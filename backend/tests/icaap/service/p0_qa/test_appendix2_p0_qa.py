@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service import digests
 from app.domain.stress.credit_bottom_up import CRD_EXPOSURE_CLASSES
 from app.models import Bank, RegulatoryPackage, RegulatoryParameter, RegulatoryRun, User
 from app.models.stress import MACRO_VARIABLES
@@ -35,7 +36,6 @@ from app.reporting.service.templates import (
     get_template,
 )
 from app.reporting.service.validation import run_validation_rules
-from app.services.attestation import digests
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,

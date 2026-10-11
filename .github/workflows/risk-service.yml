@@ -487,7 +487,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.preflight.outputs.postgres_matrix) }}
     env:
-      # Ungates tests/services/test_attestation_openbao.py against native OpenBao
+      # Ungates tests/attestation/service/test_attestation_openbao.py against native OpenBao
       # started below. Absent (a developer's machine), those tests skip and the
       # rest of the suite is unaffected.
       OPENBAO_TEST_ADDR: http://127.0.0.1:8200

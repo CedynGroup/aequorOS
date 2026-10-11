@@ -4,7 +4,7 @@ import type { AdoptSignatureRequestTypedFont } from '@aequoros/risk-service-api'
 
 /**
  * The four bundled script faces, loaded from the *same* `.ttf` files the backend
- * embeds into the signed PDF (`app/services/attestation/fonts/`, SIL Open Font
+ * embeds into the signed PDF (`app/attestation/service/fonts/`, SIL Open Font
  * License — see that directory's README).
  *
  * One copy, two consumers, on purpose. A second copy under `public/` would drift,
@@ -15,19 +15,19 @@ import type { AdoptSignatureRequestTypedFont } from '@aequoros/risk-service-api'
  * bank whose network blocks it.
  */
 const caveat = localFont({
-  src: '../../../../app/services/attestation/fonts/Caveat-Regular.ttf',
+  src: '../../../../app/attestation/service/fonts/Caveat-Regular.ttf',
   display: 'swap',
 });
 const dancingScript = localFont({
-  src: '../../../../app/services/attestation/fonts/DancingScript-Regular.ttf',
+  src: '../../../../app/attestation/service/fonts/DancingScript-Regular.ttf',
   display: 'swap',
 });
 const greatVibes = localFont({
-  src: '../../../../app/services/attestation/fonts/GreatVibes-Regular.ttf',
+  src: '../../../../app/attestation/service/fonts/GreatVibes-Regular.ttf',
   display: 'swap',
 });
 const allura = localFont({
-  src: '../../../../app/services/attestation/fonts/Allura-Regular.ttf',
+  src: '../../../../app/attestation/service/fonts/Allura-Regular.ttf',
   display: 'swap',
 });
 

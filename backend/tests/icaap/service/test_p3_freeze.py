@@ -19,13 +19,13 @@ from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.attestation.service.digests import content_digest
 from app.icaap.models.workspace import IcaapCycle, IcaapStageDecision
 from app.icaap.schemas.workspace import IcaapFreezeCreate
 from app.icaap.service import cycles, freeze, guards, workflow
 from app.models import BankFinancialFact, BankReportingPeriod, RegulatoryPackage
 from app.reporting.service.generation import snapshot_content_hash
 from app.services import reconciliation
-from app.services.attestation.digests import content_digest
 from tests.icaap.service.p3_support import (
     AS_OF,
     access_for,
@@ -532,8 +532,8 @@ class TestTheTransaction:
         digest = workflow.get_stages(db, access, cycle.id).review_digest
         period = freeze.resolve_period(db, access, row, "ICAAP-REPORT")
         definition = freeze._definition("ICAAP-REPORT")  # noqa: SLF001 - the test names the seam
+        from app.attestation.service import digests as digest_service  # noqa: PLC0415
         from app.icaap.service import snapshot  # noqa: PLC0415
-        from app.services.attestation import digests as digest_service  # noqa: PLC0415
 
         first = snapshot.build(
             db,

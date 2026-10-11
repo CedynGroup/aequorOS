@@ -133,7 +133,7 @@ class AttestationSettings(BaseSettings):
     pkcs11_user_pin: str | None = Field(default=None, alias="PKCS11_USER_PIN")
     #: Self-hosted OpenBao (Linux Foundation fork of HashiCorp Vault) reached over
     #: its HTTP API — the Transit engine signs, the key never leaves the server
-    #: (app/services/attestation/openbao.py).
+    #: (app/attestation/service/openbao.py).
     openbao_addr: str | None = Field(default=None, alias="OPENBAO_ADDR")
     #: AppRole credentials. The secret id is a CREDENTIAL: it is never logged,
     #: never put in an exception message, and never written to an audit event.

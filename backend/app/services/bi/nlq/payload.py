@@ -40,10 +40,10 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
+from app.attestation.public import canonical_json, sha256_hex
 from app.identity.public import Bank
 from app.schemas.bi_nlq import QUESTION_MAX_CHARS
 from app.services.ai import pseudonymise
-from app.services.attestation.digests import canonical_json, sha256_hex
 from app.services.bi.nlq.candidates import CandidateSet
 
 #: Why a question was not sent at all. Closed, and each has its own production copy

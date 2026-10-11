@@ -34,17 +34,17 @@ import pytest
 from pyhanko.pdf_utils import generic
 from pyhanko.pdf_utils.reader import PdfFileReader
 
+from app.attestation.service import pdf_signing
+from app.attestation.service.pdf_signing import (
+    ATTESTATION_PAGE_INDEX,
+    MIN_BOX_SIZES,
+    SIGNATURE_FIELD_TYPE,
+)
 from app.icaap.service.render.from_snapshot import (
     SnapshotError,
     filing_from_snapshot,
 )
 from app.reporting.service.exports import icaap_pdf
-from app.services.attestation import pdf_signing
-from app.services.attestation.pdf_signing import (
-    ATTESTATION_PAGE_INDEX,
-    MIN_BOX_SIZES,
-    SIGNATURE_FIELD_TYPE,
-)
 from tests.icaap.service.filing_snapshot import (
     AKAN_VOWELS,
     CEDI,

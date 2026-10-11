@@ -50,6 +50,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.public import canonical_json, sha256_hex
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
@@ -64,7 +65,6 @@ from app.services import audit, job_queue
 from app.services.ai import client as ai_client
 from app.services.ai import gates, observability, quota
 from app.services.ai.features import AiFeature
-from app.services.attestation.digests import canonical_json, sha256_hex
 
 if TYPE_CHECKING:  # Annotations only. ``from __future__ import annotations`` keeps
     # them strings at run time, so this block never executes on a worker.

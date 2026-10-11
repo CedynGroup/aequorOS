@@ -20,7 +20,7 @@
  *
  * `evidence.status` is where the service puts the tri-state, because the closed
  * response model exposes only a boolean `passed`
- * (app/services/attestation/verify.py). Rendering keys off that rather than off
+ * (app/attestation/service/verify.py). Rendering keys off that rather than off
  * `passed` alone is what keeps skipped from reading as failure.
  */
 

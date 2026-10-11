@@ -12,11 +12,11 @@ every digest and re-checks every signature using only ``cryptography``,
 ``pyhanko`` and the standard library.
 
 **Deliberate duplication.** This file imports nothing from ``app`` — not even
-``app.services.attestation.digests``. That is the point: the canonicalisation
+``app.attestation.service.digests``. That is the point: the canonicalisation
 recipe, the payload shape and the signature verification are reimplemented here
 from the published specification so that this file is a *self-contained artefact*
 an examiner can read, audit, and run against a document. The duplication cannot
-drift silently: ``tests/services/test_attestation_verify.py`` asserts that this
+drift silently: ``tests/attestation/service/test_attestation_verify.py`` asserts that this
 script's ``canonical_json``, ``attestation_payload`` and ``certification_digest``
 agree byte-for-byte with the platform's.
 
@@ -237,8 +237,7 @@ def check_signer_agreement(bundle: dict[str, Any]) -> Result:
     return Result(
         "signer_agreement",
         "PASS",
-        f"all {len(signatures)} signers covered the identical figures digest "
-        f"{covered.pop()[:16]}…",
+        f"all {len(signatures)} signers covered the identical figures digest {covered.pop()[:16]}…",
     )
 
 
@@ -283,17 +282,13 @@ def check_payloads(bundle: dict[str, Any]) -> Result:
     )
 
 
-def _verify_value(
-    record: dict[str, Any], certificate: x509.Certificate
-) -> tuple[bool, str]:
+def _verify_value(record: dict[str, Any], certificate: x509.Certificate) -> tuple[bool, str]:
     digest = bytes.fromhex(str(record["payload_digest"]))
     value = b64decode(str(record["signature_value_b64"]))
     public_key = certificate.public_key()
     method = str(record.get("signature_method"))
 
-    if method == "detached_ecdsa_p256_sha256" and isinstance(
-        public_key, ec.EllipticCurvePublicKey
-    ):
+    if method == "detached_ecdsa_p256_sha256" and isinstance(public_key, ec.EllipticCurvePublicKey):
         for algorithm in (ec.ECDSA(Prehashed(hashes.SHA256())), ec.ECDSA(hashes.SHA256())):
             try:
                 public_key.verify(value, digest, algorithm)
@@ -565,9 +560,7 @@ def _pdf_statuses(pdf: Path, roots: Sequence[x509.Certificate], bundle: dict[str
     return [
         (
             embedded.field_name,
-            validate_pdf_signature(
-                embedded, signer_validation_context=context, diff_policy=policy
-            ),
+            validate_pdf_signature(embedded, signer_validation_context=context, diff_policy=policy),
         )
         for embedded in reader.embedded_signatures
     ]
@@ -750,7 +743,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         help=(
             "Exported JSON signature record, as produced by "
-            "app.services.attestation.verify.export_verification_bundle."
+            "app.attestation.service.verify.export_verification_bundle."
         ),
     )
     parser.add_argument(

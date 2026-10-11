@@ -28,10 +28,10 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.orm import Session
 
+from app.attestation.service.digests import canonical_json
 from app.domain.bi.catalogue import catalogue
 from app.domain.bi.catalogue.members import VALUE_TYPES
 from app.models import Bank, Organization, User
-from app.services.attestation.digests import canonical_json
 from app.services.bi.commentary import payload as payload_module
 from app.services.bi.commentary import prompt as prompt_module
 from app.services.bi.insights import facts, rules

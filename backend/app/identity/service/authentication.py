@@ -517,11 +517,11 @@ def provision_signer_identity(db: Session, user: User) -> None:
     user, and the signing path provisions lazily anyway. Failure is logged, not
     raised (docs/attestation_esignature.md §2.4).
     """
-    from app.core.tenancy import TenantContext  # noqa: PLC0415 - avoids an import cycle
-    from app.services.attestation.identity import (  # noqa: PLC0415
+    from app.attestation.service.identity import (  # noqa: PLC0415
         SignerIdentityError,
         ensure_signer_identity,
     )
+    from app.core.tenancy import TenantContext  # noqa: PLC0415 - avoids an import cycle
 
     try:
         ensure_signer_identity(db, TenantContext(organization_id=user.organization_id), user.id)

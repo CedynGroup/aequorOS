@@ -19,11 +19,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service import stepup
 from app.core import security
 from app.db.session import get_sessionmaker
 from app.identity.service import authentication
 from app.models import SsoConnection, User
-from app.services.attestation import stepup
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 _ISSUER = "https://idp.tenant-one.example"

@@ -28,6 +28,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service import digests
+from app.attestation.service import workflow as attestation
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -62,8 +64,6 @@ from app.services import (
     macro_scenarios,
     management_action_plans,
 )
-from app.services.attestation import digests
-from app.services.attestation import workflow as attestation
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

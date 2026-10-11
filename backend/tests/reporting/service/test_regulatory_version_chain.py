@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service import workflow as attestation_workflow
 from app.models import (
     AttestationSignature,
     BankReportingPeriod,
@@ -29,7 +30,6 @@ from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation, snapshot_diff, version_chain
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_liquidity
-from app.services.attestation import workflow as attestation_workflow
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

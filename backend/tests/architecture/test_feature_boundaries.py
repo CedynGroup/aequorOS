@@ -284,11 +284,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "stress",
     ),
     (
-        r"^(services/(attestation/.*|attestation_api)|models/attestation|schemas/attestation"
-        r"|features/manage_attestation)$",
-        "attestation",
-    ),
-    (
         r"^(services/bi/.*|domain/bi/.*|models/bi.*|schemas/bi.*|jobs/bi.*"
         r"|features/(ask_bi|export_bi|manage_bi_.*|read_bi.*))$",
         "bi",

@@ -7,7 +7,7 @@ that took the fact set as it stands would move on every refresh, so it could
 never answer the only question worth asking of it: *are these the same figures
 the reader was shown, or different ones?*
 
-So the rules here are the ones ``app/services/attestation/digests.py`` already
+So the rules here are the ones ``app/attestation/service/digests.py`` already
 states, applied to a fact sheet:
 
 **Excluded, by RULE rather than by hope.** The whole
@@ -48,7 +48,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from app.services.attestation.digests import canonical_json, sha256_hex
+from app.attestation.public import canonical_json, sha256_hex
 from app.services.bi.insights.drivers import BridgeUnavailable, RatioBridge
 from app.services.bi.insights.facts import (
     BridgeFact,

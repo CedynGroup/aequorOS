@@ -36,10 +36,10 @@ COPY backend/dashboard backend/dashboard
 # PDF, and a second copy could drift so that the face previewed in the browser is
 # not the one stamped on a filed return. That single-source choice means this
 # COPY is load-bearing: without it `next build` fails with "Can't resolve
-# ../../../../app/services/attestation/fonts/…", which is exactly how the
+# ../../../../app/attestation/service/fonts/…", which is exactly how the
 # 2026-07-26 deploy broke. A local build cannot catch it (the whole repo is on
 # disk); only the container's narrower context can.
-COPY backend/app/services/attestation/fonts backend/app/services/attestation/fonts
+COPY backend/app/attestation/service/fonts backend/app/attestation/service/fonts
 
 # NEXT_PUBLIC_* are inlined into the client bundle at build time — Coolify passes
 # them as --build-arg when they are marked as build-time env vars.

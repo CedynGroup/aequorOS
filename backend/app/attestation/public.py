@@ -1,8 +1,8 @@
 """Attestation's interface for other features: re-exports only, no logic."""
 
-from app.models.attestation import AttestationSignature, RegulatoryArtifactVersion
-from app.schemas.attestation import SigningRole
-from app.services.attestation import (
+from app.attestation.models import AttestationSignature, RegulatoryArtifactVersion
+from app.attestation.schemas import SigningRole
+from app.attestation.service import (
     digests,
     identity,
     layouts,
@@ -11,14 +11,14 @@ from app.services.attestation import (
     register_state,
     workflow,
 )
-from app.services.attestation.digests import (
+from app.attestation.service.digests import (
     canonical_json,
     digest_of,
     register_state_digest,
     sha256_hex,
 )
-from app.services.attestation.policy import SigningPolicy
-from app.services.attestation.workflow import ensure_submittable, package_policy
+from app.attestation.service.policy import SigningPolicy
+from app.attestation.service.workflow import ensure_submittable, package_policy
 
 __all__ = [
     "AttestationSignature",

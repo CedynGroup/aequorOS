@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service import workflow as attestation_workflow
 from app.models import (
     Bank,
     RegulatoryPackage,
@@ -48,7 +49,6 @@ from app.reporting.service import (
 )
 from app.reporting.service import workflow as reporting_workflow
 from app.reporting.service.registry import REGISTRY, get_definition
-from app.services.attestation import workflow as attestation_workflow
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -469,7 +469,7 @@ def test_certification_still_signs_the_values_only_document(db_session: Session)
     is precisely what the filed-but-not-signed split exists to prevent.
     """
     _ = db_session
-    from app.services.attestation import artifact_signing  # noqa: PLC0415
+    from app.attestation.service import artifact_signing  # noqa: PLC0415
 
     assert artifact_signing.ARTIFACT_KIND == "pdf"
     assert artifact_signing.ARTIFACT_KIND not in reporting_workflow.WORKING_ARTIFACT_KINDS

@@ -108,7 +108,7 @@ def test_the_object_stem_cannot_collide_with_the_filing_pdf() -> None:
 
 
 def test_the_signing_layer_only_ever_signs_the_pdf_kind() -> None:
-    from app.services.attestation import artifact_signing  # noqa: PLC0415
+    from app.attestation.service import artifact_signing  # noqa: PLC0415
 
     assert artifact_signing.ARTIFACT_KIND == "pdf"
     assert artifact_signing.ARTIFACT_KIND != icaap_docx.ARTIFACT_KIND
