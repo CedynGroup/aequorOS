@@ -9,6 +9,7 @@ import argparse
 import ast
 import hashlib
 import json
+import math
 import os
 import subprocess
 import xml.etree.ElementTree as ET
@@ -16,12 +17,56 @@ from collections import Counter
 from pathlib import Path
 from typing import cast
 
-SHARDS = 2
+SHARDS = 4
+SCHEMA_SHARDS = 2
+DURATIONS = Path(__file__).with_name("ci_postgres_durations.json")
 BAO_MODULE = "tests/services/test_attestation_openbao.py"
 
 
 def shard_for(module: str, count: int = SHARDS) -> int:
     return int(hashlib.sha256(module.encode()).hexdigest(), 16) % count + 1
+
+
+def shard_count(suite: str) -> int:
+    return SCHEMA_SHARDS if suite == "schema" else SHARDS
+
+
+def module_shards(suite: str = "suite") -> dict[str, int]:
+    """Longest-first packing keeps fixture-sharing modules on a single worker.
+
+    Unrecorded modules use the stable hash fallback until the next main refresh.
+    Assignment depends only on the committed baseline, never on a PR subset.
+    """
+    if suite == "schema":
+        return {}
+    values = load_object(DURATIONS)["durations"]
+    if not isinstance(values, dict):
+        raise ValueError("Expected module durations")
+    durations: dict[str, float] = {}
+    for module, value in cast(dict[str, object], values).items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"Invalid duration for {module}")
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"Invalid duration for {module}")
+        durations[module] = max(float(value), 0.001)
+    totals = [0.0] * SHARDS
+    assignments: dict[str, int] = {}
+    for module in sorted(durations, key=lambda name: (-durations[name], name)):
+        index = min(range(SHARDS), key=lambda shard: (totals[shard], shard))
+        assignments[module] = index + 1
+        totals[index] += durations[module]
+    return assignments
+
+
+def selected_tests(collected: list[str], files: list[str], index: int, suite: str) -> list[str]:
+    assignments = module_shards(suite)
+    count = shard_count(suite)
+    return [
+        nodeid
+        for nodeid in collected
+        if (not files or nodeid.split("::")[0] in files)
+        and assignments.get(nodeid.split("::")[0], shard_for(nodeid.split("::")[0], count)) == index
+    ]
 
 
 def strings(value: object) -> list[str]:
@@ -103,13 +148,22 @@ def affected_files(root: Path, event: str, base: str) -> list[str]:
 
 def plan(root: Path, event: str, base: str) -> dict[str, object]:
     files = affected_files(root, event, base)
-    indices = sorted({shard_for(path) for path in files}) if files else list(range(1, SHARDS + 1))
+    assignments = module_shards()
+    indices = (
+        sorted({assignments.get(path, shard_for(path)) for path in files})
+        if files
+        else list(range(1, SHARDS + 1))
+    )
     return {
         "mode": "affected" if files else "full",
         "files": files,
         "matrix": {
             "include": [
-                {"shard": index, "openbao": not files and index == shard_for(BAO_MODULE)}
+                {
+                    "shard": index,
+                    "openbao": not files
+                    and index == assignments.get(BAO_MODULE, shard_for(BAO_MODULE)),
+                }
                 for index in indices
             ]
         },
@@ -123,7 +177,8 @@ def case_key(nodeid: str) -> tuple[str, str]:
     return ".".join([module.removesuffix(".py").replace("/", "."), *names[:-1]]), names[-1]
 
 
-def read_manifests(directory: Path, files: list[str]) -> tuple[list[str], int]:
+def read_manifests(directory: Path, files: list[str], suite: str) -> tuple[list[str], int]:
+    count = shard_count(suite)
     paths = sorted(directory.glob("*/collection-*.json"))
     if not paths:
         raise ValueError("Missing shard collection manifests")
@@ -134,19 +189,14 @@ def read_manifests(directory: Path, files: list[str]) -> tuple[list[str], int]:
         collected = strings(manifest["collected"])
         selected = strings(manifest["selected"])
         index = manifest["shard"]
-        if not isinstance(index, int) or not 1 <= index <= SHARDS:
+        if not isinstance(index, int) or not 1 <= index <= count:
             raise ValueError(f"Invalid shard in {path}")
-        if manifest["count"] != SHARDS or manifest["files"] != files:
+        if manifest["count"] != count or manifest["files"] != files:
             raise ValueError(f"Inconsistent shard configuration in {path}")
         if full is not None and collected != full:
             raise ValueError("Workers/shards collected different test sets")
         full = collected
-        expected = [
-            nodeid
-            for nodeid in collected
-            if (not files or nodeid.split("::")[0] in files)
-            and shard_for(nodeid.split("::")[0]) == index
-        ]
+        expected = selected_tests(collected, files, index, suite)
         if selected != expected or not selected:
             raise ValueError(f"Incorrect or empty selection in {path}")
         if index in selected_by_shard and selected_by_shard[index] != selected:
@@ -164,7 +214,7 @@ def read_manifests(directory: Path, files: list[str]) -> tuple[list[str], int]:
 
 
 def verify(directory: Path, files: list[str], suite: str) -> None:
-    expected_all, shard_count = read_manifests(directory, files)
+    expected_all, shard_count = read_manifests(directory, files, suite)
     reports = sorted(directory.glob("*/report.xml"))
     if len(reports) != shard_count:
         raise ValueError("Missing or duplicate shard JUnit reports")
@@ -197,11 +247,38 @@ def verify(directory: Path, files: list[str], suite: str) -> None:
     )
 
 
+def refresh_durations(directory: Path, source_run: str, output: Path) -> None:
+    """Refresh only from complete, successfully executed full-suite evidence."""
+    verify(directory, [], "suite")
+    collected, _ = read_manifests(directory, [], "suite")
+    modules = {case_key(nodeid): nodeid.split("::")[0] for nodeid in collected}
+    durations: dict[str, float] = {}
+    for report in sorted(directory.glob("*/report.xml")):
+        for case in ET.parse(report).iter("testcase"):
+            module = modules[(case.get("classname", ""), case.get("name", ""))]
+            duration = float(case.get("time", "0"))
+            if not math.isfinite(duration) or duration < 0:
+                raise ValueError("Invalid JUnit duration")
+            durations[module] = durations.get(module, 0.0) + duration
+    output.write_text(
+        json.dumps(
+            {
+                "source_run": source_run,
+                "durations": {k: round(v, 6) for k, v in sorted(durations.items())},
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+
+
 class Arguments(argparse.Namespace):
     command: str
     root: Path
     directory: Path
     suite: str
+    source_run: str
+    output: Path
 
 
 def main() -> None:
@@ -212,6 +289,10 @@ def main() -> None:
     checking = sub.add_parser("verify")
     checking.add_argument("directory", type=Path)
     checking.add_argument("--suite", choices=["suite", "schema"], required=True)
+    refresh = sub.add_parser("refresh-durations")
+    refresh.add_argument("directory", type=Path)
+    refresh.add_argument("--source-run", required=True)
+    refresh.add_argument("--output", type=Path, default=DURATIONS)
     args = parser.parse_args(namespace=Arguments())
     if args.command == "plan":
         result = plan(args.root, os.getenv("GITHUB_EVENT_NAME", ""), os.getenv("PR_BASE_SHA", ""))
@@ -221,6 +302,8 @@ def main() -> None:
             with Path(output).open("a") as stream:
                 for key, value in result.items():
                     print(f"{key}={json.dumps(value) if key != 'mode' else value}", file=stream)
+    elif args.command == "refresh-durations":
+        refresh_durations(args.directory, args.source_run, args.output)
     else:
         verify(
             args.directory,

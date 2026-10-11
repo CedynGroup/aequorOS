@@ -399,9 +399,11 @@ credential-vault encryption tests need no vault server. The live storage and
 OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
 
-CI runs the remaining PostgreSQL suite in two parallel module shards, and the
-schema/RLS suite in two more; lock tests retain their own job. Module hashing
-keeps each file together, including OpenBao's shared AppRole fixtures. The
+CI runs the remaining PostgreSQL suite in four duration-balanced module shards,
+and the schema/RLS suite in two hash-based shards; lock tests retain their own job.
+Longest-first packing uses the committed `scripts/ci_postgres_durations.json`
+baseline. Each file stays together, including OpenBao's shared AppRole fixtures.
+New modules use stable hashing until the baseline is refreshed. The
 existing **Full suite on Postgres**, **Postgres schema, RLS and locks**, and
 **Risk service gate** check names stay stable. Shards upload their complete
 collection manifests and JUnit reports; the aggregates verify that their union
@@ -417,6 +419,24 @@ locks, architecture and storage gates keep their coverage. The stdlib planner/co
 [`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via
 [`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py), so local mise
 commands continue to run their complete suites.
+
+Refresh the duration baseline after a successful **full** main run, using its four
+`pg-suite-*` artifacts (download them into separate directories under one parent):
+
+```bash
+gh-axi run download <run-id> --name pg-suite-1 --dir /tmp/pg-reports/pg-suite-1
+# Repeat for pg-suite-2, pg-suite-3 and pg-suite-4.
+python3 backend/scripts/ci_postgres.py refresh-durations /tmp/pg-reports \
+  --source-run https://github.com/CedynGroup/aequorOS/actions/runs/<run-id>
+```
+
+The refresh verifies exact collection/execution coverage, the 3,000-executed
+floor and live OpenBao execution before replacing the baseline. JUnit case times
+include setup, call and teardown. Review and commit the resulting baseline; CI
+never writes it automatically. Refresh after substantial fixture or test layout
+changes, and compare actual job timings rather than treating summed test durations
+as wall time. The initial baseline came from the successful two-shard main run
+linked in its `source_run` field, verified with that run's two-shard verifier.
 
 ### Test databases and the primary database
 
@@ -454,8 +474,8 @@ commands continue to run their complete suites.
   dependency overrides removed at teardown. Only `tests/db` migration tests build
   schemas of their own. A test that needs a fresh schema is the exception to justify,
   not the default to reach for.
-  `risk-service:test-postgres-suite` runs under pytest-xdist (`-n auto --dist loadfile`),
-  using one worker per detected CPU. Each worker lazily builds its own rollback and
+  `risk-service:test-postgres-suite` runs under pytest-xdist (`-n 4 --dist loadfile`),
+  using at most four workers. Each worker lazily builds its own rollback and
   committing schemas as needed, and a module's tests stay on one worker. CI's
   `--junitxml` output remains a single combined report for the execution-floor guard.
   Two consequences: test ids must be deterministic (xdist refuses to start when workers

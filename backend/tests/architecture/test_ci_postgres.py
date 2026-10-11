@@ -14,7 +14,8 @@ from typing import cast
 import pytest
 import yaml
 
-from scripts.ci_postgres import BAO_MODULE, plan, shard_for, verify
+from scripts import ci_postgres
+from scripts.ci_postgres import BAO_MODULE, SHARDS, module_shards, plan, shard_for, verify
 
 BACKEND = Path(__file__).parents[2]
 REPO = BACKEND.parent
@@ -104,7 +105,13 @@ def test_uncertain_changes_run_every_shard(
     assert result["mode"] == "full"
     assert result["files"] == []
     assert result["matrix"] == {
-        "include": [{"shard": index, "openbao": index == shard_for(BAO_MODULE)} for index in (1, 2)]
+        "include": [
+            {
+                "shard": index,
+                "openbao": index == module_shards().get(BAO_MODULE, shard_for(BAO_MODULE)),
+            }
+            for index in range(1, SHARDS + 1)
+        ]
     }
 
 
@@ -112,16 +119,16 @@ def test_uncertain_changes_run_every_shard(
 def built_reports(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[str]]:
     tmp_path = tmp_path_factory.mktemp("shard-run")
     # Run the real plugin under xdist, including parametrized ids containing ::.
-    # The two files deliberately hash to different shards.
+    # The files deliberately hash to different shards.
     modules: list[str] = []
-    for index in (1, 2):
+    for index in range(1, SHARDS + 1):
         suffix = next(n for n in range(100) if shard_for(f"tests/test_{n}.py") == index)
         module = f"tests/test_{suffix}.py"
         path = tmp_path / module
         path.parent.mkdir(exist_ok=True)
         path.write_text(
             "import pytest\n"
-            "@pytest.mark.parametrize('value', range(1, 162), ids=lambda n: f'value::{n}')\n"
+            "@pytest.mark.parametrize('value', range(1, 82), ids=lambda n: f'value::{n}')\n"
             "def test_pass(value):\n    assert value > 0\n"
             "@pytest.mark.skip(reason='existing opt-in fixture')\n"
             "def test_skip():\n    pass\n"
@@ -130,38 +137,40 @@ def built_reports(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[
     config = tmp_path / "pytest.ini"
     config.write_text("[pytest]\n")
     reports = tmp_path / "reports"
-    for index in (1, 2):
-        directory = reports / f"pg-suite-{index}"
-        env = {
-            **os.environ,
-            "PYTHONPATH": str(BACKEND),
-            "PYTEST_ADDOPTS": "",
-            "CI_POSTGRES_SHARD": str(index),
-            "CI_POSTGRES_FILES": json.dumps(modules),
-            "CI_POSTGRES_REPORT_DIR": str(directory),
-        }
-        _ = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pytest",
-                "-c",
-                str(config),
-                "-p",
-                "scripts.ci_postgres_plugin",
-                "-n",
-                "2",
-                "--dist",
-                "loadfile",
-                f"--junitxml={directory}/report.xml",
-                "tests",
-            ],
-            cwd=tmp_path,
-            env=env,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+    for suite in ("suite", "schema"):
+        for index in range(1, ci_postgres.shard_count(suite) + 1):
+            directory = reports / suite / f"pg-suite-{index}"
+            env = {
+                **os.environ,
+                "PYTHONPATH": str(BACKEND),
+                "PYTEST_ADDOPTS": "",
+                "CI_POSTGRES_SHARD": str(index),
+                "CI_POSTGRES_SUITE": suite,
+                "CI_POSTGRES_FILES": json.dumps(modules),
+                "CI_POSTGRES_REPORT_DIR": str(directory),
+            }
+            _ = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pytest",
+                    "-c",
+                    str(config),
+                    "-p",
+                    "scripts.ci_postgres_plugin",
+                    "-n",
+                    "2",
+                    "--dist",
+                    "loadfile",
+                    f"--junitxml={directory}/report.xml",
+                    "tests",
+                ],
+                cwd=tmp_path,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
     return reports, modules
 
 
@@ -169,7 +178,7 @@ def built_reports(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[
 def shard_reports(built_reports: tuple[Path, list[str]], tmp_path: Path) -> tuple[Path, list[str]]:
     reports, modules = built_reports
     copy = tmp_path / "reports"
-    _ = shutil.copytree(reports, copy)
+    _ = shutil.copytree(reports / "suite", copy)
     return copy, modules.copy()
 
 
@@ -192,10 +201,12 @@ def test_real_workers_partition_every_test_and_preserve_junit_names(
     ],
 )
 def test_coverage_guard_rejects_incomplete_or_inconsistent_results(
-    shard_reports: tuple[Path, list[str]], damage: str
+    shard_reports: tuple[Path, list[str]], built_reports: tuple[Path, list[str]], damage: str
 ) -> None:
     reports, modules = shard_reports
-    if damage == "missing-shard":
+    if damage == "schema-skips":
+        reports = built_reports[0] / "schema"
+    elif damage == "missing-shard":
         for path in (reports / "pg-suite-2").iterdir():
             path.unlink()
     elif damage in {"missing-case", "duplicate-case"}:
@@ -240,3 +251,91 @@ def test_workflow_preserves_required_names_and_joins_all_postgres_jobs() -> None
     assert matrix["shard"] == [1, 2]
     assert schema_strategy["fail-fast"] is False
     assert cast(dict[str, object], jobs["postgres-shard"]["strategy"])["fail-fast"] is False
+
+
+def test_recorded_durations_balance_modules_and_break_ties_deterministically(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline = tmp_path / "durations.json"
+    baseline.write_text(json.dumps({"durations": {f"tests/test_{n}.py": n for n in range(1, 9)}}))
+    monkeypatch.setattr(ci_postgres, "DURATIONS", baseline)
+    assignments = module_shards()
+    totals = [
+        sum(n for n in range(1, 9) if assignments[f"tests/test_{n}.py"] == index)
+        for index in range(1, SHARDS + 1)
+    ]
+    assert totals == [9, 9, 9, 9]
+    assert assignments["tests/test_8.py"] == 1
+    collected = [f"tests/test_{n}.py::test_example" for n in range(1, 10)]
+    partitions = [
+        ci_postgres.selected_tests(collected, [], index, "suite") for index in range(1, SHARDS + 1)
+    ]
+    assert sorted(node for partition in partitions for node in partition) == sorted(collected)
+    assert ci_postgres.selected_tests(collected, ["tests/test_8.py"], 1, "suite") == [collected[7]]
+    assert ci_postgres.shard_count("schema") == 2
+    assert ci_postgres.selected_tests(collected, [], 1, "schema") == [
+        node for node in collected if shard_for(node.split("::")[0], 2) == 1
+    ]
+
+
+@pytest.mark.parametrize("value", [-1, float("inf"), float("nan"), True, "slow"])
+def test_duration_baseline_rejects_invalid_weights(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: object
+) -> None:
+    baseline = tmp_path / "durations.json"
+    baseline.write_text(json.dumps({"durations": {"tests/test_example.py": value}}))
+    monkeypatch.setattr(ci_postgres, "DURATIONS", baseline)
+    with pytest.raises(ValueError, match="Invalid duration"):
+        module_shards()
+
+
+@pytest.mark.parametrize("skipped", [0, 2])
+def test_full_suite_floor_and_refresh_use_verified_execution_evidence(
+    tmp_path: Path, skipped: int
+) -> None:
+    modules = [
+        next(
+            f"tests/test_duration_{n}.py"
+            for n in range(100)
+            if shard_for(f"tests/test_duration_{n}.py") == index
+        )
+        for index in range(1, SHARDS + 1)
+    ]
+    collected = [f"{modules[index % 4]}::test_example[{index}]" for index in range(3000)] + [
+        f"{BAO_MODULE}::test_live"
+    ]
+    for index in range(1, SHARDS + 1):
+        selected = ci_postgres.selected_tests(collected, [], index, "suite")
+        directory = tmp_path / f"pg-suite-{index}"
+        directory.mkdir()
+        (directory / "collection-main.json").write_text(
+            json.dumps(
+                {
+                    "count": SHARDS,
+                    "shard": index,
+                    "files": [],
+                    "collected": collected,
+                    "selected": selected,
+                }
+            )
+        )
+        suite = ET.Element("testsuite")
+        for nodeid in selected:
+            classname, name = ci_postgres.case_key(nodeid)
+            case = ET.SubElement(suite, "testcase", classname=classname, name=name, time="1.0")
+            if nodeid in collected[:skipped]:
+                _ = ET.SubElement(case, "skipped")
+        ET.ElementTree(suite).write(directory / "report.xml")
+    output = tmp_path / "durations.json"
+    if skipped:
+        with pytest.raises(ValueError, match="execution floor"):
+            ci_postgres.refresh_durations(tmp_path, "fixture-run", output)
+        assert not output.exists()
+    else:
+        ci_postgres.refresh_durations(tmp_path, "fixture-run", output)
+        result = ci_postgres.load_object(output)
+        assert result["source_run"] == "fixture-run"
+        assert result["durations"] == {
+            **{module: 750 for module in modules},
+            BAO_MODULE: 1,
+        }
