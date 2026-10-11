@@ -65,6 +65,8 @@ from sqlalchemy import create_engine, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service.identity import ensure_signer_identity
+from app.attestation.service.keys import SignerKeyService
 from app.core.authorization import (
     DataScope,
     GrantorType,
@@ -89,8 +91,6 @@ from app.models import (
     RegulatoryParameter,
     User,
 )
-from app.services.attestation.identity import ensure_signer_identity
-from app.services.attestation.keys import SignerKeyService
 from app.services.fact_derivation import (
     _derive_specs,  # pyright: ignore[reportPrivateUsage]
     _fact,  # pyright: ignore[reportPrivateUsage]

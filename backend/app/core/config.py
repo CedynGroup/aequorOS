@@ -133,7 +133,7 @@ class AttestationSettings(BaseSettings):
     pkcs11_user_pin: str | None = Field(default=None, alias="PKCS11_USER_PIN")
     #: Self-hosted OpenBao (Linux Foundation fork of HashiCorp Vault) reached over
     #: its HTTP API — the Transit engine signs, the key never leaves the server
-    #: (app/services/attestation/openbao.py).
+    #: (app/attestation/service/openbao.py).
     openbao_addr: str | None = Field(default=None, alias="OPENBAO_ADDR")
     #: AppRole credentials. The secret id is a CREDENTIAL: it is never logged,
     #: never put in an exception message, and never written to an audit event.
@@ -179,7 +179,7 @@ class AttestationSettings(BaseSettings):
     #: mandatory ``ReturnSigningPolicy`` row; every return follows the
     #: signature-optional workflow (bare maker-checker approval, no ceremony).
     #: Rows go dormant, not deleted: re-enabling restores them unchanged. See
-    #: ``attestation.policy._apply_esign_kill_switch``.
+    #: ``app.attestation.service.policy._apply_esign_kill_switch``.
     esign_required: bool = Field(default=True, alias="ATTESTATION_ESIGN_REQUIRED")
     #: PEM trust anchors for verification, as a filesystem path (file or
     #: directory). WITHOUT these, verification can only anchor on the
@@ -239,7 +239,7 @@ class AttestationSettings(BaseSettings):
     def signing_ready(self) -> bool:
         """True when this deployment can actually produce a signature.
 
-        Signing is REQUIRED by default (attestation.policy.default_policy), so a
+        Signing is REQUIRED by default (app.attestation.service.policy.default_policy), so a
         deployment that cannot sign cannot file — the two settings below are the
         difference between a working filing pipeline and a locked one. They are
         reported together because separately they are not actionable: an
@@ -531,7 +531,7 @@ class IcaapSettings(BaseSettings):
     #: log and the mandatory board-resolution attachment.
     #:
     #: NO does not delete anything. It is applied AFTER policy resolution
-    #: (``attestation.policy._apply_icaap_signing_switch``), so a configured
+    #: (``app.attestation.service.policy._apply_icaap_signing_switch``), so a configured
     #: ``ReturnSigningPolicy`` row for the ICAAP family goes DORMANT — the ICAAP
     #: return takes the bare maker-checker approval path — and flipping the
     #: switch to YES restores that row unchanged. It is scoped to the ``icaap``

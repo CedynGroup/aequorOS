@@ -137,7 +137,7 @@ REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "services/regulatory_*.py",
     "reporting/service/**/*.py",
     "services/sdi_*.py",
-    "services/attestation/**/*.py",
+    "attestation/service/**/*.py",
     "services/fact_derivation.py",
     "services/pipeline.py",
     "services/params.py",
@@ -151,7 +151,7 @@ REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "reporting/api/manage_regulatory_reporting.py",
     "features/manage_enterprise_stress*.py",
     "features/manage_capital_plan.py",
-    "features/manage_attestation.py",
+    "attestation/api/manage_attestation.py",
 )
 
 #: Bank-scoped facts and sealed run records. A case module reading one of these

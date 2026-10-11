@@ -25,6 +25,7 @@ from starlette.routing import Route
 from app.adapters.database_direct.config import ConnectionConfig, TlsConfig
 from app.adapters.database_direct.drivers.base import require_verified_transport
 from app.adapters.database_direct.errors import DatabaseDirectError
+from app.attestation.service.tsa import build_pdf_timestamper
 from app.core.config import Settings, TsaSettings, get_settings
 from app.core.serve import listener_options
 from app.core.tls import (
@@ -40,7 +41,6 @@ from app.integrations.storage.s3 import S3ObjectStorage
 from app.main import create_app
 from app.reporting.service.channels.errors import ChannelPreconditionError
 from app.reporting.service.channels.orass_api import OrassApiChannel
-from app.services.attestation.tsa import build_pdf_timestamper
 
 
 @pytest.fixture
@@ -603,7 +603,7 @@ class _CertificateFetchClient(Protocol):
 def test_certificate_fetcher_refuses_plaintext(production: None) -> None:
     import asyncio  # noqa: PLC0415
 
-    from app.services.attestation.tls_fetchers import verified_fetchers  # noqa: PLC0415
+    from app.attestation.service.tls_fetchers import verified_fetchers  # noqa: PLC0415
 
     fetchers = verified_fetchers()
     with pytest.raises(TransportSecurityError, match="certificate validation evidence"):
@@ -624,7 +624,7 @@ def test_certificate_fetcher_preserves_https_content_and_refuses_redirects(
         CertificateFetchError,
     )
 
-    from app.services.attestation.tls_fetchers import verified_fetchers  # noqa: PLC0415
+    from app.attestation.service.tls_fetchers import verified_fetchers  # noqa: PLC0415
 
     cert, _key = certificate(tmp_path)
     content = x509.load_pem_x509_certificate(cert.read_bytes()).public_bytes(
@@ -656,7 +656,7 @@ def test_certificate_fetcher_preserves_https_content_and_refuses_redirects(
             timeout=timeout,
         )
 
-    monkeypatch.setattr("app.services.attestation.tls_fetchers.httpx.Client", client_factory)
+    monkeypatch.setattr("app.attestation.service.tls_fetchers.httpx.Client", client_factory)
     result = list(
         asyncio.run(
             cast(_CertificateFetchClient, verified_fetchers().cert_fetcher).fetch_certs(

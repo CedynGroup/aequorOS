@@ -467,6 +467,11 @@ This avoids the extensionless font URL compiler bug
 ([Next.js #99114](https://github.com/vercel/next.js/issues/99114)); production
 builds retain the real Google fonts.
 
+The attestation workspace journey checks every offered typed face in both the
+adoption panel and the placed signature preview. It verifies the fonts Chromium
+actually renders and hashes the downloaded script fonts against the backend's
+bundled files (`e2e/support/typed-fonts.ts`).
+
 The backend server environment pins `APP_ENV=test` and
 `TLS_ALLOW_PLAINTEXT=1` because this disposable stack uses SQLite and loopback
 HTTP (including MinIO). Test mode alone does not relax the transport policy;

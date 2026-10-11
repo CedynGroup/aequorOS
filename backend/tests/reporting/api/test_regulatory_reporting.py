@@ -299,7 +299,7 @@ def _validator_headers(validator: tuple[UUID, int]) -> dict[str, str]:
 def _relax_signing(client: TestClient, return_code: str = RETURN_CODE) -> None:
     """Opt the return out of the signing gate the way an administrator would (an
     audited PUT), so what these journeys exercise is the workflow, not the
-    attestation gate proved in tests/services/test_attestation_spine.py."""
+    attestation gate proved in tests/attestation/service/test_attestation_spine.py."""
     response = client.put(
         "/api/v1/attestation/signing-policies",
         headers=real_headers(),
@@ -602,7 +602,7 @@ def test_full_lifecycle_happy_path_with_maker_checker(
     # outstanding — approving and signing are one act now. This journey is about
     # the decision's own rules (status, maker-checker, reason, re-decide), so opt
     # the return out the way an administrator would; the one-act composition is
-    # proved in tests/services/test_attestation_workspace.py.
+    # proved in tests/attestation/service/test_attestation_workspace.py.
     _relax_signing(real_client)
     _baseline_run(real_client, period["id"])
     checker = _checker(real_session)
@@ -1148,7 +1148,7 @@ def test_artifact_version_list_and_download_round_trip(
     """The version routes exist, are tenant-scoped, and prove what they serve.
 
     The signed-revision resolution is exercised against a real ceremony in
-    tests/services/test_attestation_artifact_signing.py; what is on trial here
+    tests/attestation/service/test_attestation_artifact_signing.py; what is on trial here
     is the wire — that a version id is not an artifact id, that the checksum is
     re-verified before any byte is sent, and that a neighbouring tenant sees a
     404 rather than another bank's return.

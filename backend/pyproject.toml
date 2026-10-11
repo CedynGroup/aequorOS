@@ -64,7 +64,7 @@ dependencies = [
 #   uv sync --extra db-direct
 [project.optional-dependencies]
 # Hardware signing custody (docs/attestation_esignature.md §3.4). The PKCS#11
-# driver is lazily imported inside app/services/attestation/signers.py, so the
+# driver is lazily imported inside app/attestation/service/signers.py, so the
 # default environment stays installable and the software/dev backend and its
 # tests run without an HSM. Install when wiring a real token/HSM:
 #   uv sync --extra hsm

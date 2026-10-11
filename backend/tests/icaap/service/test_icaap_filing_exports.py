@@ -82,7 +82,7 @@ def package() -> _Package:
 def _policy(monkeypatch: pytest.MonkeyPatch) -> None:
     """The hook resolves the policy in force; nothing else here touches a session."""
     monkeypatch.setattr(
-        "app.services.attestation.workflow.package_policy",
+        "app.attestation.service.workflow.package_policy",
         lambda db, ctx, pkg: _Policy("preparer", "approver"),
     )
 
@@ -147,7 +147,7 @@ def test_the_board_slot_decides_how_many_blocks_the_hook_draws(
     monkeypatch.setattr(icaap_pdf, "render_filing_pdf", record)
     filing_hooks.HOOKS.export(NO_DB, NO_CTX, as_package(package), "pdf", None)
     monkeypatch.setattr(
-        "app.services.attestation.workflow.package_policy",
+        "app.attestation.service.workflow.package_policy",
         lambda db, ctx, pkg: _Policy("preparer", "approver", "board"),
     )
     filing_hooks.HOOKS.export(NO_DB, NO_CTX, as_package(package), "pdf", None)

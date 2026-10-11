@@ -21,9 +21,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.attestation.public import canonical_json, sha256_hex
 from app.core.config import get_settings
 from app.services.ai.client import ModelRequest, SystemBlock
-from app.services.attestation.digests import canonical_json, sha256_hex
 from app.services.bi.nlq.schema import NLQ_MAX_TRAILING_MONTHS, NlqDraft
 
 PROMPT_VERSION = "bi-nlq-v1"

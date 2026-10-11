@@ -67,6 +67,7 @@ SCANNED = (
     "app/icaap/domain",
     "app/icaap/service",
     "app/icaap/api",
+    "app/attestation/api",
     "app/domain/ai",
     "app/services/ai",
 )

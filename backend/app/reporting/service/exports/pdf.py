@@ -189,7 +189,7 @@ def _signing_block() -> Table:
 
     The geometry is load-bearing, not cosmetic. ``pdf_signing.DEFAULT_PLACEMENTS``
     is pinned to these columns and to :data:`_SIGNING_ROW_HEIGHT`, and
-    ``tests/services/test_attestation_pdf_signing.py`` measures the rendered page
+    ``tests/attestation/service/test_attestation_pdf_signing.py`` measures the rendered page
     to prove the two still agree — so changing a width here without moving the
     placements fails a test rather than filing a return with a signature stamp
     beside its line instead of on it.

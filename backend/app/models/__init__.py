@@ -1,3 +1,15 @@
+from app.attestation.models import (
+    AdoptedSignatureAppearance,
+    AttestationSignature,
+    PackageSignaturePlacement,
+    PackageSignatureRecipient,
+    RegulatoryArtifactVersion,
+    ReturnSignaturePlacement,
+    ReturnSigningPolicy,
+    SignerIdentity,
+    SignerKey,
+    SigningAuthorization,
+)
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
 from app.forecasting.models import ForecastAssumptionVersion
 from app.icaap.models.ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
@@ -49,18 +61,6 @@ from app.identity.models.refresh_token import RefreshToken
 from app.identity.models.sso_connection import SsoConnection
 from app.identity.models.user import User
 from app.models.ai import AiCommentarySettings
-from app.models.attestation import (
-    AdoptedSignatureAppearance,
-    AttestationSignature,
-    PackageSignaturePlacement,
-    PackageSignatureRecipient,
-    RegulatoryArtifactVersion,
-    ReturnSignaturePlacement,
-    ReturnSigningPolicy,
-    SignerIdentity,
-    SignerKey,
-    SigningAuthorization,
-)
 from app.models.audit_event import AuditEvent
 from app.models.bi import (
     BiAggPositionDaily,

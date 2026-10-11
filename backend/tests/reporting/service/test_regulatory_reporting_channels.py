@@ -273,7 +273,7 @@ def _seed_approved_package(db: Session) -> RegulatoryPackage:
     # every return by default, so opt this one return out the way an
     # administrator would — rather than driving a two-officer ceremony through
     # every channel test and turning them into attestation tests by accident.
-    # The gate itself is proved in tests/services/test_attestation_spine.py and
+    # The gate itself is proved in tests/attestation/service/test_attestation_spine.py and
     # in the Playwright lifecycle journey.
     relax_signing(db, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
     for ctx, email, name in (

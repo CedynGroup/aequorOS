@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from app.api.deps import BANK_ROUTE_DEPENDENCIES, require_module_access
 from app.api.health import router as health_router
 from app.api.v1.database_connections import router as database_direct_connections_router
+from app.attestation.api.manage_attestation import router as attestation_router
 from app.features.ask_bi import router as bi_ask_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
 from app.features.export_bi import router as bi_export_router
@@ -13,7 +14,6 @@ from app.features.ingest_data import router as ingestion_router
 from app.features.list_case_taxonomy import router as case_taxonomy_router
 from app.features.list_taxonomy import router as taxonomy_router
 from app.features.manage_ai_settings import router as ai_settings_router
-from app.features.manage_attestation import router as attestation_router
 from app.features.manage_bi_commentary import router as bi_commentary_router
 from app.features.manage_bi_content import router as bi_content_router
 from app.features.manage_bi_notifications import router as bi_notifications_router

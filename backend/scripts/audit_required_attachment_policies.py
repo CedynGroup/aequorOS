@@ -87,7 +87,7 @@ _POLICY_SQL = text(
 
 #: Packages a policy row could apply to. Resolution order (code beats family,
 #: bank beats org) is re-applied in Python below, against the SAME precedence
-#: the service uses -- see ``attestation/policy.resolve_policy``.
+#: the service uses -- see ``app.attestation.service.policy.resolve_policy``.
 #:
 #: The attachment count is spliced in only when the attachment table EXISTS. The
 #: whole point of this audit is to run BEFORE the ICAAP filing migration is
@@ -118,11 +118,7 @@ _ATTACHMENT_COUNT = """(SELECT count(*)
 
 
 def _package_sql(*, attachments_exist: bool):
-    return text(
-        _PACKAGE_SELECT.format(
-            attachments=_ATTACHMENT_COUNT if attachments_exist else "0"
-        )
-    )
+    return text(_PACKAGE_SELECT.format(attachments=_ATTACHMENT_COUNT if attachments_exist else "0"))
 
 
 def _applies(  # noqa: PLR0911 - one return per resolution dimension
@@ -184,9 +180,7 @@ def main() -> int:
         ]
         open_packages = [
             dict(row)
-            for row in connection.execute(
-                package_sql, {"statuses": list(NON_TERMINAL)}
-            ).mappings()
+            for row in connection.execute(package_sql, {"statuses": list(NON_TERMINAL)}).mappings()
         ]
         filed_packages = [
             dict(row)
@@ -194,8 +188,7 @@ def main() -> int:
         ]
 
     print(
-        "attachment tables present: "
-        f"{'yes' if attachments_exist else 'no (pre-migration primary)'}"
+        f"attachment tables present: {'yes' if attachments_exist else 'no (pre-migration primary)'}"
     )
     print()
     print("=== (1) Active policies that require an attachment ===")

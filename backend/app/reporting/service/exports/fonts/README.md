@@ -31,7 +31,7 @@ not lawfully embed would make the filed instrument itself defective. The
 upstream copyright line carries **no Reserved Font Name**, so a derived static
 instance may keep the family name.
 
-Noto Sans over the four script faces in `app/services/attestation/fonts/`:
+Noto Sans over the four script faces in `app/attestation/service/fonts/`:
 those are signature marks (Caveat, Allura …) with a Latin-only repertoire and no
 bold or italic, so none of them can set a document body.
 

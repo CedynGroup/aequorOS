@@ -21,9 +21,9 @@ rule.
 
 from __future__ import annotations
 
+from app.attestation.public import canonical_json, sha256_hex
 from app.core.config import get_settings
 from app.services.ai.client import ModelRequest, SystemBlock
-from app.services.attestation.digests import canonical_json, sha256_hex
 from app.services.bi.commentary.schema import CommentaryDraft
 
 #: v2 (2026-09-29): the ``data_trust`` descriptor and its instruction left the

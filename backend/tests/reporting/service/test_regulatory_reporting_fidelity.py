@@ -70,7 +70,7 @@ def _seed_with_baseline_run(db: Session) -> None:
     # This suite is about REGULATOR DECISIONS (reject, decline, resubmission),
     # not about who signed. Opt this return out of the platform's mandatory
     # signing the way an administrator would; the gate is proved in
-    # tests/services/test_attestation_spine.py.
+    # tests/attestation/service/test_attestation_spine.py.
     relax_signing(db, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
     if db.scalar(select(User.id).where(User.id == CHECKER.actor_user_id)) is None:
         db.add(

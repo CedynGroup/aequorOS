@@ -33,7 +33,7 @@ class FrameworkNotFound(LookupError):
 
 
 def canonical_json(payload: object) -> str:
-    """Byte-identical to ``services/attestation/digests.canonical_json``."""
+    """Byte-identical to ``app.attestation.service.digests.canonical_json``."""
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 

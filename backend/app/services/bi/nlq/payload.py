@@ -28,9 +28,9 @@ and a user types anyway. That is stated in the report rather than papered over: 
 words of a question are the input, so the feature cannot exist without sending them,
 and the consent text has to say so before a tenant is offered it.
 
-The payload is hashed with ``attestation.digests`` and the worker re-hashes it before
-calling the model, so a queued request can never send something other than what the
-process holding the reader's authority froze.
+The payload is hashed through ``app.attestation.public`` and the worker re-hashes
+it before calling the model, so a queued request can never send something other
+than what the process holding the reader's authority froze.
 """
 
 from __future__ import annotations
@@ -40,10 +40,10 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
+from app.attestation.public import canonical_json, sha256_hex
 from app.identity.public import Bank
 from app.schemas.bi_nlq import QUESTION_MAX_CHARS
 from app.services.ai import pseudonymise
-from app.services.attestation.digests import canonical_json, sha256_hex
 from app.services.bi.nlq.candidates import CandidateSet
 
 #: Why a question was not sent at all. Closed, and each has its own production copy

@@ -20,7 +20,7 @@ from typing import cast
 SHARDS = 4
 SCHEMA_SHARDS = 2
 DURATIONS = Path(__file__).with_name("ci_postgres_durations.json")
-BAO_MODULE = "tests/services/test_attestation_openbao.py"
+BAO_MODULE = "tests/attestation/service/test_attestation_openbao.py"
 
 
 def shard_for(module: str, count: int = SHARDS) -> int:
@@ -236,7 +236,9 @@ def verify(directory: Path, files: list[str], suite: str) -> None:
         bao = [
             case
             for case in cases
-            if case.get("classname", "").startswith("tests.services.test_attestation_openbao")
+            if case.get("classname", "").startswith(
+                "tests.attestation.service.test_attestation_openbao"
+            )
         ]
         if not bao or any(case.find("skipped") is not None for case in bao):
             raise ValueError("OpenBao tests were absent or skipped")
