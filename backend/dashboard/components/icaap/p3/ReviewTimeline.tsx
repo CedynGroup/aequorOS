@@ -14,7 +14,7 @@
  *
  *  - **A send-back does not erase what came before it.** `stillStands` is the
  *    server's answer, computed from the round rule in
- *    `app/domain/icaap/workflow.py`; this screen never recomputes it.
+ *    `app/icaap/domain/workflow.py`; this screen never recomputes it.
  *  - **The signature stage records no decision.** The board signs the
  *    document itself, in the Filing tab; a "decide" control on that stage
  *    would be an invitation to an act the server refuses (409

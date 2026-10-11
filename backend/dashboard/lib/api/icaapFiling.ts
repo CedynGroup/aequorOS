@@ -607,7 +607,7 @@ export function useProposeIcaapWorkflowTemplate(bankId: string | undefined) {
  * Rewrites the stages of a DRAFT chain.
  *
  * Both this and `useProposeIcaapWorkflowTemplate` run
- * `app/domain/icaap/workflow.validate_stages` server-side BEFORE anything is
+ * `app/icaap/domain/workflow.validate_stages` server-side BEFORE anything is
  * written, and answer 422 with that function's own code and sentence. That is
  * why the composer mirrors none of the chain rules: the one authority on what
  * a runnable chain is answers every save, and the screen prints what it said.

@@ -41,12 +41,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.icaap.frameworks import registry
 from app.domain.policy import parameter_shapes
+from app.icaap.domain.frameworks import registry
+from app.icaap.service import parameters as workspace_parameters
+from app.icaap.service.params import REPRESENTATIVE_PREFIX, ParameterRow
 from app.models import Jurisdiction, RegulatoryParameter
 from app.services import regulatory_parameters
-from app.services.icaap import parameters as workspace_parameters
-from app.services.icaap.params import REPRESENTATIVE_PREFIX, ParameterRow
 from tests.fixtures import reference_data
 
 BACKEND = Path(__file__).resolve().parents[2]
@@ -422,10 +422,7 @@ def test_the_fixture_registry_matches_the_jurisdictions_migration() -> None:
 
 
 def test_the_hermetic_database_knows_both_regulators(db_session: Session) -> None:
-    rows = {
-        row.code: row.regulator_short
-        for row in db_session.scalars(select(Jurisdiction)).all()
-    }
+    rows = {row.code: row.regulator_short for row in db_session.scalars(select(Jurisdiction)).all()}
     assert rows["NG"] == "CBN"
     assert rows["KE"] == "CBK"
 

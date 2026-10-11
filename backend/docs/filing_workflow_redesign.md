@@ -14,7 +14,7 @@ read that before changing anything in §3.3 or §6 step 1.
   round rules, the D-067 scale normaliser) plus
   `app/services/filing_workflow/engine.py` (the blocker ladder, the officer-title
   check, the send-back rules, signer display). **Both planes run it.**
-  `app/domain/icaap/workflow.py` and `app/services/icaap/workflow.py` were
+  `app/icaap/domain/workflow.py` and `app/icaap/service/workflow.py` were
   rewritten onto it with byte-identical refusal sentences; ICAAP keeps its own
   structural rules (a chain that starts with a preparation and ends at the Board,
   with exactly one freeze stage) and its own `Stage` shape, because

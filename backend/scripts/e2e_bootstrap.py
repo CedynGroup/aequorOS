@@ -758,7 +758,7 @@ def _govern_icaap_commencement(session: Session) -> None:
     proof that the change takes effect without a release (D-024 / D-032). No
     date is written into an engine, a template or a service.
     """
-    from app.services.icaap.freeze import FIRST_AS_OF_PARAM  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service.freeze import FIRST_AS_OF_PARAM  # noqa: PLC0415 - avoid a cycle
 
     rows = (
         session.query(RegulatoryParameter)

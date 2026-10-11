@@ -65,7 +65,7 @@ import {
  * backend schema change lands here through regeneration.
  *
  * NOTE for readers coming from the section checklist: `IcaapRequirementRead` is
- * the CHECKLIST requirement (`app/schemas/icaap.py`, used by
+ * the CHECKLIST requirement (`app/icaap/schemas/workspace.py`, used by
  * `components/icaap/RequirementChecklist.tsx`). The Pillar 2 capital
  * requirement statement is `IcaapCapitalRequirementRead` — the two were
  * colliding in the generator and the P2 one was renamed.
@@ -83,7 +83,7 @@ import {
  * the only correct shape for a mutation, and a hand-written copy would drift.
  *
  * NOTE for readers coming from the section checklist: `IcaapRequirementRead` is
- * the CHECKLIST requirement (`app/schemas/icaap.py`, used by
+ * the CHECKLIST requirement (`app/icaap/schemas/workspace.py`, used by
  * `components/icaap/RequirementChecklist.tsx`). The Pillar 2 capital
  * requirement statement is `IcaapCapitalRequirementRead` — the two collided in
  * the generator and the P2 one was renamed.

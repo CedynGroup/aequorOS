@@ -7,13 +7,13 @@ propose and approve — so changing one is an operator action, not a release.
 
 Two allowlists make this checkable rather than merely aspirational:
 
-* the SEED CATALOGUE (``app/services/icaap/parameters.py``) and the migration
+* the SEED CATALOGUE (``app/icaap/service/parameters.py``) and the migration
   that pins it are where values are permitted, because D-024 §2 says the
   initial approved rows have to live somewhere;
 * a short, reviewed list of STRUCTURAL constants — sizes, limits, scales,
   indices — which are not regulatory numbers at all. Each entry names why.
 
-Everything else under ``app/domain/icaap`` and ``app/services/icaap`` must be
+Everything else under ``app/icaap/domain`` and ``app/icaap/service`` must be
 free of numeric literals beyond the trivial ones, and the framework JSON must
 carry parameter CODES rather than figures.
 """
@@ -27,8 +27,8 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.icaap.frameworks import registry
-from app.services.icaap.parameters import (
+from app.icaap.domain.frameworks import registry
+from app.icaap.service.parameters import (
     ICAAP_JURISDICTION_SEED_PARAMETERS,
     ICAAP_PARAM_CODES,
     ICAAP_SEED_PARAMETERS,
@@ -40,11 +40,11 @@ from app.services.regulatory_parameters import (
 )
 
 BACKEND = Path(__file__).parents[2]
-SCANNED = ("app/domain/icaap", "app/services/icaap")
+SCANNED = ("app/icaap/domain", "app/icaap/service")
 
 #: The one file D-024 §2 permits to hold values, plus the migration that pins
 #: them. A test below proves the two agree.
-SEED_CATALOGUE = "app/services/icaap/parameters.py"
+SEED_CATALOGUE = "app/icaap/service/parameters.py"
 SEED_MIGRATION = "alembic/versions/202609190055_icaap_workspace.py"
 
 #: Numbers that are not regulatory: 0 and 1 are identity and emptiness, 2 is a
@@ -55,39 +55,39 @@ TRIVIAL = frozenset({0, 1, 2, -1})
 #: regulatory values, and a renderer only ever prints figures it was handed —
 #: so these files are exempt from the NUMERIC scan but stay in the percentage
 #: scan below, which is what would catch a regulatory claim in their copy.
-LAYOUT_ONLY = ("app/services/icaap/render/", "app/services/icaap/exports_draft.py")
+LAYOUT_ONLY = ("app/icaap/service/render/", "app/icaap/service/exports_draft.py")
 
 #: Structural constants, each with the reason it is not a regulatory value.
 #: Adding a line here is a review decision, not a workaround.
 STRUCTURAL_ALLOWLIST: dict[str, dict[int | float, str]] = {
-    "app/domain/icaap/prosemirror.py": {
+    "app/icaap/domain/prosemirror.py": {
         0xD800: "Unicode surrogate range, lower bound",
         0xDFFF: "Unicode surrogate range, upper bound",
         3: "heading level 3, a document structure level",
         4: "heading level 4, a document structure level",
     },
-    "app/domain/icaap/frameworks/schema.py": {
+    "app/icaap/domain/frameworks/schema.py": {
         280: "maximum characters in a paraphrased checklist item (editorial)",
         12: "months in a year, for month arithmetic",
         26: "letters in the alphabet, for section lettering beyond z",
     },
-    "app/services/icaap/blocks.py": {
+    "app/icaap/service/blocks.py": {
         40: "maximum characters in a generated block key slug",
     },
-    "app/services/icaap/readiness_p2.py": {
+    "app/icaap/service/readiness_p2.py": {
         12: "months in a year, for the age of a review or a Board approval",
     },
-    "app/services/icaap/sections.py": {
+    "app/icaap/service/sections.py": {
         10: "minimum characters in a waiver reason (editorial)",
         3: "heading level 3, used for the provenance heading on merged text",
     },
-    "app/services/icaap/resolvers/plans.py": {
+    "app/icaap/service/resolvers/plans.py": {
         5: "number of projection years the plan block republishes",
     },
-    "app/services/icaap/resolvers/credit.py": {
+    "app/icaap/service/resolvers/credit.py": {
         10000: "the concentration monitor's index scale, converted to 0-1 here",
     },
-    "app/services/icaap/attachments.py": {
+    "app/icaap/service/attachments.py": {
         64: "length of a hex sha256 digest",
         255: "maximum stored filename length, matching the column",
         200: "maximum stored source-reference length for object metadata",
@@ -97,27 +97,27 @@ STRUCTURAL_ALLOWLIST: dict[str, dict[int | float, str]] = {
     # stages a review chain may have, how long a job title may be, or how many
     # item ids a refusal message lists. Each matches a column width, a database
     # CHECK, or an editorial limit on a sentence.
-    "app/domain/icaap/workflow.py": {
+    "app/icaap/domain/workflow.py": {
         20: "maximum stages in a review chain, matching the CHECK on stage seq",
         10: "maximum officer titles per stage (editorial)",
         120: "maximum characters in an officer title, matching the column",
         200: "maximum characters in a stage title, matching the column",
     },
-    "app/services/icaap/workflow.py": {
+    "app/icaap/service/workflow.py": {
         10: "minimum characters in a send-back comment (editorial), as for a waiver reason",
     },
-    "app/services/icaap/freeze.py": {
+    "app/icaap/service/freeze.py": {
         5: "how many section keys a refusal names before it stops being readable",
         2000: "maximum package notes length, matching the column",
     },
-    "app/services/icaap/clone.py": {
+    "app/icaap/service/clone.py": {
         200: "maximum cycle title length, matching the column",
     },
-    "app/services/icaap/validation_rules.py": {
+    "app/icaap/service/validation_rules.py": {
         20: "how many item ids a validation finding names before it stops being readable",
     },
     # --- P5 -----------------------------------------------------------------
-    "app/services/icaap/pillar2_inputs/granularity.py": {
+    "app/icaap/service/pillar2_inputs/granularity.py": {
         5: "how many exposure references a book refusal names before it summarises",
     },
 }
@@ -243,7 +243,7 @@ def test_every_parameter_the_framework_quotes_is_seeded() -> None:
     """A checklist item quoting a code nobody seeded would refuse at read time.
 
     There are FOUR ICAAP seed catalogues, and a framework may quote from any of
-    them. P1's (``services/icaap/parameters.py``, pinned by ``202609190055``)
+    them. P1's (``icaap/service/parameters.py``, pinned by ``202609190055``)
     holds the workspace codes; P2's (``ICAAP_P2_SEED_PARAMETERS``, pinned by
     ``202609190056``) holds the Pillar 2 engine's, including the review and
     independent-review intervals the Nigeria and Kenya checklists quote; P3's
@@ -262,7 +262,7 @@ def test_every_parameter_the_framework_quotes_is_seeded() -> None:
     ``tests/services/test_regulatory_parameters_icaap_jurisdictions.py`` fails
     if that ever stops being true. Whether a code is seeded for the right
     JURISDICTION is a different question, asked by
-    ``tests/domain/icaap/test_framework_param_refs.py``.
+    ``tests/icaap/domain/test_framework_param_refs.py``.
     """
     seeded = ICAAP_PARAM_CODES | P2_PARAMETER_CODES | FILING_PARAMETER_CODES | P5_PARAMETER_CODES
     for framework in registry.load_all():

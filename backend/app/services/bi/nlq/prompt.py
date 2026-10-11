@@ -1,7 +1,7 @@
 """The prompt: a byte-stable static block, then the payload as the user turn.
 
 Same order and the same reasons as ``app/services/bi/commentary/prompt.py`` and
-``app/services/icaap/ai_prompt.py``. The static block never changes, so it caches
+``app/icaap/service/ai_prompt.py``. The static block never changes, so it caches
 across every tenant and every request; the payload is volatile and sits after it,
 where it cannot disturb the cached prefix. There is no mode block: this surface
 sends no figures, so there is nothing for a tenant's consent to vary.

@@ -580,7 +580,7 @@ class IcaapSettings(BaseSettings):
             msg = (
                 "ICAAP_EXTRA_FRAMEWORKS_DIR loads ICAAP frameworks that no reviewer has "
                 f"approved and is refused in the '{app_env}' environment. Publish the "
-                "framework under app/domain/icaap/frameworks/ instead."
+                "framework under app/icaap/domain/frameworks/ instead."
             )
             raise ValueError(msg)
         return tuple(

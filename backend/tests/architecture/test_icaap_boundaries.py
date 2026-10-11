@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.icaap.frameworks import registry
+from app.icaap.domain.frameworks import registry
 
 BACKEND = Path(__file__).parents[2]
 #: The whole ICAAP surface, not just its two packages. The route layer is
@@ -27,8 +27,9 @@ BACKEND = Path(__file__).parents[2]
 #: guard scanned two of the five (architecture audit M6), so its docstring's
 #: promise to fail "the moment the dependency is WRITTEN" did not hold there.
 SCANNED = (
-    "app/domain/icaap",
-    "app/services/icaap",
+    "app/icaap/domain",
+    "app/icaap/service",
+    "app/icaap/api",
     "app/domain/ai",
     "app/services/ai",
 )
@@ -71,6 +72,10 @@ STATEFUL_PREFIXES = (
     "app.identity.models",
     "app.identity.service",
     "app.identity.public",
+    "app.icaap.api",
+    "app.icaap.models",
+    "app.icaap.service",
+    "app.icaap.public",
 )
 
 
@@ -148,7 +153,7 @@ def test_no_icaap_module_names_a_live_model(path: Path) -> None:
     assert not offending, f"{path.relative_to(BACKEND)} names {offending}"
 
 
-DOMAIN_FILES = _python_files("app/domain/icaap")
+DOMAIN_FILES = _python_files("app/icaap/domain")
 DOMAIN_IDS = [str(path.relative_to(BACKEND)) for path in DOMAIN_FILES]
 
 
@@ -165,7 +170,7 @@ def test_the_domain_package_reads_its_data_from_its_own_directory() -> None:
     """The framework JSON and the editor schema ship inside the image."""
     assert registry.FRAMEWORK_ROOT.is_dir()
     assert list(registry.FRAMEWORK_ROOT.glob("*/*.json")), "no framework is published"
-    assert (BACKEND / "app/domain/icaap/editor_schema.json").is_file()
+    assert (BACKEND / "app/icaap/domain/editor_schema.json").is_file()
 
 
 def test_the_scanner_would_catch_a_deliberate_violation(tmp_path: Path) -> None:
@@ -177,7 +182,7 @@ def test_the_scanner_would_catch_a_deliberate_violation(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     tree = ast.parse(violation.read_text(encoding="utf-8"))
-    imported = _imported_modules(tree, "app.services.icaap.leaky")
+    imported = _imported_modules(tree, "app.icaap.service.leaky")
     assert any(name.startswith("app.services.live_block") for name in imported)
     assert _called_names(tree) & FORBIDDEN_CALLS
 
@@ -191,14 +196,14 @@ def test_the_scanner_would_catch_a_deliberate_violation(tmp_path: Path) -> None:
 # taken anywhere in that session is credited to whichever run seals next. The
 # ICAAP workspace is a REPORT plane: it seals no run and writes its own
 # governed-row record onto the frozen snapshot. Every ICAAP read therefore goes
-# through ``app/services/icaap/parameters.py``, which passes ``record=False``.
+# through ``app/icaap/service/parameters.py``, which passes ``record=False``.
 #
 # This replaces the invariant "no ICAAP request session ever seals a
 # ``RegulatoryRun``", which nothing stated and nothing tested, and which a
 # "run the engine now" action on an ICAAP block would break in one line.
 
 #: The one ICAAP module permitted to speak to the control plane directly.
-PARAMETER_DOOR = "app/services/icaap/parameters.py"
+PARAMETER_DOOR = "app/icaap/service/parameters.py"
 #: Reads that would enter the ambient ledger unless the plane is stated.
 LEDGER_ENTRY_POINTS = frozenset({"try_resolve", "resolve", "resolve_class_value", "seed_values"})
 
@@ -230,7 +235,7 @@ def test_icaap_reads_governed_parameters_only_through_its_own_door(path: Path) -
     assert not offending, (
         f"{path.relative_to(BACKEND)} calls regulatory_parameters.{offending} directly. "
         f"The ICAAP report plane seals no RegulatoryRun, so its reads must not enter the "
-        f"session consumption ledger — go through app.services.icaap.parameters, which "
+        f"session consumption ledger — go through app.icaap.service.parameters, which "
         f"passes record=False."
     )
 
@@ -316,7 +321,7 @@ def test_the_stress_overlay_does_not_restate_the_fx_addon(relative: str) -> None
     }
     assert read == set(), (
         f"{relative} computes an FX figure from NOP percentages. The Pillar 2 FX "
-        f"add-on has one definition (app/domain/icaap/pillar2/fx.py); the overlay "
+        f"add-on has one definition (app/icaap/domain/pillar2/fx.py); the overlay "
         f"reads FxOutcome.pillar2_addon."
     )
 
@@ -327,7 +332,7 @@ def test_the_stress_orchestrator_computes_the_fx_addon_with_the_icaap_function()
     tree = ast.parse(source)
     imported = _imported_modules(tree, "app.domain.stress.orchestrator")
 
-    assert "app.domain.icaap.pillar2.fx" in imported, (
+    assert "app.icaap.domain.pillar2.fx" in imported, (
         "the enterprise stress orchestrator must derive Table 5's country_and_fx "
         "from the ICAAP Pillar 2 FX method (D-038)"
     )

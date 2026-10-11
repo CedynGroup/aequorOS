@@ -627,7 +627,7 @@ when it was assumed away:
    `app/worker.py::resolve_job_types` refuses a process that mixes lanes. The
    reason is the model credential: the process holding `ANTHROPIC_API_KEY` runs
    nothing else, and it deploys from its own compose file.
-4. **Jurisdiction identity is data under `app/domain/icaap/frameworks/<code>/`**
+4. **Jurisdiction identity is data under `app/icaap/domain/frameworks/<code>/`**
    with no `if jurisdiction ==` anywhere — the same rule §2 and the jurisdictions
    registry state, applied to a whole regulatory regime. Read the sourcing
    caveats in the linked document before relying on the Nigeria or Kenya

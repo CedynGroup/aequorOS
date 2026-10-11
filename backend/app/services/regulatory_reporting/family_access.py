@@ -194,7 +194,7 @@ def can_view(
         # permission: the surface does not exist for that licence class (C-27).
         return False
     if ctx.impersonation_context is not None:
-        from app.services.icaap import guards  # noqa: PLC0415 - avoid an import cycle
+        from app.icaap.service import guards  # noqa: PLC0415 - avoid an import cycle
 
         try:
             guards.require_examiner(ctx)

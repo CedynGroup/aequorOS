@@ -514,8 +514,11 @@ def copy_freeze_attachments(
     filing, and the hash is what proves the filed document is that document. No
     commit — the freeze owns the transaction (P3-DESIGN §3.6).
     """
-    from app.models.icaap import IcaapAttachment, IcaapAttachmentWithdrawal  # noqa: PLC0415
-    from app.services.icaap import guards  # noqa: PLC0415 - framework gates live there
+    from app.icaap.models.workspace import (  # noqa: PLC0415
+        IcaapAttachment,
+        IcaapAttachmentWithdrawal,
+    )
+    from app.icaap.service import guards  # noqa: PLC0415 - framework gates live there
 
     actor_user_id = ctx.actor_user_id
     if actor_user_id is None:  # pragma: no cover - refused upstream
@@ -579,7 +582,7 @@ def _cycle_attachment_gates(
     db: Session, ctx: TenantContext, cycle_id: UUID, *, guards: Any
 ) -> dict[str, str]:
     """``{kind: gate}`` from the cycle's own framework, or ``{}`` if unresolvable."""
-    from app.models.icaap import IcaapCycle  # noqa: PLC0415
+    from app.icaap.models.workspace import IcaapCycle  # noqa: PLC0415
 
     cycle = db.scalar(
         select(IcaapCycle).where(

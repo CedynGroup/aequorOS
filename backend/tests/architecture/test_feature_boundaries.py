@@ -298,11 +298,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "reporting",
     ),
     (
-        r"^(services/icaap/.*|domain/icaap/.*|models/icaap.*|schemas/icaap.*"
-        r"|features/(manage_icaap.*|export_icaap_drafts))$",
-        "icaap",
-    ),
-    (
         r"^(services/bi/.*|domain/bi/.*|models/bi.*|schemas/bi.*|jobs/bi.*"
         r"|features/(ask_bi|export_bi|manage_bi_.*|read_bi.*))$",
         "bi",
@@ -525,7 +520,7 @@ def test_the_scanner_charges_each_rule() -> None:
     assert _violation("stress", "fx", "app.fx.domain.engine") is None
     assert _violation("stress", "fx", "app.domain.fx.engine") is None
     assert _violation("fx", "liquidity", "app.liquidity.public") is None
-    assert _violation(COMPOSITION, "icaap", "app.services.icaap.workspace") is None
+    assert _violation(COMPOSITION, "icaap", "app.icaap.service.workspace") is None
     assert _violation("icaap", KERNEL, "app.services.audit") is None
 
 

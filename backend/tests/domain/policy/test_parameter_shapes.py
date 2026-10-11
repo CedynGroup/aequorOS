@@ -21,8 +21,8 @@ import pytest
 
 from app.domain.policy import parameter_shapes
 from app.domain.policy.parameter_shapes import ParameterShapeError, validate
-from app.models.icaap import ICAAP_BASES as WORKSPACE_BASES
-from app.models.icaap_risk_capital import ICAAP_BASES
+from app.icaap.models.risk_capital import ICAAP_BASES
+from app.icaap.models.workspace import ICAAP_BASES as WORKSPACE_BASES
 
 
 def _band_table(**overrides: Any) -> dict[str, Any]:
@@ -122,7 +122,7 @@ def test_the_band_table_basis_vocabulary_matches_the_model() -> None:
 def test_the_two_icaap_bases_vocabularies_are_not_the_same_thing() -> None:
     """``ICAAP_BASES`` means two different things in two model modules.
 
-    ``app.models.icaap`` has the REPORTING basis (solo / consolidated); the
+    ``app.icaap.models.workspace`` has the REPORTING basis (solo / consolidated); the
     risk & capital module has the AMOUNT basis a Pillar 2 figure is expressed
     in. Both names come from the design. Neither is re-exported from
     ``app.models``, so nobody can pick one up by accident — but a reader who

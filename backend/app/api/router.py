@@ -9,7 +9,6 @@ from app.features.ask_bi import router as bi_ask_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
 from app.features.examiner_surfaces import router as examiner_router
 from app.features.export_bi import router as bi_export_router
-from app.features.export_icaap_drafts import router as icaap_draft_exports_router
 from app.features.generate_case_reports import router as case_reports_router
 from app.features.ingest_data import router as ingestion_router
 from app.features.list_case_taxonomy import router as case_taxonomy_router
@@ -28,25 +27,6 @@ from app.features.manage_enterprise_stress_signoff import (
     router as enterprise_stress_signoff_router,
 )
 from app.features.manage_filing_workflow import router as filing_workflow_router
-from app.features.manage_icaap import router as icaap_router
-from app.features.manage_icaap_ai import router as icaap_ai_router
-from app.features.manage_icaap_appetite import router as icaap_appetite_router
-from app.features.manage_icaap_attachments import router as icaap_attachments_router
-from app.features.manage_icaap_blocks import router as icaap_blocks_router
-from app.features.manage_icaap_disclosure import router as icaap_disclosure_router
-from app.features.manage_icaap_filing import router as icaap_filing_router
-from app.features.manage_icaap_pillar2 import router as icaap_pillar2_router
-from app.features.manage_icaap_reconciliation import (
-    router as icaap_reconciliation_router,
-)
-from app.features.manage_icaap_review import router as icaap_review_router
-from app.features.manage_icaap_reviews import router as icaap_reviews_router
-from app.features.manage_icaap_risks import router as icaap_risks_router
-from app.features.manage_icaap_sections import router as icaap_sections_router
-from app.features.manage_icaap_supervisory_addons import (
-    router as icaap_supervisory_addons_router,
-)
-from app.features.manage_icaap_workflow import router as icaap_workflow_router
 from app.features.manage_liquidity_cfp import router as liquidity_cfp_router
 from app.features.manage_liquidity_thresholds import router as liquidity_thresholds_router
 from app.features.manage_live_engine import router as live_engine_router
@@ -96,6 +76,26 @@ from app.features.track_jobs import router as jobs_router
 from app.forecasting.api.manage_forecast_assumptions import (
     router as forecast_assumptions_router,
 )
+from app.icaap.api.export_icaap_drafts import router as icaap_draft_exports_router
+from app.icaap.api.manage_icaap import router as icaap_router
+from app.icaap.api.manage_icaap_ai import router as icaap_ai_router
+from app.icaap.api.manage_icaap_appetite import router as icaap_appetite_router
+from app.icaap.api.manage_icaap_attachments import router as icaap_attachments_router
+from app.icaap.api.manage_icaap_blocks import router as icaap_blocks_router
+from app.icaap.api.manage_icaap_disclosure import router as icaap_disclosure_router
+from app.icaap.api.manage_icaap_filing import router as icaap_filing_router
+from app.icaap.api.manage_icaap_pillar2 import router as icaap_pillar2_router
+from app.icaap.api.manage_icaap_reconciliation import (
+    router as icaap_reconciliation_router,
+)
+from app.icaap.api.manage_icaap_review import router as icaap_review_router
+from app.icaap.api.manage_icaap_reviews import router as icaap_reviews_router
+from app.icaap.api.manage_icaap_risks import router as icaap_risks_router
+from app.icaap.api.manage_icaap_sections import router as icaap_sections_router
+from app.icaap.api.manage_icaap_supervisory_addons import (
+    router as icaap_supervisory_addons_router,
+)
+from app.icaap.api.manage_icaap_workflow import router as icaap_workflow_router
 from app.identity.api.auth import router as auth_router
 from app.identity.api.list_organization_users import router as organization_users_router
 from app.identity.api.manage_authorization import router as authorization_router

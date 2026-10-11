@@ -29,7 +29,7 @@ from app.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import default_macro_scenarios, enterprise_stress, regulatory_irr
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
-from tests.services.test_icaap_stress_appendix2_report import (
+from tests.icaap.service.test_icaap_stress_appendix2_report import (
     MAKER,
     _attested_signoff,
     _generate,

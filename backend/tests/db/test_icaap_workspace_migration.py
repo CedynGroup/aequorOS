@@ -695,7 +695,7 @@ def test_only_one_open_cycle_per_year_kind_and_basis(connection: Connection) -> 
 def test_the_revision_seeds_the_parameters_the_workspace_reads(
     connection: Connection,
 ) -> None:
-    from app.services.icaap.parameters import ICAAP_PARAM_CODES  # noqa: PLC0415
+    from app.icaap.service.parameters import ICAAP_PARAM_CODES  # noqa: PLC0415
 
     rows = connection.execute(
         text(

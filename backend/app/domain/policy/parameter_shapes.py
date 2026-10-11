@@ -47,7 +47,7 @@ __all__ = [
 ]
 
 #: The add-on basis vocabulary a band table may name. Mirrors
-#: ``app.models.icaap_risk_capital.ICAAP_BASES``; a test pins the two equal
+#: ``app.icaap.models.risk_capital.ICAAP_BASES``; a test pins the two equal
 #: (the model may not be imported here — ``app/domain`` is pure).
 BAND_TABLE_BASES: Final[tuple[str, ...]] = (
     "pct_total_rwa",
@@ -561,9 +561,7 @@ def _sf_nmd_caps(_numeric: Decimal | None, body: Mapping[str, Any] | None) -> No
             high=None,
         )
         if maturity == _ZERO:
-            raise ParameterShapeError(
-                f"{path}.avg_maturity_cap_years", "must be greater than zero"
-            )
+            raise ParameterShapeError(f"{path}.avg_maturity_cap_years", "must be greater than zero")
 
 
 def _sf_cpr_scaling(_numeric: Decimal | None, body: Mapping[str, Any] | None) -> None:
@@ -756,9 +754,7 @@ SHAPES: Final[Mapping[str, Shape]] = {
     "irrbb_sf_mandatory_scenarios": _structural("code_list", _code_list),
     "irrbb_sf_nii_horizon_months": _scalar("months", _scalar_int_min1),
     "irrbb_sf_cpr_time_scaling": _structural("cpr_scaling", _sf_cpr_scaling),
-    "irrbb_sf_default_cash_flow_profile": _structural(
-        "cash_flow_profile", _sf_cash_flow_profile
-    ),
+    "irrbb_sf_default_cash_flow_profile": _structural("cash_flow_profile", _sf_cash_flow_profile),
     "irrbb_sf_mandatory_from_as_of": _structural("effective_date", _effective_date),
     # --- granularity adjustment (seeded by 202609190061) -------------------
     "ga_confidence_q": _scalar("ratio", _scalar_ratio),

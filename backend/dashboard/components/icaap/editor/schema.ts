@@ -2,7 +2,7 @@
  * The ICAAP editor's document schema — the CLIENT half of a contract whose
  * authority is the backend.
  *
- * `backend/app/domain/icaap/editor_schema.json` is the allowlist the server
+ * `backend/app/icaap/domain/editor_schema.json` is the allowlist the server
  * validates every saved document against. This file must produce exactly that
  * node/mark set, with the same content expressions, groups, inline/atom flags
  * and attribute NAMES, or an author can compose a paragraph the API refuses.

@@ -86,7 +86,7 @@ __all__ = [
 PAYLOAD_SCHEMA = "aequoros-bi-commentary-payload-v1"
 
 #: Value types whose figure may cross the boundary in STANDARD mode. Mirrors
-#: ``app.domain.icaap.ai_facts.VALUE_BEARING_KINDS`` over BI's own vocabulary.
+#: ``app.icaap.domain.ai_facts.VALUE_BEARING_KINDS`` over BI's own vocabulary.
 VALUE_BEARING_TYPES: frozenset[ValueType] = frozenset(
     {"pct", "fraction", "index", "duration_years", "count"}
 )

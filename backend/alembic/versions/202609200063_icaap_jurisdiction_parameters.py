@@ -16,7 +16,7 @@ platform policy, not a regulator's number, in every jurisdiction.
 **Sourcing, stated plainly because the rows will outlive this message.**
 Neither primary text is in this repository and nobody on this platform has read
 either one. The values come from the extraction record behind
-``app/domain/icaap/frameworks/{ng,ke}/SOURCES.md`` — a whole-document reading
+``app/icaap/domain/frameworks/{ng,ke}/SOURCES.md`` — a whole-document reading
 made in the P5 design session of 2026-09-19 whose ``sha256`` identifies a copy
 to obtain and cannot be re-verified from a checkout (D-076). Every row is
 therefore ``confirmation_status='pending'`` and says so in its own citation, in

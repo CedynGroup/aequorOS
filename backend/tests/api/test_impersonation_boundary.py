@@ -776,9 +776,9 @@ def test_impersonated_examiner_reads_only_frozen_icaap_cycles(
     # Imported here rather than at module scope: this suite walks the whole
     # route table, and importing the ICAAP models at import time would register
     # them before the other cases build their app.
-    from app.domain.icaap.frameworks import registry  # noqa: PLC0415
+    from app.icaap.domain.frameworks import registry  # noqa: PLC0415
+    from app.icaap.models.workspace import IcaapCycle  # noqa: PLC0415
     from app.models import RegulatoryPackage  # noqa: PLC0415
-    from app.models.icaap import IcaapCycle  # noqa: PLC0415
     from tests.fixtures.canonical_bank_fixture import (  # noqa: PLC0415
         SAMPLE_BANK_ID,
         materialize_canonical_test_book,

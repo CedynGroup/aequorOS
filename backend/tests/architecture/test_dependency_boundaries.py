@@ -56,6 +56,7 @@ CASE_PLANE_MODULES: frozenset[str] = CASE_PLANE_MEMBERS
 #: Everything that produces or seals a filed regulatory number.
 REGULATORY_PLANE: tuple[str, ...] = (
     "domain",
+    "icaap/domain",
     "services/regulatory_reporting",
     "services/regulatory_capital.py",
     "services/regulatory_liquidity.py",
@@ -72,7 +73,7 @@ REGULATORY_PLANE: tuple[str, ...] = (
     "services/enterprise_stress.py",
     "services/reverse_stress.py",
     # The ICAAP workspace seals a Board-approved filing from the same runs.
-    "services/icaap",
+    "icaap/service",
 )
 
 

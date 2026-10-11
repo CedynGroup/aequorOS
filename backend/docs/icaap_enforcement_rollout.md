@@ -99,7 +99,7 @@ answer 403.
 
 The workspace resolves its deadline, amber window, materiality thresholds and
 checklist horizons from the regulatory-parameter control plane
-(`app/services/icaap/parameters.py` lists the codes; `202609190055` seeds them).
+(`app/icaap/service/parameters.py` lists the codes; `202609190055` seeds them).
 A missing code is a typed `missing_parameter` refusal naming the code, never a
 default. Confirm the seeded rows are present for the target jurisdiction, and
 that staff know the values are editable in Admin → Regulatory Parameters.

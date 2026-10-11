@@ -15,8 +15,6 @@
       "app.services.credit_concentration",
       "app.services.credit_params",
       "app.services.enterprise_stress",
-      "app.services.icaap.appetite",
-      "app.services.icaap.pillar2_inputs.granularity",
       "app.services.liquidity_thresholds",
       "app.services.regulatory_capital",
       "app.services.regulatory_credit",

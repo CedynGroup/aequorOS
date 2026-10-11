@@ -37,7 +37,7 @@ credits whichever run seals next in that session with a row it never consumed.
 BI is a DISPATCH plane: it seals no run, and a dashboard resolves the limits of
 every widget on the canvas — across every family — to draw them. Recording
 those would make a sealed run's provenance a function of which dashboard a
-different request happened to open. ``app/services/icaap/parameters.py`` is the
+different request happened to open. ``app/icaap/service/parameters.py`` is the
 precedent, and ``tests/architecture/test_bi_limit_resolver_boundary.py`` keeps
 this the only BI module that can reach the resolver at all.
 

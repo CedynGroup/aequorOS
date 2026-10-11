@@ -17,8 +17,8 @@ import pytest
 
 from app.domain.filing import review_digest
 from app.domain.filing import workflow as filing
-from app.domain.icaap import workflow as icaap
 from app.domain.workflow import chain
+from app.icaap.domain import workflow as icaap
 
 
 def _fact(
@@ -79,8 +79,15 @@ def test_a_bank_may_name_a_fourth_stage_and_call_the_last_one_what_it_likes() ->
     ("stages", "code"),
     [
         pytest.param(
-            [{"seq": 1, "stage_key": "approval", "title": "A", "decision_kind": "approve",
-              "transmit_on_approve": True}],
+            [
+                {
+                    "seq": 1,
+                    "stage_key": "approval",
+                    "title": "A",
+                    "decision_kind": "approve",
+                    "transmit_on_approve": True,
+                }
+            ],
             "stage_prepare_required",
             id="no-preparation",
         ),
@@ -95,8 +102,13 @@ def test_a_bank_may_name_a_fourth_stage_and_call_the_last_one_what_it_likes() ->
         pytest.param(
             [
                 {"seq": 1, "stage_key": "preparation", "title": "P", "decision_kind": "prepare"},
-                {"seq": 2, "stage_key": "approval", "title": "A", "decision_kind": "approve",
-                 "transmit_on_approve": True},
+                {
+                    "seq": 2,
+                    "stage_key": "approval",
+                    "title": "A",
+                    "decision_kind": "approve",
+                    "transmit_on_approve": True,
+                },
                 {"seq": 3, "stage_key": "second", "title": "B", "decision_kind": "approve"},
             ],
             "stage_transmit_not_last",
@@ -105,8 +117,13 @@ def test_a_bank_may_name_a_fourth_stage_and_call_the_last_one_what_it_likes() ->
         pytest.param(
             [
                 {"seq": 1, "stage_key": "preparation", "title": "P", "decision_kind": "prepare"},
-                {"seq": 2, "stage_key": "approval", "title": "A", "decision_kind": "review",
-                 "transmit_on_approve": True},
+                {
+                    "seq": 2,
+                    "stage_key": "approval",
+                    "title": "A",
+                    "decision_kind": "review",
+                    "transmit_on_approve": True,
+                },
             ],
             "stage_transmit_not_approval",
             id="a-review-cannot-transmit",
@@ -114,8 +131,13 @@ def test_a_bank_may_name_a_fourth_stage_and_call_the_last_one_what_it_likes() ->
         pytest.param(
             [
                 {"seq": 1, "stage_key": "preparation", "title": "P", "decision_kind": "prepare"},
-                {"seq": 2, "stage_key": "board", "title": "B", "decision_kind": "attest",
-                 "transmit_on_approve": True},
+                {
+                    "seq": 2,
+                    "stage_key": "board",
+                    "title": "B",
+                    "decision_kind": "attest",
+                    "transmit_on_approve": True,
+                },
             ],
             "stage_decision_kind_invalid",
             id="the-board-is-an-icaap-concept",
@@ -136,8 +158,13 @@ def test_the_icaap_chain_keeps_its_own_rules() -> None:
         icaap.validate_stages(
             [
                 {"seq": 1, "stage_key": "preparation", "title": "P", "decision_kind": "prepare"},
-                {"seq": 2, "stage_key": "approval", "title": "A", "decision_kind": "approve",
-                 "freeze_on_approve": True},
+                {
+                    "seq": 2,
+                    "stage_key": "approval",
+                    "title": "A",
+                    "decision_kind": "approve",
+                    "freeze_on_approve": True,
+                },
             ]
         )
     assert exc.value.code == "stage_attest_required"

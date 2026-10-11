@@ -80,7 +80,7 @@ for source, weight, out in (
 Cut with `fonttools` 4.63.0 (the locked version). A different fontTools release
 may produce different bytes; that is not a defect, but it makes the checksums
 below stale, so **regenerating means updating this table in the same commit** —
-`tests/services/test_icaap_fonts.py` compares the files on disk to it.
+`tests/icaap/service/test_icaap_fonts.py` compares the files on disk to it.
 
 | Committed file | Bytes | SHA-256 |
 | --- | --- | --- |

@@ -1,7 +1,7 @@
 """The prompt: a byte-stable static block, a mode block, then the payload.
 
 Order is the caching strategy and the safety boundary at once, exactly as it is
-for ICAAP (``app/services/icaap/ai_prompt.py``). The static block never changes,
+for ICAAP (``app/icaap/service/ai_prompt.py``). The static block never changes,
 so it caches across every tenant and every request. The MODE block is one of two
 fixed strings — descriptor-only or standard — so it also caches across tenants,
 and it is separate precisely because it is the sentence the tenant's consent

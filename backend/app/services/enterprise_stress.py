@@ -1101,7 +1101,7 @@ def _pillar2_overlay(
     new runs change; a stored run keeps what it recorded.
 
     **FX (D-038, extracted 2026-09-20).** The add-on is computed by
-    ``app.domain.icaap.pillar2.fx`` — the same function the ICAAP Pillar 2
+    ``app.icaap.domain.pillar2.fx`` — the same function the ICAAP Pillar 2
     register runs — inside ``orchestrator._run_fx``. This overlay only converts
     it to the directive's reporting unit. Until 2026-09-20 it restated
     ``Tier 1 × max(ΔNOP%, 0)`` here, so one filed ICAAP carried two different

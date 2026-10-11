@@ -29,6 +29,7 @@ from app.core.observability import Condition, emit
 from app.core.tls import validate_service_transports
 from app.db.base import utc_now
 from app.db.session import assert_worker_database_access, get_worker_sessionmaker
+from app.icaap.service import ai_jobs as icaap_ai_jobs
 from app.jobs import (
     bi_alerts,
     bi_commentary,
@@ -51,7 +52,6 @@ from app.services import (
     scheduler,
     temenos_jobs,
 )
-from app.services.icaap import ai_jobs as icaap_ai_jobs
 from app.services.market_desk import capture_job as desk_capture_job
 
 logger = logging.getLogger(__name__)

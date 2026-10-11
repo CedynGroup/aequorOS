@@ -25,9 +25,9 @@ import pytest
 
 from app.domain.irr import standardised_params as sfp
 from app.domain.policy import parameter_shapes
+from app.icaap.service.parameters import ICAAP_PARAM_CODES
 from app.models import RegulatoryParameter
 from app.services import regulatory_parameters as rp
-from app.services.icaap.parameters import ICAAP_PARAM_CODES
 
 MIGRATION = (
     Path(__file__).resolve().parents[2]
@@ -60,9 +60,7 @@ def test_the_framework_seeds_every_code_the_engine_requires() -> None:
 def test_the_option_uplift_is_reserved_and_not_seeded() -> None:
     """Seeding it would suggest options are priced. They are refused (DV-010)."""
     assert "irrbb_sf_option_vol_uplift_pct" not in rp.P5_PARAMETER_CODES
-    assert all(
-        spec.param_code != "irrbb_sf_option_vol_uplift_pct" for spec in rp.SEED_PARAMETERS
-    )
+    assert all(spec.param_code != "irrbb_sf_option_vol_uplift_pct" for spec in rp.SEED_PARAMETERS)
 
 
 def test_the_seed_sets_are_disjoint_so_no_code_is_seeded_twice() -> None:
@@ -141,9 +139,7 @@ def test_the_migrations_pinned_rows_equal_the_catalogue_today() -> None:
     for code, spec in catalogue.items():
         _, value, value_json, unit, confirmation, citation = pinned[code]
         assert value == spec.value, code
-        assert value_json == (
-            None if spec.value_json is None else dict(spec.value_json)
-        ), code
+        assert value_json == (None if spec.value_json is None else dict(spec.value_json)), code
         assert unit == spec.unit, code
         assert confirmation == spec.confirmation_status, code
         assert citation == spec.source_citation, code
@@ -259,16 +255,28 @@ def test_every_standardised_framework_row_is_pending_confirmation() -> None:
 #: What the platform seeds, per shock kind, per currency of the POSITION.
 FILED_SHOCK_BP: dict[str, dict[str, str]] = {
     "parallel": {
-        "GHS": "450", "USD": "200", "EUR": "225",
-        "GBP": "275", "CNY": "225", "OTHER": "325",
+        "GHS": "450",
+        "USD": "200",
+        "EUR": "225",
+        "GBP": "275",
+        "CNY": "225",
+        "OTHER": "325",
     },
     "short": {
-        "GHS": "500", "USD": "300", "EUR": "350",
-        "GBP": "425", "CNY": "300", "OTHER": "500",
+        "GHS": "500",
+        "USD": "300",
+        "EUR": "350",
+        "GBP": "425",
+        "CNY": "300",
+        "OTHER": "500",
     },
     "long": {
-        "GHS": "300", "USD": "225", "EUR": "200",
-        "GBP": "250", "CNY": "150", "OTHER": "300",
+        "GHS": "300",
+        "USD": "225",
+        "EUR": "200",
+        "GBP": "250",
+        "CNY": "150",
+        "OTHER": "300",
     },
 }
 
@@ -286,20 +294,19 @@ _SHOCK_CODES = {
 #: guideline itself is not held in this checkout (audit U-1), which is exactly
 #: why the claim needed pinning rather than repeating.
 BASEL_LONG_SHOCK_BP: dict[str, str] = {
-    "USD": "150", "EUR": "100", "GBP": "150", "CNY": "150",
+    "USD": "150",
+    "EUR": "100",
+    "GBP": "150",
+    "CNY": "150",
 }
 
 
 def _seeded_shock_body(kind: str) -> dict[str, str]:
     spec = next(
-        spec
-        for spec in rp.IRRBB_SF_SEED_PARAMETERS
-        if spec.param_code == _SHOCK_CODES[kind]
+        spec for spec in rp.IRRBB_SF_SEED_PARAMETERS if spec.param_code == _SHOCK_CODES[kind]
     )
     assert spec.value_json is not None
-    return {
-        key: str(value) for key, value in spec.value_json.items() if key != "schema"
-    }
+    return {key: str(value) for key, value in spec.value_json.items() if key != "schema"}
 
 
 @pytest.mark.parametrize("kind", sorted(FILED_SHOCK_BP))
@@ -352,9 +359,7 @@ def test_the_long_shock_citation_counts_its_divergences_correctly() -> None:
     later edit to a shock cannot leave the claim stale again.
     """
     seeded = _seeded_shock_body("long")
-    differing = sorted(
-        code for code, basel in BASEL_LONG_SHOCK_BP.items() if seeded[code] != basel
-    )
+    differing = sorted(code for code, basel in BASEL_LONG_SHOCK_BP.items() if seeded[code] != basel)
     citation = next(
         spec.source_citation
         for spec in rp.IRRBB_SF_SEED_PARAMETERS

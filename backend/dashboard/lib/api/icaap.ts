@@ -91,7 +91,7 @@ export type {
  *
  * The contract types it as an opaque object (`{ [key: string]: any }`) because
  * the ALLOWLIST, not the OpenAPI schema, is what decides a document's shape —
- * `app/domain/icaap/editor_schema.json`, which the editor mirrors and
+ * `app/icaap/domain/editor_schema.json`, which the editor mirrors and
  * `components/icaap/editor/schema.parity.test.ts` pins.
  */
 export type ProseMirrorDoc = { type: "doc"; content?: unknown[] };

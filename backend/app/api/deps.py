@@ -1289,7 +1289,7 @@ def _require_icaap_access(  # noqa: PLR0913 - the complete policy tuple is expli
     does a missing binding become 403, because the caller's own institution
     existing is not a secret from them.
     """
-    from app.services.icaap import guards  # noqa: PLC0415 - avoid deps/service cycle
+    from app.icaap.service import guards  # noqa: PLC0415 - avoid deps/service cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1383,7 +1383,7 @@ def require_icaap_ai_draft(request: Request, db: DbSession, ctx: Tenant) -> Icaa
     access = _require_icaap_access(
         request, db, ctx, permission=Permission.EDIT, surface="icaap_ai_draft"
     )
-    from app.services.icaap import ai_prompt  # noqa: PLC0415 - avoid deps/service cycle
+    from app.icaap.service import ai_prompt  # noqa: PLC0415 - avoid deps/service cycle
 
     decision = ai_gates.evaluate(
         db,
@@ -1418,7 +1418,7 @@ def require_icaap_pillar2_approve(request: Request, db: DbSession, ctx: Tenant) 
     than a check buried in the service. The service re-checks it as well,
     because two requests can race between the two.
     """
-    from app.services.icaap import pillar2  # noqa: PLC0415 - avoid deps/service cycle
+    from app.icaap.service import pillar2  # noqa: PLC0415 - avoid deps/service cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1446,7 +1446,7 @@ def require_icaap_addon_approve(request: Request, db: DbSession, ctx: Tenant) ->
     The database also refuses ``confirmed_by = created_by``; this is the layer
     that answers with an authorization decision instead of a constraint error.
     """
-    from app.services.icaap import supervisory_addons  # noqa: PLC0415
+    from app.icaap.service import supervisory_addons  # noqa: PLC0415
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1480,8 +1480,8 @@ def require_icaap_audit_review(request: Request, db: DbSession, ctx: Tenant) -> 
     instead would mean the reviewer held the authority they are reviewing.
     """
     from app.core.authorization import ConditionKind  # noqa: PLC0415
-    from app.models.icaap import IcaapCycle  # noqa: PLC0415
-    from app.services.icaap import audit_reviews  # noqa: PLC0415
+    from app.icaap.models.workspace import IcaapCycle  # noqa: PLC0415
+    from app.icaap.service import audit_reviews  # noqa: PLC0415
 
     access = _require_icaap_access(
         request, db, ctx, permission=Permission.VIEW, surface="icaap_audit_review_view"
@@ -1573,7 +1573,7 @@ def require_icaap_stage_decision(request: Request, db: DbSession, ctx: Tenant) -
     the stage's maker-checker condition separates the officers. See the ICAAP
     enforcement rollout contract for the complete authority matrix.
     """
-    from app.services.icaap import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1603,7 +1603,7 @@ def require_icaap_stage_decision(request: Request, db: DbSession, ctx: Tenant) -
 
 def require_icaap_freeze(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
     """Freezing: CAP/confidential EDIT, and NOT by anyone who reviewed it (D-030)."""
-    from app.services.icaap import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1628,7 +1628,7 @@ def require_icaap_review(request: Request, db: DbSession, ctx: Tenant) -> IcaapA
     ``conditions`` at all until 2026-09-20 and was the least guarded of the
     ICAAP decision dependencies while being the most destructive (audit F1).
     """
-    from app.services.icaap import post_freeze  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service import post_freeze  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1651,7 +1651,7 @@ def require_icaap_review(request: Request, db: DbSession, ctx: Tenant) -> IcaapA
 
 def require_icaap_workflow_approve(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
     """Approving the bank's own review chain: APPROVE, and not its proposer."""
-    from app.services.icaap import workflow_templates  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service import workflow_templates  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1676,7 +1676,7 @@ def require_icaap_workflow_approve(request: Request, db: DbSession, ctx: Tenant)
 
 def require_icaap_disclosure_approve(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
     """Approving what the bank publishes of its ICAAP: APPROVE, and four eyes."""
-    from app.services.icaap import disclosure as icaap_disclosure  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service import disclosure as icaap_disclosure  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))

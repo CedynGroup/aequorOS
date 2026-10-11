@@ -52,10 +52,9 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app.domain.icaap.document import EXPOSURE_DRAFT_NOTICE
-from app.services.attestation import pdf_signing
-from app.services.icaap.render import format as fmt
-from app.services.icaap.render.from_snapshot import (
+from app.icaap.domain.document import EXPOSURE_DRAFT_NOTICE
+from app.icaap.service.render import format as fmt
+from app.icaap.service.render.from_snapshot import (
     FilingProvenance,
     IcaapFiling,
     SnapshotTable,
@@ -65,13 +64,14 @@ from app.services.icaap.render.from_snapshot import (
 # the filing PDF and the draft of the same cycle are the same document in the
 # same measure, and two copies of a margin is how two documents of one cycle
 # come to paginate differently.
-from app.services.icaap.render.pdf import (  # noqa: E402 - grouped with its explanation
+from app.icaap.service.render.pdf import (  # noqa: E402 - grouped with its explanation
     _MARGINS,
     _PAGE,
     DraftFurniture,
     FontSet,
     IcaapPdfRenderer,
 )
+from app.services.attestation import pdf_signing
 from app.services.regulatory_reporting.exports import icaap_fonts, pdf_parts
 
 #: The artifact layout whose attestation page this module draws.
@@ -159,9 +159,7 @@ class AttestationFurniture(DraftFurniture):
                 if line:
                     canvas.setFont(self._fonts.bold, _ROLE_LINE_SIZE)
                     canvas.setFillColor(colors.black)
-                    canvas.drawString(
-                        _MARGINS["leftMargin"], top + _ROLE_LINE_GAP, line
-                    )
+                    canvas.drawString(_MARGINS["leftMargin"], top + _ROLE_LINE_GAP, line)
         canvas.restoreState()
 
 
@@ -275,9 +273,7 @@ class IcaapFilingRenderer(IcaapPdfRenderer):
             )
         if not tables:
             story.append(
-                self._para(
-                    "The annex return's own tables are not part of this snapshot.", "note"
-                )
+                self._para("The annex return's own tables are not part of this snapshot.", "note")
             )
         for table in tables:
             story.extend(self._snapshot_table(table))
@@ -295,9 +291,7 @@ class IcaapFilingRenderer(IcaapPdfRenderer):
         manifest = self._provenance_data.attachments
         story: list[Any] = [PageBreak(), self._para("Documents filed with this report", "h1")]
         if not manifest:
-            story.append(
-                self._para("No documents accompany this report.", "body")
-            )
+            story.append(self._para("No documents accompany this report.", "body"))
             return story
         header = ("Document", "Title", "Required at", "Size", "SHA-256")
         body: list[list[Any]] = [
@@ -322,9 +316,7 @@ class IcaapFilingRenderer(IcaapPdfRenderer):
         doc = self._doc
         story: list[Any] = [PageBreak(), self._para("Provenance", "h1")]
         if doc.is_exposure_draft:
-            story.append(
-                self._para(data.exposure_draft_line or EXPOSURE_DRAFT_NOTICE, "h3")
-            )
+            story.append(self._para(data.exposure_draft_line or EXPOSURE_DRAFT_NOTICE, "h3"))
         story.append(self._para("This filing", "h2"))
         for label, value in (
             ("Return", data.return_code),
@@ -385,9 +377,7 @@ class IcaapFilingRenderer(IcaapPdfRenderer):
         story: list[Any] = [self._para("Regulatory values applied", "h2")]
         parameters = self._provenance_data.parameters
         if not parameters:
-            story.append(
-                self._para("This report applies no governed regulatory value.", "small")
-            )
+            story.append(self._para("This report applies no governed regulatory value.", "small"))
             return story
         header = ("Parameter", "Value", "Unit", "Status", "Citation")
         body: list[list[Any]] = [
@@ -412,9 +402,7 @@ class IcaapFilingRenderer(IcaapPdfRenderer):
         story: list[Any] = [self._para("Calculation runs", "h2")]
         runs = self._provenance_data.source_runs
         if not runs:
-            story.append(
-                self._para("No calculation run is bound to this report.", "small")
-            )
+            story.append(self._para("No calculation run is bound to this report.", "small"))
             return story
         header = ("Module", "Run", "Input hash", "Engine")
         body: list[list[Any]] = [
@@ -458,9 +446,7 @@ class IcaapFilingRenderer(IcaapPdfRenderer):
     def _figure_sources(self) -> list[Any]:
         story: list[Any] = [self._para("Figure sources", "h2")]
         sourced = [
-            block
-            for block in self._doc.blocks.values()
-            if block.provenance or block.source_label
+            block for block in self._doc.blocks.values() if block.provenance or block.source_label
         ]
         if not sourced:
             story.append(self._para("No figure table is bound in this report.", "small"))
@@ -571,9 +557,7 @@ class IcaapFilingRenderer(IcaapPdfRenderer):
             role_lines=self._role_lines,
         )
         return [
-            PageTemplate(
-                id=_COVER_TEMPLATE, pagesize=_PAGE, frames=[_full_frame()], onPage=plain
-            ),
+            PageTemplate(id=_COVER_TEMPLATE, pagesize=_PAGE, frames=[_full_frame()], onPage=plain),
             PageTemplate(
                 id=_ATTESTATION_TEMPLATE,
                 pagesize=_PAGE,

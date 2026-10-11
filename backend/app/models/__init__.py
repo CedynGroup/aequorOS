@@ -1,5 +1,33 @@
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
 from app.forecasting.models import ForecastAssumptionVersion
+from app.icaap.models.ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
+from app.icaap.models.risk_capital import (
+    BankSupervisoryAddon,
+    IcaapAppetiteMetric,
+    IcaapAuditReview,
+    IcaapCapitalAllocation,
+    IcaapChallenge,
+    IcaapChallengeResponse,
+    IcaapControlExplanation,
+    IcaapPillar2Item,
+    IcaapPillar2ItemRevision,
+    IcaapRequirementReconciliationLine,
+    IcaapResourcesReconciliationLine,
+    IcaapRiskAssessment,
+)
+from app.icaap.models.workspace import (
+    IcaapAttachment,
+    IcaapAttachmentWithdrawal,
+    IcaapBlockBinding,
+    IcaapCycle,
+    IcaapCycleStage,
+    IcaapDataBlock,
+    IcaapDisclosure,
+    IcaapSection,
+    IcaapSectionVersion,
+    IcaapStageDecision,
+    IcaapWorkflowTemplate,
+)
 from app.identity.models.authorization import (
     AuthorizationAccessRequest,
     AuthorizationBinding,
@@ -116,34 +144,6 @@ from app.models.financial import (
     FinancialReportingPeriod,
     FinancialSourceRow,
     FinancialValidationIssue,
-)
-from app.models.icaap import (
-    IcaapAttachment,
-    IcaapAttachmentWithdrawal,
-    IcaapBlockBinding,
-    IcaapCycle,
-    IcaapCycleStage,
-    IcaapDataBlock,
-    IcaapDisclosure,
-    IcaapSection,
-    IcaapSectionVersion,
-    IcaapStageDecision,
-    IcaapWorkflowTemplate,
-)
-from app.models.icaap_ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
-from app.models.icaap_risk_capital import (
-    BankSupervisoryAddon,
-    IcaapAppetiteMetric,
-    IcaapAuditReview,
-    IcaapCapitalAllocation,
-    IcaapChallenge,
-    IcaapChallengeResponse,
-    IcaapControlExplanation,
-    IcaapPillar2Item,
-    IcaapPillar2ItemRevision,
-    IcaapRequirementReconciliationLine,
-    IcaapResourcesReconciliationLine,
-    IcaapRiskAssessment,
 )
 from app.models.implied_rating import ImpliedRatingRun
 from app.models.ingestion import (
