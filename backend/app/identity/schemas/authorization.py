@@ -41,10 +41,10 @@ GrantableRoleBundle = Literal[
     "validator",
     "account_admin",
 ]
-# ``bi_reader`` is absent on purpose and must stay absent: it is a MACHINE
-# bundle, minted only by issuing a feed key, and a human holding it would be a
-# person authenticating with a long-lived bearer credential against routes that
-# log every call as an integration's.
+# ``bi_reader`` must stay absent: machine authority must not be assigned through
+# human grants, which would misattribute a person's reads to an integration.
+# Credential availability is governed by
+# ``backend/docs/integration_key_machine_principal_rollout.md``.
 
 #: Production copy for the stored data-scope vocabulary. One home, so the
 #: authority sentence, the Members grant list and the composer's control cannot

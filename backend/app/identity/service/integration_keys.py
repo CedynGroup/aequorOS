@@ -92,7 +92,7 @@ class _Authority:
 
 
 def _authority(binding: AuthorizationBinding) -> _Authority | None:
-    """One machine binding as the purpose and slice a listing reports.
+    """Supported purpose for listing, with no read-scope metadata.
 
     A bundle this mapping does not know returns ``None`` rather than a guess: a
     new machine bundle must be named here deliberately, and until it is, a key

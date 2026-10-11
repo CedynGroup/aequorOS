@@ -20,17 +20,17 @@ An **integration key**, sent as the bearer credential on every API Push request:
 Authorization: Bearer aeq_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
-Your account administrator generates the key once in the dashboard (Data
-Engine → API Push → Integration keys). It authenticates your middleware as a
-dedicated machine identity with one exact institution-scoped Integration
-Writer binding (`DATA` / `restricted` / `ingest`). The administrator must
+Your account administrator generates the key once in the dashboard (Access →
+Integration keys, also linked from Data Engine → API Push). It authenticates your
+middleware as a dedicated machine identity with one exact institution-scoped
+Integration Writer binding (`DATA` / `restricted` / `ingest`). The administrator must
 select the bank when issuing the key. It is shown exactly once at generation
 (the platform stores only a hash) and can be revoked instantly from the same
 screen. Rotate by generating a new key for the confirmed bank, switching your
 middleware, verifying a push, then revoking the old one.
 
-Only data push keys (`purpose: writer`, the default) may be issued. Each holds
-`DATA` / `restricted` / `ingest` for one exact bank and cannot read analytics.
+Only data push keys (`purpose: writer`, the default) may be issued; they cannot
+read analytics.
 `purpose: reader` is unavailable until BI ships with governed delegation; the API
 rejects it with `422` even when `BI_ENABLED` is enabled. The approval requirements
 for reintroduction are in the

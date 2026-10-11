@@ -22,10 +22,9 @@ and rotation evidence with the deployment record, never in this repository.
 
 ## Reader key issuance
 
-Only data push keys (`purpose: writer`) may be issued until BI ships. The
-[public issuance contract](../../docs/API_INTEGRATION.md#1-authentication)
-defines the supported purpose. Rejection occurs before creating an identity,
-key or binding. Module-route isolation is governed by the
+The [public issuance contract](../../docs/API_INTEGRATION.md#1-authentication)
+defines the supported purpose. Unsupported purpose requests are rejected before
+creating an identity, key or binding. Module-route isolation is governed by the
 [human institution permission boundary](authorization_foundation.md#authority-model).
 
 Before reintroducing readers, require Org Owner approval or the issuer's own

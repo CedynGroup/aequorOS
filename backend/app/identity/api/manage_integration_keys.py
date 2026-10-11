@@ -5,10 +5,10 @@ identity, credential and machine binding together. Analytics reader issuance is
 retired until BI ships with governed delegation.
 
 The raw key is returned exactly once at issuance; listing exposes only the
-display prefix, the lifecycle metadata and the DERIVED purpose and slice.
+display prefix, the lifecycle metadata and the derived supported purpose.
 Requests authenticated WITH an integration key cannot list or revoke keys
 (scoped account-administration authority requires a human principal), and every
-one of these three reads is explicitly organization-filtered in the service
+one of these three endpoints is explicitly organization-filtered in the service
 because ``integration_keys`` is deliberately not RLS-forced.
 """
 
