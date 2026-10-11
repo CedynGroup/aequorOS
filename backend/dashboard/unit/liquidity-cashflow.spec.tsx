@@ -55,6 +55,13 @@ function windowData() {
         outflows: "3500",
         net: "-1500",
       },
+      {
+        month: "2026-02-01",
+        currency: "USD",
+        inflows: "0",
+        outflows: "0",
+        net: "0",
+      },
     ],
     totals: [
       { currency: "EUR", inflows: "1500", outflows: "1500", net: "0" },
@@ -166,7 +173,16 @@ describe("contractual liquidity cash-flow computation", () => {
         name: "Jan 2026 $2.0K $3.5K -$1.5K",
       }),
     ).toBeVisible();
-    expect(within(table).queryByText("Feb 2026")).not.toBeInTheDocument();
+    expect(
+      within(table).getByRole("row", {
+        name: "Feb 2026 $0 $0 +$0",
+      }),
+    ).toBeVisible();
+    expect(
+      within(table).getByRole("row", {
+        name: "Total $2.0K $3.5K -$1.5K",
+      }),
+    ).toBeVisible();
     expect(
       screen.getByText(/1 position carries no contractual maturity — excluded/),
     ).toBeVisible();
@@ -217,6 +233,20 @@ describe("contractual liquidity cash-flow computation", () => {
           end_date: "2026-03-31",
           months: [
             {
+              month: "2026-01-01",
+              currency: "GBP",
+              inflows: "0",
+              outflows: "0",
+              net: "0",
+            },
+            {
+              month: "2026-02-01",
+              currency: "GBP",
+              inflows: "0",
+              outflows: "0",
+              net: "0",
+            },
+            {
               month: "2026-03-01",
               currency: "GBP",
               inflows: "50",
@@ -258,7 +288,29 @@ describe("contractual liquidity cash-flow computation", () => {
         name: "Mar 2026 GBP 50 GBP 25 +GBP 25",
       }),
     ).toBeVisible();
-    expect(screen.queryByText("Jan 2026")).not.toBeInTheDocument();
+    for (const month of ["Jan", "Feb"]) {
+      expect(
+        screen.getByRole("row", {
+          name: `${month} 2026 GBP 0 GBP 0 +GBP 0`,
+        }),
+      ).toBeVisible();
+    }
+    expect(
+      screen.getByRole("row", { name: "Total GBP 50 GBP 25 +GBP 25" }),
+    ).toBeVisible();
+    for (const name of [
+      "Jan 2026 $2.0K $3.5K -$1.5K",
+      "Feb 2026 $0 $0 +$0",
+      "Total $2.0K $3.5K -$1.5K",
+    ]) {
+      expect(screen.queryByRole("row", { name })).not.toBeInTheDocument();
+    }
+    expect(
+      screen.queryByRole("button", { name: "USD" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "EUR" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText(/without an ingested conversion excluded/),
     ).not.toBeInTheDocument();
