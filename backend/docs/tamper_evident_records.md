@@ -5,13 +5,13 @@ No reported financial figure or calculation rule changes.
 
 ## Authorized delivery boundary
 
-Firstmate approved the four-layer delivery contract during the review of this
-run: this branch and [PR #504](https://github.com/CedynGroup/aequorOS/pull/504)
-validate audit chaining; [PR #505](https://github.com/CedynGroup/aequorOS/pull/505)
+The four-layer delivery contract assigns
+[PR #504](https://github.com/CedynGroup/aequorOS/pull/504)
+to audit chaining; [PR #505](https://github.com/CedynGroup/aequorOS/pull/505)
 delivers filing locks; [PR #506](https://github.com/CedynGroup/aequorOS/pull/506)
 delivers compliance storage; and [PR #507](https://github.com/CedynGroup/aequorOS/pull/507)
-delivers the append-only sweep. Each layer is validated separately. This audit
-layer alone does not certify all of issue #413. No user-visible change;
+delivers the append-only sweep. Each layer is validated separately. The audit
+and filing layers alone do not certify all of issue #413. No user-visible change;
 screenshots are not applicable.
 
 The compliance-storage layer must use the regulatory retention period confirmed
@@ -157,3 +157,34 @@ before deploying this migration in production or staging:
   and one initial mismatch page per worker and broken stream during a sustained
   incident with multiple core worker replicas.
   Attach role/grant evidence and a pager receipt to #356/#401.
+
+## Filing and input seals
+
+`202610100091` forbids financial-content updates on every generated package:
+identity, version, source-run references, input snapshot and its hash, and the
+master-data `register_state_digest` used by LRT attestation and evidence exports. Application
+roles lose table UPDATE and receive only the lifecycle-column grants (including
+`id` for PostgreSQL foreign-key key-share locking; changing it is trigger-blocked).
+Application roles also lose DELETE/TRUNCATE on packages, regulatory runs and
+attestation signatures, including unsigned packages and unfinished runs.
+Signature deletion is trigger-blocked alongside the existing update guard;
+new signatures can still be inserted.
+Signed packages cannot be deleted; their content digest is sealed. Existing
+signature evidence keeps both the deletion and content-digest seals active after
+a void. The package guard pins its search path to `pg_catalog`, the migration
+schema and then `pg_temp`, so temporary tables cannot shadow retained signatures.
+Lifecycle status, review bookkeeping and regulator outcomes continue to advance. A correction
+uses existing generation/resubmission authorization and `supersedes_id`, retaining
+the original version and figures. Voiding withdraws certification; it never opens
+an in-place financial-content edit. Completed regulatory runs, including their
+inputs and metrics, cannot be updated or deleted. Queued/running work can finish.
+
+`tests/db/test_signed_filing_locks.py` covers runtime column permissions and
+owner-trigger refusals, completed runs and versioned corrections. Its LRT
+regression retains the attestation/export binding through certification and
+voiding while refusing changes to the register-state digest, signature deletion
+and content-digest changes under temporary-table shadowing and altered search paths.
+
+Apply the [deployment role and grant requirements](#required-deployment-follow-up)
+to filing seals too. The worker's BYPASSRLS privilege does not grant permission
+to alter evidence.

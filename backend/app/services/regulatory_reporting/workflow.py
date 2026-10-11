@@ -542,9 +542,10 @@ def send_back_for_corrections(
     act only so the reviewer can take it from the surface where they read the
     figures, and so the note is required rather than optional.
 
-    No commit: the caller withdraws the attestation in the same transaction, and
-    a package returned for rework while its figures stay frozen would be a
-    package nobody can correct.
+    No commit: the caller withdraws the attestation in the same transaction,
+    so the review decision and certification withdrawal take effect together.
+    Financial corrections follow the filing and input seals contract in
+    ``backend/docs/tamper_evident_records.md``.
     """
     ensure_decidable(package, actor_user_id)
     approval = _add_approval(
