@@ -8,9 +8,12 @@
     "start": "next start -p 3001",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc -p e2e/tsconfig.json --noEmit",
-    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test scripts/*.test.mjs && node scripts/run-unit-tests.mjs && rm -rf .test-out",
+    "test": "pnpm test:legacy && vitest run && rm -rf .test-out",
     "e2e": "uv run --project .. python ../scripts/local_services.py run --storage -- node node_modules/@playwright/test/cli.js test",
-    "e2e:visual": "uv run --project .. python ../scripts/local_services.py run --storage -- node node_modules/@playwright/test/cli.js test --config playwright.visual.config.ts"
+    "e2e:visual": "uv run --project .. python ../scripts/local_services.py run --storage -- node node_modules/@playwright/test/cli.js test --config playwright.visual.config.ts",
+    "test:legacy": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test scripts/*.test.mjs && node scripts/run-unit-tests.mjs",
+    "test:coverage": "node scripts/run-unit-coverage.mjs",
+    "coverage:ratchet": "node scripts/run-unit-coverage.mjs --update"
   },
   "dependencies": {
     "@aequoros/risk-service-api": "workspace:*",
@@ -38,15 +41,20 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/react-test-renderer": "19.3.0",
+    "@vitest/coverage-v8": "^5.0.3",
     "autoprefixer": "^10.6.1",
+    "c8": "^12.0.0",
     "eslint": "10.12.0",
     "eslint-config-next": "16.3.6",
+    "fast-check": "^4.10.2",
+    "istanbul-lib-coverage": "^3.2.2",
     "jose": "^6.2.12",
     "postcss": "^8.5.28",
     "react-test-renderer": "19.3.0",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.2",
-    "typescript-eslint": "^8.70.0"
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.3"
   },
   "license": "SEE LICENSE IN LICENSE"
 }

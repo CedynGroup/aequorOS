@@ -380,7 +380,8 @@ other authentication errors show a generic sign-in failure.
 ```bash
 pnpm --filter @aequoros/dashboard typecheck   # tsc --noEmit
 pnpm --filter @aequoros/dashboard lint        # ESLint CLI
-pnpm --filter @aequoros/dashboard test        # unit and query-cache policy suites
+pnpm --filter @aequoros/dashboard test        # legacy + Vitest behavior suites
+pnpm --filter @aequoros/dashboard test:coverage # CI coverage and shrink-only ratchet
 pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
 pnpm --filter @aequoros/dashboard e2e         # Playwright; package journeys need S3/MinIO
 ```
@@ -390,7 +391,8 @@ Regenerate the API client after any backend contract change:
 
 ### Unit-test collection
 
-The dashboard currently uses Node assertion suites, not Vitest. `tsconfig.test.json`
+Legacy Node assertion suites and native Vitest behavior suites both run through
+`test`. `tsconfig.test.json`
 compiles every `*.test.ts` and `*.test.tsx` file; its explicit production roots
 support existing tests that load modules dynamically. `scripts/run-unit-tests.mjs`
 discovers all source test files, fails below the 55-file floor or when any source
@@ -400,6 +402,44 @@ included automatically. Once the collection runner starts, CI uploads the
 discovered, executed and failed file names in `dashboard-unit-collection`,
 including partial evidence if execution fails.
 The script contract tests also run through the standard `test` command.
+
+New Vitest behavior tests live in `unit/**/*.spec.ts(x)`; `vitest.config.mjs`
+collects that entire directory without a file list and excludes Playwright specs.
+Follow the [shared testing standard](../../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard):
+Testing Library queries by role, label and text, API-boundary mocks only, and
+fast-check for broad formatting and numeric input spaces. Legacy suites retain
+isolated processes because several replace Node's module loader.
+
+`test:coverage` runs both engines with V8 coverage. Vitest's AST-based report
+includes **every production TS/TSX file in `app/`, `components/` and `lib/`**,
+including untouched modules. Only tests and declaration files are excluded.
+The guard independently inventories those roots and fails if any file is absent.
+c8 collects the legacy child processes and remaps their emitted JavaScript to
+original TypeScript through compiler source maps. The combined **line** report
+uses Vitest's executable source lines as its denominator and counts a line as
+covered when either engine exercised it. Extra c8 lines cannot inflate coverage.
+Branch, function and statement reports remain separate by engine; their mapping
+schemes differ, so they are not added together. Source-text invariant guards do
+not count as execution of the modules they inspect.
+
+CI uploads `dashboard-unit-coverage`: native Vitest HTML/LCOV/JSON, legacy JSON,
+combined line LCOV and `coverage/combined/summary.json`, plus both collection
+reports. Partial reports are retained on failure. The initial measured combined
+baseline is **3,478 of 18,627 lines (18.67%) across 575 production files**;
+55 legacy files and eight native behavior tests passed, with zero skips.
+This exposes the large remaining behavior-test gap rather than reporting only
+loaded modules. The guard also rejects incomplete legacy collection, fewer than
+eight native tests, or skipped native tests.
+
+`unit-coverage-baseline.json` pins the maximum number of uncovered lines both
+in total and per file. These ceilings may only shrink; improvement elsewhere
+cannot conceal a file's regression. A new production file has a zero-uncovered
+ceiling. After improving tests, run `pnpm --filter @aequoros/dashboard coverage:ratchet`
+to rerun both engines and tighten the baseline, then review and commit it.
+That command refuses increases rather than accepting a new lower standard.
+Deleting unused production code can also shrink the baseline; intentional
+changes to the coverage policy require explicit review. Include measured
+coverage before and after in each behavior-test PR.
 
 ## End-to-end (Playwright)
 

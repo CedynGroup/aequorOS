@@ -42,8 +42,8 @@
  * everything.
  *
  * Source inspection rather than rendering, for the same reason
- * `disclosure.test.ts` uses it: this package has no component-test harness, and
- * every property above is about what a file is allowed to reference — which is
+ * `disclosure.test.ts` uses it: these rules govern what first-party source may
+ * reference, rather than the rendered grid behavior. This is
  * exactly what a source scan can decide. Comments are stripped first, so prose
  * about a defect is not read as the defect.
  *
@@ -107,6 +107,7 @@ function sourceFiles(): string[] {
     ".next-build",
     ".next-e2e",
     ".test-out",
+    "coverage",
     "playwright-report",
     "test-results",
   ]);
@@ -223,7 +224,10 @@ function offenders(
   const found: string[] = [];
   let scanned = 0;
   for (const file of sourceFiles()) {
-    const relative = file.slice(ROOT.length + 1).split("\\").join("/");
+    const relative = file
+      .slice(ROOT.length + 1)
+      .split("\\")
+      .join("/");
     if (!include(relative)) continue;
     scanned += 1;
     const text = /\.(tsx?|mjs)$/.test(relative)
@@ -249,9 +253,8 @@ function appSource(relative: string): boolean {
 
 /** The symbols the canvas imports from the grid library, as it imports them. */
 function importedGridSymbols(): string[] {
-  const match = /import\s*\{([\s\S]*?)\}\s*from\s*["']ag-grid-community["']/.exec(
-    canvas,
-  );
+  const match =
+    /import\s*\{([\s\S]*?)\}\s*from\s*["']ag-grid-community["']/.exec(canvas);
   assert.ok(match, `${CANVAS} must import its modules from ag-grid-community`);
   const symbols = match![1]
     .split(",")
@@ -344,7 +347,9 @@ test("the Enterprise edition and its licence machinery are absent", () => {
 
 test("the grid runtime is reached only through the dynamic wrapper", () => {
   assert.ok(
-    /dynamic\(\s*\(\)\s*=>\s*import\(["']\.\/PivotGridCanvas["']\)/.test(wrapper),
+    /dynamic\(\s*\(\)\s*=>\s*import\(["']\.\/PivotGridCanvas["']\)/.test(
+      wrapper,
+    ),
     `${WRAPPER} must load the canvas through next/dynamic.`,
   );
   assert.ok(
@@ -512,7 +517,8 @@ function writeDistFixture(
   const echartsChunk = chunk("echarts.js", filler + '"_echarts_instance_"');
   const gridChunk = chunk(
     "grid.js",
-    filler + (options.agGridDeferred ? '"ag-root-wrapper";"ag-header-cell"' : ""),
+    filler +
+      (options.agGridDeferred ? '"ag-root-wrapper";"ag-header-cell"' : ""),
   );
   const builderChunk = chunk(
     "builder.js",
@@ -523,7 +529,12 @@ function writeDistFixture(
   );
 
   const manifest = (route: string, entries: Record<string, string[]>) => {
-    const file = join(root, "server", "app", `${route}_client-reference-manifest.js`);
+    const file = join(
+      root,
+      "server",
+      "app",
+      `${route}_client-reference-manifest.js`,
+    );
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(
       file,
@@ -555,7 +566,9 @@ function writeDistFixture(
   loadable("(app)/dashboards/new/page", [builderChunk]);
 }
 
-function runBundleGuard(distDir: string): Readonly<{ code: number; text: string }> {
+function runBundleGuard(
+  distDir: string,
+): Readonly<{ code: number; text: string }> {
   const result = spawnSync("node", [join(ROOT, GUARD)], {
     cwd: ROOT,
     env: { ...process.env, NEXT_DIST_DIR: distDir },
@@ -776,7 +789,9 @@ test("the grid is themed from the same resolved tokens the charts use", () => {
     `${CANVAS} must theme the grid with themeQuartz.withParams (D-030).`,
   );
   assert.equal(
-    rule("a colour literal is written into the grid theme").pattern.test(canvas),
+    rule("a colour literal is written into the grid theme").pattern.test(
+      canvas,
+    ),
     false,
     `${CANVAS} must carry no colour literal; every colour is a resolved token.`,
   );
