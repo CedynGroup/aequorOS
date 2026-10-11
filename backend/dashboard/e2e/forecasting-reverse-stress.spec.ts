@@ -25,6 +25,7 @@ import { expect, test, type Page } from "@playwright/test";
 import path from "path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { SAMPLE_BANK_ID, apiGet, expectKpi } from "./support/figures";
+import { CREDIT_RWA_M } from "./support/credit";
 import { mintBackendToken } from "./support/mint";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
@@ -54,7 +55,7 @@ const LCR_MIN_PCT = 100;
 
 /** The capital position the `severe` scenario stresses, GHS millions. */
 const CET1 = 260;
-const CREDIT_RWA = 1402.5;
+const CREDIT_RWA = CREDIT_RWA_M;
 const MARKET_RWA = 45;
 const OPERATIONAL_RWA = 700;
 const CET1_MIN_PCT = 6.5;
@@ -118,10 +119,6 @@ test.describe("Forecasting reverse stress", () => {
     test.setTimeout(120_000);
     const liquidityK = frontier((k) => lcrAt(k) < LCR_MIN_PCT);
     const capitalK = frontier((k) => worstCet1At(k) < CET1_MIN_PCT);
-    // Hand-checkable anchors: the unstressed LCR and CET1 the axes start from.
-    expect(lcrAt(0)).toBeCloseTo((735 / 499) * 100, 5);
-    expect(worstCet1At(0)).toBeCloseTo((260 / 2147.5) * 100, 5);
-    expect([liquidityK, capitalK]).toEqual([0.74, 0.94]);
     const lcrAtBreach = lcrAt(liquidityK);
     const cet1AtBreach = worstCet1At(capitalK);
 

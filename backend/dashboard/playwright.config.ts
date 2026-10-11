@@ -15,6 +15,7 @@
 
 import { defineConfig } from "@playwright/test";
 import path from "path";
+import { E2E_AUTH_SECRET, E2E_JWT_SECRET } from "./e2e/support/mint";
 import { acquireE2ERunLock } from "./e2e/support/runtime-lock";
 import { selectE2ERuntimePorts } from "./e2e/support/runtime-ports";
 
@@ -157,7 +158,7 @@ export default defineConfig({
         // `test_bi_routes.py` / `test_bi_query_log.py` prove the refusal itself
         // against the product figure rather than against this one.
         BI_RATE_LIMIT_MAX_QUERIES: "5000",
-        AUTH_JWT_SECRET: "e2e-backend-jwt-secret-not-production-000",
+        AUTH_JWT_SECRET: E2E_JWT_SECRET,
         IMPERSONATION_JWT_SECRET: "e2e-impersonation-secret-not-production-000",
         SSO_INTERNAL_KEY: E2E_SSO_INTERNAL_KEY,
         E2E_IDP_ISSUER: E2E_IDP_ORIGIN,
@@ -186,7 +187,7 @@ export default defineConfig({
         // `.next` (NEXT_PUBLIC_* is compile-time-inlined; next dev shares one
         // cache per directory). Paired with distDir in next.config.js.
         NEXT_DIST_DIR: ".next-e2e",
-        AUTH_SECRET: "e2e-nextauth-secret-not-production-000",
+        AUTH_SECRET: E2E_AUTH_SECRET,
         AUTH_TRUST_HOST: "true",
         SSO_INTERNAL_KEY: E2E_SSO_INTERNAL_KEY,
         // The dashboard's egress guard mirrors the backend's loopback

@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -28,11 +29,16 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import BankFinancialFact, BankReportingPeriod
+from app.models import Bank, BankFinancialFact, BankReportingPeriod
+from app.services.credit_exposure_book import load_credit_book, require_credit_source_basis
 from app.services.regulatory_reporting import calendar
 from app.services.regulatory_reporting.anchors import anchor_dates, anchor_window
 from app.services.regulatory_reporting.registry import get_definition
-from scripts.e2e_bootstrap import E2E_USERS, latest_month_end_on_or_before
+from scripts.e2e_bootstrap import (
+    E2E_USERS,
+    _seed_canonical_positions,  # pyright: ignore[reportPrivateUsage]
+    latest_month_end_on_or_before,
+)
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -122,6 +128,48 @@ def test_carry_forward_is_a_no_op_inside_the_canonical_span(db_session: Session)
     canonical_ends = _period_ends(db_session)
     assert extend_canonical_test_book(db_session, through=canonical_ends[-1]) == []
     assert _period_ends(db_session) == canonical_ends
+
+
+def test_position_bootstrap_derives_the_official_credit_basis(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    as_of = latest_month_end_on_or_before()
+    extend_canonical_test_book(db_session, through=as_of)
+    historical = _fact_signature(db_session, date(2026, 3, 31))
+    latest_other_groups = {
+        fact for fact in _fact_signature(db_session, as_of) if fact[0] != "credit_exposure"
+    }
+
+    _seed_canonical_positions(db_session)
+
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    period = db_session.scalar(
+        select(BankReportingPeriod).where(
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+            BankReportingPeriod.period_end == as_of,
+        )
+    )
+    assert bank is not None and period is not None
+    positions, source_basis = load_credit_book(db_session, MAKER, bank, as_of)
+    assert positions
+    require_credit_source_basis(period.credit_source_basis, source_basis)
+    credit = {
+        fact.category: fact.amount
+        for fact in db_session.scalars(
+            select(BankFinancialFact).where(
+                BankFinancialFact.reporting_period_id == period.id,
+                BankFinancialFact.fact_group == "credit_exposure",
+            )
+        )
+    }
+    # 30M + 10M domestic corporate loans + the ingested USD conversion (12.85M).
+    assert credit["corporate_unrated:RW100"] == Decimal("52850000")
+    # Only the stage-3 specific allowance nets down the 3M past-due balance.
+    assert credit["past_due_90:RW150"] == Decimal("2100000")
+    assert credit["interbank:RW50"] == Decimal("5000000")
+    assert _fact_signature(db_session, date(2026, 3, 31)) == historical
+    assert {
+        fact for fact in _fact_signature(db_session, as_of) if fact[0] != "credit_exposure"
+    } == latest_other_groups
 
 
 @pytest.mark.parametrize(

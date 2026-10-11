@@ -401,6 +401,19 @@ normal development cache. Because every journey shares the disposable database
 and session files, a worktree-local lock rejects a second concurrent E2E run.
 The stack never touches the primary database.
 
+The backend server environment pins `APP_ENV=test` and
+`TLS_ALLOW_PLAINTEXT=1` because this disposable stack uses SQLite and loopback
+HTTP (including MinIO). Test mode alone does not relax the transport policy;
+without the explicit opt-in, startup refuses SQLite with "Database transport
+requires PostgreSQL with a hostname." Deployed environments still require TLS.
+
+`session-cookie-hygiene.spec.ts` deliberately sends a cookie encrypted with a
+foreign secret and malformed cookie chunks. Auth.js reports `JWTSessionError`
+and "no matching decryption secret" during those refusal journeys; their
+assertions prove the cookie is cleared and a subsequent real login succeeds.
+The server configuration imports the minting helper's test secret constants, and
+`session-lifecycle.spec.ts` decrypts a real login cookie and verifies rotation.
+
 Three prerequisites are not obvious, and each one has already cost a long
 diagnosis:
 
@@ -435,6 +448,14 @@ diagnosis:
    live plane and running the product's own `pipeline.recompute_modules`.
    Without it `/basel`, `/liquidity`, `/ftp/*`, `/irr/*` and `/fx/*` all open on
    the "no computed data yet" envelope.
+
+After loading the canonical position book, bootstrap derives the latest
+period's `credit_exposure` facts and `credit_source_basis` from those accepted
+sources. Enterprise stress checks that exact provenance before calculating:
+the aggregate spine's initial empty source basis cannot authorize stress of a
+subsequently added position book. Other fact groups and historical periods
+retain the canonical spine's figures. Capital and stress expectations for the
+latest period therefore use the position book's net CRD credit basis.
 
 ```bash
 pnpm --filter @aequoros/dashboard e2e            # the journeys

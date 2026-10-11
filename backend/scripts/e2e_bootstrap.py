@@ -64,7 +64,7 @@ import os
 from datetime import date, timedelta
 from uuid import UUID
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -82,6 +82,9 @@ from app.db.base import Base
 from app.identity.service import authorization, membership, sso_config
 from app.identity.service.organization_ownership import assign_initial_owner
 from app.models import (
+    Bank,
+    BankFinancialFact,
+    BankReportingPeriod,
     CanonicalPositionSnapshot,
     CanonicalProduct,
     IntegrationKey,
@@ -91,6 +94,11 @@ from app.models import (
 )
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
+from app.services.fact_derivation import (
+    _derive_specs,  # pyright: ignore[reportPrivateUsage]
+    _fact,  # pyright: ignore[reportPrivateUsage]
+    _load_canonical,  # pyright: ignore[reportPrivateUsage]
+)
 from tests.fixtures.bi_plane import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
@@ -601,6 +609,7 @@ def _seed_canonical_positions(session: Session) -> None:
     )
     session.flush()
     _assign_position_risk_weights(session)
+    _materialize_credit_basis(session, as_of)
     snapshots = session.scalar(
         select(func.count())
         .select_from(CanonicalPositionSnapshot)
@@ -610,6 +619,38 @@ def _seed_canonical_positions(session: Session) -> None:
         )
     )
     print(f"canonical positions: {snapshots} snapshots at {as_of.isoformat()}")
+
+
+def _materialize_credit_basis(session: Session, as_of: date) -> None:
+    """Derive the fixture's official credit basis from its accepted position book.
+
+    The aggregate fact spine initially has no source positions. Once bootstrap
+    adds them, enterprise stress must consume their net CRD exposures and exact
+    source provenance, as the backend exposure-level stress fixtures do.
+    Other groups retain the canonical spine's independently checked figures.
+    """
+    bank = session.get(Bank, SAMPLE_BANK_ID)
+    period = session.scalar(
+        select(BankReportingPeriod).where(
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+            BankReportingPeriod.period_end == as_of,
+        )
+    )
+    assert bank is not None and period is not None
+    canonical = _load_canonical(session, TenantContext(organization_id=DEMO_ORG_ID), bank, as_of)
+    specs, _, _ = _derive_specs(canonical, live=True)
+    credit = [spec for spec in specs if spec.fact_group == "credit_exposure"]
+    assert credit, "The canonical position fixture must derive credit exposures"
+    session.execute(
+        delete(BankFinancialFact).where(
+            BankFinancialFact.bank_id == SAMPLE_BANK_ID,
+            BankFinancialFact.reporting_period_id == period.id,
+            BankFinancialFact.fact_group == "credit_exposure",
+        )
+    )
+    session.add_all(_fact(bank, period, spec) for spec in credit)
+    period.credit_source_basis = canonical.credit_source_basis
+    session.flush()
 
 
 #: The governed default risk-weight code each credit product carries.

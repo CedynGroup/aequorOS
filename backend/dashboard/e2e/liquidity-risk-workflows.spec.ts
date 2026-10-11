@@ -119,8 +119,8 @@ const EARLY_WARNINGS = [
 const ADVERSE = {
   name: "Adverse domestic downturn",
   stressedLcrPct: 121.864245,
-  stressedCarPct: 16.014852,
-  baselineCarPct: 17.422771,
+  stressedCarPct: 34.46736,
+  baselineCarPct: 36.959044,
 };
 
 test.describe("Liquidity functional workflow", () => {

@@ -12,13 +12,10 @@
  *     which is the one BI route that is mounted unconditionally.
  *  2. A BASELINE MEMBER with no binding is offered the door, disabled, with the
  *     sentence an owner would act on — because here there IS a grant to ask for.
- *  3. A LIQUIDITY-ONLY READER on the Insights page is told about the figures
- *     they hold and NOTHING ELSE: this spec asserts that none of the withheld
- *     member labels and none of the loan-book figures appear anywhere in the
- *     document — a lock icon is not the property; the absence of the withheld
- *     strings is. The insight strip on that page is the positive control: it
- *     DOES tell this reader about the liquidity figures their sentence covers, so
- *     the absence assertions cannot pass on a blank page.
+ *  3. A LIQUIDITY-ONLY READER holds catalogue access but no certified headline
+ *     figure. Insights refuses rather than making a statement about advisory
+ *     liquidity figures. Neither withheld member labels nor loan-book figures
+ *     reach the document; the reader sees the explicit refusal.
  *  4. THE SAME READER'S CATALOGUE is filtered member by member, and what is kept
  *     back is reported as a COUNT. The count is asserted, and so is the fact that
  *     the ids behind it never reach the page.
@@ -67,12 +64,16 @@ async function assertAbsentFromPage(
   strings: readonly string[],
   why: string,
 ): Promise<void> {
-  const document = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+  const document = (await page.locator("body").innerText()).replace(
+    /\s+/g,
+    " ",
+  );
   const markup = await page.content();
   for (const withheld of strings) {
-    expect(document.includes(withheld), `${why}: "${withheld}" is on screen`).toBe(
-      false,
-    );
+    expect(
+      document.includes(withheld),
+      `${why}: "${withheld}" is on screen`,
+    ).toBe(false);
     expect(
       markup.includes(withheld),
       `${why}: "${withheld}" is in the markup (a title, an aria-label or a hidden node)`,
@@ -120,7 +121,9 @@ test.describe("a deployment that does not serve BI", () => {
     await expect(
       page.getByText(/404|not found|could not be found/i).first(),
     ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Insights" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Insights" })).toHaveCount(
+      0,
+    );
   });
 });
 
@@ -161,9 +164,7 @@ test.describe("a baseline member with no binding", () => {
 
     await page.goto("/explore");
     await expect(
-      page
-        .getByText(/404|not found|No authorized institutions yet/i)
-        .first(),
+      page.getByText(/404|not found|No authorized institutions yet/i).first(),
     ).toBeVisible();
     expect(biRequests).toEqual([]);
   });
@@ -172,32 +173,40 @@ test.describe("a baseline member with no binding", () => {
 test.describe("a reader whose access does not cover the view", () => {
   test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
-  test("is told about the figures it holds on Insights, and nothing about the ones it does not", async ({
+  test("is refused uncertified headlines without disclosing withheld figures", async ({
     page,
     request,
   }) => {
     const asOf = await fixtureAsOf(request);
 
-    // THE POSITIVE CONTROL FIRST, because it is what makes every absence below
-    // mean something. This reader is served `GET …/bi/insights` for the two
-    // liquidity measures their sentence covers, and the strip on the Insights
-    // page states them. So the page is NOT blank, and the withheld strings are
-    // absent because they were withheld rather than because nothing rendered.
+    // Catalogue access is real, but advisory liquidity metrics are not certified
+    // headline candidates. A grant must not turn them into official statements.
+    const catalogue = await biApi(
+      request,
+      "liquidity_viewer",
+      `/banks/${SAMPLE_BANK_ID}/bi/catalogue`,
+    );
+    expect(catalogue.status).toBe(200);
+    expect(
+      (catalogue.body as { measures: unknown[] }).measures.length,
+    ).toBeGreaterThan(0);
     const strip = await biApi(
       request,
       "liquidity_viewer",
       `/banks/${SAMPLE_BANK_ID}/bi/insights?as_of=${asOf}`,
     );
-    expect(strip.status).toBe(200);
-    const statements = (
-      strip.body as { insights: { headline: string }[]; measures_read: number }
-    ).insights;
-    expect(statements.length).toBeGreaterThan(0);
+    expect(strip.status).toBe(403);
+    expect(strip.body).toMatchObject({
+      error: { details: { error_code: "bi_insights_authorization_denied" } },
+    });
 
     await page.goto("/insights");
     await expect(page.getByRole("heading", { name: "Insights" })).toBeVisible();
     await expect(
-      page.getByText(statements[0].headline, { exact: true }).first(),
+      page.getByText(
+        "Your access does not cover everything this view needs. An organization owner can grant it.",
+        { exact: true },
+      ),
     ).toBeVisible();
 
     // THE DISCLOSURE PROPERTY. Nothing outside this reader's sentence reaches
@@ -240,7 +249,7 @@ test.describe("a reader whose access does not cover the view", () => {
     expect(served.withheld_members).toBeGreaterThan(0);
 
     await page.goto("/insights");
-    const analyse = page.locator("section.card").filter({
+    const analyse = page.locator("section").filter({
       has: page.getByRole("heading", {
         name: "What you can analyse",
         level: 3,
@@ -254,7 +263,10 @@ test.describe("a reader whose access does not cover the view", () => {
     const counts = (await availability.innerText())
       .replace(/,/g, "")
       .match(/(\d+) measures? and (\d+) fields? are available to you\./);
-    expect(counts, "the catalogue sentence must state both counts").not.toBeNull();
+    expect(
+      counts,
+      "the catalogue sentence must state both counts",
+    ).not.toBeNull();
     expect(Number(counts![1])).toBe(served.measures.length);
     expect(Number(counts![2])).toBe(served.dimensions.length);
     expect(served.measures.length).toBeGreaterThan(0);
