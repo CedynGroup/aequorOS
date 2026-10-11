@@ -15,6 +15,7 @@ class HealthResponse(BaseModel):
     service: str
     environment: AppEnv
     status: Literal["ok"]
+    bank_key_required: bool = False
 
 
 class ComponentHealth(BaseModel):

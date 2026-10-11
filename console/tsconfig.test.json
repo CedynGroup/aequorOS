@@ -17,6 +17,7 @@
     "lib/regulatory-parameters.test.ts",
     "lib/api.ts",
     "lib/bi-backfill.ts",
-    "lib/bi-backfill.test.ts"
+    "lib/bi-backfill.test.ts",
+    "lib/onboarding.test.ts"
   ]
 }

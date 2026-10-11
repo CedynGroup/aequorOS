@@ -145,8 +145,8 @@ The migration role can bypass RLS for migrations and backfills; the app runtime
 role is still created with `NOBYPASSRLS`.
 For local test and sample-demo workflows only, it seeds two demo identities for
 audit foreign keys. The script still prints their legacy tenant-header values
-for old fixture tooling, but the API does not trust those headers. Business API
-requests require an app access token issued by password or SSO login:
+for old fixture tooling, but the API does not trust those headers. App-session API
+requests use an access token issued by password or SSO login:
 
 ```http
 Authorization: Bearer <app-access-token>

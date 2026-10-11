@@ -125,16 +125,7 @@ run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -
 description = "Run the opt-in real-data API suite; requires REAL_DATA_DATABASE_URL"
 run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features tests/identity tests/services"
 
-# The live S3-compatible backend contract: SSE-KMS at rest, the hash-chained
-# access log, and provisioning/deprovisioning of a per-institution bucket. The
-# suite self-skips when S3_* is unconfigured. Before the dedicated storage and
-# Playwright journey jobs were added, that described every CI job: measured with
-# the credentials blanked, `27 passed, 18 skipped`. The storage job now supplies
-# MinIO with built-in KMS and requires all 45 tests to execute.
-#
-# Native MinIO with its BUILT-IN KMS satisfies all 18 — no KES sidecar is
-# needed, which is what made this look unreachable. Measured against
-# `MINIO_KMS_SECRET_KEY=aequoros-key:<base64-32>`: `45 passed`.
+# Storage suite execution and CI service setup: README.md#run-tests.
 #
 # Two sharp edges, both found by running it:
 #   * the KMS key MUST be named `aequoros-key` — the SSE-KMS assertion pins that

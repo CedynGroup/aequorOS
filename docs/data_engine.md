@@ -708,7 +708,7 @@ The adapter supports both integration modes with the same canonical output:
 **Mode B: Batch File (Fallback).**
 
 - Daily post-COB SFTP file drop
-- Files land in an S3 bucket with KMS encryption
+- Files land in S3 through the [bank-key storage contract](../backend/docs/bank_key_setup.md)
 - MD5 hash validation
 - Schema validation before parsing
 - Full-refresh mode
@@ -977,8 +977,7 @@ For banks with international operations, SWIFT message feeds provide interbank p
 
 ### 14.2 Encryption
 
-- At rest: AES-256 with customer-managed keys; bank-key requirements and the
-  implemented provider boundary are governed by
+- Bank files at rest: governed by
   [the bank key setup guide](../backend/docs/bank_key_setup.md).
 - In transit: governed by
   [the transport control and evidence contract](../backend/docs/transport_security.md).

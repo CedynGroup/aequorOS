@@ -7,13 +7,11 @@ applies: behavior differences (Object Lock, KES vs SSE-KMS) are handled here
 and never leak through the interface. GCS lands later as a true second
 implementation against the same contract suite.
 
-Encryption note: KES went live on the MVP MinIO on 2026-07-15 with the
-platform key ``aequoros-key``. Every write is SSE-KMS encrypted under the
-configured ``STORAGE_KMS_KEY_ID`` unless the caller names a different key in
-metadata, and provisioning sets the same key as each bucket's default so
-presigned uploads inherit it. One platform key for all institutions is a
-tracked deviation from §7.2 (one key per institution) until KES key creation
-is automated in onboarding.
+Objects of banks with connected keys use AWS Encryption SDK messages.
+Their object keys are wrapped by bank-held master keys in the key registry.
+During optional rollout, banks without keys retain platform storage encryption.
+Bucket SSE also protects platform audit logs.
+
 """
 
 from __future__ import annotations
@@ -22,13 +20,15 @@ import logging
 from collections.abc import Callable, Iterator
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any, BinaryIO, Literal, cast
+from typing import Any, BinaryIO, Literal, Protocol, cast
 
 import boto3
 from boto3.exceptions import S3UploadFailedError
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
+from pydantic import TypeAdapter, ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings
 from app.core.tls import require_boto_tls, require_https
@@ -49,9 +49,21 @@ from app.storage.client import (
     Tier,
 )
 from app.storage.config import StorageEngineSettings, enforce_retirement
-from app.storage.provisioning import ensure_audit_bucket, provision_institution
+from app.storage.downloads import issue
+from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption
+from app.storage.provisioning import ProvisioningClient, ensure_audit_bucket, provision_institution
 
 logger = logging.getLogger(__name__)
+_OBJECT_HEADERS = TypeAdapter(dict[str, str])
+
+
+class _S3ControlClient(Protocol):
+    def generate_presigned_url(
+        self, operation: str, *, Params: dict[str, str], ExpiresIn: int
+    ) -> str: ...
+
+    def list_buckets(self) -> object: ...
+
 
 _ACCESS_DENIED_CODES = {"AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "403"}
 _NOT_FOUND_CODES = {"NoSuchKey", "NoSuchBucket", "NoSuchVersion", "404", "NotFound"}
@@ -79,6 +91,7 @@ class S3CompatibleStorageClient(StorageClient):
         settings: StorageEngineSettings,
         *,
         access_log: AccessLogHook | None = None,
+        encryption: ObjectEncryption | None = None,
         client_factory: Callable[..., Any] | None = None,
     ) -> None:
         # Order matters. A deployment that does not exist cannot be past its
@@ -93,6 +106,7 @@ class S3CompatibleStorageClient(StorageClient):
         if settings.endpoint:
             require_https(settings.endpoint, field="S3_ENDPOINT")
         enforce_retirement(settings)
+        self._encryption = encryption or ObjectEncryption()
         self._settings = settings
         self._env: StorageEnv = settings.env
         self._log = access_log or null_access_log
@@ -132,35 +146,49 @@ class S3CompatibleStorageClient(StorageClient):
                 key.lower(): value for key, value in existing.get("Metadata", {}).items()
             }
             if existing_metadata.get("checksum-sha256") == metadata.checksum_sha256:
+                _object, verified = self.read(location, version_id=existing.get("VersionId"))
+                verified.close()
                 self._log("write.noop", location, version_id=existing.get("VersionId"))
                 return self._to_storage_object(location, existing)
 
-        effective_key = metadata.kms_key_id or self._settings.kms_key_id
-        if effective_key is not None and metadata.kms_key_id is None:
-            metadata = replace(metadata, kms_key_id=effective_key)
+        try:
+            encrypted, envelope_id, bank_key_id = self._encryption.encrypt(location, data, metadata)
+        except StorageAccessError:
+            self._log("write", location, result="key-refused")
+            raise
+        effective_sse_key = self._settings.kms_key_id
+        if envelope_id is None:
+            effective_sse_key = metadata.kms_key_id or effective_sse_key
+        metadata = replace(metadata, kms_key_id=bank_key_id or effective_sse_key)
+        headers = metadata.to_object_metadata()
+        if envelope_id is not None:
+            headers.update({"encryption-format": ENCRYPTION_FORMAT, "key-envelope-id": envelope_id})
         extra_args: dict[str, Any] = {
             "ContentType": content_type,
-            "Metadata": metadata.to_object_metadata(),
+            "Metadata": headers,
         }
-        if effective_key is not None:
+        if effective_sse_key is not None:
             extra_args["ServerSideEncryption"] = "aws:kms"
-            extra_args["SSEKMSKeyId"] = effective_key
+            extra_args["SSEKMSKeyId"] = effective_sse_key
         # upload_fileobj auto-switches to a multipart upload above the threshold,
         # so a large staged bundle is sent in parts each under the backend/proxy
         # request-size limit; a single put_object would 413 on a >100 MB object.
         # The managed transfer returns no response body, so the version id comes
         # from the follow-up stat (the write we just made is the latest version).
-        self._call(
-            "write",
-            location,
-            lambda: self._s3.upload_fileobj(
-                data,
-                bucket,
-                location.object_path,
-                ExtraArgs=extra_args,
-                Config=_UPLOAD_TRANSFER_CONFIG,
-            ),
-        )
+        try:
+            self._call(
+                "write",
+                location,
+                lambda: self._s3.upload_fileobj(
+                    encrypted,
+                    bucket,
+                    location.object_path,
+                    ExtraArgs=extra_args,
+                    Config=_UPLOAD_TRANSFER_CONFIG,
+                ),
+            )
+        finally:
+            encrypted.close()
         stat = self._call(
             "write.stat",
             location,
@@ -180,9 +208,28 @@ class S3CompatibleStorageClient(StorageClient):
         kwargs: dict[str, Any] = {"Bucket": bucket, "Key": location.object_path}
         if version_id is not None:
             kwargs["VersionId"] = version_id
-        response = self._call("read", location, lambda: self._s3.get_object(**kwargs))
-        self._log("read", location, version_id=response.get("VersionId"))
-        return self._to_storage_object(location, response), response["Body"]
+        response = cast(
+            dict[str, object],
+            self._call("read", location, lambda: self._s3.get_object(**kwargs)),
+        )
+        body = cast(BinaryIO, response["Body"])
+        try:
+            descriptor = self._to_storage_object(location, response)
+            headers = {
+                key.lower(): value
+                for key, value in _OBJECT_HEADERS.validate_python(
+                    response.get("Metadata", {})
+                ).items()
+            }
+            plaintext = self._encryption.decrypt(location, body, descriptor.metadata, headers)
+        except (StorageError, ValidationError, ValueError, KeyError) as exc:
+            body.close()
+            self._log("read", location, result="verification-refused")
+            raise StorageAccessError(
+                "The bank key or encrypted object could not be verified."
+            ) from exc
+        self._log("read", location, version_id=descriptor.version_id)
+        return descriptor, plaintext
 
     def exists(self, location: StorageLocation) -> bool:
         stat = self._stat_or_none(location.bucket_name(self._env), location.object_path)
@@ -297,29 +344,67 @@ class S3CompatibleStorageClient(StorageClient):
         operation: Literal["read", "write"],
         expires_in_seconds: int = 900,
     ) -> str:
-        bucket = location.bucket_name(self._env)
-        method = "get_object" if operation == "read" else "put_object"
-        url = self._call(
-            "presigned_url",
-            location,
-            lambda: self._s3.generate_presigned_url(
-                method,
-                Params={"Bucket": bucket, "Key": location.object_path},
-                ExpiresIn=expires_in_seconds,
+        audit_operation = f"presigned_url.{operation}"
+        try:
+            bank_key_required = self._encryption.bank_key_required(location)
+        except (RuntimeError, SQLAlchemyError) as exc:
+            self._log(audit_operation, location, result="configuration-refused")
+            raise StorageAccessError("The bank key configuration could not be verified.") from exc
+        if not bank_key_required:
+            method = "get_object" if operation == "read" else "put_object"
+            signer = cast(_S3ControlClient, cast(object, self._s3))
+            url = cast(
+                str,
+                self._call(
+                    audit_operation,
+                    location,
+                    lambda: signer.generate_presigned_url(
+                        method,
+                        Params={
+                            "Bucket": location.bucket_name(self._env),
+                            "Key": location.object_path,
+                        },
+                        ExpiresIn=expires_in_seconds,
+                    ),
+                ),
+            )
+            self._log(audit_operation, location)
+            return url
+        if operation != "read":
+            self._log(audit_operation, location, result="key-refused")
+            raise StorageAccessError(
+                "Encrypted bank uploads must pass through application storage."
+            )
+        stat = cast(
+            dict[str, object],
+            self._call(
+                audit_operation,
+                location,
+                lambda: self._stat_object(location.bucket_name(self._env), location.object_path),
             ),
         )
-        self._log(f"presigned_url.{operation}", location)
+        version = stat.get("VersionId")
+        version_id = str(version) if version is not None else None
+        try:
+            url = issue(location, version_id, expires_in_seconds)
+        except (StorageError, RuntimeError, ValueError):
+            self._log(audit_operation, location, result="signing-refused")
+            raise
+        self._log(audit_operation, location, version_id=version_id)
         return url
 
     def health_check(self) -> StorageHealth:
         try:
-            self._s3.list_buckets()
+            client = cast(_S3ControlClient, cast(object, self._s3))
+            _ = client.list_buckets()
         except (ClientError, BotoCoreError) as exc:
             return StorageHealth(healthy=False, backend=self._settings.backend, detail=str(exc))
         return StorageHealth(healthy=True, backend=self._settings.backend)
 
     def ensure_institution(self, institution_slug: str) -> None:
-        provision_institution(self._s3, self._settings, institution_slug)
+        provision_institution(
+            cast(ProvisioningClient, cast(object, self._s3)), self._settings, institution_slug
+        )
 
     def flush_access_log(self) -> str | None:
         if not isinstance(self._log, HashChainedAccessLog):
@@ -329,7 +414,9 @@ class S3CompatibleStorageClient(StorageClient):
             return None
         jsonl, first, last = segment
         bucket = f"aequoros-{self._env}-audit-logs"
-        ensure_audit_bucket(self._s3, self._settings, bucket)
+        ensure_audit_bucket(
+            cast(ProvisioningClient, cast(object, self._s3)), self._settings, bucket
+        )
         stamp = datetime.now(UTC)
         key = (
             f"{self._log.identity}/{stamp:%Y-%m-%d}/{stamp:%H%M%S}-seq{first:08d}-{last:08d}.jsonl"

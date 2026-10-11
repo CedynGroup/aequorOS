@@ -71,13 +71,15 @@ App connection string comes from `backend/.env` (remote:
 Verified in `backend/app/api/deps.py`, `app/db/session.py`, and migration
 `alembic/versions/202605250002_enable_tenant_rls.py`.
 
-1. **Verified credential → context.** Every authenticated business request carries
+1. **Verified credential → context.** Requests that establish a `TenantContext` carry
    an HTTP bearer credential. Normal app access tokens are HS256 JWTs whose verified `org`, `sub`,
    legacy `roles`, and `authv` claims form a frozen `TenantContext`; missing,
    malformed, expired, pre-authorization-version, or wrongly typed tokens return
    `401` before service code runs. Integration keys and operator impersonation
    tokens are separate bearer credential types with their own validation and
    lifecycle rules; caller-supplied tenant/user headers never establish identity.
+   Bank download access follows the
+   [bank-key storage contract](backend/docs/bank_key_setup.md).
 2. **Dependency aliases** (use these, never raw `Depends(...)` in feature modules):
    - `DbSession` — tenant-validated SQLAlchemy session (`get_tenant_db_session`). It stores
      `session.info["organization_id"]` and validates that the org exists and, when present, that

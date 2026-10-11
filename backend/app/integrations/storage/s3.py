@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 import boto3
 from botocore.client import Config
@@ -10,6 +10,12 @@ from botocore.exceptions import ClientError
 from app.core.config import get_settings
 from app.core.tls import require_boto_tls, require_https
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
+
+
+class _Signer(Protocol):
+    def generate_presigned_url(
+        self, operation: str, *, Params: dict[str, str], ExpiresIn: int, HttpMethod: str
+    ) -> str: ...
 
 
 class S3ObjectStorage:
@@ -49,7 +55,7 @@ class S3ObjectStorage:
         content_type: str,
         expires_seconds: int,
     ) -> PresignedUpload:
-        url = self._client.generate_presigned_url(
+        url = cast(_Signer, cast(object, self._client)).generate_presigned_url(
             "put_object",
             Params={"Bucket": bucket, "Key": object_key, "ContentType": content_type},
             ExpiresIn=expires_seconds,
@@ -69,7 +75,7 @@ class S3ObjectStorage:
         object_key: str,
         expires_seconds: int,
     ) -> str:
-        return self._client.generate_presigned_url(
+        return cast(_Signer, cast(object, self._client)).generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket, "Key": object_key},
             ExpiresIn=expires_seconds,

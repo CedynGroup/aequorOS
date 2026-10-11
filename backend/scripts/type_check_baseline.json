@@ -729,9 +729,9 @@
  },
  "app.integrations.storage.s3": {
   "reportMissingTypeStubs": 3,
-  "reportUnknownArgumentType": 5,
-  "reportUnknownMemberType": 16,
-  "reportUnknownVariableType": 4
+  "reportUnknownArgumentType": 4,
+  "reportUnknownMemberType": 12,
+  "reportUnknownVariableType": 2
  },
  "app.jobs.bi_alerts": {
   "reportAny": 41
@@ -986,9 +986,9 @@
  },
  "app.operator.features.provision": {
   "reportMissingTypeStubs": 2,
-  "reportUnknownArgumentType": 2,
-  "reportUnknownMemberType": 2,
-  "reportUnknownVariableType": 2
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 1,
+  "reportUnknownVariableType": 1
  },
  "app.operator.features.regulatory_parameters": {
   "reportUnknownArgumentType": 1,
@@ -1029,8 +1029,7 @@
   "reportUnknownMemberType": 6
  },
  "app.operator.services.tenant_provisioning": {
-  "reportAny": 20,
-  "reportUnknownVariableType": 1
+  "reportAny": 12
  },
  "app.schemas.findings": {
   "reportAny": 1
@@ -2201,20 +2200,20 @@
   "reportAny": 4
  },
  "app.storage.provisioning": {
-  "reportMissingParameterType": 7,
+  "reportMissingParameterType": 1,
   "reportMissingTypeStubs": 1,
-  "reportUnknownArgumentType": 8,
-  "reportUnknownMemberType": 14,
-  "reportUnknownParameterType": 7,
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 7,
+  "reportUnknownParameterType": 1,
   "reportUnknownVariableType": 5
  },
  "app.storage.s3_compatible": {
-  "reportAny": 37,
+  "reportAny": 31,
   "reportMissingTypeStubs": 5,
   "reportUnknownArgumentType": 9,
-  "reportUnknownLambdaType": 8,
-  "reportUnknownMemberType": 42,
-  "reportUnknownVariableType": 15
+  "reportUnknownLambdaType": 7,
+  "reportUnknownMemberType": 36,
+  "reportUnknownVariableType": 13
  },
  "app.worker": {
   "reportAny": 3,
@@ -2245,7 +2244,7 @@
   "reportAny": 22
  },
  "scripts.backup_storage": {
-  "reportAny": 38,
+  "reportAny": 36,
   "reportMissingTypeStubs": 3,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 2
@@ -3891,14 +3890,12 @@
   "reportAny": 6
  },
  "tests.operator.test_provisioning": {
-  "reportAny": 48,
-  "reportMissingParameterType": 1,
+  "reportAny": 46,
   "reportMissingTypeArgument": 2,
   "reportUnknownArgumentType": 1,
   "reportUnknownLambdaType": 2,
-  "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 3,
-  "reportUnknownVariableType": 8
+  "reportUnknownParameterType": 2,
+  "reportUnknownVariableType": 7
  },
  "tests.operator.test_regulatory_parameter_shapes": {
   "reportAny": 10,
@@ -5126,9 +5123,9 @@
   "reportMissingParameterType": 3,
   "reportPrivateUsage": 3,
   "reportUnknownArgumentType": 2,
-  "reportUnknownMemberType": 14,
+  "reportUnknownMemberType": 13,
   "reportUnknownParameterType": 3,
-  "reportUnknownVariableType": 6
+  "reportUnknownVariableType": 5
  },
  "tests.test_cors": {
   "reportMissingParameterType": 2,

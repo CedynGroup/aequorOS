@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.core.key_management.settings import get_key_settings
 from app.core.logging import logger
 from app.db.session import get_engine, get_worker_sessionmaker, worker_visibility
 from app.schemas.health import ComponentHealth, HealthResponse, ReadinessResponse
@@ -66,6 +67,7 @@ def live(settings: Annotated[Settings, Depends(get_settings)]) -> HealthResponse
         service=settings.app.app_name,
         environment=settings.app.app_env,
         status="ok",
+        bank_key_required=get_key_settings().bank_key_required,
     )
 
 
@@ -148,9 +150,7 @@ def _worker_health(settings: Settings) -> ComponentHealth:
     """
     visibility = worker_visibility()
     if visibility.blind:
-        logger.bind(
-            worker_role=visibility.role, worker_visibility_detail=visibility.detail
-        ).error(
+        logger.bind(worker_role=visibility.role, worker_visibility_detail=visibility.detail).error(
             "Readiness: the background worker cannot claim jobs. Every scheduled "
             "refresh, official run and vendor pull is stalled."
         )

@@ -1,13 +1,14 @@
 """Tenant provisioning saga (docs/internal/developer.md §2, §2a).
 
 ``provision_tenant`` creates everything a new bank tenant needs — org, bank,
-storage buckets, (optionally) a per-tenant KMS key, the disabled SSO stub,
+storage buckets, the disabled SSO stub,
 the first account administrator, and that user's Org Owner binding — as an
 explicit saga: every step records
 ``succeeded | failed | skipped | rolled_back`` so partial failure never
 leaves a half-tenant silently. On any failure the DB transaction rolls back
 and freshly-created buckets are deleted (they are empty at that point; when
 deletion itself fails the result says so — manual cleanup, named).
+Bank-key setup during onboarding follows ``backend/docs/bank_key_setup.md``.
 
 Rules this module enforces on purpose:
 
@@ -38,7 +39,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import security
-from app.core.config import OperatorSettings, get_operator_settings
+from app.core.key_management.registry import ProviderFactory, provider_for, register
+from app.core.key_management.settings import get_key_settings
+from app.core.key_management.types import KeyUnavailableError
 from app.db.base import utc_now
 from app.identity import public as membership
 from app.identity import public as organization_ownership
@@ -73,7 +76,7 @@ SSO_REDIRECT_URI_PATHS: tuple[str, str] = (
 )
 
 #: Steps whose effects live in the DB transaction (rolled back wholesale).
-_DB_STEPS = frozenset({"organization", "bank", "sso_stub", "first_admin", "first_owner"})
+_DB_STEPS = frozenset({"organization", "bank", "sso_stub", "first_admin", "first_owner", "kms"})
 
 
 @dataclass(frozen=True)
@@ -82,13 +85,13 @@ class ProvisioningClients:
 
     ``s3_client`` is None when object storage is unconfigured/unavailable —
     the storage step then FAILS with ``unavailable_reason`` (a tenant without
-    buckets is not provisioned). ``kms_client`` is None unless
-    OPERATOR_AWS_KMS_ENABLED and boto3 could build one.
+    buckets is not provisioned). Key operations use the provider interface;
+    onboarding never creates, deletes or exports a bank master key.
     """
 
     s3_client: Any | None
     storage_settings: StorageEngineSettings
-    kms_client: Any | None = None
+    key_providers: ProviderFactory = provider_for
     unavailable_reason: str | None = None
 
 
@@ -104,7 +107,6 @@ class _SagaState:
     bank_id: str | None = None
     created_buckets: list[str] = field(default_factory=list)
     bucket_names: list[str] = field(default_factory=list)
-    kms_key_id: str | None = None
     one_time_password: str | None = None
 
     def record(self, step: str, status_: str, detail: str) -> None:
@@ -215,58 +217,37 @@ def _step_storage(
     return registry
 
 
-def _step_kms(
+def _step_kms(  # noqa: PLR0913 - explicit provisioning saga inputs
+    db: Session,
+    bank: Bank,
     registry: TenantStorage,
-    organization_id: str,
+    payload: TenantProvisionCreate,
     clients: ProvisioningClients,
-    operator_settings: OperatorSettings,
     state: _SagaState,
 ) -> None:
-    if not operator_settings.aws_kms_enabled:
-        state.record(
-            "kms",
-            "skipped",
-            "KMS disabled (OPERATOR_AWS_KMS_ENABLED=0) — SSE-KMS not applied",
+    if payload.encryption_key is None:
+        if not get_key_settings().bank_key_required:
+            state.record(
+                "kms", "skipped", "No bank key connected; existing platform storage remains active."
+            )
+            return
+        raise state.fail("kms", "A bank-owned encryption key must be connected before onboarding.")
+    try:
+        row = register(
+            db,
+            bank_id=bank.id,
+            organization_id=bank.organization_id,
+            storage_slug=bank.storage_slug or bank.id.lower(),
+            key=payload.encryption_key.reference(),
+            providers=clients.key_providers,
         )
-        return
-    if clients.kms_client is None:
-        raise state.fail(
-            "kms",
-            "OPERATOR_AWS_KMS_ENABLED=1 but no KMS client is available — refusing to "
-            "report per-tenant encryption that was not applied.",
-        )
-    key = clients.kms_client.create_key(
-        Description=f"AequorOS per-tenant storage key for {organization_id}",
-        Tags=[{"TagKey": "aequoros-org", "TagValue": organization_id}],
-    )
-    key_metadata = key["KeyMetadata"]
-    state.kms_key_id = key_metadata["KeyId"]
-    clients.kms_client.create_alias(
-        AliasName=f"alias/aequoros-{organization_id}",
-        TargetKeyId=key_metadata["KeyId"],
-    )
-    for bucket in registry.bucket_names:
-        clients.s3_client.put_bucket_encryption(  # type: ignore[union-attr] - storage step ran first
-            Bucket=bucket,
-            ServerSideEncryptionConfiguration={
-                "Rules": [
-                    {
-                        "ApplyServerSideEncryptionByDefault": {
-                            "SSEAlgorithm": "aws:kms",
-                            "KMSMasterKeyID": key_metadata["Arn"],
-                        }
-                    }
-                ]
-            },
-        )
-    registry.kms_key_arn = key_metadata["Arn"]
-    registry.provider = "aws"
+    except KeyUnavailableError as exc:
+        raise state.fail("kms", str(exc)) from exc
+    registry.kms_key_arn = row.key_id
     state.record(
         "kms",
         "succeeded",
-        f"per-tenant KMS key created (alias/aequoros-{organization_id}); SSE-KMS set as "
-        f"default encryption on {len(registry.bucket_names)} buckets. Offboarding can now "
-        "crypto-shred by scheduling key deletion.",
+        "Bank-held master key connected; ownership, enabled state and wrap/unwrap probe verified.",
     )
 
 
@@ -454,15 +435,6 @@ def _step_readiness(db: Session, organization_id: str, bank_id: str, state: _Sag
 def _cleanup_external(clients: ProvisioningClients, state: _SagaState) -> None:
     """Best-effort external cleanup after a failed saga (DB already rolled back)."""
     notes: list[str] = []
-    if state.kms_key_id is not None and clients.kms_client is not None:
-        try:
-            clients.kms_client.schedule_key_deletion(KeyId=state.kms_key_id, PendingWindowInDays=7)
-            notes.append(f"KMS key {state.kms_key_id} scheduled for deletion (7 days)")
-        except Exception as exc:  # noqa: BLE001 - cleanup must report, not raise
-            notes.append(
-                f"MANUAL CLEANUP NEEDED: KMS key {state.kms_key_id} could not be "
-                f"scheduled for deletion ({exc})"
-            )
     for bucket in state.created_buckets:
         try:
             clients.s3_client.delete_bucket(Bucket=bucket)  # type: ignore[union-attr]
@@ -496,12 +468,9 @@ def provision_tenant(  # noqa: PLR0915 - one linear saga; each step is named and
     operator: OperatorContext,
     payload: TenantProvisionCreate,
     clients: ProvisioningClients,
-    *,
-    operator_settings: OperatorSettings | None = None,
 ) -> ProvisioningResultRead:
     """Run the onboarding saga. Returns the explicit step-by-step result;
     the HTTP layer always answers 200 with ``succeeded`` telling the truth."""
-    operator_settings = operator_settings or get_operator_settings()
     state = _SagaState()
     _validate(db, payload, state)
 
@@ -536,7 +505,7 @@ def provision_tenant(  # noqa: PLR0915 - one linear saga; each step is named and
         # c. storage  d. kms  e. sso stub  f. first admin  g. first owner
         # h. parameters  i. readiness
         registry = _step_storage(db, bank, organization.id, clients, state)
-        _step_kms(registry, organization.id, clients, operator_settings, state)
+        _step_kms(db, bank, registry, payload, clients, state)
         _step_sso_stub(db, organization.id, state)
         administrator = _step_first_admin(db, payload, organization.id, state)
         _step_first_owner(db, organization.id, administrator, operator, state)
@@ -641,6 +610,9 @@ def _audit(
             "currency": payload.currency,
             "institution_type": payload.institution_type,
             "admin_email": payload.admin_email.lower(),
+            "encryption_key": payload.encryption_key.model_dump()
+            if payload.encryption_key
+            else None,
             "steps": [{"step": s.step, "status": s.status} for s in state.steps],
             "warnings": state.warnings,
         },

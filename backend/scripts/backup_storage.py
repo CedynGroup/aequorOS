@@ -1,30 +1,16 @@
-"""Inventory and optionally copy the AequorOS object store for recovery.
+"""Inventory, copy or restore the AequorOS object store.
 
-    cd backend
-    uv run python -m scripts.backup_storage --out-dir /var/backups/aequoros/objects
-    uv run python -m scripts.backup_storage --out-dir /var/backups/aequoros/objects --download
-
-Regulatory artifacts — sealed return PDFs, signed packages, ingestion source
-files — live in object storage, not in Postgres. A database backup alone
-therefore recovers the *ledger* of what was filed and loses the *artifacts*
-themselves, so this runs alongside :mod:`scripts.backup_database`.
-
-Two modes, because they answer different questions:
-
-* **inventory** (default) — every bucket, key, size, ETag and last-modified
-  time, written to a manifest. Cheap enough to run often, and it is what proves
-  after the fact that an object existed at a point in time.
-* **``--download``** — additionally streams each object to ``--out-dir`` and
-  records a SHA-256 per object. This is the copy an actual recovery needs.
+Backup and restore commands, encrypted-object recovery requirements and known
+limitations are owned by ``backend/docs/bank_key_setup.md``.
 
 **The HEAD problem.** This deployment's S3-compatible endpoint sits behind a
 WAF that 403s and, worse, sometimes *times out* ``HEAD`` requests. The obvious
 implementation — list keys, then ``head_object`` each for its metadata — stalls
-for minutes and then fails. So this script never issues ``HEAD``: size and ETag
-come from the ``ListObjectsV2`` response, which is a GET and passes. Downloads
-use ``GetObject`` for the same reason.
+for minutes and then fails. Inventory and downloads never issue object ``HEAD``:
+size and ETag come from GET responses. Restore uses the provisioning module for bucket
+existence checks and configuration.
 
-Failures are recorded per bucket rather than aborting the run: a WAF that
+Inventory and download failures are recorded per bucket rather than aborting the run: a WAF that
 blocks one bucket must not cost you the inventory of the other twenty. The exit
 code is non-zero when anything failed, and the manifest names what.
 """
@@ -37,13 +23,16 @@ import json
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO, Protocol, cast
 
 import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
+from pydantic import TypeAdapter, ValidationError
 
+from app.storage.client import TIERS
 from app.storage.config import get_storage_settings
+from app.storage.provisioning import ProvisioningClient, provision_bucket
 from scripts.dr_common import DisasterRecoveryError, load_env_file
 from scripts.dr_manifest import utc_now_iso
 
@@ -55,6 +44,8 @@ class ObjectRecord:
     etag: str
     last_modified: str
     sha256: str = ""
+    metadata: dict[str, str] = field(default_factory=dict)
+    content_type: str = "application/octet-stream"
 
 
 @dataclass
@@ -76,6 +67,7 @@ class StorageBackupReport:
     endpoint: str
     downloaded: bool
     buckets: list[BucketRecord] = field(default_factory=list)
+    format_version: int = 1
 
     @property
     def ok(self) -> bool:
@@ -125,16 +117,96 @@ def list_buckets(client: Any, *, prefix: str) -> list[str]:
     return sorted(n for n in names if not prefix or n.startswith(prefix))
 
 
-def _download(client: Any, bucket: str, key: str, destination: Path) -> str:
-    """Stream one object to disk and return its SHA-256 (GET, never HEAD)."""
+class _RecoveryClient(ProvisioningClient, Protocol):
+    def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]: ...
+
+    def put_object(
+        self,
+        *,
+        Bucket: str,
+        Key: str,
+        Body: BinaryIO,
+        Metadata: dict[str, str],
+        ContentType: str,
+    ) -> object: ...
+
+
+def _object_path(root: Path, bucket: str, key: str) -> Path:
+    if Path(bucket).name != bucket or bucket in {".", ".."}:
+        raise DisasterRecoveryError("Invalid backup bucket name.")
+    bucket_root = (root / bucket).resolve()
+    destination = (bucket_root / key).resolve()
+    if (
+        not bucket_root.is_relative_to(root.resolve())
+        or not destination.is_relative_to(bucket_root)
+        or ".." in Path(key).parts
+    ):
+        raise DisasterRecoveryError("Object key escapes the backup bucket directory.")
+    return destination
+
+
+def _download(
+    client: _RecoveryClient, bucket: str, key: str, destination: Path, entry: ObjectRecord
+) -> str:
     destination.parent.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256()
-    body = client.get_object(Bucket=bucket, Key=key)["Body"]
-    with destination.open("wb") as handle:
-        for chunk in iter(lambda: body.read(1024 * 1024), b""):
-            digest.update(chunk)
-            handle.write(chunk)
+    response = client.get_object(Bucket=bucket, Key=key)
+    body = cast(BinaryIO, response["Body"])
+    try:
+        entry.metadata = {
+            name.lower(): value
+            for name, value in TypeAdapter(dict[str, str])
+            .validate_python(response.get("Metadata", {}))
+            .items()
+        }
+        entry.content_type = str(response.get("ContentType", "application/octet-stream"))
+        entry.size = int(str(response.get("ContentLength", entry.size)))
+        entry.etag = str(response.get("ETag", entry.etag)).strip('"')
+        entry.last_modified = str(response.get("LastModified", entry.last_modified))
+        with destination.open("wb") as handle:
+            for chunk in iter(lambda: body.read(1024 * 1024), b""):
+                digest.update(chunk)
+                handle.write(chunk)
+    finally:
+        body.close()
     return digest.hexdigest()
+
+
+def restore_storage_backup(client: _RecoveryClient, manifest: Path, *, out_dir: Path) -> int:
+    report = TypeAdapter(StorageBackupReport).validate_json(manifest.read_bytes())
+    if report.format_version != 2 or not report.downloaded or not report.ok:
+        raise DisasterRecoveryError("Restore requires a complete version-2 downloaded backup.")
+    count = 0
+    settings = get_storage_settings()
+    for bucket in report.buckets:
+        suffix = bucket.bucket.rsplit("-", 1)[-1]
+        tier = suffix if suffix in TIERS else None
+        _ = provision_bucket(
+            client,
+            settings,
+            bucket.bucket,
+            "audit-logs" if bucket.bucket.endswith("-audit-logs") else tier,
+        )
+        for entry in bucket.keys:
+            source = _object_path(out_dir, bucket.bucket, entry.key)
+            with source.open("rb") as body:
+                if (
+                    not entry.sha256
+                    or hashlib.file_digest(body, "sha256").hexdigest() != entry.sha256
+                ):
+                    raise DisasterRecoveryError(
+                        "Backup object checksum does not match the manifest."
+                    )
+                _ = body.seek(0)
+                _ = client.put_object(
+                    Bucket=bucket.bucket,
+                    Key=entry.key,
+                    Body=body,
+                    Metadata=entry.metadata,
+                    ContentType=entry.content_type,
+                )
+            count += 1
+    return count
 
 
 def inventory_bucket(client: Any, bucket: str, *, out_dir: Path | None) -> BucketRecord:
@@ -152,11 +224,17 @@ def inventory_bucket(client: Any, bucket: str, *, out_dir: Path | None) -> Bucke
                     last_modified=str(item.get("LastModified", "")),
                 )
                 if out_dir is not None:
-                    entry.sha256 = _download(client, bucket, key, out_dir / bucket / key)
+                    entry.sha256 = _download(
+                        cast(_RecoveryClient, cast(object, client)),
+                        bucket,
+                        key,
+                        _object_path(out_dir, bucket, key),
+                        entry,
+                    )
                 record.keys.append(entry)
                 record.objects += 1
                 record.bytes += entry.size
-    except (ClientError, BotoCoreError) as exc:
+    except (ClientError, BotoCoreError, DisasterRecoveryError, ValidationError) as exc:
         # Recorded, not raised: one blocked bucket must not cost the whole run.
         record.error = f"{type(exc).__name__}: {str(exc)[:300]}"
     return record
@@ -168,7 +246,7 @@ def run_storage_backup(
     client, endpoint = _client()
     out_dir.mkdir(parents=True, exist_ok=True)
     report = StorageBackupReport(
-        taken_at=utc_now_iso(), endpoint=endpoint, downloaded=download
+        taken_at=utc_now_iso(), endpoint=endpoint, downloaded=download, format_version=2
     )
     try:
         buckets = list_buckets(client, prefix=bucket_prefix)
@@ -195,9 +273,11 @@ def run_storage_backup(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__ or "", add_help=True)
     parser.add_argument("--out-dir", required=True, type=Path)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--download", action="store_true", help="Copy object bytes, not just the inventory."
     )
+    mode.add_argument("--restore-manifest", type=Path, default=None)
     parser.add_argument("--bucket-prefix", default="aequoros-")
     parser.add_argument("--env-file", type=Path, default=None)
     return parser
@@ -207,6 +287,13 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.env_file is not None:
         load_env_file(args.env_file)
+    if args.restore_manifest is not None:
+        client, _endpoint = _client()
+        count = restore_storage_backup(
+            cast(_RecoveryClient, cast(object, client)), args.restore_manifest, out_dir=args.out_dir
+        )
+        print(f"[storage] Restored {count} object(s).")
+        return 0
     report = run_storage_backup(
         out_dir=args.out_dir, download=args.download, bucket_prefix=args.bucket_prefix
     )

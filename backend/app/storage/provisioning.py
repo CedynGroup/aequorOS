@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import Literal, Protocol
 
 from botocore.exceptions import ClientError
 
@@ -25,7 +26,27 @@ logger = logging.getLogger(__name__)
 TEMP_EXPIRY_DAYS = 30
 
 
-def _create_bucket(s3_client, settings: StorageEngineSettings, bucket: str) -> None:
+class ProvisioningClient(Protocol):
+    def head_bucket(self, *, Bucket: str) -> object: ...
+
+    def create_bucket(self, *, Bucket: str, **kwargs: object) -> object: ...
+
+    def put_bucket_versioning(
+        self, *, Bucket: str, VersioningConfiguration: dict[str, str]
+    ) -> object: ...
+
+    def put_bucket_lifecycle_configuration(
+        self, *, Bucket: str, LifecycleConfiguration: dict[str, object]
+    ) -> object: ...
+
+    def put_bucket_encryption(
+        self, *, Bucket: str, ServerSideEncryptionConfiguration: dict[str, object]
+    ) -> object: ...
+
+
+def _create_bucket(
+    s3_client: ProvisioningClient, settings: StorageEngineSettings, bucket: str
+) -> None:
     """Create a bucket, branching on the S3 dialect (developer.md §2a).
 
     MinIO requires an explicit ``CreateBucketConfiguration.LocationConstraint``
@@ -56,7 +77,7 @@ class ProvisioningResult:
 
 
 def provision_institution(
-    s3_client,  # boto3 S3 client
+    s3_client: ProvisioningClient,
     settings: StorageEngineSettings,
     institution_slug: str,
 ) -> ProvisioningResult:
@@ -67,21 +88,10 @@ def provision_institution(
         bucket = StorageLocation(
             institution_slug=institution_slug, tier=tier, object_path=""
         ).bucket_name(settings.env)
-        if _bucket_exists(s3_client, bucket):
-            existing.append(bucket)
-        else:
-            _create_bucket(s3_client, settings, bucket)
+        if provision_bucket(s3_client, settings, bucket, tier):
             created.append(bucket)
-            logger.info("provisioned bucket %s", bucket)
-
-        if tier in RETAINED_TIERS:
-            s3_client.put_bucket_versioning(
-                Bucket=bucket, VersioningConfiguration={"Status": "Enabled"}
-            )
-        if tier == "temp":
-            _ensure_temp_lifecycle(s3_client, bucket)
-        if settings.kms_key_id is not None:
-            _ensure_default_encryption(s3_client, bucket, settings.kms_key_id)
+        else:
+            existing.append(bucket)
 
     return ProvisioningResult(
         institution_slug=institution_slug,
@@ -124,21 +134,39 @@ def deprovision_institution(
     return removed
 
 
-def ensure_audit_bucket(s3_client, settings: StorageEngineSettings, bucket: str) -> None:
+def ensure_audit_bucket(
+    s3_client: ProvisioningClient, settings: StorageEngineSettings, bucket: str
+) -> None:
     """The platform-wide audit bucket: versioned, encrypted, never lifecycled.
 
     Audit segments are retained for 7+ years (storage.md §9.2); no lifecycle
     rule is set so nothing ever ages out implicitly.
     """
-    if not _bucket_exists(s3_client, bucket):
+    _ = provision_bucket(s3_client, settings, bucket, "audit-logs")
+
+
+def provision_bucket(
+    s3_client: ProvisioningClient,
+    settings: StorageEngineSettings,
+    bucket: str,
+    tier: Tier | Literal["audit-logs"] | None,
+) -> bool:
+    created = not _bucket_exists(s3_client, bucket)
+    if created:
         _create_bucket(s3_client, settings, bucket)
-        logger.info("provisioned audit bucket %s", bucket)
-    s3_client.put_bucket_versioning(Bucket=bucket, VersioningConfiguration={"Status": "Enabled"})
+        logger.info("provisioned bucket %s", bucket)
+    if tier in (*RETAINED_TIERS, "audit-logs"):
+        _ = s3_client.put_bucket_versioning(
+            Bucket=bucket, VersioningConfiguration={"Status": "Enabled"}
+        )
+    if tier == "temp":
+        _ensure_temp_lifecycle(s3_client, bucket)
     if settings.kms_key_id is not None:
         _ensure_default_encryption(s3_client, bucket, settings.kms_key_id)
+    return created
 
 
-def _ensure_default_encryption(s3_client, bucket: str, kms_key_id: str) -> None:
+def _ensure_default_encryption(s3_client: ProvisioningClient, bucket: str, kms_key_id: str) -> None:
     # MinIO requires the key ID inside the rule (a bare aws:kms rule is
     # rejected as MalformedXML — probed 2026-07-15).
     s3_client.put_bucket_encryption(
@@ -156,7 +184,7 @@ def _ensure_default_encryption(s3_client, bucket: str, kms_key_id: str) -> None:
     )
 
 
-def _bucket_exists(s3_client, bucket: str) -> bool:
+def _bucket_exists(s3_client: ProvisioningClient, bucket: str) -> bool:
     try:
         s3_client.head_bucket(Bucket=bucket)
         return True
@@ -167,7 +195,7 @@ def _bucket_exists(s3_client, bucket: str) -> bool:
         raise
 
 
-def _ensure_temp_lifecycle(s3_client, bucket: str) -> None:
+def _ensure_temp_lifecycle(s3_client: ProvisioningClient, bucket: str) -> None:
     s3_client.put_bucket_lifecycle_configuration(
         Bucket=bucket,
         LifecycleConfiguration={

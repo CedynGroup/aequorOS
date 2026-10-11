@@ -72,7 +72,12 @@ export class ApiError extends Error {
    */
   details: unknown;
 
-  constructor(code: string, message: string, status: number, details?: unknown) {
+  constructor(
+    code: string,
+    message: string,
+    status: number,
+    details?: unknown,
+  ) {
     super(message);
     this.name = "ApiError";
     this.code = code;
@@ -235,6 +240,12 @@ export interface ProvisionTenantRequest {
   currency: string; // ISO-4217, ^[A-Z]{3}$ — schema-level 422 otherwise
   admin_email: string;
   admin_full_name: string;
+  encryption_key?: {
+    provider: "aws_kms";
+    key_id: string;
+    region: string;
+    owner_account: string;
+  } | null;
 }
 
 export type ProvisionStepStatus =
@@ -266,6 +277,7 @@ export interface HealthResponse {
   service: string;
   environment: string;
   status: "ok";
+  bank_key_required: boolean;
 }
 
 // --------------------------------------------------------------------------

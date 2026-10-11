@@ -100,4 +100,14 @@ class InterceptHandler(logging.Handler):
             frame = frame.f_back
             depth += 1
 
-        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+        if record.name == "uvicorn.access":
+            args = record.args
+            if isinstance(args, tuple) and len(args) == 5:
+                client, method, path, version, status = cast(tuple[object, ...], args)
+                record.args = (client, method, str(path).partition("?")[0], version, status)
+                message = record.getMessage()
+            else:
+                message = "HTTP request"
+        else:
+            message = record.getMessage()
+        logger.opt(depth=depth, exception=record.exc_info).log(level, message)
