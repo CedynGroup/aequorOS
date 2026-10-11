@@ -44,7 +44,12 @@ from app.storage.encryption import ObjectEncryption
 from app.storage.factory import get_storage_client
 from app.storage.provisioning import ProvisioningClient
 from app.storage.s3_compatible import S3CompatibleStorageClient
-from scripts.backup_storage import StorageBackupReport, inventory_bucket, restore_storage_backup
+from scripts.backup_storage import (
+    STORAGE_FORMAT_VERSION,
+    StorageBackupReport,
+    inventory_bucket,
+    restore_storage_backup,
+)
 from tests.storage.contract import metadata_for
 from tests.support.helpers import ORG_1
 
@@ -64,9 +69,11 @@ class _Body(Protocol):
 class _S3(ProvisioningClient, Protocol):
     def list_buckets(self) -> dict[str, object]: ...
 
-    def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]: ...
+    def get_object(self, *, Bucket: str, Key: str, VersionId: str = ...) -> dict[str, object]: ...
 
-    def put_object(self, **kwargs: object) -> object: ...
+    # Returns the store's response, because a restore reads the `VersionId` it
+    # minted to reconcile the database's pinned references (#501).
+    def put_object(self, **kwargs: object) -> dict[str, object]: ...
 
     def delete_object(self, *, Bucket: str, Key: str) -> object: ...
 
@@ -415,7 +422,13 @@ def test_backup_wipe_restore_reapplies_encryption_headers_and_reads(
     assert record.keys[0].metadata["encryption-format"]
     assert record.keys[0].metadata["checksum-sha256"]
     manifest = tmp_path / "manifest.json"
-    StorageBackupReport("synthetic", "moto", True, [record], format_version=2).write(manifest)
+    StorageBackupReport(
+        "synthetic", "moto", True, [record], format_version=STORAGE_FORMAT_VERSION
+    ).write(manifest)
+    # The identity the database pins. #501: a restore that does not carry it
+    # puts the bytes back under a fresh id, and every pinned download 404s.
+    backed_up_version = record.keys[0].version_id
+    assert backed_up_version, "the backup recorded no version identity to restore under"
     archived = {row.id: row.wrapped_key for row in db_session.scalars(select(ObjectKeyEnvelope))}
     row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
     registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider)
@@ -429,10 +442,23 @@ def test_backup_wipe_restore_reapplies_encryption_headers_and_reads(
         envelope.wrapped_key = archived[envelope.id]
     _ = db_session.execute(delete(RetainedBankKey))
     db_session.commit()
-    assert restore_storage_backup(bank_storage.s3, manifest, out_dir=tmp_path) == 1
+    restored = restore_storage_backup(bank_storage.s3, manifest, out_dir=tmp_path)
+    assert restored.objects == 1
     _, body = bank_storage.storage.read(location)
     assert body.read() == content
     body.close()
+
+    # The mapping is what lets a pinned reference be repaired. Asserting the
+    # pairing — and that the new id is genuinely NEW — is the difference
+    # between "the bytes came back" and "the recovery can be completed".
+    assert [v.backed_up_version_id for v in restored.versions] == [backed_up_version]
+    minted = restored.versions[0].restored_version_id
+    assert minted and minted != backed_up_version
+    # And the restored revision is readable BY THAT ID, which is what a pinned
+    # download does once `reconcile_storage_versions` has repointed the row.
+    _descriptor, pinned = bank_storage.storage.read(location, version_id=minted)
+    assert pinned.read() == content
+    pinned.close()
 
 
 def test_rotation_preserves_archived_envelopes_until_retention_expires(

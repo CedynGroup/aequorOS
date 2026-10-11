@@ -2241,7 +2241,7 @@
   "reportAny": 22
  },
  "scripts.backup_storage": {
-  "reportAny": 36,
+  "reportAny": 34,
   "reportMissingTypeStubs": 3,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 2
