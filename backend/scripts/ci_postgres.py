@@ -99,7 +99,7 @@ def git(root: Path, *args: str) -> str:
 
 
 def affected_files(root: Path, event: str, base: str, *, worktree: bool = False) -> list[str]:
-    """Only body or AST-neutral edits to unreferenced domain tests can narrow a PR.
+    """Only body or AST-neutral edits to unreferenced domain tests can narrow a run.
 
     Production, fixture, decorator, collection, config, addition/deletion and
     uncertain changes all run the full suite. No inferred application dependency

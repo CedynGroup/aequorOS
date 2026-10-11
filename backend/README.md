@@ -358,10 +358,10 @@ the suite explicitly neutralizes any `DATABASE_URL` from `.env` (empty env value
 unconfigured), so a configured remote database cannot leak into tests implicitly.
 For a local feedback loop, run `mise run risk-service:test-fast`. It compares the
 current branch and staged/unstaged edits with the merge base of `origin/main`.
-It reuses CI's conservative affected-module rules described below: only body or
-formatting edits in existing, unreferenced domain test modules can narrow the run.
-Production, fixture, configuration, new/deleted or untracked files, a missing base,
-and an empty diff run the complete hermetic suite instead, with an explicit message.
+It reuses CI's conservative affected-module rules described below. When those
+rules cannot narrow the selection, it runs the complete hermetic suite instead.
+Untracked files, a missing base and an empty diff also force this fallback, with
+an explicit message.
 Both modes use four workers and `--dist loadfile` to keep each module's fixtures
 together.
 This profile is local and opt-in; the default test tasks and full main CI stay unchanged.
@@ -427,8 +427,9 @@ affected modules. Changes to fixtures, decorators, production code, new/deleted
 tests, configuration or an uncertain diff select the full suite. Schema/RLS,
 locks, architecture and storage gates keep their coverage. The stdlib planner/coverage verifier is
 [`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via
-[`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py), so local mise
-commands continue to run their complete suites.
+[`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py). Default local test
+tasks continue to run their complete suites; `risk-service:test-fast` uses the
+local profile described above.
 
 Architecture guards still scan every module and run every check. Their shared
 scanner memoizes immutable facts by source text and import/table context within
