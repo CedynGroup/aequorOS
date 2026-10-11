@@ -12,8 +12,8 @@ Five rules, each from **D-041** (and **D-043**, which moved the scheduler's
 "is this bank due" read behind the seam so this allow-list needed no
 amendment):
 
-a. **The regulatory/live plane never imports BI.** The whole of ``app/`` is
-   scanned except the BI-owned paths. One allow-list: ``app.bi.service.enqueue``
+a. **The regulatory/live plane never imports BI.**
+   One allow-list: ``app.bi.service.enqueue``
    and ``app.bi.service.versions`` — the enqueue seam the spec's hook table
    requires — may be imported by the five hook sites and nowhere else.
 b. **BI never calls the official derivation.** ``derive_facts`` REFUSES a book
@@ -95,9 +95,7 @@ BACKEND = APP.parent
 # What the BI plane IS, and what may reach into it
 # ---------------------------------------------------------------------------
 
-#: Where BI lives on disk, relative to ``app/``. Every path matching one of
-#: these globs is BI and is exempt from rule (a) — it is allowed to import BI
-#: because it IS BI. The feature package and named operator modules own this plane.
+#: Where BI lives on disk, relative to ``app/``.
 BI_OWNED_GLOBS: tuple[str, ...] = (
     "bi/service/**/*.py",
     "bi/domain/**/*.py",
@@ -151,9 +149,6 @@ SEAM_IMPORTERS: frozenset[str] = frozenset(
 #: ``app.bi.models`` and must never name a BI service or domain module.
 MODEL_REGISTRY = "app/models/__init__.py"
 
-# BI wire schemas live in the feature package and share its write restrictions.
-# Import and write checks still scan every module outside this ownership set.
-
 
 def _app_modules() -> list[Path]:
     return sorted(p for p in APP.rglob("*.py") if "__pycache__" not in p.parts)
@@ -174,10 +169,8 @@ def _bi_owned() -> frozenset[str]:
 BI_OWNED: frozenset[str] = _bi_owned()
 
 #: The feature-plane files the globs above are allowed to resolve to, named
-#: rather than observed (audit A6-09). Rule (a) exempts everything in
-#: :data:`BI_OWNED` from the "no module outside BI imports BI" check, so a
-#: non-BI module drifting into this set is a silent boundary hole. Adding a BI
-#: feature file means adding it here in the same change.
+#: rather than observed (audit A6-09). Adding a BI feature file means adding
+#: it here in the same change.
 EXPECTED_BI_FEATURE_FILES: frozenset[str] = frozenset(
     {
         "app/bi/api/read_bi.py",
@@ -194,8 +187,8 @@ EXPECTED_BI_FEATURE_FILES: frozenset[str] = frozenset(
 def test_the_bi_owned_globs_resolve_to_no_non_bi_module() -> None:
     """The exemption list is asserted, not whatever the globs happened to match.
 
-    ``BI_OWNED`` is what rule (a) exempts. A substring glob once stood here, so
-    any feature file containing "bi" would have been exempted without a test
+    A substring glob once stood here, so any feature file containing "bi"
+    would have been exempted without a test
     failing. Both directions are asserted so a renamed or deleted BI feature is
     just as loud as an unexpected new member.
     """
@@ -374,7 +367,9 @@ def test_the_regulatory_and_live_plane_never_imports_bi() -> None:
     offenders: list[str] = []
     for path in _app_modules():
         relative = _relative(path)
-        if relative in BI_OWNED or relative == MODEL_REGISTRY:
+        if relative == MODEL_REGISTRY or (
+            relative in BI_OWNED and relative != "app/bi/schemas/query.py"
+        ):
             continue
         offenders.extend(
             f"{relative}:{lineno} imports {name}" for lineno, name in forbidden_bi_imports(path)
@@ -386,6 +381,65 @@ def test_the_regulatory_and_live_plane_never_imports_bi() -> None:
         f"permitted BI imports are {sorted(SEAM_MODULES)} from "
         f"{sorted(SEAM_IMPORTERS)}:\n  " + "\n  ".join(offenders)
     )
+
+
+@pytest.fixture
+def bi_schema_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    app = tmp_path / "app"
+    schemas = app / "bi" / "schemas"
+    schemas.mkdir(parents=True)
+    for name in ("__init__", "query", "content", "commentary", "nlq", "notifications"):
+        (schemas / f"{name}.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(f"{__name__}.APP", app)
+    monkeypatch.setattr(f"{__name__}.BACKEND", tmp_path)
+    monkeypatch.setattr("tests.architecture._planes.APP", app)
+    monkeypatch.setattr(f"{__name__}.BI_OWNED", _bi_owned())
+    return schemas
+
+
+@pytest.mark.parametrize(
+    "target",
+    (
+        "service.compiler",
+        "domain.catalogue",
+        "domain.extract",
+        "models.marts",
+        "public",
+        "service.enqueue",
+        "service.versions",
+    ),
+)
+@pytest.mark.parametrize("shape", ("absolute", "relative", "dynamic", "dynamic-relative"))
+def test_query_wire_contract_cannot_import_bi_internals(
+    bi_schema_tree: Path, target: str, shape: str
+) -> None:
+    bodies = {
+        "absolute": f"import app.bi.{target}\n",
+        "relative": f"from ..{target} import value\n",
+        "dynamic": f'import importlib\nimportlib.import_module("app.bi.{target}")\n',
+        "dynamic-relative": (
+            f'import importlib\nimportlib.import_module("..{target}", '
+            'package="app.bi.schemas")\n'
+        ),
+    }
+    (bi_schema_tree / "query.py").write_text(bodies[shape], encoding="utf-8")
+    with pytest.raises(AssertionError, match=r"app/bi/schemas/query\.py:\d+ imports app\.bi\."):
+        test_the_regulatory_and_live_plane_never_imports_bi()
+
+
+@pytest.mark.parametrize("schema", ("__init__", "content", "commentary", "nlq", "notifications"))
+def test_sibling_bi_schemas_keep_their_internal_imports(bi_schema_tree: Path, schema: str) -> None:
+    (bi_schema_tree / f"{schema}.py").write_text(
+        "from app.bi.models.content import BiSavedView\n", encoding="utf-8"
+    )
+    test_the_regulatory_and_live_plane_never_imports_bi()
+
+
+def test_query_wire_contract_accepts_pure_imports(bi_schema_tree: Path) -> None:
+    (bi_schema_tree / "query.py").write_text(
+        "from datetime import date\nfrom pydantic import BaseModel\n", encoding="utf-8"
+    )
+    test_the_regulatory_and_live_plane_never_imports_bi()
 
 
 def test_every_hook_site_still_uses_the_seam() -> None:
@@ -1100,13 +1154,13 @@ def test_every_permitted_write_is_live() -> None:
 
 
 def test_every_bi_owned_module_is_in_the_write_scan() -> None:
-    """The A360-1 gap, pinned structurally: rule (a)'s exemption set and rule (c)'s
-    scan set are the SAME set. Exempting a module from the import ban without
+    """The A360-1 gap, pinned structurally. Exempting a module from the import ban without
     scanning its writes is how a non-bi_* write hides."""
     scanned = {_relative(path) for path in _bi_owned_tree()}
     assert scanned == BI_OWNED
     assert "app/bi/api/read_bi.py" in scanned
     assert "app/bi/jobs/bi_commentary.py" in scanned
+    assert "app/bi/schemas/query.py" in scanned
     assert "app/operator/features/bi_backfill.py" in scanned
 
 
