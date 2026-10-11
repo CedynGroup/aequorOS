@@ -169,6 +169,20 @@ export default defineConfig({
         CREDENTIAL_VAULT_MASTER_KEY: E2E_VAULT_KEY,
         CORS_ORIGINS: E2E_BASE_URL,
         APP_ENV: "test",
+        // The hermetic stack has no TLS to verify: the database is a disposable
+        // SQLite FILE (no transport at all), and MinIO, the IdP and the
+        // dashboard all answer plain http on loopback. Since database TLS
+        // became mandatory (#470) `plaintext_allowed()` requires BOTH an
+        // undeployed APP_ENV and this flag, so without it `create_app` refuses
+        // at startup — `TransportSecurityError: Database transport requires
+        // PostgreSQL with a hostname` — before a single journey runs (#492).
+        //
+        // It cannot reach a deployment: `validate_service_transports` raises
+        // outright when APP_ENV is staging or production and this flag is set,
+        // which `test_production_refuses_local_escape_hatch` pins. Setting it
+        // here rather than in `backend/.env` also keeps a developer's own TLS
+        // posture from changing what the journeys see.
+        TLS_ALLOW_PLAINTEXT: "1",
       },
     },
     {
