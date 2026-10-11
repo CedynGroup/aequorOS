@@ -15,6 +15,7 @@
 
 import { defineConfig } from "@playwright/test";
 import path from "path";
+import { E2E_AUTH_SECRET, E2E_JWT_SECRET } from "./e2e/support/mint";
 import { acquireE2ERunLock } from "./e2e/support/runtime-lock";
 import { selectE2ERuntimePorts } from "./e2e/support/runtime-ports";
 
@@ -85,9 +86,7 @@ export default defineConfig({
       env: {
         DATABASE_URL: `sqlite+pysqlite:///${E2E_DB}`,
         WORKER_DATABASE_URL: "",
-        // Signer identities need a pepper to derive; signing itself stays
-        // OFF so the hermetic stack exercises the surfaces and guards
-        // without an HSM.
+        // Signer identities need a pepper even with disposable software keys.
         SIGNER_ID_PEPPER: "e2e-signer-pepper-not-production-000",
         // Signing ON for the hermetic stack, backed by disposable self-signed
         // software keys. The software backend refuses to start when APP_ENV is
@@ -157,7 +156,7 @@ export default defineConfig({
         // `test_bi_routes.py` / `test_bi_query_log.py` prove the refusal itself
         // against the product figure rather than against this one.
         BI_RATE_LIMIT_MAX_QUERIES: "5000",
-        AUTH_JWT_SECRET: "e2e-backend-jwt-secret-not-production-000",
+        AUTH_JWT_SECRET: E2E_JWT_SECRET,
         IMPERSONATION_JWT_SECRET: "e2e-impersonation-secret-not-production-000",
         SSO_INTERNAL_KEY: E2E_SSO_INTERNAL_KEY,
         E2E_IDP_ISSUER: E2E_IDP_ORIGIN,
@@ -169,6 +168,9 @@ export default defineConfig({
         CREDENTIAL_VAULT_MASTER_KEY: E2E_VAULT_KEY,
         CORS_ORIGINS: E2E_BASE_URL,
         APP_ENV: "test",
+        // This disposable stack uses SQLite, loopback HTTP and local MinIO.
+        // The transport policy defaults to TLS even in test; opt in only here.
+        TLS_ALLOW_PLAINTEXT: "1",
       },
     },
     {
@@ -183,7 +185,7 @@ export default defineConfig({
         // `.next` (NEXT_PUBLIC_* is compile-time-inlined; next dev shares one
         // cache per directory). Paired with distDir in next.config.js.
         NEXT_DIST_DIR: ".next-e2e",
-        AUTH_SECRET: "e2e-nextauth-secret-not-production-000",
+        AUTH_SECRET: E2E_AUTH_SECRET,
         AUTH_TRUST_HOST: "true",
         SSO_INTERNAL_KEY: E2E_SSO_INTERNAL_KEY,
         // The dashboard's egress guard mirrors the backend's loopback

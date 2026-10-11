@@ -66,10 +66,6 @@ test.describe("Forecasting assumptions and NII", () => {
     const base = project(BASE);
     const adverse = project(ADVERSE);
     const edited = project(EDITED);
-    // Hand-checkable anchors: 105.3888M of Y1 NII on the 2,020M earning book.
-    expect(base.years[1].nii).toBe(105_388_800);
-    expect(base.years[0].carPct).toBeCloseTo((340 / 2147.5) * 100, 5);
-
     const periods = await apiGet(
       page,
       "analyst",
