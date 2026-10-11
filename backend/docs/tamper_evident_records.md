@@ -102,8 +102,10 @@ worker reaches the platform task with the audit flag alone, without tenant
 ticks, while AI and BI workers do not repeat it. The PostgreSQL tests exercise
 runtime-role inserts, denied ALTER/UPDATE/DELETE/TRUNCATE and helper replacement,
 forced chain RLS, a bank-free hourly cadence and concurrent worker exclusion.
-An unavailable verifier emits and publishes the same paging condition; the
-platform task advances to the next hour even after a mismatch or refusal.
+An unavailable verifier emits and publishes the same paging condition; after a
+mismatch or verifier refusal, the platform task advances to the next hour only
+if the schedule transaction commits. A failed acquisition, advance or commit
+leaves the task eligible for another poll, with paging bounded as described above.
 The worker reports once per outage episode at the complete task boundary,
 including combined verifier and schedule acquisition, advance, commit or session
 failures, while ordinary job dispatch continues. Behavioral regressions cover
@@ -152,5 +154,6 @@ before deploying this migration in production or staging:
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,
   truncation and function replacement fail. Confirm one sweep with zero banks
-  and one mismatch page per broken stream with multiple core worker replicas.
+  and one initial mismatch page per worker and broken stream during a sustained
+  incident with multiple core worker replicas.
   Attach role/grant evidence and a pager receipt to #356/#401.

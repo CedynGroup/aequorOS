@@ -60,7 +60,7 @@ class DatabaseSettings(BaseSettings):
     @field_validator("database_url", "migration_database_url", mode="before")
     @classmethod
     def empty_means_unconfigured(cls, value: str | None) -> str | None:
-        """DATABASE_URL="" means unconfigured.
+        """An empty runtime or migration database URL means unconfigured.
 
         Environment variables take priority over the .env file in
         pydantic-settings, so setting the variable to an empty string is the
