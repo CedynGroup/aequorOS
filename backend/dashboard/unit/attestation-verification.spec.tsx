@@ -28,15 +28,17 @@ const endpoint = `${apiBaseUrl}/banks/${bankId}/regulatory-packages/${packageId}
 const server = setupServer(
   http.get(`${apiBaseUrl}/banks`, () =>
     HttpResponse.json({
-      banks: [{
-        id: bankId,
-        name: "Sample bank",
-        currency: "EUR",
-        jurisdiction_code: "EU",
-        institution_type: "universal_bank",
-        institution_type_detail: null,
-        jurisdiction: null,
-      }],
+      banks: [
+        {
+          id: bankId,
+          name: "Sample bank",
+          currency: "EUR",
+          jurisdiction_code: "EU",
+          institution_type: "universal_bank",
+          institution_type_detail: null,
+          jurisdiction: null,
+        },
+      ],
     }),
   ),
   http.get(`${apiBaseUrl}/banks/${bankId}/reporting-periods`, () =>
@@ -133,36 +135,52 @@ it("verifies on request, distinguishes skipped checks, and refreshes an integrit
     </SessionProvider>,
   );
   expect(await screen.findByText(/Signing is switched off/)).toBeVisible();
-  expect(screen.queryByText("Every applicable check passed.")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("Every applicable check passed."),
+  ).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Verify" }));
-  expect(await screen.findByText("Every applicable check passed.")).toBeVisible();
+  expect(
+    await screen.findByText("Every applicable check passed."),
+  ).toBeVisible();
   const checks = screen.getAllByRole("listitem");
-  expect(within(checks[0]).getByText("PDF cryptographic validity")).toBeVisible();
+  expect(
+    within(checks[0]).getByText("PDF cryptographic validity"),
+  ).toBeVisible();
   expect(within(checks[0]).getByText("Skipped")).toBeVisible();
   expect(within(checks[1]).getByText("Content binding")).toBeVisible();
   expect(within(checks[1]).getByText("Pass")).toBeVisible();
   expect(screen.getByText(/1 pass · 0 fail · 1 skipped/)).toBeVisible();
-  expect(screen.getByText(/Skipped checks had nothing to validate/)).toBeVisible();
+  expect(
+    screen.getByText(/Skipped checks had nothing to validate/),
+  ).toBeVisible();
   expect(screen.getByText("Signature hash chain intact")).toBeVisible();
 
-  server.use(http.get(`${endpoint}/verify`, () => HttpResponse.json({
-    ...report,
-    overall_passed: false,
-    chain_ok: false,
-    chain_broken_at: "signature-row-2",
-    checks: [{
-      check: "content_binding",
-      passed: false,
-      detail: "Frozen figures no longer match the signed digest.",
-      evidence: { status: "failed" },
-    }],
-  })));
+  server.use(
+    http.get(`${endpoint}/verify`, () =>
+      HttpResponse.json({
+        ...report,
+        overall_passed: false,
+        chain_ok: false,
+        chain_broken_at: "signature-row-2",
+        checks: [
+          {
+            check: "content_binding",
+            passed: false,
+            detail: "Frozen figures no longer match the signed digest.",
+            evidence: { status: "failed" },
+          },
+        ],
+      }),
+    ),
+  );
   await user.click(screen.getByRole("button", { name: "Verify" }));
   expect(await screen.findByText(/Verification did not pass/)).toBeVisible();
   expect(screen.getByText("Fail")).toBeVisible();
   expect(screen.getByText(/0 pass · 1 fail · 0 skipped/)).toBeVisible();
   expect(screen.getByText("Signature hash chain is broken")).toBeVisible();
   expect(screen.getByText("first broken row: signature-row-2")).toBeVisible();
-  expect(screen.queryByText("Every applicable check passed.")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("Every applicable check passed."),
+  ).not.toBeInTheDocument();
   expect(screen.queryByText("Skipped")).not.toBeInTheDocument();
 });
