@@ -278,13 +278,13 @@ rotation and retained-key recovery are governed by
 
 ## Append-only inventory and sweep
 
-`202610100092` complements the existing attestation, governance, ICAAP, market-data
+`202610110093` complements the existing attestation, governance, ICAAP, market-data
 and filing-chain migrations. The inventory distinguishes history from live state:
 
 | Record family                                                                                                            | Database protection                                                                                                                                       |
 | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tenant and operator audit logs                                                                                           | Existing UPDATE/DELETE guards; database hash chain; TRUNCATE guard                                                                                        |
-| Signature and artifact versions, filing approvals/submission events, pinned stages/decisions and attachments/withdrawals | Existing UPDATE guards; added unconditional DELETE and TRUNCATE guards                                                                                    |
+| Signature and artifact versions, filing approvals/submission events, pinned stages/decisions and attachments/withdrawals | Existing UPDATE guards and signature DELETE guard; sweep closes other DELETE gaps and adds TRUNCATE guards                                                |
 | Scenario assumption and financial manual-edit histories                                                                  | Added UPDATE/DELETE/TRUNCATE guards                                                                                                                       |
 | Eleven `param_*` board registers (risk weights, limits, thresholds, haircuts, shocks, ECL assumptions)                   | Values/scope/approval evidence sealed from insert; only effective-to and timestamp bookkeeping may update; DELETE/TRUNCATE refused                        |
 | Approved/rejected forecast assumption generations                                                                        | All updates and deletion refused; drafts retain their editing lifecycle                                                                                   |
@@ -345,3 +345,30 @@ uv run python scripts/local_services.py run --postgres --role-admin -- \
 Production acceptance still needs counsel's retention period, an AWS locked-version
 deletion/shortening refusal, and an SNS-to-pager receipt. Attach those deployment
 records alongside this design and test evidence in the BoG pack (#356 / #401).
+
+## Sweep integration validation (2026-10-11)
+
+The sweep follows merged audit, filing and storage protections, with revision
+`202610110093` following ICAAP revision `202610110092`. Alembic reports one head.
+The initial replay reproduced a two-head setup failure before guard execution;
+linearizing this new revision resolves it without changing the ICAAP migration.
+The signature DELETE guard remains owned by the filing-lock migration, while the
+sweep adds its owner-level TRUNCATE guard.
+
+Native PostgreSQL validation with four workers passed **81 migration, audit,
+filing and sweep checks** in 218.02 seconds, including restricted migration
+upgrade/downgrade and linked correction. A separate **66-case matrix** passed in
+31.62 seconds: each of the 33 retained tables refuses cascading TRUNCATE both for
+its actual owner and for the runtime role. Owner cases temporarily restore
+TRUNCATE privileges, including cascade dependencies, inside rolled-back fixtures
+to reach the statement trigger; runtime cases retain revoked privileges. These
+checks prove both enforcement layers without adding a production bypass.
+
+The disposable native cluster used `max_locks_per_transaction=1024`. A prior run
+passed 80 checks but exhausted its default lock table during three schema
+teardowns; the retry cleaned those known schemas and completed. This is test
+capacity evidence, not a production configuration requirement. All managed
+services stopped after validation. Exact Ruff lint, strict BasedPyright baseline
+and changed-file Python/Markdown formatting passed without baseline growth.
+This pre-pipeline evidence supplements the historical record above; final CI
+and live pipeline evidence belong to the published sweep head.

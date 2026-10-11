@@ -297,9 +297,9 @@ def test_every_sealed_table_carries_its_trigger_and_cannot_be_truncated(
         )
         assert installed == expected
 
-        # A table's OWNER keeps TRUNCATE by ownership, which REVOKE cannot remove
-        # (the same limitation 202607250027 lives with); the revoke protects every
-        # role that holds it by GRANT. Assert the grant is gone for non-owners.
+        # Owners can restore TRUNCATE by GRANT; the sweep's statement triggers
+        # protect that path. Revocation separately removes this privilege from
+        # application roles. Assert the grant is gone for non-owners.
         leaked = [
             rule.table
             for rule in GOVERNANCE_MIGRATION.SEALED_TABLES

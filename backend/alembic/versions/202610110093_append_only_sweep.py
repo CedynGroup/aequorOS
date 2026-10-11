@@ -1,13 +1,13 @@
 """Close evidence deletion gaps and seal approved assumptions, limits and grants.
 
-Revision ID: 202610100092
-Revises: 202610100091
+Revision ID: 202610110093
+Revises: 202610110092
 """
 
 from alembic import op
 
-revision = "202610100092"
-down_revision = "202610100091"
+revision = "202610110093"
+down_revision = "202610110092"
 branch_labels = None
 depends_on = None
 
@@ -16,7 +16,6 @@ HISTORY_TABLES = (
     "financial_manual_edit_history",
 )
 DELETE_GAPS = (
-    "attestation_signatures",
     "regulatory_artifact_versions",
     "regulatory_package_approvals",
     "regulatory_submission_events",
@@ -44,6 +43,19 @@ GOVERNANCE_TABLES = (
     "system_of_record_declarations",
     "reconciliation_exceptions",
     "canonical_withdrawals",
+)
+TRUNCATE_TABLES = (
+    *HISTORY_TABLES,
+    "attestation_signatures",
+    *DELETE_GAPS,
+    *SEALED_TABLES,
+    *GOVERNANCE_TABLES,
+    "audit_events",
+    "operator_audit_log",
+    "audit_chain_entries",
+    "audit_chain_heads",
+    "regulatory_packages",
+    "regulatory_runs",
 )
 
 
@@ -119,19 +131,8 @@ def upgrade() -> None:
         _revoke(table, "TRUNCATE")
         if table in (*PARAMETER_TABLES, "authorization_bindings", "reconciliation_exceptions"):
             _revoke(table, "DELETE")
-    # Statement triggers also cover owners who retain implicit TRUNCATE rights.
-    for table in (
-        *HISTORY_TABLES,
-        *DELETE_GAPS,
-        *SEALED_TABLES,
-        *GOVERNANCE_TABLES,
-        "audit_events",
-        "operator_audit_log",
-        "audit_chain_entries",
-        "audit_chain_heads",
-        "regulatory_packages",
-        "regulatory_runs",
-    ):
+    # Statement triggers also cover owners who can restore TRUNCATE privileges.
+    for table in TRUNCATE_TABLES:
         op.execute(
             f"CREATE TRIGGER {table}_no_truncate BEFORE TRUNCATE ON {table} "
             "FOR EACH STATEMENT EXECUTE FUNCTION aequoros_append_only_guard()"
@@ -141,18 +142,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     if op.get_bind().dialect.name != "postgresql":
         return
-    for table in (
-        *HISTORY_TABLES,
-        *DELETE_GAPS,
-        *SEALED_TABLES,
-        *GOVERNANCE_TABLES,
-        "audit_events",
-        "operator_audit_log",
-        "audit_chain_entries",
-        "audit_chain_heads",
-        "regulatory_packages",
-        "regulatory_runs",
-    ):
+    for table in TRUNCATE_TABLES:
         op.execute(f"DROP TRIGGER {table}_no_truncate ON {table}")
     for table in (*DELETE_GAPS, *SEALED_TABLES, *GOVERNANCE_TABLES):
         op.execute(f"DROP TRIGGER {table}_retained ON {table}")

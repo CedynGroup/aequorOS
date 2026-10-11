@@ -16,6 +16,7 @@ from tests.db.test_governance_append_only import (
 from tests.db.test_governance_append_only import (
     governance_schema as governance_schema,  # noqa: PLC0414 - register shared pytest fixture
 )
+from tests.db.test_postgres_migrations import MigratedPostgresSchema
 from tests.support.helpers import ORG_1
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
@@ -46,6 +47,78 @@ PARAMETERS: dict[str, dict[str, object]] = {
     "param_ecl_assumption": {"segment": "test", "stage": 1, "pd_pct": 5, "lgd_pct": 5},
     "param_crm_haircut": {"collateral_class": "test", "haircut_pct": 5},
 }
+AUDIT_OWNER_TABLES = (
+    "audit_events",
+    "operator_audit_log",
+    "audit_chain_entries",
+    "audit_chain_heads",
+)
+RETAINED_TABLES = (
+    *PARAMETERS,
+    *AUDIT_OWNER_TABLES,
+    "scenario_assumption_history",
+    "financial_manual_edit_history",
+    "attestation_signatures",
+    "regulatory_artifact_versions",
+    "regulatory_package_approvals",
+    "regulatory_submission_events",
+    "package_stage_decisions",
+    "package_workflow_stages",
+    "regulatory_package_attachments",
+    "regulatory_package_attachment_withdrawals",
+    "forecast_assumption_versions",
+    "authorization_bindings",
+    "regulatory_parameter",
+    "system_of_record_declarations",
+    "reconciliation_exceptions",
+    "canonical_withdrawals",
+    "regulatory_packages",
+    "regulatory_runs",
+)
+
+
+@pytest.mark.parametrize("table", RETAINED_TABLES)
+@pytest.mark.parametrize("actor", ["owner", "runtime"])
+def test_every_retained_table_refuses_truncate(
+    connection: Connection,
+    governance_schema: MigratedPostgresSchema,
+    table: str,
+    actor: str,
+) -> None:
+    if actor == "runtime":
+        role = governance_schema.runtime_role
+        assert role is not None
+        connection.execute(text(f'SET LOCAL ROLE "{role}"'))
+        refusal = "permission denied"
+    else:
+        if table in AUDIT_OWNER_TABLES:
+            connection.execute(text("SET LOCAL ROLE aequoros_audit_owner"))
+            connection.execute(
+                text(f"GRANT TRUNCATE ON {', '.join(AUDIT_OWNER_TABLES)} TO CURRENT_USER")
+            )
+        else:
+            # CASCADE checks privileges on referencing tables before invoking
+            # statement triggers; restore them only in this rolled-back fixture.
+            connection.execute(
+                text(
+                    f'GRANT TRUNCATE ON ALL TABLES IN SCHEMA "{governance_schema.schema_name}" '
+                    "TO CURRENT_USER"
+                )
+            )
+        assert connection.scalar(
+            text(
+                "SELECT pg_get_userbyid(relowner) = current_user FROM pg_class "
+                "WHERE oid = to_regclass(:table)"
+            ),
+            {"table": table},
+        )
+        refusal = "append-only"
+    savepoint = connection.begin_nested()
+    try:
+        with pytest.raises(DatabaseError, match=refusal):
+            connection.execute(text(f"TRUNCATE {table} CASCADE"))
+    finally:
+        savepoint.rollback()
 
 
 def _reject(connection: Connection, sql: str, parameters: dict[str, object]) -> None:
