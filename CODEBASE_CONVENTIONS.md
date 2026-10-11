@@ -253,6 +253,99 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
 
 ### Tests (`backend/tests/`)
 
+#### Behavior, properties and state machines (backend and dashboard)
+
+These rules apply to new and changed tests on both surfaces. Reviewers must require
+coverage of the observable contract, including refusals, before accepting a change.
+
+- **Test public behavior.** Backend tests exercise service/API inputs and outputs,
+  persisted state and emitted events; pure domain functions are public interfaces too.
+  Dashboard component tests use Testing Library to exercise what users see and do:
+  query by role or label, interact, then assert visible results and accessible state.
+  Mock only true boundaries (network, clock, external services). Do not mock the
+  service or component under test, or assert private helpers, internal call counts,
+  hook/component structure or source text. Existing architecture/contract guards
+  enforce named repository invariants; they do not replace behavior coverage.
+- **Use properties for broad input spaces and invariants.** Use Hypothesis in the
+  backend and fast-check in dashboard tests for calculations, money and rounding,
+  parsers, serialization round-trips, permission matrices, number/date formatting,
+  chart transforms and grant gating. Generate valid and invalid boundary values,
+  including missing values, using the contract's numeric kinds. Assert an independent
+  invariant or oracle, not a copy of the implementation. Keep example tests for
+  concrete business outcomes and minimized regressions alongside properties.
+- **Model every workflow with statuses as a state machine.** Record its transition
+  table (source, command, actor/scope, guard, destination and observable effects),
+  including forbidden transitions, retries and terminal states. Exercise the real
+  public interface with Hypothesis `RuleBasedStateMachine` in backend tests or
+  fast-check model-based commands in dashboard tests; the reference model must be
+  independent of production transition helpers. Generate action sequences,
+  duplicate commands, unauthorized actors and attempts from the wrong status.
+  Check after every step: only legal transitions succeed; terminal states remain
+  terminal; makers cannot check their own work; filed/frozen content is immutable;
+  and another tenant or bank can neither read nor mutate it. Apply each invariant
+  where the workflow's contract requires it, recording why any is inapplicable.
+  Rejected commands must leave workflow content/status and success events unchanged;
+  refusal audit events may be recorded.
+  Preconditions may select legal paths, but must not exclude tests of illegal ones.
+- **Bound and reproduce property runs.** Configure explicit PR/CI Hypothesis profiles
+  with small budgets (start at `max_examples=25`, `stateful_step_count=20`), load the
+  chosen profile in test setup and keep per-test overrides within the same budget.
+  Use `derandomize=True` or `print_blob=True` and preserve the failing example/replay
+  information in CI output. Bound fast-check runs (start at `numRuns: 100`) and keep
+  its reported seed and path. Every stateful example gets isolated data and cleanup;
+  use disposable schemas for mutating Postgres tests. Larger profiles belong in a
+  scheduled nightly job only when one exists; document any justified budget change.
+  Turn a discovered defect's minimized example into a regression test and describe
+  the defect and minimal fix in the PR.
+
+Examples of observable assertions:
+
+- An API edit after filing returns a conflict; re-reading the filed artifact shows
+  the same content and digest, and no successful-edit event was persisted.
+- A Testing Library test selects an institution, enters a reason and presses
+  "Request access"; it asserts the displayed pending request. It does not inspect
+  the mutation hook or count invalidation calls.
+- An allocation property generates totals and weights and asserts that all public
+  result amounts are nonnegative and sum to the original Decimal total. See
+  [`test_allocation.py`](backend/tests/icaap/domain/test_allocation.py).
+
+A dashboard property can assert that missing measurements never imply compliance
+for any positive floor (fast-check is the required library for these tests):
+
+```ts
+import assert from "node:assert/strict";
+import fc from "fast-check";
+import { assessAgainstFloor } from "./values";
+
+fc.assert(
+  fc.property(fc.integer({ min: 1, max: 1_000_000 }), (floor) => {
+    assert.deepEqual(assessAgainstFloor(null, floor), {
+      assessed: false,
+      reason: "no_value",
+    });
+  }),
+  { numRuns: 100 },
+);
+```
+
+For a filing machine, rules should attempt submit, approve, file and edit with
+generated actors/statuses, compare each outcome with the transition table, then
+re-read the record to check invariants. Include sequences such as submit → maker
+approval refusal → checker approval → file → edit refusal, and cross-bank attempts
+within the same organization as well as cross-organization attempts. The existing
+[`authorization state machines`](backend/tests/identity/api/test_authorization_state_machine.py)
+show `@rule`, `@invariant` and `run_state_machine_as_test` through real services/APIs.
+Run each with bounded settings, for example:
+
+```python
+run_state_machine_as_test(
+    FilingMachine,
+    settings=settings(max_examples=25, stateful_step_count=20, derandomize=True),
+)
+```
+
+#### Backend fixtures and contracts
+
 - Layout and fixture ownership follow [the feature layout](#5-feature-layout).
   HTTP-level tests are the default style.
 - **Database fixtures**: see [CONTRIBUTING.md](CONTRIBUTING.md) for fixture selection and

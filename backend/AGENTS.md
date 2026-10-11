@@ -24,6 +24,9 @@ This file is the starting point for agents working in `backend`.
 - Preserve deterministic in-process job stubs until worker infrastructure is introduced.
 - Add regression tests for tenant isolation, state transitions, and
   storage/database edge cases.
+- Follow the shared [testing standard](../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard):
+  assert public service/API behavior, mock only boundaries, use Hypothesis for
+  broad input spaces and test status workflows with stateful properties.
 - Canonical financial manual entry and correction use resource-specific
   `/api/v1/cases/{case_id}/financial-workspace/*` routes. Keep their OpenAPI and
   generated-client contracts aligned; successful mutations return the record plus
