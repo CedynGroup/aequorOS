@@ -276,8 +276,9 @@ coverage of the observable contract, including refusals, before accepting a chan
 - **Model every workflow with statuses as a state machine.** Record its transition
   table (source, command, actor/scope, guard, destination and observable effects),
   including forbidden transitions, retries and terminal states. Exercise the real
-  public interface with Hypothesis `RuleBasedStateMachine`; the reference model must
-  be independent of production transition helpers. Generate action sequences,
+  public interface with Hypothesis `RuleBasedStateMachine` in backend tests or
+  fast-check model-based commands in dashboard tests; the reference model must be
+  independent of production transition helpers. Generate action sequences,
   duplicate commands, unauthorized actors and attempts from the wrong status.
   Check after every step: only legal transitions succeed; terminal states remain
   terminal; makers cannot check their own work; filed/frozen content is immutable;
