@@ -475,12 +475,13 @@ latest period therefore use the position book's net CRD credit basis.
 
 ```bash
 pnpm --filter @aequoros/dashboard e2e            # the journeys
-VISUAL_TOUR=1 npx playwright test visual-tour    # full-page screenshot of every
-                                                 # route -> e2e/.tmp/visual-tour/
+AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual
 ```
 
 The visual tour is not part of the gate: it exists so a design change can be
-reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
+reviewed as pixels rather than as a diff. Run the commands from the repository
+root; the tour writes full-page screenshots of every route to
+`backend/dashboard/e2e/.tmp/visual-tour/`.
 
 The Data Engine journeys (`e2e/data-engine-ingestion.spec.ts`) use the fixtures in
 `e2e/fixtures/data-engine/` to cover Excel/CSV upload, legacy `.xls` refusal,
@@ -625,10 +626,11 @@ coverage; reducing it requires a reviewed suite change.
 
 The previous four skips were diagnostics: three temporary home/bell/stress
 screenshot probes were retired, and the assertion-free whole-site visual tour
-moved out of the required suite. Run `pnpm --filter @aequoros/dashboard e2e:visual`
-to capture that tour separately against the same disposable stack. It neither
-pads the journey count nor skips a required journey. Its output remains in
-`e2e/.tmp/visual-tour/`.
+moved out of the required suite. From the repository root, run
+`AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual`
+to capture that tour separately against the same disposable stack using native
+services locally. It neither pads the journey count nor skips a required journey.
+Its output remains in `backend/dashboard/e2e/.tmp/visual-tour/`.
 
 Each shard also requires at least 20 executed journeys and the quarantine in
 `e2e/support/quarantine.ts` to match the size the workflow pins. A journey may only be parked there by name,
@@ -676,6 +678,7 @@ focusable scroll region and a caption naming the gesture; tables that fit are
 unchanged. The affordance is the floor, not the goal: when a table overflows
 because it was put in a half-width grid cell, move it to a full row — signpost
 the overflow you cannot remove, remove the one you can. **Design changes are
-reviewed as pixels**: run `VISUAL_TOUR=1 npx playwright test visual-tour` and
-compare `e2e/.tmp/visual-tour/` before and after. Type-checking cannot see a
-clipped column.
+reviewed as pixels**: from the repository root, run
+`AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual` and
+compare `backend/dashboard/e2e/.tmp/visual-tour/` before and after.
+Type-checking cannot see a clipped column.
