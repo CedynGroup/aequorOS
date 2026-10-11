@@ -202,7 +202,7 @@ echo "TypeScript client generated successfully."
 '''
 
 [tasks."risk-service:migrate"]
-description = "Run Alembic migrations; requires DATABASE_URL"
+description = "Run Alembic migrations; credentials: docs/tamper_evident_records.md#required-deployment-follow-up"
 run = "uv run alembic upgrade head"
 
 [tasks."risk-service:bootstrap-db"]
