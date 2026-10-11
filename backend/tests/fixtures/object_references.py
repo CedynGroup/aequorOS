@@ -293,6 +293,7 @@ def _lineage(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
         session,
         LineageRecord(
             organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
             ingestion_batch_id=UUID(objects["ingestion_batch"]),
             operation_type="ADAPTER_EXTRACT",
             operation_ref=tenant.marker,

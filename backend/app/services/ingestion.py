@@ -1599,6 +1599,7 @@ def _lineage(  # noqa: PLR0913 - mirrors record_event's shape
 ) -> LineageRecord:
     node = LineageRecord(
         organization_id=ctx.organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type=operation_type,
         operation_ref=operation_ref,

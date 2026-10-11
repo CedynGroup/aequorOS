@@ -46,6 +46,7 @@ def push_register(db: Session, *rows: tuple[str, str, str]) -> None:
     db.flush()
     lineage = LineageRecord(
         organization_id=DEMO_ORG_ID,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="capital-structure-tiers",

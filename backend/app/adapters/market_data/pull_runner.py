@@ -671,6 +671,7 @@ def _lineage(  # noqa: PLR0913 - mirrors ingestion's lineage writer
 ) -> LineageRecord:
     node = LineageRecord(
         organization_id=organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type=operation_type,
         operation_ref=operation_ref,

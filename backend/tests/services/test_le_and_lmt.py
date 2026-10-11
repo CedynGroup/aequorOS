@@ -146,6 +146,7 @@ class _CanonicalSeeder:
         db.flush()
         lineage = LineageRecord(
             organization_id=DEMO_ORG_ID,
+            bank_id=batch.bank_id,
             ingestion_batch_id=batch.id,
             operation_type="ADAPTER_TRANSLATE",
             operation_ref="w6-fixture",
@@ -1518,6 +1519,7 @@ def test_sdi_irrbb_uses_net_own_funds_and_omits_bank_outlier_fields(
     db_session.flush()
     lineage = LineageRecord(
         organization_id=DEMO_ORG_ID,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="sdi-irrbb-nof",

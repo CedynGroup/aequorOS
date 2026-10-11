@@ -100,6 +100,7 @@ class _Book:
         db.flush()
         lineage = LineageRecord(
             organization_id=DEMO_ORG_ID,
+            bank_id=batch.bank_id,
             ingestion_batch_id=batch.id,
             operation_type="ADAPTER_TRANSLATE",
             operation_ref="ias21-fixture",

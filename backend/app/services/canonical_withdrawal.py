@@ -371,6 +371,7 @@ def approve_withdrawal(
     db.flush()
     node = LineageRecord(
         organization_id=row.organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="SUPERSESSION",
         operation_ref=f"withdrawal/{row.id}",
@@ -583,6 +584,7 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
     db.flush()
     node = LineageRecord(
         organization_id=row.organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="SUPERSESSION",
         operation_ref=f"withdrawal-reversal/{row.id}",

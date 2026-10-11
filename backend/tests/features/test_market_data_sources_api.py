@@ -60,6 +60,7 @@ def _seed_curve(session: Session, bank_id: str, *, curve_name: str, source_syste
     session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="source-pref-api-fixture",

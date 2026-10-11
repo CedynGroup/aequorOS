@@ -142,6 +142,7 @@ def _seed_events(db_session: Session, events: list[dict]) -> None:
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="credit-events-test",
@@ -279,6 +280,7 @@ def _seed_prior_month_book(db_session: Session) -> None:
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="prior-month-book",
@@ -435,6 +437,7 @@ def test_vintages_build_cohorts_with_origination_coverage(db_session: Session) -
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="april-book",
@@ -676,6 +679,7 @@ def test_employer_par30_ewi_names_the_breaching_employer(db_session: Session) ->
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="employer-book",
@@ -752,6 +756,7 @@ def _seed_employer_loans(
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="employer-fx-book",
@@ -861,6 +866,7 @@ def _seed_second_system_loan(  # noqa: PLR0913 - one keyword per stated attribut
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="second-system-loan",

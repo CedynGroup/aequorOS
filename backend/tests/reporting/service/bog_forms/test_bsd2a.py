@@ -90,6 +90,7 @@ def _seed_slice(db: Session, as_of: date) -> None:
     db.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="bsd2a-fixture",
