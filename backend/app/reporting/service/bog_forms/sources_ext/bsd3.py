@@ -168,8 +168,6 @@ def _in_population(kind: str, row: Any) -> bool:
 def build_ranking(rows: list[Any], kind: str, base_currency: str) -> Ranking:
     """Aggregate ``rows`` (le_generation ``_CanonicalRow`` records) into the
     ranked roster for ``kind`` — largest total first, ties by name."""
-    # Local import: le_generation → generation → bog_forms.generation → engine →
-    # sources_ext would cycle at module import time.
     from app.reporting.service.le_generation import (  # noqa: PLC0415
         _entity_identity,
     )

@@ -340,7 +340,7 @@ Generated through `POST /api/v1/banks/{bank}/regulatory-packages` on the hermeti
 ## 7. Framework asks
 
 1. **A "blank by construction" line status.** Roster rows beyond the bank's population (rank 15 of 20 when the bank has 12 depositors) are correctly blank but can only be reported as `input_required`; a `not_applicable`/`blank` `LineStatus` (or a resolver-signalled "no such row") would keep the Completion-notes sheet honest and short. Today: 80–150 spurious notes per BSD3 run on a small book.
-2. **Promote the LE canonical slice.** `sources_ext/bsd3.py` imports `le_generation._load_canonical_rows` / `_entity_identity` (private names, lazily to avoid the `engine → sources_ext → le_generation → generation → bog_forms.generation → engine` cycle). A public `canonical_slice` module (rows + connected-counterparty identity) shared by LE / LMT / BoG forms would remove both smells.
+2. **Promote the LE canonical slice.** `sources_ext/bsd3.py` imports `le_generation._load_canonical_rows` / `_entity_identity` (private names). A public `canonical_slice` module (rows + connected-counterparty identity) shared by LE / LMT / BoG forms would give these consumers a shared public interface.
 3. **Row labels for grids.** `grid_lines` labels a roster row by its left-most label (`"1."`, `"2."`); an optional label template (`"rank {n} depositor"`) would make the Completion notes self-explanatory.
 4. **BSD3B per subsidiary** — see `bsd3b_line_map.md` (subsidiary register + one workbook per subsidiary).
 

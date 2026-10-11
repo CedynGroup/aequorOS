@@ -3351,6 +3351,7 @@ def _generators() -> dict[
         [Session, TenantContext, Bank, BankReportingPeriod, ReturnDefinition], GeneratedReturn
     ],
 ]:
+    """Load sibling registries at call time so they can import the shared seams first."""
     from app.reporting.service.bog_forms.generation import BOG_GENERATORS  # noqa: PLC0415
     from app.reporting.service.dbk_generation import DBK_GENERATORS  # noqa: PLC0415
     from app.reporting.service.le_generation import LE_GENERATORS  # noqa: PLC0415

@@ -77,12 +77,7 @@ def _cells_payload(result: FormResult) -> dict[str, dict[str, Any]]:
 
 
 def unit_kind(unit: str) -> str:
-    """The normalised measure kind for a sheet's official unit convention.
-
-    Deferred import: ``regulatory_reporting.generation`` imports this module at
-    the bottom of its own module body, so the normaliser is fetched at call
-    time rather than at import time.
-    """
+    """The normalised measure kind for a sheet's official unit convention."""
     from app.reporting.service.generation import unit_kind as _kind  # noqa: PLC0415
 
     return _kind(unit)
@@ -282,7 +277,6 @@ def generate_bog_form(
     definition: ReturnDefinition,
 ) -> Any:
     """Generator entry used by the registry (``generator="bog_form"``)."""
-    # Local import: generation.py imports this module's registry at import time.
     from app.reporting.service.generation import GeneratedReturn  # noqa: PLC0415
 
     spec = form_spec(definition.code)
