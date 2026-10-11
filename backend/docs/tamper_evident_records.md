@@ -195,14 +195,41 @@ Set `STORAGE_OBJECT_LOCK_ENABLED=true` for the AWS deployment. Local MinIO and
 hermetic fixtures retain their existing behavior with this flag off. Provisioning
 creates lock-capable output buckets and refuses an existing output bucket without Object
 Lock. Enable Object Lock/versioning on existing cloud buckets through the
-infrastructure owner before switching on the flag. Every output object (including
-filed PDF/XLSX, archived signed revisions and attachments) is written with
-`COMPLIANCE`, a retain-until date, and a transport checksum. All output versions
-are retained to avoid a path-based classification missing a filing format.
-Idempotent writes verify/apply retention to the existing concrete version;
-retention can be extended but is never shortened. Object version IDs remain the
-reference of record. Retained presigned uploads are refused so they cannot bypass
-application retention checks. A delete marker hides the current key but does not remove a
+infrastructure owner before switching on the flag. At the shared submission boundary,
+all artifacts admitted by `filing_admits_artifact()` receive confirmed `COMPLIANCE`
+retention on their exact archived object versions before channel delivery or a
+manual submission commits. This includes previously signed versions created with
+the flag off, canonical exports, and the official BoG formula workbook. Internal
+SDI working sheets, ICAAP Word drafts and unrelated outputs remain unlocked.
+Exports and signing archive bytes without automatically locking every output;
+read-only filing previews do not apply retention. Attachments are recorded as a
+manifest, not transmitted artifacts, and are outside this object retention set.
+Retention can be extended but is never shortened, including an existing longer
+governance interval. A retention PUT is followed by a version-specific GET;
+submission refuses if compliance mode or the required date cannot be confirmed.
+The submission event records each retained `storage_version_id`.
+
+For historical filings, run the tenant- and bank-scoped inventory from `backend`:
+
+```bash
+uv run python -m scripts.retain_filed_objects --organization-id OR-XXXXXXXX --bank-id BK-XXXXXXXX
+```
+
+This is a dry-run by default: it reads submission manifests and archived version
+rows and prints bucket/key/version/date locators, without provisioning buckets or
+writing database or object-store state. Resolve missing manifests, missing version
+rows or nonconcrete versions before rollout; the command refuses those records.
+For older manifests without version IDs it resolves the latest matching archived
+kind/path/checksum at or before the submission, never the current object-store key.
+Review the inventory and counsel-approved period, enable Object Lock on the
+existing buckets, then explicitly pass `--apply` with the retention flag enabled
+to apply and verify retention. This is an irreversible deployment-time operator
+decision; never run it against real buckets during development or validation.
+Re-running only extends retention and never shortens existing compliance locks.
+Presigned writes keep normal encryption rules; they cannot bypass the shared
+filing boundary's exact-version retention requirement.
+
+A delete marker hides the current key but does not remove a
 locked version. Apply an IAM deny on DeleteObject for evidence buckets if hiding
 current keys must also be prevented.
 

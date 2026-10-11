@@ -85,6 +85,7 @@ def test_retained_filing_stays_encrypted_and_revocation_refuses_read(
         location, io.BytesIO(content), metadata_for(SLUG, "outputs", content)
     )
     assert stored.version_id is not None
+    bank_storage.storage.retain(location, stored.version_id, datetime.now(UTC) + timedelta(days=7))
     retention = client.get_object_retention(
         Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId=stored.version_id
     )
@@ -133,6 +134,7 @@ def test_retention_never_shortens_existing_compliance_lock(
     )
     assert stored.version_id is not None
     bucket = location.bucket_name("dev")
+    bank_storage.storage.retain(location, stored.version_id, datetime.now(UTC) + timedelta(days=7))
     original = client.get_object_retention(
         Bucket=bucket, Key=location.object_path, VersionId=stored.version_id
     )
@@ -200,20 +202,19 @@ def test_local_backup_does_not_require_object_lock(
     get_storage_settings.cache_clear()
 
 
-def test_retained_presigned_uploads_cannot_bypass_application_storage(
+def test_unfiled_presigned_upload_keeps_optional_encryption_behavior(
     bank_storage: BankStorage, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _enable(bank_storage, monkeypatch)
 
-    # A bank without connected keys still cannot bypass retention checks.
     def bank_key_optional(_location: StorageLocation) -> bool:
         return False
 
     monkeypatch.setattr(bank_storage.storage._encryption, "bank_key_required", bank_key_optional)  # pyright: ignore[reportPrivateUsage]
-    with pytest.raises(StorageAccessError, match="Retained uploads"):
-        bank_storage.storage.presigned_url(
-            StorageLocation(SLUG, "outputs", "synthetic.pdf"), "write"
-        )
+    url = bank_storage.storage.presigned_url(
+        StorageLocation(SLUG, "outputs", "synthetic.pdf"), "write"
+    )
+    assert url.startswith("https://")
 
 
 def test_retention_vendor_errors_are_safe(
@@ -234,7 +235,7 @@ def test_retention_vendor_errors_are_safe(
         retain_version(client, "synthetic", "synthetic.pdf", "version", datetime.now(UTC))
 
 
-def test_existing_unretained_version_is_locked_on_idempotent_write(
+def test_existing_unretained_version_is_locked_and_confirmed(
     bank_storage: BankStorage, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     location = StorageLocation(SLUG, "outputs", "pre-rollout.pdf")
@@ -254,7 +255,13 @@ def test_existing_unretained_version_is_locked_on_idempotent_write(
         )
     read = client.get_object_retention
 
-    def absent(**_: object) -> dict[str, object]:
+    reads = 0
+
+    def absent(**kwargs: str) -> dict[str, object]:
+        nonlocal reads
+        reads += 1
+        if reads > 1:
+            return read(**kwargs)
         raise ClientError(
             {"Error": {"Code": "NoSuchObjectLockConfiguration"}}, "GetObjectRetention"
         )
@@ -265,6 +272,7 @@ def test_existing_unretained_version_is_locked_on_idempotent_write(
     )
     assert repeated.version_id == stored.version_id
     assert stored.version_id is not None
+    bank_storage.storage.retain(location, stored.version_id, datetime.now(UTC) + timedelta(days=7))
     retention = read(
         Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId=stored.version_id
     )

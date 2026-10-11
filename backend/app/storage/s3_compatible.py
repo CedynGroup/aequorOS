@@ -52,7 +52,7 @@ from app.storage.config import StorageEngineSettings, enforce_retirement
 from app.storage.downloads import issue
 from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption
 from app.storage.provisioning import ProvisioningClient, ensure_audit_bucket, provision_institution
-from app.storage.retention import RetentionClient, filing_retention, retain_version
+from app.storage.retention import RetentionClient, retain_version
 
 logger = logging.getLogger(__name__)
 _OBJECT_HEADERS = TypeAdapter(dict[str, str])
@@ -142,7 +142,6 @@ class S3CompatibleStorageClient(StorageClient):
         self._validate_metadata(location, metadata)
         bucket = location.bucket_name(self._env)
 
-        until = filing_retention(self._settings, location)
         existing = self._stat_or_none(bucket, location.object_path)
         if existing is not None:
             existing_metadata = {
@@ -151,14 +150,6 @@ class S3CompatibleStorageClient(StorageClient):
             if existing_metadata.get("checksum-sha256") == metadata.checksum_sha256:
                 _object, verified = self.read(location, version_id=existing.get("VersionId"))
                 verified.close()
-                if until is not None:
-                    retain_version(
-                        cast(RetentionClient, cast(object, self._s3)),
-                        bucket,
-                        location.object_path,
-                        cast(str | None, existing.get("VersionId")),
-                        until,
-                    )
                 self._log("write.noop", location, version_id=existing.get("VersionId"))
                 return self._to_storage_object(location, existing)
 
@@ -178,12 +169,6 @@ class S3CompatibleStorageClient(StorageClient):
             "ContentType": content_type,
             "Metadata": headers,
         }
-        if until is not None:
-            extra_args.update(
-                ObjectLockMode="COMPLIANCE",
-                ObjectLockRetainUntilDate=until,
-                ChecksumAlgorithm="SHA256",
-            )
         if effective_sse_key is not None:
             extra_args["ServerSideEncryption"] = "aws:kms"
             extra_args["SSEKMSKeyId"] = effective_sse_key
@@ -213,16 +198,20 @@ class S3CompatibleStorageClient(StorageClient):
             log=False,
         )
         version_id = cast(str | None, stat.get("VersionId"))
-        if until is not None:
-            retain_version(
-                cast(RetentionClient, cast(object, self._s3)),
-                bucket,
-                location.object_path,
-                version_id,
-                until,
-            )
         self._log("write", location, version_id=version_id)
         return self._to_storage_object(location, stat, version_id=version_id)
+
+    def retain(self, location: StorageLocation, version_id: str, until: datetime) -> None:
+        if location.tier != "outputs":
+            raise StorageValidationError("Filing retention requires an output object.")
+        retain_version(
+            cast(RetentionClient, cast(object, self._s3)),
+            location.bucket_name(self._env),
+            location.object_path,
+            version_id,
+            until,
+        )
+        self._log("retain", location, version_id=version_id)
 
     def read(
         self,
@@ -370,9 +359,6 @@ class S3CompatibleStorageClient(StorageClient):
         expires_in_seconds: int = 900,
     ) -> str:
         audit_operation = f"presigned_url.{operation}"
-        if operation == "write" and filing_retention(self._settings, location) is not None:
-            self._log(audit_operation, location, result="retention-refused")
-            raise StorageAccessError("Retained uploads must pass through application storage.")
         try:
             bank_key_required = self._encryption.bank_key_required(location)
         except (RuntimeError, SQLAlchemyError) as exc:

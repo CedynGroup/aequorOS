@@ -12,7 +12,7 @@ from boto3.exceptions import S3UploadFailedError
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import TypeAdapter, ValidationError
 
-from app.storage.client import StorageBackendError, StorageLocation, StorageValidationError
+from app.storage.client import StorageBackendError, StorageValidationError
 from app.storage.config import StorageEngineSettings
 
 
@@ -30,12 +30,6 @@ class RetentionClient(Protocol):
 
 def retention_until(settings: StorageEngineSettings) -> datetime:
     return datetime.now(UTC) + timedelta(days=settings.object_lock_retention_days)
-
-
-def filing_retention(settings: StorageEngineSettings, location: StorageLocation) -> datetime | None:
-    if settings.object_lock_enabled and location.tier == "outputs":
-        return retention_until(settings)
-    return None
 
 
 @contextmanager
@@ -76,16 +70,28 @@ def retain_version(
             error = TypeAdapter(dict[str, object]).validate_python(error_response.get("Error", {}))
             if error.get("Code") != "NoSuchObjectLockConfiguration":
                 raise
-            # Existing versions can predate the Object Lock rollout. The PUT
-            # below still refuses a bucket that has not enabled Object Lock.
             response = {}
         current = TypeAdapter(dict[str, object]).validate_python(response.get("Retention", {}))
         date = current.get("RetainUntilDate")
         if current.get("Mode") == "COMPLIANCE" and isinstance(date, datetime) and date >= until:
             return
+        if isinstance(date, datetime) and date > until:
+            until = date
         _ = client.put_object_retention(
             Bucket=bucket,
             Key=key,
             VersionId=version,
             Retention={"Mode": "COMPLIANCE", "RetainUntilDate": until},
         )
+        confirmed = TypeAdapter(dict[str, object]).validate_python(
+            client.get_object_retention(Bucket=bucket, Key=key, VersionId=version).get(
+                "Retention", {}
+            )
+        )
+        confirmed_date = confirmed.get("RetainUntilDate")
+        if (
+            confirmed.get("Mode") != "COMPLIANCE"
+            or not isinstance(confirmed_date, datetime)
+            or confirmed_date < until
+        ):
+            raise StorageBackendError("Compliance retention could not be verified or applied.")
