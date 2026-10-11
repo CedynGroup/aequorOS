@@ -41,10 +41,14 @@ function expectImpliedMargin(
   );
   const expected = (contributionCents * 100) / balanceCents;
   const magnitude =
-    (contributionsCents.reduce((sum, value) => sum + Math.abs(value), 0) * 100) /
+    (contributionsCents.reduce((sum, value) => sum + Math.abs(value), 0) *
+      100) /
     balanceCents;
   const errorBudget =
-    4 * (contributionsCents.length + 4) * Number.EPSILON * Math.max(1, magnitude);
+    4 *
+    (contributionsCents.length + 4) *
+    Number.EPSILON *
+    Math.max(1, magnitude);
   expect(Math.abs((actual ?? NaN) - expected)).toBeLessThanOrEqual(errorBudget);
 }
 
