@@ -36,8 +36,7 @@ from app.storage.encryption import ObjectEncryption
 from app.storage.provisioning import ProvisioningClient
 from app.storage.s3_compatible import S3CompatibleStorageClient
 from scripts import retain_filed_objects
-from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, SAMPLE_BANK_ID
-from tests.services.test_attestation_artifact_signing import (
+from tests.attestation.service.test_attestation_artifact_signing import (
     CHECKER,
     MAKER,
     VALIDATOR,
@@ -47,9 +46,10 @@ from tests.services.test_attestation_artifact_signing import (
     _validator_releases,  # pyright: ignore[reportPrivateUsage]
     _version,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.services.test_attestation_artifact_signing import (
+from tests.attestation.service.test_attestation_artifact_signing import (
     signing_env as signing_env,  # noqa: PLC0414
 )
+from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, SAMPLE_BANK_ID
 from tests.storage.contract import metadata_for
 from tests.storage.test_object_lock import (
     LockClient,
