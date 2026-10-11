@@ -98,8 +98,8 @@ def git(root: Path, *args: str) -> str:
     return subprocess.check_output(["git", "-C", str(root), *args], text=True)
 
 
-def affected_files(root: Path, event: str, base: str) -> list[str]:
-    """Only body or AST-neutral edits to unreferenced domain tests can narrow a PR.
+def affected_files(root: Path, event: str, base: str, *, worktree: bool = False) -> list[str]:
+    """Only body or AST-neutral edits to unreferenced domain tests can narrow a run.
 
     Production, fixture, decorator, collection, config, addition/deletion and
     uncertain changes all run the full suite. No inferred application dependency
@@ -108,7 +108,11 @@ def affected_files(root: Path, event: str, base: str) -> list[str]:
     try:
         if event != "pull_request" or not base:
             raise ValueError("Full suite required outside a known PR diff")
-        if (
+        if worktree:
+            base = git(root, "merge-base", base, "HEAD").strip()
+            if git(root, "ls-files", "--others", "--exclude-standard").strip():
+                raise ValueError("Untracked changes require the full suite")
+        elif (
             subprocess.run(
                 ["git", "-C", str(root), "rev-parse", "--verify", "--quiet", "HEAD^2"],
                 capture_output=True,
@@ -117,7 +121,8 @@ def affected_files(root: Path, event: str, base: str) -> list[str]:
             == 0
         ):
             base = git(root, "rev-parse", "HEAD^1").strip()
-        changes = git(root, "diff", "--name-status", "--no-renames", base, "HEAD").splitlines()
+        target = [] if worktree else ["HEAD"]
+        changes = git(root, "diff", "--name-status", "--no-renames", base, *target).splitlines()
         if not changes:
             raise ValueError("Empty change set")
         selected: list[str] = []
