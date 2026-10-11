@@ -423,6 +423,11 @@ percentage-point headroom, governed-floor disclosures and regime-specific column
 FX specs cover persisted position/parameter snapshots and scenario figures/verdicts.
 Their 100-run properties preserve decimal values and enforce exact sensitivity,
 whole-institution capital scope and entitlement boundaries.
+Credit specs check saved PD estimates and disclosures, migration entry/departure
+amounts, roll-rate absence versus zero, and scoped row versus whole-book grants.
+FTP specs check saved pricing assumptions, conservation of business-line view
+balances/contributions/flags, uncomputable margins and confidential scenario grants.
+These read-only analytical tables do not implement status transitions.
 
 `test:coverage` runs both engines with V8 coverage. Vitest's AST-based report
 includes **every production TS/TSX file in `app/`, `components/` and `lib/`**,
