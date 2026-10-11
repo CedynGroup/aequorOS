@@ -155,7 +155,7 @@ run = [
 ]
 
 [tasks."risk-service:migrate"]
-description = "Run risk service Alembic migrations; requires DATABASE_URL"
+description = "Run risk service Alembic migrations; credentials: backend/docs/tamper_evident_records.md#required-deployment-follow-up"
 dir = "backend"
 run = "mise run risk-service:migrate"
 

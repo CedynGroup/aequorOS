@@ -792,12 +792,12 @@ DELETE, TRUNCATE` on `audit_events`, `attestation_signatures`,
   `BEFORE UPDATE OR DELETE` trigger that raises; restrictive RLS admitting
   `SELECT`/`INSERT` only; `created_at` gets `server_default now()` so the
   database, not an app host, stamps arrival.
-- **Per-tenant hash chain** on the signature and audit tables, generalising the
-  existing `HashChainedAccessLog` pattern
-  (`app/storage/access_log.py:74`) — each row carries `prev_hash` and
-  `entry_hash`, with a scheduled `verify_chain` job and periodic anchoring of
-  the chain head (the current implementation has no scheduled verification
-  despite its docstring, and flushes from exactly one call site).
+- **Per-tenant signature hash chain** — each signature carries `prev_hash` and
+  `entry_hash`. Scheduled verification and periodic anchoring of this signature
+  chain remain hardening requirements. Database audit-stream chaining is
+  governed separately by
+  [the tamper-evident records contract](../backend/docs/tamper_evident_records.md);
+  the storage access log remains a separate in-process chain.
 - **Artifacts become append-only** (G2): a new immutable
   `regulatory_package_artifact_versions` row per export, persisting the S3
   `version_id`; the signature record pins the exact version it signed.

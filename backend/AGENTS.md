@@ -9,7 +9,7 @@ This file is the starting point for agents working in `backend`.
 | [README.md](README.md)                             | Local setup, run commands, environment variables, and API authentication.        |
 | [../ARCHITECTURE.md](../ARCHITECTURE.md)           | Service boundaries, tenant isolation, API versioning, and background job policy. |
 | [docker-compose.yml](docker-compose.yml)           | Local Postgres and MinIO services for demos and Postgres-backed tests.           |
-| [scripts/bootstrap_db.sh](scripts/bootstrap_db.sh) | Database role setup, migrations, grants, and demo tenant seeding.                |
+| [docs/tamper_evident_records.md](docs/tamper_evident_records.md#required-deployment-follow-up) | Migration-role preparation and audit ownership; legacy bootstrap is incompatible. |
 | [alembic/versions](alembic/versions)               | Schema migrations, including Phase 1 tables and RLS policies.                    |
 | [tests](tests)                                     | API, service, schema-default, tenant isolation, and health regression coverage.  |
 
@@ -78,5 +78,4 @@ reason to do otherwise. Put the ticket reference in the commit body or footer.
 mise run risk-service:test
 mise run risk-service:test-postgres
 mise run risk-service:check
-mise run risk-service:bootstrap-db
 ```

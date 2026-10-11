@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -23,6 +24,7 @@ from tests.support.helpers import ORG_1, ORG_2
 class MigratedPostgresSchema:
     app_engine: Engine
     schema_name: str
+    runtime_role: str | None = None
 
     def constraints(self, names: set[str]) -> set[str]:
         placeholders = ", ".join(f"'{name}'" for name in sorted(names))
@@ -127,7 +129,7 @@ def forward_migrated_postgres_schema(
 
 def _migrated_schema(
     monkeypatch: pytest.MonkeyPatch, *, downgrade: bool
-) -> Iterator[MigratedPostgresSchema]:
+) -> Generator[MigratedPostgresSchema]:
     test_database_url = os.environ["TEST_DATABASE_URL"]
     if not make_url(test_database_url).drivername.startswith("postgresql"):
         pytest.skip("TEST_DATABASE_URL must point to Postgres.")
@@ -139,14 +141,38 @@ def _migrated_schema(
         is_superuser = connection.scalar(
             text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
         )
-    migration_role = "pg_database_owner" if is_superuser else None
+    migration_role = f"risk_service_migrator_{uuid4().hex}" if is_superuser else None
+    if is_superuser:
+        with admin_engine.connect() as connection:
+            connection.execute(text("SELECT pg_advisory_lock(4130901)"))
+            try:
+                connection.execute(
+                    text(
+                        f'CREATE ROLE "{migration_role}" NOLOGIN NOSUPERUSER NOBYPASSRLS '
+                        "NOINHERIT NOCREATEDB NOREPLICATION CREATEROLE"
+                    )
+                )
+                connection.execute(
+                    text(f"""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM pg_roles
+                                       WHERE rolname = 'aequoros_audit_owner') THEN
+                            CREATE ROLE aequoros_audit_owner NOLOGIN;
+                        END IF;
+                    END $$;
+                    GRANT aequoros_audit_owner TO "{migration_role}"
+                        WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
+                """)
+                )
+            finally:
+                connection.execute(text("SELECT pg_advisory_unlock(4130901)"))
     database_url = postgres_schema_url(test_database_url, schema_name, role=migration_role)
     app_engine = create_engine(database_url)
     monkeypatch.setenv("DATABASE_URL", database_url)
     clear_database_caches()
 
     with admin_engine.connect() as connection:
-        authorization = " AUTHORIZATION pg_database_owner" if migration_role is not None else ""
+        authorization = f' AUTHORIZATION "{migration_role}"' if migration_role is not None else ""
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"{authorization}'))
 
     try:
@@ -159,6 +185,8 @@ def _migrated_schema(
         app_engine.dispose()
         with admin_engine.connect() as connection:
             connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
+            if migration_role is not None:
+                connection.execute(text(f'DROP ROLE "{migration_role}"'))
         admin_engine.dispose()
 
 
@@ -172,6 +200,130 @@ def alembic_config_for_app() -> Config:
 def clear_database_caches() -> None:
     get_settings.cache_clear()
     get_engine.cache_clear()
+
+
+def _superuser_database_url() -> str:
+    for database_url in (os.getenv("POSTGRES_ADMIN_URL"), os.getenv("TEST_DATABASE_URL")):
+        if not database_url:
+            continue
+        engine = create_engine(database_url)
+        try:
+            with engine.connect() as connection:
+                if (
+                    connection.scalar(
+                        text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+                    )
+                    is True
+                ):
+                    return database_url
+        finally:
+            engine.dispose()
+    reason = "Superuser credentials are required for the administrator migration regression."
+    if os.getenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED"):
+        pytest.fail(f"{reason} POSTGRES_PRIVILEGE_TESTS_REQUIRED is set.")
+    pytest.skip(reason)
+
+
+@pytest.fixture
+def superuser_database_url() -> str:
+    return _superuser_database_url()
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+@pytest.mark.parametrize("downgrade", [False, True])
+@pytest.mark.parametrize("source", ["POSTGRES_ADMIN_URL", "TEST_DATABASE_URL"])
+def test_superuser_migrations_use_restricted_role(
+    monkeypatch: pytest.MonkeyPatch,
+    superuser_database_url: str,
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
+    downgrade: bool,
+    source: str,
+) -> None:
+    assert forward_migrated_postgres_schema.tables({"audit_chain_heads"}) == {"audit_chain_heads"}
+    monkeypatch.delenv("POSTGRES_ADMIN_URL", raising=False)
+    monkeypatch.setenv(source, superuser_database_url)
+    admin_url = _superuser_database_url()
+    assert admin_url == superuser_database_url
+    monkeypatch.setenv("TEST_DATABASE_URL", admin_url)
+    migration_role: str | None = None
+    schemas = _migrated_schema(monkeypatch, downgrade=downgrade)
+    try:
+        schema = next(schemas)
+        with schema.app_engine.connect() as connection:
+            role = cast(
+                tuple[str, bool, bool],
+                connection.execute(
+                    text(
+                        "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles "
+                        "WHERE rolname = current_user"
+                    )
+                ).one(),
+            )
+            migration_role = role[0]
+            assert tuple(role[1:]) == (False, False)
+            assert migration_role != "pg_database_owner"
+            assert (
+                connection.scalar(
+                    text(
+                        "SELECT pg_get_userbyid(nspowner) = current_user FROM pg_namespace "
+                        "WHERE nspname = current_schema()"
+                    )
+                )
+                is True
+            )
+            assert connection.scalar(text("SELECT count(*) FROM audit_chain_heads")) == 2
+        with pytest.raises(StopIteration):
+            next(schemas)
+    finally:
+        schemas.close()
+    admin_engine = create_engine(admin_url)
+    try:
+        with admin_engine.connect() as connection:
+            assert (
+                connection.scalar(
+                    text("SELECT count(*) FROM pg_roles WHERE rolname = :role"),
+                    {"role": migration_role},
+                )
+                == 0
+            )
+    finally:
+        admin_engine.dispose()
+
+
+@pytest.mark.parametrize("required", [False, True])
+def test_missing_superuser_credentials_follow_privilege_policy(
+    monkeypatch: pytest.MonkeyPatch, required: bool
+) -> None:
+    monkeypatch.delenv("POSTGRES_ADMIN_URL", raising=False)
+    monkeypatch.delenv("TEST_DATABASE_URL", raising=False)
+    monkeypatch.setenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED", "1" if required else "")
+    outcome = pytest.fail.Exception if required else pytest.skip.Exception
+    with pytest.raises(outcome, match="Superuser credentials are required"):
+        _superuser_database_url()
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+@pytest.mark.parametrize("required", [False, True])
+def test_restricted_test_url_follows_privilege_policy(
+    monkeypatch: pytest.MonkeyPatch,
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
+    required: bool,
+) -> None:
+    monkeypatch.delenv("POSTGRES_ADMIN_URL", raising=False)
+    monkeypatch.setenv(
+        "TEST_DATABASE_URL",
+        forward_migrated_postgres_schema.app_engine.url.render_as_string(hide_password=False),
+    )
+    monkeypatch.setenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED", "1" if required else "")
+    outcome = pytest.fail.Exception if required else pytest.skip.Exception
+    with pytest.raises(outcome, match="Superuser credentials are required"):
+        _superuser_database_url()
 
 
 @pytest.mark.skipif(
