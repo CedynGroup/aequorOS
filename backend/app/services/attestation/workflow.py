@@ -184,9 +184,8 @@ def is_fully_certified(policy: SigningPolicy, signatures: list[AttestationSignat
 def chain_head(db: Session, ctx: TenantContext) -> str:
     """The tenant's signature-chain head, or the genesis value.
 
-    A per-tenant hash chain makes removal of a signature detectable even though
-    DELETE is reachable by deleting the owning package: the next entry's
-    ``prev_hash`` would no longer resolve.
+    A per-tenant hash chain exposes removal of an intermediate signature:
+    the next entry's ``prev_hash`` would no longer resolve.
     """
     latest = db.scalars(
         select(AttestationSignature)
