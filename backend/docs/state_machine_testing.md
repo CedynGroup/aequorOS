@@ -108,7 +108,7 @@ dedicated example tests; this machine concentrates on the freeze boundary.
 | Draft                                 | Submit / EDIT                                           | Editable version                                                                  | Pending approval                                          |
 | Pending approval                      | Decide / APPROVE                                        | Different officer from proposer                                                   | Approved or rejected; decision audit                      |
 | Prior approved template               | Approve replacement / APPROVE                           | Replacement passes four-eyes guards                                               | Prior superseded atomically; new template approved        |
-| Approved/rejected/superseded template | Edit/submit/decide                                      | No legal command                                                                  | Refusal; pinned package stages unchanged                  |
+| Approved/rejected/superseded template | Edit/submit/decide                                      | Version is neither editable nor awaiting a decision                               | Refusal; sealed content and pinned stages unchanged       |
 | Access request: none                  | Request / active member                                 | Recognized route/permission and tenant institution                                | Pending; duplicate pending scope returns existing request |
 | Pending request                       | Approve / grant administrator                           | Requested institution/module/sensitivity preserved; grant policy/expiry/SoD valid | Approved + scoped binding, in one transaction             |
 | Pending request                       | Create a grant satisfying request / grant administrator | Matching effective complete scoped grant                                          | Approved with resolution evidence                         |
@@ -118,18 +118,18 @@ dedicated example tests; this machine concentrates on the freeze boundary.
 The template model runs against both public services. Generated commands vary
 the actor, target version, proposed title and decision, including old versions and
 wrong banks/tenants. Checkpoints reach each status through real commands; a forward
-rule ensures successive approvals exercise supersession. Invariants require one
-open draft and one approved chain at most, monotonically numbered versions,
-proposer/checker separation and sealed decision content. The effective chain must
+rule ensures successive approvals exercise supersession. Invariants require at most
+one open proposal (draft or pending approval) and one approved chain, monotonically
+numbered versions, proposer/checker separation and sealed decision content. The effective chain must
 come from the approved version; refusing a command preserves history and audit
 events. An approved template may become superseded; rejected and superseded versions
 are terminal. Cycle/package pinning remains covered by their acceptance tests.
 
 The access-request model varies two banks and three declared view routes, including
-two liquidity routes that one complete scoped grant can satisfy. Direct approval
-resolves its selected request; the composer resolves every pending request now
-satisfied by the member's complete active bindings, including prior grants. It generates
-duplicate filing, direct approval, composer grants, rejection, revocation and
+two liquidity routes that one complete scoped grant can satisfy. It exercises
+the [request-resolution contract](authorization_foundation.md#route-access-requests)
+through direct approval and composer grants, including resolution through prior
+grants. It generates duplicate filing, direct approval, composer grants, rejection, revocation and
 refiling, plus altered scope, unauthorized-member and other-tenant decisions.
 Invariants preserve the original request, one pending row per exact route/scope,
 matching resolution bindings and exactly one persisted resolution event. Resolved
