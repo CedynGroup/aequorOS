@@ -535,9 +535,7 @@ def test_legacy_post_freeze_return_preserves_evidence_and_allows_refreeze(
         machine.round, machine.stage = 2, return_seq
         machine.status = "returned" if return_seq == 1 else "in_review"
         machine.package_id, machine.freezer = None, None
-        machine.approvals = {
-            seq: who for seq, who in machine.approvals.items() if seq < return_seq
-        }
+        machine.approvals = {seq: who for seq, who in machine.approvals.items() if seq < return_seq}
         machine.cycle_and_frozen_versions_match_model()
         for _ in range(5 - return_seq):
             machine.advance()
