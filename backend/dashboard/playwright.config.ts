@@ -169,6 +169,9 @@ export default defineConfig({
         CREDENTIAL_VAULT_MASTER_KEY: E2E_VAULT_KEY,
         CORS_ORIGINS: E2E_BASE_URL,
         APP_ENV: "test",
+        // This disposable stack uses SQLite, loopback HTTP and local MinIO.
+        // The transport policy defaults to TLS even in test; opt in only here.
+        TLS_ALLOW_PLAINTEXT: "1",
       },
     },
     {
