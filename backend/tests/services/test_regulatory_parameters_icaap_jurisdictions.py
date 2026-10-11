@@ -21,7 +21,7 @@ sharper here than anywhere else:
   test below keeps that phrasing out of these rows.
 
 The ``REPRESENTATIVE:`` prefix is pinned too, because it is load-bearing rather
-than decorative: ``services/icaap/params.ParameterRow.representative`` tests
+than decorative: ``icaap/service/params.ParameterRow.representative`` tests
 ``startswith``, and that flag is what puts the label on readiness, on the
 Pillar 2 register and in a frozen report's parameter provenance. Moving the
 prefix off the front of a string — or explaining the sourcing before it —
@@ -113,7 +113,7 @@ def test_the_catalogue_covers_exactly_nigeria_and_kenya() -> None:
 def test_the_review_interval_codes_are_the_pillar_two_ones() -> None:
     """These two rows seed a code another catalogue owns for Ghana.
 
-    Named in ``services/icaap/parameters`` so the jurisdiction rows can quote
+    Named in ``icaap/service/parameters`` so the jurisdiction rows can quote
     them; pinned here so a rename in the Pillar 2 catalogue cannot leave these
     rows pointing at a code nothing reads.
     """

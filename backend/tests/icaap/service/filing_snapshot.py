@@ -189,7 +189,7 @@ def snapshot(
     framework_status: str = "exposure_draft",
     with_annex: bool = True,
 ) -> dict[str, Any]:
-    """The frozen envelope, as ``services/icaap/snapshot.py`` writes it."""
+    """The frozen envelope, as ``icaap/service/snapshot.py`` writes it."""
     sections: list[dict[str, Any]] = [
         {
             "code": "icaap_headline",

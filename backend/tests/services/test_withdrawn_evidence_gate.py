@@ -562,7 +562,7 @@ def test_a_withdrawal_at_another_date_leaves_the_run_alone(db_session: Session) 
 # every annex package's ``source_runs`` — so a cycle could be SEALED, its
 # package minted and its stage decision written on evidence that had been
 # withdrawn under two-officer approval. The ICAAP-side substitute is partial by
-# construction: ``domain/icaap/readiness.py`` makes a withdrawn source blocking
+# construction: ``icaap/domain/readiness.py`` makes a withdrawn source blocking
 # only for a block the PROSE references, and never looks at annexes at all.
 #
 # The gate therefore lives at the mint, not in ``freeze_cycle``: the next
