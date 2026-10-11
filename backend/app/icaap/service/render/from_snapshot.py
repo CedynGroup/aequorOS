@@ -8,7 +8,7 @@ snapshot is the sealed evidence an officer certifies and a regulator receives;
 a renderer that could reach past it could print a figure the signature does not
 cover, and the two artifacts could disagree with each other.
 
-The snapshot this module reads is the one ``services/icaap/snapshot.py`` freezes
+The snapshot this module reads is the one ``icaap/service/snapshot.py`` freezes
 (P3-DESIGN §3.7). The shape is a contract between two modules, so it is written
 out here rather than inferred:
 

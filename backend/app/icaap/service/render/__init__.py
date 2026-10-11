@@ -2,7 +2,7 @@
 
 One model in (``app/icaap/domain/document.IcaapDocument``), bytes out. Nothing
 in this package touches the database, the request or the clock: everything it
-prints was resolved by ``services/icaap/exports_draft.py`` (P1 drafts) or by
+prints was resolved by ``icaap/service/exports_draft.py`` (P1 drafts) or by
 P3's snapshot reader, which is what lets a draft and a filed document of the
 same cycle be compared line by line.
 

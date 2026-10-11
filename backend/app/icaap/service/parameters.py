@@ -255,7 +255,7 @@ _AMBER = (
 )
 
 #: Platform policy the Pillar 2 REGISTER resolves for every cycle, whatever the
-#: framework (``services/icaap/pillar2.REGISTER_CODES``). Neither is a
+#: framework (``icaap/service/pillar2.REGISTER_CODES``). Neither is a
 #: regulator's number in any jurisdiction, and without them readiness refuses
 #: before it reaches a single finding — so a framework without them is not
 #: functional even though every code it quotes resolves.

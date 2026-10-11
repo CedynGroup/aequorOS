@@ -41,12 +41,12 @@ CAP/aggregated binding is not sufficient; neither is a binding on a sibling
 institution, and no route infers authority from `users.role`, token `roles[]`,
 a different module or a different sensitivity.
 
-| Permission | Surfaces |
-|---|---|
-| `view` | framework list and detail, block-type catalogue, cycle list and detail, readiness, section list/detail/versions, block list/detail/bindings, attachment list and download |
-| `create` | creating a cycle; re-basing a cycle onto a newer framework version |
-| `edit` | cycle update and archive; section autosave, version commit and requirement state; block create, refresh, pin, unpin, manual table and retire; attachment upload and withdrawal |
-| `export` | the draft PDF and Word exports |
+| Permission | Surfaces                                                                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `view`     | framework list and detail, block-type catalogue, cycle list and detail, readiness, section list/detail/versions, block list/detail/bindings, attachment list and download      |
+| `create`   | creating a cycle; re-basing a cycle onto a newer framework version                                                                                                             |
+| `edit`     | cycle update and archive; section autosave, version commit and requirement state; block create, refresh, pin, unpin, manual table and retire; attachment upload and withdrawal |
+| `export`   | the draft PDF and Word exports                                                                                                                                                 |
 
 For the permissions in this table: **ANALYST** satisfies view/create/edit/export
 (the full preparer role); **APPROVER**, **AUDITOR** and **VIEWER** satisfy view
@@ -64,7 +64,7 @@ An operator acting as examiner reaches ICAAP through the one explicit branch in
 `require_icaap_view`. It reads no binding, is unavailable to every other
 permission, and returns only cycles that have been **frozen** — a workspace
 before a freeze holds text nobody has signed and figures nobody has reviewed.
-Every ICAAP read goes through `services/icaap/guards.get_cycle_or_404`, which is
+Every ICAAP read goes through `icaap/service/guards.get_cycle_or_404`, which is
 where that limit lives; P3 must keep routing new reads through it.
 
 Impersonated sessions remain structurally incapable of any unsafe method.
@@ -111,12 +111,12 @@ the ICAAP surface and take the SAME CAP/confidential bindings as the rest of it
 — `view` to read, `create`/`edit` to change. Four actions need something more,
 and each separation is the point of the action:
 
-| Action | Authority | Why it is not `edit` |
-|---|---|---|
-| Approve a Pillar 2 figure (`approveIcaapPillar2Item`) | CAP/confidential `approve`, plus a maker-checker condition that the caller did not author the revision being approved | The author of a capital figure approving it is not a second pair of eyes |
-| Confirm or withdraw a supervisory add-on | CAP/confidential `approve`, plus four eyes against the person who recorded the letter | The database enforces `confirmed_by <> created_by`; this layer answers with an authorization decision instead of a constraint error |
+| Action                                                                    | Authority                                                                                                                                                          | Why it is not `edit`                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Approve a Pillar 2 figure (`approveIcaapPillar2Item`)                     | CAP/confidential `approve`, plus a maker-checker condition that the caller did not author the revision being approved                                              | The author of a capital figure approving it is not a second pair of eyes                                                                                                                                                 |
+| Confirm or withdraw a supervisory add-on                                  | CAP/confidential `approve`, plus four eyes against the person who recorded the letter                                                                              | The database enforces `confirmed_by <> created_by`; this layer answers with an authorization decision instead of a constraint error                                                                                      |
 | Record the independent review (`createIcaapAuditReview` and its siblings) | ICAAP `view` **and** an ORGANISATION-wide `Audit`/confidential `create` binding, with a maker-checker condition that the caller is not a participant of this cycle | Internal audit must not hold the authority it is reviewing. An "Analyst on Audit, organisation-wide, confidential" grant expresses the IA function; the AUDITOR bundle is view-only and therefore cannot record a review |
-| Propose a capital-plan update (`proposeIcaapCapitalPlanUpdate`) | ICAAP `edit` **and** the capital plan's own drafting authority (`create` for a new version, `edit` for an existing draft) | The proposal writes a capital-plan DRAFT through `capital_plan.put_capital_plan`; without this an ICAAP editor could author a plan they are not entitled to author |
+| Propose a capital-plan update (`proposeIcaapCapitalPlanUpdate`)           | ICAAP `edit` **and** the capital plan's own drafting authority (`create` for a new version, `edit` for an existing draft)                                          | The proposal writes a capital-plan DRAFT through `capital_plan.put_capital_plan`; without this an ICAAP editor could author a plan they are not entitled to author                                                       |
 
 | Request, insert or discard an AI draft (`requestIcaapAiDraft`, `acceptIcaapAiDraft`, `rejectIcaapAiDraft`) | CAP/confidential `edit`, **plus** the AI egress gates: the deployment kill-switch, the tenant's Organisation-Owner consent, the named feature, the current consent version, and — in a deployed environment — a committed approved configuration | `edit` says the caller may change this report; it does not say this organisation has agreed to send its figures to an external service. The two answers are unrelated, so they are asked separately. An APPROVER may READ a draft (those routes stay on `view`) but may never request or insert one, which keeps maker and checker apart at the route |
 | Change the organisation's AI settings (`getAiCommentarySettings`, `updateAiCommentarySettings`) | The explicit **Org Owner** binding (`require_ai_settings_administration`, the same authority as grant administration) | Deliberately NOT scoped Account administration. A scoped Account administrator configures account surfaces; deciding that this organisation's figures may leave the platform is the one decision its Owner makes personally |
@@ -141,7 +141,7 @@ worker as its own Coolify app so `ANTHROPIC_API_KEY` never enters the core
 containers — is in `.ai/icaap/agent-reports/P4.md` §9.
 
 "Participant of this cycle" is a fact gathered from the rows themselves
-(`services/icaap/participants.py`): whoever created the cycle, committed or
+(`icaap/service/participants.py`): whoever created the cycle, committed or
 edited a section, bound a figure, uploaded evidence, scored a risk, saved an
 appetite metric, authored a Pillar 2 revision, computed or explained a
 reconciliation line, saved an allocation, or answered a challenge. The
@@ -168,16 +168,16 @@ revision clone take the same CAP/confidential bindings. Every write that changes
 who has signed off carries a separation condition as well, evaluated before the
 route runs so the refusal is an authorization decision with a trace:
 
-| Action | Authority | Separation |
-|---|---|---|
-| Submit for review; draft or submit the disclosure; update or submit a workflow template | `edit` | — |
-| Propose a workflow template; clone a cycle as a revision or an update | `create` | — |
-| Decide a review stage (`decideIcaapStage`) | `review` | The decider neither prepared the report nor decided another stage of this round |
-| Decide an approval stage (`decideIcaapStage`) | `approve` | As above. An unresolvable stage takes `approve` |
-| Freeze (`freezeIcaapCycle`) | `edit` | Nobody who reviewed or approved the round (D-030): freezing makes the actor the package's preparer of record |
-| Send a frozen ICAAP back (`returnIcaapCycle`) | `review` | Not the officer who froze it |
-| Decide a workflow template (`decideIcaapWorkflowTemplate`) | `approve` | Not its proposer |
-| Approve the disclosure (`decideIcaapDisclosure`) | `approve` | Not whoever chose what to publish |
+| Action                                                                                  | Authority | Separation                                                                                                   |
+| --------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
+| Submit for review; draft or submit the disclosure; update or submit a workflow template | `edit`    | —                                                                                                            |
+| Propose a workflow template; clone a cycle as a revision or an update                   | `create`  | —                                                                                                            |
+| Decide a review stage (`decideIcaapStage`)                                              | `review`  | The decider neither prepared the report nor decided another stage of this round                              |
+| Decide an approval stage (`decideIcaapStage`)                                           | `approve` | As above. An unresolvable stage takes `approve`                                                              |
+| Freeze (`freezeIcaapCycle`)                                                             | `edit`    | Nobody who reviewed or approved the round (D-030): freezing makes the actor the package's preparer of record |
+| Send a frozen ICAAP back (`returnIcaapCycle`)                                           | `review`  | Not the officer who froze it                                                                                 |
+| Decide a workflow template (`decideIcaapWorkflowTemplate`)                              | `approve` | Not its proposer                                                                                             |
+| Approve the disclosure (`decideIcaapDisclosure`)                                        | `approve` | Not whoever chose what to publish                                                                            |
 
 The current **APPROVER** bundle carries both `review` and `approve`; there is
 no separate Reviewer bundle. The stage permission split alone therefore does

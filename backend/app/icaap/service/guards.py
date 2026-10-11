@@ -36,7 +36,7 @@ EDITABLE_STATUSES: frozenset[str] = frozenset({"draft", "returned"})
 #: way of getting them, and forcing a send-back to attach a file would make the
 #: review trail worse rather than better — so uploads and withdrawals stay open
 #: while the cycle is under review. The review digest deliberately excludes
-#: attachments for the same reason (``domain/icaap/review_digest.py``); the
+#: attachments for the same reason (``icaap/domain/review_digest.py``); the
 #: freeze gate checks them separately and at that point they are sealed.
 ATTACHABLE_STATUSES: frozenset[str] = frozenset({"draft", "in_review", "returned"})
 

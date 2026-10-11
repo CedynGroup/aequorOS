@@ -2,7 +2,14 @@
   "schema_version": "icaap-editor-v1",
   "top_node": "doc",
   "nodes": {
-    "doc": {"content": "block*", "groups": [], "leaf": false, "inline": false, "atom": false, "attrs": {}},
+    "doc": {
+      "content": "block*",
+      "groups": [],
+      "leaf": false,
+      "inline": false,
+      "atom": false,
+      "attrs": {}
+    },
     "paragraph": {
       "content": "inline*",
       "groups": ["block"],
@@ -10,7 +17,7 @@
       "inline": false,
       "atom": false,
       "attrs": {
-        "aiSuggestionId": {"type": "uuid_or_null", "default": null}
+        "aiSuggestionId": { "type": "uuid_or_null", "default": null }
       }
     },
     "heading": {
@@ -20,11 +27,25 @@
       "inline": false,
       "atom": false,
       "attrs": {
-        "level": {"type": "integer", "enum": [2, 3, 4], "required": true}
+        "level": { "type": "integer", "enum": [2, 3, 4], "required": true }
       }
     },
-    "blockquote": {"content": "block+", "groups": ["block"], "leaf": false, "inline": false, "atom": false, "attrs": {}},
-    "bulletList": {"content": "listItem+", "groups": ["block", "list"], "leaf": false, "inline": false, "atom": false, "attrs": {}},
+    "blockquote": {
+      "content": "block+",
+      "groups": ["block"],
+      "leaf": false,
+      "inline": false,
+      "atom": false,
+      "attrs": {}
+    },
+    "bulletList": {
+      "content": "listItem+",
+      "groups": ["block", "list"],
+      "leaf": false,
+      "inline": false,
+      "atom": false,
+      "attrs": {}
+    },
     "orderedList": {
       "content": "listItem+",
       "groups": ["block", "list"],
@@ -32,13 +53,43 @@
       "inline": false,
       "atom": false,
       "attrs": {
-        "start": {"type": "integer", "minimum": 1, "maximum": 10000, "default": 1},
-        "type": {"type": "string_or_null", "enum": [null, "1"], "default": null}
+        "start": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 1
+        },
+        "type": {
+          "type": "string_or_null",
+          "enum": [null, "1"],
+          "default": null
+        }
       }
     },
-    "listItem": {"content": "paragraph block*", "groups": [], "leaf": false, "inline": false, "atom": false, "attrs": {}},
-    "hardBreak": {"content": null, "groups": ["inline"], "leaf": true, "inline": true, "atom": false, "attrs": {}},
-    "text": {"content": null, "groups": ["inline"], "leaf": true, "inline": true, "atom": false, "attrs": {}},
+    "listItem": {
+      "content": "paragraph block*",
+      "groups": [],
+      "leaf": false,
+      "inline": false,
+      "atom": false,
+      "attrs": {}
+    },
+    "hardBreak": {
+      "content": null,
+      "groups": ["inline"],
+      "leaf": true,
+      "inline": true,
+      "atom": false,
+      "attrs": {}
+    },
+    "text": {
+      "content": null,
+      "groups": ["inline"],
+      "leaf": true,
+      "inline": true,
+      "atom": false,
+      "attrs": {}
+    },
     "dataBlock": {
       "content": null,
       "groups": ["block"],
@@ -46,7 +97,7 @@
       "inline": false,
       "atom": true,
       "attrs": {
-        "blockId": {"type": "uuid", "required": true}
+        "blockId": { "type": "uuid", "required": true }
       }
     },
     "factRef": {
@@ -56,16 +107,20 @@
       "inline": true,
       "atom": true,
       "attrs": {
-        "blockId": {"type": "uuid", "required": true},
-        "factKey": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$", "required": true},
-        "suggestionId": {"type": "uuid_or_null", "default": null}
+        "blockId": { "type": "uuid", "required": true },
+        "factKey": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "required": true
+        },
+        "suggestionId": { "type": "uuid_or_null", "default": null }
       }
     }
   },
   "marks": {
-    "bold": {"attrs": {}},
-    "italic": {"attrs": {}},
-    "underline": {"attrs": {}}
+    "bold": { "attrs": {} },
+    "italic": { "attrs": {} },
+    "underline": { "attrs": {} }
   },
   "limits": {
     "max_doc_bytes": 262144,

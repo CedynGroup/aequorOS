@@ -4,7 +4,7 @@ Three properties are what this module exists for, and each of them is the
 answer to a way an approval record can be made worthless.
 
 **A decision names the text it was taken on.** Every forward decision carries
-the review digest (``domain/icaap/review_digest.py``). A decision on a digest
+the review digest (``icaap/domain/review_digest.py``). A decision on a digest
 that is no longer current is refused, so "the CRO approved this ICAAP" can
 never mean "the CRO approved an earlier draft of it".
 

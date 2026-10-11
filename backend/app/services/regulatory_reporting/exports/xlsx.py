@@ -517,7 +517,7 @@ def _normalize_zip(data: bytes, pinned: datetime) -> bytes:
 
 #: The same normalisation, under a public name. Every OOXML container has the
 #: wall-clock problem this solves, so the ICAAP DOCX exports
-#: (``services/icaap/render/docx.py``) reuse it rather than growing a second,
+#: (``icaap/service/render/docx.py``) reuse it rather than growing a second,
 #: drifting copy: python-docx stamps zip entries at save time exactly as
 #: openpyxl does.
 normalize_zip = _normalize_zip

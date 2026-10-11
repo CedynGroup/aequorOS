@@ -205,7 +205,7 @@ Validator signs before transmitting or merely authorises; do not assume.
 
 ## 4. What changes, by surface
 
-- **Backend:** a shared `filing_workflow` service lifted from `services/icaap/workflow.py`;
+- **Backend:** a shared `filing_workflow` service lifted from `icaap/service/workflow.py`;
   `Permission.SUBMIT`; `require_package_submit` rewritten to it; stage/decision tables for the
   package plane; `checks_passed` replacing the `validated` status; send-back routing and rounds.
 - **Lifecycle statuses:** `pending_approval`/`approved` become projections of the chain's

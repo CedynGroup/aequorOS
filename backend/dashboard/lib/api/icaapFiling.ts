@@ -639,14 +639,12 @@ export function useUpdateIcaapWorkflowTemplate(bankId: string | undefined) {
 }
 
 export function useSubmitIcaapWorkflowTemplate(bankId: string | undefined) {
-  return useP3Mutation(
-    bankId,
-    (vars: { templateId: string; reason: string }) =>
-      icaapApi.submitIcaapWorkflowTemplate({
-        bankId: bankId!,
-        templateId: vars.templateId,
-        icaapWorkflowTemplateSubmit: { reason: vars.reason },
-      }),
+  return useP3Mutation(bankId, (vars: { templateId: string; reason: string }) =>
+    icaapApi.submitIcaapWorkflowTemplate({
+      bankId: bankId!,
+      templateId: vars.templateId,
+      icaapWorkflowTemplateSubmit: { reason: vars.reason },
+    }),
   );
 }
 

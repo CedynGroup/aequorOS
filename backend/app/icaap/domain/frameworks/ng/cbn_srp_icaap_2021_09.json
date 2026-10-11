@@ -17,9 +17,7 @@
   "first_as_of_date": "2021-12-31",
   "first_as_of_basis": "inferred",
   "first_as_of_note": "The Guidelines carry an issue month (September 2021) but no stated commencement date; the first annual report is taken to be the one as at 31 December 2021 (¶51 reports as at 31 December). Confirm with the CBN before relying on pre-2022 cycles.",
-  "institution_classes": [
-    "bank"
-  ],
+  "institution_classes": ["bank"],
   "supersedes": null,
   "section_key_map": [],
   "cross_framework_section_map": [
@@ -266,9 +264,7 @@
               "ref": "4(a)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -281,10 +277,7 @@
               "ref": "4(b)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:pillar2_summary"
-          ],
+          "evidence": ["narrative", "block:pillar2_summary"],
           "waivable": false,
           "applies_when": null
         },
@@ -297,10 +290,7 @@
               "ref": "6"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:capital_plan"
-          ],
+          "evidence": ["narrative", "block:capital_plan"],
           "waivable": false,
           "applies_when": null
         }
@@ -317,10 +307,7 @@
       },
       "source_status": "sourced",
       "guidance": "Legal and operational structure, business model and where risks arise within the bank and group (¶17, ¶21; Annex B §4).",
-      "data_blocks": [
-        "institution_profile",
-        "financials"
-      ],
+      "data_blocks": ["institution_profile", "financials"],
       "ai_draftable": true,
       "public_disclosure": false,
       "requirements": [
@@ -333,10 +320,7 @@
               "ref": "17"
             }
           ],
-          "evidence": [
-            "narrative",
-            "workflow:basis_companion_cycle"
-          ],
+          "evidence": ["narrative", "workflow:basis_companion_cycle"],
           "waivable": false,
           "applies_when": "has_subsidiaries"
         },
@@ -349,9 +333,7 @@
               "ref": "21"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -364,10 +346,7 @@
               "ref": "AnnexB-4(a)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:institution_profile"
-          ],
+          "evidence": ["narrative", "block:institution_profile"],
           "waivable": false,
           "applies_when": null
         },
@@ -380,10 +359,7 @@
               "ref": "AnnexB-4(b)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:financials"
-          ],
+          "evidence": ["narrative", "block:financials"],
           "waivable": false,
           "applies_when": null
         },
@@ -396,9 +372,7 @@
               "ref": "AnnexB-4(c)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -411,9 +385,7 @@
               "ref": "AnnexB-4(d)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         }
@@ -430,10 +402,7 @@
       },
       "source_status": "sourced",
       "guidance": "Board and senior management responsibilities, organisation and controls around the ICAAP (¶7, ¶9, ¶40–42; Annex B §3).",
-      "data_blocks": [
-        "institution_profile",
-        "management_actions"
-      ],
+      "data_blocks": ["institution_profile", "management_actions"],
       "ai_draftable": true,
       "public_disclosure": false,
       "requirements": [
@@ -446,9 +415,7 @@
               "ref": "9"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -461,9 +428,7 @@
               "ref": "7"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -476,9 +441,7 @@
               "ref": "40"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -495,9 +458,7 @@
               "ref": "fn2"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -510,9 +471,7 @@
               "ref": "42"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -525,10 +484,7 @@
               "ref": "AnnexB-3(a)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "workflow:stage_decisions"
-          ],
+          "evidence": ["narrative", "workflow:stage_decisions"],
           "waivable": false,
           "applies_when": null
         },
@@ -541,9 +497,7 @@
               "ref": "AnnexB-3(b)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -556,9 +510,7 @@
               "ref": "AnnexB-3(c)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -571,9 +523,7 @@
               "ref": "AnnexB-3(d)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -586,9 +536,7 @@
               "ref": "AnnexB-3(e)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": true,
           "applies_when": null
         },
@@ -601,9 +549,7 @@
               "ref": "AnnexB-3(f)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -616,9 +562,7 @@
               "ref": "AnnexB-3(g)"
             }
           ],
-          "evidence": [
-            "attachment:board_committee_minutes"
-          ],
+          "evidence": ["attachment:board_committee_minutes"],
           "waivable": false,
           "applies_when": null
         },
@@ -631,10 +575,7 @@
               "ref": "AnnexB-3(h)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:management_actions"
-          ],
+          "evidence": ["narrative", "block:management_actions"],
           "waivable": false,
           "applies_when": null
         },
@@ -647,10 +588,7 @@
               "ref": "AnnexB-3(i)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:pillar2_summary"
-          ],
+          "evidence": ["narrative", "block:pillar2_summary"],
           "waivable": false,
           "applies_when": null
         }
@@ -680,9 +618,7 @@
               "ref": "AnnexB-5(a)"
             }
           ],
-          "evidence": [
-            "attachment:board_approved_ras"
-          ],
+          "evidence": ["attachment:board_approved_ras"],
           "waivable": false,
           "applies_when": null
         },
@@ -695,9 +631,7 @@
               "ref": "AnnexB-5(b)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -710,9 +644,7 @@
               "ref": "AnnexB-5(c)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -725,10 +657,7 @@
               "ref": "AnnexB-5(d)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:risk_appetite"
-          ],
+          "evidence": ["narrative", "block:risk_appetite"],
           "waivable": false,
           "applies_when": null
         },
@@ -741,9 +670,7 @@
               "ref": "AnnexB-5(e)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": "has_subsidiaries"
         },
@@ -756,9 +683,7 @@
               "ref": "AnnexB-5(f)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         }
@@ -788,9 +713,7 @@
               "ref": "19"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -807,10 +730,7 @@
               "ref": "AnnexA-note"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:risk_register"
-          ],
+          "evidence": ["narrative", "block:risk_register"],
           "waivable": false,
           "applies_when": null
         },
@@ -823,9 +743,7 @@
               "ref": "22"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -838,9 +756,7 @@
               "ref": "23"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -853,9 +769,7 @@
               "ref": "24"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -868,10 +782,7 @@
               "ref": "25"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:risk_register"
-          ],
+          "evidence": ["narrative", "block:risk_register"],
           "waivable": false,
           "applies_when": null
         },
@@ -884,9 +795,7 @@
               "ref": "26"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -899,9 +808,7 @@
               "ref": "27"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -914,9 +821,7 @@
               "ref": "AnnexB-6(a)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -929,9 +834,7 @@
               "ref": "AnnexB-6(b)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -944,9 +847,7 @@
               "ref": "AnnexB-6(c)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -959,9 +860,7 @@
               "ref": "AnnexB-6(d)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": true,
           "applies_when": null
         },
@@ -974,9 +873,7 @@
               "ref": "AnnexB-6(e)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": "has_subsidiaries"
         },
@@ -989,9 +886,7 @@
               "ref": "AnnexB-6(f)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1004,9 +899,7 @@
               "ref": "AnnexB-6(g)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         }
@@ -1041,10 +934,7 @@
               "ref": "12"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:pillar2_summary"
-          ],
+          "evidence": ["narrative", "block:pillar2_summary"],
           "waivable": false,
           "applies_when": null
         },
@@ -1057,9 +947,7 @@
               "ref": "13"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1072,9 +960,7 @@
               "ref": "28"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1087,9 +973,7 @@
               "ref": "29"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1102,10 +986,7 @@
               "ref": "30"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:pillar2_summary"
-          ],
+          "evidence": ["narrative", "block:pillar2_summary"],
           "waivable": false,
           "applies_when": null
         },
@@ -1118,10 +999,7 @@
               "ref": "31"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:pillar1_rwa"
-          ],
+          "evidence": ["narrative", "block:pillar1_rwa"],
           "waivable": false,
           "applies_when": null
         },
@@ -1134,9 +1012,7 @@
               "ref": "33"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1153,9 +1029,7 @@
               "ref": "5.5"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1168,9 +1042,7 @@
               "ref": "AnnexB-7(a)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1183,9 +1055,7 @@
               "ref": "AnnexB-7(b)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1198,9 +1068,7 @@
               "ref": "AnnexB-7(c)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1213,9 +1081,7 @@
               "ref": "AnnexB-7(d)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1228,10 +1094,7 @@
               "ref": "AnnexB-7(e)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:pillar1_rwa"
-          ],
+          "evidence": ["narrative", "block:pillar1_rwa"],
           "waivable": false,
           "applies_when": null
         },
@@ -1244,10 +1107,7 @@
               "ref": "AnnexB-7(f)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:pillar2_summary"
-          ],
+          "evidence": ["narrative", "block:pillar2_summary"],
           "waivable": false,
           "applies_when": null
         },
@@ -1260,10 +1120,7 @@
               "ref": "AnnexB-7(g)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:pillar2_summary"
-          ],
+          "evidence": ["narrative", "block:pillar2_summary"],
           "waivable": false,
           "applies_when": null
         }
@@ -1298,10 +1155,7 @@
               "ref": "36"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:stress_narratives"
-          ],
+          "evidence": ["narrative", "block:stress_narratives"],
           "waivable": false,
           "applies_when": null
         },
@@ -1314,9 +1168,7 @@
               "ref": "37"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1329,10 +1181,7 @@
               "ref": "38"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:management_actions"
-          ],
+          "evidence": ["narrative", "block:management_actions"],
           "waivable": false,
           "applies_when": null
         },
@@ -1345,9 +1194,7 @@
               "ref": "39(a)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1364,10 +1211,7 @@
               "ref": "39(e)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:management_actions"
-          ],
+          "evidence": ["narrative", "block:management_actions"],
           "waivable": false,
           "applies_when": null
         },
@@ -1380,9 +1224,7 @@
               "ref": "55(c)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1395,9 +1237,7 @@
               "ref": "AnnexB-9(a)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1410,10 +1250,7 @@
               "ref": "AnnexB-9(b)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:reverse_stress"
-          ],
+          "evidence": ["narrative", "block:reverse_stress"],
           "waivable": false,
           "applies_when": null
         },
@@ -1426,9 +1263,7 @@
               "ref": "AnnexB-9(c)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1441,9 +1276,7 @@
               "ref": "AnnexB-9(d)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1456,9 +1289,7 @@
               "ref": "AnnexB-9(e)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1471,10 +1302,7 @@
               "ref": "AnnexB-9(f)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:stress_narratives"
-          ],
+          "evidence": ["narrative", "block:stress_narratives"],
           "waivable": false,
           "applies_when": null
         },
@@ -1487,9 +1315,7 @@
               "ref": "AnnexB-9(g)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         }
@@ -1506,10 +1332,7 @@
       },
       "source_status": "sourced",
       "guidance": "Strategy, forecasting horizon and the capital plan (¶44; Annex B §2 and the capital-planning item printed as §6 on p. 20).",
-      "data_blocks": [
-        "capital_plan",
-        "capital_position"
-      ],
+      "data_blocks": ["capital_plan", "capital_position"],
       "ai_draftable": true,
       "public_disclosure": false,
       "requirements": [
@@ -1522,9 +1345,7 @@
               "ref": "AnnexB-2(a)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1537,10 +1358,7 @@
               "ref": "AnnexB-2(b)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:capital_plan"
-          ],
+          "evidence": ["narrative", "block:capital_plan"],
           "waivable": false,
           "applies_when": null
         },
@@ -1553,9 +1371,7 @@
               "ref": "AnnexB-2(c)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1568,10 +1384,7 @@
               "ref": "AnnexB-6p20(a)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:capital_plan"
-          ],
+          "evidence": ["narrative", "block:capital_plan"],
           "waivable": false,
           "applies_when": null
         },
@@ -1584,9 +1397,7 @@
               "ref": "AnnexB-6p20(b)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1599,9 +1410,7 @@
               "ref": "AnnexB-6p20(c)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1614,9 +1423,7 @@
               "ref": "AnnexB-6p20(d)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1629,9 +1436,7 @@
               "ref": "AnnexB-6p20(e)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1648,10 +1453,7 @@
               "ref": "fn3"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:capital_plan"
-          ],
+          "evidence": ["narrative", "block:capital_plan"],
           "waivable": false,
           "applies_when": null
         }
@@ -1668,9 +1470,7 @@
       },
       "source_status": "sourced",
       "guidance": "Allocation of internal capital and its reconciliation with regulatory requirements and capital (¶34; Annex B §8).",
-      "data_blocks": [
-        "capital_position"
-      ],
+      "data_blocks": ["capital_position"],
       "ai_draftable": true,
       "public_disclosure": false,
       "requirements": [
@@ -1683,10 +1483,7 @@
               "ref": "34"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:capital_position"
-          ],
+          "evidence": ["narrative", "block:capital_position"],
           "waivable": false,
           "applies_when": null
         },
@@ -1699,9 +1496,7 @@
               "ref": "AnnexB-8(a)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": true,
           "applies_when": null
         },
@@ -1714,9 +1509,7 @@
               "ref": "AnnexB-8(b)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1729,10 +1522,7 @@
               "ref": "AnnexB-8(c)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:capital_position"
-          ],
+          "evidence": ["narrative", "block:capital_position"],
           "waivable": false,
           "applies_when": null
         },
@@ -1745,9 +1535,7 @@
               "ref": "AnnexB-8(d)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1760,9 +1548,7 @@
               "ref": "AnnexB-8(e)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1775,10 +1561,7 @@
               "ref": "AnnexB-8(f)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:pillar2_summary"
-          ],
+          "evidence": ["narrative", "block:pillar2_summary"],
           "waivable": false,
           "applies_when": null
         },
@@ -1791,9 +1574,7 @@
               "ref": "AnnexB-8(g)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1806,9 +1587,7 @@
               "ref": "AnnexB-8(h)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         }
@@ -1838,10 +1617,7 @@
               "ref": "8"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:audit_review"
-          ],
+          "evidence": ["narrative", "block:audit_review"],
           "waivable": false,
           "applies_when": null
         },
@@ -1854,9 +1630,7 @@
               "ref": "44"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1869,9 +1643,7 @@
               "ref": "46"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1884,14 +1656,10 @@
               "ref": "47"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null,
-          "param_refs": [
-            "icaap_independent_review_max_months"
-          ]
+          "param_refs": ["icaap_independent_review_max_months"]
         },
         {
           "id": "ng_048_review_areas",
@@ -1902,9 +1670,7 @@
               "ref": "48"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1917,9 +1683,7 @@
               "ref": "AnnexB-10(a)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1932,9 +1696,7 @@
               "ref": "AnnexB-10(b)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1947,9 +1709,7 @@
               "ref": "AnnexB-10(c)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1962,9 +1722,7 @@
               "ref": "AnnexB-10(d)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -1977,9 +1735,7 @@
               "ref": "AnnexB-10(e)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": true,
           "applies_when": null
         }
@@ -2017,10 +1773,7 @@
               "ref": "11(c)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "workflow:stage_decisions"
-          ],
+          "evidence": ["narrative", "workflow:stage_decisions"],
           "waivable": false,
           "applies_when": null
         },
@@ -2049,14 +1802,10 @@
               "ref": "52"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null,
-          "param_refs": [
-            "icaap_review_max_months"
-          ]
+          "param_refs": ["icaap_review_max_months"]
         },
         {
           "id": "ng_053_on_request",
@@ -2067,9 +1816,7 @@
               "ref": "53"
             }
           ],
-          "evidence": [
-            "attachment:regulator_request_letter"
-          ],
+          "evidence": ["attachment:regulator_request_letter"],
           "waivable": false,
           "applies_when": "cycle_kind:regulator_request"
         },
@@ -2082,9 +1829,7 @@
               "ref": "54"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -2101,9 +1846,7 @@
               "ref": "55(b)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -2120,9 +1863,7 @@
               "ref": "56(a)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -2135,9 +1876,7 @@
               "ref": "43"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -2167,9 +1906,7 @@
               "ref": "AnnexB-12(b)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         }
@@ -2199,9 +1936,7 @@
               "ref": "10"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         },
@@ -2214,10 +1949,7 @@
               "ref": "AnnexB-11(a)"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:challenge_log"
-          ],
+          "evidence": ["narrative", "block:challenge_log"],
           "waivable": false,
           "applies_when": null
         },
@@ -2230,9 +1962,7 @@
               "ref": "AnnexB-11(b)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         }
@@ -2249,9 +1979,7 @@
       },
       "source_status": "sourced",
       "guidance": "Summary of the ICAAP process as a whole, its features and proportionality (¶3–4, ¶14–16, ¶18).",
-      "data_blocks": [
-        "capital_position"
-      ],
+      "data_blocks": ["capital_position"],
       "ai_draftable": true,
       "public_disclosure": false,
       "requirements": [
@@ -2264,10 +1992,7 @@
               "ref": "18"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:pillar2_summary"
-          ],
+          "evidence": ["narrative", "block:pillar2_summary"],
           "waivable": false,
           "applies_when": null
         },
@@ -2288,9 +2013,7 @@
               "ref": "16"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": false,
           "applies_when": null
         }
@@ -2320,10 +2043,7 @@
               "ref": "32"
             }
           ],
-          "evidence": [
-            "narrative",
-            "block:internal_models_inventory"
-          ],
+          "evidence": ["narrative", "block:internal_models_inventory"],
           "waivable": true,
           "applies_when": null
         },
@@ -2336,9 +2056,7 @@
               "ref": "AnnexB-7(e)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": true,
           "applies_when": null
         },
@@ -2351,9 +2069,7 @@
               "ref": "AnnexB-10(e)"
             }
           ],
-          "evidence": [
-            "narrative"
-          ],
+          "evidence": ["narrative"],
           "waivable": true,
           "applies_when": null
         }
@@ -2380,9 +2096,7 @@
           "table5_row": null,
           "p29_class": "pillar1",
           "p29_basis": "sourced",
-          "allowed_methods": [
-            "judgemental"
-          ]
+          "allowed_methods": ["judgemental"]
         }
       ],
       "sub_requirements": []
@@ -2404,19 +2118,14 @@
           "table5_row": null,
           "p29_class": "pillar1",
           "p29_basis": "sourced",
-          "allowed_methods": [
-            "fx_nop_addon",
-            "judgemental"
-          ]
+          "allowed_methods": ["fx_nop_addon", "judgemental"]
         },
         {
           "key": "other_market",
           "table5_row": null,
           "p29_class": "pillar1",
           "p29_basis": "sourced",
-          "allowed_methods": [
-            "judgemental"
-          ]
+          "allowed_methods": ["judgemental"]
         }
       ],
       "sub_requirements": []
@@ -2438,10 +2147,7 @@
           "table5_row": null,
           "p29_class": "pillar1",
           "p29_basis": "sourced",
-          "allowed_methods": [
-            "operational_scenario_net_p1",
-            "judgemental"
-          ]
+          "allowed_methods": ["operational_scenario_net_p1", "judgemental"]
         }
       ],
       "sub_requirements": []
@@ -2515,9 +2221,7 @@
           "table5_row": null,
           "p29_class": "outside_pillar1",
           "p29_basis": "sourced",
-          "allowed_methods": [
-            "judgemental"
-          ]
+          "allowed_methods": ["judgemental"]
         }
       ],
       "sub_requirements": []
@@ -2539,9 +2243,7 @@
           "table5_row": null,
           "p29_class": "outside_pillar1",
           "p29_basis": "sourced",
-          "allowed_methods": [
-            "judgemental"
-          ]
+          "allowed_methods": ["judgemental"]
         }
       ],
       "sub_requirements": []
@@ -2563,9 +2265,7 @@
           "table5_row": null,
           "p29_class": "outside_pillar1",
           "p29_basis": "sourced",
-          "allowed_methods": [
-            "judgemental"
-          ]
+          "allowed_methods": ["judgemental"]
         }
       ],
       "sub_requirements": []
@@ -2587,9 +2287,7 @@
           "table5_row": null,
           "p29_class": "outside_pillar1",
           "p29_basis": "sourced",
-          "allowed_methods": [
-            "judgemental"
-          ]
+          "allowed_methods": ["judgemental"]
         }
       ],
       "sub_requirements": []
@@ -2611,9 +2309,7 @@
           "table5_row": null,
           "p29_class": "outside_pillar1",
           "p29_basis": "sourced",
-          "allowed_methods": [
-            "judgemental"
-          ]
+          "allowed_methods": ["judgemental"]
         }
       ],
       "sub_requirements": []
@@ -2635,9 +2331,7 @@
           "table5_row": null,
           "p29_class": "outside_pillar1",
           "p29_basis": "inferred",
-          "allowed_methods": [
-            "judgemental"
-          ]
+          "allowed_methods": ["judgemental"]
         }
       ],
       "sub_requirements": []
@@ -2662,9 +2356,7 @@
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       ],
       "applies_when": null,
-      "section_keys": [
-        "approval_review_use"
-      ]
+      "section_keys": ["approval_review_use"]
     },
     {
       "kind": "board_resolution",
@@ -2679,13 +2371,9 @@
       "min_count": 1,
       "max_count": null,
       "relaxable_by_signing_policy": false,
-      "media_types": [
-        "application/pdf"
-      ],
+      "media_types": ["application/pdf"],
       "applies_when": null,
-      "section_keys": [
-        "approval_review_use"
-      ]
+      "section_keys": ["approval_review_use"]
     },
     {
       "kind": "board_committee_minutes",
@@ -2705,9 +2393,7 @@
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       ],
       "applies_when": null,
-      "section_keys": [
-        "governance_structure"
-      ]
+      "section_keys": ["governance_structure"]
     },
     {
       "kind": "board_approved_ras",
@@ -2722,13 +2408,9 @@
       "min_count": 1,
       "max_count": null,
       "relaxable_by_signing_policy": false,
-      "media_types": [
-        "application/pdf"
-      ],
+      "media_types": ["application/pdf"],
       "applies_when": null,
-      "section_keys": [
-        "risk_appetite_framework"
-      ]
+      "section_keys": ["risk_appetite_framework"]
     },
     {
       "kind": "management_action_evidence",
@@ -2748,9 +2430,7 @@
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       ],
       "applies_when": null,
-      "section_keys": [
-        "stress_testing"
-      ]
+      "section_keys": ["stress_testing"]
     },
     {
       "kind": "parent_support_evidence",
@@ -2769,13 +2449,9 @@
       "min_count": 0,
       "max_count": null,
       "relaxable_by_signing_policy": true,
-      "media_types": [
-        "application/pdf"
-      ],
+      "media_types": ["application/pdf"],
       "applies_when": "group_member",
-      "section_keys": [
-        "structure_operations"
-      ]
+      "section_keys": ["structure_operations"]
     },
     {
       "kind": "technical_annex",
@@ -2815,9 +2491,7 @@
       "min_count": 1,
       "max_count": null,
       "relaxable_by_signing_policy": false,
-      "media_types": [
-        "application/pdf"
-      ],
+      "media_types": ["application/pdf"],
       "applies_when": "cycle_kind:regulator_request",
       "section_keys": []
     },

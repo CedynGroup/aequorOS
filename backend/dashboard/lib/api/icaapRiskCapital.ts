@@ -304,7 +304,9 @@ function useP2KeyedQuery<T>(
         ),
       ),
     enabled:
-      workspaceEnabled && Boolean(bankId && cycleId) && (!keyed || Boolean(key)),
+      workspaceEnabled &&
+      Boolean(bankId && cycleId) &&
+      (!keyed || Boolean(key)),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
 }
@@ -338,14 +340,26 @@ export function useIcaapRisks(
   bankId: string | undefined,
   cycleId: string | undefined,
 ) {
-  return useP2Query("icaap-risks", bankId, cycleId, icaapApi.listIcaapRisks, normalizeRiskRegister);
+  return useP2Query(
+    "icaap-risks",
+    bankId,
+    cycleId,
+    icaapApi.listIcaapRisks,
+    normalizeRiskRegister,
+  );
 }
 
 export function useIcaapAppetite(
   bankId: string | undefined,
   cycleId: string | undefined,
 ) {
-  return useP2Query("icaap-appetite", bankId, cycleId, icaapApi.getIcaapAppetite, normalizeAppetite);
+  return useP2Query(
+    "icaap-appetite",
+    bankId,
+    cycleId,
+    icaapApi.getIcaapAppetite,
+    normalizeAppetite,
+  );
 }
 
 export function useIcaapPillar2Register(
@@ -357,7 +371,7 @@ export function useIcaapPillar2Register(
     bankId,
     cycleId,
     icaapApi.getIcaapPillar2Register,
-  normalizePillar2Register,
+    normalizePillar2Register,
   );
 }
 
@@ -365,7 +379,13 @@ export function useIcaapTable5(
   bankId: string | undefined,
   cycleId: string | undefined,
 ) {
-  return useP2Query("icaap-table5", bankId, cycleId, icaapApi.getIcaapTable5, normalizeTable5);
+  return useP2Query(
+    "icaap-table5",
+    bankId,
+    cycleId,
+    icaapApi.getIcaapTable5,
+    normalizeTable5,
+  );
 }
 
 export function useIcaapReconciliation(
@@ -377,7 +397,7 @@ export function useIcaapReconciliation(
     bankId,
     cycleId,
     icaapApi.getIcaapReconciliation,
-  normalizeReconciliation,
+    normalizeReconciliation,
   );
 }
 
@@ -390,7 +410,7 @@ export function useIcaapAuditReviews(
     bankId,
     cycleId,
     icaapApi.listIcaapAuditReviews,
-  normalizeAuditReviews,
+    normalizeAuditReviews,
   );
 }
 
@@ -403,7 +423,7 @@ export function useIcaapChallenges(
     bankId,
     cycleId,
     icaapApi.listIcaapChallenges,
-  normalizeChallenges,
+    normalizeChallenges,
   );
 }
 

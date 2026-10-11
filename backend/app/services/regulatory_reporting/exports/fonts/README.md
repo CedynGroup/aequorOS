@@ -9,13 +9,13 @@ is Windows-1252, so the Ghana cedi sign `₵` (U+20B5) and the Ghanaian vowels
 cannot print its own currency symbol is not acceptable, so the ICAAP filing PDF
 embeds a Unicode family.
 
-| File | Face | reportlab name |
-| --- | --- | --- |
-| `NotoSans-Regular.ttf` | Noto Sans Regular | `AeqNotoSans` |
-| `NotoSans-Bold.ttf` | Noto Sans Bold | `AeqNotoSans-Bold` |
-| `NotoSans-Italic.ttf` | Noto Sans Italic | `AeqNotoSans-Italic` |
-| `NotoSans-BoldItalic.ttf` | Noto Sans Bold Italic | `AeqNotoSans-BoldItalic` |
-| `OFL.txt` | SIL Open Font License 1.1, verbatim | — |
+| File                      | Face                                | reportlab name           |
+| ------------------------- | ----------------------------------- | ------------------------ |
+| `NotoSans-Regular.ttf`    | Noto Sans Regular                   | `AeqNotoSans`            |
+| `NotoSans-Bold.ttf`       | Noto Sans Bold                      | `AeqNotoSans-Bold`       |
+| `NotoSans-Italic.ttf`     | Noto Sans Italic                    | `AeqNotoSans-Italic`     |
+| `NotoSans-BoldItalic.ttf` | Noto Sans Bold Italic               | `AeqNotoSans-BoldItalic` |
+| `OFL.txt`                 | SIL Open Font License 1.1, verbatim | —                        |
 
 **Scope, deliberately narrow.** Only the `icaap` return family renders through
 these files (`exports/icaap_fonts.py` → `exports/icaap_pdf.py`). No other
@@ -45,11 +45,11 @@ Upstream publishes Noto Sans as **two variable fonts**, not as static weights,
 so the committed files are instances cut locally from those two sources. Both
 sources were taken from `github.com/google/fonts` at `main`:
 
-| Source file | SHA-256 |
-| --- | --- |
-| `ofl/notosans/NotoSans[wdth,wght].ttf` | `bfb7bb691513f12e734dc346c03a03f784912432d7e3fa8e56efcf906fe86b3d` |
+| Source file                                   | SHA-256                                                            |
+| --------------------------------------------- | ------------------------------------------------------------------ |
+| `ofl/notosans/NotoSans[wdth,wght].ttf`        | `bfb7bb691513f12e734dc346c03a03f784912432d7e3fa8e56efcf906fe86b3d` |
 | `ofl/notosans/NotoSans-Italic[wdth,wght].ttf` | `58e6e0ebd1931b29a365aa2d3e2ee9a9e831a3af7cf3ad1462d4e72154f0b291` |
-| `ofl/notosans/OFL.txt` | `cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a` |
+| `ofl/notosans/OFL.txt`                        | `cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a` |
 
 Upstream project: `github.com/notofonts/latin-greek-cyrillic` (Noto Sans v2.015,
 Latin / Greek / Cyrillic / Devanagari; axes `wdth` 62.5–100, `wght` 100–900).
@@ -82,13 +82,13 @@ may produce different bytes; that is not a defect, but it makes the checksums
 below stale, so **regenerating means updating this table in the same commit** —
 `tests/icaap/service/test_icaap_fonts.py` compares the files on disk to it.
 
-| Committed file | Bytes | SHA-256 |
-| --- | --- | --- |
-| `NotoSans-Regular.ttf` | 626220 | `5910c0f369838b8a926001864ddbe5bcc66128474196e4da3a4df120787fde5f` |
-| `NotoSans-Bold.ttf` | 629912 | `7b2533d860a5611598408b67b68550a1e863fa97c9c624e7a7f411b6fd13b74e` |
-| `NotoSans-Italic.ttf` | 646460 | `327987775f76a224a127109adab6257e6761a374149b81be9094477768ea0318` |
+| Committed file            | Bytes  | SHA-256                                                            |
+| ------------------------- | ------ | ------------------------------------------------------------------ |
+| `NotoSans-Regular.ttf`    | 626220 | `5910c0f369838b8a926001864ddbe5bcc66128474196e4da3a4df120787fde5f` |
+| `NotoSans-Bold.ttf`       | 629912 | `7b2533d860a5611598408b67b68550a1e863fa97c9c624e7a7f411b6fd13b74e` |
+| `NotoSans-Italic.ttf`     | 646460 | `327987775f76a224a127109adab6257e6761a374149b81be9094477768ea0318` |
 | `NotoSans-BoldItalic.ttf` | 648564 | `37968fdd1072d485082ebd6646c42a7a9ebfe9a3c3f1604be4ef5d33c107019b` |
-| `OFL.txt` | 4396 | `cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a` |
+| `OFL.txt`                 | 4396   | `cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a` |
 
 Replacing a file means replacing `OFL.txt` in the same commit if the upstream
 licence text changed, and re-running the coverage test — a face that has lost
