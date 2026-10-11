@@ -74,7 +74,9 @@ def test_local_selection_includes_worktree_changes(
 
 
 def test_local_profile_executes_selected_modules_and_full_fallback(
-    selection_repo: tuple[Path, str, Path], capfd: pytest.CaptureFixture[str]
+    selection_repo: tuple[Path, str, Path],
+    capfd: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, base, test = selection_repo
     other = test.with_name("test_other.py")
@@ -82,16 +84,18 @@ def test_local_profile_executes_selected_modules_and_full_fallback(
     _ = run_git(root, "add", "-A")
     _ = run_git(root, "commit", "-qm", "second module")
     base = run_git(root, "rev-parse", "HEAD")
+    _ = run_git(root, "update-ref", "refs/remotes/origin/main", base)
     report = root / "result.xml"
+    monkeypatch.setenv("PYTEST_ADDOPTS", f"--junitxml={report}")
     test.write_text("def test_leaf():\n    assert 2 == 2\n")
-    assert run_fast(root, base, [f"--junitxml={report}"]) == 0
+    assert run_fast(root) == 0
     assert [case.get("name") for case in ET.parse(report).iter("testcase")] == ["test_leaf"]
     assert "4 workers" in capfd.readouterr().out
     report.unlink()
     # A production change requires all modules; pytest failure must reach the caller.
     (root / "backend/app.py").write_text("VALUE = 2\n")
     other.write_text("def test_other():\n    assert False\n")
-    assert run_fast(root, base, [f"--junitxml={report}"]) == 1
+    assert run_fast(root) == 1
     cases = list(ET.parse(report).iter("testcase"))
     assert {case.get("name") for case in cases} == {"test_leaf", "test_other"}
     assert sum(case.find("failure") is not None for case in cases) == 1
