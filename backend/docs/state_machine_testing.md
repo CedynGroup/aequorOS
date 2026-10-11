@@ -79,7 +79,7 @@ attestation stages. Production stages come from the pinned framework/template.
 | Frozen                                                    | Board certification / signature ceremony | Required recipients/signatures and framework filing rules                          | Board approved                            | Certification; sealed content unchanged                                                           |
 | Board approved                                            | Submit / SUBMIT                          | Complete chain, attestation, attachments, reconciliation, channel gates            | Submitted                                 | Package/cycle advance together; receipt                                                           |
 | Submitted                                                 | Regulator acknowledgement                | Authorized channel outcome                                                         | Acknowledged                              | Package/cycle advance together                                                                    |
-| Frozen/board approved; submitted only if package rejected | Governed post-freeze return / APPROVE    | Fresh round/digest; not freezer; freeze-stage title; target at/before freeze stage | Returned or in review, next round         | Unlink old package; clear seal timestamps; invalidate decisions/signatures; old snapshot retained |
+| Frozen/board approved; submitted only if package rejected | Governed post-freeze return / REVIEW     | Fresh round/digest; not freezer; freeze-stage title; target at/before freeze stage | Returned or in review, next round         | Unlink old package; clear seal timestamps; invalidate decisions/signatures; old snapshot retained |
 | Returned/in review after correction                       | Review and freeze again                  | All original gates apply again                                                     | Frozen with next package version          | Supersede predecessor without changing its content                                                |
 | Draft/returned with no linked package                     | Archive / EDIT                           | No active package                                                                  | Archived                                  | Recorded retirement; no further editing/review/freezing                                           |
 | Editable cycle                                            | Rebase / EDIT                            | Unfrozen and editable; permitted framework carry                                   | Old cycle superseded; new cycle draft     | Preserve old versions and explicit carry history                                                  |
@@ -192,20 +192,14 @@ matching the API session boundary without discarding earlier committed actions.
 
 ## Defects retained as regression examples
 
-- Filing: submit an approved return manually, then submit it again. The second
-  attempt must refuse without adding a receipt. Governed downtime-email → ORASS
-  re-upload remains a separate channel operation.
-- ICAAP: freeze, return to preparation or an approval stage, complete the new
-  round and freeze again. A return belongs to the round it closes; recording it
-  in the new round invalidated that round's fresh approvals. Persisted legacy
-  returns are interpreted using their package's frozen decision at the shared
-  state-loading boundary. The compatibility regression completes fresh approvals,
-  refreezes, and performs another return/refreeze while preserving the original
-  decision row, its recorded round, and every sealed snapshot.
-- ICAAP: freeze, then return to the freeze stage itself. This is a legal governed
-  return, but the database CHECK admitted only strictly earlier targets. The
-  migrated constraint permits same-stage returns only when they name a sealed
-  package; in-review returns and forward returns remain refused.
+- Filing: `test_repeated_manual_submission_cannot_add_a_second_receipt`
+  exercises the [manual submission contract](../../docs/regulatory_reporting.md#2-package-lifecycle).
+- ICAAP: `test_frozen_version_survives_return_edit_and_refreeze` exercises every
+  return target, including the freeze stage itself.
+  `test_legacy_post_freeze_return_preserves_evidence_and_allows_refreeze`
+  exercises fresh approvals and repeated refreeze from persisted legacy history.
+  The [freeze and return contract](icaap_workspace_and_filing.md#6-freeze-gates-and-why-the-workspace-fails-closed)
+  owns round interpretation, compatibility and same-stage constraints.
 
 The freeze regression covers each return target and checks the old sealed
 snapshot after refreeze. `tests/db/test_icaap_filing_migration.py` exercises the

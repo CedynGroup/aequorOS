@@ -608,9 +608,8 @@ def submit_package(  # noqa: PLR0913
 ) -> RegulatoryPackageRead:
     """Record a channel submission: ``approved -> submitted`` + submission event.
 
-    Concrete channels (export/submission wave) obtain ``external_ref`` from
-    :class:`~app.reporting.service.channels.base.SubmissionChannel`
-    and delegate here; this function never talks to a channel itself.
+    Channel delivery and governed email-to-ORASS re-uploads use
+    :func:`submit_package_via_channel`; they do not delegate here.
     """
     require_actor(ctx)
     get_bank_or_404(db, ctx, bank_id)
