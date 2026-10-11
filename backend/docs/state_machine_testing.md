@@ -9,18 +9,21 @@ transition changes; update its table and independent test model in the same chan
 
 ## Coverage and order
 
-| Workflow                         | Public interface / transition authority                                                         | Stateful coverage                                                                                  |
-| -------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Filing review and submission     | `app/reporting/api/manage_filing_workflow.py`; `app/reporting/service/workflow.py`              | [Filing machine](../tests/reporting/service/test_filing_state_machine.py)                          |
-| ICAAP review, freeze and return  | `app/icaap/service/{workflow,freeze,post_freeze,cycles}.py`                                     | [Freeze machine](../tests/icaap/service/test_freeze_state_machine.py)                              |
-| Maker-checker workflow templates | `app/reporting/service/filing_workflow/templates.py`; `app/icaap/service/workflow_templates.py` | Next priority; example tests cover each service                                                    |
-| Scoped access requests           | `app/identity/api/manage_authorization.py`                                                      | Next priority; [grant administration examples](../tests/identity/api/test_grant_administration.py) |
-| Grants and session invalidation  | `app/identity/service/{authentication,authorization,grant_administration}.py`                   | [Existing authorization machines](../tests/identity/api/test_authorization_state_machine.py)       |
-| Jobs                             | `app/services/job_queue.py`; `app/worker.py`                                                    | Queue/worker examples; generated retries and stale claims pending                                  |
-| Ingestion batches                | `app/services/ingestion.py`                                                                     | Ingestion examples; generated extraction/validation/retry sequences pending                        |
-| BI alert verdicts                | `app/bi/service/alerts.py`                                                                     | Alert examples; generated missing-data/breach/recovery sequences pending                           |
+| Workflow                         | Public interface / transition authority                                                         | Stateful coverage                                                                            |
+| -------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Filing review and submission     | `app/reporting/api/manage_filing_workflow.py`; `app/reporting/service/workflow.py`              | [Filing machine](../tests/reporting/service/test_filing_state_machine.py)                    |
+| ICAAP review, freeze and return  | `app/icaap/service/{workflow,freeze,post_freeze,cycles}.py`                                     | [Freeze machine](../tests/icaap/service/test_freeze_state_machine.py)                        |
+| Maker-checker workflow templates | `app/reporting/service/filing_workflow/templates.py`; `app/icaap/service/workflow_templates.py` | [Template version machine](../tests/reporting/service/test_template_state_machine.py)        |
+| Scoped access requests           | `app/identity/api/manage_authorization.py`                                                      | [Access-request machine](../tests/identity/api/test_access_request_state_machine.py)         |
+| Grants and session invalidation  | `app/identity/service/{authentication,authorization,grant_administration}.py`                   | [Existing authorization machines](../tests/identity/api/test_authorization_state_machine.py) |
+| Jobs                             | `app/services/job_queue.py`; `app/worker.py`                                                    | Queue/worker examples; generated retries and stale claims pending                            |
+| Ingestion batches                | `app/services/ingestion.py`                                                                     | Ingestion examples; generated extraction/validation/retry sequences pending                  |
+| BI alert verdicts                | `app/bi/service/alerts.py`                                                                      | Alert examples; generated missing-data/breach/recovery sequences pending                     |
 
-The first two machines use real services and persisted audit/submission events.
+The filing, freeze and template machines use real services and persisted audit/submission events.
+The access-request machine uses HTTP with real scoped bindings and signed tokens,
+including a second tenant administrator. It refreshes tokens after grant changes
+rather than bypassing authorization-version checks.
 Their models do not import production transition tables or maker-checker helpers.
 Route-level bundle enforcement remains covered by reporting/ICAAP API tests:
 passing a context to a service does not manufacture a scoped authorization grant.
@@ -98,19 +101,41 @@ dedicated example tests; this machine concentrates on the freeze boundary.
 
 ## Maker-checker templates and access requests
 
-| Workflow / source                   | Command / actor                                         | Guard                                                                             | Destination / effect                                      |
-| ----------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Filing or ICAAP template: none      | Propose / bank-scoped EDIT                              | Valid stages; open-proposal rules                                                 | Draft version                                             |
-| Draft                               | Edit / EDIT                                             | Editable version                                                                  | Same status; proposed stages change                       |
-| Draft                               | Submit / EDIT                                           | Editable version                                                                  | Pending approval                                          |
-| Pending approval                    | Decide / APPROVE                                        | Different officer from proposer                                                   | Approved or rejected; decision audit                      |
-| Prior approved template             | Approve replacement / APPROVE                           | Replacement passes four-eyes guards                                               | Prior superseded atomically; new template approved        |
-| Approved/superseded filing template | Edit/submit/decide                                      | No legal command                                                                  | Refusal; pinned package stages unchanged                  |
-| Access request: none                | Request / active member                                 | Recognized route/permission and tenant institution                                | Pending; duplicate pending scope returns existing request |
-| Pending request                     | Approve / grant administrator                           | Requested institution/module/sensitivity preserved; grant policy/expiry/SoD valid | Approved + scoped binding, in one transaction             |
-| Pending request                     | Create a grant satisfying request / grant administrator | Matching effective complete scoped grant                                          | Approved with resolution evidence                         |
-| Pending request                     | Reject / grant administrator                            | Pending tenant-owned request                                                      | Rejected with decision reason                             |
-| Approved/rejected request           | Decide again                                            | No legal command                                                                  | Not found; resolved request immutable                     |
+| Workflow / source                     | Command / actor                                         | Guard                                                                             | Destination / effect                                      |
+| ------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Filing or ICAAP template: none        | Propose / bank-scoped EDIT                              | Valid stages; open-proposal rules                                                 | Draft version                                             |
+| Draft                                 | Edit / EDIT                                             | Editable version                                                                  | Same status; proposed stages change                       |
+| Draft                                 | Submit / EDIT                                           | Editable version                                                                  | Pending approval                                          |
+| Pending approval                      | Decide / APPROVE                                        | Different officer from proposer                                                   | Approved or rejected; decision audit                      |
+| Prior approved template               | Approve replacement / APPROVE                           | Replacement passes four-eyes guards                                               | Prior superseded atomically; new template approved        |
+| Approved/rejected/superseded template | Edit/submit/decide                                      | Version is neither editable nor awaiting a decision                               | Refusal; sealed content and pinned stages unchanged       |
+| Access request: none                  | Request / active member                                 | Recognized route/permission and tenant institution                                | Pending; duplicate pending scope returns existing request |
+| Pending request                       | Approve / grant administrator                           | Requested institution/module/sensitivity preserved; grant policy/expiry/SoD valid | Approved + scoped binding, in one transaction             |
+| Pending request                       | Create a grant satisfying request / grant administrator | Matching effective complete scoped grant                                          | Approved with resolution evidence                         |
+| Pending request                       | Reject / grant administrator                            | Pending tenant-owned request                                                      | Rejected with decision reason                             |
+| Approved/rejected request             | Decide again                                            | No legal command                                                                  | Not found; resolved request immutable                     |
+
+The template model runs against both public services. Generated commands vary
+the actor, target version, proposed title and decision, including old versions and
+wrong banks/tenants. Checkpoints reach each status through real commands; a forward
+rule ensures successive approvals exercise supersession. Invariants require at most
+one open proposal (draft or pending approval) and one approved chain, monotonically
+numbered versions, proposer/checker separation and sealed decision content. The effective chain must
+come from the approved version; refusing a command preserves history and audit
+events. An approved template may become superseded; rejected and superseded versions
+are terminal. Cycle/package pinning remains covered by their acceptance tests.
+
+The access-request model varies two banks and three declared view routes, including
+two liquidity routes that one complete scoped grant can satisfy. It exercises
+the [request-resolution contract](authorization_foundation.md#route-access-requests)
+through direct approval and composer grants, including resolution through prior
+grants. It generates duplicate filing, direct approval, composer grants, rejection, revocation and
+refiling, plus altered scope, unauthorized-member and other-tenant decisions.
+Invariants preserve the original request, one pending row per exact route/scope,
+matching resolution bindings and exactly one persisted resolution event. Resolved
+requests stay closed when their grant is revoked; a new request gets a new identity.
+Refusals preserve requests, bindings, audit evidence and authorization versions.
+These sequence properties complement the existing Postgres concurrency tests.
 
 SSO admission is a distinct user workflow: pending inactive → active via explicit
 scoped approval, or pending → rejected. A later valid SSO request may reopen a
@@ -166,7 +191,7 @@ do not infer legal transitions solely from a column CHECK constraint.
 | Calculation/assessment execution and evidence           | `models/{calculation,capital,regulatory_run,regulatory,risk,implied_rating}.py`; feature calculation services and jobs                                                                              |
 | Live engine publication and ingestion mappings          | `models/live.py`; `models/ingestion.py`; `services/{live_state,live_view,ingestion}.py`                                                                                                             |
 | Connections, key custody and pulls                      | `models/{database_connection,temenos,market_data}.py`; `core/key_management/`; connector/pull services                                                                                              |
-| BI commentary, outbox/deliveries and notification state | `bi/models/{commentary,notifications,content}.py`; `bi/service/`                                                                                                                             |
+| BI commentary, outbox/deliveries and notification state | `bi/models/{commentary,notifications,content}.py`; `bi/service/`                                                                                                                                    |
 | Identity profiles, grants, ownership and entitlements   | `identity/models/{institution_profile,authorization}.py`; `models/entitlements.py`; `identity/service/`                                                                                             |
 | Legacy findings and document parsing                    | `models/{financial,risk}.py`; feature APIs and worker handlers                                                                                                                                      |
 
@@ -176,8 +201,9 @@ do not infer legal transitions solely from a column CHECK constraint.
 20 stateful steps, no wall-clock deadline, `derandomize=True`, `print_blob=True`.
 `HYPOTHESIS_PROFILE` may select an explicitly registered profile. There is no
 scheduled property-test CI job, so no unbounded or larger nightly profile is added.
-The filing/freeze machines lower examples to 12 because each builds real computed
-positions and/or frozen reports; they retain 20 generated steps. Failure output
+The database machines lower examples to 12 to bound persisted workflow setup and
+HTTP requests. The filing/freeze machines additionally build real computed
+positions and/or frozen reports. All retain 20 generated steps. Failure output
 contains a minimized command sequence and reproduction blob.
 
 Each machine example owns a connection savepoint and a separate session whose
@@ -209,4 +235,12 @@ constraint against a migrated PostgreSQL schema, including its negative cases.
 cd backend
 CASHFLOW_FAST_TEST=1 uv run pytest tests/reporting/service/test_filing_state_machine.py tests/icaap/service/test_freeze_state_machine.py
 AQS_LOCAL_SERVICES=native uv run python scripts/local_services.py run --postgres -- uv run pytest tests/reporting/service/test_filing_state_machine.py tests/icaap/service/test_freeze_state_machine.py
+```
+
+Run the template/access-request models with:
+
+```sh
+cd backend
+CASHFLOW_FAST_TEST=1 uv run pytest tests/reporting/service/test_template_state_machine.py tests/identity/api/test_access_request_state_machine.py
+AQS_LOCAL_SERVICES=native uv run python scripts/local_services.py run --postgres -- uv run pytest tests/reporting/service/test_template_state_machine.py tests/identity/api/test_access_request_state_machine.py
 ```
