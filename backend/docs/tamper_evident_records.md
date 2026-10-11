@@ -5,13 +5,13 @@ No reported financial figure or calculation rule changes.
 
 ## Authorized delivery boundary
 
-Firstmate approved the four-layer delivery contract during the review of this
-run: this branch and [PR #504](https://github.com/CedynGroup/aequorOS/pull/504)
-validate audit chaining; [PR #505](https://github.com/CedynGroup/aequorOS/pull/505)
+The four-layer delivery contract assigns
+[PR #504](https://github.com/CedynGroup/aequorOS/pull/504)
+to audit chaining; [PR #505](https://github.com/CedynGroup/aequorOS/pull/505)
 delivers filing locks; [PR #506](https://github.com/CedynGroup/aequorOS/pull/506)
 delivers compliance storage; and [PR #507](https://github.com/CedynGroup/aequorOS/pull/507)
-delivers the append-only sweep. Each layer is validated separately. This audit
-layer alone does not certify all of issue #413. No user-visible change;
+delivers the append-only sweep. Each layer is validated separately. The audit
+and filing layers alone do not certify all of issue #413. No user-visible change;
 screenshots are not applicable.
 
 The compliance-storage layer must use the regulatory retention period confirmed
@@ -170,8 +170,10 @@ attestation signatures, including unsigned packages and unfinished runs.
 Signature deletion is trigger-blocked alongside the existing update guard;
 new signatures can still be inserted.
 Signed packages cannot be deleted; their content digest is sealed. Existing
-signature evidence keeps the deletion seal active after a void. Lifecycle status,
-review bookkeeping and regulator outcomes continue to advance. A correction
+signature evidence keeps both the deletion and content-digest seals active after
+a void. The package guard pins its search path to `pg_catalog`, the migration
+schema and then `pg_temp`, so temporary tables cannot shadow retained signatures.
+Lifecycle status, review bookkeeping and regulator outcomes continue to advance. A correction
 uses existing generation/resubmission authorization and `supersedes_id`, retaining
 the original version and figures. Voiding withdraws certification; it never opens
 an in-place financial-content edit. Completed regulatory runs, including their

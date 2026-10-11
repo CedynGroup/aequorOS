@@ -789,8 +789,8 @@ Delivered before the first signature is possible:
 - **Database audit and filing protection**: permissions, triggers and ownership
   are governed by
   [the tamper-evident records contract](../backend/docs/tamper_evident_records.md).
-  Signature-table enforcement is tiered as noted in §9 D1; `created_at` gets
-  `server_default now()` so the database, not an app host, stamps arrival.
+  `created_at` gets `server_default now()` so the database, not an app host,
+  stamps arrival.
 - **Per-tenant signature hash chain** — each signature carries `prev_hash` and
   `entry_hash`. Scheduled verification and periodic anchoring of this signature
   chain remain hardening requirements. Database audit-stream chaining is
