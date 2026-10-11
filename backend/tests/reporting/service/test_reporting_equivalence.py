@@ -353,20 +353,3 @@ def test_every_engine_backed_cell_equals_its_source_run(
     # Every parametrised form must actually have proved something, or the gate
     # is decorative for that form.
     assert checked > 0, f"{form_code}: no engine-backed cell was proved"
-
-
-def test_the_bsd5a_car_inequality_is_left_alone() -> None:
-    """A guard on this suite, not on BSD5A.
-
-    ``bog_forms/test_bsd5.py`` pins that BoG's E70 does NOT equal the capital
-    engine's ``car_pct`` — "by construction, not by accident". If someone ever
-    tries to make the two agree, they must change that test, not this one; this
-    assertion exists so nobody mistakes the equivalence gate above for a licence
-    to equate declared alternate methodologies.
-    """
-    from pathlib import Path  # noqa: PLC0415
-
-    pinned = Path(__file__).resolve().parent / "bog_forms" / "test_bsd5.py"
-    text = pinned.read_text()
-    assert "by construction, not by accident" in text
-    assert "not _close(" in text

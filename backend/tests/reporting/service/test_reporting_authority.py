@@ -670,15 +670,6 @@ def test_the_two_unit_vocabularies_normalise_onto_one_kind() -> None:
     assert generation.unit_kind("furlongs") == ""
 
 
-def test_appendix_ii_does_not_default_its_unit_to_cedis() -> None:
-    """A currency literal must never be defaulted onto a filed artifact."""
-    from pathlib import Path  # noqa: PLC0415
-
-    source = Path(__file__).resolve().parents[3] / "app" / "reporting" / "service" / "generation.py"
-    text = source.read_text()
-    assert 'appendix.get("unit", "GHS' not in text
-
-
 # ---------------------------------------------------------------------------
 # 5. return eligibility — ONE authority (audit ARCH-8)
 # ---------------------------------------------------------------------------

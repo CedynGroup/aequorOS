@@ -23,7 +23,9 @@ from app.icaap.models.workspace import IcaapCycle, IcaapStageDecision
 from app.icaap.schemas.workspace import IcaapFreezeCreate
 from app.icaap.service import cycles, freeze, guards, workflow
 from app.models import BankFinancialFact, BankReportingPeriod, RegulatoryPackage
+from app.reporting.service.generation import snapshot_content_hash
 from app.services import reconciliation
+from app.services.attestation.digests import content_digest
 from tests.icaap.service.p3_support import (
     AS_OF,
     access_for,
@@ -349,9 +351,9 @@ class TestTheTransaction:
             IcaapFreezeCreate(review_digest=digest, reason="Seal the dry run."),
         )
         assert out.cycle.status == "frozen"
-        assert out.package.return_code == "ICAAP-REPORT"
         package = db.get(RegulatoryPackage, out.package.id)
         assert package is not None
+        assert out.package.return_code == "ICAAP-REPORT"
         assert package.is_rehearsal
         assert package.snapshot["metadata"]["icaap"]["cycle"]["kind"] == "rehearsal"
         filing = cast(dict[str, object], package.snapshot["metadata"]["filing"])
@@ -380,6 +382,10 @@ class TestTheTransaction:
         assert out.package.return_code == "ICAAP-REPORT"
         assert out.package.version == 1
         assert out.cycle.status == "frozen"
+        package = db.get(RegulatoryPackage, out.package.id)
+        assert package is not None
+        assert package.content_digest == content_digest(package.snapshot)
+        assert package.snapshot_sha256 == snapshot_content_hash(package.snapshot)
         row = db.get(IcaapCycle, cycle.id)
         assert row is not None
         assert row.package_id == out.package.id

@@ -8,15 +8,13 @@ own. Defects are pinned as ``xfail(strict=True)`` with a ``P0-QA-###`` id.
 
 from __future__ import annotations
 
-import ast
 import copy
 import csv
 import io
 import re
 import zipfile
 from decimal import Decimal
-from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import pdfplumber
@@ -27,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.stress.credit_bottom_up import CRD_EXPOSURE_CLASSES
-from app.models import Bank, RegulatoryPackage, RegulatoryParameter, User
+from app.models import Bank, RegulatoryPackage, RegulatoryParameter, RegulatoryRun, User
 from app.models.stress import MACRO_VARIABLES
 from app.reporting.service.exports import export_package
 from app.reporting.service.templates import (
@@ -65,7 +63,6 @@ pytestmark = pytest.mark.usefixtures(
     "return_generation_authority", "fx_run_authority", "irrbb_run_authority"
 )
 
-BACKEND = Path(__file__).parents[4]
 PILLAR2_FIELDS = (
     "pillar2_credit_concentration",
     "pillar2_irrbb",
@@ -189,33 +186,6 @@ def _seed_hostile_attester(db: Session) -> None:
 # --- P0-2: neutral headers + provenance -----------------------------------------------
 
 
-def _string_constants(path: Path) -> list[tuple[int, str]]:
-    """Every string literal in a module that is NOT a docstring."""
-    tree = ast.parse(path.read_text())
-    docstrings: set[int] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
-            body = node.body
-            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
-                docstrings.add(id(body[0].value))
-    return [
-        (node.lineno, node.value)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and id(node) not in docstrings
-    ]
-
-
-@pytest.mark.parametrize("module", ["templates.py", "generation.py"])
-def test_no_13_percent_literal_outside_docstrings(module: str) -> None:
-    path = BACKEND / "app" / "reporting" / "service" / module
-    offenders = [
-        (line, text) for line, text in _string_constants(path) if re.search(r"13\s*%", text)
-    ]
-    assert offenders == []
-
-
 def test_every_capital_requirement_header_is_neutral() -> None:
     for template_id in (
         "bog-icaap-stress-appendix2-v1",
@@ -229,6 +199,28 @@ def test_every_capital_requirement_header_is_neutral() -> None:
             texts += [column.header for column in layout.columns]
             for text in texts:
                 assert not re.search(r"\b1[0-3](\.\d+)?\s*%", text), (template_id, text)
+
+
+@pytest.mark.parametrize("unit", [None, "", "NGN'000"])
+def test_appendix_unit_comes_from_the_attested_run(db_session: Session, unit: str | None) -> None:
+    materialize_canonical_test_book(db_session)
+    _seed_checker(db_session)
+    run_id = _run_enterprise_stress(db_session, _approved_scenario(db_session))
+    run = db_session.get(RegulatoryRun, run_id)
+    assert run is not None
+    metrics = cast(dict[str, object], dict(run.metrics))
+    appendix = dict(cast(dict[str, object], metrics["appendix_ii"]))
+    if unit is None:
+        appendix.pop("unit", None)
+    else:
+        appendix["unit"] = unit
+    metrics["appendix_ii"] = appendix
+    run.metrics = metrics
+    db_session.flush()
+    _attested_signoff(db_session, run_id)
+    package = _generate(db_session)
+    metadata = cast(dict[str, object], package.snapshot["metadata"])
+    assert metadata["unit"] == (unit or "")
 
 
 def test_governed_floor_provenance_is_in_the_snapshot_and_every_export(

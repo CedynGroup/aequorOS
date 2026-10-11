@@ -354,12 +354,3 @@ def test_balance_ties_is_honest_when_there_is_nothing_to_compare() -> None:
     assert passed is True
     assert "nothing to compare across years" in message
     assert "Projected assets equal liabilities plus equity" not in message
-
-
-def test_the_old_unconditional_assurance_is_gone() -> None:
-    """The exact sentence the audit called out must not be reachable."""
-    from pathlib import Path  # noqa: PLC0415
-
-    source = Path(__file__).resolve().parents[3] / "app" / "services" / "regulatory_forecasting.py"
-    text = source.read_text()
-    assert '"Projected assets equal liabilities plus equity in every forecast year."' not in text
