@@ -6,6 +6,7 @@ import os
 import threading
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -17,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app import worker
 from app.core import audit_integrity
-from app.core.audit_integrity import run_due_verification, scheduled_verification, verify_chains
+from app.core.audit_integrity import AuditIntegrityTask, scheduled_verification, verify_chains
 from app.core.config import get_settings
 from app.db.session import force_rls_suspended
 from tests.db import test_governance_append_only as governance_fixtures
@@ -167,6 +168,7 @@ def test_privileged_tampering_is_detected_and_alerted(
         connection.execute(text("SET LOCAL row_security = off"))
         with Session(bind=connection) as session:
             results = scheduled_verification(session)
+    AuditIntegrityTask().report(results)
     assert not results[0].valid
     assert results[1].valid
     assert len(calls) == 1
@@ -303,7 +305,7 @@ def test_platform_schedule_runs_once_hourly_without_banks(
     assert polls == [("scheduled_tick",)] * 4
     assert len(verifications) == 2
     reason = "chain_mismatch" if failure == "mismatch" else "verification_unavailable"
-    assert pages == [reason, reason]
+    assert pages == [reason]
     with Session(forward_migrated_postgres_schema.app_engine) as session:
         assert session.scalar(
             text("SELECT run_after FROM audit_integrity_schedule")
@@ -318,19 +320,27 @@ def test_peer_worker_cannot_repeat_locked_platform_sweep(
     with governance_schema.app_engine.begin() as connection:
         connection.execute(text("UPDATE audit_integrity_schedule SET run_after = '-infinity'"))
     calls: list[Session] = []
+    pages: list[tuple[str, str | None]] = []
+
+    def page(reason: str, stream: str | None = None) -> bool:
+        pages.append((reason, stream))
+        return True
+
+    monkeypatch.setattr(audit_integrity, "publish_alert", page)
     now = datetime(2026, 10, 10, 12, 15, tzinfo=UTC)
     with Session(governance_schema.app_engine) as peer:
 
         def verify(session: Session) -> list[audit_integrity.ChainVerification]:
             calls.append(session)
-            assert not run_due_verification(peer, now)
+            assert not AuditIntegrityTask().run(lambda: nullcontext(peer), now)
             return [audit_integrity.ChainVerification("audit_events", 0, True)]
 
         monkeypatch.setattr(audit_integrity, "scheduled_verification", verify)
         with Session(governance_schema.app_engine) as first:
-            assert run_due_verification(first, now)
-            assert not run_due_verification(peer, now)
+            assert AuditIntegrityTask().run(lambda: nullcontext(first), now)
+            assert not AuditIntegrityTask().run(lambda: nullcontext(peer), now)
             assert calls == [first]
+            assert pages == []
 
 
 def test_chain_rls_hides_rows_even_with_runtime_select(

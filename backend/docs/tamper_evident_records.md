@@ -53,17 +53,22 @@ Tenant-readable job progress carries only its existing tenant-local scheduling
 fields. Verification recomputes every hash from the source row, verifies links
 and sequence continuity, and compares row count and final hash to the protected head. Content edits,
 missing events, deleted middle entries and deleted tails fail verification.
-Tenant ticks never invoke the platform sweep. Each completed hourly task pages
-once for each broken stream; adding organizations or worker replicas does not
-multiply sweeps or pages. Monitor scan duration as volume grows.
+Tenant ticks never invoke the platform sweep. Each completed hourly task checks
+both streams; adding organizations or worker replicas does not multiply completed
+sweeps. Monitor scan duration as volume grows.
 
 Set `AUDIT_INTEGRITY_ALERT_TOPIC_ARN` to a standard AWS SNS topic subscribed to
 the on-call pager and grant the worker's AWS identity `sns:Publish` on that topic.
-Verification publishes safe incident metadata for mismatches and unavailable
-verification, independently of the database transaction. It also emits the
-structured ERROR condition `audit.chain_broken`. An absent topic or failed
+The complete platform-task boundary publishes safe incident metadata for
+mismatches and unavailable verification, independently of the database transaction.
+Each running worker retains its outage episode outside the database transaction:
+it pages on the first failure and on escalation to a newly broken stream.
+Acquisition, advancement, commit and session failures cannot reset suppression.
+Only a completed healthy sweep resets the episode; idle polls do not. This state
+is local to the worker lifetime, so each replica or restarted worker can send its
+initial page during an outage. The task also emits the structured ERROR condition `audit.chain_broken`. An absent topic or failed
 publication emits `paging_unconfigured` or `paging_failed`, without vendor error
-details. A broken chain continues to be checked and paged on later hourly tasks.
+details. A broken chain continues to be checked on later hourly tasks.
 Before production acceptance,
 exercise the route in a disposable environment and attach the pager receipt to
 the BoG evidence pack. No pager credential or destination is stored in bank data.
@@ -87,9 +92,11 @@ runtime-role inserts, denied ALTER/UPDATE/DELETE/TRUNCATE and helper replacement
 forced chain RLS, a bank-free hourly cadence and concurrent worker exclusion.
 An unavailable verifier emits and publishes the same paging condition; the
 platform task advances to the next hour even after a mismatch or refusal.
-The worker reports unavailability once at the complete task boundary, including
-combined verifier and schedule acquisition, advance, commit or session failures,
-while ordinary job dispatch continues. Migration regressions exercise
+The worker reports once per outage episode at the complete task boundary,
+including combined verifier and schedule acquisition, advance, commit or session
+failures, while ordinary job dispatch continues. Behavioral regressions cover
+repeated failures, mismatch-before-commit failures, escalation and recovery
+followed by a new outage. Migration regressions exercise
 both forward and round-trip upgrades with superuser test credentials, using and
 cleaning up an ordinary restricted migration role. Administrator regressions use
 either `POSTGRES_ADMIN_URL` or a superuser `TEST_DATABASE_URL`; without superuser

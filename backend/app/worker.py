@@ -146,7 +146,7 @@ def resolve_job_types(raw: str | None) -> tuple[str, ...]:
     return unique
 
 
-def _new_session(organization_id=None) -> Session:
+def _new_session(organization_id: str | None = None) -> Session:
     session = get_worker_sessionmaker()()
     if organization_id is not None:
         session.info["organization_id"] = organization_id
@@ -298,18 +298,10 @@ def run_worker(
         job_types,
         stale_after.total_seconds(),
     )
+    audit_task = audit_integrity.AuditIntegrityTask()
     while stop_event is None or not stop_event.is_set():
         if settings.worker.audit_integrity_enabled and "scheduled_tick" in job_types:
-            try:
-                with _new_session() as session:
-                    results = audit_integrity.run_due_verification(session, utc_now())
-            except Exception:
-                audit_integrity.report_verification_unavailable()
-            else:
-                if results is not None and any(
-                    result.stream == "verification_unavailable" for result in results
-                ):
-                    audit_integrity.report_verification_unavailable()
+            audit_task.run(_new_session, utc_now())
         try:
             worked = run_once(job_types, worker_id=worker_id)
         except Exception as exc:  # noqa: BLE001 - a claim failure must not kill the loop

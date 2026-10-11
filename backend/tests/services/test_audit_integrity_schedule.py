@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
+from dataclasses import dataclass
 from datetime import datetime
 
 import pytest
@@ -44,8 +45,13 @@ def test_worker_starts_platform_schedule_without_tenant_ticks(
     stop = threading.Event()
     calls: list[Session] = []
 
-    def verify(session: Session, _now: datetime) -> list[ChainVerification]:
-        calls.append(session)
+    def verify(
+        _task: audit_integrity.AuditIntegrityTask,
+        new_session: Callable[[], AbstractContextManager[Session]],
+        _now: datetime,
+    ) -> list[ChainVerification]:
+        with new_session() as session:
+            calls.append(session)
         return [ChainVerification("audit_events", 0, True)]
 
     def poll(_types: tuple[str, ...], *, worker_id: str) -> bool:
@@ -61,7 +67,7 @@ def test_worker_starts_platform_schedule_without_tenant_ticks(
     monkeypatch.setattr(worker, "_reap_stale", ignore)
     monkeypatch.setattr(worker, "_new_session", lambda: nullcontext(db_session))
     monkeypatch.setattr(worker, "run_once", poll)
-    monkeypatch.setattr(audit_integrity, "run_due_verification", verify)
+    monkeypatch.setattr(audit_integrity.AuditIntegrityTask, "run", verify)
     worker.run_worker(job_types=job_types, stop_event=stop)
     assert calls == ([db_session] if "scheduled_tick" in job_types else [])
 
@@ -95,34 +101,30 @@ def test_unavailable_verification_returns_failed_outcome(
     assert paging_evidence == ([], [])
 
 
-@pytest.mark.parametrize(
-    "failure",
-    [None, "acquisition", "advance", "commit", "session_creation", "session_entry", "session_exit"],
-)
-@pytest.mark.parametrize("verifier_unavailable", [False, True])
-def test_platform_task_failure_pages_and_preserves_job_dispatch(
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-    failure: str | None,
-    verifier_unavailable: bool,
-    paging_evidence: tuple[list[tuple[Condition, dict[str, object]]], list[tuple[str, str | None]]],
-) -> None:
+@dataclass(frozen=True)
+class TaskPoll:
+    failure: str | None = None
+    verification: str = "healthy"
+    due: bool = True
+
+
+@pytest.fixture
+def run_audit_polls(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> Callable[[list[TaskPoll]], list[tuple[str, ...]]]:
     monkeypatch.setenv("AUDIT_INTEGRITY_ENABLED", "true")
     get_settings.cache_clear()
     stop = threading.Event()
-    conditions, pages = paging_evidence
     polls: list[tuple[str, ...]] = []
-    stages: list[str] = []
+    attempts: list[TaskPoll] = []
 
     def fail_at(stage: str) -> None:
-        stages.append(stage)
-        if failure == stage:
-            stop.set()
+        if attempts[len(polls)].failure == stage:
             raise RuntimeError("private database failure detail")
 
-    def acquire(*args: object, **kwargs: object) -> bool:
+    def acquire(*args: object, **kwargs: object) -> bool | None:
         fail_at("acquisition")
-        return True
+        return True if attempts[len(polls)].due else None
 
     def advance(*args: object, **kwargs: object) -> None:
         fail_at("advance")
@@ -143,15 +145,18 @@ def test_platform_task_failure_pages_and_preserves_job_dispatch(
         return session_context()
 
     def verify(_session: Session) -> list[ChainVerification]:
-        stages.append("verification")
-        if verifier_unavailable:
-            stop.set()
+        outcome = attempts[len(polls)].verification
+        if outcome == "unavailable":
             raise RuntimeError("private verification failure detail")
-        return [ChainVerification("audit_events", 0, True)]
+        return [
+            ChainVerification(stream, 0, outcome not in {stream, "both"})
+            for stream in audit_integrity.STREAMS
+        ]
 
     def poll(types: tuple[str, ...], *, worker_id: str) -> bool:
         polls.append(types)
-        stop.set()
+        if len(polls) == len(attempts):
+            stop.set()
         return True
 
     def ignore(*args: object, **kwargs: object) -> None:
@@ -166,17 +171,126 @@ def test_platform_task_failure_pages_and_preserves_job_dispatch(
     monkeypatch.setattr(worker, "_reap_stale", ignore)
     monkeypatch.setattr(worker, "_new_session", new_session)
     monkeypatch.setattr(worker, "run_once", poll)
-    worker.run_worker(job_types=("scheduled_tick",), stop_event=stop)
-    assert polls == [("scheduled_tick",)]
-    assert conditions == (
-        [
+
+    def run(sequence: list[TaskPoll]) -> list[tuple[str, ...]]:
+        attempts.extend(sequence)
+        worker.run_worker(job_types=("scheduled_tick",), stop_event=stop)
+        return polls
+
+    return run
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [None, "acquisition", "advance", "commit", "session_creation", "session_entry", "session_exit"],
+)
+@pytest.mark.parametrize("verification", ["healthy", "unavailable", "audit_events"])
+def test_repeated_platform_failures_page_once_and_preserve_job_dispatch(
+    run_audit_polls: Callable[[list[TaskPoll]], list[tuple[str, ...]]],
+    failure: str | None,
+    verification: str,
+    paging_evidence: tuple[list[tuple[Condition, dict[str, object]]], list[tuple[str, str | None]]],
+) -> None:
+    sequence = [TaskPoll(failure, verification)] * 3
+    assert run_audit_polls(sequence) == [("scheduled_tick",)] * len(sequence)
+    conditions, pages = paging_evidence
+    verified = failure in {None, "advance", "commit", "session_exit"}
+    if verified and verification == "audit_events":
+        assert pages == [("chain_mismatch", "audit_events")]
+        assert conditions == [
+            (Condition.AUDIT_CHAIN_BROKEN, {"severity": "error", "stream": "audit_events"})
+        ]
+    elif failure is not None or verification == "unavailable":
+        assert pages == [("verification_unavailable", None)]
+        assert conditions == [
             (
                 Condition.AUDIT_CHAIN_BROKEN,
                 {"severity": "error", "reason": "verification_unavailable"},
             )
         ]
-        if failure is not None or verifier_unavailable
-        else []
+    else:
+        assert paging_evidence == ([], [])
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [None, "acquisition", "advance", "commit", "session_creation", "session_entry", "session_exit"],
+)
+@pytest.mark.parametrize("verification", ["unavailable", "audit_events"])
+def test_only_completed_healthy_sweep_resets_episode(
+    run_audit_polls: Callable[[list[TaskPoll]], list[tuple[str, ...]]],
+    failure: str | None,
+    verification: str,
+    paging_evidence: tuple[list[tuple[Condition, dict[str, object]]], list[tuple[str, str | None]]],
+) -> None:
+    outage = TaskPoll(failure, verification)
+    sequence = [
+        outage,
+        TaskPoll(due=False),
+        outage,
+        TaskPoll("commit"),
+        outage,
+        TaskPoll("session_exit"),
+        outage,
+        TaskPoll(),
+        outage,
+        outage,
+    ]
+    assert run_audit_polls(sequence) == [("scheduled_tick",)] * len(sequence)
+    _, pages = paging_evidence
+    page = (
+        ("chain_mismatch", "audit_events")
+        if verification == "audit_events" and failure in {None, "advance", "commit", "session_exit"}
+        else ("verification_unavailable", None)
     )
-    assert pages == ([("verification_unavailable", None)] if conditions else [])
-    assert ("verification" in stages) == (failure in {None, "advance", "commit", "session_exit"})
+    assert pages == [page, page]
+
+
+def test_episode_escalates_to_each_new_broken_stream(
+    run_audit_polls: Callable[[list[TaskPoll]], list[tuple[str, ...]]],
+    paging_evidence: tuple[list[tuple[Condition, dict[str, object]]], list[tuple[str, str | None]]],
+) -> None:
+    sequence = [
+        TaskPoll("acquisition"),
+        TaskPoll("acquisition"),
+        TaskPoll("commit", "audit_events"),
+        TaskPoll("commit", "audit_events"),
+        TaskPoll(verification="unavailable"),
+        TaskPoll("session_exit", "both"),
+        TaskPoll(verification="both"),
+        TaskPoll(),
+        TaskPoll(verification="both"),
+    ]
+    assert run_audit_polls(sequence) == [("scheduled_tick",)] * len(sequence)
+    _, pages = paging_evidence
+    assert pages == [
+        ("verification_unavailable", None),
+        ("chain_mismatch", "audit_events"),
+        ("chain_mismatch", "operator_audit_log"),
+        ("chain_mismatch", "audit_events"),
+        ("chain_mismatch", "operator_audit_log"),
+    ]
+
+
+@pytest.mark.parametrize("verification", ["unavailable", "audit_events"])
+def test_failed_publication_does_not_restart_episode(
+    run_audit_polls: Callable[[list[TaskPoll]], list[tuple[str, ...]]],
+    monkeypatch: pytest.MonkeyPatch,
+    verification: str,
+) -> None:
+    attempts: list[tuple[str, str | None]] = []
+
+    def page(reason: str, stream: str | None = None) -> bool:
+        attempts.append((reason, stream))
+        return False
+
+    monkeypatch.setattr(audit_integrity, "publish_alert", page)
+    outage = TaskPoll("commit", verification)
+    sequence = [outage, outage, TaskPoll(), outage, outage]
+    assert run_audit_polls(sequence) == [("scheduled_tick",)] * len(sequence)
+    expected = (
+        ("chain_mismatch", "audit_events")
+        if verification == "audit_events"
+        else ("verification_unavailable", None)
+    )
+    assert attempts == [expected, expected]

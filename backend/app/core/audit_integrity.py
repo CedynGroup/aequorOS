@@ -6,7 +6,8 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from contextlib import AbstractContextManager
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Protocol, cast
 
@@ -151,59 +152,92 @@ def verify_chains(session: Session) -> list[ChainVerification]:
     return results
 
 
-def report_verification_unavailable() -> None:
-    emit(
-        Condition.AUDIT_CHAIN_BROKEN,
-        "Audit integrity verification unavailable",
-        severity="error",
-        reason="verification_unavailable",
-    )
-    publish_alert("verification_unavailable")
-
-
 def scheduled_verification(session: Session) -> list[ChainVerification]:
-    """Verify the streams and page on detected chain mismatches."""
+    """Return verification outcomes without publishing inside the transaction."""
     try:
         with session.begin_nested():
             results = verify_chains(session)
     except Exception:
         return [ChainVerification("verification_unavailable", 0, False)]
     for result in results:
-        if not result.valid:
-            emit(
-                Condition.AUDIT_CHAIN_BROKEN,
-                "Audit chain verification failed",
-                severity="error",
-                stream=result.stream,
-            )
-            publish_alert("chain_mismatch", result.stream)
-        else:
+        if result.valid:
             logger.bind(stream=result.stream, entries=result.entries).info(
                 "Audit integrity verification passed"
             )
     return results
 
 
-def run_due_verification(session: Session, now: datetime) -> list[ChainVerification] | None:
-    """Run the single platform task, serialized across worker processes."""
-    if not get_settings().worker.audit_integrity_enabled:
-        return None
-    due = cast(
-        bool | None,
-        session.scalar(
-            text("""
-                SELECT id FROM audit_integrity_schedule
-                WHERE run_after <= :now FOR UPDATE SKIP LOCKED
-            """),
-            {"now": now},
-        ),
-    )
-    if due is None:
-        return None
-    results = scheduled_verification(session)
-    session.execute(
-        text("UPDATE audit_integrity_schedule SET run_after = :next_hour WHERE id = true"),
-        {"next_hour": now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)},
-    )
-    session.commit()
-    return results
+@dataclass
+class AuditIntegrityTask:
+    unavailable_reported: bool = False
+    broken_streams: set[str] = field(default_factory=set)
+
+    def report(self, results: list[ChainVerification] | None, *, task_failed: bool = False) -> None:
+        broken = {
+            result.stream
+            for result in results or []
+            if not result.valid and result.stream != "verification_unavailable"
+        }
+        for stream in sorted(broken - self.broken_streams):
+            emit(
+                Condition.AUDIT_CHAIN_BROKEN,
+                "Audit chain verification failed",
+                severity="error",
+                stream=stream,
+            )
+            self.broken_streams.add(stream)
+            publish_alert("chain_mismatch", stream)
+        unavailable = task_failed or any(
+            result.stream == "verification_unavailable" for result in results or []
+        )
+        if unavailable:
+            if not self.unavailable_reported and not broken and not self.broken_streams:
+                emit(
+                    Condition.AUDIT_CHAIN_BROKEN,
+                    "Audit integrity verification unavailable",
+                    severity="error",
+                    reason="verification_unavailable",
+                )
+                self.unavailable_reported = True
+                publish_alert("verification_unavailable")
+        elif results and not broken:
+            self.unavailable_reported = False
+            self.broken_streams.clear()
+
+    def run(
+        self, new_session: Callable[[], AbstractContextManager[Session]], now: datetime
+    ) -> list[ChainVerification] | None:
+        """Coordinate the platform task and report once per worker outage episode."""
+        if not get_settings().worker.audit_integrity_enabled:
+            return None
+        results: list[ChainVerification] | None = None
+        failed = False
+        try:
+            with new_session() as session:
+                due = cast(
+                    bool | None,
+                    session.scalar(
+                        text("""
+                            SELECT id FROM audit_integrity_schedule
+                            WHERE run_after <= :now FOR UPDATE SKIP LOCKED
+                        """),
+                        {"now": now},
+                    ),
+                )
+                if due is not None:
+                    results = scheduled_verification(session)
+                    session.execute(
+                        text(
+                            "UPDATE audit_integrity_schedule "
+                            "SET run_after = :next_hour WHERE id = true"
+                        ),
+                        {
+                            "next_hour": now.replace(minute=0, second=0, microsecond=0)
+                            + timedelta(hours=1)
+                        },
+                    )
+                    session.commit()
+        except Exception:
+            failed = True
+        self.report(results, task_failed=failed)
+        return results

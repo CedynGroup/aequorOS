@@ -2217,10 +2217,10 @@
  },
  "app.worker": {
   "reportAny": 3,
-  "reportMissingParameterType": 3,
+  "reportMissingParameterType": 2,
   "reportUnknownArgumentType": 1,
   "reportUnknownMemberType": 8,
-  "reportUnknownParameterType": 3
+  "reportUnknownParameterType": 2
  },
  "scripts.ai_vendor_preflight": {
   "reportAny": 47,
