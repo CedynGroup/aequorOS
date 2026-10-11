@@ -330,7 +330,7 @@ def test_completed_run_inputs_and_history_are_read_only(connection: Connection) 
         INSERT INTO bank_reporting_periods
           (id, organization_id, bank_id, period_start, period_end,
            label, status, created_at, updated_at)
-        VALUES (:id, :org, 'BK-SEAL001', DATE '2026-09-01', DATE '2026-09-30', 
+        VALUES (:id, :org, 'BK-SEAL001', DATE '2026-09-01', DATE '2026-09-30',
                 'September', 'open', now(), now())
     """),
         {"id": period, "org": ORG_1},
