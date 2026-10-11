@@ -7,12 +7,12 @@ appearance of a signature on a filed regulatory return may not depend on a
 third party being reachable, and the dashboard's preview must show the signer
 the same face the PDF will stamp — one file, both consumers.
 
-| Key              | File                        | Family        | Licence                            |
-| ---------------- | --------------------------- | ------------- | ---------------------------------- |
-| `caveat`         | `Caveat-Regular.ttf`        | Caveat        | SIL Open Font License 1.1 (`Caveat-OFL.txt`) |
-| `dancing_script` | `DancingScript-Regular.ttf` | Dancing Script| SIL Open Font License 1.1 (`DancingScript-OFL.txt`) |
-| `great_vibes`    | `GreatVibes-Regular.ttf`    | Great Vibes   | SIL Open Font License 1.1 (`GreatVibes-OFL.txt`) |
-| `allura`         | `Allura-Regular.ttf`        | Allura        | SIL Open Font License 1.1 (`Allura-OFL.txt`) |
+| Key              | File                        | Family         | Licence                                             |
+| ---------------- | --------------------------- | -------------- | --------------------------------------------------- |
+| `caveat`         | `Caveat-Regular.ttf`        | Caveat         | SIL Open Font License 1.1 (`Caveat-OFL.txt`)        |
+| `dancing_script` | `DancingScript-Regular.ttf` | Dancing Script | SIL Open Font License 1.1 (`DancingScript-OFL.txt`) |
+| `great_vibes`    | `GreatVibes-Regular.ttf`    | Great Vibes    | SIL Open Font License 1.1 (`GreatVibes-OFL.txt`)    |
+| `allura`         | `Allura-Regular.ttf`        | Allura         | SIL Open Font License 1.1 (`Allura-OFL.txt`)        |
 
 The OFL is the reason these four and not others: §1 permits redistribution of
 the font files, and §1's "may be … embedded" clause covers embedding a subset
@@ -42,6 +42,6 @@ between upstream and what we embed.
 
 Replacing a file means replacing its licence file in the same commit, and
 adding a face means adding it to `TYPED_SIGNATURE_FONTS`
-(`app/attestation/models.py`) *and* to the dashboard's preview map — a face the
+(`app/attestation/models.py`) _and_ to the dashboard's preview map — a face the
 backend stamps but the browser cannot preview is a signer adopting a mark they
 were never shown.

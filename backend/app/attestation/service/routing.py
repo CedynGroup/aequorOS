@@ -7,7 +7,7 @@ particular colleague it is waiting for them.
 
 This module adds the missing half and is careful to ADD it. A recipient row
 satisfies a policy slot; it never stands in for one. When the nominee actually
-signs, every guard in ``attestation.workflow`` runs unchanged —
+signs, every guard in ``app.attestation.service.workflow`` runs unchanged —
 ``ensure_certifiable``, ``ensure_digest_unchanged``, ``ensure_maker_checker``,
 ``ensure_signing_configured`` — and the submission gate is still
 ``ensure_submittable``. Nomination is validated by calling the very same
@@ -49,7 +49,7 @@ from app.reporting.models.packages import RegulatoryPackage
 from app.services.audit import record_event
 
 #: Signing slots that exercise checker authority. Mirrors
-#: ``attestation_api.CHECKER_ROLES``: a nominee who could not pass the route's own
+#: ``app.attestation.service.api.CHECKER_ROLES``: a nominee who could not pass the route's own
 #: gate must not be routed, or the preparer would be told at signing time that the
 #: person they nominated was never eligible.
 CHECKER_ROLES: frozenset[str] = frozenset({"approver", "board"})

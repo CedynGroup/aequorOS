@@ -255,7 +255,7 @@ def checkers(
 
 
 def canonical_json(payload: object) -> str:
-    """Byte-identical to ``services/attestation/digests.canonical_json``.
+    """Byte-identical to ``app.attestation.service.digests.canonical_json``.
 
     Here so a digest taken by the shared engine cannot drift from the one the
     attestation plane takes; the ICAAP framework registry carries the same

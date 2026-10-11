@@ -274,7 +274,7 @@ class PdfSigningError(RuntimeError):
     """A signing precondition failed, or the appearance cannot be rendered.
 
     Deliberately not an ``HTTPException``: this module is bytes-in/bytes-out and
-    the caller (``attestation.signing``) owns the API-facing error shape.
+    the caller (``app.attestation.service.signing``) owns the API-facing error shape.
     """
 
 

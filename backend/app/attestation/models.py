@@ -648,7 +648,7 @@ class PackageSignatureRecipient(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     """A named person routed to fill one of the policy's signing slots.
 
     The policy names ROLES; this names PEOPLE, and it *satisfies* the policy
-    rather than replacing it — every guard in ``attestation.workflow`` still runs
+    rather than replacing it — every guard in ``app.attestation.service.workflow`` still runs
     when the nominee actually signs.
 
     Scoped by ``attestation_cycle`` for the same reason signatures are: a void

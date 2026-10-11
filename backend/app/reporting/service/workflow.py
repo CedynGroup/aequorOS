@@ -361,7 +361,7 @@ def ensure_decidable(package: RegulatoryPackage, actor_user_id: UUID) -> None:
 
     There are exactly two routes to ``approved`` and both pass through here: the
     bare decision below, and certification, which calls this per checker
-    signature from ``attestation.workflow.ensure_checked_release`` at the moment
+    signature from ``app.attestation.service.workflow.ensure_checked_release`` at the moment
     it would release the package. Keep it that way — a rule with two
     implementations is a rule with two behaviours.
     """

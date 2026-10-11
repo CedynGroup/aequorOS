@@ -1,8 +1,8 @@
 """API-facing orchestration for attestation (routes → services → schemas).
 
-Kept out of ``app/attestation/service/`` deliberately: that package is the
-domain core and must stay free of HTTP and response-model concerns so it can be
-exercised — and verified — without FastAPI. This module is the seam.
+This module is the HTTP and response-model seam within the feature's service
+package. The signing and verification modules do not import it, so they can
+be exercised independently of the route orchestration.
 """
 
 from __future__ import annotations

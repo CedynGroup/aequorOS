@@ -23,7 +23,7 @@ advisory designation and the certified verdict.
 
 **Canonicalisation is the platform's one recipe.** Sorted keys, compact
 separators, ASCII, and deliberately no ``default=`` handler — reused from
-``attestation.digests`` rather than re-implemented, so a BI digest and an
+``app.attestation.public`` rather than re-implemented, so a BI digest and an
 attestation digest cannot drift apart. Everything is pre-stringified before it
 gets there, which is what makes a silent ``str()`` coercion impossible.
 

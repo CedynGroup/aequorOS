@@ -214,9 +214,9 @@ def _as_utc(value: datetime | None) -> datetime | None:
 def signature_read(signature: AttestationSignature) -> dict[str, Any]:
     """The ``SignatureRead`` shape.
 
-    Duplicated from ``attestation_api._signature_read`` deliberately: this
-    package is the domain core and importing the HTTP seam would invert the
-    layering documented in ``attestation/__init__.py``.
+    Duplicated from ``app.attestation.service.api._signature_read`` deliberately:
+    verification must not import the HTTP orchestration seam. The service
+    layering is documented in ``attestation/service/__init__.py``.
     """
     return {
         "id": signature.id,

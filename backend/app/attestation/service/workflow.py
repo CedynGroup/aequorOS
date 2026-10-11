@@ -61,9 +61,9 @@ CERTIFIABLE_STATUSES: frozenset[str] = frozenset({"generated", "validated"})
 
 #: Slots whose holder is a CHECKER — the second pair of eyes a regulated filing
 #: requires. Canonical here because this module owns the release guard;
-#: ``attestation.routing.CHECKER_ROLES`` and ``attestation_api.CHECKER_ROLES``
-#: mirror it for their own role gates (they cannot import this module without
-#: closing a cycle), and ``test_checker_roles_do_not_drift`` pins the three
+#: ``app.attestation.service.routing.CHECKER_ROLES`` and
+#: ``app.attestation.service.api.CHECKER_ROLES`` mirror it for their own role
+#: gates, and ``test_checker_roles_do_not_drift`` pins the three
 #: together so the mirrors cannot diverge from the guard.
 CHECKER_ROLES: frozenset[str] = frozenset({"approver", "board"})
 
