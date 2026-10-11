@@ -24,6 +24,9 @@ This file is the starting point for agents working in `backend`.
 - Preserve deterministic in-process job stubs until worker infrastructure is introduced.
 - Add regression tests for tenant isolation, state transitions, and
   storage/database edge cases.
+- Follow the shared [testing standard](../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard):
+  assert public service/API behavior, mock only boundaries, use Hypothesis for
+  broad input spaces and test status workflows with stateful properties.
 - Canonical financial manual entry and correction use resource-specific
   `/api/v1/cases/{case_id}/financial-workspace/*` routes. Keep their OpenAPI and
   generated-client contracts aligned; successful mutations return the record plus
@@ -77,3 +80,10 @@ mise run risk-service:test-postgres
 mise run risk-service:check
 mise run risk-service:bootstrap-db
 ```
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
