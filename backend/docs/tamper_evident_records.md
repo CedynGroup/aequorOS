@@ -11,8 +11,8 @@ to audit chaining; [PR #505](https://github.com/CedynGroup/aequorOS/pull/505)
 delivers filing locks; [PR #506](https://github.com/CedynGroup/aequorOS/pull/506)
 delivers compliance storage; and [PR #507](https://github.com/CedynGroup/aequorOS/pull/507)
 delivers the append-only sweep. Each layer is validated separately. The audit
-and filing layers alone do not certify all of issue #413. No user-visible change;
-screenshots are not applicable.
+and filing layers alone do not certify all of issue #413. The compliance-storage
+layer adds submission refusals described under [write-once objects and backups](#write-once-objects-and-backups).
 
 The compliance-storage layer must use the regulatory retention period confirmed
 by counsel (#246).
@@ -207,6 +207,9 @@ manifest, not transmitted artifacts, and are outside this object retention set.
 Retention can be extended but is never shortened, including an existing longer
 governance interval. A retention PUT is followed by a version-specific GET;
 submission refuses if compliance mode or the required date cannot be confirmed.
+The API returns HTTP 409 with `error_code=filing_retention_unconfirmed` when
+retention fails; resolve the storage capability, permissions or archived-version
+problem before retrying the submission.
 The submission event records each retained `storage_version_id`.
 
 For historical filings, run the tenant- and bank-scoped inventory from `backend`:
@@ -233,9 +236,10 @@ A delete marker hides the current key but does not remove a
 locked version. Apply an IAM deny on DeleteObject for evidence buckets if hiding
 current keys must also be prevented.
 
-`STORAGE_OBJECT_LOCK_RETENTION_DAYS` defaults to **2555 days as an operational
-placeholder, confirm with counsel, #246**. This is not a statement of BoG law or
-legal sign-off. Counsel and the infrastructure owner must approve the production
+`STORAGE_OBJECT_LOCK_RETENTION_DAYS` sets the interval in days; its default in
+[`StorageEngineSettings`](../app/storage/config.py) is **an operational placeholder,
+confirm with counsel, #246**. This is not a statement of BoG law or legal sign-off.
+Counsel and the infrastructure owner must approve the production
 period before enabling compliance retention, which cannot be shortened on stored
 versions. In AWS, even account administrators cannot delete or shorten a locked
 version during that interval. See [AWS Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html).
@@ -249,13 +253,10 @@ rather than claiming a retained backup; local recovery artifacts remain availabl
 Off-flag backup runs continue to write local files. The retained manifest includes
 the chain tables in its schema fingerprints. Object-store backups copy ciphertext
 and envelope metadata; keep the paired database backup for the envelopes.
+Keep the platform backup KMS key decrypt-capable for the full retained backup
+interval.
 
-Bank-held envelope encryption is applied before retention, unchanged. Object Lock
-retains ciphertext; it does not grant permission to decrypt it or bypass a revoked
-bank key. Existing reads still check the bank key and refuse revoked/unavailable
-keys. Keep retired KMS keys and envelope registries for at least the longest
-retained ciphertext/backup interval, through the existing retained-key recovery
-contract. Destruction of a key is a separate cryptographic loss of access that
-Object Lock cannot prevent. Rotation creates new encrypted versions; old retained
-versions stay recoverable only with their original bank keys. Never shorten key
-recovery windows below the Object Lock interval.
+Object Lock retains ciphertext; it does not grant permission to decrypt it or
+prevent cryptographic loss of access through key destruction. Bank-key enforcement,
+rotation and retained-key recovery are governed by
+[the bank encryption contract](bank_encryption.md#rotation-backups-and-recovery).

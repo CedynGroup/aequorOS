@@ -155,6 +155,41 @@ def test_retention_never_shortens_existing_compliance_lock(
         retain_version(client, bucket, location.object_path, None, datetime.now(UTC))
 
 
+def test_retention_confirms_deadline_when_server_discards_subseconds(
+    bank_storage: BankStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = _enable(bank_storage, monkeypatch)
+    location = StorageLocation(SLUG, "outputs", "subsecond-deadline.pdf")
+    content = b"synthetic retained version"
+    stored = bank_storage.storage.write(
+        location, io.BytesIO(content), metadata_for(SLUG, "outputs", content)
+    )
+    assert stored.version_id is not None
+    read = client.get_object_retention
+
+    def whole_second_retention(**kwargs: str) -> dict[str, object]:
+        response = read(**kwargs)
+        retention = TypeAdapter(dict[str, object]).validate_python(response["Retention"])
+        date = retention.get("RetainUntilDate")
+        if isinstance(date, datetime):
+            retention["RetainUntilDate"] = date.replace(microsecond=0)
+        return {"Retention": retention}
+
+    monkeypatch.setattr(client, "get_object_retention", whole_second_retention)
+    requested = (datetime.now(UTC) + timedelta(days=7)).replace(microsecond=123456)
+    bank_storage.storage.retain(location, stored.version_id, requested)
+    confirmed = client.get_object_retention(
+        Bucket=location.bucket_name("dev"),
+        Key=location.object_path,
+        VersionId=stored.version_id,
+    )
+    retention = TypeAdapter(dict[str, object]).validate_python(confirmed["Retention"])
+    assert retention["Mode"] == "COMPLIANCE"
+    deadline = retention["RetainUntilDate"]
+    assert isinstance(deadline, datetime)
+    assert requested <= deadline < requested + timedelta(seconds=1)
+
+
 def test_backup_pair_is_published_with_compliance_versions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

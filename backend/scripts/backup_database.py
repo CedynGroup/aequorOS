@@ -20,6 +20,9 @@ The manifest is what makes a restore checkable rather than merely finished, so
 treat the pair as one artifact: an archive restored without its manifest cannot
 be verified, only hoped about.
 
+Cloud publication and compliance-retention configuration are governed by
+``backend/docs/tamper_evident_records.md`` (Write-once objects and backups).
+
 Safety: the source session is pinned ``default_transaction_read_only``, the
 credential is passed through ``PG*`` environment variables rather than argv, and
 nothing in the output stream contains a password.

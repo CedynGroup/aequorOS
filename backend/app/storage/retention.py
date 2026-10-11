@@ -29,7 +29,16 @@ class RetentionClient(Protocol):
 
 
 def retention_until(settings: StorageEngineSettings) -> datetime:
-    return datetime.now(UTC) + timedelta(days=settings.object_lock_retention_days)
+    until = datetime.now(UTC) + timedelta(days=settings.object_lock_retention_days)
+    return _storage_deadline(until)
+
+
+def _storage_deadline(until: datetime) -> datetime:
+    # S3-compatible servers may discard subsecond precision. Round upward so
+    # the confirmed deadline never falls short of the requested retention.
+    if until.microsecond:
+        return until.replace(microsecond=0) + timedelta(seconds=1)
+    return until
 
 
 @contextmanager
@@ -62,6 +71,7 @@ def retain_version(
     """Extend existing retention if needed; never shorten a compliance lock."""
     if not version or version == "null":
         raise StorageValidationError("Compliance retention requires a concrete object version.")
+    until = _storage_deadline(until)
     with retention_errors():
         try:
             response = client.get_object_retention(Bucket=bucket, Key=key, VersionId=version)
