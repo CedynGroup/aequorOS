@@ -31,9 +31,9 @@ The five, and what each one alone can prove:
 5. ``artifact_binding`` — the stored object still hashes to the checksum the
    signature pinned, resolved at the exact object-store version.
 
-Plus the per-tenant signature hash chain (``workflow.verify_chain``): removal of
-a signature is detectable even though DELETE is reachable by deleting the owning
-package.
+Plus the per-tenant signature hash chain (``workflow.verify_chain``), an
+independent integrity check alongside the database retention guards owned by
+``backend/docs/tamper_evident_records.md`` ("Filing and input seals").
 
 **SKIPPED is not FAILED.** The signing policy may not require a signed PDF (C1),
 in which case checks 1, 2 and 5 have nothing to examine. Reporting those as

@@ -19,13 +19,10 @@ append-only triggers on exactly seven tables — ``audit_events``,
 Which tier each table gets, and why
 -----------------------------------
 
-The existing pattern is two-tiered (``202607250027``):
-
-IMMUTABLE
-    no UPDATE, no DELETE — ``audit_events``.
-UNALTERABLE
-    no UPDATE; DELETE stays reachable through the owning package's CASCADE —
-    the signature/identity/artifact-version tables.
+At this revision the existing pattern is two-tiered (``202607250027``):
+IMMUTABLE refuses UPDATE and DELETE, while UNALTERABLE refuses UPDATE.
+Current retention protections are owned by
+``backend/docs/tamper_evident_records.md`` ("Append-only inventory and sweep").
 
 **Neither tier transfers verbatim to these four, and saying otherwise would ship
 a trigger that breaks the product on its first approval.** Each of these rows
@@ -90,22 +87,9 @@ Per table:
     cannot be expressed as "not null"; the write-once ``reversal_batch_id`` is
     what pins the reversal to its batch.
 
-DELETE is deliberately NOT blocked on any of the four
------------------------------------------------------
-
-The same reasoning ``202607250027`` gives for its UNALTERABLE tier, plus two
-concrete paths that would break: the hermetic bank fixture purges
-``reconciliation_exceptions`` between cases
-(``tests/fixtures/canonical_bank_fixture.py``), and five service tests delete
-``regulatory_parameter`` rows to exercise the fail-loud "unseeded code" path
-that proves a regulatory number is never invented. ALTERATION and FORGERY are
-what these registers must prevent and both are now impossible: a row can never
-be rewritten, and a deleted generation is *detectable* — the operator audit
-trail (itself IMMUTABLE) retains the propose/approve events, and the resolver
-raises rather than substituting a value when a mandatory code has no row.
-
-TRUNCATE **is** revoked, on all four: it bypasses row triggers entirely, so
-leaving it grantable would leave the whole register erasable in one statement.
+This revision leaves DELETE unguarded and revokes TRUNCATE on all four tables.
+The later sweep adds retention and statement guards; see the current contract
+above rather than using this revision's permissions as the deployment policy.
 
 Postgres-only. The hermetic suite builds its schema with
 ``Base.metadata.create_all`` and runs no migration; SQLite has neither triggers

@@ -7,8 +7,8 @@ No reported financial figure or calculation rule changes.
 
 The four-layer delivery contract assigns
 [PR #504](https://github.com/CedynGroup/aequorOS/pull/504)
-to audit chaining; [PR #505](https://github.com/CedynGroup/aequorOS/pull/505)
-delivers filing locks; [PR #506](https://github.com/CedynGroup/aequorOS/pull/506)
+to audit chaining; [PR #530](https://github.com/CedynGroup/aequorOS/pull/530)
+delivers filing locks; [PR #533](https://github.com/CedynGroup/aequorOS/pull/533)
 delivers compliance storage; and [PR #507](https://github.com/CedynGroup/aequorOS/pull/507)
 delivers the append-only sweep. Each layer is validated separately. The audit
 and filing layers alone do not certify all of issue #413. The compliance-storage
@@ -281,17 +281,18 @@ rotation and retained-key recovery are governed by
 `202610110093` complements the existing attestation, governance, ICAAP, market-data
 and filing-chain migrations. The inventory distinguishes history from live state:
 
-| Record family                                                                                                            | Database protection                                                                                                                                       |
-| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tenant and operator audit logs                                                                                           | Existing UPDATE/DELETE guards; database hash chain; TRUNCATE guard                                                                                        |
-| Signature and artifact versions, filing approvals/submission events, pinned stages/decisions and attachments/withdrawals | Existing UPDATE guards and signature DELETE guard; sweep closes other DELETE gaps and adds TRUNCATE guards                                                |
-| Scenario assumption and financial manual-edit histories                                                                  | Added UPDATE/DELETE/TRUNCATE guards                                                                                                                       |
-| Eleven `param_*` board registers (risk weights, limits, thresholds, haircuts, shocks, ECL assumptions)                   | Values/scope/approval evidence sealed from insert; only effective-to and timestamp bookkeeping may update; DELETE/TRUNCATE refused                        |
-| Approved/rejected forecast assumption generations                                                                        | All updates and deletion refused; drafts retain their editing lifecycle                                                                                   |
-| Authorization bindings                                                                                                   | Grant/scope evidence sealed from insert; revocation fields write-once; DELETE/TRUNCATE refused                                                            |
-| Completed regulatory runs and package financial snapshots                                                                | Filing/input seals above; added TRUNCATE guard                                                                                                            |
-| Live scenario assumptions, current financial workspace, working artifact pointers                                        | Mutable operational state; immutable histories/version records retain their evidence                                                                      |
-| Regulatory parameter control plane, system-of-record, reconciliation exceptions and canonical withdrawals                | Existing governed-row seals; added DELETE protection on authoritative rows and TRUNCATE guards; draft, effective-date and revocation lifecycles preserved |
+| Record family                                                                                                            | Database protection                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tenant and operator audit logs                                                                                           | Existing UPDATE/DELETE guards; database hash chain; TRUNCATE guard                                                                                           |
+| Signature and artifact versions, filing approvals/submission events, pinned stages/decisions and attachments/withdrawals | Existing UPDATE guards and signature DELETE guard; sweep closes other DELETE gaps and adds TRUNCATE guards                                                   |
+| Scenario assumption and financial manual-edit histories                                                                  | Added UPDATE/DELETE/TRUNCATE guards                                                                                                                          |
+| Eleven `param_*` board registers (risk weights, limits, thresholds, haircuts, shocks, ECL assumptions)                   | Values/scope/approval evidence sealed from insert; only effective-to and timestamp bookkeeping may update; DELETE/TRUNCATE refused                           |
+| Approved/rejected forecast assumption generations                                                                        | All updates and deletion refused; drafts retain their editing lifecycle                                                                                      |
+| Authorization bindings                                                                                                   | Grant/scope evidence sealed from insert; revocation fields write-once; revoked status cannot be reversed; DELETE/TRUNCATE refused                            |
+| Completed regulatory runs and package financial snapshots                                                                | Filing/input seals above; added TRUNCATE guard                                                                                                               |
+| Live scenario assumptions, current financial workspace, working artifact pointers                                        | Mutable operational state; immutable histories/version records retain their evidence                                                                         |
+| Regulatory parameter control plane and system-of-record declarations                                                     | Existing governed-row seals; approved rows cannot be deleted; all TRUNCATE refused; draft, effective-date and revocation lifecycles preserved                |
+| Reconciliation exceptions and canonical withdrawals                                                                      | Existing governed-row seals; all exceptions and applied/reversed withdrawals cannot be deleted; all TRUNCATE refused; pending withdrawal lifecycle preserved |
 
 No application-set reset flag bypasses the new deletion guards. Destructive test
 setup must use fresh disposable schemas or privileged fixture restoration, never

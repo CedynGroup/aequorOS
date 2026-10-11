@@ -1,18 +1,11 @@
 """Attestation & e-signature models (docs/attestation_esignature.md).
 
-Evidence tables here are **DB-enforced unalterable** — migration 202607250027
-revokes UPDATE and TRUNCATE from every non-superuser role, installs a
-BEFORE UPDATE trigger that raises, and adds a restrictive RLS policy that no
-future permissive policy can override. Signature evidence the owning role can
-rewrite is not evidence (gap G1), so the guarantee lives in the schema rather
-than in review discipline.
+Evidence retention, database guards and deployment-role requirements are owned
+by ``backend/docs/tamper_evident_records.md`` ("Filing and input seals" and
+"Append-only inventory and sweep"). Foreign-key cascades do not bypass those
+guards.
 
-Precisely what is guaranteed, because the distinction matters:
-  * ``attestation_signatures``, ``signer_identities``,
-    ``regulatory_artifact_versions`` — never UPDATE-able, never TRUNCATE-able.
-    DELETE is reachable only by deleting the owning package (CASCADE), which no
-    production path does and which a broken hash chain would expose.
-  * ``audit_events`` (in the reporting module) — additionally never DELETE-able.
+Operational records have separate lifecycles:
   * ``signer_keys`` — NOT append-only: key lifecycle genuinely transitions
     (active → rotated → revoked).
   * ``signing_authorizations`` — NOT append-only: single-use tokens are marked
