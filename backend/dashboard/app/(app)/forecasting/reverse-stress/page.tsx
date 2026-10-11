@@ -179,7 +179,6 @@ export default function ReverseStress() {
 
               <SectionCard
                 title="Frontier narrative"
-                subtitle="The most recent saved frontier for this period"
                 footer={
                   <span>
                     The frontier anchors to both engines&apos; baseline

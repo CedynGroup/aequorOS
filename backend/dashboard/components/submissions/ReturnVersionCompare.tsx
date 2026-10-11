@@ -111,10 +111,7 @@ export default function ReturnVersionCompare({
 
   return (
     <div className="space-y-6">
-      <SectionCard
-        title="What to compare"
-        subtitle="Two versions of the same return and reporting date"
-      >
+      <SectionCard title="What to compare">
         <QueryBoundary
           contained
           isLoading={templatesQuery.isLoading || packagesQuery.isLoading}

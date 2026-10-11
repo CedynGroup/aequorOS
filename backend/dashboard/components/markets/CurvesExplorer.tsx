@@ -259,7 +259,7 @@ export default function CurvesExplorer({
         subtitle={
           showAdjusted
             ? "Official published (solid) vs your adjusted composition (dashed)"
-            : "Published curve at the reproduced as-of date"
+            : undefined
         }
         height={280}
       >

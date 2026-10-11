@@ -346,10 +346,7 @@ export default function SdiLiquidityMonitoringView({
               </div>
 
               <div className="grid gap-6 xl:grid-cols-2">
-                <SectionCard
-                  title="Contractual maturity ladder"
-                  subtitle="Net and cumulative contractual mismatches from the LMTD maturity buckets."
-                >
+                <SectionCard title="Contractual maturity ladder">
                   <MaturityLadderChart data={ladderChart} />
                 </SectionCard>
                 {isSdi ? (
@@ -367,10 +364,7 @@ export default function SdiLiquidityMonitoringView({
                     />
                   </SectionCard>
                 ) : (
-                  <SectionCard
-                    title="Basel liquidity compliance"
-                    subtitle="LCR/NSFR inputs and named validation exceptions from the active Basel calculation."
-                  >
+                  <SectionCard title="Basel liquidity compliance">
                     <dl className="grid grid-cols-2 gap-x-5 gap-y-4 text-caption">
                       <div>
                         <dt className="text-slate">HQLA stock</dt>
@@ -617,11 +611,7 @@ export default function SdiLiquidityMonitoringView({
                 </SectionCard>
               </div>
 
-              <SectionCard
-                title="Maturity ladder detail"
-                subtitle="The same contractual positions behind the mismatch chart, retained for review and export."
-                noPadding
-              >
+              <SectionCard title="Maturity ladder detail" noPadding>
                 <DataTable
                   columns={maturityColumns}
                   rows={data.maturity_ladder}

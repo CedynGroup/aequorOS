@@ -529,7 +529,6 @@ function RunDashboard({
         <ChartFrame
           className="xl:col-span-3"
           title="Balance-sheet projection"
-          subtitle={`Total assets, liabilities, and equity over the ${horizon}-year horizon`}
           height={320}
           footer={
             <>
@@ -553,7 +552,7 @@ function RunDashboard({
         <ChartFrame
           className="xl:col-span-2"
           title="Asset composition"
-          subtitle={`Loans, securities, and cash across the horizon · ${currencyCode()} millions`}
+          subtitle={`${currencyCode()} millions`}
           height={320}
         >
           <BalanceSheetProjectionChart data={compositionData} height={320} />
@@ -566,7 +565,6 @@ function RunDashboard({
       {/* Horizon table */}
       <SectionCard
         title={`${horizon}-year projection path`}
-        subtitle="Annual balance-sheet and P&L path with period-over-period deltas"
         noPadding
         computedAt={computedAt}
       >
@@ -626,12 +624,7 @@ function RunDashboard({
       </div>
 
       {/* Validations */}
-      <SectionCard
-        title="Validations"
-        subtitle="Projection integrity and regulatory rule evaluation persisted on the run"
-        noPadding
-        computedAt={computedAt}
-      >
+      <SectionCard title="Validations" noPadding computedAt={computedAt}>
         <ValidationList validations={run.validations} />
       </SectionCard>
     </div>

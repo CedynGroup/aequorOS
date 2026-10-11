@@ -404,10 +404,7 @@ export default function ExplorePage() {
 
         {catalogueQuery.data && hasMeasures && (
           <div className="grid gap-4 lg:grid-cols-2">
-            <SectionCard
-              title="Measure"
-              subtitle="What the answer counts, sums or averages."
-            >
+            <SectionCard title="Measure">
               <div className="max-h-80 space-y-4 overflow-y-auto pr-1">
                 {measureGroups.map(([module, entries]) => (
                   <div key={module}>

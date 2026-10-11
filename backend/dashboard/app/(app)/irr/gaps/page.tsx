@@ -147,7 +147,6 @@ export default function IrrGapsPage() {
 
             <SectionCard
               title="Bucket detail"
-              subtitle="Click a bucket to expand its stored-run line item"
               noPadding
               computedAt={computedAt}
             >

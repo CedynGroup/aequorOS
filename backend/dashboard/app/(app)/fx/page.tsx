@@ -163,7 +163,6 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
 
         <SectionCard
           title="Position detail"
-          subtitle="Net exposure, period-end spot, and limit state per currency"
           noPadding
           footer={
             splits.size === 0 ? (

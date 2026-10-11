@@ -389,10 +389,7 @@ export default function LiquidityCockpit() {
                   </div>
                 </SectionCard>
               )}
-              <SectionCard
-                title="Control workspace"
-                subtitle="Move from current posture to the relevant control without losing context."
-              >
+              <SectionCard title="Control workspace">
                 <div className="space-y-2">
                   {[
                     {

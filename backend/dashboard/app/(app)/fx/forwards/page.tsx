@@ -66,7 +66,7 @@ function ForwardsBody({ ctx }: { ctx: FxFrameContext }) {
           >
             <ForwardCurve data={forwardPoints} />
           </ChartFrame>
-          <SectionCard title="Forward points" subtitle="Outright and points by tenor" noPadding>
+          <SectionCard title="Forward points" noPadding>
             <DataTable
               columns={[
                 { key: 'tenor', header: 'Tenor', render: (r: ForwardPoint) => r.tenorLabel },

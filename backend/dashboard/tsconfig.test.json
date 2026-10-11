@@ -11,6 +11,8 @@
     "outDir": ".test-out",
     "types": ["node"]
   },
+  "//exclude": "The parent excludes e2e/ and playwright.config.ts from the app build. This config compiles an explicit file list, so dropping those exclusions adds nothing beyond the files named below — and e2e/support/transport.test.ts is one of them.",
+  "exclude": ["node_modules"],
   "include": [
     "types/next-auth.d.ts",
     "app/login/loginErrors.ts",
@@ -130,6 +132,7 @@
     "lib/outbound.ts",
     "lib/outbound.test.ts",
     "lib/ip-version.test.ts",
-    "components/forecasting/reviewRegressions.test.tsx"
+    "components/forecasting/reviewRegressions.test.tsx",
+    "e2e/support/transport.test.ts"
   ]
 }

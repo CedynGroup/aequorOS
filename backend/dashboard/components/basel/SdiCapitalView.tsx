@@ -312,7 +312,6 @@ export default function SdiCapitalView({
               </SectionCard>
               <SectionCard
                 title="Simplified risk-weighted assets"
-                subtitle="Current eligible asset exposure and its simplified RWA contribution."
                 footer={
                   cap.composition_source === "code_default" ? (
                     <span className="text-caption text-warning">
@@ -527,18 +526,12 @@ export default function SdiCapitalView({
           </SectionCard>
 
           {(checks.data?.checks.length ?? 0) > 0 ? (
-            <SectionCard
-              title="Capital control headroom"
-              subtitle="Actual paid-up capital and reserve fund against their current requirements."
-            >
+            <SectionCard title="Capital control headroom">
               <SdiCapitalControlsChart data={capitalControls} />
             </SectionCard>
           ) : null}
 
-          <SectionCard
-            title="Simplified-capital checks"
-            subtitle="Minimum paid-up capital and statutory reserve fund."
-          >
+          <SectionCard title="Simplified-capital checks">
             <QueryBoundary
               contained
               isLoading={checks.isLoading}

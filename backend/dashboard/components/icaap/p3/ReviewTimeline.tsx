@@ -52,10 +52,7 @@ export default function ReviewTimeline({ stages }: { stages: IcaapStages }) {
   const chain = stages.stages ?? [];
   if (chain.length === 0) {
     return (
-      <SectionCard
-        title="Review chain"
-        subtitle="Who reads this assessment, and in what order."
-      >
+      <SectionCard title="Review chain">
         <EmptyState title="The chain has not been set yet" description={NO_REVIEW_YET} />
       </SectionCard>
     );

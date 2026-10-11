@@ -154,7 +154,6 @@ function ProductsCard({
   return (
     <SectionCard
       title="Products"
-      subtitle="Product proposals and approvals with the regulator reference"
       actions={
         <button
           type="button"
@@ -377,7 +376,6 @@ function LicencesCard({
   return (
     <SectionCard
       title="Licences"
-      subtitle="Operating licences with class, issue date, and standing"
       actions={
         <button
           type="button"

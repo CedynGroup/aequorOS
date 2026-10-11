@@ -165,7 +165,6 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
 
           <SectionCard
             title="Standalone VaR by currency"
-            subtitle="Single-currency historical VaR before diversification"
             noPadding
           >
             <DataTable columns={columns} rows={data.standaloneVars} density="compact" />

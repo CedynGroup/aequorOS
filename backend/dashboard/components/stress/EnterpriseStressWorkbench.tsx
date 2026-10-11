@@ -772,21 +772,13 @@ function ResultsView({
         )}
         {!isSdiTenant && (
           <>
-            <ChartFrame
-              title="CET1 — base vs stress"
-              subtitle="Common equity Tier 1 ratio path"
-              height={240}
-            >
+            <ChartFrame title="CET1 — base vs stress" height={240}>
               <ProjectionPaths
                 projection={run.projection}
                 metricKey="cet1_ratio_pct"
               />
             </ChartFrame>
-            <ChartFrame
-              title="Tier 1 & leverage"
-              subtitle="Tier 1 ratio path over the horizon"
-              height={240}
-            >
+            <ChartFrame title="Tier 1 & leverage" height={240}>
               <ProjectionPaths
                 projection={run.projection}
                 metricKey="tier1_ratio_pct"
@@ -799,10 +791,7 @@ function ResultsView({
       <DriverWaterfall run={run} />
 
       {isSdiTenant ? (
-        <SectionCard
-          title="Liquidity regime"
-          subtitle="SDI liquidity stress (docs/sdi.md §4.6)"
-        >
+        <SectionCard title="Liquidity regime">
           <SdiLiquidityNotAssessed position={sdiLiquidity} />
         </SectionCard>
       ) : coupling ? (

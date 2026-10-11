@@ -49,8 +49,11 @@ export type PrimaryAction = {
   kind: PrimaryActionKind;
   /** The button's words. */
   label: string;
-  /** One line under it saying what pressing it does. Always present. */
-  caption: string;
+  /**
+   * One line under it saying what pressing it does, or null when the label
+   * already says it all.
+   */
+  caption: string | null;
   enabled: boolean;
   /** Why it is disabled. Never null when `enabled` is false. */
   reason: string | null;
@@ -241,7 +244,7 @@ function transmitAction(input: SurfaceInput): PrimaryAction {
     return {
       kind: "poll",
       label: `Check for ${input.regulatorName}'s decision`,
-      caption: `Asks the channel whether ${input.regulatorName} has decided on this filing.`,
+      caption: null,
       enabled: input.canPoll,
       reason: input.canPoll
         ? null
