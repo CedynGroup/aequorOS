@@ -18,7 +18,7 @@ transition changes; update its table and independent test model in the same chan
 | Grants and session invalidation  | `app/identity/service/{authentication,authorization,grant_administration}.py`                   | [Existing authorization machines](../tests/identity/api/test_authorization_state_machine.py)       |
 | Jobs                             | `app/services/job_queue.py`; `app/worker.py`                                                    | Queue/worker examples; generated retries and stale claims pending                                  |
 | Ingestion batches                | `app/services/ingestion.py`                                                                     | Ingestion examples; generated extraction/validation/retry sequences pending                        |
-| BI alert verdicts                | `app/services/bi/alerts.py`                                                                     | Alert examples; generated missing-data/breach/recovery sequences pending                           |
+| BI alert verdicts                | `app/bi/service/alerts.py`                                                                     | Alert examples; generated missing-data/breach/recovery sequences pending                           |
 
 The first two machines use real services and persisted audit/submission events.
 Their models do not import production transition tables or maker-checker helpers.
@@ -166,7 +166,7 @@ do not infer legal transitions solely from a column CHECK constraint.
 | Calculation/assessment execution and evidence           | `models/{calculation,capital,regulatory_run,regulatory,risk,implied_rating}.py`; feature calculation services and jobs                                                                              |
 | Live engine publication and ingestion mappings          | `models/live.py`; `models/ingestion.py`; `services/{live_state,live_view,ingestion}.py`                                                                                                             |
 | Connections, key custody and pulls                      | `models/{database_connection,temenos,market_data}.py`; `core/key_management/`; connector/pull services                                                                                              |
-| BI commentary, outbox/deliveries and notification state | `models/{bi_commentary,bi_notifications,bi_content}.py`; `services/bi/`                                                                                                                             |
+| BI commentary, outbox/deliveries and notification state | `bi/models/{commentary,notifications,content}.py`; `bi/service/`                                                                                                                             |
 | Identity profiles, grants, ownership and entitlements   | `identity/models/{institution_profile,authorization}.py`; `models/entitlements.py`; `identity/service/`                                                                                             |
 | Legacy findings and document parsing                    | `models/{financial,risk}.py`; feature APIs and worker handlers                                                                                                                                      |
 
