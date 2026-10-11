@@ -22,14 +22,21 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import cast
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import Table, delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.bi.domain.catalogue import ColumnRef, EngineRule, MeasureDef, catalogue
-from app.bi.models.marts import BiAggPositionDaily, BiFactEngineMetric, BiFactPositionDaily
+from app.bi.models.marts import (
+    BiAggPositionDaily,
+    BiFactEngineMetric,
+    BiFactPositionDaily,
+    BiMartBuild,
+)
 from app.bi.schemas.query import BiDateRange, BiQuery, BiTime
 from app.bi.service.compiler import compile_query
 from app.bi.service.execution import execute
@@ -50,11 +57,50 @@ from app.bi.service.insights.assemble import (
 from app.bi.service.insights.facts import MovementFact, ObservedFact
 from app.core.authorization import InstitutionScope, ModuleScope, SensitivityScope
 from app.models import Bank
-from tests.bi.api.test_bi_insights import _clone_day
-from tests.bi.api.test_bi_routes import AS_OF, Grant, grant_only, seed_bi_mart
+from tests.bi.api.test_bi_routes import (
+    AS_OF,
+    BUILT_AT,
+    FINGERPRINT,
+    Grant,
+    grant_only,
+    seed_bi_mart,
+)
 from tests.support.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)
+
+
+def _clone_day(db: Session, bank: Bank, *, target: date, factor: Decimal) -> None:
+    """Copy the fixture day with scaled decimals to provide a real comparison."""
+    for model in (BiFactPositionDaily, BiAggPositionDaily, BiFactEngineMetric):
+        rows = db.scalars(
+            select(model).where(model.bank_id == bank.id, model.as_of_date == AS_OF)
+        ).all()
+        for row in rows:
+            values: dict[str, object] = {}
+            table = cast(Table, model.__table__)
+            for column in table.columns:
+                value = cast(object, getattr(row, column.name))
+                values[column.name] = value * factor if isinstance(value, Decimal) else value
+            values["as_of_date"] = target
+            if "id" in values:
+                values["id"] = uuid4()
+            db.add(model(**values))
+    db.add(
+        BiMartBuild(
+            organization_id=bank.organization_id,
+            bank_id=bank.id,
+            as_of_date=target,
+            scope="engine",
+            fingerprint=FINGERPRINT,
+            status="succeeded",
+            builder_version=1,
+            started_at=BUILT_AT,
+            finished_at=BUILT_AT,
+            row_counts={},
+        )
+    )
+    db.commit()
 
 
 def _cat():  # noqa: ANN202 - the catalogue's own type, resolved by the caller
@@ -412,8 +458,7 @@ def test_assembled_figures_equal_the_public_compiled_query_results(
         )
         answer = execute(db_session, compiled, timeout_ms=5000, row_cap=500)
         assert answer.rows
-        values = {
-            column.role: value for column, value in zip(answer.columns, answer.rows[0], strict=True)
-        }
+        row: tuple[object, ...] = answer.rows[0]
+        values = {column.role: value for column, value in zip(answer.columns, row, strict=True)}
         assert fact.current == Decimal(str(values["current"]))
         assert fact.prior == Decimal(str(values["prior"]))
