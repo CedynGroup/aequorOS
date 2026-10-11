@@ -320,7 +320,7 @@ export function primaryFilingAction(input: SurfaceInput): PrimaryAction | null {
   // theirs and is offered disabled, with the reason; a stage behind it is done
   // and nothing is offered.
   const position =
-    at === "closed"
+    at === "closed" || at === "regulator"
       ? STAGE_ORDER.length
       : STAGE_ORDER.indexOf(at as FilingStageKey);
   const ahead = held.find((stage) => STAGE_ORDER.indexOf(stage) > position);

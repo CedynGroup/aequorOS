@@ -40,6 +40,52 @@ const stress = (values: unknown = ["100", "0", "-25", "10.50", "2"]) => ({
 });
 
 describe("stored liquidity ladder figures", () => {
+  it("preserves currency isolation and amount ordering when a stored horizon changes", () => {
+    fc.assert(
+      fc.property(
+        series,
+        cents,
+        fc.integer({ min: 0, max: 4 }),
+        (amounts, increment, horizon) => {
+          const original = [
+            { ...gap(decimalStrings(amounts)), currency: "EUR" },
+            { ...gap(decimalStrings(amounts.toReversed())), currency: "JPY" },
+          ];
+          const updatedAmounts = [...amounts];
+          updatedAmounts[horizon] += Math.abs(increment);
+          const changed = [
+            { ...original[0], assets: decimalStrings(updatedAmounts) },
+            original[1],
+          ];
+          const before = parseCurrencyGaps(
+            storedRun({ currency_gaps: original }),
+          );
+          const after = parseCurrencyGaps(
+            storedRun({ currency_gaps: changed }),
+          );
+          expect(after[0].assets[horizon]).toBeGreaterThanOrEqual(
+            before[0].assets[horizon],
+          );
+          expect(after[0].assets[horizon]).toBe(updatedAmounts[horizon] / 100);
+          expect(after[0].liabilities).toEqual(before[0].liabilities);
+          expect(after[0].net).toEqual(before[0].net);
+          expect(after[0].cumulative).toEqual(before[0].cumulative);
+          expect(after[1]).toEqual(before[1]);
+          amounts.forEach((amount, index) => {
+            if (index !== horizon)
+              expect(after[0].assets[index]).toBe(amount / 100);
+          });
+          expect(
+            parseCurrencyGaps(
+              storedRun({ currency_gaps: changed.toReversed() }),
+            ),
+          ).toEqual(after.toReversed());
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
   it("preserves zero, deficits, decimals and currency identity", () => {
     expect(parseCurrencyGaps(storedRun({ currency_gaps: [gap()] }))).toEqual([
       {

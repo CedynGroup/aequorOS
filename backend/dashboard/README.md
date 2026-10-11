@@ -429,6 +429,46 @@ FTP specs check saved pricing assumptions, conservation of business-line view
 balances/contributions/flags, uncomputable margins and confidential scenario grants.
 These read-only analytical tables do not implement status transitions.
 
+The formatting and chart properties cover compact money rounding/error bounds,
+amount ordering, UTC reporting-date round-trips, missing versus measured chart
+points, waterfall balance conservation and tenant labels rendered as tooltip text.
+Stored ladder properties also check that changing one horizon preserves the other
+currencies and stored net/cumulative figures. Filing capability properties generate
+module, sensitivity and permission combinations independently for sibling banks.
+These pure properties use 100 runs and preserve fast-check's failure seed/path.
+
+`unit/filing-state-machine.spec.tsx` models server status responses and officer,
+institution, authority resolution, clearance and in-flight changes through the
+public filing projection and visible `PrimaryActionButton`. Every status/officer
+checkpoint runs explicitly; generated sequences use 20 examples of at most 25
+commands. The UI transition model is:
+
+| Source                             | Server response                    | UI effect                                                                                                |
+| ---------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Draft                              | Generated                          | Certification waits for clean validation                                                                 |
+| Generated                          | Validated or superseded            | Certification becomes available, or the version closes                                                   |
+| Validated                          | Pending approval or superseded     | Preparation disappears; the approver may review, or the version closes                                   |
+| Pending approval                   | Approved or rejected               | Approval disappears; the validator may file with clearance, or a preparer may create a corrected version |
+| Approved                           | Submitted or superseded            | Only the validator may check the regulator's decision, or the version closes                             |
+| Submitted                          | Acknowledged, rejected or declined | The version closes, or correction starts on a new version                                                |
+| Rejected                           | Superseded                         | The old version closes                                                                                   |
+| Acknowledged, declined, superseded | None                               | No filing action is offered                                                                              |
+
+Attempts to act run at every status, including frozen and terminal checkpoints;
+unresolved, examiner and sibling-bank authority must offer no act. Pending requests
+disable the offered act. The frontend consumes server statuses; it does not enforce
+server transitions, freeze financial content or make the final contextual
+maker-checker decision. Those invariants are exercised by the
+[backend state machines](../docs/state_machine_testing.md), not inferred from a UI button.
+
+`unit/transmit-confirm-state-machine.spec.tsx` exercises the dialog's own
+acknowledgment state with Testing Library: unacknowledged → acknowledged →
+pending → refused/retry, plus cancel/reopen. Confirmation requires acknowledgment
+and no in-flight submission; network rerenders retain acknowledgment, while a new
+dialog requires it afresh. A fixed refusal/retry path complements 20 generated
+examples of at most 15 commands. Each example unmounts its components and resets
+shared jurisdiction state, and failures retain fast-check's replay seed/path.
+
 BI contract suites use `unit/backend.ts` to execute the backend's actual schema
 validators and serializers through `uv run --frozen --no-python-downloads`.
 Running `test`, `test:legacy` or `test:coverage` therefore also requires uv and

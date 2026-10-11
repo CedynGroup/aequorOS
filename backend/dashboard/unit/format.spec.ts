@@ -3,12 +3,25 @@ import fc from "fast-check";
 import {
   currencyCode,
   fmtCurrency,
+  fmtCurrencyFull,
   fmtCurrencySigned,
   fmtNum,
   fmtPctSigned,
   fmtRatioVsThreshold,
   setActiveJurisdiction,
 } from "../lib/format";
+import { fmtDateUTC, isoDate } from "../lib/api/values";
+
+// Decode the public display vocabulary so properties compare monetary values,
+// rather than duplicating the formatter's choice of compact units.
+function displayedMoney(display: string): { amount: number; unit: number } {
+  const match = /^EUR ([\d,.-]+)([KMB]?)$/.exec(display);
+  expect(match).not.toBeNull();
+  const unit = { "": 1, K: 1_000, M: 1_000_000, B: 1_000_000_000 }[
+    match![2] as "" | "K" | "M" | "B"
+  ];
+  return { amount: Number(match![1].replaceAll(",", "")) * unit, unit };
+}
 
 beforeEach(() =>
   setActiveJurisdiction({ currencyCode: "EUR", locale: "en-US" }),
@@ -55,6 +68,87 @@ describe("bank display formatting", () => {
         expect(Number(displayed.slice(0, -1))).toBe(percent);
         expect(displayed.startsWith(percent >= 0 ? "+" : "-")).toBe(true);
       }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("bounds compact money rounding at unit boundaries and preserves order", () => {
+    const cents = fc.oneof(
+      fc.integer({ min: 0, max: 1_000_000_000_000 }),
+      fc.constantFrom(
+        99_999,
+        100_000,
+        99_999_999,
+        100_000_000,
+        99_999_999_999,
+        100_000_000_000,
+      ),
+    );
+    fc.assert(
+      fc.property(
+        cents,
+        cents,
+        fc.integer({ min: 0, max: 3 }),
+        (left, right, decimals) => {
+          const lower = Math.min(left, right) / 100;
+          const upper = Math.max(left, right) / 100;
+          const low = displayedMoney(
+            fmtCurrency(lower, undefined, { decimals }),
+          );
+          const high = displayedMoney(
+            fmtCurrency(upper, undefined, { decimals }),
+          );
+          expect(low.amount).toBeLessThanOrEqual(high.amount);
+          for (const amount of [lower, upper, -lower, -upper]) {
+            const shown = displayedMoney(
+              fmtCurrency(amount, undefined, { decimals }),
+            );
+            const tolerance =
+              shown.unit === 1 ? 0.0005 : shown.unit / (2 * 10 ** decimals);
+            expect(Math.abs(shown.amount - amount)).toBeLessThanOrEqual(
+              tolerance + 0.00001,
+            );
+            expect(fmtCurrencySigned(amount)).toBe(
+              `${amount >= 0 ? "+" : "-"}${fmtCurrency(Math.abs(amount))}`,
+            );
+            expect(
+              Math.abs(displayedMoney(fmtCurrencyFull(amount)).amount - amount),
+            ).toBeLessThanOrEqual(0.5 + 0.00001);
+          }
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it("keeps a reporting date in UTC throughout its whole day", () => {
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sept",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 47_481 }),
+        fc.integer({ min: 0, max: 86_399_999 }),
+        (day, offset) => {
+          const midnight = new Date(day * 86_400_000);
+          const instant = new Date(midnight.getTime() + offset);
+          const expected = `${String(midnight.getUTCDate()).padStart(2, "0")} ${months[midnight.getUTCMonth()]} ${midnight.getUTCFullYear()}`;
+          expect(isoDate(instant)).toBe(isoDate(midnight));
+          expect(fmtDateUTC(instant)).toBe(expected);
+          expect(isoDate(new Date(isoDate(instant)))).toBe(isoDate(midnight));
+        },
+      ),
       { numRuns: 100 },
     );
   });
