@@ -422,6 +422,9 @@ commands continue to run their complete suites.
 
 Refresh the duration baseline after a successful **full** main run, using its four
 `pg-suite-*` artifacts (download them into separate directories under one parent):
+run these commands from the repository root at that run's commit, before changing
+the baseline. Verification recomputes shard assignments from the baseline in that
+revision, so reports from another revision may be rejected.
 
 ```bash
 gh-axi run download <run-id> --name pg-suite-1 --dir /tmp/pg-reports/pg-suite-1

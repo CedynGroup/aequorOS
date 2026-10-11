@@ -44,13 +44,10 @@ name: Risk Service CI
 #   postgres-suite — the remaining backend suite against Postgres, including
 #                 OpenBao signing. Suite ownership is defined in backend/mise.toml
 #                 and pinned by tests/architecture/test_ci_task_wiring.py.
-#                 Two module shards and their aggregate preserve exact coverage.
+#                 Sharding, selection and coverage guards are documented in
+#                 backend/README.md#run-tests.
 #                 Parallel execution and schema isolation are documented in
 #                 backend/README.md#test-databases-and-the-primary-database.
-#                 The aggregate retains the 3000-executed floor on full runs,
-#                 and verifies every selected test on affected-only PR runs.
-#                 The full-run floor proves the suite did not
-#                 accidentally collect or execute nothing.
 #   storage     — the S3-compatible object-store contract: SSE-KMS at rest, the
 #                 hash-chained access log, per-institution provisioning. Added
 #                 2026-08-22. It self-skips without S3_*, and no job had ever
