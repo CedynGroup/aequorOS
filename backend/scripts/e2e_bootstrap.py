@@ -20,15 +20,12 @@ the institution profile, every package — flows through the API in the
 Playwright global setup and the journeys themselves: the same paths the product
 uses.
 
-The book is carried forward because the Returns workspace opens on the
-regulator's anchor (the last month end on or before today for a monthly return —
-``services/regulatory_reporting/anchors.py``), and a return can only be
-generated from an EXACT snapshot as of that date. The canonical book ends at
-a fixed month; without the carry-forward every anchor after it reads "no
-position has been computed", correctly, and the generate journeys have
-nothing to drive. ``extend_canonical_test_book`` appends one snapshot per
-month end through the last month end on or before today, each repeating the
-canonical latest fact set unchanged.
+Carry-forward is necessary because the Returns workspace requires an EXACT
+snapshot at the regulator's anchor (``services/regulatory_reporting/anchors.py``).
+Without it, an anchor beyond the fixture's fixed span correctly reads "no
+position has been computed" and leaves the generate journeys nothing to drive.
+The fixture's carry-forward and latest-period credit-basis replacement are
+documented in ``dashboard/README.md`` under "End-to-end (Playwright)".
 
 It also enrols a **software signing key** per human role so the attestation
 ceremony can be driven end to end in a browser. Self-signed and disposable:

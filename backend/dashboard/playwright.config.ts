@@ -86,9 +86,7 @@ export default defineConfig({
       env: {
         DATABASE_URL: `sqlite+pysqlite:///${E2E_DB}`,
         WORKER_DATABASE_URL: "",
-        // Signer identities need a pepper to derive; signing itself stays
-        // OFF so the hermetic stack exercises the surfaces and guards
-        // without an HSM.
+        // Signer identities need a pepper even with disposable software keys.
         SIGNER_ID_PEPPER: "e2e-signer-pepper-not-production-000",
         // Signing ON for the hermetic stack, backed by disposable self-signed
         // software keys. The software backend refuses to start when APP_ENV is

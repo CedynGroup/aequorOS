@@ -405,7 +405,8 @@ The backend server environment pins `APP_ENV=test` and
 `TLS_ALLOW_PLAINTEXT=1` because this disposable stack uses SQLite and loopback
 HTTP (including MinIO). Test mode alone does not relax the transport policy;
 without the explicit opt-in, startup refuses SQLite with "Database transport
-requires PostgreSQL with a hostname." Deployed environments still require TLS.
+requires PostgreSQL with a hostname." Exception limits are governed by
+[the transport contract](../docs/transport_security.md#local-development-and-narrowly-bounded-exceptions).
 
 `session-cookie-hygiene.spec.ts` deliberately sends a cookie encrypted with a
 foreign secret and malformed cookie chunks. Auth.js reports `JWTSessionError`
@@ -449,9 +450,12 @@ diagnosis:
    Without it `/basel`, `/liquidity`, `/ftp/*`, `/irr/*` and `/fx/*` all open on
    the "no computed data yet" envelope.
 
-After loading the canonical position book, bootstrap derives the latest
-period's `credit_exposure` facts and `credit_source_basis` from those accepted
-sources. Enterprise stress checks that exact provenance before calculating:
+The canonical fixture ends at a fixed month. Bootstrap first carries it forward
+(`extend_canonical_test_book`) one month-end snapshot at a time through the last
+month end on or before today, each repeating the canonical latest fact set.
+After loading the canonical position book, it replaces the latest period's
+`credit_exposure` facts and `credit_source_basis` with values derived from those
+accepted sources. Enterprise stress checks that exact provenance before calculating:
 the aggregate spine's initial empty source basis cannot authorize stress of a
 subsequently added position book. Other fact groups and historical periods
 retain the canonical spine's figures. Capital and stress expectations for the
@@ -588,11 +592,8 @@ or `test.fail` declaration missing from that list.
 
 Reporting-date selection and exact snapshot matching are governed by
 [the reporting-date contract](../../docs/regulatory_reporting.md#5a-reporting-date-vs-data-arrival-corrected-2026-08-23).
-The canonical fixture ends at a fixed month, so `scripts/e2e_bootstrap.py` carries it forward
-(`extend_canonical_test_book`) one month-end snapshot at a time through the last
-month end on or before today, each repeating the canonical latest fact set. That is
-what gives the package-generation journeys a real position to generate from
-without changing how the product selects a reporting date.
+The fixture bootstrap described under [End-to-end (Playwright)](#end-to-end-playwright)
+supplies the snapshots those package-generation journeys require.
 
 ## Deploy to bank.aequoros.com
 

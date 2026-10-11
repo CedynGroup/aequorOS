@@ -2,7 +2,7 @@
  * The canonical fixture book's balance-sheet forecast, derived independently
  * for the Forecasting journeys.
  *
- * Every balance is the latest canonical period of
+ * Balance-sheet balances come from the latest canonical period of
  * `tests/fixtures/canonical_bank_fixture.py` (`_FIXED_ASSETS_M`, `_DEPOSITS_M`,
  * `_LOAN_EXPOSURES_M`, `_SECURITIES_M`, `_OFF_BALANCE_M`, `_MARKET_RISK_M`,
  * `_OPERATIONAL_INCOME_M`, `_CAPITAL_COMPONENTS_M`), carried forward unchanged
@@ -14,8 +14,8 @@
  * standardised weights on the bootstrap's net CRD source book, with aggregate
  * commitments at a 50% CCF and general provisions capped at 1.25% of credit RWA.
  * Market RWA uses the FX open position at an 8% charge × 12.5, and operational
- * RWA uses the Basic Indicator Approach over the three most
- * recent gross-income years. Amounts are GHS, rounded to 4 dp at the points
+ * RWA uses the Basic Indicator Approach over the three most recent gross-income
+ * years. Amounts are GHS, rounded to 4 dp at the points
  * the engine rounds, so the figures match its output to the cent.
  *
  * LCR and NSFR paths are NOT derived here: a journey pins them as engine
