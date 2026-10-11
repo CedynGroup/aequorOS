@@ -96,8 +96,10 @@ print(json.dumps(dict(faces=faces, defaultKey=default_face_key())))`,
     await expect(preview).toHaveText("Ama Mensah");
     await preview.evaluate(async (element) => {
       const style = getComputedStyle(element);
+      // Loading the whole stack also requests Next's local Arial fallback,
+      // which rejects on hosts without Arial even when the script face loads.
       await document.fonts.load(
-        `${style.fontSize} ${style.fontFamily}`,
+        `${style.fontSize} ${style.fontFamily.split(",")[0]}`,
         element.textContent ?? "",
       );
       await document.fonts.ready;
