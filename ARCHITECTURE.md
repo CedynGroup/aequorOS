@@ -79,7 +79,7 @@ Verified in `backend/app/api/deps.py`, `app/db/session.py`, and migration
    tokens are separate bearer credential types with their own validation and
    lifecycle rules; caller-supplied tenant/user headers never establish identity.
    Bank download access follows the
-   [bank-key storage contract](backend/docs/bank_key_setup.md).
+   [bank-key download contract](backend/docs/bank_encryption.md#downloads).
 2. **Dependency aliases** (use these, never raw `Depends(...)` in feature modules):
    - `DbSession` — tenant-validated SQLAlchemy session (`get_tenant_db_session`). It stores
      `session.info["organization_id"]` and validates that the org exists and, when present, that

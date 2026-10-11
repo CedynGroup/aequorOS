@@ -210,7 +210,8 @@ def test_http_boundary_does_not_relog_a_sensitive_propagated_exception(
     assert request_id.startswith("sha256:")
     assert all(cast(dict[str, object], extra)["request_id"] == request_id for extra in extras)
     assert any(record["message"] == "Request completed" for record in log_records)
-    for secret in ("Jane Private", "123456789012", "9876543.21", "13.75", "BK-PRIVATE1"):
+    # Match the rate's unit so elapsed-time metadata cannot resemble customer content.
+    for secret in ("Jane Private", "123456789012", "9876543.21", "13.75%", "BK-PRIVATE1"):
         error_records = [
             record for record in log_records if record["message"] != "Request completed"
         ]

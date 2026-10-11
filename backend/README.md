@@ -18,7 +18,7 @@ and `python -m app.core.serve operator`. Certificate, trust-store, database URL,
 and local-development exceptions are governed by
 [the transport contract](docs/transport_security.md).
 
-Bank-owned encryption key requirements are in
+Bank-held object encryption and optional rollout are in
 [the bank key setup guide](docs/bank_key_setup.md).
 
 - Health and readiness under `/api/health`; readiness reports database, storage,
@@ -376,11 +376,17 @@ available; point `TEST_DATABASE_URL` at it to reuse that service.
 
 CI starts native PostgreSQL 17 through
 [`setup-postgres`](../.github/actions/setup-postgres/action.yml), shared by the
-schema/RLS/locks and full-suite jobs. It verifies the server version and raises
-`max_locks_per_transaction` to 256 before creating the restricted test roles.
+schema/RLS/locks, storage and full-suite jobs. It verifies the server version and
+raises `max_locks_per_transaction` to 256 before creating the restricted test roles.
 The migration chain requires no extensions: `gen_random_uuid()` is built into
 PostgreSQL 17. If a migration adds an extension dependency, install its PostgreSQL
 17 package in that action and verify availability before running migrations.
+
+Run the storage contract suite with `mise run risk-service:test-storage`. Its
+wrapper supplies disposable PostgreSQL for key-rotation concurrency and MinIO
+for the object-store contract unless `TEST_DATABASE_URL` and `S3_*` settings
+already supply those services. The dedicated CI storage job supplies both and
+rejects any skipped test.
 
 CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official
@@ -493,6 +499,10 @@ mise run risk-service:revision "describe change"
 ```
 
 ## Environment Variables
+
+For bank-key rollout settings, AWS policies, onboarding, rotation and recovery,
+follow [bank key setup](docs/bank_key_setup.md). Custody and enforcement are
+governed by [the bank encryption contract](docs/bank_encryption.md).
 
 Copy [`.env.example`](.env.example) to `.env` for the current local settings,
 including the explicit plaintext opt-in. Document uploads, presigned URLs,
