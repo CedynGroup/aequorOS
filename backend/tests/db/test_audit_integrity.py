@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -14,6 +15,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session
 
+from app import worker
 from app.core import audit_integrity
 from app.core.audit_integrity import run_due_verification, scheduled_verification, verify_chains
 from app.core.config import get_settings
@@ -227,7 +229,8 @@ def test_runtime_insert_uses_definer_but_cannot_forge_links(
         {"id": uuid4()},
     )
     for statement in (
-        "INSERT INTO audit_chain_entries VALUES ('audit_events', 999, gen_random_uuid(), '', '', '{}')",
+        "INSERT INTO audit_chain_entries VALUES "
+        "('audit_events', 999, gen_random_uuid(), '', '', '{}')",
         "SELECT aequoros_chain_append('audit_events', gen_random_uuid(), '{}'::jsonb)",
         "CREATE OR REPLACE FUNCTION aequoros_append_only_guard() RETURNS trigger "
         "LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
@@ -258,8 +261,13 @@ def test_platform_schedule_runs_once_hourly_without_banks(
     get_settings.cache_clear()
     now = datetime(2026, 10, 10, 12, 15, tzinfo=UTC)
     pages: list[str] = []
+    verifications: list[Session] = []
+    polls: list[tuple[str, ...]] = []
+    stop = threading.Event()
+    times = iter([now, now, now.replace(minute=59), now + timedelta(hours=1)])
 
     def verify(session: Session) -> list[audit_integrity.ChainVerification]:
+        verifications.append(session)
         if failure == "unavailable":
             raise RuntimeError("verification unavailable")
         return [audit_integrity.ChainVerification("operator_audit_log", 1, False)]
@@ -273,12 +281,33 @@ def test_platform_schedule_runs_once_hourly_without_banks(
     monkeypatch.setattr(audit_integrity, "publish_alert", page)
     with Session(forward_migrated_postgres_schema.app_engine) as session:
         assert session.scalar(text("SELECT count(*) FROM banks")) == 0
-        assert run_due_verification(session, now)
-        assert not run_due_verification(session, now)
-        assert not run_due_verification(session, now.replace(minute=59))
-        assert run_due_verification(session, now + timedelta(hours=1))
+
+    def poll(types: tuple[str, ...], *, worker_id: str) -> bool:
+        polls.append(types)
+        if len(polls) == 4:
+            stop.set()
+        return True
+
+    def ignore(*args: object, **kwargs: object) -> None:
+        pass
+
+    monkeypatch.setattr(worker, "assert_worker_database_access", ignore)
+    monkeypatch.setattr(worker, "_heartbeat_safely", ignore)
+    monkeypatch.setattr(worker, "_reap_stale", ignore)
+    monkeypatch.setattr(
+        worker, "_new_session", lambda: Session(forward_migrated_postgres_schema.app_engine)
+    )
+    monkeypatch.setattr(worker, "run_once", poll)
+    monkeypatch.setattr(worker, "utc_now", lambda: next(times))
+    worker.run_worker(job_types=("scheduled_tick",), stop_event=stop)
+    assert polls == [("scheduled_tick",)] * 4
+    assert len(verifications) == 2
     reason = "chain_mismatch" if failure == "mismatch" else "verification_unavailable"
     assert pages == [reason, reason]
+    with Session(forward_migrated_postgres_schema.app_engine) as session:
+        assert session.scalar(
+            text("SELECT run_after FROM audit_integrity_schedule")
+        ) == now.replace(hour=14, minute=0)
 
 
 def test_peer_worker_cannot_repeat_locked_platform_sweep(
@@ -295,7 +324,7 @@ def test_peer_worker_cannot_repeat_locked_platform_sweep(
         def verify(session: Session) -> list[audit_integrity.ChainVerification]:
             calls.append(session)
             assert not run_due_verification(peer, now)
-            return []
+            return [audit_integrity.ChainVerification("audit_events", 0, True)]
 
         monkeypatch.setattr(audit_integrity, "scheduled_verification", verify)
         with Session(governance_schema.app_engine) as first:

@@ -129,7 +129,7 @@ def forward_migrated_postgres_schema(
 
 def _migrated_schema(
     monkeypatch: pytest.MonkeyPatch, *, downgrade: bool
-) -> Generator[MigratedPostgresSchema, None, None]:
+) -> Generator[MigratedPostgresSchema]:
     test_database_url = os.environ["TEST_DATABASE_URL"]
     if not make_url(test_database_url).drivername.startswith("postgresql"):
         pytest.skip("TEST_DATABASE_URL must point to Postgres.")
@@ -202,18 +202,51 @@ def clear_database_caches() -> None:
     get_engine.cache_clear()
 
 
+def _superuser_database_url() -> str:
+    for database_url in (os.getenv("POSTGRES_ADMIN_URL"), os.getenv("TEST_DATABASE_URL")):
+        if not database_url:
+            continue
+        engine = create_engine(database_url)
+        try:
+            with engine.connect() as connection:
+                if (
+                    connection.scalar(
+                        text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+                    )
+                    is True
+                ):
+                    return database_url
+        finally:
+            engine.dispose()
+    reason = "Superuser credentials are required for the administrator migration regression."
+    if os.getenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED"):
+        pytest.fail(f"{reason} POSTGRES_PRIVILEGE_TESTS_REQUIRED is set.")
+    pytest.skip(reason)
+
+
+@pytest.fixture
+def superuser_database_url() -> str:
+    return _superuser_database_url()
+
+
 @pytest.mark.skipif(
     os.getenv("TEST_DATABASE_URL") is None,
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
 @pytest.mark.parametrize("downgrade", [False, True])
+@pytest.mark.parametrize("source", ["POSTGRES_ADMIN_URL", "TEST_DATABASE_URL"])
 def test_superuser_migrations_use_restricted_role(
     monkeypatch: pytest.MonkeyPatch,
+    superuser_database_url: str,
     forward_migrated_postgres_schema: MigratedPostgresSchema,
     downgrade: bool,
+    source: str,
 ) -> None:
     assert forward_migrated_postgres_schema.tables({"audit_chain_heads"}) == {"audit_chain_heads"}
-    admin_url = os.environ["POSTGRES_ADMIN_URL"]
+    monkeypatch.delenv("POSTGRES_ADMIN_URL", raising=False)
+    monkeypatch.setenv(source, superuser_database_url)
+    admin_url = _superuser_database_url()
+    assert admin_url == superuser_database_url
     monkeypatch.setenv("TEST_DATABASE_URL", admin_url)
     migration_role: str | None = None
     schemas = _migrated_schema(monkeypatch, downgrade=downgrade)
@@ -258,6 +291,39 @@ def test_superuser_migrations_use_restricted_role(
             )
     finally:
         admin_engine.dispose()
+
+
+@pytest.mark.parametrize("required", [False, True])
+def test_missing_superuser_credentials_follow_privilege_policy(
+    monkeypatch: pytest.MonkeyPatch, required: bool
+) -> None:
+    monkeypatch.delenv("POSTGRES_ADMIN_URL", raising=False)
+    monkeypatch.delenv("TEST_DATABASE_URL", raising=False)
+    monkeypatch.setenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED", "1" if required else "")
+    outcome = pytest.fail.Exception if required else pytest.skip.Exception
+    with pytest.raises(outcome, match="Superuser credentials are required"):
+        _superuser_database_url()
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+@pytest.mark.parametrize("required", [False, True])
+def test_restricted_test_url_follows_privilege_policy(
+    monkeypatch: pytest.MonkeyPatch,
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
+    required: bool,
+) -> None:
+    monkeypatch.delenv("POSTGRES_ADMIN_URL", raising=False)
+    monkeypatch.setenv(
+        "TEST_DATABASE_URL",
+        forward_migrated_postgres_schema.app_engine.url.render_as_string(hide_password=False),
+    )
+    monkeypatch.setenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED", "1" if required else "")
+    outcome = pytest.fail.Exception if required else pytest.skip.Exception
+    with pytest.raises(outcome, match="Superuser credentials are required"):
+        _superuser_database_url()
 
 
 @pytest.mark.skipif(
