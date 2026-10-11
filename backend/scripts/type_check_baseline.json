@@ -2208,7 +2208,7 @@
   "reportUnknownVariableType": 5
  },
  "app.storage.s3_compatible": {
-  "reportAny": 31,
+  "reportAny": 28,
   "reportMissingTypeStubs": 5,
   "reportUnknownArgumentType": 9,
   "reportUnknownLambdaType": 7,
