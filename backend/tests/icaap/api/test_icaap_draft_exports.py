@@ -20,18 +20,17 @@ DRAFT, and an audit row per export.
 from __future__ import annotations
 
 import hashlib
-import inspect
 import io
 import zipfile
 from collections.abc import Iterator
 from datetime import date
-from typing import Any
+from typing import Any, NoReturn, cast
 from uuid import UUID, uuid4
 
 import pdfplumber
 import pytest
 from docx import Document as read_document
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
@@ -45,11 +44,12 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.db.session import get_sessionmaker
-from app.icaap.api import export_icaap_drafts
+from app.features.ingest_data import get_ingestion_storage
 from app.icaap.domain.frameworks import registry
 from app.icaap.models.workspace import IcaapBlockBinding, IcaapCycle, IcaapDataBlock, IcaapSection
 from app.icaap.service import parameters, readiness
 from app.identity.service import authorization
+from app.integrations.storage.s3 import get_object_storage
 from app.models import AuditEvent, AuthorizationBinding, Bank, User
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
@@ -668,8 +668,28 @@ class TestReadinessOnTheCover:
 
 
 class TestNoStorageDependency:
-    def test_the_routes_declare_no_storage_dependency(self) -> None:
-        # Drafts stream and are never stored, so a deployment whose object
-        # storage is unconfigured can still read its own ICAAP.
-        source = inspect.getsource(export_icaap_drafts)
-        assert "Storage" not in source
+    @pytest.mark.parametrize("kind", ["pdf", "docx"])
+    def test_the_routes_export_when_storage_is_unavailable(
+        self, db_client: TestClient, monkeypatch: pytest.MonkeyPatch, kind: str
+    ) -> None:
+        def unavailable() -> NoReturn:
+            raise HTTPException(status_code=503, detail="Storage unavailable")
+
+        app = cast(FastAPI, db_client.app)
+        monkeypatch.setitem(app.dependency_overrides, get_object_storage, unavailable)
+        monkeypatch.setitem(app.dependency_overrides, get_ingestion_storage, unavailable)
+        monkeypatch.setattr("app.storage.factory.get_storage_client", unavailable)
+        version = _grant()
+        cycle_id = _make_cycle()
+        response = db_client.get(
+            f"{_base()}/cycles/{cycle_id}/draft.{kind}",
+            headers=headers(authorization_version=version),
+        )
+        assert response.status_code == 200, response.text
+        if kind == "pdf":
+            with pdfplumber.open(io.BytesIO(response.content)) as pdf:
+                assert pdf.pages
+                assert "DRAFT" in (pdf.pages[0].extract_text() or "")
+        else:
+            document = read_document(io.BytesIO(response.content))
+            assert any("ICAAP" in paragraph.text for paragraph in document.paragraphs)

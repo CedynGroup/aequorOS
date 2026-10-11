@@ -14,11 +14,17 @@ turns out to have been recomputed under somebody's feet.
 from __future__ import annotations
 
 import ast
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
+from app.domain.stress.appendix_ii import build_appendix_ii
 from app.icaap.domain.frameworks import registry
+from app.services import enterprise_stress
+from tests.domain.stress_fixtures import severe_paths
+from tests.domain.test_stress_appendix_ii import _RECOGNITION_CAPS, _projection
+from tests.domain.test_stress_orchestrator import _fx_positions, _fx_run, _short_usd
 
 BACKEND = Path(__file__).parents[2]
 #: The whole ICAAP surface, not just its two packages. The route layer is
@@ -295,73 +301,48 @@ def test_the_plane_scanner_would_catch_a_deliberate_violation(tmp_path: Path) ->
 # --- D-038: one FX Pillar 2 definition across the filed document -------------
 
 
-#: The FX outcome fields the retired overlay formula read. Table 5's
-#: ``country_and_fx`` was ``Tier 1 × max(stressed NOP% − base NOP%, 0)``, the
-#: change in a RATIO; the ICAAP register used the revaluation loss. Both
-#: appeared in one filed ICAAP and the source-consistency control compared
-#: them, so a preparer had to explain a discrepancy the platform created
-#: (audit W3). D-038 recorded the extraction as done when it was not, which is
-#: why this is a test rather than a note.
-_RETIRED_FX_OVERLAY_FIELDS = ("stressed_nop_pct_tier1", "base_nop_pct_tier1")
-
-_FX_OVERLAY_OWNERS = (
-    "app/services/enterprise_stress.py",
-    "app/domain/stress/appendix_ii.py",
+@pytest.mark.parametrize(
+    ("short", "loss", "addon"),
+    [(False, Decimal("0"), Decimal("0")), (True, Decimal("8000000"), Decimal("3500000"))],
 )
+def test_the_stress_orchestrator_computes_the_fx_revaluation_addon(
+    short: bool, loss: Decimal, addon: Decimal
+) -> None:
+    outcome = _fx_run(_short_usd() if short else _fx_positions())
+    assert outcome.fx is not None
+    assert outcome.fx.revaluation_loss == loss
+    assert outcome.fx.pillar1_fx_capital == Decimal("4500000")
+    assert outcome.fx.pillar2_addon == addon
+    serialized = outcome.serialize()["fx"]
+    assert isinstance(serialized, dict)
+    assert Decimal(serialized["pillar2_addon"]) == addon
 
 
-@pytest.mark.parametrize("relative", _FX_OVERLAY_OWNERS)
-def test_the_stress_overlay_does_not_restate_the_fx_addon(relative: str) -> None:
-    source = (BACKEND / relative).read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    read = {
-        node.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute) and node.attr in _RETIRED_FX_OVERLAY_FIELDS
-    }
-    assert read == set(), (
-        f"{relative} computes an FX figure from NOP percentages. The Pillar 2 FX "
-        f"add-on has one definition (app/icaap/domain/pillar2/fx.py); the overlay "
-        f"reads FxOutcome.pillar2_addon."
+@pytest.mark.parametrize("short", [False, True])
+def test_the_stress_overlay_and_appendix_preserve_the_fx_addon(short: bool) -> None:
+    outcome = _fx_run(_short_usd() if short else _fx_positions())
+    expected = Decimal("3500") if short else Decimal("0")
+    overlay = enterprise_stress._pillar2_overlay(outcome, 3)  # noqa: SLF001
+    assert overlay is not None
+    assert set(overlay) == {1, 2, 3}
+    assert all(row.country_and_fx == expected for row in overlay.values())
+    tables = build_appendix_ii(
+        _projection(severe_paths()),
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=Decimal("13"),
+        recognition_caps=_RECOGNITION_CAPS,
+        pillar2_by_stress_year=overlay,
     )
-
-
-def test_the_stress_orchestrator_computes_the_fx_addon_with_the_icaap_function() -> None:
-    """The positive half: D-038 is true in code, not only in the decision log."""
-    source = (BACKEND / "app/domain/stress/orchestrator.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    imported = _imported_modules(tree, "app.domain.stress.orchestrator")
-
-    assert "app.icaap.domain.pillar2.fx" in imported, (
-        "the enterprise stress orchestrator must derive Table 5's country_and_fx "
-        "from the ICAAP Pillar 2 FX method (D-038)"
-    )
-    called = {
-        node.func.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-    }
-    assert "fx_revaluation_addon" in called
-
-
-def test_the_fx_guard_convicts_the_retired_overlay() -> None:
-    """Proof the guard above reports rather than merely being present.
-
-    This is the overlay body verbatim as it stood until 2026-09-20.
-    """
-    retired = (
-        "def _pillar2_overlay(outcome, tier1, horizon_years):\n"
-        "    if outcome.fx is not None:\n"
-        "        nop_uplift = max(\n"
-        "            outcome.fx.stressed_nop_pct_tier1 - outcome.fx.base_nop_pct_tier1, _ZERO\n"
-        "        )\n"
-        "        country_fx = thousands(tier1 * nop_uplift / _HUNDRED)\n"
-        "    return country_fx\n"
-    )
-    tree = ast.parse(retired)
-    read = {
-        node.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute) and node.attr in _RETIRED_FX_OVERLAY_FIELDS
-    }
-    assert read == set(_RETIRED_FX_OVERLAY_FIELDS)
+    for row in tables.table5_rwa.rows:
+        assert row.pillar2.country_and_fx == (
+            expected if row.label.startswith("stress_y") else None
+        )
+    serialized = tables.serialize()["table5_rwa"]
+    assert isinstance(serialized, dict)
+    for row in serialized["rows"]:
+        value = row["pillar2"]["country_and_fx"]
+        if row["label"].startswith("stress_y"):
+            assert Decimal(value) == expected
+        else:
+            assert value is None

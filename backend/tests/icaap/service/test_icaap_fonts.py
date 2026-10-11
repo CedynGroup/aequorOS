@@ -16,16 +16,15 @@ Three separate promises are checked here, because each fails differently:
 
 from __future__ import annotations
 
-import ast
 import re
-from pathlib import Path
 
 import pytest
 from fontTools.ttLib import TTFont
 
+from app.icaap.service.render.pdf import render_pdf
 from app.services.regulatory_reporting.exports import icaap_fonts
-
-APP_ROOT = Path(icaap_fonts.__file__).resolve().parents[3]
+from tests.icaap.service.test_draft_pdf import build_document
+from tests.icaap.service.test_icaap_filing_pdf import font_resources, render
 
 
 def test_every_committed_face_and_the_licence_are_present() -> None:
@@ -89,28 +88,21 @@ def test_registration_is_idempotent_and_registers_the_family() -> None:
     assert pdfmetrics.getFont(first.bold).fontName == first.bold
 
 
-def test_only_the_icaap_filing_pdf_imports_the_font_module() -> None:
-    """D-022 conditions the change on existing returns being untouched.
-
-    A second importer is how a font resource reaches another return's PDF and
-    moves bytes an export golden pins. The check is on the source, because by
-    the time a golden fails the cause is three files away.
-    """
-    module = "exports.icaap_fonts"
-    importers: set[str] = set()
-    for path in sorted(APP_ROOT.joinpath("app").rglob("*.py")):
-        source = path.read_text(encoding="utf-8")
-        if "icaap_fonts" not in source:
-            continue
-        tree = ast.parse(source)
-        for node in ast.walk(tree):
-            names = []
-            if isinstance(node, ast.ImportFrom):
-                names = [f"{node.module or ''}.{alias.name}" for alias in node.names]
-            elif isinstance(node, ast.Import):
-                names = [alias.name for alias in node.names]
-            if any("icaap_fonts" in name for name in names):
-                importers.add(path.name)
-    assert importers <= {"icaap_fonts.py", "icaap_pdf.py"}, (
-        f"{module} is imported by {sorted(importers)}; only the ICAAP filing PDF may."
-    )
+def test_only_the_icaap_filing_pdf_embeds_the_font_family() -> None:
+    document = build_document()
+    before = render_pdf(document)
+    filing_fonts = font_resources(render())
+    embedded_names = {name for name, embedded in filing_fonts if embedded}
+    assert embedded_names
+    assert all("NotoSans" in name for name in embedded_names)
+    after = render_pdf(document)
+    assert before == after
+    draft_fonts = font_resources(after)
+    assert draft_fonts
+    assert {name for name, _ in draft_fonts} <= {
+        "/Helvetica",
+        "/Helvetica-Bold",
+        "/Helvetica-Oblique",
+        "/Helvetica-BoldOblique",
+    }
+    assert not any(embedded for _, embedded in draft_fonts)

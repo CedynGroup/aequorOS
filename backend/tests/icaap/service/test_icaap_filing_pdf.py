@@ -26,6 +26,7 @@ import hashlib
 import io
 import re
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pdfplumber
 import pytest
@@ -432,14 +433,66 @@ def test_the_draft_renderer_escapes_identically_under_the_default_font() -> None
 
 
 def test_the_generic_tabular_renderer_never_sees_the_embedded_font() -> None:
-    """Every non-ICAAP return still renders through ``exports/pdf.py`` alone."""
-    import inspect  # noqa: PLC0415
-
     from app.services.regulatory_reporting.exports import pdf as tabular  # noqa: PLC0415
+    from app.services.regulatory_reporting.templates import (  # noqa: PLC0415
+        TEMPLATES,
+        RenderedCell,
+        RenderedReturn,
+        RenderedRow,
+        RenderedSection,
+    )
 
-    source = inspect.getsource(tabular)
-    assert "icaap_fonts" not in source
-    assert "AeqNotoSans" not in source
+    template = TEMPLATES["bog-sdi-lmt-monthly-v1"]
+    layout = next(
+        section for section in template.sections if section.section_code == "maturity_ladder"
+    )
+    row = RenderedRow(
+        cells=tuple(
+            RenderedCell(kind=spec.kind, value="Cash" if spec.kind == "text" else Decimal("100"))
+            for spec in layout.columns
+        )
+    )
+    rendered = RenderedReturn(
+        template=template,
+        metadata_pairs=(("Institution", "Sample S&L"),),
+        sections=(
+            RenderedSection(
+                layout=layout,
+                title=layout.sheet_title,
+                rows=(row,),
+                total_row=RenderedRow(cells=row.cells, is_total=True),
+            ),
+        ),
+        provenance_runs=(),
+        provenance_lines=("Frozen package snapshot",),
+    )
+    before = tabular.render_pdf(rendered, sandbox_watermark=False)
+    render()
+    after = tabular.render_pdf(rendered, sandbox_watermark=False)
+    assert before == after
+    fonts = font_resources(after)
+    assert fonts
+    assert {name for name, _ in fonts} <= {
+        "/Helvetica",
+        "/Helvetica-Bold",
+        "/Helvetica-Oblique",
+        "/Helvetica-BoldOblique",
+        "/Symbol",
+    }
+    assert not any(embedded for _, embedded in fonts)
+
+
+def font_resources(payload: bytes) -> set[tuple[str, bool]]:
+    reader = PdfFileReader(io.BytesIO(payload))
+    found: set[tuple[str, bool]] = set()
+    for reference in reader.root["/Pages"]["/Kids"]:
+        resources = reference.get_object()["/Resources"]
+        for font in resources["/Font"].values():
+            font = font.get_object()
+            descriptor = font["/FontDescriptor"] if "/FontDescriptor" in font else {}
+            embedded = any(key in descriptor for key in ("/FontFile", "/FontFile2", "/FontFile3"))
+            found.add((str(font["/BaseFont"]), embedded))
+    return found
 
 
 # --------------------------------------------------------------------------

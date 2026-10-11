@@ -8,12 +8,11 @@ exports), reusing the fixtures of ``test_icaap_stress_appendix2_report``.
 
 from __future__ import annotations
 
-import ast
 import io
 import re
 import zipfile
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,13 +21,13 @@ from uuid import UUID
 
 import pdfplumber
 import pytest
+from fastapi import HTTPException
 from openpyxl import load_workbook
 from sqlalchemy import select
-from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
-from app.models import Bank, RegulatoryPackage, RegulatoryRun
-from app.services import capital_plan, enterprise_stress, regulatory_forecasting
+from app.models import Bank, BankReportingPeriod, RegulatoryPackage, RegulatoryRun
+from app.services import capital_plan, enterprise_stress
 from app.services.regulatory_reporting import generation, workflow
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.exports.pdf_parts import escape_text, printable
@@ -503,27 +502,71 @@ def test_the_governed_row_follows_the_resolver_layer_order() -> None:
 # --- item 17: one horizon rule --------------------------------------------------------
 
 
-def test_both_icaap_consumers_share_one_horizon_rule() -> None:
-    compiled = {
-        str(select(RegulatoryRun.id).where(clause).compile(dialect=postgresql.dialect()))
-        for clause in (
-            capital_plan._planning_horizon(),  # noqa: SLF001
-            regulatory_forecasting.regulatory_horizon_clause(),
+@pytest.mark.parametrize(
+    "regulatory_inputs",
+    [{}, {"horizon_years": None}, {"horizon_years": 5}, None],
+    ids=["default", "null", "explicit-five", "no-regulatory-run"],
+)
+def test_both_icaap_consumers_select_only_the_regulatory_horizon(
+    db_session: Session, regulatory_inputs: dict[str, int | None] | None
+) -> None:
+    materialize_canonical_test_book(db_session)
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    period = db_session.scalar(
+        select(BankReportingPeriod).where(
+            BankReportingPeriod.bank_id == bank.id,
+            BankReportingPeriod.period_end == date(2026, 3, 31),
         )
-    }
-    assert len(compiled) == 1
-    source = (BACKEND / "app" / "services" / "regulatory_reporting" / "generation.py").read_text(
-        encoding="utf-8"
     )
-    tree = ast.parse(source)
-    function = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "_generate_icaap_stress"
+    assert period is not None
+    inputs = ([regulatory_inputs] if regulatory_inputs is not None else []) + [
+        {"horizon_years": 3},
+        {"horizon_years": 7},
+    ]
+    runs: list[RegulatoryRun] = []
+    for index, values in enumerate(inputs):
+        computed_at = datetime(2026, 4, 1, tzinfo=UTC) + timedelta(minutes=index)
+        run = RegulatoryRun(
+            organization_id=MAKER.organization_id,
+            bank_id=bank.id,
+            reporting_period_id=period.id,
+            module="forecast",
+            scenario_code="base",
+            status="succeeded",
+            engine_version="forecast-test-v1",
+            input_schema_version="forecast-input-test-v1",
+            output_schema_version="forecast-output-test-v1",
+            input_hash=str(index) * 64,
+            inputs={"parameters": {}, **values},
+            metrics={"cumulative_net_income": str(100 + index)},
+            parameter_provenance=[],
+            created_by=MAKER.actor_user_id,
+            created_at=computed_at,
+            completed_at=computed_at,
+        )
+        db_session.add(run)
+        runs.append(run)
+    db_session.flush()
+    selected = capital_plan._forecast_runs(db_session, MAKER, bank)  # noqa: SLF001
+    if regulatory_inputs is None:
+        assert selected == []
+        with pytest.raises(HTTPException) as refused:
+            generation._generate_icaap_stress(  # noqa: SLF001
+                db_session, MAKER, bank, period, generation.REGISTRY["ICAAP-STRESS"]
+            )
+        assert refused.value.status_code == 409
+        assert refused.value.detail["error_code"] == "no_forecast_run"
+        return
+    assert [run.id for run in selected] == [runs[0].id]
+    generated = generation._generate_icaap_stress(  # noqa: SLF001
+        db_session, MAKER, bank, period, generation.REGISTRY["ICAAP-STRESS"]
     )
-    body = ast.unparse(function)
-    assert "regulatory_horizon_clause()" in body
-    assert "horizon_years" not in body
+    assert generated.snapshot["metadata"]["forecast_run_id"] == str(runs[0].id)
+    assert [entry["run_id"] for entry in generated.source_runs] == [str(runs[0].id)]
+    summary = _section(generated.snapshot, "forecast_summary")
+    assert summary is not None
+    assert summary["rows"][0]["value"] == "100"
 
 
 # --- item 18: printed wording ----------------------------------------------------------
