@@ -19,6 +19,7 @@ import re
 import shlex
 import tomllib
 from pathlib import Path
+from typing import cast
 
 import yaml
 
@@ -478,3 +479,22 @@ def test_the_hermetic_run_still_proves_it_collected_every_module() -> None:
         "the ones pytest collects. A module that collects nowhere would again "
         "be invisible."
     )
+
+
+def test_duration_shards_preserve_worker_limit_and_schema_configuration() -> None:
+    command = _run_commands(_tasks(BACKEND_TASKS)["risk-service:test-postgres-suite"])[0]
+    tokens = shlex.split(command)
+    assert tokens[tokens.index("-n") + 1] == "4"
+    assert tokens[tokens.index("--dist") + 1] == "loadfile"
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
+    )
+    schema = document["jobs"]["postgres-schema"]
+    steps = cast(list[dict[str, object]], schema["steps"])
+    step = next(
+        step for step in steps if step.get("run") == "mise run risk-service:test-postgres-schema"
+    )
+    assert cast(dict[str, object], step["env"])["CI_POSTGRES_SUITE"] == "schema"
+    strategy = cast(dict[str, object], schema["strategy"])
+    assert cast(dict[str, object], strategy["matrix"])["shard"] == [1, 2]

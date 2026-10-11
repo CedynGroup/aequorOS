@@ -44,13 +44,10 @@ name: Risk Service CI
 #   postgres-suite — the remaining backend suite against Postgres, including
 #                 OpenBao signing. Suite ownership is defined in backend/mise.toml
 #                 and pinned by tests/architecture/test_ci_task_wiring.py.
-#                 Two module shards and their aggregate preserve exact coverage.
+#                 Sharding, selection and coverage guards are documented in
+#                 backend/README.md#run-tests.
 #                 Parallel execution and schema isolation are documented in
 #                 backend/README.md#test-databases-and-the-primary-database.
-#                 The aggregate retains the 3000-executed floor on full runs,
-#                 and verifies every selected test on affected-only PR runs.
-#                 The full-run floor proves the suite did not
-#                 accidentally collect or execute nothing.
 #   storage     — the S3-compatible object-store contract: SSE-KMS at rest, the
 #                 hash-chained access log, per-institution provisioning. Added
 #                 2026-08-22. It self-skips without S3_*, and no job had ever
@@ -425,6 +422,7 @@ jobs:
           POSTGRES_PRIVILEGE_TESTS_REQUIRED: "1"
           CI_POSTGRES_SHARD: ${{ matrix.shard }}
           CI_POSTGRES_FILES: "[]"
+          CI_POSTGRES_SUITE: schema
           CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-schema
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-schema/report.xml
         run: mise run risk-service:test-postgres-schema
@@ -480,7 +478,7 @@ jobs:
         run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-locks.xml" --min-executed 60 --max-skipped 0
 
   postgres-shard:
-    name: Postgres suite shard ${{ matrix.shard }}/2
+    name: Postgres suite shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
     needs: preflight
     if: needs.preflight.outputs.backend == 'true'

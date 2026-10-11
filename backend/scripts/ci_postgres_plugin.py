@@ -1,4 +1,4 @@
-"""Opt-in CI module sharding; normal developer pytest runs are unchanged."""
+"""Opt-in CI duration-balanced module sharding; normal developer pytest runs are unchanged."""
 
 from __future__ import annotations
 
@@ -9,23 +9,20 @@ from typing import cast
 
 import pytest
 
-from scripts.ci_postgres import SHARDS, shard_for, strings
+from scripts.ci_postgres import selected_tests, shard_count, strings
 
 
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     index = int(os.environ["CI_POSTGRES_SHARD"])
     files = strings(cast(object, json.loads(os.getenv("CI_POSTGRES_FILES", "[]"))))
-    if not 1 <= index <= SHARDS:
+    suite = os.getenv("CI_POSTGRES_SUITE", "suite")
+    count = shard_count(suite)
+    if not 1 <= index <= count:
         raise pytest.UsageError("CI_POSTGRES_SHARD is outside the configured matrix")
     collected = [item.nodeid for item in items]
-    selected = [
-        item
-        for item in items
-        if (not files or item.nodeid.split("::")[0] in files)
-        and shard_for(item.nodeid.split("::")[0]) == index
-    ]
-    selected_ids = {item.nodeid for item in selected}
+    selected_ids = set(selected_tests(collected, files, index, suite))
+    selected = [item for item in items if item.nodeid in selected_ids]
     deselected = [item for item in items if item.nodeid not in selected_ids]
     config.hook.pytest_deselected(items=deselected)
     items[:] = selected
@@ -35,7 +32,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     (directory / f"collection-{worker}.json").write_text(
         json.dumps(
             {
-                "count": SHARDS,
+                "count": count,
                 "shard": index,
                 "files": files,
                 "collected": collected,
