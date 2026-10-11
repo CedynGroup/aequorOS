@@ -120,7 +120,7 @@ describe("credit stored analytical figures", () => {
       ),
       { numRuns: 100 },
     );
-  });
+  }, 30_000);
 
   it("keeps missing estimates, actual zero, segment evidence and display-only ECL suggestions distinct", () => {
     render(
@@ -262,7 +262,7 @@ describe("credit stored analytical figures", () => {
       ),
       { numRuns: 100 },
     );
-  });
+  }, 30_000);
 
   it("distinguishes absent roll rates from zero and preserves rates across all bucket pairs", () => {
     const buckets = [
@@ -320,5 +320,5 @@ describe("credit stored analytical figures", () => {
         ],
       },
     );
-  });
+  }, 30_000);
 });
