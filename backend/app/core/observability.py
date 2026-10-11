@@ -99,6 +99,7 @@ class Condition(StrEnum):
     WORKER_STARVED = "worker.starved"
     WORKER_JOB_FAILED = "worker.job_failed"
     STORAGE_FAILED = "storage.failed"
+    AUDIT_CHAIN_BROKEN = "audit.chain_broken"
     AUTH_ANOMALY = "auth.anomaly"
     SSRF_BLOCKED = "egress.blocked"
     AUTHORIZATION_DENIED = "authz.denied"
@@ -117,6 +118,9 @@ _LEVELS: Final[dict[str, str]] = {"info": "INFO", "warning": "WARNING", "error":
 #: structured log emitted by this module is an operational signal; for the
 #: conditions that name a table below, the table is the evidence.
 CONDITION_SOURCES: Final[dict[Condition, str]] = {
+    Condition.AUDIT_CHAIN_BROKEN: (
+        "audit_chain_entries + audit_chain_heads; all-tenant verification logs and pages"
+    ),
     Condition.CALCULATION_FAILED: (
         "this log line from migrated calculation boundaries; legacy persisted attempts use "
         "audit_events(event_type='calculation_run.failed') + calculation_runs.status"

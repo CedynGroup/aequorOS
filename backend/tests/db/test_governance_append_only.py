@@ -93,7 +93,14 @@ def governance_schema() -> Iterator[MigratedPostgresSchema]:
     with admin_engine.connect() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
     try:
-        command.upgrade(alembic_config_for_app(), "head")
+        # Several modules reuse this fixture under xdist. Serialize their full
+        # migration chains to stay within a stock PostgreSQL server's lock budget.
+        with admin_engine.connect() as migration_lock:
+            migration_lock.execute(text("SELECT pg_advisory_lock(413090)"))
+            try:
+                command.upgrade(alembic_config_for_app(), "head")
+            finally:
+                migration_lock.execute(text("SELECT pg_advisory_unlock(413090)"))
         with app_engine.connect() as connection:
             connection.execute(
                 text("SELECT set_config('app.organization_id', :org, false)"),

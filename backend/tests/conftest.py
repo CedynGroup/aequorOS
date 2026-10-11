@@ -109,6 +109,7 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # they'd pass or fail depending on whose .env ran them. All default to off in
     # the product; tests that need one ON set it themselves via monkeypatch.
     for _scheduling_flag in (
+        "AUDIT_INTEGRITY_ENABLED",
         "OFFICIAL_RUN_ENABLED",
         "MARKET_DATA_PULL_ENABLED",
         "TEMENOS_PULL_ENABLED",
@@ -117,6 +118,11 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "DESK_CAPTURE_ENABLED",
     ):
         monkeypatch.setenv(_scheduling_flag, "0")
+    # Production paging must not send fixture data to AWS.
+    for _setting, _value in {
+        "AUDIT_INTEGRITY_ALERT_TOPIC_ARN": "",
+    }.items():
+        monkeypatch.setenv(_setting, _value)
     # Same guard, same reason, for the ICAAP signing switch: it ships OFF, and a
     # developer who has turned the ICAAP ceremony on locally would otherwise flip
     # every test that asserts the suspended path. Tests that need the ceremony
