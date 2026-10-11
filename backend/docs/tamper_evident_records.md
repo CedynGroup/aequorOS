@@ -134,3 +134,23 @@ before deploying this migration in production or staging:
   truncation and function replacement fail. Confirm one sweep with zero banks
   and one mismatch page per broken stream with multiple core worker replicas.
   Attach role/grant evidence and a pager receipt to #356/#401.
+
+## Filing and input seals
+
+`202610100091` forbids financial-content updates on every generated package:
+identity, version, source-run references, input snapshot and its hash. Application
+roles lose table UPDATE and receive only the lifecycle-column grants (including
+`id` for PostgreSQL foreign-key key-share locking; changing it is trigger-blocked).
+Signed packages cannot be deleted; their content digest is sealed. Existing
+signature evidence keeps the deletion seal active after a void. Lifecycle status,
+review bookkeeping and regulator outcomes continue to advance. A correction
+uses existing generation/resubmission authorization and `supersedes_id`, retaining
+the original version and figures. Voiding withdraws certification; it never opens
+an in-place financial-content edit. Completed regulatory runs, including their
+inputs and metrics, cannot be updated or deleted. Queued/running work can finish.
+
+Do not grant blanket UPDATE/DELETE after migration. `bootstrap_db.sh`'s legacy
+blanket grants must not be used as a production reprovisioning procedure; triggers
+still protect records but the intended permission layer requires migration grants.
+Use a separate migration owner and unprivileged application role. The worker's
+BYPASSRLS privilege does not grant permission to alter evidence.
