@@ -211,11 +211,12 @@ def _workflow_detector_command(
     workflow: str = "dashboard-journeys.yml", step_id: str = "areas", job: str = "changes"
 ) -> str:
     repo = GATE.parents[2]
-    document = yaml.load(
-        (repo / ".github/workflows" / workflow).read_text(),
-        Loader=yaml.BaseLoader,
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.load((repo / ".github/workflows" / workflow).read_text(), Loader=yaml.BaseLoader),
     )
-    step = next(step for step in document["jobs"][job]["steps"] if step.get("id") == step_id)
+    steps = cast(list[dict[str, object]], document["jobs"][job]["steps"])
+    step = next(step for step in steps if step.get("id") == step_id)
     return cast(str, step["run"])
 
 

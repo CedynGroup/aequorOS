@@ -190,7 +190,10 @@ def test_every_task_ci_invokes_exists() -> None:
 
 def test_dashboard_journeys_have_an_always_reported_sharded_gate() -> None:
     """Validate the Actions job graph that supplies the required check."""
-    document = yaml.load((WORKFLOWS / "dashboard-journeys.yml").read_text(), Loader=yaml.BaseLoader)
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.load((WORKFLOWS / "dashboard-journeys.yml").read_text(), Loader=yaml.BaseLoader),
+    )
     assert set(document["on"]) == {"pull_request", "push", "workflow_dispatch"}
     assert document["on"]["push"]["branches"] == ["main"]
     jobs = document["jobs"]
@@ -199,10 +202,14 @@ def test_dashboard_journeys_have_an_always_reported_sharded_gate() -> None:
     assert set(_needs(jobs["gate"])) == {"changes", "journeys"}
     assert _needs(jobs["journeys"]) == ["changes"]
     assert jobs["journeys"]["if"] == "needs.changes.outputs.journeys == 'true'"
-    assert jobs["journeys"]["strategy"]["matrix"]["shard"] == ["1", "2", "3", "4"]
-    assert jobs["journeys"]["strategy"]["fail-fast"] == "false"
+    strategy = cast(dict[str, object], jobs["journeys"]["strategy"])
+    assert cast(dict[str, object], strategy["matrix"])["shard"] == ["1", "2", "3", "4"]
+    assert strategy["fail-fast"] == "false"
 
-    risk_document = yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text())
+    risk_document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
+    )
     assert "journeys" not in risk_document["jobs"]
     assert "journeys" not in _needs(risk_document["jobs"]["gate"])
 

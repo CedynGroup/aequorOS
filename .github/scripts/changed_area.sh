@@ -34,7 +34,7 @@ case "${3:-}" in
 esac
 
 emit() {
-  echo "${NAME}=$1" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
+  echo "${NAME}=$1" >>"${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
   echo "${NAME}=$1"
 }
 
