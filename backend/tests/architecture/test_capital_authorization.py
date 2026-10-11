@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi.routing import APIRoute
 
-from app.main import create_app
+from app.main import app
 
 _ROUTE_DEPENDENCIES = {
     ("GET", "/api/v1/banks/{bank_id}/capital/dashboard"): "require_capital_aggregated_view",
@@ -38,7 +38,7 @@ def _dependency_names(route: APIRoute) -> set[str]:
 
 
 def test_capital_routes_cannot_revert_to_legacy_authorization() -> None:
-    routes = [route for route in create_app().routes if isinstance(route, APIRoute)]
+    routes = [route for route in app.routes if isinstance(route, APIRoute)]
 
     for (method, path), required_dependency in _ROUTE_DEPENDENCIES.items():
         matches = [

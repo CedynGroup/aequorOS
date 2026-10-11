@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import ast
 import re
+from functools import lru_cache
 from pathlib import Path
 
 APP = Path(__file__).parents[2] / "app"
@@ -292,6 +293,11 @@ def imported_modules(source: str, *, module: str | None = None) -> set[str]:
     * this is per-file. Reachability through a chain of modules is covered by
       the CLOSURE rule in `test_case_plane_boundary.py`, not here.
     """
+    return set(_imported_modules(source, module))
+
+
+@lru_cache(maxsize=2048)
+def _imported_modules(source: str, module: str | None) -> frozenset[str]:
     tree = ast.parse(source)
     package = _package_of(module) if module else None
     modules: set[str] = set(_dynamic_import_targets(tree))
@@ -311,7 +317,7 @@ def imported_modules(source: str, *, module: str | None = None) -> set[str]:
                 continue
             modules.add(base)
             modules.update(f"{base}.{alias.name}" for alias in node.names)
-    return modules
+    return frozenset(modules)
 
 
 def referenced_names(source: str) -> set[str]:
@@ -327,6 +333,11 @@ def referenced_names(source: str) -> set[str]:
     not a dependency on it. ``getattr`` is the narrow exception because its
     second argument IS an attribute access.
     """
+    return set(_referenced_names(source))
+
+
+@lru_cache(maxsize=2048)
+def _referenced_names(source: str) -> frozenset[str]:
     names: set[str] = set()
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.ImportFrom):
@@ -342,7 +353,7 @@ def referenced_names(source: str) -> set[str]:
             and (attribute := string_value(node.args[1])) is not None
         ):
             names.add(attribute)
-    return names
+    return frozenset(names)
 
 
 def literal_strings(tree: ast.AST) -> list[str]:
@@ -388,7 +399,12 @@ def sql_table_references(source: str, tables: frozenset[str]) -> set[str]:
     LIMIT: only statically-known SQL. A query assembled at runtime, or read
     from a file, is not visible.
     """
+    return set(_sql_table_references(source, tables))
+
+
+@lru_cache(maxsize=2048)
+def _sql_table_references(source: str, tables: frozenset[str]) -> frozenset[str]:
     referenced: set[str] = set()
     for statement in literal_strings(ast.parse(source)):
         referenced.update(match for match in _SQL_TABLE.findall(statement) if match in tables)
-    return referenced
+    return frozenset(referenced)
