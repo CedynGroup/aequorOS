@@ -396,8 +396,9 @@ support existing tests that load modules dynamically. `scripts/run-unit-tests.mj
 discovers all source test files, fails below the 55-file floor or when any source
 test lacks compiled output, and executes each file in its own Node process.
 There is no hand-maintained execution list. New nested TS and TSX tests are
-included automatically. CI uploads the discovered, executed and failed file
-names in `dashboard-unit-collection`, including partial evidence on failure.
+included automatically. Once the collection runner starts, CI uploads the
+discovered, executed and failed file names in `dashboard-unit-collection`,
+including partial evidence if execution fails.
 The script contract tests also run through the standard `test` command.
 
 ## End-to-end (Playwright)
@@ -440,7 +441,7 @@ diagnosis:
    specs, plus the SSO attestation journey, refuse immediately without it rather
    than letting storage-dependent assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The
-   manually dispatched GitHub Actions workflow starts a disposable MinIO with
+   GitHub Actions journey workflow starts a disposable MinIO with
    its built-in KMS and runs the standard suite against that real object store.
 2. **Global reference registries.** `scripts/e2e_bootstrap.py` builds the schema
    with `Base.metadata.create_all`, so **no migration runs** — jurisdictions,
@@ -624,19 +625,16 @@ result and cannot inflate the count. Missing/unfinished tests or a lost shard
 fail the gate even when the remaining reports pass. Raise the floor when adding
 coverage; reducing it requires a reviewed suite change.
 
-The previous four skips were diagnostics: three temporary home/bell/stress
-screenshot probes were retired, and the assertion-free whole-site visual tour
-moved out of the required suite. From the repository root, run
-`AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual`
-to capture that tour separately against the same disposable stack using native
-services locally. It neither pads the journey count nor skips a required journey.
-Its output remains in `backend/dashboard/e2e/.tmp/visual-tour/`.
+Screenshot diagnostics are separate from the required suite; see the visual-tour
+capture command and output under [End-to-end (Playwright)](#end-to-end-playwright).
 
 Each shard also requires at least 20 executed journeys and the quarantine in
 `e2e/support/quarantine.ts` to match the size the workflow pins. A journey may only be parked there by name,
-declared with `test.fail` and a reason beside it, and with the workflow's gate
-edited to admit it; the custom reporter fails the run for any non-quarantined
-failure, unexpected quarantine pass, skipped or undiscovered quarantine entry,
+declared with `test.fail` and a reason beside it, and with both the workflow's
+shard gate and `.github/scripts/assert_dashboard_journeys.mjs` edited to admit
+it. The aggregate currently refuses any quarantine. The custom reporter fails
+the run for any non-quarantined failure, unexpected quarantine pass, skipped or
+undiscovered quarantine entry,
 or `test.fail` declaration missing from that list.
 
 Reporting-date selection and exact snapshot matching are governed by
@@ -678,7 +676,6 @@ focusable scroll region and a caption naming the gesture; tables that fit are
 unchanged. The affordance is the floor, not the goal: when a table overflows
 because it was put in a half-width grid cell, move it to a full row — signpost
 the overflow you cannot remove, remove the one you can. **Design changes are
-reviewed as pixels**: from the repository root, run
-`AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual` and
-compare `backend/dashboard/e2e/.tmp/visual-tour/` before and after.
-Type-checking cannot see a clipped column.
+reviewed as pixels**: follow the visual-tour capture instructions under
+[End-to-end (Playwright)](#end-to-end-playwright) and compare the screenshots
+before and after. Type-checking cannot see a clipped column.
