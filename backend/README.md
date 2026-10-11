@@ -349,6 +349,9 @@ for that scenario without altering acknowledged or dismissed history.
 
 ## Run Tests
 
+The [workflow inventory and stateful-test guide](docs/state_machine_testing.md)
+records transition guards, coverage boundaries, and bounded Hypothesis profiles.
+
 ```bash
 mise run risk-service:test
 ```

@@ -180,16 +180,8 @@ def return_cycle(
         # been unsealed and rewritten in the same statement.
         cycle.status = "returned"
         db.flush()
-        # FLUSH 2: the row is unsealed now, so the seal's own fields may go.
-        cycle.package_id = None
-        cycle.frozen_at = None
-        cycle.board_approved_at = None
-        cycle.submitted_at = None
-        cycle.round += 1
-        cycle.current_stage_seq = payload.return_to_seq
-        if payload.return_to_seq > 1:
-            cycle.status = "in_review"
-        db.flush()
+        # A return closes the old round. Recording it in the new round would
+        # invalidate that round's fresh approvals too (reset starts at round + 1).
         workflow.record_decision(
             db,
             access,
@@ -201,6 +193,16 @@ def return_cycle(
             comment=payload.reason,
             package_id=old_package_id,
         )
+        # FLUSH 2: the row is unsealed now, so the seal's own fields may go.
+        cycle.package_id = None
+        cycle.frozen_at = None
+        cycle.board_approved_at = None
+        cycle.submitted_at = None
+        cycle.round += 1
+        cycle.current_stage_seq = payload.return_to_seq
+        if payload.return_to_seq > 1:
+            cycle.status = "in_review"
+        db.flush()
         if package is not None and package.status not in {"rejected", "declined"}:
             _void_attestation(db, access, package, payload.reason)
         record_event(
