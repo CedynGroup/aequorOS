@@ -144,12 +144,11 @@ jobs:
         with:
           pattern: dashboard-journey-report-*
           path: ${{ runner.temp }}/journey-reports
-      - name: Summarize journey counts
+      - name: Verify complete journey execution and report skipped names
         if: needs.changes.outputs.journeys == 'true'
         run: |
-          set -euo pipefail
-          jq -s '{shards: length, discovered: (map(.discovered) | add), executed: (map(.executed) | add), skipped: (map(.skipped) | add)}' \
-            "$RUNNER_TEMP"/journey-reports/*/journeys.json | tee -a "$GITHUB_STEP_SUMMARY"
+          node .github/scripts/assert_dashboard_journeys.mjs \
+            "$RUNNER_TEMP"/journey-reports/*/journeys.json
       - name: Require the journey shards or a verified irrelevant change
         if: always()
         env:

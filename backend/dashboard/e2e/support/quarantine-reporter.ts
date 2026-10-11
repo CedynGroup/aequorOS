@@ -32,11 +32,14 @@ function isExpectedFailure(testCase: TestCase): boolean {
 export default class QuarantineReporter implements Reporter {
   private errors: string[] = [];
   private discovered = 0;
-  private executed = 0;
-  private skipped = 0;
-  private quarantinedExecuted = 0;
+  private shard: FullConfig["shard"] = null;
+  private results = new Map<
+    string,
+    { id: string; name: string; status: TestResult["status"] }
+  >();
 
   onBegin(_config: FullConfig, suite: Suite): void {
+    this.shard = _config.shard;
     const tests = suite.allTests();
     this.discovered = tests.length;
     const discovered = new Map(
@@ -69,14 +72,12 @@ export default class QuarantineReporter implements Reporter {
   }
 
   onTestEnd(testCase: TestCase, result: TestResult): void {
-    if (result.status === "skipped") {
-      this.skipped += 1;
-      return;
-    }
-    this.executed += 1;
-    if (QUARANTINED_SET.has(journeyName(testCase))) {
-      this.quarantinedExecuted += 1;
-    }
+    // A retry replaces the same journey's result rather than inflating counts.
+    this.results.set(testCase.id, {
+      id: testCase.id,
+      name: journeyName(testCase),
+      status: result.status,
+    });
   }
 
   // `async` so the declared return type is the `Promise<...>` arm of Playwright's
@@ -86,14 +87,30 @@ export default class QuarantineReporter implements Reporter {
   // The script now checks both trees — see `package.json` — so this cannot rot
   // again silently.
   async onEnd(result: FullResult): Promise<{ status?: FullResult["status"] }> {
-    if (this.executed < 20) {
+    const journeys = [...this.results.values()];
+    const executed = journeys.filter(
+      (journey) => journey.status !== "skipped",
+    ).length;
+    const skippedNames = journeys
+      .filter((journey) => journey.status === "skipped")
+      .map((journey) => journey.name);
+    const quarantinedExecuted = journeys.filter(
+      (journey) =>
+        journey.status !== "skipped" && QUARANTINED_SET.has(journey.name),
+    ).length;
+    if (journeys.length !== this.discovered) {
       this.errors.push(
-        `only ${this.executed} journeys executed; the CI gate expects at least 20`,
+        `only ${journeys.length} of ${this.discovered} discovered journeys reported a result`,
       );
     }
-    if (this.quarantinedExecuted !== QUARANTINED_JOURNEYS.length) {
+    if (executed < 20) {
       this.errors.push(
-        `${this.quarantinedExecuted} quarantined journeys executed; expected ${QUARANTINED_JOURNEYS.length}`,
+        `only ${executed} journeys executed; the CI gate expects at least 20`,
+      );
+    }
+    if (quarantinedExecuted !== QUARANTINED_JOURNEYS.length) {
+      this.errors.push(
+        `${quarantinedExecuted} quarantined journeys executed; expected ${QUARANTINED_JOURNEYS.length}`,
       );
     }
 
@@ -103,10 +120,14 @@ export default class QuarantineReporter implements Reporter {
         output,
         `${JSON.stringify(
           {
+            shard: this.shard,
+            status: result.status,
             discovered: this.discovered,
-            executed: this.executed,
-            skipped: this.skipped,
-            quarantinedExecuted: this.quarantinedExecuted,
+            executed,
+            skipped: skippedNames.length,
+            skippedNames,
+            journeys,
+            quarantinedExecuted,
             quarantineSize: QUARANTINED_JOURNEYS.length,
             integrityErrors: this.errors,
           },

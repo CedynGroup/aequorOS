@@ -15,6 +15,9 @@ const test = base.extend<{
     const api = `${E2E_API_ORIGIN}/api/v1`;
     const headers = {
       Authorization: `Bearer ${await mintBackendToken("admin")}`,
+      // The browser journey can outlast Uvicorn's idle keep-alive window.
+      // Cleanup must open a fresh connection rather than race its expiry.
+      Connection: "close",
     };
     const bindings: string[] = [];
     try {

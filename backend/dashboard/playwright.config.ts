@@ -185,6 +185,13 @@ export default defineConfig({
         // `.next` (NEXT_PUBLIC_* is compile-time-inlined; next dev shares one
         // cache per directory). Paired with distDir in next.config.js.
         NEXT_DIST_DIR: ".next-e2e",
+        // Google can return extensionless font URLs that Next 16.4 cannot
+        // compile (vercel/next.js#99114). Only this disposable server uses
+        // fixed CSS responses; production keeps its real Google fonts.
+        NEXT_FONT_GOOGLE_MOCKED_RESPONSES: path.join(
+          __dirname,
+          "e2e/support/google-font-responses.cjs",
+        ),
         AUTH_SECRET: E2E_AUTH_SECRET,
         AUTH_TRUST_HOST: "true",
         SSO_INTERNAL_KEY: E2E_SSO_INTERNAL_KEY,
