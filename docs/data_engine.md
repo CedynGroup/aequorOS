@@ -637,7 +637,8 @@ Separate from the lineage graph, a linear audit log records every user action:
 - Model retraining events
 - Any change to a canonical record
 
-The audit log is append-only, tamper-evident (hash-chained records), and retained per regulatory requirement (7+ years).
+Database audit-chain enforcement and verification are governed by
+[the tamper-evident records contract](../backend/docs/tamper_evident_records.md).
 
 ---
 

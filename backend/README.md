@@ -21,6 +21,9 @@ and local-development exceptions are governed by
 Bank-held object encryption and optional rollout are in
 [the bank key setup guide](docs/bank_key_setup.md).
 
+Audit-chain verification, paging and required migration-role preparation are in
+[the tamper-evident records contract](docs/tamper_evident_records.md).
+
 - Health and readiness under `/api/health`; readiness reports database, storage,
   worker and signing subsystems independently
 - Password and OIDC SSO authentication (AequorOS is its own relying party — no
@@ -135,18 +138,14 @@ Fully-local alternative (offline work):
 
 ```bash
 docker compose up -d
-mise run risk-service:bootstrap-db
-export DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service
+export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/risk_service
 ```
 
-`mise run risk-service:bootstrap-db` creates separate local database roles for migrations and app
-runtime, runs Alembic migrations, and grants the runtime role data privileges.
-The migration role can bypass RLS for migrations and backfills; the app runtime
-role is still created with `NOBYPASSRLS`.
-For local test and sample-demo workflows only, it seeds two demo identities for
-audit foreign keys. The script still prints their legacy tenant-header values
-for old fixture tooling, but the API does not trust those headers. App-session API
-requests use an access token issued by password or SSO login:
+The bundled compose uses local superuser credentials and does not demonstrate
+production credential separation. For separate local roles, follow the
+[audit ownership contract](docs/tamper_evident_records.md#required-deployment-follow-up),
+including its legacy-bootstrap limitation. App-session API requests use an
+access token issued by password or SSO login:
 
 ```http
 Authorization: Bearer <app-access-token>
@@ -509,7 +508,8 @@ feat(risk-service): add scenario endpoint
 
 ## Run Migrations
 
-`DATABASE_URL` is required for migrations.
+Alembic connection selection and role requirements are governed by the
+[migration credential contract](docs/tamper_evident_records.md#required-deployment-follow-up).
 
 ```bash
 mise run risk-service:migrate

@@ -46,6 +46,8 @@ find here is held privately — ask for it.
 
 The compose files require the coordinated certificate and proxy preparation in
 [the transport deployment contract](backend/docs/transport_security.md#deployment-preparation-review-before-applying).
+The audit-chain migration also requires
+[migration credential and audit ownership preparation](backend/docs/tamper_evident_records.md#required-deployment-follow-up).
 
 ## Prerequisites
 
