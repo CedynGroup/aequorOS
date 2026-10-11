@@ -21,7 +21,7 @@ Three rules this module exists to keep:
   writes no currency code, regulator name or locale of its own.
 
 Number conventions follow the platform's filed returns
-(``regulatory_reporting/templates.format_cell``): thousands separators,
+(``app.reporting.service.templates.format_cell``): thousands separators,
 parenthesised negatives, money and percentages at two decimals. Dates print as
 ``31 Dec 2025`` — the day/month order of an ISO date written out, which no
 reader can mistake for the other one.

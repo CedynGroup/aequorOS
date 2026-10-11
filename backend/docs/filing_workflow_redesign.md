@@ -30,7 +30,7 @@ read that before changing anything in §3.3 or §6 step 1.
   The `validated` status survives only as a projection of "checks passed and the
   return has not been sent for approval yet", and `pending_approval`/`approved`
   are projections of the chain's position (`chain.project_status`).
-- **The transmission gate lives in `regulatory_reporting.workflow.transition`**,
+- **The transmission gate lives in `app.reporting.service.workflow.transition`**,
   the single writer of `-> submitted`, not on a route. Every channel, the manual
   record and the BG/FMD/2026/07 re-upload pass it.
 - **SoD is re-checked under the row lock.** `get_package_or_404(..., for_update=True)`

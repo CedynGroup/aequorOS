@@ -472,8 +472,8 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
   `jurisdictions.base_currency(bank)`, which deliberately has no fallback: an unset
   currency is a skipped decision at the creation site, not a Ghanaian bank. Never write a
   currency literal into bank-facing narrative — the guard suite
-  `tests/services/test_jurisdiction_neutrality.py` scans the calculation modules for
-  exactly that and is the cheapest place to catch the regression. On the dashboard,
+  `tests/services/test_jurisdiction_neutrality.py` exercises currency-labelled liquidity
+  narratives and unresolved-identity refusals, alongside registry and model checks. On the dashboard,
   `fmtCurrency(value)` uses the active jurisdiction; passing a second argument OVERRIDES
   it, so pass it only when the currency is genuinely not the bank's own.
 - Banks are created only by staff provisioning (`provision_institution`), which takes

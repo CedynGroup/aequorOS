@@ -5,12 +5,12 @@ official form **registered, structure-exported template-faithfully, formula-eval
 governed** (see `00_full_return_registry.md` §4 and `tests/reporting/service/test_bog_forms_framework.py`).
 Per-form work is exactly three deliverables — nothing else may be edited:
 
-| Deliverable                      | Path (one per form; create it)                                              |
-| -------------------------------- | --------------------------------------------------------------------------- |
+| Deliverable                      | Path (one per form; create it)                                  |
+| -------------------------------- | --------------------------------------------------------------- |
 | Line map                         | `backend/app/reporting/service/bog_forms/linemaps/<form>.py`    |
 | Extra resolvers (only if needed) | `backend/app/reporting/service/bog_forms/sources_ext/<form>.py` |
-| Line/cell map doc                | `docs/bog_returns/<form>_line_map.md`                                       |
-| Tests                            | `backend/tests/reporting/service/bog_forms/test_<form>.py`                           |
+| Line/cell map doc                | `docs/bog_returns/<form>_line_map.md`                           |
+| Tests                            | `backend/tests/reporting/service/bog_forms/test_<form>.py`      |
 
 **Do not edit** `spec.py`, `engine.py`, `render.py`, `catalog.py`, `sources.py`, `registry.py`,
 `layouts/*.json`, or another form's files. If the framework genuinely blocks you, write the need

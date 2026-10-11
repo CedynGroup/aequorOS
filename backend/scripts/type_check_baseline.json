@@ -3134,16 +3134,8 @@
   "reportPrivateUsage": 1,
   "reportUnnecessaryIsInstance": 1
  },
- "tests.architecture.test_current_generation_predicate": {
-  "reportUnusedImport": 1
- },
  "tests.architecture.test_feature_boundaries": {
   "reportAny": 15
- },
- "tests.architecture.test_icaap_governed_literals": {
-  "reportAny": 1,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownVariableType": 1
  },
  "tests.architecture.test_icaap_no_regulatory_literals": {
   "reportAny": 10,
@@ -5087,7 +5079,6 @@
   "reportUnusedFunction": 1
  },
  "tests.services.test_validation_status_fail_closed": {
-  "reportAny": 6,
   "reportPrivateUsage": 1
  },
  "tests.services.test_window_analytics": {

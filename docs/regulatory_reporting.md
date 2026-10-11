@@ -172,6 +172,8 @@ keeps its `WORKING COPY — FOR INTERNAL REVIEW · not a filing artifact` label.
 
 ## 5. Services (`app/reporting/service/`)
 
+- `hub.py` — the former package-level service facade; cross-feature consumers use
+  `app/reporting/public.py`, following [the feature boundary contract](../CODEBASE_CONVENTIONS.md#5-feature-layout).
 - `generation.py` — generators pull ONLY from existing services/run snapshots (no recomputation);
   snapshot embeds every value that will be exported; records source_runs with input hashes.
 - `validation.py` — completeness (all template cells sourced), internal consistency (totals,

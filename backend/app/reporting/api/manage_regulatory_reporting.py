@@ -11,7 +11,7 @@ Two artifact surfaces, and the difference decides what a bank files. The
 per kind, upserted. The ``artifact-versions`` routes serve the append-only
 chain, including every signed revision an officer's certification pinned. Once
 a return is certified the signed revision is the document (see
-``services/regulatory_reporting/artifact_versions.py``); the base export stays
+``app/reporting/service/artifact_versions.py``); the base export stays
 retrievable as the pre-signature engine output.
 """
 

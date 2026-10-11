@@ -15,6 +15,7 @@ Companion to `docs/regulatory_reporting.md` (architecture) and `docs/research/` 
 ## Fidelity disclosure (read before filing anything)
 
 Template fidelity is graded per return in Governance → Regulatory Reporting → Templates:
+
 - **CONFIRMED/PARTIAL** — structure sourced from published BoG directive appendices
   (LMTD 2026 exposure-draft tables; IRRBB Appendix parameters).
 - **REPRESENTATIVE** — professional reconstruction where BoG has not published the form

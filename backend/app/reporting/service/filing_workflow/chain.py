@@ -5,7 +5,7 @@ This is the BoG package plane running the engine P3 built for the ICAAP
 properties are what the module exists for.
 
 **A decision names the state it was taken on.** Every forward decision carries
-the review digest (``domain/filing/review_digest.py``). A decision on a digest
+the review digest (``app/reporting/domain/review_digest.py``). A decision on a digest
 that is no longer current is refused, so "the Approver signed off this return"
 can never mean "the Approver signed off an earlier version of it".
 
@@ -26,7 +26,7 @@ statuses.
 
 **Transmission is the chain's last position, not a status.**
 :func:`assert_transmission_permitted` is called from
-``regulatory_reporting.workflow.transition`` — the single writer of
+``app.reporting.service.workflow.transition`` — the single writer of
 ``-> submitted`` — rather than from a route, because the two gates this codebase
 lost (D-069, and the withdrawn-evidence check missing from
 ``generate_frozen_package``) were both lost at a seam where one mint site had
@@ -401,7 +401,7 @@ def assert_transmission_permitted(
 ) -> None:
     """Refuse a move to ``submitted`` unless the chain says it may be filed.
 
-    Called from ``regulatory_reporting.workflow.transition`` — the one writer of
+    Called from ``app.reporting.service.workflow.transition`` — the one writer of
     ``-> submitted`` — so every channel, the manual record and the downtime
     re-upload pass it, and a future filing path gets it without remembering to.
 
