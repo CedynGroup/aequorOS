@@ -577,9 +577,9 @@ The `Dashboard Playwright journeys` workflow in
 `.github/workflows/dashboard-journeys.yml` runs automatically on pull requests
 and pushes to main, and remains available through the Actions UI or
 `gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`.
-The shared change detector filters expensive PR jobs for dashboard, backend
-application/migration/script and shared-package changes, plus their build and
-workflow inputs. Main pushes and manual dispatch run every shard; unknown
+The shared change detector filters expensive PR jobs for dashboard changes,
+backend application, migration, script and test inputs, shared packages, and
+their build and workflow inputs. Main pushes and manual dispatch run every shard; unknown
 change decisions fail closed. The **`Dashboard journeys gate`** is the stable
 check to require before merge: it always reports, including on unrelated PRs,
 and accepts a skipped suite only after successful detection of unrelated changes.
