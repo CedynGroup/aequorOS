@@ -126,6 +126,23 @@ test("rejects interrupted results and quarantine integrity errors", () =>
     other[0].integrityErrors = ["missing test"];
     assert.equal(invoke(root, other).status, 1);
   }));
+test("counts unsuccessful journeys as executed while refusing the run", () =>
+  fixture((root) => {
+    for (const status of ["failed", "timedOut", "interrupted"]) {
+      const data = reports();
+      data[0].status = "failed";
+      data[0].journeys[0].status = status;
+      const result = invoke(root, data);
+      assert.equal(result.status, 1);
+      assert.match(result.stdout, /243 executed, 0 skipped/);
+      assert.ok(
+        result.stdout.includes(
+          `Journey did not pass: ${data[0].journeys[0].name} (${status})`,
+        ),
+      );
+      assert.doesNotMatch(result.stdout, /Counts disagree|Only \d+ .*journeys/);
+    }
+  }));
 test("real Playwright reporter writes unique named results, including skipped names", () =>
   fixture((root) => {
     const report = path.join(root, "results.json");

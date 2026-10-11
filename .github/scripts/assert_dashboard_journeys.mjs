@@ -43,11 +43,13 @@ try {
         throw new Error(`Missing or duplicate journey identity: ${file}`);
       ids.add(journey.id);
       if (journey.status === "skipped") skipped.push(journey.name);
-      else if (journey.status === "passed") ran += 1;
-      else
-        problems.push(
-          `Journey did not pass: ${journey.name} (${journey.status})`,
-        );
+      else {
+        ran += 1;
+        if (journey.status !== "passed")
+          problems.push(
+            `Journey did not pass: ${journey.name} (${journey.status})`,
+          );
+      }
     }
     skippedNames.push(...skipped);
     if (
