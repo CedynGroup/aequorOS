@@ -222,7 +222,6 @@ export default function LiquidityCockpit() {
 
             <SectionCard
               title="Liquidity posture"
-              subtitle="Basel reference ratios against governed monitoring thresholds, buffer concentration, early-warning state, and contingency readiness."
               computedAt={computedAt}
               footer={provenance}
             >
@@ -389,10 +388,7 @@ export default function LiquidityCockpit() {
                   </div>
                 </SectionCard>
               )}
-              <SectionCard
-                title="Control workspace"
-                subtitle="Move from current posture to the relevant control without losing context."
-              >
+              <SectionCard title="Control workspace">
                 <div className="space-y-2">
                   {[
                     {

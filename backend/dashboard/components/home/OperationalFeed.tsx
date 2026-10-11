@@ -98,7 +98,6 @@ export default function OperationalFeed({
           Operational feed
         </span>
       }
-      subtitle="Recent ingestion batches and data activations"
       actions={
         <Link
           href="/data-engine"

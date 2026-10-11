@@ -399,11 +399,7 @@ export default function ContingencyFundingPlan() {
             </SectionCard>
 
             <div className="grid gap-6 xl:grid-cols-2">
-              <SectionCard
-                title="Funding action inventory"
-                subtitle="Board-approved funding options by activation horizon, capacity, and lead time."
-                noPadding
-              >
+              <SectionCard title="Funding action inventory" noPadding>
                 {fundingOptions.length > 0 ? (
                   <DataTable
                     columns={[
@@ -439,11 +435,7 @@ export default function ContingencyFundingPlan() {
                 )}
               </SectionCard>
 
-              <SectionCard
-                title="Action ownership and readiness"
-                subtitle="Asset and liability actions, with the accountable owner and stated execution timeline."
-                noPadding
-              >
+              <SectionCard title="Action ownership and readiness" noPadding>
                 {actionPlans.length > 0 ? (
                   <DataTable
                     columns={[

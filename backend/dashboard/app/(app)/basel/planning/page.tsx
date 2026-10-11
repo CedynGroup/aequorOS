@@ -392,7 +392,6 @@ export default function CapitalPlanning() {
                       SCENARIO_LABELS[activeScenario ?? ""] ??
                       labelize(activeScenario ?? "")
                     }`}
-                    subtitle="Five-year CAR / Tier 1 / CET1 path from the stored forecast run"
                     height={300}
                     loading={forecastRun.isLoading}
                     footer={

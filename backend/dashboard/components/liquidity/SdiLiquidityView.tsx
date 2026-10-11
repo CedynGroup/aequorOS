@@ -162,7 +162,6 @@ export default function SdiLiquidityView({ bankId }: { bankId: string | undefine
 
               <SectionCard
                 title="Contractual maturity mismatch"
-                subtitle="Net and cumulative contractual cash-flow mismatch by maturity bucket."
                 noPadding
               >
                 <DataTable columns={maturityColumns} rows={position.data.maturity_ladder} density="compact" />

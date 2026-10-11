@@ -40,10 +40,7 @@ function RulesBody({ ctx }: { ctx: FtpFrameContext }) {
 
   return (
     <>
-      <SectionCard
-        title="Pricing methodology"
-        subtitle="How each figure in this module is produced"
-      >
+      <SectionCard title="Pricing methodology">
         <ul className="space-y-2 text-body text-slate leading-relaxed list-disc pl-5">
           <li>
             Every product is match-funded against the transfer curve at its
@@ -139,7 +136,6 @@ function RulesBody({ ctx }: { ctx: FtpFrameContext }) {
 
       <SectionCard
         title="NMD behaviouralisation"
-        subtitle="Core / volatile split, effective duration, and assigned FTP per segment"
         noPadding
       >
         <NmdTable rows={data.nmdSegments} />
@@ -147,7 +143,6 @@ function RulesBody({ ctx }: { ctx: FtpFrameContext }) {
 
       <SectionCard
         title="All validations"
-        subtitle="FTP curve, margin, and NMD policy rule evaluation for this period"
         noPadding
       >
         <ValidationList validations={data.validations} />

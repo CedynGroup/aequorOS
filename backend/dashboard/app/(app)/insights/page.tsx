@@ -124,11 +124,7 @@ export default function InsightsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Insights"
-        subtitle="What the platform can say about this institution's reporting date, and what you can analyse."
-        asOf={asOf}
-      />
+      <PageHeader title="Insights" asOf={asOf} />
 
       <PageContainer className="space-y-6 py-6">
         <FilterBar

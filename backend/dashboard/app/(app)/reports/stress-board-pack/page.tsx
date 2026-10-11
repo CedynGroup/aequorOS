@@ -133,10 +133,7 @@ export default function StressBoardPack() {
         <PageContainer className="py-6 space-y-6">
           {/* Composer controls (hidden on print) */}
           <div className="print:hidden">
-            <SectionCard
-              title="Compose"
-              subtitle="Pick a run and the sections to include"
-            >
+            <SectionCard title="Compose">
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <label className="block">

@@ -96,10 +96,7 @@ export default function FilingDownloads({
       onRetry={() => void artifacts.refetch()}
       contained
     >
-      <SectionCard
-        title="Report files"
-        subtitle="The sealed report, each signed revision of it, and the working copy."
-      >
+      <SectionCard title="Report files">
         <div className="space-y-4">
           {failure && (
             <p className="card border-l-4 border-l-critical bg-critical-light/40 p-3 text-body text-navy/80">

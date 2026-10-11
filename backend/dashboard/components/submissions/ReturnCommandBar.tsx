@@ -195,7 +195,7 @@ export function PrimaryActionButton({
           {action.label}
         </button>
       ) : (
-        <DisabledWithReason reason={action.reason ?? action.caption}>
+        <DisabledWithReason reason={action.reason ?? action.caption ?? ''}>
           {(descriptionId) => (
             <span
               role="button"
@@ -211,12 +211,14 @@ export function PrimaryActionButton({
           )}
         </DisabledWithReason>
       )}
-      <p
-        data-testid={testId ? `${testId}-reason` : undefined}
-        className="mt-1.5 text-caption text-slate leading-relaxed"
-      >
-        {action.enabled ? action.caption : action.reason}
-      </p>
+      {(action.enabled ? action.caption : action.reason) && (
+        <p
+          data-testid={testId ? `${testId}-reason` : undefined}
+          className="mt-1.5 text-caption text-slate leading-relaxed"
+        >
+          {action.enabled ? action.caption : action.reason}
+        </p>
+      )}
     </div>
   );
 }

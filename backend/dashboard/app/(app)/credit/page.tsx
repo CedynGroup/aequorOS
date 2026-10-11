@@ -195,10 +195,7 @@ function OverviewBody({ ctx }: { ctx: CreditTabContext }) {
             </p>
           ) : null}
         </SectionCard>
-        <SectionCard
-          title="Loan quality and provision burden"
-          subtitle="Exposure and required provision by the active classification grid."
-        >
+        <SectionCard title="Loan quality and provision burden">
           <SdiLoanQualityChart
             data={data.grades.map((bucket) => ({
               grade: labelize(bucket.grade),

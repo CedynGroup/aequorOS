@@ -395,7 +395,6 @@ export default function RiskLimitMonitorPage() {
                   <SectionCard
                     key={module}
                     title={MODULE_LABELS[module as LimitModule]}
-                    subtitle="Rule evaluations from the module dashboard for this period"
                     actions={
                       <Link
                         href={MODULE_HREFS[module as LimitModule]}

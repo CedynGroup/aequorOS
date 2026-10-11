@@ -165,7 +165,6 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
 
           <SectionCard
             title="Standalone VaR by currency"
-            subtitle="Single-currency historical VaR before diversification"
             noPadding
           >
             <DataTable columns={columns} rows={data.standaloneVars} density="compact" />
@@ -173,10 +172,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
         </div>
       </div>
 
-      <SectionCard
-        title="Depreciation scenario NOP"
-        subtitle="Aggregate NOP under the persisted depreciation shocks"
-      >
+      <SectionCard title="Depreciation scenario NOP">
         <ScenarioStrip
           scenarios={data.scenarios}
           aggregateLimitPct={num(m.nopAggregateLimitPct)}

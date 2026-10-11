@@ -487,7 +487,6 @@ export default function PriorVersionsCard({
   return (
     <SectionCard
       title="Prior versions"
-      subtitle="Superseded snapshots remain immutable history — open a version for its signers, its files, and what changed"
       noPadding
     >
       <ul>

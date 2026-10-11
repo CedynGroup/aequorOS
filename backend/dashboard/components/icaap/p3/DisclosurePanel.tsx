@@ -98,7 +98,6 @@ export default function DisclosurePanel({
       {data && (
         <SectionCard
           title="Public disclosure"
-          subtitle="What the institution publishes about its own capital adequacy assessment."
           actions={
             status ? <StatusPill tone={status.tone}>{status.label}</StatusPill> : undefined
           }

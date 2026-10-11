@@ -215,10 +215,7 @@ function ProjectedPath({
 
   if (scenarios.length === 0) {
     return (
-      <SectionCard
-        title="When the plan would act"
-        subtitle="Taken from the capital plan's own projection."
-      >
+      <SectionCard title="When the plan would act">
         <p className="text-body text-slate">
           The capital plan carries no projected path for these ratios, so no
           crossing year can be stated.

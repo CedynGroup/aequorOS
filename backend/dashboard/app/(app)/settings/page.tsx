@@ -109,10 +109,7 @@ function DataComputePanel({ bankId }: { bankId: string | undefined }) {
 
   return (
     <Card>
-      <CardHeader
-        title="Data & compute"
-        subtitle="Read-only view of the services and feeds behind this workspace"
-      />
+      <CardHeader title="Data & compute" />
       <CardBody className="space-y-3">
         <div className="flex items-center justify-between gap-3 py-2 border-b border-border-light">
           <div className="min-w-0">

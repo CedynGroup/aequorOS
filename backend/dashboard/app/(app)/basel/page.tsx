@@ -618,7 +618,6 @@ export default function BaselOverview() {
             {/* Validations */}
             <SectionCard
               title="Validations"
-              subtitle="Regulatory rule evaluation for this period"
               noPadding
               computedAt={computedAt}
               footer={provenance}

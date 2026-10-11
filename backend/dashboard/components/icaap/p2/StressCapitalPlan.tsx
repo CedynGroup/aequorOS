@@ -76,7 +76,7 @@ export default function StressCapitalPlan({
         <div className="space-y-4">
           <SectionCard
             title="What this assessment's stress results rest on"
-            subtitle="The figures bound into this cycle. Linking, refreshing and pinning them is done on the Sections tab."
+            subtitle="Linking, refreshing and pinning these figures is done on the Sections tab."
             noPadding
           >
             {blocks.length === 0 ? (
@@ -96,10 +96,7 @@ export default function StressCapitalPlan({
           </SectionCard>
 
           {appendix === null ? (
-            <SectionCard
-              title="Appendix II — regulatory deliverable"
-              subtitle="The stress submission tables."
-            >
+            <SectionCard title="Appendix II — regulatory deliverable">
               <p className="text-body text-slate">
                 {evidence.runId === null
                   ? "The attested stress run is not linked to this cycle, so its Appendix II tables cannot be shown."
@@ -137,10 +134,7 @@ export default function StressCapitalPlan({
               unavailable={plan.projectionUnavailable}
             />
           ) : (
-            <SectionCard
-              title="Capital plan projection"
-              subtitle="The plan's own five-year path."
-            >
+            <SectionCard title="Capital plan projection">
               <p className="text-body text-slate">
                 The capital plan has no stored projection for this institution
                 yet.

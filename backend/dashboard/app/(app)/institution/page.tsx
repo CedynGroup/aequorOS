@@ -126,7 +126,6 @@ function ProfileView({
   return (
     <SectionCard
       title="Corporate profile"
-      subtitle="Legal identity, authorisation, capital, listing, and ownership"
       actions={
         <button
           type="button"

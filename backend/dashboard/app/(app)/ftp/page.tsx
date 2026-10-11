@@ -135,7 +135,6 @@ function CurveBody({ ctx }: { ctx: FtpFrameContext }) {
 
       <SectionCard
         title="Curve points"
-        subtitle="Published transfer prices by standard tenor"
         noPadding
       >
         <DataTable columns={columns} rows={data.curve} density="compact" />
@@ -144,7 +143,6 @@ function CurveBody({ ctx }: { ctx: FtpFrameContext }) {
       {curveValidations.length > 0 && (
         <SectionCard
           title="Curve integrity"
-          subtitle="Rule evaluation for the transfer curve"
           noPadding
         >
           <ValidationList validations={curveValidations} />

@@ -808,10 +808,8 @@ function DecidePanel({
               Review and sign
             </Link>
             <p className="text-caption text-slate leading-relaxed">
-              Opens the return itself with the preparer&apos;s signature on it.
-              Approving and signing are one act recorded in one transaction, so
-              neither can exist without the other — and the same screen sends
-              the return back for corrections with a note if you have concerns.
+              Approving and signing are one act. The same screen sends the
+              return back for corrections with a note.
             </p>
           </>
         ) : (
@@ -944,10 +942,6 @@ function DecidePanel({
         <div className="rounded border border-border-light bg-surface px-3.5 py-3">
           <p className="text-micro font-medium uppercase tracking-wider text-slate">
             The return
-          </p>
-          <p className="mt-1 text-caption text-slate">
-            The immutable figures this version carries — exactly what the
-            artifacts render.
           </p>
           <div className="mt-3">
             {detailQuery.isLoading ? (

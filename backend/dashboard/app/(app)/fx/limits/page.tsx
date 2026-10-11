@@ -140,7 +140,6 @@ function LimitsBody({ ctx }: { ctx: FxFrameContext }) {
 
       <SectionCard
         title="Validations"
-        subtitle="NOP, VaR, and hedge-accounting rule evaluation for this period"
         noPadding
       >
         <ValidationList validations={data.validations} />

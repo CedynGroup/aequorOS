@@ -74,7 +74,7 @@ export default function ChallengeLog({
       {data && (
         <SectionCard
           title="Challenge log"
-          subtitle="What the committees and the Board asked, and what they were told. Entries cannot be edited or removed."
+          subtitle="Entries cannot be edited or removed."
           actions={
             canEdit ? (
               <SecondaryButton onClick={() => setRaising(true)}>

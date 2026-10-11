@@ -788,7 +788,6 @@ export default function ForwardTab({
                       <MonoChip>{selectedCurve.currency}</MonoChip>
                     </span>
                   }
-                  subtitle="Forward yields across the desk-published periods"
                   height={260}
                 >
                   <ForwardYieldLine
@@ -804,7 +803,6 @@ export default function ForwardTab({
               {resultView === "grid" && (
                 <SectionCard
                   title="Forward grid"
-                  subtitle="The desk's published Start / End / discount-factor / forward-yield rows"
                   actions={
                     <div className="flex items-center gap-2">
                       <BasisSwitcher value={basis} onChange={setBasis} />
@@ -843,10 +841,7 @@ export default function ForwardTab({
               )}
 
               {resultView === "analysis" && meta && meta.pillars.length > 0 && (
-                <SectionCard
-                  title="Reference pillars"
-                  subtitle="The instruments and quotes backing the published grid"
-                >
+                <SectionCard title="Reference pillars">
                   <div className="flex flex-wrap gap-2">
                     {meta.pillars.map((pillar, index) => (
                       <span

@@ -320,7 +320,7 @@ function OutletForm({
       subtitle={
         outlet
           ? 'Full replacement — set status to "Closed" to record a closure'
-          : 'Register a new head office, branch, or agency'
+          : undefined
       }
     >
       <form onSubmit={submit} className="space-y-4">

@@ -211,7 +211,6 @@ export default function AttestationPanel({
           {status && <SubmissionClearancePill status={status} />}
         </span>
       }
-      subtitle="Who signed, who must still sign, and the frozen figures they committed to"
       actions={
         <button
           type="button"

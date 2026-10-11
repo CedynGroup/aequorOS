@@ -210,7 +210,7 @@ function ProductsBody({ ctx }: { ctx: FtpFrameContext }) {
 
       <SectionCard
         title="Product margin detail"
-        subtitle="Click a column header to sort · below-floor products flagged in red"
+        subtitle="Below-floor products flagged in red"
         noPadding
         actions={
           <StatusPill tone={m.productsBelowMinMargin > 0 ? 'amber' : 'success'}>

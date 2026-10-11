@@ -163,7 +163,6 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
 
         <SectionCard
           title="Position detail"
-          subtitle="Net exposure, period-end spot, and limit state per currency"
           noPadding
           footer={
             splits.size === 0 ? (
@@ -198,7 +197,7 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
       {selectedSplit && selectedPosition && (
         <SectionCard
           title={`${selectedSplit.currency} position split`}
-          subtitle="From the stored run's fact snapshot — figures in original currency"
+          subtitle="Figures in original currency"
           actions={
             <button
               type="button"
