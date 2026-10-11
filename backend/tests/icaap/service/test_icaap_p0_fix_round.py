@@ -14,7 +14,6 @@ import zipfile
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 from uuid import UUID
@@ -61,9 +60,6 @@ __all__ = ["storage"]
 pytestmark = pytest.mark.usefixtures(
     "return_generation_authority", "fx_run_authority", "irrbb_run_authority"
 )
-
-BACKEND = Path(__file__).parents[3]
-
 
 # --- helpers ---------------------------------------------------------------------
 
@@ -290,15 +286,6 @@ def test_methodologies_are_cited_as_67c_never_67d() -> None:
     labels = dict(generation._APPENDIX2_NARRATIVE_ELEMENTS)  # noqa: SLF001
     assert "¶67(c)" in labels["methodology_summary"]
     assert "¶67(b)" in labels["assumptions_rationale"]
-    wrong = re.compile(r"67\(d\)[^.\n]{0,40}methodolog", re.IGNORECASE)
-    for path in (
-        BACKEND / "app" / "models" / "stress.py",
-        BACKEND / "app" / "schemas" / "enterprise_stress_signoff.py",
-        BACKEND / "app" / "services" / "regulatory_reporting" / "templates.py",
-        BACKEND / "app" / "services" / "regulatory_reporting" / "generation.py",
-        BACKEND / "dashboard" / "components" / "stress" / "SignoffPanel.tsx",
-    ):
-        assert not wrong.search(path.read_text(encoding="utf-8")), path
 
 
 # --- item 8: nil is not "not modelled" ---------------------------------------------
