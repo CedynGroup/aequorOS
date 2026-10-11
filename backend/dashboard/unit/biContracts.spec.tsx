@@ -81,7 +81,7 @@ print(json.dumps({name: {"fields": list(getattr(content, name).model_fields),
     value_type: measure.valueType,
     favourable_direction: measure.favourableDirection,
   });
-});
+}, 15_000); // Includes cold startup of the Python schema-validation process.
 
 it("preserves authored formula and copy bytes through the actual request writer", () => {
   fc.assert(
@@ -177,10 +177,11 @@ it("sends complete notification definitions through every create and update hook
         createElement(
           QueryClientProvider,
           { client },
-          createElement(QueryAuthorityScopeProvider, {
-            scope: queryAuthorityScope("OR-test", "reader@example.com", 1),
-            children: createElement(Probe),
-          }),
+          <QueryAuthorityScopeProvider
+            scope={queryAuthorityScope("OR-test", "reader@example.com", 1)}
+          >
+            <Probe />
+          </QueryAuthorityScopeProvider>,
         ),
       );
     });

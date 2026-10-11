@@ -109,7 +109,7 @@ def test_a_member_that_was_not_offered_is_refused_wherever_it_appears(
 ) -> None:
     """Every position a member id can occupy is walked, not just ``measures``.
 
-    A filter reveals as surely as a projection does (``services/bi/authorization``
+    A filter reveals as surely as a projection does (``app/bi/service/authorization``
     rule 1), so an unoffered id in a filter, a Top-N axis or a sort key has to refuse
     exactly as an unoffered measure does.
     """

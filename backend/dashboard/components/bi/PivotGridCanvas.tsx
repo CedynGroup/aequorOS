@@ -152,9 +152,7 @@ function RowHeadCell(
     const deepest = [...params.dimensionColumns]
       .slice(0, Math.max(0, data.level ?? 0))
       .reverse()
-      .map((column) =>
-        formatCell(data.values[column.id], column.format),
-      )
+      .map((column) => formatCell(data.values[column.id], column.format))
       .find((value) => value !== "" && value !== NOT_MEASURED);
     text = subtotalLabel(data.level ?? 0, deepest ?? "");
   }
@@ -189,7 +187,9 @@ function columnDefsFor(page: BiGridPageRead): ColDef<GridRowData>[] {
       headerName: headerName(column),
       headerTooltip: column.label,
       valueGetter: (params: ValueGetterParams<GridRowData>) =>
-        params.data === undefined ? null : (params.data.values[column.id] ?? null),
+        params.data === undefined
+          ? null
+          : (params.data.values[column.id] ?? null),
       valueFormatter: (params) => formatCell(params.value, column.format),
       // Two reasons a measure column does not offer a sort. A pivoted answer is
       // ordered by its row fields — the compiler refuses to order one by a
@@ -270,7 +270,10 @@ export default function PivotGridCanvas({
 
   // The opening page, asked for WITHOUT an end row: the server answers with one
   // page at its own cap, so its length is the page size the grid then uses.
-  const probe = useBiGrid(bankId, query === null ? null : { query, startRow: 0 });
+  const probe = useBiGrid(
+    bankId,
+    query === null ? null : { query, startRow: 0 },
+  );
   const page = probe.data;
 
   const [pagingError, setPagingError] = useState<string | null>(null);

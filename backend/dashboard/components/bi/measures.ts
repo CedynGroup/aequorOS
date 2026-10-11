@@ -122,8 +122,7 @@ export const MEASURE_FUNCTIONS = [
     name: "LAG",
     arity: 3,
     signature: "LAG(figure, periods, PERIOD)",
-    purpose:
-      "The same figure as it stood a stated number of periods earlier.",
+    purpose: "The same figure as it stood a stated number of periods earlier.",
   },
 ] as const;
 
@@ -143,8 +142,14 @@ export const PERIOD_GRAINS = [
 
 /** The operators the language accepts, for the reference panel. */
 export const MEASURE_OPERATORS = [
-  { symbol: "+ − × ÷", reads: "written + - * /, with brackets where the order matters" },
-  { symbol: "> >= < <= = !=", reads: "compare two figures; the answer is a yes or no, not a number" },
+  {
+    symbol: "+ − × ÷",
+    reads: "written + - * /, with brackets where the order matters",
+  },
+  {
+    symbol: "> >= < <= = !=",
+    reads: "compare two figures; the answer is a yes or no, not a number",
+  },
   { symbol: "AND OR NOT", reads: "combine two yes-or-no answers" },
 ] as const;
 
@@ -228,7 +233,11 @@ const STANDINGS: Readonly<Record<MeasureState, MeasureStanding>> = {
 };
 
 export function measureStanding(state: string): MeasureStanding {
-  if (state === "personal" || state === "proposed" || state === "bank_certified") {
+  if (
+    state === "personal" ||
+    state === "proposed" ||
+    state === "bank_certified"
+  ) {
     return STANDINGS[state];
   }
   // Neutral, never the most favourable neighbour: a state this build does not
@@ -357,7 +366,10 @@ export type FigureRefusal = Readonly<{
 
 function strings(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+    ? value.filter(
+        (entry): entry is string =>
+          typeof entry === "string" && entry.length > 0,
+      )
     : [];
 }
 
@@ -427,9 +439,7 @@ export function refusedFiguresSentence(refusal: FigureRefusal): string | null {
  *   offered with nothing to break it down by.
  */
 export type CalculatedUnusable =
-  | "not_certified"
-  | "figure_not_in_catalogue"
-  | "mixed_time_behaviour";
+  "not_certified" | "figure_not_in_catalogue" | "mixed_time_behaviour";
 
 export type CalculatedMeasureOffer =
   | Readonly<{ usable: true; entry: BiCatalogueMeasureRead }>
@@ -602,7 +612,9 @@ export const MEASURE_DIRECTIONS = [
 ] as const;
 
 export function valueTypeLabel(code: string): string {
-  return MEASURE_VALUE_TYPES.find((entry) => entry.code === code)?.label ?? code;
+  return (
+    MEASURE_VALUE_TYPES.find((entry) => entry.code === code)?.label ?? code
+  );
 }
 
 export function directionLabel(code: string): string {
@@ -626,7 +638,9 @@ export function draftProblems(
   if (options.keyEditable) {
     const key = draft.measureKey.trim();
     if (key.length === 0) {
-      problems.push("Give the measure an id, so a formula and a chart can name it.");
+      problems.push(
+        "Give the measure an id, so a formula and a chart can name it.",
+      );
     } else if (key.length > MEASURE_KEY_MAX_LENGTH) {
       problems.push(
         `An id can be up to ${MEASURE_KEY_MAX_LENGTH} characters long.`,
@@ -640,7 +654,9 @@ export function draftProblems(
   if (draft.label.trim().length === 0) {
     problems.push("Give the measure a name that will read well on a chart.");
   } else if (draft.label.length > MEASURE_LABEL_MAX_LENGTH) {
-    problems.push(`A name can be up to ${MEASURE_LABEL_MAX_LENGTH} characters long.`);
+    problems.push(
+      `A name can be up to ${MEASURE_LABEL_MAX_LENGTH} characters long.`,
+    );
   }
   if (draft.description.length > MEASURE_DESCRIPTION_MAX_LENGTH) {
     problems.push(
@@ -666,7 +682,10 @@ export function draftProblems(
  */
 export function expressionReady(
   draft: MeasureDraft,
-  verdict: Readonly<{ expression: string; read: BiMeasureValidationRead }> | null,
+  verdict: Readonly<{
+    expression: string;
+    read: BiMeasureValidationRead;
+  }> | null,
 ): boolean {
   if (verdict === null) return false;
   return verdict.expression === draft.expression && verdict.read.valid;
@@ -675,7 +694,8 @@ export function expressionReady(
 /** A reason string a mutation route requires, with the field's own bound. */
 export function reasonProblem(reason: string, what: string): string | null {
   const trimmed = reason.trim();
-  if (trimmed.length === 0) return `Say why, so the decision is on the record: ${what}`;
+  if (trimmed.length === 0)
+    return `Say why, so the decision is on the record: ${what}`;
   if (reason.length > MEASURE_REASON_MAX_LENGTH) {
     return `A reason can be up to ${MEASURE_REASON_MAX_LENGTH} characters long.`;
   }

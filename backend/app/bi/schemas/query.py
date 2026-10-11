@@ -8,9 +8,9 @@ table, a column or a SQL fragment: members are catalogue ids and values are
 typed scalars the compiler binds as parameters. Validation failures are
 pydantic's (422) and quote the offending field, never a statement.
 
-Class names here are unique across ``app/schemas`` on purpose: FastAPI emits
-``app__schemas__x__Name`` component keys when two modules share a class name,
-and the generated client cannot map those back (AGENTS.md, openapi hazard).
+Keep class names unique across exposed schemas; module-qualified component
+keys can break generated clients. ``ARCHITECTURE.md`` §6, "Generated-client
+hazards", owns the naming contract.
 """
 
 from __future__ import annotations

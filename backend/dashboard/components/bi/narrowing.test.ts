@@ -210,10 +210,10 @@ test("a field no widget on the page can carry is not offered at all", () => {
 
 test("with no widgets named, the whole catalogue is offered (Explore)", () => {
   const offered = narrowingFieldsFor(CATALOGUE, []);
-  assert.deepEqual(offered.map((dimension) => dimension.id), [
-    "position.product_family",
-    "position.branch",
-  ]);
+  assert.deepEqual(
+    offered.map((dimension) => dimension.id),
+    ["position.product_family", "position.branch"],
+  );
 });
 
 if (failures > 0) {

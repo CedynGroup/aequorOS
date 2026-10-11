@@ -11,15 +11,9 @@
       "title": "Portfolio by product",
       "caption": "Balances, the non-performing ratio and account count by product family.",
       "query": {
-        "measures": [
-          "loans.balance_rc",
-          "loans.npl_ratio_pct",
-          "loans.count"
-        ],
+        "measures": ["loans.balance_rc", "loans.npl_ratio_pct", "loans.count"],
         "window": "as_of",
-        "dimensions": [
-          "product.family"
-        ],
+        "dimensions": ["product.family"],
         "sort": [
           {
             "member": "loans.balance_rc",
@@ -37,13 +31,9 @@
       "title": "Disbursements",
       "caption": "Loan disbursements month by month over the past year.",
       "query": {
-        "measures": [
-          "events.disbursement_rc"
-        ],
+        "measures": ["events.disbursement_rc"],
         "window": "trailing_12_months",
-        "dimensions": [
-          "time.calendar_month"
-        ]
+        "dimensions": ["time.calendar_month"]
       },
       "display": {
         "show_trend": true
@@ -80,14 +70,9 @@
       "title": "Recoveries and write-offs",
       "caption": "Recovered and written-off amounts month by month over the past year.",
       "query": {
-        "measures": [
-          "events.recovery_rc",
-          "events.write_off_rc"
-        ],
+        "measures": ["events.recovery_rc", "events.write_off_rc"],
         "window": "trailing_12_months",
-        "dimensions": [
-          "time.calendar_month"
-        ]
+        "dimensions": ["time.calendar_month"]
       }
     },
     {
@@ -96,13 +81,9 @@
       "title": "Balances by origination month",
       "caption": "Current balances of the loans written in each origination month.",
       "query": {
-        "measures": [
-          "loans.balance_rc"
-        ],
+        "measures": ["loans.balance_rc"],
         "window": "as_of",
-        "dimensions": [
-          "loan.vintage_month"
-        ],
+        "dimensions": ["loan.vintage_month"],
         "sort": [
           {
             "member": "loan.vintage_month",
@@ -142,9 +123,7 @@
           "loans.count"
         ],
         "window": "as_of",
-        "dimensions": [
-          "position.officer_code"
-        ],
+        "dimensions": ["position.officer_code"],
         "sort": [
           {
             "member": "loans.balance_rc",
@@ -162,13 +141,9 @@
       "title": "Loan book by channel",
       "caption": "Balances by how each account was opened or is serviced. It reads as no value, never as zero, until the loan book states a channel.",
       "query": {
-        "measures": [
-          "loans.balance_rc"
-        ],
+        "measures": ["loans.balance_rc"],
         "window": "as_of",
-        "dimensions": [
-          "position.channel"
-        ]
+        "dimensions": ["position.channel"]
       },
       "display": {
         "series_dimension": "position.channel"

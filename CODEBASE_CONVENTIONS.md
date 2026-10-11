@@ -489,7 +489,7 @@ feature. New code goes in the target layout; existing code moves one feature per
 - **Target shape.** `app/<feature>/` holds `public.py` (the cross-feature interface: re-exports
   only, no logic), `api/` (one router module per use case, today's `verb_noun` names kept),
   `service.py` or `service/`, `domain/` (pure engines under the same purity rule as
-  `app/domain`), `models.py` or `models/`, `schemas.py` or `schemas/`, and `jobs.py` where the
+  `app/domain`), `models.py` or `models/`, `schemas.py` or `schemas/`, and `jobs.py` or `jobs/` where the
   feature has worker handlers. A role is one module until it passes about 1,000 lines. The
   kernel stays in `app/core/`, `app/db/`, `app/storage/` and `app/integrations/`; the
   composition root is `app/main.py`, `app/worker.py`, `app/api/router.py`,

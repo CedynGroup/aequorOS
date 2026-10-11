@@ -11,14 +11,9 @@
       "title": "Non-performing loans by sector",
       "caption": "Sectors ranked by non-performing exposure, with each sector's ratio.",
       "query": {
-        "measures": [
-          "loans.npl_exposure_rc",
-          "loans.npl_ratio_pct"
-        ],
+        "measures": ["loans.npl_exposure_rc", "loans.npl_ratio_pct"],
         "window": "as_of",
-        "dimensions": [
-          "loan.sector"
-        ],
+        "dimensions": ["loan.sector"],
         "top_n": {
           "dimension": "loan.sector",
           "n": 10,
@@ -42,13 +37,9 @@
       "title": "Non-performing loans by product",
       "caption": "The non-performing ratio by product family at the reporting date.",
       "query": {
-        "measures": [
-          "loans.npl_ratio_pct"
-        ],
+        "measures": ["loans.npl_ratio_pct"],
         "window": "as_of",
-        "dimensions": [
-          "product.family"
-        ]
+        "dimensions": ["product.family"]
       },
       "display": {
         "series_dimension": "product.family",
@@ -61,14 +52,9 @@
       "title": "Non-performing loans by branch",
       "caption": "The non-performing ratio by branch. Branches appear once the loan book carries a branch identifier.",
       "query": {
-        "measures": [
-          "loans.npl_exposure_rc",
-          "loans.npl_ratio_pct"
-        ],
+        "measures": ["loans.npl_exposure_rc", "loans.npl_ratio_pct"],
         "window": "as_of",
-        "dimensions": [
-          "branch.name"
-        ],
+        "dimensions": ["branch.name"],
         "top_n": {
           "dimension": "branch.name",
           "n": 10,
@@ -93,13 +79,9 @@
       "title": "Impairment stage mix",
       "caption": "Classified exposure by impairment stage, against the prior quarter. Loan-by-loan movement between stages is in the migration panel.",
       "query": {
-        "measures": [
-          "loans.classification_exposure_rc"
-        ],
+        "measures": ["loans.classification_exposure_rc"],
         "window": "as_of",
-        "dimensions": [
-          "loan.ifrs9_stage"
-        ],
+        "dimensions": ["loan.ifrs9_stage"],
         "compare": "prior_quarter"
       },
       "display": {
@@ -121,13 +103,9 @@
       "title": "Provision coverage",
       "caption": "Provisions held on non-performing loans over non-performing exposure, month by month.",
       "query": {
-        "measures": [
-          "loans.provision_coverage_pct"
-        ],
+        "measures": ["loans.provision_coverage_pct"],
         "window": "trailing_12_months",
-        "dimensions": [
-          "time.calendar_month"
-        ]
+        "dimensions": ["time.calendar_month"]
       },
       "display": {
         "show_trend": true,
@@ -140,9 +118,7 @@
       "title": "Sector concentration",
       "caption": "Concentration of classified exposure across sectors.",
       "query": {
-        "measures": [
-          "loans.sector_hhi"
-        ],
+        "measures": ["loans.sector_hhi"],
         "window": "as_of"
       },
       "display": {
@@ -155,13 +131,9 @@
       "title": "Largest exposures",
       "caption": "The largest obligors by classified exposure.",
       "query": {
-        "measures": [
-          "loans.classification_exposure_rc"
-        ],
+        "measures": ["loans.classification_exposure_rc"],
         "window": "as_of",
-        "dimensions": [
-          "counterparty.name"
-        ],
+        "dimensions": ["counterparty.name"],
         "top_n": {
           "dimension": "counterparty.name",
           "n": 20,

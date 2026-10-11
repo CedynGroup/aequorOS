@@ -283,9 +283,8 @@ test.describe.serial("certifying a formula takes two people", () => {
       },
     );
     expect(stale.status).toBe(409);
-    const body = (
-      stale.body as { error: { details: { error_code: string } } }
-    ).error.details;
+    const body = (stale.body as { error: { details: { error_code: string } } })
+      .error.details;
     expect(body.error_code).toBe("bi_measure_expression_moved");
   });
 
@@ -430,9 +429,7 @@ test.describe.serial("certifying a formula takes two people", () => {
 });
 
 /** The reporting date the fixture's marts were built at, read from the platform. */
-async function asOf(
-  request: Parameters<typeof biApi>[0],
-): Promise<string> {
+async function asOf(request: Parameters<typeof biApi>[0]): Promise<string> {
   const { status, body } = await biApi(
     request,
     "admin",

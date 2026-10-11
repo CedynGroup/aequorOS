@@ -38,9 +38,7 @@
           "positions.unconverted_share_pct"
         ],
         "window": "as_of",
-        "dimensions": [
-          "position.type"
-        ],
+        "dimensions": ["position.type"],
         "sort": [
           {
             "member": "positions.unconverted_count",

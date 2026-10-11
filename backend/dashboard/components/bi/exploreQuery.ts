@@ -261,7 +261,9 @@ export function measureIsCompatible(
   // compiler refuses the pair outright; the option is not offered rather than
   // explained after the fact, in both directions.
   const calculated = measure.aggregation === CALCULATED_AGGREGATION;
-  const concentration = CONCENTRATION_AGGREGATIONS.includes(measure.aggregation);
+  const concentration = CONCENTRATION_AGGREGATIONS.includes(
+    measure.aggregation,
+  );
   if (calculated && hasConcentrationMeasure(catalogue, measures)) return false;
   if (concentration && hasCalculatedMeasure(catalogue, measures)) return false;
   const behaviours = timeBehavioursOf(catalogue, measures);
@@ -318,7 +320,11 @@ export function legalSorts(
     dimensions: readonly string[];
     pivoted: boolean;
   }>,
-): Readonly<{ sort: BiSort[]; droppedMeasureSort: boolean; droppedOverCap: number }> {
+): Readonly<{
+  sort: BiSort[];
+  droppedMeasureSort: boolean;
+  droppedOverCap: number;
+}> {
   const known = new Set<string>([...context.measures, ...context.dimensions]);
   const measures = new Set<string>(context.measures);
   let droppedMeasureSort = false;

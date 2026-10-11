@@ -48,10 +48,7 @@
       "title": "Asset quality",
       "caption": "The non-performing share of classified exposure, and the provisions held against it.",
       "query": {
-        "measures": [
-          "loans.npl_ratio_pct",
-          "loans.provision_coverage_pct"
-        ],
+        "measures": ["loans.npl_ratio_pct", "loans.provision_coverage_pct"],
         "window": "as_of",
         "compare": "prior_quarter"
       },
@@ -66,13 +63,9 @@
       "title": "Net interest margin",
       "caption": "An analytical figure from the funds transfer pricing module. It is not part of a filed return.",
       "query": {
-        "measures": [
-          "engine.portfolio_nim_pct.advisory_internal.official"
-        ],
+        "measures": ["engine.portfolio_nim_pct.advisory_internal.official"],
         "window": "trailing_12_months",
-        "dimensions": [
-          "time.calendar_month"
-        ]
+        "dimensions": ["time.calendar_month"]
       },
       "display": {
         "show_trend": true,
@@ -85,14 +78,9 @@
       "title": "Balance sheet",
       "caption": "Month-end balances by position type over the past year.",
       "query": {
-        "measures": [
-          "positions.balance_rc"
-        ],
+        "measures": ["positions.balance_rc"],
         "window": "trailing_12_months",
-        "dimensions": [
-          "time.calendar_month",
-          "position.type"
-        ]
+        "dimensions": ["time.calendar_month", "position.type"]
       },
       "display": {
         "stacked": true,

@@ -821,7 +821,7 @@ def test_a_region_scope_resolves_through_the_branch_dimension(
     )
     assert response.status_code == 200, response.text
     assert {row["branch.code"] for row in _rows(response)} == {"B1", "B2"}
-    # The label is the platform's own (``services/bi/data_scope.py``), not a
+    # The label is the platform's own (``app/bi/service/data_scope.py``), not a
     # second copy written for this surface: it names the GRANT (the region) and
     # how many branches it came to, so an institution-wide-looking payload cannot
     # be mistaken for one. The interpunct the shared label uses is replaced by

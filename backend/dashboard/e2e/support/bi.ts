@@ -51,9 +51,7 @@ export async function biApi(
  * The reporting date the fixture's analytics were built at: the latest reporting
  * period the platform lists, which the API returns period-end descending.
  */
-export async function fixtureAsOf(
-  request: APIRequestContext,
-): Promise<string> {
+export async function fixtureAsOf(request: APIRequestContext): Promise<string> {
   const { status, body } = await biApi(
     request,
     "admin",

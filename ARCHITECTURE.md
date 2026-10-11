@@ -639,8 +639,8 @@ it, adding one registry entry moved an unrelated family's content digest.
 
 One governed foundation: worker-built marts and conformed dimensions, a metric
 catalogue, a safe query compiler, and an authorization gate every BI surface
-reads through. Built behind default-off flags (`Settings.bi`); no BI route is
-mounted until `BI_ENABLED`.
+reads through. Built behind default-off flags (`Settings.bi`); mounted BI routes
+return 404 until `BI_ENABLED`.
 
 **The plane boundary is the whole design.** BI is a DISPATCH plane: it reads
 canonical rows (through `is_current_generation` only), `live_metrics`,
@@ -648,19 +648,15 @@ canonical rows (through `is_current_generation` only), `live_metrics`,
 guard derives the writable set from the model registry by prefix, so a new mart
 is covered on the day it is written) **plus `ai_commentary_drafts`** — the one
 non-`bi_` table a BI-owned module writes, by decision D-191, from
-`app/bi/jobs/bi_commentary.py`. Stated precisely because audit A360-1 M1 found the
-older "nothing else" wording false: the write scan then covered `app/bi/service`
-and `app/bi/domain` only, while `app/jobs/bi_*.py` and `app/features/*bi*.py`
-were exempt from the import rule and unscanned. The 2026-09-29 remediation makes
-the exemption set and the scan set the SAME set and names `ai_commentary_drafts`
-as the one permitted non-`bi_` write
-(`test_every_bi_owned_module_is_in_the_write_scan`; in the working tree at the
-time of writing). The regulatory plane never imports BI, with exactly two
-exceptions —
-`app/bi/service/enqueue.py` and `app/bi/service/versions.py`, the enqueue
-seam the hook sites call, which themselves import no BI model, builder,
-catalogue or compiler. `tests/architecture/test_bi_plane_boundary.py` pins all
-of it, including that BI never calls `derive_facts`.
+`app/bi/jobs/bi_commentary.py`. Platform audit, queue, notification and operator
+audit writes go only through the helpers named in `PERMITTED_MEDIATED_WRITES` in
+`tests/architecture/test_bi_plane_boundary.py`. Its ownership and write scans
+cover the BI package and BI operator modules; `app/bi/schemas/query.py` also
+remains subject to the import ban on BI internals. The regulatory/live plane
+may import only `app/bi/service/enqueue.py` and `app/bi/service/versions.py`,
+from the hook sites named in `SEAM_IMPORTERS`. These seams may read BI models
+but import no builder, catalogue, compiler, executor or handler. The guard pins
+these boundaries and prevents BI from calling `derive_facts`.
 
 - **Engine metrics are COPIED, never recomputed.** `bi_fact_engine_metric`
   carries a `live` tier from `live_metrics` and an `official` tier from the
@@ -683,7 +679,7 @@ of it, including that BI never calls `derive_facts`.
 - **BI carries NO reconciliation to the regulatory returns — founder decision
   2026-09-29.** Until that date this bullet read "Reconciliation R1–R12 drives a
   trust badge (`green | amber | red | grey`)": twelve checks in
-  `app/bi/service/reconciliation.py` compared the marts with "the figures the
+  the former `app/services/bi/reconciliation.py` compared the marts with "the figures the
   platform already files" (R4 against BSD7A, a BoG return, line by line), and
   the verdict was rendered as a "Does not reconcile" chip on every dashboard
   card, treasury ones included. The founder rejected the premise — _"we are
@@ -877,19 +873,9 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
 
 ### BI working rules
 
-- **BI plane** (spec `docs/bi.md`, which is not published; working ledger in the gitignored
-  `.ai/BI_*.md`). Governed analytics over the bank's own treasury data, so a bank can drop
-  its separate Power BI project. It is a **DISPATCH plane**: it reads canonical rows
-  (current generation only), `live_metrics`, `regulatory_runs` and the registers, and writes
-  **the `bi_*` tables plus `ai_commentary_drafts`** (from `app/bi/jobs/bi_commentary.py`; the
-  write guard scans every BI-owned module and names that one permitted write); the
-  regulatory plane never imports BI except the two enqueue-seam modules
-  (`services/bi/enqueue.py`, `services/bi/versions.py`), which import no BI model, builder,
-  catalogue or compiler. `tests/architecture/test_bi_plane_boundary.py` pins it,
-  `derive_facts` included. **Engine metrics are COPIED, never recomputed**, and portfolio
-  measures reuse the engines' own pure functions out of `app/domain/` — one definition, not
-  a BI copy.
-- **Nothing is mounted by default:** all six `BiSettings` booleans (`BI_ENABLED`,
+- **BI plane boundaries and metric provenance** are owned by
+  [§3e](#3e-bi-plane-governed-analytics-over-the-banks-own-treasury-and-alm-data).
+- **BI routes refuse by default:** all six `BiSettings` booleans (`BI_ENABLED`,
   `BI_MART_ENQUEUE_ENABLED`, `BI_SCHEDULER_ENABLED`, `BI_ALERTS_ENABLED`,
   `BI_SUBSCRIPTIONS_ENABLED`, `BI_NLQ_ENABLED`) default off, so every BI route 404s until
   `BI_ENABLED` is set; `GET /feature-flags` projects all six. Turning it on is the ORDERED
@@ -919,20 +905,22 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   sensitivity) across measures, dimensions AND filters, deny-by-default, and export
   authority is derived from the member set the query touches — never a client flag, and
   re-checked after compilation where the second check can only refuse.
-- **No `text()` in `app/bi/service` or `app/bi/domain`** (an AST guard that proves
-  itself), no currency/regulator literal in BI code or pack JSON — though `eve_base_ghs` and
+- **Compiler SQL safety** is owned by
+  [§3e](#3e-bi-plane-governed-analytics-over-the-banks-own-treasury-and-alm-data).
+  No currency/regulator literal in BI code or pack JSON — though `eve_base_ghs` and
   `ghs_millions` are load-bearing wire keys, not leaks, exactly like the `bog_` fact
   categories and the `refinitiv` vendor id.
 - **The packs name `.crd.official` measures and are correct for a BANK only** — an SDI has a
   different capital regime and is refused the packs surface until its own pack set ships
   (the gate resolves through the authority registry and opens by itself).
-- **BI tables span three model modules** (`app/bi/models/marts.py`, `app/bi/models/content.py`,
-  `app/bi/models/notifications.py`), and three registries each convict you by name if you miss a new
-  table: the plane guard's `BI_OWNED` globs, its writable-table derivation, and the table
-  census that requires every `bi_*` table to be named by exactly one module's tuple. **Check
-  which Postgres suite iterates your table** — `tests/db/test_bi_foundation_migration.py`
-  reads `app/bi/models/marts.py` ALONE, and `tests/db/test_bi_phase3_migration.py` gives the other
-  modules' tables column, CHECK and FORCE-RLS parity. Without that parity a column too narrow
+- **BI model registration and migration parity** are pinned by
+  `tests/db/test_bi_owned_tables_parity.py`: its subject is the union of tables declared
+  under `app.bi.models` and `bi_*` tables in `Base.metadata`, including
+  `ai_commentary_drafts`. Each must appear in exactly one model module's table tuple.
+  Its Postgres checks cover RLS, column types/lengths/nullability and CHECK names/values;
+  `test_bi_migration_structural_parity.py` covers primary keys, foreign keys and indexes.
+  The foundation and Phase 3 migration suites iterate narrower subsets; use the derived
+  census for complete coverage. Without that parity a column too narrow
   for the values copied into it passes on SQLite (which ignores VARCHAR lengths) and fails a
   tenant's WHOLE nightly build on Postgres, because the model and the migration agree on the
   wrong number.
@@ -1168,12 +1156,12 @@ All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 appeared in no workflow at all, and the dashboard workflow ran neither `lint` nor `test`, so
 the regulatory fail-open guard and the browser-runtime SSRF guard were unenforced):
 
-| Workflow                                   | Jobs                                                                                                                                                                                                                   |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/risk-service.yml`       | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests) |
+| Workflow                                   | Jobs                                                                                                                                                                                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.github/workflows/risk-service.yml`       | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests)   |
 | `.github/workflows/dashboard.yml`          | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection) |
-| `.github/workflows/web.yml`                | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                          |
-| `.github/workflows/dashboard-journeys.yml` | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                             |
+| `.github/workflows/web.yml`                | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                            |
+| `.github/workflows/dashboard-journeys.yml` | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                               |
 
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.

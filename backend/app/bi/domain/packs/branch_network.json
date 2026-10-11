@@ -11,15 +11,9 @@
       "title": "Branch league table",
       "caption": "Book size, arrears and account count by branch. Branches appear once the loan book carries a branch identifier.",
       "query": {
-        "measures": [
-          "loans.balance_rc",
-          "loans.npl_ratio_pct",
-          "loans.count"
-        ],
+        "measures": ["loans.balance_rc", "loans.npl_ratio_pct", "loans.count"],
         "window": "as_of",
-        "dimensions": [
-          "branch.name"
-        ],
+        "dimensions": ["branch.name"],
         "sort": [
           {
             "member": "loans.balance_rc",
@@ -38,13 +32,9 @@
       "title": "Book by region",
       "caption": "Balances by region. Regions are declared in the bank's business unit register and are never inferred.",
       "query": {
-        "measures": [
-          "loans.balance_rc"
-        ],
+        "measures": ["loans.balance_rc"],
         "window": "as_of",
-        "dimensions": [
-          "branch.region"
-        ]
+        "dimensions": ["branch.region"]
       },
       "display": {
         "series_dimension": "branch.region"
@@ -71,13 +61,9 @@
       "title": "Arrears by branch",
       "caption": "The overdue portion of the loan book, branch by branch. It reads as no value, never as zero, until the loan book states an arrears amount.",
       "query": {
-        "measures": [
-          "loans.arrears_amount_rc"
-        ],
+        "measures": ["loans.arrears_amount_rc"],
         "window": "as_of",
-        "dimensions": [
-          "branch.name"
-        ],
+        "dimensions": ["branch.name"],
         "sort": [
           {
             "member": "loans.arrears_amount_rc",

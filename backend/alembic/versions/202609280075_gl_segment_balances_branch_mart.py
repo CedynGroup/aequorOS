@@ -28,7 +28,7 @@ Three changes, one feature.
 2. ``bi_fact_gl_branch_monthly``, the branch mart. **A SEPARATE table rather than a
    ``branch_code`` column on ``bi_fact_gl_monthly``**, and that is a security
    decision rather than a modelling preference:
-   ``services/bi/authorization.branch_attributable`` reads the branch key off the
+   ``app/bi/service/authorization.branch_attributable`` reads the branch key off the
    MAPPED TABLE, so a branch key on the institution's own ledger would have made
    the institution's whole profit-and-loss readable by a branch-scoped principal —
    the exact disclosure Phase 4's data scopes exist to prevent.

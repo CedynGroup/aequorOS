@@ -34,12 +34,10 @@ c. **BI writes ``bi_*`` tables, plus exactly the platform seams named in
    (``audit.record_event`` writing ``audit_events``, ``job_queue.enqueue``
    writing ``jobs``) is resolved through the helper's own body and convicted the
    same way unless the ``(helper, table)`` pair is allow-listed with its reason.
-   Until audit A360-1 the scan covered ``app/bi/service`` and ``app/bi/domain``
-   only — 68 of the 90 exempt modules — and the one direct non-``bi_*`` write in
-   the tree (``ai_commentary_drafts``, from the AI job) had been placed in the
-   unscanned part precisely because the guard would have convicted it under
-   ``app/bi/service``; a ``db.add(CanonicalPosition(...))`` in any feature
-   route would have passed every guard.
+   The ownership globs cover the feature's routes, schemas, jobs and models as
+   well as its service/domain trees and operator surface. Every owned module
+   participates in the write scan, including the query wire schema, which
+   remains subject to rule (a)'s import ban on BI internals.
 d. **``app/bi/domain/**`` imports no application state.** The BI-specific
    restatement of the pure-domain rule (``test_dependency_boundaries.py``), so
    the catalogue and the row extractors stay reusable and golden-testable.
@@ -418,8 +416,7 @@ def test_query_wire_contract_cannot_import_bi_internals(
         "relative": f"from ..{target} import value\n",
         "dynamic": f'import importlib\nimportlib.import_module("app.bi.{target}")\n',
         "dynamic-relative": (
-            f'import importlib\nimportlib.import_module("..{target}", '
-            'package="app.bi.schemas")\n'
+            f'import importlib\nimportlib.import_module("..{target}", package="app.bi.schemas")\n'
         ),
     }
     (bi_schema_tree / "query.py").write_text(bodies[shape], encoding="utf-8")

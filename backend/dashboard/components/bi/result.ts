@@ -42,7 +42,13 @@
 import type { BiQueryResult, BiResultColumn } from "@aequoros/risk-service-api";
 // Relative, not the `@/` alias: this module is compiled and run under node by
 // `pnpm --filter @aequoros/dashboard test`, which cannot resolve the alias.
-import { currencyCode, fmtCurrency, fmtInt, fmtNum, fmtPct } from "../../lib/format";
+import {
+  currencyCode,
+  fmtCurrency,
+  fmtInt,
+  fmtNum,
+  fmtPct,
+} from "../../lib/format";
 import { hasAnyValue, type SeriesValue } from "../../lib/echartsOptions";
 
 /** The display for a value the platform did not measure. */

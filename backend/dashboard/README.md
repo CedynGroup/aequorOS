@@ -429,6 +429,13 @@ FTP specs check saved pricing assumptions, conservation of business-line view
 balances/contributions/flags, uncomputable margins and confidential scenario grants.
 These read-only analytical tables do not implement status transitions.
 
+BI contract suites use `unit/backend.ts` to execute the backend's actual schema
+validators and serializers through `uv run --frozen --no-python-downloads`.
+Running `test`, `test:legacy` or `test:coverage` therefore also requires uv and
+Python 3.13; prepare the [backend environment](../README.md#local-setup) before
+running them. The helper clears database URLs and disables the in-process worker;
+these contract checks need no running backend or database.
+
 `test:coverage` runs both engines with V8 coverage. Vitest's AST-based report
 includes **every production TS/TSX file in `app/`, `components/` and `lib/`**,
 including untouched modules. Only tests and declaration files are excluded.

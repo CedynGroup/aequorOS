@@ -488,12 +488,12 @@ Before the deployment that mounts the BI routes, attach:
 
 ## Pinned by
 
-| Guarantee                                                                                                            | Test                                                                                                  |
-| -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Guarantee                                                                                                            | Test                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | The matrix: principal kind × bundle × module × sensitivity × institution × query shape                               | `tests/bi/api/test_bi_authorization_matrix.py`                                                           |
-| Pair collection (filters, hierarchies, ratio components, `over`, Top-N, pivot, sort), call budget, fail-closed edges | `tests/bi/service/test_bi_authorization.py`                                                          |
-| Every catalogue member's module and sensitivity resolves to a platform enum value                                    | `tests/architecture/test_bi_catalogue_authority.py`                                                   |
-| Nothing a client sends becomes SQL                                                                                   | `tests/architecture/test_bi_compiler_injection.py`                                                    |
+| Pair collection (filters, hierarchies, ratio components, `over`, Top-N, pivot, sort), call budget, fail-closed edges | `tests/bi/service/test_bi_authorization.py`                                                              |
+| Every catalogue member's module and sensitivity resolves to a platform enum value                                    | `tests/architecture/test_bi_catalogue_authority.py`                                                      |
+| Nothing a client sends becomes SQL                                                                                   | `tests/architecture/test_bi_compiler_injection.py`                                                       |
 | Cross-tenant 404 on every `/bi/*` route, and the route dependency inventory                                          | wave-3 `tests/bi/api/test_bi_routes.py`, `tests/architecture/test_bi_authorization.py` (not yet written) |
 
 ## Rehearsal record
