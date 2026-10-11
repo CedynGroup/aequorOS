@@ -532,3 +532,33 @@ def test_an_approved_declaration_is_sealed_but_still_revocable(
         {"id": str(row_id)},
         "write-once",
     )
+
+
+@postgres_only
+@pytest.mark.parametrize(
+    "table",
+    [
+        "regulatory_parameter",
+        "system_of_record_declarations",
+        "reconciliation_exceptions",
+        "canonical_withdrawals",
+    ],
+)
+def test_authoritative_register_evidence_cannot_be_deleted(
+    connection: Connection, table: str
+) -> None:
+    row_id = uuid4()
+    if table == "regulatory_parameter":
+        row_id = _approved_parameter_id(connection)
+    elif table == "system_of_record_declarations":
+        _insert_declaration(connection, row_id, declaration_status="approved")
+    elif table == "reconciliation_exceptions":
+        _insert_exception(connection, row_id)
+    else:
+        _insert_withdrawal(connection, row_id, withdrawal_status="applied")
+    # Exercise the trigger even when the fixture is the migration owner.
+    connection.execute(text(f"GRANT DELETE, TRUNCATE ON {table} TO CURRENT_USER"))
+    _refused(
+        connection, f"DELETE FROM {table} WHERE id = :id", {"id": str(row_id)}, "retained evidence"
+    )
+    _refused(connection, f"TRUNCATE {table} CASCADE", {}, "append-only")

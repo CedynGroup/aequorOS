@@ -123,3 +123,70 @@ contract. Destruction of a key is a separate cryptographic loss of access that
 Object Lock cannot prevent. Rotation creates new encrypted versions; old retained
 versions stay recoverable only with their original bank keys. Never shorten key
 recovery windows below the Object Lock interval.
+
+## Append-only inventory and sweep
+
+`202610100092` complements the existing attestation, governance, ICAAP, market-data
+and filing-chain migrations. The inventory distinguishes history from live state:
+
+| Record family | Database protection |
+| --- | --- |
+| Tenant and operator audit logs | Existing UPDATE/DELETE guards; database hash chain; TRUNCATE guard |
+| Signature and artifact versions, filing approvals/submission events, pinned stages/decisions and attachments/withdrawals | Existing UPDATE guards; added unconditional DELETE and TRUNCATE guards |
+| Scenario assumption and financial manual-edit histories | Added UPDATE/DELETE/TRUNCATE guards |
+| Eleven `param_*` board registers (risk weights, limits, thresholds, haircuts, shocks, ECL assumptions) | Values/scope/approval evidence sealed from insert; only effective-to and timestamp bookkeeping may update; DELETE/TRUNCATE refused |
+| Approved/rejected forecast assumption generations | All updates and deletion refused; drafts retain their editing lifecycle |
+| Authorization bindings | Grant/scope evidence sealed from insert; revocation fields write-once; DELETE/TRUNCATE refused |
+| Completed regulatory runs and package financial snapshots | Filing/input seals above; added TRUNCATE guard |
+| Live scenario assumptions, current financial workspace, working artifact pointers | Mutable operational state; immutable histories/version records retain their evidence |
+| Regulatory parameter control plane, system-of-record, reconciliation exceptions and canonical withdrawals | Existing governed-row seals; added DELETE protection on authoritative rows and TRUNCATE guards; draft, effective-date and revocation lifecycles preserved |
+
+No application-set reset flag bypasses the new deletion guards. Destructive test
+setup must use fresh disposable schemas or privileged fixture restoration, never
+a production mutation capability. Every authority mutation continues to use the
+existing transactional authorization invalidation service.
+
+`tests/db/test_signed_filing_locks.py` verifies locked edits/deletes, completion,
+void-and-rework, and linked resubmission. `tests/db/test_append_only_sweep.py`
+exercises each board register plus assumption approvals, grant scope/revocation
+and legacy history. `tests/db/test_retained_filing_evidence.py` tests UPDATE, DELETE
+and cascading TRUNCATE against all eight retained filing-child tables.
+`tests/storage/test_object_lock.py` uses Moto plus real local
+bank-key encryption to verify retention metadata, refusal of version deletion,
+idempotence, no shortening by the retention helper, and revocation refusal.
+Moto's missing GetObjectRetention action is adapted to its real HEAD retention
+headers; uploads, retention writes and version deletion guards remain emulator
+operations. Vendor errors are translated to a safe storage-layer failure.
+These are executable contract tests; actual AWS compliance immutability and pager
+delivery require deployment acceptance evidence, not an emulator assertion.
+
+## Local validation record (2026-10-10)
+
+The exact `risk-service:format`, `risk-service:lint` and
+`risk-service:typecheck` tasks passed. The strict type-check baseline added no
+errors and removed three legacy Any errors. No financial figures or rules changed.
+
+The hermetic suite passed **16,154 tests**, with **671 skips** and **one expected
+failure**, using four workers. It preceded the final cloud-endpoint,
+output-bucket and tenant-progress refinements. The final focused run below
+exercised those refinements and passed **all 74 tests**, including complete
+upgrade/downgrade of the migration chain. All PostgreSQL writes used disposable
+schemas in this worktree's isolated local PostgreSQL service.
+
+```bash
+env -u TEST_DATABASE_URL -u REAL_DATA_DATABASE_URL \
+  uv run pytest -n 4 --dist loadfile --tb=short -q
+
+uv run python scripts/local_services.py run --postgres --role-admin -- \
+  uv run pytest -n 4 --dist loadfile --tb=short -q \
+  tests/db/test_postgres_migrations.py \
+  tests/db/test_audit_integrity.py tests/db/test_signed_filing_locks.py \
+  tests/db/test_append_only_sweep.py tests/db/test_retained_filing_evidence.py \
+  tests/db/test_governance_append_only.py tests/core/test_audit_integrity_alerts.py \
+  tests/services/test_audit_integrity_schedule.py tests/storage/test_object_lock.py \
+  tests/db/test_regulatory_event_append_only.py
+```
+
+Production acceptance still needs counsel's retention period, an AWS locked-version
+deletion/shortening refusal, and an SNS-to-pager receipt. Attach those deployment
+records alongside this design and test evidence in the BoG pack (#356 / #401).
