@@ -1180,7 +1180,7 @@ the regulatory fail-open guard and the browser-runtime SSRF guard were unenforce
 | `.github/workflows/risk-service.yml`       | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests) |
 | `.github/workflows/dashboard.yml`          | `dashboard` — client typecheck, dashboard typecheck, lint, test, production build + Command Center entry-graph guard                                                                                                   |
 | `.github/workflows/web.yml`                | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                          |
-| `.github/workflows/dashboard-journeys.yml` | `journeys` — manual dispatch; see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                                          |
+| `.github/workflows/dashboard-journeys.yml` | `journeys` — four isolated shards on PRs/main/manual dispatch; always-reported `Dashboard journeys gate`; see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)                              |
 
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.
@@ -1194,8 +1194,9 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
 
 - **CI enforces every surface.** `risk-service.yml` gates the backend, `dashboard.yml`
   gates typecheck + **lint** + **test** + build, `web.yml` gates `frontend` lint+build
-  and `console` typecheck+test+build, and the manual-dispatch `dashboard-journeys.yml`
-  runs the dashboard Playwright journeys against disposable MinIO. See
+  and `console` typecheck+test+build, and `dashboard-journeys.yml` runs four isolated
+  Playwright shards on relevant pull requests, main pushes and manual dispatch.
+  Its always-reported `Dashboard journeys gate` aggregates every shard. See
   [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for the
   reasoned, size-pinned quarantine and the canonical fixture carried forward through the
   last month end on or before today. These gates are what enforce the dashboard's
