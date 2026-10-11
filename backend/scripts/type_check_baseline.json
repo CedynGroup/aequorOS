@@ -2245,10 +2245,10 @@
   "reportAny": 22
  },
  "scripts.backup_storage": {
-  "reportAny": 38,
+  "reportAny": 10,
   "reportMissingTypeStubs": 3,
   "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 2
+  "reportUnknownVariableType": 1
  },
  "scripts.bi_benchmark": {
   "reportAny": 193,
