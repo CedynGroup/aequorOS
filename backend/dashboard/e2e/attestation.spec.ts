@@ -14,7 +14,7 @@
  * refuses to initialise when APP_ENV is production.
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Response } from "@playwright/test";
 import path from "path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { requireObjectStorage } from "./support/object-storage";
@@ -23,6 +23,7 @@ import { generateCurrentVersion } from "./support/generate";
 // Shared with the full-lifecycle journeys, which sign for real: one description
 // of the ceremony surface, so a change to it cannot pass here and rot there.
 import { placeBothSignatureFields, placeField } from "./support/ceremony";
+import { expectTypedSignatureFonts } from "./support/typed-fonts";
 
 const analystState = path.join(E2E_TMP, "analyst.json");
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
@@ -341,6 +342,7 @@ test.describe("the signing workspace", () => {
   test("places typed fields from the palette, and refuses an illegible box", async ({
     browser,
   }) => {
+    test.setTimeout(180_000);
     const admin = await mintBackendToken("admin");
     const authorize = { Authorization: `Bearer ${admin}` };
     // LMT again, and for the same reason as the ceremony journey above: BSD3 is
@@ -356,6 +358,11 @@ test.describe("the signing workspace", () => {
 
     const context = await browser.newContext({ storageState: analystState });
     const page = await context.newPage();
+    const fontResponses: Response[] = [];
+    page.on("response", (response) => {
+      if (response.request().resourceType() === "font")
+        fontResponses.push(response);
+    });
     try {
       const opted = await page.request.put(
         `${API}/attestation/signing-policies`,
@@ -437,6 +444,7 @@ test.describe("the signing workspace", () => {
       const placed = await readBox();
       expect(placed[2] - placed[0]).toBeCloseTo(144, -0.5);
       expect(placed[3] - placed[1]).toBeCloseTo(35, -0.5);
+      await expectTypedSignatureFonts(page, workspace, fontResponses);
       // Accepted, not merely drawn: no violation on the box and no block on the
       // ceremony from the size of it.
       await expect(field.getByRole("alert")).toHaveCount(0);

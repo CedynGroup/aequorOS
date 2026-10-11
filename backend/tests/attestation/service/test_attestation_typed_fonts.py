@@ -147,27 +147,3 @@ def test_a_missing_font_file_drops_the_face_from_the_offer(monkeypatch: pytest.M
         key for key, face in TYPED_FACES.items() if face.base_14 is not None
     ]
     assert default_face_key() == FALLBACK_BASE_14_KEY
-
-
-def test_the_dashboard_previews_every_face_the_backend_can_stamp() -> None:
-    """A face the browser cannot preview is a mark adopted sight unseen.
-
-    Read out of the dashboard's own module rather than duplicated here, so a key
-    added on one side and forgotten on the other fails in CI instead of in front
-    of an officer.
-    """
-    fonts_ts = (
-        Path(__file__).resolve().parents[3] / "dashboard/components/attestation/signing/fonts.ts"
-    )
-    source = fonts_ts.read_text(encoding="utf-8")
-    for key in TYPED_FACES:
-        assert f"{key}:" in source, f"{key} has no preview style in fonts.ts"
-    for key, face in TYPED_FACES.items():
-        if face.file_name:
-            assert face.file_name in source, (
-                f"{key} previews in something other than the file the PDF embeds"
-            )
-    # The panel's first offer and the backend's own no-mark fallback are the
-    # same face, so a signer who adopts nothing gets what the panel showed them.
-    assert "DEFAULT_TYPED_FONT" in source
-    assert f"= '{default_face_key()}';" in source
