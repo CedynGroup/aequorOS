@@ -1107,6 +1107,10 @@ class WorkerSettings(BaseSettings):
     worker_stale_job_seconds: float = Field(default=900.0, alias="WORKER_STALE_JOB_SECONDS")
     official_run_hour: int = Field(default=2, alias="OFFICIAL_RUN_HOUR")
     official_run_enabled: bool = Field(default=False, alias="OFFICIAL_RUN_ENABLED")
+    audit_integrity_enabled: bool = Field(default=False, alias="AUDIT_INTEGRITY_ENABLED")
+    audit_integrity_alert_topic_arn: str | None = Field(
+        default=None, alias="AUDIT_INTEGRITY_ALERT_TOPIC_ARN"
+    )
     #: Hourly live-refresh recovery net: enqueues only when accepted ingestion
     #: is newer than the bank's oldest live module (or no live rows exist).
     #: Unchanged and structurally unavailable rows are never refreshed by age.

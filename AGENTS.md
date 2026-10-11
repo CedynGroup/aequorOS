@@ -162,6 +162,7 @@ new topic, add a row here.
 | Legacy case vertical (`/api/v1/cases`)                         | [backend/AGENTS.md](backend/AGENTS.md#legacy-case-vertical)                                                                              |
 | TLS enforcement and bank-reviewable transport evidence         | [backend/docs/transport_security.md](backend/docs/transport_security.md)                                                                 |
 | Bank-held keys, onboarding, rotation and backup recovery       | [backend/docs/bank_encryption.md](backend/docs/bank_encryption.md)                                                                       |
+| Audit chains, filed-input seals and compliance retention      | [backend/docs/tamper_evident_records.md](backend/docs/tamper_evident_records.md)                                                           |
 | Coolify deployment rules                                       | [deploy/README.md](deploy/README.md#coolify-compose-rules)                                                                               |
 | Host change to `bank.aequoros.com`                             | [backend/dashboard/README.md](backend/dashboard/README.md#deploy-to-bankaequoroscom)                                                     |
 
