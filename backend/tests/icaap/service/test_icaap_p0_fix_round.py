@@ -535,18 +535,21 @@ def test_both_icaap_consumers_select_only_the_regulatory_horizon(
         db_session.add(run)
         runs.append(run)
     db_session.flush()
+    # Exercise private selection seams without changing the public interfaces.
     selected = capital_plan._forecast_runs(db_session, MAKER, bank)  # noqa: SLF001
     if regulatory_inputs is None:
         assert selected == []
         with pytest.raises(HTTPException) as refused:
-            generation._generate_icaap_stress(  # noqa: SLF001
+            generation._generate_icaap_stress(  # pyright: ignore[reportPrivateUsage]
                 db_session, MAKER, bank, period, generation.REGISTRY["ICAAP-STRESS"]
             )
         assert refused.value.status_code == 409
-        assert refused.value.detail["error_code"] == "no_forecast_run"
+        detail: object = refused.value.detail
+        assert isinstance(detail, dict)
+        assert cast(dict[str, object], detail)["error_code"] == "no_forecast_run"
         return
     assert [run.id for run in selected] == [runs[0].id]
-    generated = generation._generate_icaap_stress(  # noqa: SLF001
+    generated = generation._generate_icaap_stress(  # pyright: ignore[reportPrivateUsage]
         db_session, MAKER, bank, period, generation.REGISTRY["ICAAP-STRESS"]
     )
     assert generated.snapshot["metadata"]["forecast_run_id"] == str(runs[0].id)

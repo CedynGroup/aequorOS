@@ -14,17 +14,48 @@ turns out to have been recomputed under somebody's feet.
 from __future__ import annotations
 
 import ast
+from collections.abc import Sequence
 from decimal import Decimal
 from pathlib import Path
+from typing import Protocol, cast
 
 import pytest
 
+from app.domain.fx.engine import FxPosition
 from app.domain.stress.appendix_ii import build_appendix_ii
+from app.domain.stress.management_actions import RecognitionCaps
+from app.domain.stress.orchestrator import EnterpriseStressOutcome
+from app.domain.stress.projection import EnterpriseProjection
+from app.domain.stress.translation import MacroPathPoint
 from app.icaap.domain.frameworks import registry
 from app.services import enterprise_stress
+from tests.domain import test_stress_appendix_ii, test_stress_orchestrator
 from tests.domain.stress_fixtures import severe_paths
-from tests.domain.test_stress_appendix_ii import _RECOGNITION_CAPS, _projection
-from tests.domain.test_stress_orchestrator import _fx_positions, _fx_run, _short_usd
+
+
+class _AppendixFixtures(Protocol):
+    _RECOGNITION_CAPS: RecognitionCaps
+
+    def _projection(self, paths: Sequence[MacroPathPoint]) -> EnterpriseProjection: ...
+
+
+class _FxFixtures(Protocol):
+    def _fx_positions(self) -> tuple[FxPosition, ...]: ...
+
+    def _short_usd(self) -> tuple[FxPosition, ...]: ...
+
+    def _fx_run(self, positions: Sequence[FxPosition]) -> EnterpriseStressOutcome: ...
+
+
+# Type only the fixture calls used here; their legacy helpers remain unchanged.
+APPENDIX_FIXTURES = cast(_AppendixFixtures, test_stress_appendix_ii)
+FX_FIXTURES = cast(_FxFixtures, test_stress_orchestrator)
+# Reusing private test fixtures is intentional, rather than an application API.
+RECOGNITION_CAPS = APPENDIX_FIXTURES._RECOGNITION_CAPS  # pyright: ignore[reportPrivateUsage]
+projection = APPENDIX_FIXTURES._projection  # pyright: ignore[reportPrivateUsage]
+fx_positions = FX_FIXTURES._fx_positions  # pyright: ignore[reportPrivateUsage]
+short_usd = FX_FIXTURES._short_usd  # pyright: ignore[reportPrivateUsage]
+fx_run = FX_FIXTURES._fx_run  # pyright: ignore[reportPrivateUsage]
 
 BACKEND = Path(__file__).parents[2]
 #: The whole ICAAP surface, not just its two packages. The route layer is
@@ -308,30 +339,34 @@ def test_the_plane_scanner_would_catch_a_deliberate_violation(tmp_path: Path) ->
 def test_the_stress_orchestrator_computes_the_fx_revaluation_addon(
     short: bool, loss: Decimal, addon: Decimal
 ) -> None:
-    outcome = _fx_run(_short_usd() if short else _fx_positions())
+    outcome = fx_run(short_usd() if short else fx_positions())
     assert outcome.fx is not None
     assert outcome.fx.revaluation_loss == loss
     assert outcome.fx.pillar1_fx_capital == Decimal("4500000")
     assert outcome.fx.pillar2_addon == addon
     serialized = outcome.serialize()["fx"]
     assert isinstance(serialized, dict)
-    assert Decimal(serialized["pillar2_addon"]) == addon
+    serialized_fx = cast(dict[str, object], serialized)
+    serialized_addon = serialized_fx["pillar2_addon"]
+    assert isinstance(serialized_addon, str)
+    assert Decimal(serialized_addon) == addon
 
 
 @pytest.mark.parametrize("short", [False, True])
 def test_the_stress_overlay_and_appendix_preserve_the_fx_addon(short: bool) -> None:
-    outcome = _fx_run(_short_usd() if short else _fx_positions())
+    outcome = fx_run(short_usd() if short else fx_positions())
     expected = Decimal("3500") if short else Decimal("0")
-    overlay = enterprise_stress._pillar2_overlay(outcome, 3)  # noqa: SLF001
+    # Exercise the internal overlay seam without changing its public interface.
+    overlay = enterprise_stress._pillar2_overlay(outcome, 3)  # pyright: ignore[reportPrivateUsage]
     assert overlay is not None
     assert set(overlay) == {1, 2, 3}
     assert all(row.country_and_fx == expected for row in overlay.values())
     tables = build_appendix_ii(
-        _projection(severe_paths()),
+        projection(severe_paths()),
         severe_paths(),
         currency="GHS",
         car_target_pct=Decimal("13"),
-        recognition_caps=_RECOGNITION_CAPS,
+        recognition_caps=RECOGNITION_CAPS,
         pillar2_by_stress_year=overlay,
     )
     for row in tables.table5_rwa.rows:
@@ -340,9 +375,13 @@ def test_the_stress_overlay_and_appendix_preserve_the_fx_addon(short: bool) -> N
         )
     serialized = tables.serialize()["table5_rwa"]
     assert isinstance(serialized, dict)
-    for row in serialized["rows"]:
-        value = row["pillar2"]["country_and_fx"]
-        if row["label"].startswith("stress_y"):
+    serialized_table = cast(dict[str, object], serialized)
+    for row in cast(list[dict[str, object]], serialized_table["rows"]):
+        value = cast(dict[str, object], row["pillar2"])["country_and_fx"]
+        label = row["label"]
+        assert isinstance(label, str)
+        if label.startswith("stress_y"):
+            assert isinstance(value, str)
             assert Decimal(value) == expected
         else:
             assert value is None

@@ -27,6 +27,7 @@ import io
 import re
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import cast
 
 import pdfplumber
 import pytest
@@ -485,11 +486,17 @@ def test_the_generic_tabular_renderer_never_sees_the_embedded_font() -> None:
 def font_resources(payload: bytes) -> set[tuple[str, bool]]:
     reader = PdfFileReader(io.BytesIO(payload))
     found: set[tuple[str, bool]] = set()
-    for reference in reader.root["/Pages"]["/Kids"]:
-        resources = reference.get_object()["/Resources"]
-        for font in resources["/Font"].values():
-            font = font.get_object()
-            descriptor = font["/FontDescriptor"] if "/FontDescriptor" in font else {}
+    pages = cast(generic.DictionaryObject, reader.root["/Pages"])
+    for reference in cast(list[generic.PdfObject], pages["/Kids"]):
+        page = cast(generic.DictionaryObject, reference.get_object())
+        resources = cast(generic.DictionaryObject, page["/Resources"])
+        fonts = cast(dict[str, generic.PdfObject], resources["/Font"])
+        for font_reference in fonts.values():
+            font = cast(dict[str, generic.PdfObject], font_reference.get_object())
+            descriptor = cast(
+                dict[str, generic.PdfObject],
+                font.get("/FontDescriptor", generic.DictionaryObject()).get_object(),
+            )
             embedded = any(key in descriptor for key in ("/FontFile", "/FontFile2", "/FontFile3"))
             found.add((str(font["/BaseFont"]), embedded))
     return found

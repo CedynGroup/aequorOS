@@ -104,7 +104,11 @@ assert.equal(ICAAP_EDITOR_SCHEMA_VERSION, fixture.schema_version);
 for (const [name, expected] of Object.entries(fixture.nodes)) {
   const type = schema.nodes[name];
   assert.ok(type, `node ${name} is missing from the editor schema`);
-  const spec = type.spec as { content?: string; group?: string; atom?: boolean };
+  const spec = type.spec as {
+    content?: string;
+    group?: string;
+    atom?: boolean;
+  };
 
   assert.equal(
     spec.content ?? null,
