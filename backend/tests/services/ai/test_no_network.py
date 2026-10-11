@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import Callable
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -58,26 +60,37 @@ def test_constructing_a_real_model_in_tests_is_refused(
         ai_client.AnthropicModel()
 
 
-def test_importing_the_api_does_not_load_the_sdk() -> None:
-    assert (
-        _subprocess_check("import sys; import app.main; print('anthropic' in sys.modules)")
-        == "False"
-    )
+@pytest.fixture(scope="module")
+def imported_app_modules() -> Callable[[str], frozenset[str]]:
+    """Share each cold-process import snapshot between its isolation checks."""
+
+    @cache
+    def snapshot(app_module: str) -> frozenset[str]:
+        loaded = _subprocess_check(
+            f"import sys; import {app_module}; print(','.join(sorted(sys.modules)))"
+        )
+        return frozenset(loaded.split(","))
+
+    return snapshot
 
 
-def test_importing_the_worker_does_not_load_the_sdk() -> None:
+def test_importing_the_api_does_not_load_the_sdk(
+    imported_app_modules: Callable[[str], frozenset[str]],
+) -> None:
+    assert "anthropic" not in imported_app_modules("app.main")
+
+
+def test_importing_the_worker_does_not_load_the_sdk(
+    imported_app_modules: Callable[[str], frozenset[str]],
+) -> None:
     """The core worker holds no model credential and loads no model code."""
-    assert (
-        _subprocess_check("import sys; import app.worker; print('anthropic' in sys.modules)")
-        == "False"
-    )
+    assert "anthropic" not in imported_app_modules("app.worker")
 
 
-def test_importing_the_operator_app_does_not_load_the_sdk() -> None:
-    assert (
-        _subprocess_check("import sys; import app.operator.main; print('anthropic' in sys.modules)")
-        == "False"
-    )
+def test_importing_the_operator_app_does_not_load_the_sdk(
+    imported_app_modules: Callable[[str], frozenset[str]],
+) -> None:
+    assert "anthropic" not in imported_app_modules("app.operator.main")
 
 
 def test_even_importing_the_client_module_does_not_load_the_sdk() -> None:
@@ -102,16 +115,18 @@ def test_importing_a_vendor_adapter_does_not_load_its_transport(module: str) -> 
 
 
 @pytest.mark.parametrize("app_module", ["app.main", "app.worker", "app.operator.main"])
-def test_no_ordinary_process_loads_a_vendor_adapter(app_module: str) -> None:
+def test_no_ordinary_process_loads_a_vendor_adapter(
+    app_module: str,
+    imported_app_modules: Callable[[str], frozenset[str]],
+) -> None:
     """The tier resolves its adapters with ``importlib`` at call time, and the
     enqueue gate reaches them the same way, so no process that merely imports the
     application parses a vendor credential class."""
-    script = (
-        f"import sys; import {app_module}; "
-        "print(any(name.startswith('app.services.ai.openai_model') "
-        "or name.startswith('app.services.ai.google_model') for name in sys.modules))"
+    assert not any(
+        name.startswith("app.services.ai.openai_model")
+        or name.startswith("app.services.ai.google_model")
+        for name in imported_app_modules(app_module)
     )
-    assert _subprocess_check(script) == "False"
 
 
 @pytest.mark.parametrize(
