@@ -994,8 +994,10 @@ actor_user_id, reason, occurred_at`. Append-only; **checker ≠ prior maker enfo
 **`audit_log`** _(new — append-only, tamper-evident)_:
 `id, org_id (nullable for platform), actor_user_id, impersonator_user_id (nullable),
 action, resource_type, resource_id, reason, ip, session_id, result, occurred_at`.
-Not editable/deletable via the app; consider hash-chaining + WORM storage
-(S3 Object Lock). Covers logins, role/permission changes, every
+Not editable/deletable via the app. The existing database audit streams and
+the compliance-storage delivery boundary are governed by
+[the tamper-evident records contract](../backend/docs/tamper_evident_records.md).
+The proposed schema covers logins, role/permission changes, every
 create/edit/delete/**export**, approvals, submissions, impersonation, SSO/SCIM
 changes, and every financial mutation (with its reason).
 

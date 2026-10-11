@@ -23,11 +23,10 @@ Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `back
 (`.pre-commit-config.yaml`): ruff check/format scoped to `^backend/`, Conventional
 Commits enforcement, and a pre-push hook that runs `mise run risk-service:api-fresh`.
 
-Local DB bootstrap: `mise run risk-service:bootstrap-db` creates a migration role (may bypass RLS)
-and an app runtime role created with `NOBYPASSRLS`, runs migrations, and seeds two demo tenants.
-App connection string comes from `backend/.env` (remote:
-`postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database>`; local fallback:
-`postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service`).
+Database setup and local connection settings are owned by
+[the backend setup guide](backend/README.md#run-the-api); migration credentials and
+audit ownership are governed by
+[the tamper-evident records contract](backend/docs/tamper_evident_records.md#required-deployment-follow-up).
 
 ### Product segments and the staff control plane
 

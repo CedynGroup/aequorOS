@@ -14,6 +14,9 @@ delivers the append-only sweep. Each layer is validated separately. This audit
 layer alone does not certify all of issue #413. No user-visible change;
 screenshots are not applicable.
 
+The compliance-storage layer must use the regulatory retention period confirmed
+by counsel (#246).
+
 ## Audit chain
 
 `202610100090` installs a separate SHA-256 chain for `audit_events` and
@@ -46,9 +49,9 @@ boundary; a row lock with SKIP LOCKED and a committed advance coordinates worker
 replicas and restarts. The worker requires SELECT/UPDATE on that schedule row.
 AI and BI workers do not run the task. The task checks both full streams using
 an all-tenant BYPASSRLS role and records successful counts in operational logs.
-Tenant-readable job progress carries only its existing tenant-local scheduling fields. Verification
-recomputes every hash from the source row, verifies links and sequence continuity,
-and compares row count and final hash to the protected head. Content edits,
+Tenant-readable job progress carries only its existing tenant-local scheduling
+fields. Verification recomputes every hash from the source row, verifies links
+and sequence continuity, and compares row count and final hash to the protected head. Content edits,
 missing events, deleted middle entries and deleted tails fail verification.
 Tenant ticks never invoke the platform sweep. Each completed hourly task pages
 once for each broken stream; adding organizations or worker replicas does not
@@ -93,10 +96,10 @@ either `POSTGRES_ADMIN_URL` or a superuser `TEST_DATABASE_URL`; without superuse
 credentials they skip locally and fail when `POSTGRES_PRIVILEGE_TESTS_REQUIRED`
 is set. Ordinary migration tests still need only `TEST_DATABASE_URL`.
 `tests/core/test_migration_credentials.py` exercises the migration credential
-boundary for each runtime connection role. `tests/core/test_audit_integrity_alerts.py` verifies SNS routing, the safe
-incident payload, and visible missing/failed delivery with a fake publisher.
+boundary for each runtime connection role.
+`tests/core/test_audit_integrity_alerts.py` verifies SNS routing, the safe incident
+payload, and visible missing/failed delivery with a fake publisher.
 PostgreSQL tests use disposable schemas, never the primary database.
-
 
 ## Required deployment follow-up
 
@@ -121,6 +124,11 @@ before deploying this migration in production or staging:
   source SELECT/INSERT grants; grant no chain INSERT/UPDATE/DELETE/TRUNCATE and
   no definer EXECUTE to runtime identities. Avoid blanket post-migration grants
   and bootstrap ownership reassignment.
+- The legacy `scripts/bootstrap_db.sh` is incompatible with this migration:
+  it creates a NOCREATEROLE migrator without preparing audit-owner membership,
+  reassigns existing table ownership and applies blanket runtime grants.
+  Do not use it to initialize or refresh an audit-protected database; prepare
+  roles and grants as described above before running Alembic.
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,
   truncation and function replacement fail. Confirm one sweep with zero banks
