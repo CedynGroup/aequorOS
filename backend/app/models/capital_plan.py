@@ -80,6 +80,15 @@ class IlaapSnapshot(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             ["banks.organization_id", "banks.id"],
             name="fk_ilaap_snapshots_org_bank",
         ),
+        ForeignKeyConstraint(
+            ["reporting_period_id", "organization_id", "bank_id"],
+            [
+                "bank_reporting_periods.id",
+                "bank_reporting_periods.organization_id",
+                "bank_reporting_periods.bank_id",
+            ],
+            name="fk_ilaap_snapshots_reporting_period_id_bank",
+        ),
         Index("ix_ilaap_snapshots_bank", "organization_id", "bank_id"),
     )
 

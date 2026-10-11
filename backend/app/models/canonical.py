@@ -152,6 +152,22 @@ def canonical_constraints(table_name: str) -> tuple:
             ["lineage_records.id", "lineage_records.organization_id", "lineage_records.bank_id"],
             name=f"fk_{table_name}_lineage_id_bank",
         ),
+        ForeignKeyConstraint(
+            ["superseded_by", "organization_id", "bank_id"],
+            [f"{table_name}.id", f"{table_name}.organization_id", f"{table_name}.bank_id"],
+            name=f"fk_{table_name}_superseded_by_bank",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        ForeignKeyConstraint(
+            ["withdrawn_by_batch_id", "organization_id", "bank_id"],
+            [
+                "ingestion_batches.id",
+                "ingestion_batches.organization_id",
+                "ingestion_batches.bank_id",
+            ],
+            name=f"fk_{table_name}_withdrawn_by_batch_id_bank",
+        ),
         UniqueConstraint("id", "organization_id", name=f"uq_{table_name}_id_org"),
         *(
             (
