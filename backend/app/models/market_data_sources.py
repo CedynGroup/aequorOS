@@ -18,6 +18,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
+    ForeignKeyConstraint,
     String,
     UniqueConstraint,
     Uuid,
@@ -36,6 +37,11 @@ class MarketDataSourcePreference(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "market_data_source_preferences"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "bank_id"],
+            ["banks.organization_id", "banks.id"],
+            name="fk_market_data_source_preferences_org_bank",
+        ),
         CheckConstraint(
             f"curves_source IN {SOURCE_CHOICES!r}",
             name="ck_market_data_source_preferences_curves_source",
@@ -56,7 +62,7 @@ class MarketDataSourcePreference(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id"), nullable=False
     )
-    bank_id: Mapped[str] = mapped_column(String(16), ForeignKey("banks.id"), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
 
     curves_source: Mapped[str] = mapped_column(String(8), nullable=False, default="aequor")
     fx_source: Mapped[str] = mapped_column(String(8), nullable=False, default="aequor")

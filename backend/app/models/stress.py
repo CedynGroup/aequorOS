@@ -131,6 +131,11 @@ def _in_clause(values: tuple[str, ...]) -> str:
 class MacroScenario(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "macro_scenarios"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "bank_id"],
+            ["banks.organization_id", "banks.id"],
+            name="fk_macro_scenarios_org_bank",
+        ),
         CheckConstraint(
             f"scenario_type IN {_in_clause(SCENARIO_TYPES)}",
             name="ck_macro_scenarios_scenario_type",
@@ -148,9 +153,7 @@ class MacroScenario(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         # One logical scenario per code within a bank scope. bank_id NULL
         # (supervisory) rows are NOT de-duplicated by this constraint (SQL NULLs
         # never compare equal); the service enforces code-uniqueness for those.
-        UniqueConstraint(
-            "organization_id", "bank_id", "code", name="uq_macro_scenarios_scope"
-        ),
+        UniqueConstraint("organization_id", "bank_id", "code", name="uq_macro_scenarios_scope"),
         Index("ix_macro_scenarios_org_bank_status", "organization_id", "bank_id", "status"),
         Index("ix_macro_scenarios_org_type", "organization_id", "scenario_type"),
     )
@@ -160,9 +163,7 @@ class MacroScenario(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     )
     # NULL = global-supervisory (org-wide, bank-agnostic — the bottom-up
     # supervisory path, ¶13). Set = bank-specific scenario.
-    bank_id: Mapped[str | None] = mapped_column(
-        String(16), ForeignKey("banks.id"), nullable=True
-    )
+    bank_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     code: Mapped[str] = mapped_column(String(60), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -186,9 +187,7 @@ class MacroScenario(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     # Forward hook (documented, unused in Phase 1): a JSON list of
     # institution_type / institution_class codes this scenario applies to, for
     # the later SDI scoping (docs/sdi.md §7). NULL = applies to all types.
-    institution_type_applicability: Mapped[list[Any] | None] = mapped_column(
-        JSON, nullable=True
-    )
+    institution_type_applicability: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
 
 
 class MacroScenarioPath(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
@@ -235,22 +234,23 @@ class ManagementActionPlan(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "management_action_plans"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "bank_id"],
+            ["banks.organization_id", "banks.id"],
+            name="fk_management_action_plans_org_bank",
+        ),
         CheckConstraint(
             f"status IN {_in_clause(PLAN_STATUSES)}", name="ck_mgmt_action_plans_status"
         ),
         CheckConstraint("version >= 1", name="ck_mgmt_action_plans_version"),
-        UniqueConstraint(
-            "organization_id", "bank_id", "code", name="uq_mgmt_action_plans_scope"
-        ),
+        UniqueConstraint("organization_id", "bank_id", "code", name="uq_mgmt_action_plans_scope"),
         Index("ix_mgmt_action_plans_org_bank_status", "organization_id", "bank_id", "status"),
     )
 
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id"), nullable=False
     )
-    bank_id: Mapped[str | None] = mapped_column(
-        String(16), ForeignKey("banks.id"), nullable=True
-    )
+    bank_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     code: Mapped[str] = mapped_column(String(60), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -367,9 +367,7 @@ class EnterpriseStressSignoff(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         # Exactly one sign-off per run (a withdrawn sign-off stays the row for
         # that run; a fresh run gets a fresh sign-off). The service refuses a
         # duplicate before this constraint would fire.
-        UniqueConstraint(
-            "organization_id", "run_id", name="uq_enterprise_stress_signoffs_run"
-        ),
+        UniqueConstraint("organization_id", "run_id", name="uq_enterprise_stress_signoffs_run"),
         Index(
             "ix_enterprise_stress_signoffs_scope",
             "organization_id",
@@ -406,17 +404,11 @@ class EnterpriseStressSignoff(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     # Headline outcomes captured from the run at sign-off time (the attestation
     # records what the Board actually attested to).
     stays_above_all_minima: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    with_actions_stays_above_all_minima: Mapped[bool | None] = mapped_column(
-        Boolean, nullable=True
-    )
+    with_actions_stays_above_all_minima: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     submitted_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-    submitted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Set on attestation; the maker-checker rule (attester != preparer) is enforced
     # in the service, so these user ids are never equal on an attested row.
     attested_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-    attested_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    attested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -30,6 +30,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -52,6 +53,11 @@ class LiquidityEwiIndicator(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "liquidity_ewi_indicators"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "bank_id"],
+            ["banks.organization_id", "banks.id"],
+            name="fk_liquidity_ewi_indicators_org_bank",
+        ),
         CheckConstraint(
             f"direction IS NULL OR direction IN {EWI_DIRECTIONS!r}",
             name="ck_liquidity_ewi_indicators_direction",
@@ -64,7 +70,7 @@ class LiquidityEwiIndicator(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id"), nullable=False
     )
-    bank_id: Mapped[str] = mapped_column(String(16), ForeignKey("banks.id"), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     code: Mapped[str] = mapped_column(String(60), nullable=False)
     # Display fields are nullable: a starter override inherits the code-defined
     # name/description; a custom indicator must supply its own (API-enforced).
@@ -92,6 +98,11 @@ class ContingencyFundingPlan(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "contingency_funding_plans"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "bank_id"],
+            ["banks.organization_id", "banks.id"],
+            name="fk_contingency_funding_plans_org_bank",
+        ),
         CheckConstraint(f"status IN {CFP_STATUSES!r}", name="ck_contingency_funding_plans_status"),
         UniqueConstraint(
             "organization_id", "bank_id", "version", name="uq_contingency_funding_plans_version"
@@ -101,7 +112,7 @@ class ContingencyFundingPlan(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id"), nullable=False
     )
-    bank_id: Mapped[str] = mapped_column(String(16), ForeignKey("banks.id"), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="draft")
     # The ¶72(a)–(g) blocks, shape-validated by ``schemas.liquidity_cfp.CfpContent``.
@@ -125,6 +136,11 @@ class CfpActivationEvent(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "cfp_activation_events"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "bank_id"],
+            ["banks.organization_id", "banks.id"],
+            name="fk_cfp_activation_events_org_bank",
+        ),
         CheckConstraint(f"event_type IN {CFP_EVENT_TYPES!r}", name="ck_cfp_activation_events_type"),
         Index("ix_cfp_activation_events_bank", "organization_id", "bank_id"),
     )
@@ -132,7 +148,7 @@ class CfpActivationEvent(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id"), nullable=False
     )
-    bank_id: Mapped[str] = mapped_column(String(16), ForeignKey("banks.id"), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     cfp_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("contingency_funding_plans.id"), nullable=False
     )
