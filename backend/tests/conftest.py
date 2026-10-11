@@ -11,6 +11,7 @@ from contextlib import contextmanager
 os.environ["RUN_INPROCESS_WORKER"] = "0"
 os.environ["TLS_ALLOW_PLAINTEXT"] = "1"
 os.environ["DATABASE_URL"] = ""
+os.environ["MIGRATION_DATABASE_URL"] = ""
 os.environ["WORKER_DATABASE_URL"] = ""
 
 from collections.abc import Callable, Iterator
@@ -82,6 +83,7 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # Postgres-gated tests opt in explicitly via TEST_DATABASE_URL and run in
     # a disposable per-run schema).
     monkeypatch.setenv("DATABASE_URL", "")
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", "")
     monkeypatch.setenv("WORKER_DATABASE_URL", "")
     monkeypatch.setenv("CORS_ORIGINS", "")
     monkeypatch.setenv("LOG_LEVEL", "INFO")

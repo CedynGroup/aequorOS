@@ -25,7 +25,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core import audit_integrity
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import Settings, get_settings
 from app.core.observability import authorization_denied
@@ -64,8 +63,7 @@ def any_scheduling_enabled(settings: Settings) -> bool:
     listed in one place but not the other either strands its feature with no
     tick chain (seeding) or lets the chain die (inert check)."""
     return (
-        settings.worker.audit_integrity_enabled
-        or settings.worker.official_run_enabled
+        settings.worker.official_run_enabled
         or settings.market_data.market_data_pull_enabled
         or settings.temenos.temenos_pull_enabled
         or settings.database_direct.database_direct_health_enabled
@@ -170,9 +168,6 @@ def run_tick(session: Session, job: Job) -> None:
         bi_subscription_scan_enqueued = (
             _enqueue_bi_subscription_scan(session, org_id, now) is not None
         )
-
-    if settings.worker.audit_integrity_enabled:
-        _ = audit_integrity.scheduled_verification(session)
 
     job_queue.enqueue(
         session,

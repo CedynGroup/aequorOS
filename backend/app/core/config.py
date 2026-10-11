@@ -6,6 +6,7 @@ from typing import Final, Literal, get_args
 
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 AppEnv = Literal["local", "test", "staging", "production"]
 StorageBackend = Literal["s3"]
@@ -54,8 +55,9 @@ class DatabaseSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
+    migration_database_url: str | None = Field(default=None, alias="MIGRATION_DATABASE_URL")
 
-    @field_validator("database_url", mode="before")
+    @field_validator("database_url", "migration_database_url", mode="before")
     @classmethod
     def empty_means_unconfigured(cls, value: str | None) -> str | None:
         """DATABASE_URL="" means unconfigured.
@@ -1398,3 +1400,27 @@ class OperatorSettings(BaseSettings):
 @lru_cache
 def get_operator_settings() -> OperatorSettings:
     return OperatorSettings()
+
+
+def get_migration_database_url() -> str:
+    """Resolve administrative credentials independently of runtime connections."""
+    settings = get_settings()
+    migration_url = settings.database.migration_database_url
+    if settings.app.app_env in {"production", "staging"}:
+        runtime_urls = (
+            settings.database.database_url,
+            settings.worker.worker_database_url,
+            settings.bi.database_url,
+            get_operator_settings().operator_database_url,
+        )
+        if migration_url is None or any(
+            url is not None and make_url(url).username == make_url(migration_url).username
+            for url in runtime_urls
+        ):
+            raise RuntimeError(
+                "MIGRATION_DATABASE_URL must use a role distinct from all runtime roles."
+            )
+    url = migration_url or settings.database.database_url
+    if url is None:
+        raise RuntimeError("DATABASE_URL or MIGRATION_DATABASE_URL is required for migrations.")
+    return url

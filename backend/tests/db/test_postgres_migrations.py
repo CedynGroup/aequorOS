@@ -23,6 +23,7 @@ from tests.support.helpers import ORG_1, ORG_2
 class MigratedPostgresSchema:
     app_engine: Engine
     schema_name: str
+    runtime_role: str | None = None
 
     def constraints(self, names: set[str]) -> set[str]:
         placeholders = ", ".join(f"'{name}'" for name in sorted(names))
@@ -139,6 +140,24 @@ def _migrated_schema(
         is_superuser = connection.scalar(
             text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
         )
+    if is_superuser:
+        with admin_engine.connect() as connection:
+            connection.execute(text("SELECT pg_advisory_lock(4130901)"))
+            try:
+                connection.execute(
+                    text("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM pg_roles
+                                       WHERE rolname = 'aequoros_audit_owner') THEN
+                            CREATE ROLE aequoros_audit_owner NOLOGIN;
+                        END IF;
+                    END $$;
+                    GRANT aequoros_audit_owner TO pg_database_owner
+                        WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
+                """)
+                )
+            finally:
+                connection.execute(text("SELECT pg_advisory_unlock(4130901)"))
     migration_role = "pg_database_owner" if is_superuser else None
     database_url = postgres_schema_url(test_database_url, schema_name, role=migration_role)
     app_engine = create_engine(database_url)

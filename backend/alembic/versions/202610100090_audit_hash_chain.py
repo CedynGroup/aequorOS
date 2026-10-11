@@ -22,6 +22,21 @@ def upgrade() -> None:
         return
     # Migration-wide lock makes the historical boundary and the first live
     # insert atomic. Historical entries are ordered, not retroactively trusted.
+    op.execute("SELECT pg_advisory_xact_lock(4130901)")
+    op.execute("""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aequoros_audit_owner') THEN
+                CREATE ROLE aequoros_audit_owner NOLOGIN NOSUPERUSER NOBYPASSRLS
+                    NOCREATEDB NOCREATEROLE NOREPLICATION;
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aequoros_audit_owner'
+                       AND (rolcanlogin OR rolsuper OR rolbypassrls OR rolcreatedb
+                            OR rolcreaterole OR rolreplication)) THEN
+                RAISE EXCEPTION 'aequoros_audit_owner must be an unprivileged NOLOGIN role';
+            END IF;
+        END $$;
+    """)
+    op.execute("GRANT aequoros_audit_owner TO CURRENT_USER WITH INHERIT TRUE, SET TRUE")
     op.execute("LOCK TABLE audit_events, operator_audit_log IN ACCESS EXCLUSIVE MODE")
     op.execute("""
         CREATE TABLE audit_chain_heads (
@@ -40,6 +55,11 @@ def upgrade() -> None:
             UNIQUE (stream, event_id)
         );
         INSERT INTO audit_chain_heads(stream) VALUES ('audit_events'), ('operator_audit_log');
+        CREATE TABLE audit_integrity_schedule (
+            id boolean PRIMARY KEY DEFAULT true CHECK (id),
+            run_after timestamptz NOT NULL
+        );
+        INSERT INTO audit_integrity_schedule VALUES (true, '-infinity');
     """)
     schema = cast(str, op.get_bind().exec_driver_sql("SELECT current_schema()").scalar_one())
     quoted_schema = op.get_bind().dialect.identifier_preparer.quote_identifier(str(schema))
@@ -47,6 +67,7 @@ def upgrade() -> None:
         CREATE FUNCTION aequoros_chain_append(stream_name text, event_id uuid, payload jsonb)
         RETURNS void LANGUAGE plpgsql SECURITY DEFINER
         SET search_path = pg_catalog, {quoted_schema}, pg_temp
+        SET row_security = on
         SET TimeZone = 'UTC' AS $$
         DECLARE head audit_chain_heads%ROWTYPE; next_hash text;
         BEGIN
@@ -65,6 +86,7 @@ def upgrade() -> None:
         CREATE FUNCTION aequoros_audit_chain_insert() RETURNS trigger
         LANGUAGE plpgsql SECURITY DEFINER
         SET search_path = pg_catalog, {quoted_schema}, pg_temp
+        SET row_security = on
         SET TimeZone = 'UTC' AS $$
         BEGIN
             PERFORM aequoros_chain_append(TG_TABLE_NAME, NEW.id, to_jsonb(NEW));
@@ -87,27 +109,59 @@ def upgrade() -> None:
             CREATE TRIGGER {stream}_chain_insert AFTER INSERT ON {stream}
                 FOR EACH ROW EXECUTE FUNCTION aequoros_audit_chain_insert();
             """)
-    for table in ("audit_chain_heads", "audit_chain_entries"):
-        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
-        # No tenant policy: only the trusted definer writes, only BYPASSRLS
-        # verification roles read. The heads contain no tenant-facing API data.
+    op.execute("""
+        CREATE TRIGGER audit_chain_entries_append_only BEFORE UPDATE OR DELETE
+          ON audit_chain_entries FOR EACH ROW EXECUTE FUNCTION aequoros_append_only_guard();
+    """)
+    op.execute(f"GRANT USAGE, CREATE ON SCHEMA {quoted_schema} TO aequoros_audit_owner")
+    for table in (*STREAMS, "audit_chain_heads", "audit_chain_entries", "audit_integrity_schedule"):
+        op.execute(f"ALTER TABLE {table} OWNER TO aequoros_audit_owner")
+        if table not in STREAMS:
+            op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+            op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
         op.execute(f"""
             REVOKE ALL ON {table} FROM PUBLIC;
             DO $$ DECLARE r record; BEGIN
                 FOR r IN SELECT rolname, rolbypassrls FROM pg_roles
                          WHERE rolname NOT LIKE 'pg\\_%' AND NOT rolsuper
-                           AND rolname <> current_user LOOP
-                    EXECUTE format('REVOKE ALL ON {table} FROM %I', r.rolname);
-                    IF r.rolbypassrls THEN
-                        EXECUTE format('GRANT SELECT ON {table} TO %I', r.rolname);
+                           AND rolname <> 'aequoros_audit_owner' LOOP
+                    IF '{table}' IN ('audit_events', 'operator_audit_log') THEN
+                        EXECUTE format('REVOKE UPDATE, DELETE, TRUNCATE ON {table} FROM %I',
+                                       r.rolname);
+                    ELSE
+                        EXECUTE format('REVOKE ALL ON {table} FROM %I', r.rolname);
+                        IF r.rolbypassrls THEN
+                            EXECUTE format('GRANT SELECT ON {table} TO %I', r.rolname);
+                            IF '{table}' = 'audit_integrity_schedule' THEN
+                                EXECUTE format('GRANT UPDATE ON {table} TO %I', r.rolname);
+                            END IF;
+                        END IF;
                     END IF;
                 END LOOP;
             END $$;
         """)
-    op.execute("""
-        CREATE TRIGGER audit_chain_entries_append_only BEFORE UPDATE OR DELETE
-          ON audit_chain_entries FOR EACH ROW EXECUTE FUNCTION aequoros_append_only_guard();
-    """)
+        if table not in STREAMS:
+            op.execute(f"""
+                CREATE POLICY {table}_owner ON {table} TO aequoros_audit_owner
+                    USING (true) WITH CHECK (true)
+            """)
+    for function in (
+        "aequoros_chain_append(text, uuid, jsonb)",
+        "aequoros_audit_chain_insert()",
+        "aequoros_append_only_guard()",
+    ):
+        op.execute(f"ALTER FUNCTION {function} OWNER TO aequoros_audit_owner")
+        op.execute(f"""
+            REVOKE ALL ON FUNCTION {function} FROM PUBLIC;
+            DO $$ DECLARE r record; BEGIN
+                FOR r IN SELECT rolname FROM pg_roles
+                         WHERE rolname NOT LIKE 'pg\\_%' AND NOT rolsuper
+                           AND rolname <> 'aequoros_audit_owner' LOOP
+                    EXECUTE format('REVOKE ALL ON FUNCTION {function} FROM %I', r.rolname);
+                END LOOP;
+            END $$;
+        """)
+    op.execute(f"REVOKE CREATE ON SCHEMA {quoted_schema} FROM aequoros_audit_owner")
 
 
 def downgrade() -> None:
@@ -117,4 +171,7 @@ def downgrade() -> None:
         op.execute(f"DROP TRIGGER {stream}_chain_insert ON {stream}")
     op.execute("DROP FUNCTION aequoros_audit_chain_insert()")
     op.execute("DROP FUNCTION aequoros_chain_append(text, uuid, jsonb)")
-    op.execute("DROP TABLE audit_chain_entries, audit_chain_heads")
+    op.execute("DROP TABLE audit_chain_entries, audit_chain_heads, audit_integrity_schedule")
+    for table in STREAMS:
+        op.execute(f"ALTER TABLE {table} OWNER TO CURRENT_USER")
+    op.execute("ALTER FUNCTION aequoros_append_only_guard() OWNER TO CURRENT_USER")

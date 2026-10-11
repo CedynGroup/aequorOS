@@ -23,6 +23,7 @@ from uuid import uuid4
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core import audit_integrity
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_request_id, reset_request_id, set_request_id
 from app.core.observability import Condition, emit
@@ -299,6 +300,9 @@ def run_worker(
     )
     while stop_event is None or not stop_event.is_set():
         try:
+            if settings.worker.audit_integrity_enabled and "scheduled_tick" in job_types:
+                with _new_session() as session:
+                    _ = audit_integrity.run_due_verification(session, utc_now())
             worked = run_once(job_types, worker_id=worker_id)
         except Exception as exc:  # noqa: BLE001 - a claim failure must not kill the loop
             logger.exception("Worker poll iteration failed")

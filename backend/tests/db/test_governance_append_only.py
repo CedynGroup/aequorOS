@@ -83,6 +83,7 @@ def governance_schema() -> Iterator[MigratedPostgresSchema]:
     """One migrated schema for the whole module, plus the org + bank to hang rows on."""
     test_database_url = os.environ["TEST_DATABASE_URL"]
     schema_name = f"risk_service_sealed_{uuid4().hex}"
+    runtime_role = f"{schema_name}_runtime"
     database_url = postgres_schema_url(test_database_url, schema_name)
     admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
     app_engine = create_engine(database_url)
@@ -92,6 +93,17 @@ def governance_schema() -> Iterator[MigratedPostgresSchema]:
 
     with admin_engine.connect() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
+        connection.execute(text(f'CREATE ROLE "{runtime_role}" NOLOGIN'))
+        connection.execute(
+            text(f'GRANT "{runtime_role}" TO CURRENT_USER WITH INHERIT FALSE, SET TRUE')
+        )
+        connection.execute(text(f'GRANT USAGE ON SCHEMA "{schema_name}" TO "{runtime_role}"'))
+        connection.execute(
+            text(
+                f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema_name}" '
+                f'GRANT ALL ON TABLES TO "{runtime_role}"'
+            )
+        )
     try:
         # Several modules reuse this fixture under xdist. Serialize their full
         # migration chains to stay within a stock PostgreSQL server's lock budget.
@@ -127,13 +139,16 @@ def governance_schema() -> Iterator[MigratedPostgresSchema]:
                 {"bank": _BANK_ID, "org": str(ORG_1)},
             )
             connection.commit()
-        yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
+        yield MigratedPostgresSchema(
+            app_engine=app_engine, schema_name=schema_name, runtime_role=runtime_role
+        )
     finally:
         monkeypatch.undo()
         clear_database_caches()
         app_engine.dispose()
         with admin_engine.connect() as connection:
             connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
+            connection.execute(text(f'DROP ROLE "{runtime_role}"'))
         admin_engine.dispose()
 
 
