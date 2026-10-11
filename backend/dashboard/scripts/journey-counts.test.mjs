@@ -21,9 +21,18 @@ const verifier = path.join(
 );
 function fixture(run) {
   const root = mkdtempSync(path.join(scratch, "journey-counts-"));
+  const inheritedSummary = path.join(root, "inherited-summary.md");
+  const originalSummary = process.env.GITHUB_STEP_SUMMARY;
+  const sentinel = "Existing CI summary\n";
+  writeFileSync(inheritedSummary, sentinel);
+  process.env.GITHUB_STEP_SUMMARY = inheritedSummary;
   try {
-    return run(root);
+    const result = run(root);
+    assert.equal(readFileSync(inheritedSummary, "utf8"), sentinel);
+    return result;
   } finally {
+    if (originalSummary === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+    else process.env.GITHUB_STEP_SUMMARY = originalSummary;
     rmSync(root, { recursive: true, force: true });
   }
 }
@@ -46,14 +55,20 @@ function reports() {
   }));
 }
 function invoke(root, data) {
+  const summary = path.join(root, "verifier-summary.md");
+  const existingSummary = "Existing fixture summary\n";
+  writeFileSync(summary, existingSummary);
   const files = data.map((report, index) => {
     const file = path.join(root, `${index}.json`);
     writeFileSync(file, JSON.stringify(report));
     return file;
   });
-  return spawnSync(process.execPath, [verifier, ...files], {
+  const result = spawnSync(process.execPath, [verifier, ...files], {
     encoding: "utf8",
+    env: { ...process.env, GITHUB_STEP_SUMMARY: summary },
   });
+  assert.equal(readFileSync(summary, "utf8"), existingSummary + result.stdout);
+  return result;
 }
 test("accepts a complete four-shard run at the 243-journey floor", () =>
   fixture((root) => {
