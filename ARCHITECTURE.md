@@ -1171,7 +1171,7 @@ the regulatory fail-open guard and the browser-runtime SSRF guard were unenforce
 | Workflow                                   | Jobs                                                                                                                                                                                                                   |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.github/workflows/risk-service.yml`       | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests) |
-| `.github/workflows/dashboard.yml`          | `dashboard` — client typecheck, dashboard typecheck, lint, test, production build + Command Center entry-graph guard                                                                                                   |
+| `.github/workflows/dashboard.yml`          | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection) |
 | `.github/workflows/web.yml`                | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                          |
 | `.github/workflows/dashboard-journeys.yml` | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                             |
 
@@ -1185,8 +1185,8 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
 
 ### CI enforcement
 
-- **CI enforces every surface.** `risk-service.yml` gates the backend, `dashboard.yml`
-  gates typecheck + **lint** + **test** + build, `web.yml` gates `frontend` lint+build
+- **CI enforces every surface.** `risk-service.yml` gates the backend; `dashboard.yml`
+  enforces the dashboard gates listed above; `web.yml` gates `frontend` lint+build
   and `console` typecheck+test+build, and `dashboard-journeys.yml` gates browser
   journeys. [Dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)
   owns journey selection, runner isolation, the required check, quarantine and

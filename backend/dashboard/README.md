@@ -430,12 +430,12 @@ artifacts; raw V8 data is not uploaded.
 
 CI uploads `dashboard-unit-coverage`: native Vitest HTML/LCOV/JSON, legacy JSON,
 combined line LCOV and `coverage/combined/summary.json`, plus both collection
-reports. Partial reports are retained on failure. The initial measured combined
-baseline is **3,478 of 18,627 lines (18.67%) across 575 production files**;
-55 legacy files and eight native behavior tests passed, with zero skips.
-This exposes the large remaining behavior-test gap rather than reporting only
-loaded modules. The guard also rejects incomplete legacy collection, fewer than
-eight native tests, or skipped native tests.
+reports. Partial reports are retained on failure. The generated combined summary
+owns measured line coverage, production-file counts and collection totals;
+`unit-coverage-baseline.json` owns the committed uncovered-line ceilings.
+The report exposes untested production code rather than reporting only loaded
+modules. The guard also rejects incomplete legacy collection, fewer than eight
+native tests, or skipped native tests.
 
 `unit-coverage-baseline.json` pins the maximum number of uncovered lines both
 in total and per file. These ceilings may only shrink; improvement elsewhere
