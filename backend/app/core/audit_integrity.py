@@ -151,19 +151,23 @@ def verify_chains(session: Session) -> list[ChainVerification]:
     return results
 
 
+def report_verification_unavailable() -> None:
+    emit(
+        Condition.AUDIT_CHAIN_BROKEN,
+        "Audit integrity verification unavailable",
+        severity="error",
+        reason="verification_unavailable",
+    )
+    publish_alert("verification_unavailable")
+
+
 def scheduled_verification(session: Session) -> list[ChainVerification]:
     """Emit a paging condition on every failed sweep, without audit recursion."""
     try:
         with session.begin_nested():
             results = verify_chains(session)
     except Exception:
-        emit(
-            Condition.AUDIT_CHAIN_BROKEN,
-            "Audit integrity verification unavailable",
-            severity="error",
-            reason="verification_unavailable",
-        )
-        publish_alert("verification_unavailable")
+        report_verification_unavailable()
         return [ChainVerification("verification_unavailable", 0, False)]
     for result in results:
         if not result.valid:
