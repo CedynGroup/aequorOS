@@ -390,7 +390,8 @@ rejects any skipped test.
 CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official
 release binaries and verify pinned SHA256 digests before execution. MinIO runs
-only for the storage contract and manual dashboard journeys, with a disposable
+only for the storage contract and
+[dashboard journeys](dashboard/README.md#end-to-end-playwright), with a disposable
 built-in KMS key named `aequoros-key`. OpenBao runs only in the suite shard owning its
 live signing tests. Both listen on loopback and stop at job cleanup. Other API,
 health and operator provisioning tests retain their in-process storage fakes;
