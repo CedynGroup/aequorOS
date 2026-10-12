@@ -27,7 +27,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.core.authorization import (
     InstitutionScope,
@@ -38,6 +38,7 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.db.session import get_engine
 from app.features.ingest_data import get_ingestion_storage
+from app.identity.public import AuthorizationBinding
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from tests.db.test_postgres_migrations import (
@@ -325,8 +326,9 @@ def _replace_generated_bindings(
         return {
             str(identifier)
             for identifier in connection.scalars(
-                text("SELECT id FROM authorization_bindings WHERE organization_id = :org"),
-                {"org": organization_id},
+                select(AuthorizationBinding.id).where(
+                    AuthorizationBinding.organization_id == organization_id
+                ),
             )
         }
 
