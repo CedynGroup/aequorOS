@@ -189,11 +189,15 @@ serializes each daily key across tenants and retains completed-job cadence. Only
 `aqs_worker` can execute it; tenant job kinds are refused. Legacy credentials keep
 the existing global enqueue path.
 
-Authentication explicitly uses `DATABASE_URL`; the operator resolves
+Authentication explicitly uses `DATABASE_URL`; the operator API resolves
 `OPERATOR_DATABASE_URL` then `DATABASE_URL`, never `WORKER_DATABASE_URL`. The
 worker credential switch requires this PR's compatibility code and migration.
 Keep the current API credential until the captain-reviewed lookup-function PR;
 switching it to `aqs_api` remains blocked before that follow-up.
+Before switching the worker secret, configure explicit credentials for
+[first-account provisioning](../../backend/scripts/create_operator.py) and
+[logical backups](../../backend/scripts/backup_database.py); those tools retain
+legacy worker-URL fallbacks.
 
 Each handler transaction sets `app.organization_id` and `app.bank_id`. A bank
 carried in the payload must agree with the dispatch envelope and belong to that
@@ -309,7 +313,8 @@ WHERE rolname IN ('aqs_worker', 'aqs_operator');
 ```
 
 After the new connections are healthy and old pools drained, Eric removes
-BYPASSRLS from the old deployment roles or retires their credentials. No
+BYPASSRLS from the retired worker/operator roles or retires their credentials.
+Preserve any legacy role still used by the API or an operator awaiting its cutover. No
 engineering migration alters those existing role attributes. **Do not switch the
 API credential yet:** `aqs_api` cannot authenticate integration keys or look up
 bank encryption keys, and pre-tenant password/refresh/SSO lookups still use the

@@ -21,11 +21,12 @@ Gate: zero rows in (1) and (2) -> enforce. Otherwise each row needs a decision
 before deploy (the bank relaxes the requirement through the audited settings
 PUT, or uploads the document through the new endpoint).
 
-Run it against the primary with the BYPASSRLS worker URL, which is the only
-credential that can see every tenant::
+Set ``LIVE_DATA_DATABASE_URL`` to an authorized all-tenant read credential before
+running against the primary; the tenant-scoped worker URL cannot inventory all
+organizations. Credential activation follows ``docs/ops/database-roles.md``::
 
     cd backend
-    RUN_INPROCESS_WORKER=0 LIVE_DATA_DATABASE_URL="$WORKER_DATABASE_URL" \\
+    RUN_INPROCESS_WORKER=0 \\
       uv run python scripts/audit_required_attachment_policies.py \\
       > ../.ai/icaap/test-results/required-attachment-audit.txt
 

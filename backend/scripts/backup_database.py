@@ -4,9 +4,10 @@
     uv run python scripts/backup_database.py --out-dir /var/backups/aequoros
 
 Reads ``BACKUP_SOURCE_DATABASE_URL``, else ``WORKER_DATABASE_URL``, else
-``DATABASE_URL``. The worker URL is the right default: its role holds
-``BYPASSRLS``, and a role without it produces a silently empty archive
-(:mod:`scripts.dr_common`).
+``DATABASE_URL``. Set ``BACKUP_SOURCE_DATABASE_URL`` to an authorized all-tenant
+backup credential before activating the tenant-scoped worker role; the retained
+URL fallbacks do not confer backup privileges. :mod:`scripts.dr_common` refuses
+roles lacking ``SUPERUSER`` or ``BYPASSRLS``.
 
 Two artifacts are written per run, sharing a timestamped stem:
 

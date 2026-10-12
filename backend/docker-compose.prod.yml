@@ -182,7 +182,8 @@ services:
   # domain to container port 8100 (e.g. op.aequoros.com); the console app's
   # OPERATOR_API_URL points at it. Auth is workforce-OIDC-only in production
   # (dev auth is hard-refused), and OPERATOR_DATABASE_URL falls back to
-  # WORKER_DATABASE_URL from the shared .env when unset.
+  # DATABASE_URL from the shared .env when unset. Credential rollout follows
+  # docs/ops/database-roles.md#worker-and-operator-activation.
   risk-operator:
     build: .
     command: ["python", "-m", "app.core.serve", "operator"]

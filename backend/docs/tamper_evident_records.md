@@ -84,7 +84,8 @@ boundary and a recovery epoch; a row lock with SKIP LOCKED and a committed advan
 replicas and restarts. Migration `202610120100` exposes this coordination and full-stream
 verification through `aqs_worker_audit_check`, with a pinned search path and UTC
 hash serialization. It returns only stream names, entry counts, validity and the
-recovery epoch; `aqs_worker` has no direct audit-source, chain or schedule-table grants.
+recovery epoch; `aqs_worker` has no unscoped audit-source visibility or direct chain
+or schedule-table grants. Its tenant-scoped audit SELECT/INSERT rights remain.
 The function remains owned by NOLOGIN `aqs_owner`: it must lock and update the
 schedule, which the read-only `aqs_audit_verifier` cannot do. The deployment owner
 also lacks SET membership in the verifier role. The authorized fallback is a

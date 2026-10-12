@@ -173,8 +173,8 @@ Every access check answers: **who (role) → may do what (permission) → on wha
                        ┌────────────────────────────────────────────┐
                        │   PLATFORM PLANE  (AequorOS / vendor)       │
                        │   console.aequoros.com — CROSS-TENANT       │
-                       │   runs OUTSIDE RLS (BYPASSRLS, like the     │
-                       │   background worker's WORKER_DATABASE_URL)  │
+                       │   database access and credential rollout:  │
+                       │   docs/ops/database-roles.md                │
                        └───────────────┬────────────────────────────┘
                                        │ provisions / supports / audits
         ┌──────────────────────────────┼──────────────────────────────┐
@@ -1009,10 +1009,9 @@ org_id, reason, ticket_ref, read_only, started_at, expires_at, ended_at`.
 
 ### RLS reminder
 
-Everything tenant-scoped keeps RLS on `organization_id`. `platform_staff`,
-`impersonation_sessions`, and cross-tenant reads live on the **BYPASSRLS** path
-(same seam as `WORKER_DATABASE_URL`). The platform console is the _only_
-cross-tenant surface.
+Everything tenant-scoped keeps RLS on `organization_id`. Staff cross-tenant
+access and the worker's separate platform entry points follow
+[the role handoff runbook](ops/database-roles.md).
 
 ---
 
