@@ -279,6 +279,27 @@ coverage of the observable contract, including refusals, before accepting a chan
   including missing values, using the contract's numeric kinds. Assert an independent
   invariant or oracle, not a copy of the implementation. Keep example tests for
   concrete business outcomes and minimized regressions alongside properties.
+- **Share realistic domain generators.** Reuse feature-owned Hypothesis strategies
+  and fast-check arbitraries from the
+  [domain helper guide](backend/tests/support/PROPERTY_TESTING.md#find-the-domain-helpers).
+  Generate synthetic bank data with coherent financial relationships, workflow
+  histories and provenance; never read production or customer data. Mix deliberate
+  edges into realistic defaults and bias inputs toward source-defined thresholds.
+  Cite the engine, schema or regulatory source in each generator's docstring,
+  including units, precision and rounding. Distinguish internal bank policy and
+  draft calibration from in-force regulatory requirements. Every valid generator
+  needs a property proving its instances satisfy the public validator or engine
+  contract. Keep named invalid/adversarial generators and missing-value cases.
+- **Share domain assertions and tolerance policies.** Name the invariant and include
+  the relevant amounts, units, statuses or identities in failure messages. Check
+  metamorphic relationships where applicable: scaling amounts preserves ratios,
+  reordering preserves totals, zero exposure leaves capital unchanged, and currency
+  round trips stay within the domain's tolerance. Compare public observations
+  across runs without reimplementing production formulas. Each domain owns one
+  documented policy with separate bounds for unlike units, derived from actual
+  quantization and propagated rounding. Status, identity, provenance and digests
+  compare exactly; monetary tolerances must never weaken them. Follow the
+  [assertion and tolerance contract](backend/tests/support/PROPERTY_TESTING.md#assertions-and-tolerances).
 - **Model every workflow with statuses as a state machine.** Record its transition
   table (source, command, actor/scope, guard, destination and observable effects),
   including forbidden transitions, retries and terminal states. Exercise the real
@@ -301,8 +322,11 @@ coverage of the observable contract, including refusals, before accepting a chan
   its reported seed and path. Every stateful example gets isolated data and cleanup;
   use disposable schemas for mutating Postgres tests. Larger profiles belong in a
   scheduled nightly job only when one exists; document any justified budget change.
+  Migrating tests to shared helpers preserves their existing example budgets unless
+  profiling justifies a change; never depend on wall-clock timing for correctness.
   Turn a discovered defect's minimized example into a regression test and describe
-  the defect and minimal fix in the PR.
+  the defect and minimal fix in the PR. Distinguish a production defect from a
+  generator or assertion correction rather than silently loosening a property.
 
 Examples of observable assertions:
 
