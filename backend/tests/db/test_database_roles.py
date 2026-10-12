@@ -70,12 +70,19 @@ def privilege_snapshot(connection: Connection) -> dict[str, object]:
         list[tuple[str, str, str, str, bool]],
         connection.execute(
             text(
-                "SELECT c.relname, a.attname, r.rolname, acl.privilege_type, acl.is_grantable "
+                "SELECT c.relname, a.attname, r.rolname, privilege, "
+                "has_column_privilege(r.oid, c.oid, a.attnum, privilege || ' WITH GRANT OPTION') "
                 "FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid "
                 "JOIN pg_namespace n ON n.oid=c.relnamespace "
-                "CROSS JOIN LATERAL aclexplode(a.attacl) acl JOIN pg_roles r ON r.oid=acl.grantee "
+                "CROSS JOIN pg_roles r "
+                "CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','REFERENCES']) privilege "
                 "WHERE n.nspname=current_schema() AND r.rolname=ANY(:roles) "
-                "ORDER BY c.relname, a.attname, r.rolname, acl.privilege_type"
+                "AND c.relkind IN ('r','p','v','m','f') AND a.attnum > 0 AND NOT a.attisdropped "
+                "AND has_column_privilege(r.oid, c.oid, a.attnum, privilege) "
+                "AND (NOT has_table_privilege(r.oid, c.oid, privilege) OR ("
+                "has_column_privilege(r.oid, c.oid, a.attnum, privilege || ' WITH GRANT OPTION') "
+                "AND NOT has_table_privilege(r.oid, c.oid, privilege || ' WITH GRANT OPTION'))) "
+                "ORDER BY c.relname, a.attname, r.rolname, privilege"
             ),
             {"roles": list(ROLES)},
         ).all(),
@@ -211,6 +218,67 @@ def test_matrix_detects_an_unexpected_grant(administrator: Engine) -> None:
         before = privilege_snapshot(connection)
         connection.execute(text("GRANT UPDATE ON audit_events TO aqs_api"))
         assert privilege_snapshot(connection) != before
+        connection.rollback()
+
+
+@pytest.mark.parametrize("privilege", ["SELECT", "INSERT", "UPDATE", "REFERENCES"])
+def test_matrix_detects_public_column_grants(administrator: Engine, privilege: str) -> None:
+    with administrator.connect() as connection, connection.begin():
+        before = privilege_snapshot(connection)
+        connection.execute(
+            text(f"GRANT {privilege} (bank_id, key_id) ON bank_encryption_keys TO PUBLIC")
+        )
+        after = privilege_snapshot(connection)
+        assert after != before
+        assert after["tables"] == before["tables"]
+        added = [
+            row
+            for row in cast(list[list[object]], after["columns"])
+            if row not in cast(list[list[object]], before["columns"])
+        ]
+        assert added == [
+            ["bank_encryption_keys", column, role, privilege, False]
+            for column in ("bank_id", "key_id")
+            for role in sorted(ROLES)
+        ]
+        connection.rollback()
+
+
+def test_matrix_detects_inherited_column_grants_and_grant_options(administrator: Engine) -> None:
+    with administrator.connect() as connection, connection.begin():
+        before = privilege_snapshot(connection)
+        parent = f"column_probe_{uuid4().hex}"
+        connection.execute(text(f"CREATE ROLE {parent} NOLOGIN"))
+        connection.execute(
+            text(f"GRANT SELECT (key_id) ON bank_encryption_keys TO {parent} WITH GRANT OPTION")
+        )
+        connection.execute(text(f"GRANT {parent} TO aqs_api WITH INHERIT TRUE, SET FALSE"))
+        after = privilege_snapshot(connection)
+        assert after != before
+        assert after["tables"] == before["tables"]
+        assert ["bank_encryption_keys", "key_id", "aqs_api", "SELECT", True] in cast(
+            list[list[object]], after["columns"]
+        )
+        connection.rollback()
+
+
+@pytest.mark.parametrize("grantable", [False, True])
+def test_matrix_normalizes_column_rights_already_granted_on_the_table(
+    administrator: Engine, grantable: bool
+) -> None:
+    with administrator.connect() as connection, connection.begin():
+        before = privilege_snapshot(connection)
+        suffix = " WITH GRANT OPTION" if grantable else ""
+        connection.execute(text(f"GRANT SELECT (bank_id) ON jobs TO aqs_api{suffix}"))
+        after = privilege_snapshot(connection)
+        if grantable:
+            assert after != before
+            assert after["tables"] == before["tables"]
+            assert ["jobs", "bank_id", "aqs_api", "SELECT", True] in cast(
+                list[list[object]], after["columns"]
+            )
+        else:
+            assert after == before
         connection.rollback()
 
 
