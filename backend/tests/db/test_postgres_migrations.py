@@ -128,7 +128,7 @@ def forward_migrated_postgres_schema(
 
 
 def migrate_isolated_postgres_schema(
-    monkeypatch: pytest.MonkeyPatch, *, downgrade: bool
+    monkeypatch: pytest.MonkeyPatch, *, downgrade: bool, revision: str = "head"
 ) -> Generator[MigratedPostgresSchema]:
     """Migrate an isolated schema for a caller-owned fixture lifetime."""
     test_database_url = os.environ["TEST_DATABASE_URL"]
@@ -177,7 +177,7 @@ def migrate_isolated_postgres_schema(
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"{authorization}'))
 
     try:
-        command.upgrade(alembic_config, "head")
+        command.upgrade(alembic_config, revision)
         yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
         if downgrade:
             command.downgrade(alembic_config, "base")

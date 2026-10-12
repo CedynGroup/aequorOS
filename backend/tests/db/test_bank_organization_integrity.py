@@ -21,6 +21,7 @@ from app.db.base import Base
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
+    forward_migrated_postgres_schema,
     migrate_isolated_postgres_schema,
 )
 
@@ -28,6 +29,8 @@ pytestmark = [
     pytest.mark.committing_db,
     pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL is required"),
 ]
+__all__ = ["forward_migrated_postgres_schema"]
+
 TABLES = (
     "capital_plans",
     "ilaap_snapshots",
@@ -54,7 +57,9 @@ class _BankScopeMigration(Protocol):
 @pytest.fixture(scope="module")
 def bank_integrity_schema() -> Iterator[MigratedPostgresSchema]:
     with pytest.MonkeyPatch.context() as monkeypatch:
-        yield from migrate_isolated_postgres_schema(monkeypatch, downgrade=False)
+        yield from migrate_isolated_postgres_schema(
+            monkeypatch, downgrade=False, revision="202610110093"
+        )
 
 
 def bank_scope_scenario(connection: Connection) -> None:
@@ -178,9 +183,10 @@ def test_an_organization_wide_scope_remains_admitted(
         transaction.rollback()
 
 
-def test_bank_foreign_keys_match_themigrate_isolated_postgres_schema(
-    bank_integrity_schema: MigratedPostgresSchema,
+def test_bank_foreign_keys_match_the_migrated_schema(
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
+    bank_integrity_schema = forward_migrated_postgres_schema
     inspector = sa.inspect(bank_integrity_schema.app_engine)
     for name in TABLES:
         model = {
