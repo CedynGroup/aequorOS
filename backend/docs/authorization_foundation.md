@@ -290,6 +290,7 @@ authority rather than a tenant binding. Its server projection grants only
 institution `view` capabilities, applies the same request-wide vetoes, and is
 shared by profile bootstrap and bank list/detail/period/fact coverage. It grants
 no tenant mutation capability and never advertises Liquidity Monitoring access.
+Bank audit visibility follows [the bank audit contract](tamper_evident_records.md#bank-audit-read-api).
 
 ## Liquidity enforcement
 
@@ -430,8 +431,9 @@ target member in the current browser tab. Returning to Members after signing
 in again restores the draft, including after a self-revocation ends the session.
 Successful submission or cancellation clears the saved draft.
 
-Members may grant Viewer, Auditor, Analyst, Approver, Validator, or Account
-Admin. Org
+The Members composer offers Viewer, Auditor, Analyst, Approver, Validator, or
+Account Admin. The additional API-only audit officer grants and their staged UI
+delivery are governed by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid
 only as organization-wide Account Administration at all sensitivity levels.
 
@@ -756,7 +758,8 @@ the `credit` module, its `risk`-to-`credit` mirror migration, the credit rows
 of the shared live summary / alerts / window / snapshot surfaces, the direct
 `/credit/*` route cutover, and the first surfaces to apply a binding's
 branch/region `data_scope` to the rows AND to every count — is
-owned by the [credit rollout contract](credit_enforcement_rollout.md). Existing
+owned by the [credit rollout contract](credit_enforcement_rollout.md). The bank
+audit-route cutover is owned by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,

@@ -62,14 +62,15 @@ writers. Event, chain entry and head advance commit or roll back together.
 Each entry records its captured column names so adding a source column does not
 invalidate historical hashes. Removing or renaming captured fields requires an
 explicit chain-version migration; do not silently reinterpret old entries.
-The helper functions are not callable by application roles. Their search path
+The chain-write helper functions are not callable by application roles. Their search path
 is pinned to the migration schema with pg_catalog first and pg_temp last.
 The dedicated `aequoros_audit_owner` NOLOGIN role owns both source tables, both
 chain tables, the definer functions and the shared append-only guard. The chain
 tables force RLS; an owner-only policy allows the definer to append entries and
 advance heads. Runtime roles retain their existing source SELECT/INSERT grants
-and insert through the trigger; they have no direct chain write or helper EXECUTE
-grant. The all-tenant worker has SELECT on chain entries and heads. Source-table
+and insert through the trigger; they have no direct chain write or chain-write helper
+EXECUTE grant. Scoped read helpers are described under [Bank audit read API](#bank-audit-read-api).
+The all-tenant worker has SELECT on chain entries and heads. Source-table
 ownership also prevents runtime credentials from disabling the source guards;
 ownership of the shared guard prevents replacing its implementation.
 
@@ -145,8 +146,9 @@ not themselves authorize this feed. The officer bundles are grantable through
 the existing owner API and confined to whole-institution Audit coverage by
 service validation and a database CHECK. No officer binding is backfilled.
 Every successful page read appends `audit_log.viewed` in the same transaction;
-a failure to retain that event refuses the read. Streaming export and the
-Members composer options are the following delivery stages of issue #494.
+a failure to retain that event refuses the read. CSV/JSON export, the bank Audit
+log screen and the Members composer officer options remain later delivery stages
+of issue #494.
 
 Attribution uses an explicit `details.bank_id`, bank entity target,
 binding `details.scope.institution_id`, or the retained subject's bank ownership.
@@ -245,17 +247,18 @@ AequorOS owns incidents outside that visibility boundary.
 
 Migration `202610120100` enables forced RLS on the staff source and adds scoped
 chain-entry reads. The new API role gains SELECT on these two tables and
-EXECUTE on `bank_audit_previous_link`; it gains no global-head access, chain
-write permission or BYPASSRLS. The helper returns only a predecessor-link
-boolean for an attributable event. Its NOLOGIN audit owner, pinned search path
+EXECUTE on `bank_audit_previous_link` and `bank_audit_inspection_context`; it gains
+no global-head access, chain write permission or BYPASSRLS. `bank_audit_previous_link`
+returns only a predecessor-link boolean for an attributable event. The helpers'
+NOLOGIN audit owner, pinned search path
 and temporary schema-CREATE grant follow the existing chain custody pattern.
 The audit owner has tenant-scoped SELECT on the ownership catalogue's subject
 tables so the predecessor check applies the same historical attribution rule.
 Existing all-tenant operator and verifier policies retain their own reads.
 Legacy runtime credentials need their existing source/chain SELECT grants and
-the new helper EXECUTE grant, which the migration adds for existing chain
+the scoped read-helper EXECUTE grants, which the migration adds for existing chain
 readers. Before switching a legacy tenant API role without chain SELECT, apply
-the same narrow SELECT grants and helper EXECUTE grant as `aqs_api`; forced RLS
+the same narrow SELECT and scoped read-helper EXECUTE grants as `aqs_api`; forced RLS
 continues to restrict these reads. Do not grant global-head SELECT to the API.
 
 `integrity=verified` means the source payload matches its database-generated
@@ -323,7 +326,8 @@ before deploying this migration in production or staging:
   SELECT/UPDATE during migration. Provision those roles first, or apply those
   narrow grants afterward when provisioning them. Preserve existing authorized
   source SELECT/INSERT grants; grant no chain INSERT/UPDATE/DELETE/TRUNCATE and
-  no audit-chain definer EXECUTE to runtime identities. Avoid blanket
+  no chain-write definer EXECUTE to runtime identities. For the scoped read-helper
+  grants, follow [Bank audit read API](#bank-audit-read-api). Avoid blanket
   post-migration grants and bootstrap ownership reassignment.
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,

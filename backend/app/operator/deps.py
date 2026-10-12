@@ -49,7 +49,6 @@ from app.core.config import (
     get_settings,
     is_undeployed_environment,
 )
-from app.db.base import utc_now
 from app.db.session import get_engine
 from app.identity.public import Bank
 from app.models import InstitutionType, OperatorAuditLog, OperatorInspectorSession, OperatorUser
