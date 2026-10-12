@@ -152,23 +152,24 @@ def canonical_constraints(table_name: str) -> tuple:
             ["lineage_records.id", "lineage_records.organization_id", "lineage_records.bank_id"],
             name=f"fk_{table_name}_lineage_id_bank",
         ),
-        UniqueConstraint("id", "organization_id", name=f"uq_{table_name}_id_org"),
-        *(
-            (
-                UniqueConstraint(
-                    "id", "organization_id", "bank_id", name=f"uq_{table_name}_id_org_bank"
-                ),
-            )
-            if table_name
-            in (
-                "canonical_gl_accounts",
-                "canonical_counterparties",
-                "canonical_products",
-                "canonical_positions",
-                "canonical_yield_curves",
-            )
-            else ()
+        ForeignKeyConstraint(
+            ["superseded_by", "organization_id", "bank_id"],
+            [f"{table_name}.id", f"{table_name}.organization_id", f"{table_name}.bank_id"],
+            name=f"fk_{table_name}_superseded_by_bank",
+            deferrable=True,
+            initially="DEFERRED",
         ),
+        ForeignKeyConstraint(
+            ["withdrawn_by_batch_id", "organization_id", "bank_id"],
+            [
+                "ingestion_batches.id",
+                "ingestion_batches.organization_id",
+                "ingestion_batches.bank_id",
+            ],
+            name=f"fk_{table_name}_withdrawn_by_batch_id_bank",
+        ),
+        UniqueConstraint("id", "organization_id", name=f"uq_{table_name}_id_org"),
+        UniqueConstraint("id", "organization_id", "bank_id", name=f"uq_{table_name}_id_org_bank"),
         Index(f"ix_{table_name}_org_bank_as_of", "organization_id", "bank_id", "as_of_date"),
         Index(f"ix_{table_name}_org_batch", "organization_id", "ingestion_batch_id"),
     )

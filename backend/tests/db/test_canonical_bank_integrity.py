@@ -87,11 +87,13 @@ def insert_row(connection: Connection, table: str, row: dict[str, object]) -> UU
     )
 
 
-def canonical_row(connection: Connection, table: str, bank: str) -> dict[str, object]:
+def canonical_row(
+    connection: Connection, table: str, bank: str, organization: str = ORG
+) -> dict[str, object]:
     """An otherwise valid canonical record and its own-bank prerequisites."""
     if table == "ingestion_batches":
         return dict(
-            organization_id=ORG,
+            organization_id=organization,
             bank_id=bank,
             source_system="MANUAL",
             adapter_version="proof-v1",
@@ -100,10 +102,12 @@ def canonical_row(connection: Connection, table: str, bank: str) -> dict[str, ob
             as_of_date=AS_OF,
         )
     batch = insert_row(
-        connection, "ingestion_batches", canonical_row(connection, "ingestion_batches", bank)
+        connection,
+        "ingestion_batches",
+        canonical_row(connection, "ingestion_batches", bank, organization),
     )
     node: dict[str, object] = dict(
-        organization_id=ORG,
+        organization_id=organization,
         bank_id=bank,
         ingestion_batch_id=batch,
         operation_type="VALIDATION",
@@ -113,7 +117,7 @@ def canonical_row(connection: Connection, table: str, bank: str) -> dict[str, ob
         return node
     lineage = insert_row(connection, "lineage_records", node)
     row: dict[str, object] = dict(
-        organization_id=ORG,
+        organization_id=organization,
         bank_id=bank,
         ingestion_batch_id=batch,
         lineage_id=lineage,
@@ -159,13 +163,13 @@ def canonical_row(connection: Connection, table: str, bank: str) -> dict[str, ob
         row["position_id"] = insert_row(
             connection,
             "canonical_positions",
-            canonical_row(connection, "canonical_positions", bank),
+            canonical_row(connection, "canonical_positions", bank, organization),
         )
     if table == "canonical_yield_curve_points":
         row["yield_curve_id"] = insert_row(
             connection,
             "canonical_yield_curves",
-            canonical_row(connection, "canonical_yield_curves", bank),
+            canonical_row(connection, "canonical_yield_curves", bank, organization),
         )
     return row
 
