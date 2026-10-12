@@ -297,9 +297,9 @@ def test_every_sealed_table_carries_its_trigger_and_cannot_be_truncated(
         )
         assert installed == expected
 
-        # A table's OWNER keeps TRUNCATE by ownership, which REVOKE cannot remove
-        # (the same limitation 202607250027 lives with); the revoke protects every
-        # role that holds it by GRANT. Assert the grant is gone for non-owners.
+        # Owners can restore TRUNCATE by GRANT; the sweep's statement triggers
+        # protect that path. Revocation separately removes this privilege from
+        # application roles. Assert the grant is gone for non-owners.
         leaked = [
             rule.table
             for rule in GOVERNANCE_MIGRATION.SEALED_TABLES
@@ -547,3 +547,33 @@ def test_an_approved_declaration_is_sealed_but_still_revocable(
         {"id": str(row_id)},
         "write-once",
     )
+
+
+@postgres_only
+@pytest.mark.parametrize(
+    "table",
+    [
+        "regulatory_parameter",
+        "system_of_record_declarations",
+        "reconciliation_exceptions",
+        "canonical_withdrawals",
+    ],
+)
+def test_authoritative_register_evidence_cannot_be_deleted(
+    connection: Connection, table: str
+) -> None:
+    row_id = uuid4()
+    if table == "regulatory_parameter":
+        row_id = _approved_parameter_id(connection)
+    elif table == "system_of_record_declarations":
+        _insert_declaration(connection, row_id, declaration_status="approved")
+    elif table == "reconciliation_exceptions":
+        _insert_exception(connection, row_id)
+    else:
+        _insert_withdrawal(connection, row_id, withdrawal_status="applied")
+    # Exercise the trigger even when the fixture is the migration owner.
+    connection.execute(text(f"GRANT DELETE, TRUNCATE ON {table} TO CURRENT_USER"))
+    _refused(
+        connection, f"DELETE FROM {table} WHERE id = :id", {"id": str(row_id)}, "retained evidence"
+    )
+    _refused(connection, f"TRUNCATE {table} CASCADE", {}, "append-only")

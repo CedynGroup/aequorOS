@@ -7,8 +7,8 @@ No reported financial figure or calculation rule changes.
 
 The four-layer delivery contract assigns
 [PR #504](https://github.com/CedynGroup/aequorOS/pull/504)
-to audit chaining; [PR #505](https://github.com/CedynGroup/aequorOS/pull/505)
-delivers filing locks; [PR #506](https://github.com/CedynGroup/aequorOS/pull/506)
+to audit chaining; [PR #530](https://github.com/CedynGroup/aequorOS/pull/530)
+delivers filing locks; [PR #533](https://github.com/CedynGroup/aequorOS/pull/533)
 delivers compliance storage; and [PR #507](https://github.com/CedynGroup/aequorOS/pull/507)
 delivers the append-only sweep. Each layer is validated separately. The audit
 and filing layers alone do not certify all of issue #413. The compliance-storage
@@ -275,3 +275,102 @@ Object Lock retains ciphertext; it does not grant permission to decrypt it or
 prevent cryptographic loss of access through key destruction. Bank-key enforcement,
 rotation and retained-key recovery are governed by
 [the bank encryption contract](bank_encryption.md#rotation-backups-and-recovery).
+
+## Append-only inventory and sweep
+
+`202610110094` complements the existing attestation, governance, ICAAP, market-data
+and filing-chain migrations. The inventory distinguishes history from live state:
+
+| Record family                                                                                                            | Database protection                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tenant and operator audit logs                                                                                           | Existing UPDATE/DELETE guards; database hash chain; TRUNCATE guard                                                                                           |
+| Signature and artifact versions, filing approvals/submission events, pinned stages/decisions and attachments/withdrawals | Existing UPDATE guards and signature DELETE guard; sweep closes other DELETE gaps and adds TRUNCATE guards                                                   |
+| Scenario assumption and financial manual-edit histories                                                                  | Added UPDATE/DELETE/TRUNCATE guards                                                                                                                          |
+| Eleven `param_*` board registers (risk weights, limits, thresholds, haircuts, shocks, ECL assumptions)                   | Values/scope/approval evidence sealed from insert; only effective-to and timestamp bookkeeping may update; DELETE/TRUNCATE refused                           |
+| Approved/rejected forecast assumption generations                                                                        | All updates and deletion refused; drafts retain their editing lifecycle                                                                                      |
+| Authorization bindings                                                                                                   | Grant/scope evidence sealed from insert; revocation fields write-once; revoked status cannot be reversed; DELETE/TRUNCATE refused                            |
+| Completed regulatory runs and package financial snapshots                                                                | Filing/input seals above; added TRUNCATE guard                                                                                                               |
+| Live scenario assumptions, current financial workspace, working artifact pointers                                        | Mutable operational state; immutable histories/version records retain their evidence                                                                         |
+| Regulatory parameter control plane and system-of-record declarations                                                     | Existing governed-row seals; approved rows cannot be deleted; all TRUNCATE refused; draft, effective-date and revocation lifecycles preserved                |
+| Reconciliation exceptions and canonical withdrawals                                                                      | Existing governed-row seals; all exceptions and applied/reversed withdrawals cannot be deleted; all TRUNCATE refused; pending withdrawal lifecycle preserved |
+
+No application-set reset flag bypasses the new deletion guards. Destructive test
+setup must use fresh disposable schemas or privileged fixture restoration, never
+a production mutation capability. Every authority mutation continues to use the
+existing transactional authorization invalidation service.
+
+`tests/db/test_signed_filing_locks.py` verifies locked edits/deletes, completion,
+void-and-rework, and linked resubmission. `tests/db/test_append_only_sweep.py`
+exercises each board register plus assumption approvals, grant scope/revocation
+and legacy history. `tests/db/test_retained_filing_evidence.py` tests UPDATE, DELETE
+and cascading TRUNCATE against all eight retained filing-child tables.
+`tests/storage/test_object_lock.py` uses Moto plus real local
+bank-key encryption to verify retention metadata, refusal of version deletion,
+idempotence, no shortening by the retention helper, and revocation refusal.
+Moto's missing GetObjectRetention action is adapted to its real HEAD retention
+headers; uploads, retention writes and version deletion guards remain emulator
+operations. Vendor errors are translated to a safe storage-layer failure.
+These are executable contract tests; actual AWS compliance immutability and pager
+delivery require deployment acceptance evidence, not an emulator assertion.
+
+## Historical local validation record (2026-10-10)
+
+This records the original stack at `94643538`; it does not validate the restacked
+branch. Current-parent validation remains required before shipping.
+
+The exact `risk-service:format`, `risk-service:lint` and
+`risk-service:typecheck` tasks passed. The strict type-check baseline added no
+errors and removed three legacy Any errors. No financial figures or rules changed.
+
+The hermetic suite passed **16,154 tests**, with **671 skips** and **one expected
+failure**, using four workers. It preceded the final cloud-endpoint,
+output-bucket and tenant-progress refinements. The final focused run below
+exercised those refinements and passed **all 74 tests**, including complete
+upgrade/downgrade of the migration chain. All PostgreSQL writes used disposable
+schemas in this worktree's isolated local PostgreSQL service.
+
+```bash
+env -u TEST_DATABASE_URL -u REAL_DATA_DATABASE_URL \
+  uv run pytest -n 4 --dist loadfile --tb=short -q
+
+uv run python scripts/local_services.py run --postgres --role-admin -- \
+  uv run pytest -n 4 --dist loadfile --tb=short -q \
+  tests/db/test_postgres_migrations.py \
+  tests/db/test_audit_integrity.py tests/db/test_signed_filing_locks.py \
+  tests/db/test_append_only_sweep.py tests/db/test_retained_filing_evidence.py \
+  tests/db/test_governance_append_only.py tests/core/test_audit_integrity_alerts.py \
+  tests/services/test_audit_integrity_schedule.py tests/storage/test_object_lock.py \
+  tests/db/test_regulatory_event_append_only.py
+```
+
+Production acceptance still needs counsel's retention period, an AWS locked-version
+deletion/shortening refusal, and an SNS-to-pager receipt. Attach those deployment
+records alongside this design and test evidence in the BoG pack (#356 / #401).
+
+## Sweep integration validation (2026-10-11)
+
+The sweep follows merged audit, filing and storage protections, with revision
+`202610110094` following bank-ownership revision `202610110093`, which follows
+ICAAP revision `202610110092`. Alembic reports one head.
+The initial replay reproduced a two-head setup failure before guard execution;
+linearizing this new revision resolves it without changing the ICAAP migration.
+The signature DELETE guard remains owned by the filing-lock migration, while the
+sweep adds its owner-level TRUNCATE guard.
+
+Native PostgreSQL validation with four workers passed **81 migration, audit,
+filing and sweep checks** in 218.02 seconds, including restricted migration
+upgrade/downgrade and linked correction. A separate **66-case matrix** passed in
+31.62 seconds: each of the 33 retained tables refuses cascading TRUNCATE both for
+its actual owner and for the runtime role. Owner cases temporarily restore
+TRUNCATE privileges, including cascade dependencies, inside rolled-back fixtures
+to reach the statement trigger; runtime cases retain revoked privileges. These
+checks prove both enforcement layers without adding a production bypass.
+
+The disposable native cluster used `max_locks_per_transaction=1024`. A prior run
+passed 80 checks but exhausted its default lock table during three schema
+teardowns; the retry cleaned those known schemas and completed. This is test
+capacity evidence, not a production configuration requirement. All managed
+services stopped after validation. Exact Ruff lint, strict BasedPyright baseline
+and changed-file Python/Markdown formatting passed without baseline growth.
+This pre-pipeline evidence supplements the historical record above; final CI
+and live pipeline evidence belong to the published sweep head.
