@@ -1,7 +1,7 @@
 """Introduce deployment ownership and dormant least-privilege service roles.
 
 Revision ID: 202610120096
-Revises: 202610110095
+Revises: 202610110097
 """
 
 from pathlib import Path
@@ -10,7 +10,7 @@ from typing import cast
 from alembic import op
 
 revision = "202610120096"
-down_revision = "202610110095"
+down_revision = "202610110097"
 branch_labels = None
 depends_on = None
 
