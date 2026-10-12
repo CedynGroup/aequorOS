@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+from collections.abc import Iterator, Mapping
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
+from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
@@ -32,10 +37,20 @@ from app.db import session as database
 from app.db.session import get_storage_session, worker_tenant_context
 from app.identity.api import auth as auth_api
 from app.identity.public import Bank
-from app.models import AuditEvent, DeskDetermination, DeskMethodology, Job, OperatorAuditLog, User
+from app.models import (
+    AuditEvent,
+    DeskDetermination,
+    DeskMethodology,
+    DeskObservation,
+    DeskSourceCapture,
+    Job,
+    OperatorAuditLog,
+    User,
+)
 from app.operator.deps import resolve_operator_database_url
 from app.services import job_queue, scheduler
 from app.services.market_desk import capture_job
+from app.services.market_desk.sources import ParseResult, ingest_capture
 from app.storage.client import StorageLocation
 from app.storage.encryption import ObjectEncryption
 from tests.db import test_database_roles as foundation
@@ -328,6 +343,167 @@ def test_desk_views_allow_robot_drafts_and_refuse_approval_or_base_writes(
             text("UPDATE desk_determinations SET status = 'approved' WHERE id = :id"),
             {"id": draft_id},
         )
+
+
+@pytest.fixture
+def worker_desk_session(
+    role_engines: dict[str, Engine], monkeypatch: pytest.MonkeyPatch
+) -> Iterator[Session]:
+    monkeypatch.setattr(
+        worker, "get_worker_sessionmaker", lambda: sessionmaker(role_engines["aqs_worker"])
+    )
+    with worker.job_session(ORG_1) as session:
+        yield session
+
+
+def _gss_grr_payload(value: str) -> bytes:
+    return json.dumps(
+        {"data": [{"key": ["2026M06", "Ghana reference rate"], "values": [value]}]}
+    ).encode()
+
+
+def _ingest_worker_capture(
+    session: Session, source_key: str, raw: bytes
+) -> tuple[DeskSourceCapture, ParseResult]:
+    capture = DeskSourceCapture(
+        source_key=source_key,
+        as_of_date=NOW.date(),
+        content_sha256=hashlib.sha256(raw).hexdigest(),
+        parser_version="pending",
+        created_by=capture_job.CAPTURE_IDENTITY,
+    )
+    session.add(capture)
+    session.flush()
+    result = ingest_capture(session, capture, raw)
+    session.commit()
+    return capture, result
+
+
+@pytest.mark.parametrize("gss_first", (False, True))
+def test_worker_capture_commits_cross_source_reconciliation_and_reingestion(
+    worker_desk_session: Session, administrator: Engine, gss_first: bool
+) -> None:
+    raw = (
+        Path(__file__).parents[1] / "fixtures/market_desk/raw/bog_summary_econ_fin_data_2026-07.pdf"
+    ).read_bytes()
+    sources = [("bog_sefd_pdf", raw), ("gss_interest_px", _gss_grr_payload("29.4"))]
+    if gss_first:
+        sources.reverse()
+    captures: dict[str, DeskSourceCapture] = {}
+    results: list[ParseResult] = []
+    for source_key, payload in sources:
+        capture, result = _ingest_worker_capture(worker_desk_session, source_key, payload)
+        assert result.errors == []
+        assert capture.status == "parsed"
+        captures[source_key] = capture
+        results.append(result)
+    assert any("cross-source mismatch" in warning for warning in results[-1].warnings)
+
+    with Session(administrator) as admin:
+        rows = {
+            row.series_code: row
+            for row in admin.scalars(
+                select(DeskObservation).where(
+                    DeskObservation.series_code.in_(("GHS.SEFD.GRR", "GHS.GRR")),
+                    DeskObservation.as_of_date == date(2026, 6, 1),
+                    DeskObservation.superseded_by.is_(None),
+                )
+            )
+        }
+        assert set(rows) == {"GHS.SEFD.GRR", "GHS.GRR"}
+        for series, source, value, other in (
+            ("GHS.SEFD.GRR", "bog_sefd_pdf", "10.02", "GHS.GRR"),
+            ("GHS.GRR", "gss_interest_px", "29.4", "GHS.SEFD.GRR"),
+        ):
+            row = rows[series]
+            assert row.value == Decimal(value)
+            assert row.capture_id == captures[source].id
+            assert row.entered_by is None
+            assert "cross_source_mismatch" in row.quality_flags
+            attributes = cast(dict[str, object], row.attributes)
+            mismatch = cast(dict[str, str], attributes["cross_source_mismatch"])
+            assert set(mismatch) == {"against", "other_value", "tolerance"}
+            assert mismatch["against"] == other
+            assert Decimal(mismatch["other_value"]) == rows[other].value
+            assert mismatch["tolerance"] == "0.5"
+        old_id = rows["GHS.GRR"].id
+
+    corrected, result = _ingest_worker_capture(
+        worker_desk_session, "gss_interest_px", _gss_grr_payload("29.5")
+    )
+    assert result.errors == []
+    with Session(administrator) as admin:
+        old = admin.get(DeskObservation, old_id)
+        assert old is not None and old.value == Decimal("29.4")
+        assert old.superseded_by is not None
+        current = admin.get(DeskObservation, old.superseded_by)
+        assert current is not None and current.value == Decimal("29.5")
+        assert current.capture_id == corrected.id
+        assert "cross_source_mismatch" in current.quality_flags
+    old = worker_desk_session.get(DeskObservation, old_id)
+    assert old is not None
+    old.quality_flags = [*cast(list[object], old.quality_flags), "cross_source_mismatch"]
+    with pytest.raises(DBAPIError, match="append-only"):
+        worker_desk_session.commit()
+    worker_desk_session.rollback()
+
+
+@pytest.mark.parametrize("superseding", (False, True))
+@pytest.mark.parametrize(
+    "field, new_value",
+    (
+        ("value", Decimal("30.0")),
+        ("as_of_date", date(2026, 6, 2)),
+        ("capture_id", None),
+        ("entered_by", "other-robot@aequoros.system"),
+        ("series_code", "GHS.OTHER"),
+        ("unit", "rate"),
+        ("id", uuid4()),
+        ("created_at", NOW),
+        ("attributes", {"month_key": "2026M05"}),
+    ),
+)
+def test_worker_observation_refuses_financial_and_lineage_changes(
+    worker_desk_session: Session,
+    administrator: Engine,
+    field: str,
+    new_value: object,
+    superseding: bool,
+) -> None:
+    capture, result = _ingest_worker_capture(
+        worker_desk_session, "gss_interest_px", _gss_grr_payload("29.4")
+    )
+    assert result.errors == []
+    row = worker_desk_session.scalars(
+        select(DeskObservation).where(DeskObservation.capture_id == capture.id)
+    ).one()
+    row_id = row.id
+    with Session(administrator) as admin:
+        before = dict(
+            cast(
+                Mapping[str, object],
+                admin.execute(select(DeskObservation.__table__).where(DeskObservation.id == row_id))
+                .mappings()
+                .one(),
+            )
+        )
+    setattr(row, field, new_value)
+    row.quality_flags = [*cast(list[object], row.quality_flags), "cross_source_mismatch"]
+    if superseding:
+        row.superseded_by = uuid4()
+    with pytest.raises(DBAPIError, match="append-only"):
+        worker_desk_session.commit()
+    worker_desk_session.rollback()
+    with Session(administrator) as admin:
+        after = dict(
+            cast(
+                Mapping[str, object],
+                admin.execute(select(DeskObservation.__table__).where(DeskObservation.id == row_id))
+                .mappings()
+                .one(),
+            )
+        )
+        assert after == before
 
 
 @pytest.mark.parametrize("envelope_bank", [True, False])

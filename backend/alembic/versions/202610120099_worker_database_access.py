@@ -320,9 +320,12 @@ def _desk_access(schema: str) -> None:
                     WHERE id = NEW.capture_id AND created_by = 'desk-capture-job@aequoros.system')
                 THEN RAISE EXCEPTION 'Worker observations require robot capture lineage'; END IF;
                 IF TG_OP = 'UPDATE' AND (OLD.superseded_by IS NOT NULL
-                    OR NEW.superseded_by IS NULL OR
-                    (to_jsonb(NEW) - 'superseded_by' - 'updated_at') IS DISTINCT FROM
-                    (to_jsonb(OLD) - 'superseded_by' - 'updated_at'))
+                    OR (to_jsonb(NEW) - 'superseded_by' - 'updated_at'
+                        - 'quality_flags' - 'attributes') IS DISTINCT FROM
+                       (to_jsonb(OLD) - 'superseded_by' - 'updated_at'
+                        - 'quality_flags' - 'attributes')
+                    OR (NEW.attributes::jsonb - 'cross_source_mismatch') IS DISTINCT FROM
+                       (OLD.attributes::jsonb - 'cross_source_mismatch'))
                 THEN RAISE EXCEPTION 'Worker observations are append-only'; END IF;
             """
         else:
