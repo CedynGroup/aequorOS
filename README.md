@@ -29,9 +29,9 @@ aequorOS/
 └── ARCHITECTURE.md           # system map + conventions (start here)
 ```
 
-Specs, runbooks and the internal audit register live in `docs/`, which is **not**
-part of this repository (`.gitignore:42`). Anything cited below that you cannot
-find here is held privately — ask for it.
+Specs, runbooks and the internal audit register live in `docs/`, which is private
+by default; `.gitignore` publishes only explicitly allow-listed files. Anything
+cited below that you cannot find here is held privately — ask for it.
 
 ### Deployables
 

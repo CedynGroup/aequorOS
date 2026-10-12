@@ -56,9 +56,8 @@ def get_engine(database_url: str, application_name: str = "aequoros-api") -> Eng
     # The primary database is remote (~40ms away), so connection handling — not
     # query cost — dominates latency. Without TCP keepalives a firewall/NAT silently
     # drops idle pooled connections, forcing a full TLS+auth reconnect (~200ms) on the
-    # next request; a small default pool also starves under the API + in-process worker
-    # sharing it. Keep connections warm, size the pool for both, and recycle before any
-    # server-side idle timeout.
+    # next request; a small default pool also starves under concurrent requests.
+    # Keep each pool's connections warm and recycle before any server-side idle timeout.
     tls_args = database_connect_args(database_url)
     if database_url.startswith("postgresql"):
         return create_engine(

@@ -7,15 +7,15 @@ existing application URLs, ownership, credentials or BYPASSRLS roles.
 
 ## Target matrix
 
-| Role                 | Connection purpose       | Allowed access                                                                                                          | Forbidden access                                                                |
-| -------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `aqs_owner`          | NOLOGIN object owner     | DDL and explicit migration work through SET ROLE                                                                        | Application connections                                                         |
-| `aqs_migrator`       | Deployment only          | SET ROLE `aqs_owner`; no automatic inheritance                                                                          | Runtime use, elevated attributes                                                |
+| Role                 | Connection purpose       | Allowed access                                                                                                                                            | Forbidden access                                                                                  |
+| -------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `aqs_owner`          | NOLOGIN object owner     | DDL and explicit migration work through SET ROLE                                                                                                          | Application connections                                                                           |
+| `aqs_migrator`       | Deployment only          | SET ROLE `aqs_owner`; no automatic inheritance                                                                                                            | Runtime use, elevated attributes                                                                  |
 | `aqs_api`            | Tenant API               | Tenant SELECT/INSERT/UPDATE/DELETE under forced RLS, audit append, filing lifecycle columns, enqueue/coalesce jobs and parse/assessment lifecycle updates | Schema DDL, ownership, audit or immutable evidence changes, job DELETE or worker-only job columns |
-| `aqs_worker`         | Background jobs          | API tenant rights plus queue state changes under RLS                                                                    | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes        |
-| `aqs_bi`             | Interactive BI           | SELECT on BI marts/dimensions and public jurisdiction/parameter reference tables under RLS; 10-second statement timeout | Writes, operational queue or identity-table access                              |
-| `aqs_operator`       | Staff operations         | Dedicated cross-bank metadata views, introduced in the operator PR                                                      | Direct tenant-table access; financial inspection outside the governed #351 flow |
-| `aqs_audit_verifier` | Independent audit checks | SELECT audit sources, chain entries and heads, including cross-bank verification                                        | Other tenant tables, writes or chain ownership                                  |
+| `aqs_worker`         | Background jobs          | API tenant rights plus queue state changes under RLS                                                                                                      | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes                          |
+| `aqs_bi`             | Interactive BI           | SELECT on BI marts/dimensions and public jurisdiction/parameter reference tables under RLS; 10-second statement timeout                                   | Writes, operational queue or identity-table access                                                |
+| `aqs_operator`       | Staff operations         | Dedicated cross-bank metadata views, introduced in the operator PR                                                                                        | Direct tenant-table access; financial inspection outside the governed #351 flow                   |
+| `aqs_audit_verifier` | Independent audit checks | SELECT audit sources, chain entries and heads, including cross-bank verification                                                                          | Other tenant tables, writes or chain ownership                                                    |
 
 No application role owns objects or holds SUPERUSER, CREATEDB, CREATEROLE,
 REPLICATION or BYPASSRLS. There is no standing break-glass role. The historical
@@ -47,16 +47,19 @@ the other accepts a bank id and returns only that bank's key reference. That
 follow-up must prove the API still cannot SELECT either underlying table or
 enumerate other banks. Direct table grants remain absent.
 
-Per-role lock, transaction and other statement budgets are coordinated with #518; this change uses the existing
-interactive BI ceiling rather than inventing those budgets.
+API, worker and migration timeout budgets are deferred to
+[session cleanup and timeouts #518](https://github.com/CedynGroup/aequorOS/issues/518);
+this foundation retains the existing interactive BI ceiling.
 
 ## Migration and local development order
 
 1. On deployment, an administrator prepares the new roles using
    `backend/scripts/database_roles_202610120096.sql`, without local password SQL.
-2. Prepare the deployment actor's ability to administer and SET ROLE the NOLOGIN
-   owner, and grant that owner CREATE/USAGE on the application schema. On an
-   existing database, preserve legacy ownership until Eric's planned handoff.
+2. For the existing deployment actor, prepare ADMIN, INHERIT and SET membership
+   in `aqs_owner` and `aequoros_audit_owner`, and grant `aqs_owner` CREATE/USAGE on
+   the application schema. This administrative preparation is distinct from
+   `aqs_migrator`'s SET-only membership. On an existing database, preserve legacy
+   ownership until Eric's planned handoff.
 3. Apply the chain through `202610120096` using the existing deployment actor.
    Subsequent deployment connections as `aqs_migrator` explicitly SET ROLE
    `aqs_owner` in Alembic, so newly created objects belong to the NOLOGIN owner.
@@ -79,6 +82,14 @@ development passwords equal to role names;
 never execute `database_roles_local.sql` on a deployment. Existing DATABASE_URL
 and worker/operator fallbacks keep working. All runtime pools identify API,
 worker, BI and operator connections separately through `application_name`.
+
+For externally supplied test services, an administrator must prepare the versioned
+foundation SQL and the test actor's ADMIN, INHERIT and SET owner memberships before
+running the migration suites. Real-login role proofs in
+`backend/tests/db/test_database_roles.py` also require a superuser
+`POSTGRES_ADMIN_URL` (or a superuser `TEST_DATABASE_URL`) on the same disposable
+test database to create and remove probe logins. The local runner and CI prepare
+these prerequisites; never use the primary database.
 
 ## Eric's deployment runbook
 

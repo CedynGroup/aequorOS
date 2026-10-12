@@ -143,10 +143,9 @@ export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/risk_
 ```
 
 The bundled compose uses local superuser credentials and does not demonstrate
-production credential separation. For separate local roles, follow the
-[audit ownership contract](docs/tamper_evident_records.md#required-deployment-follow-up),
-including its legacy-bootstrap limitation. App-session API requests use an
-access token issued by password or SSO login:
+production credential separation. Local role preparation and the staged deployment
+switches follow the [database role handoff](../docs/ops/database-roles.md#migration-and-local-development-order).
+App-session API requests use an access token issued by password or SSO login:
 
 ```http
 Authorization: Bearer <app-access-token>
@@ -385,7 +384,8 @@ native PostgreSQL 17 when Docker is unavailable. Set `AQS_LOCAL_SERVICES=native`
 to force that mode. Native MinIO setup, isolation and shutdown are documented
 in the dashboard's [local service guide](dashboard/README.md#local-services-without-docker-or-orbstack).
 The existing `docker compose up -d risk-postgres` alternative also remains
-available; point `TEST_DATABASE_URL` at it to reuse that service.
+available; point `TEST_DATABASE_URL` at it to reuse that service. Supplied services
+must also meet the [role-test preparation requirements](../docs/ops/database-roles.md#migration-and-local-development-order).
 
 CI starts native PostgreSQL 17 through
 [`setup-postgres`](../.github/actions/setup-postgres/action.yml), shared by the

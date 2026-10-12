@@ -126,8 +126,7 @@ def upgrade() -> None:
     # No future table is automatically exposed. A later migration must grant
     # its classified rights; the catalogue test then holds that contract.
     op.execute(
-        "ALTER DEFAULT PRIVILEGES FOR ROLE aqs_owner "
-        "REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC"
+        "ALTER DEFAULT PRIVILEGES FOR ROLE aqs_owner REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC"
     )
     tables = connection.exec_driver_sql("""
         SELECT c.relname, c.relrowsecurity AND c.relforcerowsecurity,

@@ -133,12 +133,9 @@ before deploying this migration in production or staging:
   `BI_DATABASE_URL`. Alembic refuses a missing migration URL or a shared role in
   production/staging; local/test runs retain the existing URL fallback. Runtime
   containers must never receive migration credentials.
-- The migration identity needs CREATEROLE to create the NOLOGIN owner, or the
-  database administrator must precreate it and grant the migrator ADMIN,
-  INHERIT and SET membership. The migration grants only that administrative
-  identity owner membership. Runtime identities must have no direct or inherited
-  membership in the owner or migrator roles, no SUPERUSER/CREATEROLE/CREATEDB,
-  no ownership of the database or schema, and no schema CREATE privilege.
+- Prepare migration roles and owner membership through the
+  [role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order)
+  before running Alembic.
 - Keep worker/operator all-tenant BYPASSRLS identities separate from the
   migrator. Existing BYPASSRLS roles receive chain SELECT and schedule
   SELECT/UPDATE during migration. Provision those roles first, or apply those
@@ -146,11 +143,6 @@ before deploying this migration in production or staging:
   source SELECT/INSERT grants; grant no chain INSERT/UPDATE/DELETE/TRUNCATE and
   no definer EXECUTE to runtime identities. Avoid blanket post-migration grants
   and bootstrap ownership reassignment.
-- Local `scripts/bootstrap_db.sh` now prepares the versioned role foundation and
-  migrations without ownership reassignment, blanket grants or tenant seeding.
-  It accepts only a local service. Deployment administrators follow the
-  [role handoff runbook](../../docs/ops/database-roles.md); never run the local
-  password preparation SQL on a deployment.
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,
   truncation and function replacement fail. Confirm one sweep with zero banks
