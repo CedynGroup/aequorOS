@@ -1513,6 +1513,14 @@ def test_active_member_route_access_request_is_deduplicated_audited_and_approved
         )
         assert audit is not None
         assert audit.actor_user_id == GRANTEE
+        assert audit.details["bank_id"] == BANK_A
+        approval_audit = db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "authorization.access_request_approved",
+                AuditEvent.entity_id == created.json()["id"],
+            )
+        )
+        assert approval_audit is not None and approval_audit.details["bank_id"] == BANK_A
 
 
 def test_organization_scoped_access_request_carries_expiry_into_the_grant(
@@ -1880,6 +1888,7 @@ def test_rejected_request_is_audited_with_its_reason_and_can_be_refiled(
         assert audit.details["reason_category"] == "other"
         assert audit.details["reason_detail"] == "Treasury forecasting is not part of this role"
         assert audit.details["reference"] == "HR-2026-0042"
+        assert audit.details["bank_id"] == BANK_A
         assert not list(
             db.scalars(
                 select(AuthorizationBinding).where(

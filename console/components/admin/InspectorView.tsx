@@ -39,6 +39,7 @@ import { isSessionLive } from "./util";
 interface StartForm {
   organization_id: string;
   reason: string;
+  support_reference: string;
   mode: InspectorMode;
   ttl_minutes: number;
 }
@@ -46,6 +47,7 @@ interface StartForm {
 const BLANK_FORM: StartForm = {
   organization_id: "",
   reason: "",
+  support_reference: "",
   mode: "consent",
   ttl_minutes: 30,
 };
@@ -121,6 +123,8 @@ export default function InspectorView() {
       errs.organization_id = "Choose a tenant to inspect.";
     if (!form.reason.trim())
       errs.reason = "A reason is required and is written to the audit log.";
+    if (!form.support_reference.trim())
+      errs.support_reference = "A support reference is required.";
     if (
       !Number.isFinite(form.ttl_minutes) ||
       form.ttl_minutes < 15 ||
@@ -133,6 +137,7 @@ export default function InspectorView() {
     void startM.mutate({
       organization_id: form.organization_id,
       reason: form.reason.trim(),
+      support_reference: form.support_reference.trim(),
       mode: form.mode,
       ttl_minutes: form.ttl_minutes,
     });
@@ -451,6 +456,24 @@ export default function InspectorView() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, reason: e.target.value }))
               }
+            />
+          </Field>
+
+          <Field
+            label="Support reference"
+            required
+            error={formErr.support_reference}
+            htmlFor="insp-reference"
+          >
+            <Input
+              id="insp-reference"
+              value={form.support_reference}
+              maxLength={200}
+              invalid={Boolean(formErr.support_reference)}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, support_reference: e.target.value }))
+              }
+              placeholder="Ticket or incident reference"
             />
           </Field>
 

@@ -204,3 +204,18 @@ def test_privileged_tampering_is_reported_as_failed(
             own = next(event for event in response.events if str(event.id) == evidence["own"])
             assert own.integrity == "failed"
         transaction.rollback()
+
+
+def test_inspection_context_refuses_unattributed_events_and_raw_session_reads(
+    api_connection: Connection, evidence: dict[str, str]
+) -> None:
+    for key in ("foreign", "sibling"):
+        assert (
+            api_connection.scalar(
+                text("SELECT bank_audit_inspection_context('audit_events', CAST(:id AS uuid))"),
+                {"id": evidence[key]},
+            )
+            is None
+        )
+    with pytest.raises(DBAPIError, match="permission denied"), api_connection.begin_nested():
+        api_connection.execute(text("SELECT reason FROM operator_inspector_sessions"))

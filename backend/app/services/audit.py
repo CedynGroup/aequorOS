@@ -21,8 +21,15 @@ def record_event(  # noqa: PLR0913
     entity_type: str,
     entity_id: UUID | str,
     details: dict[str, Any] | None = None,
+    bank_id: str | None = None,
 ) -> AuditEvent:
     merged_details: dict[str, Any] = normalize_event_details(event_type, dict(details or {}))
+    if bank_id is not None:
+        merged_details.setdefault("bank_id", bank_id)
+    if entity_type == "authorization_access_request" and isinstance(
+        merged_details.get("institution_id"), str
+    ):
+        merged_details.setdefault("bank_id", merged_details["institution_id"])
     if entity_type in SUBJECT_TABLES:
         db.flush()
         bank_id = db.scalar(

@@ -17,10 +17,10 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api import deps
+from app.api.deps import IcaapAccess
 from app.attestation.service import stepup
 from app.core import security
 from app.core.audit_attribution import subject_bank_sql
-from app.core.config import AuthSettings
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
@@ -30,8 +30,15 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.core.config import AuthSettings, get_settings
 from app.core.tenancy import TenantContext
 from app.domain.capital.engine import CapitalParams, CapitalRatiosResult, RwaResult
+from app.icaap.schemas.workspace import (
+    IcaapCycleCreate,
+    IcaapSectionCommit,
+    IcaapSectionWorkingSave,
+)
+from app.icaap.service import cycles, sections
 from app.identity.schemas.audit_log import AuditLogRead
 from app.identity.schemas.auth import MeResponse
 from app.identity.schemas.banks import BankListRead
@@ -43,20 +50,40 @@ from app.models import (
     BankReportingPeriod,
     CanonicalPosition,
     CanonicalPositionSnapshot,
+    CapitalPlan,
+    ContingencyFundingPlan,
+    EnterpriseStressSignoff,
+    IlaapSnapshot,
     IngestionBatch,
     LineageRecord,
+    MacroScenario,
+    ManagementActionPlan,
     OperatorAuditLog,
+    OperatorInspectorSession,
     RegulatoryArtifactVersion,
     RegulatoryPackage,
     RegulatoryPackageArtifact,
     RegulatoryRun,
+    SavedScenarioAnalysis,
     SsoConnection,
     User,
 )
 from app.operator.deps import OperatorContext, record_operator_action
+from app.operator.features.inspector_reads import get_tenant_ingestion_batch
+from app.operator.services import inspector
+from app.reporting.domain import workflow as filing_domain
+from app.reporting.schemas.filing_workflow import (
+    FilingWorkflowTemplateCreate,
+    FilingWorkflowTemplateDecision,
+    FilingWorkflowTemplateSubmit,
+    FilingWorkflowTemplateUpdate,
+)
 from app.reporting.service import workflow
+from app.reporting.service.filing_workflow import templates
+from app.schemas.database_connection import DatabaseConnectionCreate
 from app.schemas.ingestion import PositionSnapshotOverrideCreate
-from app.services import ingestion, regulatory_capital
+from app.schemas.push import PushBatchOpen, PushRecordsPage
+from app.services import database_connections, ingestion, push_ingestion, regulatory_capital
 from app.services.audit import record_event
 from tests.conftest import (
     ApiTestDatabase,
@@ -65,7 +92,9 @@ from tests.conftest import (
 )
 from tests.db import test_postgres_migrations as migrations
 from tests.support.factories.authorization import grant_institution_authority
+from tests.support.factories.outbound import stub_public_dns
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("TEST_DATABASE_URL"), reason="Migrated PostgreSQL required"
@@ -1046,3 +1075,475 @@ def test_historical_production_shapes_normalize_without_changing_seals(
         for action, row in rows.items():
             stored = db.get(AuditEvent, row.id)
             assert stored is not None and stored.details == {"bank_id": BANK, **evidence[action]}
+
+
+def test_real_connection_and_template_writers_are_visible(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", "audit-fixture-vault-key")
+    get_settings.cache_clear()
+    stub_public_dns(monkeypatch, "core-db.example.test")
+    ctx = TenantContext(ORG_1, actor_user_id=USER_1, authorization_version=1)
+    with _session() as db:
+        connection = database_connections.create_connection(
+            db,
+            ctx,
+            BANK,
+            DatabaseConnectionCreate.model_validate(
+                {
+                    "backend": "sqlserver",
+                    "display_name": "Audit core connection",
+                    "host": "core-db.example.test",
+                    "port": 1433,
+                    "database": "audit",
+                    "schemas": ["DBO"],
+                    "credentials": {"username": "fixture", "password": "disposable-secret"},
+                    "extraction_spec": {
+                        "tables": [{"table": "DBO.GL_ACCOUNTS", "record_kind": "gl_account"}],
+                        "default_mode": "full",
+                    },
+                }
+            ),
+        )
+        database_connections.revoke_connection(db, ctx, BANK, connection.id)
+        bank = db.get(Bank, BANK)
+        assert bank is not None
+        stages = templates.stage_inputs(filing_domain.default_stages())
+        proposed = templates.propose_template(
+            db,
+            ctx,
+            bank,
+            FilingWorkflowTemplateCreate(stages=stages, reason="Propose audit review chain"),
+        )
+        templates.update_template(
+            db,
+            ctx,
+            bank,
+            proposed.id,
+            FilingWorkflowTemplateUpdate(stages=stages, reason="Review audit filing chain"),
+        )
+        templates.submit_template(
+            db,
+            ctx,
+            bank,
+            proposed.id,
+            FilingWorkflowTemplateSubmit(reason="Submit reviewed audit chain"),
+        )
+        checker = User(organization_id=ORG_1, email="audit-checker@example.test")
+        db.add(checker)
+        db.flush()
+        templates.decide_template(
+            db,
+            TenantContext(ORG_1, actor_user_id=checker.id),
+            bank,
+            proposed.id,
+            FilingWorkflowTemplateDecision(
+                decision="approved", reason="Approve reviewed audit chain"
+            ),
+        )
+        stored = list(db.scalars(select(AuditEvent)))
+        assert all(row.details["bank_id"] == BANK for row in stored)
+        for row in stored:
+            db.add(
+                AuditEvent(
+                    organization_id=ORG_1,
+                    event_type=row.event_type + ".historical",
+                    entity_type=row.entity_type,
+                    entity_id=row.entity_id,
+                    details={},
+                )
+            )
+        db.commit()
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert len(rows) == 12
+    assert all(row.integrity == "verified" for row in rows)
+    assert {row.action for row in rows} >= {
+        "database_direct_connection.created",
+        "database_direct_connection.revoked",
+        "filing_workflow_template.updated.historical",
+    }
+    get_settings.cache_clear()
+
+
+def test_real_icaap_commit_and_retained_cycle_ownership(db_client: TestClient) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    with _session() as db:
+        bank = db.get(Bank, BANK)
+        assert bank is not None
+        access = IcaapAccess(
+            ctx=TenantContext(ORG_1, actor_user_id=USER_1, authorization_version=1), bank=bank
+        )
+        cycle = cycles.create_cycle(
+            db,
+            access,
+            IcaapCycleCreate.model_validate(
+                {
+                    "fiscal_year": 2025,
+                    "cycle_kind": "rehearsal",
+                    "basis": "solo",
+                    "framework_code": "bog_icaap",
+                    "framework_version": "2026.02-ed.1",
+                    "reason": "Audit evidence rehearsal",
+                }
+            ),
+        )
+        sections.save_working(
+            db,
+            access,
+            cycle.id,
+            "executive_summary",
+            IcaapSectionWorkingSave(
+                base_rev=0,
+                doc={
+                    "type": "doc",
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [{"type": "text", "text": "Audit evidence"}],
+                        }
+                    ],
+                },
+            ),
+        )
+        committed = sections.commit_version(
+            db,
+            access,
+            cycle.id,
+            "executive_summary",
+            IcaapSectionCommit(base_rev=1, note="Reviewed audit section"),
+        )
+        db.add(
+            AuditEvent(
+                organization_id=ORG_1,
+                event_type="icaap.section.historical",
+                entity_type="icaap_section_version",
+                entity_id=str(committed.id),
+                details={},
+            )
+        )
+        db.add(
+            AuditEvent(
+                organization_id=ORG_1,
+                event_type="icaap.reconciliation.resources_line_deleted",
+                entity_type="icaap_resources_reconciliation_line",
+                entity_id=str(uuid4()),
+                details={"cycle_id": str(cycle.id)},
+            )
+        )
+        db.commit()
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert {row.action for row in rows} >= {
+        "icaap.cycle.created",
+        "icaap.section.version_committed",
+        "icaap.section.historical",
+        "icaap.reconciliation.resources_line_deleted",
+    }
+    assert all(row.integrity == "verified" for row in rows)
+
+
+def test_real_push_staging_snapshots_resolved_bank(db_client: TestClient) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    storage = InMemoryStorageClient()
+    ctx = TenantContext(ORG_1, actor_user_id=USER_1)
+    with _session() as db:
+        opened = push_ingestion.open_push_batch(
+            db,
+            ctx,
+            BANK,
+            PushBatchOpen(
+                as_of_date=date(2026, 9, 30),
+                idempotency_key="audit-push",
+                reason="Audit source transfer",
+            ),
+            storage,
+        )
+        push_ingestion.stage_push_records(
+            db,
+            ctx,
+            BANK,
+            opened.push_batch_id,
+            PushRecordsPage(
+                entities={
+                    "gl_account": [
+                        {
+                            "source_reference": "1000",
+                            "account_code": "1000",
+                            "name": "Cash",
+                            "account_class": "ASSET",
+                            "currency": "GHS",
+                        }
+                    ]
+                }
+            ),
+            storage,
+        )
+        push_ingestion.commit_push_batch(db, ctx, BANK, opened.push_batch_id, storage)
+        batch = db.scalar(select(IngestionBatch).where(IngestionBatch.bank_id == BANK))
+        assert batch is not None
+        legacy = str(uuid4())
+        for action, detail in (
+            ("push_batch.opened", {}),
+            ("push_batch.records_staged", {}),
+            ("push_batch.committed", {"ingestion_batch_id": str(batch.id)}),
+        ):
+            db.add(
+                AuditEvent(
+                    organization_id=ORG_1,
+                    event_type=action,
+                    entity_type="push_batch",
+                    entity_id=legacy,
+                    details=detail,
+                )
+            )
+        db.commit()
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert len([row for row in rows if row.target_type == "push_batch"]) == 6
+    assert all(row.integrity == "verified" for row in rows)
+
+
+@pytest.mark.parametrize("historical", [False, True])
+def test_real_staff_batch_read_uses_session_evidence(
+    db_client: TestClient, historical: bool
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    with _session() as db:
+        batch, _, _ = _owned_subjects(db, BANK)
+        operator = OperatorContext("audit-staff@example.test", "dev", "super_admin")
+        session = inspector.start_session(
+            db,
+            organization_id=ORG_1,
+            started_by=operator.email,
+            reason="Diagnose bank upload",
+            support_reference="SUP-494",
+            mode="consent",
+            ttl_minutes=30,
+        )
+        db.commit()
+        if historical:
+            db.add(
+                OperatorAuditLog(
+                    operator_email=operator.email,
+                    auth_mode="dev",
+                    action="inspector.read.ingestion_batch",
+                    target_org=ORG_1,
+                    detail={"session_id": str(session.id), "batch_id": str(batch.id)},
+                )
+            )
+            db.commit()
+        else:
+            get_tenant_ingestion_batch(ORG_1, batch.id, db, operator)
+        retained = db.scalar(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "inspector.read.ingestion_batch"
+            )
+        )
+        assert retained is not None
+        event_id = retained.id
+        if not historical:
+            assert (
+                retained.detail["reason"] == session.reason
+                and retained.detail["support_reference"] == "SUP-494"
+            )
+        assert db.get(OperatorInspectorSession, session.id) is not None
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert len(rows) == 1
+    assert rows[0].id == event_id and rows[0].integrity == "verified"
+    assert rows[0].reason == "Diagnose bank upload" and rows[0].support_reference == "SUP-494"
+
+
+def test_governed_subjects_share_write_read_and_verification_ownership(
+    db_client: TestClient,
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    expected: set[str] = set()
+    with _session() as db:
+        for bank_id, org in ((BANK, ORG_1), (SIBLING, ORG_1), (FOREIGN, ORG_2)):
+            _, _, run = _owned_subjects(db, bank_id, org)
+            subjects = [
+                (
+                    "capital_plan",
+                    CapitalPlan(organization_id=org, bank_id=bank_id, version=1, content={}),
+                ),
+                (
+                    "ilaap_snapshot",
+                    IlaapSnapshot(
+                        organization_id=org,
+                        bank_id=bank_id,
+                        reporting_period_id=run.reporting_period_id,
+                        as_of_date=date(2026, 9, 30),
+                        content={},
+                        adequate=False,
+                    ),
+                ),
+                (
+                    "contingency_funding_plan",
+                    ContingencyFundingPlan(
+                        organization_id=org, bank_id=bank_id, version=1, content={}
+                    ),
+                ),
+                (
+                    "macro_scenario",
+                    MacroScenario(
+                        organization_id=org,
+                        bank_id=bank_id,
+                        code="audit",
+                        name="Audit scenario",
+                        scenario_type="base",
+                    ),
+                ),
+                (
+                    "management_action_plan",
+                    ManagementActionPlan(
+                        organization_id=org, bank_id=bank_id, code="audit", name="Audit action plan"
+                    ),
+                ),
+                (
+                    "scenario_analysis",
+                    SavedScenarioAnalysis(
+                        organization_id=org,
+                        bank_id=bank_id,
+                        reporting_period_id=run.reporting_period_id,
+                        module="capital",
+                        name="Audit analysis",
+                        engine_version="fixture",
+                        scenarios=[],
+                        results=[],
+                    ),
+                ),
+                (
+                    "enterprise_stress_signoff",
+                    EnterpriseStressSignoff(
+                        organization_id=org,
+                        bank_id=bank_id,
+                        run_id=run.id,
+                        reporting_period_id=run.reporting_period_id,
+                        scenario_code="base",
+                        scenario_narrative="Audit narrative",
+                        assumptions_rationale="Audit assumptions",
+                    ),
+                ),
+            ]
+            for kind, subject in subjects:
+                db.add(subject)
+                db.flush()
+                written = record_event(
+                    db,
+                    TenantContext(org),
+                    event_type=kind + ".changed",
+                    entity_type=kind,
+                    entity_id=subject.id,
+                )
+                assert written.details["bank_id"] == bank_id
+                db.flush()
+                historical = AuditEvent(
+                    organization_id=org,
+                    event_type=kind + ".historical",
+                    entity_type=kind,
+                    entity_id=str(subject.id),
+                    details={},
+                )
+                db.add(historical)
+                db.flush()
+                if bank_id == BANK:
+                    expected.update((str(written.id), str(historical.id)))
+                elif bank_id == SIBLING:
+                    db.add(
+                        AuditEvent(
+                            organization_id=ORG_1,
+                            event_type=kind + ".conflicting",
+                            entity_type=kind,
+                            entity_id=str(subject.id),
+                            details={"bank_id": BANK},
+                        )
+                    )
+            parameter = record_event(
+                db,
+                TenantContext(org),
+                event_type="parameter.changed",
+                entity_type="param_ecl_assumption",
+                entity_id=bank_id,
+            )
+            assert parameter.details["bank_id"] == bank_id
+            db.flush()
+            if bank_id == BANK:
+                expected.add(str(parameter.id))
+        db.commit()
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert {str(row.id) for row in rows} == expected
+    assert all(row.integrity == "verified" for row in rows)
+
+
+def test_historical_access_request_institution_marker_is_consistent(db_client: TestClient) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    with _session() as db:
+        ctx = TenantContext(ORG_1, actor_user_id=USER_1)
+        written = record_event(
+            db,
+            ctx,
+            event_type="authorization.access_requested",
+            entity_type="authorization_access_request",
+            entity_id=uuid4(),
+            details={"institution_id": BANK},
+        )
+        assert written.details["bank_id"] == BANK
+        for institution, scope in ((BANK, BANK), (BANK, SIBLING), (SIBLING, BANK)):
+            db.add(
+                AuditEvent(
+                    organization_id=ORG_1,
+                    event_type="authorization.access_request_rejected",
+                    entity_type="authorization_access_request",
+                    entity_id=str(uuid4()),
+                    details={"institution_id": institution, "scope": {"institution_id": scope}},
+                )
+            )
+        db.commit()
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert len(rows) == 2
+    assert all(row.integrity == "verified" for row in rows)
+
+
+@pytest.mark.parametrize("mismatch", ["organization", "operator"])
+def test_historical_staff_session_evidence_does_not_cross_ownership(
+    db_client: TestClient, mismatch: str
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    with _session() as db:
+        session = inspector.start_session(
+            db,
+            organization_id=ORG_2 if mismatch == "organization" else ORG_1,
+            started_by="other-staff@example.test"
+            if mismatch == "operator"
+            else "audit-staff@example.test",
+            reason="Private incident explanation",
+            support_reference="SUP-PRIVATE",
+            mode="consent",
+            ttl_minutes=30,
+        )
+        db.add(
+            OperatorAuditLog(
+                operator_email="audit-staff@example.test",
+                auth_mode="dev",
+                action="inspector.read.ingestion_batch",
+                target_org=ORG_1,
+                detail={"bank_id": BANK, "session_id": str(session.id)},
+            )
+        )
+        db.commit()
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert len(rows) == 1 and rows[0].integrity == "verified"
+    assert rows[0].reason is None and rows[0].support_reference is None

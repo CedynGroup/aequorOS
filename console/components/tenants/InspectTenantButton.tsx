@@ -8,6 +8,7 @@ import { useMutation } from '@/lib/use-api';
 import {
   Button,
   Field,
+  Input,
   Modal,
   Select,
   Textarea,
@@ -39,6 +40,7 @@ export function InspectTenantButton({
   const { setActive } = useInspector();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
+  const [supportReference, setSupportReference] = useState('');
   const [mode, setMode] = useState<InspectMode>('consent');
   const [ttl, setTtl] = useState(30);
 
@@ -49,6 +51,7 @@ export function InspectTenantButton({
       setActive(session);
       setOpen(false);
       setReason('');
+      setSupportReference('');
       setMode('consent');
       setTtl(30);
     },
@@ -82,12 +85,13 @@ export function InspectTenantButton({
             <Button
               variant={breakGlass ? 'danger' : 'primary'}
               loading={start.loading}
-              disabled={!reasonValid}
+              disabled={!reasonValid || !supportReference.trim()}
               icon={breakGlass ? <ShieldAlert size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
               onClick={() =>
                 void start.mutate({
                   organization_id: orgId,
                   reason: reason.trim(),
+                  support_reference: supportReference.trim(),
                   mode,
                   ttl_minutes: ttl,
                 })
@@ -110,6 +114,15 @@ export function InspectTenantButton({
               rows={3}
               placeholder="e.g. Investigating a failed official run reported by the bank."
               invalid={reason.length > 0 && !reasonValid}
+            />
+          </Field>
+
+          <Field label="Support reference" required>
+            <Input
+              value={supportReference}
+              onChange={(e) => setSupportReference(e.target.value)}
+              maxLength={200}
+              placeholder="Ticket or incident reference"
             />
           </Field>
 

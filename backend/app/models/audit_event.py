@@ -16,6 +16,9 @@ class AuditEvent(UuidV4PrimaryKeyMixin, Base):
         Index("ix_audit_events_organization_id", "organization_id"),
         Index("ix_audit_events_actor_user_id", "actor_user_id"),
         Index("ix_audit_events_created_at", "created_at"),
+        Index(
+            "ix_audit_events_subject", "organization_id", "entity_type", "entity_id", "event_type"
+        ),
     )
 
     organization_id: Mapped[str | None] = mapped_column(

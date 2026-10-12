@@ -151,15 +151,30 @@ Members composer options are the following delivery stages of issue #494.
 Attribution uses an explicit `details.bank_id`, bank entity target,
 binding `details.scope.institution_id`, or the retained subject's bank ownership.
 The shared event writer snapshots bank ownership for ingestion batches, mapping
-configs, position snapshots, regulatory runs, packages and their artifact records;
-all their lifecycle events use this boundary. Historical events resolve through
-the same tenant-scoped ownership catalogue without rewriting sealed records.
+configs, position snapshots, regulatory runs, packages and their artifact records,
+core-database connections, filing templates, capital/ILAAP and contingency funding
+plans, scenario analyses, bank-local scenarios and management plans, stress sign-offs,
+and ICAAP cycles and child records; their lifecycle events use this boundary. Bank
+parameter-register targets resolve through their bank platform IDs. Access requests
+retain their `institution_id` through the same writer. Push staging snapshots the
+caller's resolved bank; historical committed pushes resolve through their retained
+ingestion batch. Deleted ICAAP children resolve through the recorded cycle.
+Historical events resolve through the same tenant-scoped ownership catalogue
+without rewriting sealed records.
 Contradictory bank markers or subject ownership refuse visibility. Staff events
 use `detail.bank_id` or the tenant-scoped ownership of `detail.batch_id`. The
 shared staff writer snapshots that ownership, and historical reads and integrity
 verification resolve it through the same catalogue. Recorded `note` explanations
 become the public `reason`; batch actions name the batch as their target, and bank
-actions without a more specific target name their bank.
+actions without a more specific target name their bank. New inspector sessions
+require a support reference, captured by both console entry forms. The shared
+staff writer snapshots the caller-owned session's explanation and reference,
+while preserving an action's own note. Historical staff and impersonated events
+resolve those fields through `bank_audit_inspection_context`, which checks the
+event's bank attribution, session tenant and operator identity before returning
+only reason/reference. The API has no inspector-session table read grant. This
+historical context supplements the sealed event payload; it is not included in
+the event's integrity claim.
 Tenant-wide records without a provable bank association remain outside this feed.
 
 Password sign-in, SSO and signing re-authentication retain success and refusal

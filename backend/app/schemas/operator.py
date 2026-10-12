@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.core.key_management.schemas import BankKeyConnect
 from app.schemas.common import JsonObject
@@ -385,6 +385,9 @@ type InspectorMode = Literal["consent", "break_glass"]
 class InspectorSessionCreate(ClosedModel):
     organization_id: str = Field(min_length=1, max_length=16)
     reason: str = Field(min_length=1, max_length=2000)
+    support_reference: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
+    ]
     mode: InspectorMode
     #: Session lifetime in minutes (15–60). The session is a viewing window;
     #: it grants no access on its own — the read endpoints are what render data.
@@ -401,6 +404,7 @@ class InspectorSessionRead(ClosedModel):
     started_at: datetime
     expires_at: datetime
     reason: str
+    support_reference: str | None = None
     ended_at: datetime | None = None
     ended_by: str | None = None
 

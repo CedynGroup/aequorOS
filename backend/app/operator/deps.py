@@ -32,6 +32,7 @@ import secrets
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, cast
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -49,7 +50,7 @@ from app.core.config import (
     is_undeployed_environment,
 )
 from app.db.session import get_engine
-from app.models import OperatorAuditLog, OperatorUser
+from app.models import OperatorAuditLog, OperatorInspectorSession, OperatorUser
 from app.models.operator import OPERATOR_ROLE_RANK
 from app.operator.services import operator_auth
 
@@ -276,6 +277,23 @@ def record_operator_action(
     ``detail``: the row is append-only and readable by every operator.
     """
     evidence: dict[str, JsonValue] = dict(detail or {})
+    session_id = evidence.get("session_id")
+    if target_org is not None and isinstance(session_id, str):
+        try:
+            inspection_id = UUID(session_id)
+        except ValueError:
+            inspection_id = None
+        if inspection_id is not None:
+            inspection = db.scalar(
+                select(OperatorInspectorSession).where(
+                    OperatorInspectorSession.id == inspection_id,
+                    OperatorInspectorSession.organization_id == target_org,
+                    OperatorInspectorSession.started_by == operator.email,
+                )
+            )
+            if inspection is not None:
+                evidence.setdefault("reason", evidence.get("note") or inspection.reason)
+                evidence.setdefault("support_reference", inspection.support_reference)
     batch_id = evidence.get("batch_id")
     if target_org is not None and isinstance(batch_id, str):
         bank_id = db.scalar(

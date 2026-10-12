@@ -72,6 +72,7 @@ def start_inspector_session(
         started_by=operator.email,
         mode=payload.mode,
         reason=payload.reason,
+        support_reference=payload.support_reference,
         ttl_minutes=payload.ttl_minutes,
     )
     record_operator_action(
@@ -164,9 +165,7 @@ def mint_inspector_act_token(
     # arithmetic below never trips over a naive/aware comparison (Postgres rows
     # are already aware — the guard is a no-op there).
     session_expires_at = (
-        row.expires_at
-        if row.expires_at.tzinfo is not None
-        else row.expires_at.replace(tzinfo=UTC)
+        row.expires_at if row.expires_at.tzinfo is not None else row.expires_at.replace(tzinfo=UTC)
     )
     if row.ended_at is not None:
         raise HTTPException(

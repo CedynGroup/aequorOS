@@ -6,7 +6,7 @@ import base64
 import binascii
 from contextlib import suppress
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -183,9 +183,16 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
             "audit_events.organization_id",
             "audit_events.entity_type",
             "audit_events.entity_id",
+            details="audit_events.details",
             postgresql=db.get_bind().dialect.name == "postgresql",
         ),
         String,
+    )
+    institution = case(
+        (
+            event.c.entity_type == "authorization_access_request",
+            _json_text(event.c.details, "institution_id"),
+        )
     )
     tenant_events = select(
         event.c.id,
@@ -200,6 +207,7 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
         event.c.organization_id == ctx.organization_id,
         or_(
             _json_text(event.c.details, "bank_id") == bank.id,
+            institution == bank.id,
             and_(event.c.entity_type == "bank", event.c.entity_id == bank.id),
             _json_text(event.c.details, "scope", "institution_id") == bank.id,
             owned_bank == bank.id,
@@ -218,6 +226,7 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
             event.c.entity_id == bank.id,
         ),
         or_(owned_bank.is_(None), owned_bank == bank.id),
+        or_(institution.is_(None), institution == bank.id),
     )
     staff_details = (
         sql_cast(_STAFF.c.detail, JSONB)
@@ -307,6 +316,7 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
         .all()
     )
     events = [_present(row) for row in TypeAdapter(list[StoredEvent]).validate_python(rows[:limit])]
+    _inspection_evidence(db, events)
     _verify_events(db, events)
     next_cursor = None
     if len(rows) > limit:
@@ -376,6 +386,29 @@ def _present(row: StoredEvent) -> AuditEventRead:
     if item.occurred_at.tzinfo is None:
         item.occurred_at = item.occurred_at.replace(tzinfo=UTC)
     return item
+
+
+def _inspection_evidence(db: Session, events: list[AuditEventRead]) -> None:
+    if db.get_bind().dialect.name != "postgresql":
+        return
+    for event in events:
+        if "session_id" not in event.details and "impersonation_session_id" not in event.details:
+            continue
+        context = cast(
+            "object",
+            db.scalar(
+                select(sql_cast(func.bank_audit_inspection_context(event.stream, event.id), JSONB))
+            ),
+        )
+        if context is None:
+            continue
+        evidence = TypeAdapter(dict[str, JsonValue]).validate_python(context)
+        if event.reason is None:
+            event.reason = _string(evidence.get("reason"))
+            event.details["reason"] = event.reason
+        if event.support_reference is None:
+            event.support_reference = _string(evidence.get("support_reference"))
+            event.details["support_reference"] = event.support_reference
 
 
 def _verify_events(db: Session, events: list[AuditEventRead]) -> None:

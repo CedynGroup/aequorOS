@@ -2351,6 +2351,7 @@ export interface InspectorSession {
   started_at: string;
   expires_at: string;
   reason: string;
+  support_reference?: string | null;
   ended_at: string | null;
   ended_by: string | null;
 }
@@ -2364,6 +2365,7 @@ export interface InspectorSessionsResponse {
 export function startInspectorSession(body: {
   organization_id: string;
   reason: string;
+  support_reference: string;
   mode: InspectorMode;
   ttl_minutes: number;
 }): Promise<InspectorSession> {

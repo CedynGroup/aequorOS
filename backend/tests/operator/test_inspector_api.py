@@ -39,6 +39,7 @@ def test_start_consent_session_returns_read_only_window_and_audits(
     response = operator_client.post(
         SESSIONS,
         json={
+            "support_reference": "SUP-TEST",
             "organization_id": organization_id,
             "reason": "customer asked for help with an ingestion error",
             "mode": "consent",
@@ -53,26 +54,33 @@ def test_start_consent_session_returns_read_only_window_and_audits(
     assert body["read_only"] is True
     assert body["started_by"] == "dev@aequoros.com"
     assert body["ended_at"] is None
+    assert body["support_reference"] == "SUP-TEST"
+    retained = operator_db.get(OperatorInspectorSession, uuid.UUID(body["session_id"]))
+    assert retained is not None and retained.support_reference == "SUP-TEST"
     assert body["session_id"]
     # No tenant credential / act-as-user material leaks into the response.
     assert "token" not in response.text.lower()
 
     audit = list(
         operator_db.scalars(
-            select(OperatorAuditLog).where(
-                OperatorAuditLog.action == "inspector.session.start"
-            )
+            select(OperatorAuditLog).where(OperatorAuditLog.action == "inspector.session.start")
         )
     )
     assert len(audit) == 1
     assert audit[0].target_org == organization_id
     assert audit[0].detail["mode"] == "consent"
+    assert audit[0].detail["support_reference"] == "SUP-TEST"
 
 
 def test_start_unknown_org_is_404(operator_client: TestClient) -> None:
     response = operator_client.post(
         SESSIONS,
-        json={"organization_id": "OR-00000000", "reason": "x", "mode": "consent"},
+        json={
+            "organization_id": "OR-00000000",
+            "reason": "x",
+            "mode": "consent",
+            "support_reference": "SUP-TEST",
+        },
         headers=operator_headers(),
     )
     assert response.status_code == 404
@@ -82,7 +90,12 @@ def test_reason_is_required(operator_client: TestClient) -> None:
     organization_id = _provision(operator_client)
     response = operator_client.post(
         SESSIONS,
-        json={"organization_id": organization_id, "reason": "", "mode": "consent"},
+        json={
+            "organization_id": organization_id,
+            "reason": "",
+            "mode": "consent",
+            "support_reference": "SUP-TEST",
+        },
         headers=operator_headers(),
     )
     assert response.status_code == 422
@@ -94,6 +107,7 @@ def test_ttl_out_of_range_is_422(operator_client: TestClient) -> None:
         response = operator_client.post(
             SESSIONS,
             json={
+                "support_reference": "SUP-TEST",
                 "organization_id": organization_id,
                 "reason": "r",
                 "mode": "consent",
@@ -112,6 +126,7 @@ def test_break_glass_requires_operator_admin(
     dev_headers = bearer(login(operator_client, "ama@aequoros.com", PASSWORD))
 
     payload = {
+        "support_reference": "SUP-TEST",
         "organization_id": organization_id,
         "reason": "incident triage",
         "mode": "break_glass",
@@ -134,12 +149,22 @@ def test_list_newest_first_and_active_filter(operator_client: TestClient) -> Non
     organization_id = _provision(operator_client)
     first = operator_client.post(
         SESSIONS,
-        json={"organization_id": organization_id, "reason": "one", "mode": "consent"},
+        json={
+            "organization_id": organization_id,
+            "reason": "one",
+            "mode": "consent",
+            "support_reference": "SUP-TEST",
+        },
         headers=operator_headers(),
     ).json()
     second = operator_client.post(
         SESSIONS,
-        json={"organization_id": organization_id, "reason": "two", "mode": "consent"},
+        json={
+            "organization_id": organization_id,
+            "reason": "two",
+            "mode": "consent",
+            "support_reference": "SUP-TEST",
+        },
         headers=operator_headers(),
     ).json()
 
@@ -160,9 +185,7 @@ def test_list_newest_first_and_active_filter(operator_client: TestClient) -> Non
 
     active = operator_client.get(f"{SESSIONS}?active=true", headers=operator_headers()).json()
     assert [s["session_id"] for s in active["sessions"]] == [second["session_id"]]
-    inactive = operator_client.get(
-        f"{SESSIONS}?active=false", headers=operator_headers()
-    ).json()
+    inactive = operator_client.get(f"{SESSIONS}?active=false", headers=operator_headers()).json()
     assert [s["session_id"] for s in inactive["sessions"]] == [first["session_id"]]
 
 
@@ -180,7 +203,12 @@ def test_list_scoped_by_organization(operator_client: TestClient) -> None:
     for org in (org_a, org_b):
         operator_client.post(
             SESSIONS,
-            json={"organization_id": org, "reason": "r", "mode": "consent"},
+            json={
+                "organization_id": org,
+                "reason": "r",
+                "mode": "consent",
+                "support_reference": "SUP-TEST",
+            },
             headers=operator_headers(),
         )
     scoped = operator_client.get(
@@ -190,13 +218,16 @@ def test_list_scoped_by_organization(operator_client: TestClient) -> None:
     assert scoped["sessions"][0]["organization_id"] == org_a
 
 
-def test_end_is_idempotent_and_audited(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_end_is_idempotent_and_audited(operator_client: TestClient, operator_db: Session) -> None:
     organization_id = _provision(operator_client)
     session_id = operator_client.post(
         SESSIONS,
-        json={"organization_id": organization_id, "reason": "r", "mode": "consent"},
+        json={
+            "organization_id": organization_id,
+            "reason": "r",
+            "mode": "consent",
+            "support_reference": "SUP-TEST",
+        },
         headers=operator_headers(),
     ).json()["session_id"]
 
@@ -218,20 +249,34 @@ def test_end_is_idempotent_and_audited(
 
 
 def test_end_unknown_session_is_404(operator_client: TestClient) -> None:
-    response = operator_client.post(
-        f"{SESSIONS}/{uuid.uuid4()}/end", headers=operator_headers()
-    )
+    response = operator_client.post(f"{SESSIONS}/{uuid.uuid4()}/end", headers=operator_headers())
     assert response.status_code == 404
 
 
-def test_read_only_column_is_always_true(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_read_only_column_is_always_true(operator_client: TestClient, operator_db: Session) -> None:
     organization_id = _provision(operator_client)
     operator_client.post(
         SESSIONS,
-        json={"organization_id": organization_id, "reason": "r", "mode": "consent"},
+        json={
+            "organization_id": organization_id,
+            "reason": "r",
+            "mode": "consent",
+            "support_reference": "SUP-TEST",
+        },
         headers=operator_headers(),
     )
     rows = list(operator_db.scalars(select(OperatorInspectorSession)))
     assert rows and all(r.read_only is True for r in rows)
+
+
+def test_support_reference_is_required(operator_client: TestClient) -> None:
+    for reference in (None, "", "   ", "x" * 201):
+        body = {
+            "organization_id": "OR-00000000",
+            "reason": "Support investigation",
+            "mode": "consent",
+        }
+        if reference is not None:
+            body["support_reference"] = reference
+        response = operator_client.post(SESSIONS, json=body, headers=operator_headers())
+        assert response.status_code == 422
