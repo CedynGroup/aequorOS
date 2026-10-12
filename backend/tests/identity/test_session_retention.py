@@ -109,14 +109,37 @@ def test_batch_limit_and_rerun_drain_backlog(
     assert list(db_session.scalars(select(RefreshToken))) == []
 
 
-def test_long_rotation_grace_survives_cleanup(
+@pytest.mark.parametrize("enabled", ["true", "false"])
+@pytest.mark.parametrize("days", [1, 30, 90])
+def test_settings_loading_refuses_retention_shorter_than_rotation_grace(
+    monkeypatch: pytest.MonkeyPatch, enabled: str, days: int
+) -> None:
+    monkeypatch.setenv("AUTH_SESSION_PURGE_ENABLED", enabled)
+    monkeypatch.setenv("AUTH_REFRESH_TOKEN_RETENTION_DAYS", str(days))
+    monkeypatch.setenv("AUTH_REFRESH_ROTATION_GRACE", str(days * 86400 + 1))
+    get_settings.cache_clear()
+    with pytest.raises(
+        ValidationError,
+        match="AUTH_REFRESH_TOKEN_RETENTION_DAYS must cover AUTH_REFRESH_ROTATION_GRACE",
+    ):
+        get_settings()
+
+
+def test_rotation_grace_equal_to_retention_uses_configured_cleanup_window(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("AUTH_REFRESH_ROTATION_GRACE", str(60 * 86400))
+    monkeypatch.setenv("AUTH_REFRESH_ROTATION_GRACE", str(30 * 86400))
     get_settings.cache_clear()
-    identifier = _token(db_session, expires_at=NOW - timedelta(days=31))
-    assert purge_refresh_tokens(db_session, ORG_1, now=NOW) == 0
-    assert db_session.get(RefreshToken, identifier) is not None
+    assert get_settings().auth.refresh_token_retention_days == 30
+    expired = _token(db_session, expires_at=NOW - timedelta(days=31))
+    revoked = _token(
+        db_session, expires_at=NOW + timedelta(days=1), revoked_at=NOW - timedelta(days=31)
+    )
+    boundary = _token(db_session, expires_at=NOW - timedelta(days=30))
+    assert purge_refresh_tokens(db_session, ORG_1, now=NOW) == 2
+    assert db_session.get(RefreshToken, expired) is None
+    assert db_session.get(RefreshToken, revoked) is None
+    assert db_session.get(RefreshToken, boundary) is not None
 
 
 def test_scheduler_enqueues_purge_without_other_features_and_handler_rechecks_switch(

@@ -20,12 +20,7 @@ from app.models.job import Job
 def purge_refresh_tokens(session: Session, organization_id: str, *, now: datetime) -> int:
     """Delete at most one batch strictly older than the investigation window."""
     settings = get_settings().auth
-    # Even an unusually long concurrent-refresh grace must survive cleanup.
-    window = max(
-        timedelta(days=settings.refresh_token_retention_days),
-        timedelta(seconds=settings.refresh_rotation_grace_seconds),
-    )
-    cutoff = now - window
+    cutoff = now - timedelta(days=settings.refresh_token_retention_days)
     eligible = or_(RefreshToken.expires_at < cutoff, RefreshToken.revoked_at < cutoff)
     identifiers = list(
         session.scalars(

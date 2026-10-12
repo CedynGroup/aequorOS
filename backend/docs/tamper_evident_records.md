@@ -24,10 +24,15 @@ Refresh-token state is credential bookkeeping, not the audit chain. Enable
 tenant scheduler alive and enqueue `session_purge`. Each job deletes at most
 `AUTH_SESSION_PURGE_BATCH_SIZE` rows (default 1000, maximum 10000) belonging to
 its organization. Eligibility is expiry **or** revocation strictly older than
-`AUTH_REFRESH_TOKEN_RETENTION_DAYS` (default 30 days). The interval is retained
-for incident investigation; a longer configured refresh-rotation grace also
-survives cleanup. Active and recent credentials stay, and retries are idempotent.
+`AUTH_REFRESH_TOKEN_RETENTION_DAYS` (default 30 days). The configured interval
+is retained for incident investigation and is the sole cleanup window. Settings
+refuse startup if this window is shorter than `AUTH_REFRESH_ROTATION_GRACE`
+(seconds); increase retention or reduce grace to make the configuration valid.
+Active and recent credentials stay, and retries are idempotent.
 Hourly batches drain any backlog without a single long cleanup transaction.
+Provisioning seeds the tenant's first tick in its onboarding transaction,
+including when the worker is already running. The operator's scheduling flags
+do not gate seeding; the worker decides whether a tick runs or stays inert.
 The switch defaults off and is rechecked by the handler. Monitor per-job
 `refresh_tokens_deleted`; repeated full batches indicate a growing backlog.
 

@@ -141,6 +141,7 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "STORAGE_OBJECT_LOCK_ENABLED": "0",
         "BACKUP_WORM_BUCKET": "",
         "AUTH_REFRESH_TOKEN_RETENTION_DAYS": "30",
+        "AUTH_REFRESH_ROTATION_GRACE": "30",
         "AUTH_SESSION_PURGE_BATCH_SIZE": "1000",
     }.items():
         monkeypatch.setenv(_setting, _value)

@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Final, Literal, get_args
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -1195,6 +1195,15 @@ class AuthSettings(BaseSettings):
     # OIDC client config (the only path that ever reads the secret back). Unset =
     # that internal endpoint is disabled, so browser SSO cannot start.
     sso_internal_key: str | None = Field(default=None, alias="SSO_INTERNAL_KEY")
+
+    @model_validator(mode="after")
+    def retention_covers_rotation_grace(self) -> AuthSettings:
+        if self.refresh_token_retention_days * 86400 < self.refresh_rotation_grace_seconds:
+            raise ValueError(
+                "AUTH_REFRESH_TOKEN_RETENTION_DAYS must cover AUTH_REFRESH_ROTATION_GRACE "
+                "(seconds)"
+            )
+        return self
 
     @field_validator("sso_internal_key", mode="before")
     @classmethod

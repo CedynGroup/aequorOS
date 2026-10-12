@@ -3,25 +3,32 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
+from threading import Event
 from typing import cast
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
+from app import worker
 from app.core import security
+from app.core.config import get_settings
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.settings import get_key_settings
+from app.db.base import utc_now
 from app.forecasting.service import resolve_effective
+from app.identity.models.refresh_token import RefreshToken
 from app.models import (
     AuthorizationBinding,
     Bank,
     ForecastAssumptionVersion,
+    Job,
     OperatorAuditLog,
     Organization,
     OrganizationOwnerAssignment,
@@ -46,6 +53,81 @@ from tests.operator.conftest import (
 
 def _steps_by_name(body: dict) -> dict[str, dict]:
     return {step["step"]: step for step in body["steps"]}
+
+
+def test_provisioning_after_worker_startup_reaches_session_purge(
+    operator_client: TestClient,
+    operator_db: Session,
+    _operator_bound_sessionmaker: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_SESSION_PURGE_ENABLED", "true")
+    get_settings.cache_clear()
+    monkeypatch.setattr(worker, "get_worker_sessionmaker", lambda: _operator_bound_sessionmaker)
+    monkeypatch.setattr(worker, "assert_worker_database_access", lambda: None)
+    stop = Event()
+    stop.set()
+    worker.run_worker(stop_event=stop)
+    assert operator_db.scalar(select(Job)) is None
+
+    monkeypatch.setenv("AUTH_SESSION_PURGE_ENABLED", "false")
+    get_settings.cache_clear()
+    response = operator_client.post(
+        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+    )
+    assert response.status_code == 200, response.text
+    result = ProvisioningResultRead.model_validate(response.json())
+    assert result.succeeded
+    organization_id = result.organization_id
+    assert organization_id is not None
+    tick = operator_db.scalar(
+        select(Job).where(Job.organization_id == organization_id, Job.job_type == "scheduled_tick")
+    )
+    assert tick is not None
+    assert tick.status == "queued"
+    administrator = operator_db.scalar(select(User).where(User.organization_id == organization_id))
+    assert administrator is not None
+    identifier = uuid4()
+    now = utc_now()
+    operator_db.add(
+        RefreshToken(
+            id=identifier,
+            organization_id=organization_id,
+            user_id=administrator.id,
+            family_id=identifier,
+            token_hash=identifier.hex * 2,
+            issued_at=now - timedelta(days=90),
+            expires_at=now - timedelta(days=31),
+        )
+    )
+    operator_db.commit()
+
+    monkeypatch.setenv("AUTH_SESSION_PURGE_ENABLED", "true")
+    get_settings.cache_clear()
+    assert worker.run_once(("scheduled_tick",))
+    operator_db.expire_all()
+    assert tick.status == "succeeded"
+    purge = operator_db.scalar(
+        select(Job).where(Job.organization_id == organization_id, Job.job_type == "session_purge")
+    )
+    assert purge is not None
+    assert worker.run_once(("session_purge",))
+    operator_db.expire_all()
+    assert purge.status == "succeeded"
+    assert purge.progress == {"status": "succeeded", "refresh_tokens_deleted": 1}
+    assert operator_db.get(RefreshToken, identifier) is None
+    assert not worker.run_once(("session_purge",))
+    next_ticks = list(
+        operator_db.scalars(
+            select(Job).where(
+                Job.organization_id == organization_id,
+                Job.job_type == "scheduled_tick",
+                Job.status == "queued",
+            )
+        )
+    )
+    assert len(next_ticks) == 1
+    assert next_ticks[0].coalesce_key == f"tick:{organization_id}"
 
 
 def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserted end to end
@@ -345,6 +427,7 @@ def test_storage_failure_rolls_back_everything(
     assert operator_db.scalar(select(Bank)) is None
     assert operator_db.scalar(select(TenantStorage)) is None
     assert operator_db.scalar(select(User)) is None
+    assert operator_db.scalar(select(Job)) is None
 
     # External: the created (empty) buckets were deleted again.
     assert fake_s3.buckets == {}
