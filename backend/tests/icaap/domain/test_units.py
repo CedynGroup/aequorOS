@@ -6,7 +6,6 @@ from decimal import Decimal
 
 import pytest
 from hypothesis import given, settings
-from hypothesis import strategies as st
 
 from app.icaap.domain.units import (
     AMOUNT_QUANTUM,
@@ -19,6 +18,7 @@ from app.icaap.domain.units import (
     pillar1_capital,
     to_amount,
 )
+from tests.capital.testing.generators import capital_percentages, rwa_amounts
 
 FULL = Denominators(total_rwa=Decimal(1000), credit_rwa=Decimal(800), car_min_pct=Decimal(13))
 
@@ -72,10 +72,8 @@ def test_a_negative_basis_value_is_refused() -> None:
 
 @settings(max_examples=300, deadline=None)
 @given(
-    basis_value=st.decimals(
-        min_value=Decimal(0), max_value=Decimal(100), places=4, allow_nan=False
-    ),
-    total_rwa=st.integers(min_value=1, max_value=10**9),
+    basis_value=capital_percentages(),
+    total_rwa=rwa_amounts(),
 )
 def test_a_conversion_is_exact_to_the_money_quantum(basis_value: Decimal, total_rwa: int) -> None:
     denominators = Denominators(total_rwa=Decimal(total_rwa))
@@ -86,10 +84,8 @@ def test_a_conversion_is_exact_to_the_money_quantum(basis_value: Decimal, total_
 
 @settings(max_examples=300, deadline=None)
 @given(
-    basis_value=st.decimals(
-        min_value=Decimal(0), max_value=Decimal(100), places=4, allow_nan=False
-    ),
-    total_rwa=st.integers(min_value=1000, max_value=10**6),
+    basis_value=capital_percentages(),
+    total_rwa=rwa_amounts(),
 )
 def test_a_percentage_survives_the_round_trip(basis_value: Decimal, total_rwa: int) -> None:
     """Within the two quanta the two directions are allowed to lose."""

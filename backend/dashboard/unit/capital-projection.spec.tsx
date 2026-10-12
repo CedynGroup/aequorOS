@@ -14,6 +14,9 @@ import CapitalPlanProjection, {
   CapitalPlanProjectionUnavailable,
 } from "../components/basel/CapitalPlanProjection";
 
+import { capitalMeasurements } from "./capital/testing/generators";
+import { assertCapitalDisplay } from "./capital/testing/assertions";
+
 afterEach(cleanup);
 
 const minimum: CapitalFloorRead = {
@@ -100,16 +103,10 @@ describe("capital plan projection behavior", () => {
   });
 
   it("preserves independently stored ratios and percentage-point headroom across signed decimals", () => {
-    const hundredths = fc.integer({ min: -20_000, max: 20_000 });
     fc.assert(
       fc.property(
-        hundredths,
-        hundredths,
-        hundredths,
-        hundredths,
-        hundredths,
-        hundredths,
-        (car, headroom, tier1, tier1Headroom, cet1, cet1Headroom) => {
+        capitalMeasurements,
+        ([car, headroom, tier1, tier1Headroom, cet1, cet1Headroom]) => {
           const values = [
             car,
             headroom,
@@ -121,6 +118,14 @@ describe("capital plan projection behavior", () => {
           render(
             <CapitalPlanProjection
               projection={projection({
+                pillar1Min: {
+                  ...minimum,
+                  valuePct: "13",
+                  regulatoryValuePct: "13",
+                },
+                pillar1MinPct: "13",
+                pillar2AddonPct: "0",
+                totalRequirementPct: "13",
                 scenarios: [
                   scenario("base", {
                     carPct: String(car / 100),
@@ -141,10 +146,7 @@ describe("capital plan projection behavior", () => {
             // Independent round-trip oracle: displayed units and stored values survive formatting.
             displayed.forEach((text, index) => {
               const point = index % 2 === 1;
-              expect(text.endsWith(point ? " pp" : "%")).toBe(true);
-              expect(
-                Number(text.replace("−", "-").replace(point ? " pp" : "%", "")),
-              ).toBe(values[index] / 100);
+              assertCapitalDisplay(text, values[index], point);
             });
           } finally {
             cleanup();

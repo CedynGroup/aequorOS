@@ -39,5 +39,29 @@ The [shared testing standard](../../../CODEBASE_CONVENTIONS.md#behavior-properti
 governs both surfaces.
 
 Issue #553 has an approved five-PR sequence: scaffolding plus filing/ICAAP/approvals
-(this delivery), liquidity plus capital, credit plus FX, FTP plus IRRBB plus
+then liquidity plus capital, credit plus FX, FTP plus IRRBB plus
 canonical data, then testing-standard documentation.
+
+## Liquidity and capital
+
+Liquidity and capital helpers live in their feature-owned `testing` packages on
+both surfaces. Backend facts use the engines' four-decimal money quantum and
+six-decimal percentage quantum, with `ROUND_HALF_UP`. Each domain's ratio
+comparison policy allows two percentage quanta for independently rounded runs;
+identity and order comparisons remain exact. Dashboard liquidity comparisons
+allow one money quantum when accumulating parsed Numbers; capital display
+fixtures use exact hundredths at the component's two-decimal display precision.
+
+Backend generators consume the parameter register and regulatory seed catalogue.
+The bank CAR seed includes the conservation buffer; LCR/NSFR targets are internal
+monitoring levels, not BoG requirements. Capital books reconcile the balance
+sheet and include the three-year BIA input series. Liquidity books preserve
+balance-sheet and granular-loan tie-outs while the public engine calibrates the
+funding mix toward the NSFR target. Ladder totals come from five nonnegative
+asset/liability buckets; net gaps can be negative. All data is synthetic.
+
+Validity properties execute the public engines or dashboard parser. Metamorphic
+assertions compare scaling, reordering and zero-exposure results without copying
+production ratio formulas. Keep malformed/missing-value examples alongside the
+valid defaults: decoder tests still verify that persisted figures are presented
+without recomputation, including deliberate mismatches and signed-value edges.
