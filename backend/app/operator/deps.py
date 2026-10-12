@@ -51,9 +51,10 @@ from app.core.config import (
 )
 from app.db.session import get_engine
 from app.identity.public import Bank
-from app.models import InstitutionType, OperatorAuditLog, OperatorInspectorSession, OperatorUser
+from app.models import OperatorAuditLog, OperatorInspectorSession, OperatorUser
 from app.models.operator import OPERATOR_ROLE_RANK
 from app.operator.services import operator_auth
+from app.policy.public import InstitutionType
 
 _bearer_scheme = HTTPBearer(
     auto_error=False,
