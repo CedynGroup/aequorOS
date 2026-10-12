@@ -45,6 +45,7 @@ from app.identity.public import run_session_purge
 from app.models import Job, WorkerHeartbeat
 from app.services import (
     database_direct_jobs,
+    documents,
     etl_dedup_jobs,
     job_queue,
     market_data_jobs,
@@ -67,6 +68,7 @@ Handler = Callable[[Session, Job], None]
 # tests/services/test_desk_capture_job.py enforces the invariant.
 HANDLERS: dict[str, Handler] = {
     "session_purge": run_session_purge,
+    "document_delete": documents.run_document_delete,
     "pipeline_refresh": pipeline.run_refresh,
     "official_run": pipeline.run_official,
     "scheduled_tick": scheduler.run_tick,

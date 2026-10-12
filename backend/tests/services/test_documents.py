@@ -99,7 +99,6 @@ def test_parse_rejects_unuploaded_and_deleted_documents(
         db_session,
         ctx,
         document.id,
-        storage_client=factories.storage,
     )
 
     with pytest.raises(HTTPException) as deleted:

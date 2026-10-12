@@ -202,6 +202,19 @@ provenance fields. The dashboard's current capabilities are documented in
 
 ### Legacy case vertical
 
+Document deletion commits the document tombstone, the stored object's
+`pending_deletion` status, the audit event and a `document_delete` job atomically.
+The existing deleted response means logical deletion: downloads, parsing and
+upload completion refuse the document immediately. The core worker closes its
+read transaction before deleting from storage, then commits the object's
+`deleted` acknowledgement with job completion. A transport failure or lost
+acknowledgement leaves pending cleanup safe to retry; duplicate requests preserve
+one job and one deletion event. Existing deleted records remain unchanged.
+The queue's bounded exponential retries and stale-worker reclaim apply; exhausted
+cleanup remains pending and appears as a failed job on the operator jobs board.
+See [`documents.py`](app/services/documents.py) and the
+[deletion regression tests](tests/services/test_document_deletion.py).
+
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
 `PATCH` routes below that path support institutions, accounts, reporting
