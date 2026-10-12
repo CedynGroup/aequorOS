@@ -189,7 +189,7 @@ def migrate_isolated_postgres_schema(
                             CREATE ROLE aequoros_audit_owner NOLOGIN;
                         END IF;
                     END $$;
-                    GRANT aqs_owner TO "{migration_role}" WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
+                    GRANT aqs_owner TO "{migration_role}" {admin_grant_options};
                     GRANT aequoros_audit_owner TO "{migration_role}"
                         {admin_grant_options};
                 """)
