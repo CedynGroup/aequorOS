@@ -178,22 +178,29 @@ def run_bi_export(  # noqa: PLR0913 - FastAPI injects db/access/storage
         permissions=policy.permissions_for(export_class),
     )
 
+    organization_id, institution_id = access.ctx.organization_id, access.bank.id
+    injected_filters = read_bi.injected_filters(authorized)
+    db.commit()
     probe_cap = min(settings.export_async_threshold_rows, settings.export_row_cap)
     try:
         run = runner.run_query(
             db,
             cat=catalogue(),
             query=query,
-            organization_id=access.ctx.organization_id,
-            bank_id=access.bank.id,
-            injected_filters=read_bi.injected_filters(authorized),
+            organization_id=organization_id,
+            bank_id=institution_id,
+            injected_filters=injected_filters,
             row_cap=probe_cap,
             timeout_ms=settings.export_timeout_ms,
+            before_query=db.commit,
         )
     except BiQueryError as exc:
         read_bi.append_query_log(db, replace(authorized.record, row_count=None, duration_ms=None))
         raise read_bi.query_error(exc) from exc
 
+    # The single-database fallback runs the read on this session. End that
+    # read too, so delivery metadata and telemetry start a fresh transaction.
+    db.commit()
     # Fail closed on the COMPILED member set: compilation can add members the
     # decision did not cover (a data-scope filter), and a widened set must not be
     # served under the authority that covered the narrower one.
@@ -276,6 +283,7 @@ def _inline(  # noqa: PLR0913 - one delivery, spelled out
             member_ids=run.compiled.member_ids,
             row_count=run.row_count,
             duration_ms=run.result.elapsed_ms,
+            build_fingerprint=ctx_block.build_fingerprint,
         ),
     )
     return StreamingResponse(

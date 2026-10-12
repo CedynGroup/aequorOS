@@ -14,6 +14,7 @@ and nothing else — the feature and the job own ``audit_events``).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from uuid import UUID
@@ -122,8 +123,9 @@ def run_query(  # noqa: PLR0913 - compile and execute take their guards explicit
     injected_filters: tuple[BiFilter, ...],
     row_cap: int,
     timeout_ms: int,
+    before_query: Callable[[], None] | None = None,
 ) -> ExportRun:
-    """Compile and run under the EXPORT caps: the long timeout, the high cap."""
+    """Compile and run under export caps, invoking ``before_query`` for every BI read."""
 
     compiled = compile_query(
         db,
@@ -132,8 +134,11 @@ def run_query(  # noqa: PLR0913 - compile and execute take their guards explicit
         organization_id=organization_id,
         bank_id=bank_id,
         injected_filters=injected_filters,
+        before_query=before_query,
     )
-    result = execute(db, compiled, timeout_ms=timeout_ms, row_cap=row_cap)
+    result = execute(
+        db, compiled, timeout_ms=timeout_ms, row_cap=row_cap, before_query=before_query
+    )
     return ExportRun(compiled=compiled, result=result)
 
 

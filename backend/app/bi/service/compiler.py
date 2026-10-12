@@ -2251,7 +2251,9 @@ def _top_keys(build: _Build) -> Select[Any]:
     return select(subquery.c["k0"])
 
 
-def _pivot_values(db: Session, build: _Build) -> tuple[Any, ...]:
+def _pivot_values(
+    db: Session, build: _Build, before_query: Callable[[], None] | None
+) -> tuple[Any, ...]:
     """The pivot dimension's distinct values in the window, capped at the column limit."""
     resolved = build.resolved
     assert resolved.pivot is not None and resolved.pivot_dimension is not None
@@ -2271,6 +2273,7 @@ def _pivot_values(db: Session, build: _Build) -> tuple[Any, ...]:
         statement,
         organization_id=build.organization_id,
         timeout_ms=get_settings().bi.interactive_timeout_ms,
+        before_query=before_query,
     )
     if len(rows) > cap:
         raise InvalidQuery(
@@ -2288,7 +2291,9 @@ def _pivot_values(db: Session, build: _Build) -> tuple[Any, ...]:
     return tuple(row[0] for row in rows)
 
 
-def _require_period_end(db: Session, build: _Build, grain: expr.PeriodGrain) -> None:
+def _require_period_end(
+    db: Session, build: _Build, grain: expr.PeriodGrain, before_query: Callable[[], None] | None
+) -> None:
     """The reporting date must be the last date WITH DATA in its ``grain`` period.
 
     The other half of D-195. A measure that compares each quarter with the one
@@ -2321,6 +2326,7 @@ def _require_period_end(db: Session, build: _Build, grain: expr.PeriodGrain) -> 
         statement,
         organization_id=build.organization_id,
         timeout_ms=get_settings().bi.interactive_timeout_ms,
+        before_query=before_query,
     )
     nearest = rows[0][0] if rows else None
     if nearest == as_of:
@@ -2466,6 +2472,7 @@ def compile_query(  # noqa: PLR0913 - the contract signature (bi_contracts.md)
     organization_id: str,
     bank_id: str,
     injected_filters: Sequence[BiFilter] = (),
+    before_query: Callable[[], None] | None = None,
 ) -> CompiledQuery:
     """Compile ``q`` for one tenant institution.
 
@@ -2473,8 +2480,9 @@ def compile_query(  # noqa: PLR0913 - the contract signature (bi_contracts.md)
     principal's institution) and become the first two predicates of every
     select; ``injected_filters`` are the caller's data scope (wave 4) and are
     appended to the WHERE of every select the query compiles to — the request
-    cannot name, weaken or remove them. ``db`` is used only for the pivot
-    value probe and to learn the dialect.
+    cannot name, weaken or remove them. ``db`` reads certified measure metadata
+    and supplies the dialect. ``before_query`` releases caller state before
+    the period-end and pivot discovery statements run on the BI pool.
     """
     retention_days = get_settings().bi.daily_retention_days
     certified = _load_certified(db, q, cat, organization_id=organization_id, bank_id=bank_id)
@@ -2489,12 +2497,12 @@ def compile_query(  # noqa: PLR0913 - the contract signature (bi_contracts.md)
         aggregate=aggregate_table_covers(cat, resolved),
     )
     if resolved.grain is not None:
-        _require_period_end(db, build, resolved.grain)
+        _require_period_end(db, build, resolved.grain, before_query)
     if resolved.top_n is not None:
         build.top_other = resolved.top_n.other
         build.top_keys = _top_keys(build)
     if resolved.pivot is not None:
-        build.pivot_values = _pivot_values(db, build)
+        build.pivot_values = _pivot_values(db, build, before_query)
     # A rollup over nothing is the plain total; ROLLUP() is not valid SQL.
     rollup = q.subtotals and bool(resolved.dimensions)
 

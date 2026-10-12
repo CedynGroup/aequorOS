@@ -21,8 +21,12 @@ No application role owns objects or holds SUPERUSER, CREATEDB, CREATEROLE,
 REPLICATION or BYPASSRLS. There is no standing break-glass role. The historical
 `aequoros_audit_owner` remains NOLOGIN and retains audit-chain custody; deployment
 ownership has explicit membership in it. Its existing inheritance setting is
-preserved. No application sequence or platform-function grants are installed. Existing
-PUBLIC execution on non-definer trigger functions remains unchanged.
+preserved. No application sequence grants are installed. The API's sole partition
+function grant is `bi_ensure_month_partition(regclass,date)`: its definer pins the
+search path and restricts API logins to the query-log parent in its own schema,
+for the previous, current or next UTC month. It adds no table-level grants or
+mart/drop-partition capability. Existing PUBLIC execution on non-definer trigger
+functions remains unchanged.
 Existing integrity triggers and restrictive policies remain authoritative for
 completed runs, sealed registers and filed-content immutability (#511).
 
@@ -64,12 +68,11 @@ needs no permission to administer runtime roles.
 | BI (`aqs_bi`)                            | 5 minutes                   | 10 seconds by default |
 | Migrations (`aqs_migrator`, `aqs_owner`) | Disabled                    | Disabled              |
 
-The API idle limit releases locks from abandoned transactions. API transactions
-currently span BI exports (120 seconds) and other storage calls (up to six 60-second
-read-timeout attempts, or 360 seconds, plus retry backoff). Ten minutes gives these
-supported waits margin to finish their database writes. Document deletion and
-upload-completion transaction boundaries are owned by the
-[backend API guide](../../backend/README.md#legacy-case-vertical).
+The API idle limit releases locks from abandoned transactions. The
+[backend API guide](../../backend/README.md#api-transactions-and-external-waits)
+owns transaction boundaries and the remaining external-wait inventory.
+Storage reads allow up to six 60-second attempts plus backoff, so the ten-minute
+budget remains until those paths commit before external waits.
 [Issue #559](https://github.com/CedynGroup/aequorOS/issues/559) tracks removing
 transactions around external waits; review this budget when that lands or when
 cross-service timeout/retry budgets increase. Active SQL is subject to the
@@ -83,9 +86,7 @@ pool. No total transaction or idle-outside-transaction timeout is added.
 
 BI keeps its existing interactive ceiling. The query executor overrides it
 inside a savepoint for the configured interactive/export budget (exports
-default to 120 seconds), then restores the role default. The separate API
-transaction remains open while the BI pool runs; the API idle budget therefore
-exceeds the supported export ceiling. The five-minute BI idle limit protects an
+default to 120 seconds), then restores the role default. The five-minute BI idle limit protects an
 abandoned read transaction without changing those query budgets.
 
 `backend/app/db/session.py` supplies connection startup options for legacy
@@ -112,8 +113,9 @@ disposable probe logins with the configured role settings and service privileges
 real API idle termination/lock release using a short
 transaction-local probe limit, legacy connection budgets, a 65-second worker
 statement and BI export overrides above ten seconds. Native regressions in
-`backend/tests/db/test_api_cross_service_timeouts.py` also prove that a
-65-second BI export commits its provenance, audit and query log. Document deletion
+`backend/tests/db/test_bi_export_transactions.py` prove through `pg_stat_activity`
+that slow BI statements and compiler probes hold no API transaction, and that
+delivery audit/query-log/job writes commit atomically. Document deletion
 concurrency and role-timeout coverage is linked from the backend API guide above.
 
 ## Migration and local development order
