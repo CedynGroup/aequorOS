@@ -12,7 +12,8 @@ import pytest
 from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field, JsonValue, TypeAdapter
-from sqlalchemy import create_engine, event as sqlalchemy_event, select, text
+from sqlalchemy import create_engine, select, text
+from sqlalchemy import event as sqlalchemy_event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import ORMExecuteState, Session, sessionmaker
 from sqlalchemy.sql import Select
@@ -1999,7 +2000,8 @@ def test_repeated_resource_banks_are_verified_in_one_batch(db_client: TestClient
             nonlocal bank_queries
             statement = state.statement
             if isinstance(statement, Select) and any(
-                column.get("entity") is Bank for column in statement.column_descriptions
+                column.get("entity") is Bank
+                for column in cast(list[dict[str, object]], statement.column_descriptions)
             ):
                 bank_queries += 1
 
