@@ -1,7 +1,7 @@
 """Retain inspector audit evidence and index refresh-token cleanup.
 
 Revision ID: 202610120098
-Revises: 202610110097
+Revises: 202610120096
 """
 
 import sqlalchemy as sa
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "202610120098"
-down_revision = "202610110097"
+down_revision = "202610120096"
 branch_labels = None
 depends_on = None
 
