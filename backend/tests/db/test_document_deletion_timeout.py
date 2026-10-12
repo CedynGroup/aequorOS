@@ -10,10 +10,12 @@ import os
 import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from http.client import HTTPResponse
 from threading import Event
 from typing import cast
 from urllib.request import Request, urlopen
+from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
@@ -21,7 +23,7 @@ from sqlalchemy import Engine, create_engine, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.db.base import utc_now
 from app.integrations.storage.base import StoredObjectHead
 from app.integrations.storage.s3 import S3ObjectStorage
@@ -55,6 +57,150 @@ def timeout_role_engines(role_engines: dict[str, Engine]) -> Iterator[dict[str, 
             engine.dispose()
 
 
+class BlockingHeadStorage(FakeStorage):
+    def __init__(self) -> None:
+        self.entered_head = Event()
+        self.resume_head = Event()
+        self.head: StoredObjectHead | None = StoredObjectHead(
+            content_type="application/pdf", byte_size=1234, etag='"etag"'
+        )
+        self.deleted = []
+
+    def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
+        captured_head = self.head
+        self.entered_head.set()
+        assert self.resume_head.wait(15)
+        return captured_head
+
+
+@dataclass
+class UploadDeletionRace:
+    api_engine: Engine
+    worker_engine: Engine
+    ctx: TenantContext
+    settings: Settings
+    storage: BlockingHeadStorage
+    document_id: UUID
+    object_id: UUID
+    locator: tuple[str, str]
+    expire_on_commit: bool
+    upload_pid: int = 0
+
+    def complete_upload(self) -> str:
+        with Session(self.api_engine, expire_on_commit=self.expire_on_commit) as completing:
+            completing.info["organization_id"] = ORG_1
+            self.upload_pid = cast(int, completing.scalar(text("SELECT pg_backend_pid()")))
+            result = documents.complete_upload(
+                completing,
+                self.ctx,
+                self.document_id,
+                settings=self.settings,
+                storage_client=self.storage,
+            )
+            return result.status
+
+    def cleanup(self) -> None:
+        with Session(self.worker_engine, expire_on_commit=False) as worker:
+            worker.info["organization_id"] = ORG_1
+            job = worker.scalar(select(Job).where(Job.entity_id == str(self.document_id)))
+            assert job is not None
+            documents.run_document_delete(worker, job)
+            job_queue.complete(worker, job)
+
+
+def build_upload_deletion_race(
+    timeout_role_engines: dict[str, Engine],
+    monkeypatch: pytest.MonkeyPatch,
+    expire_on_commit: bool,
+) -> UploadDeletionRace:
+    api_engine = timeout_role_engines["aqs_api"]
+    ctx = TenantContext(organization_id=ORG_1)
+    settings = get_settings()
+    storage = BlockingHeadStorage()
+    monkeypatch.setattr(documents, "get_object_storage", lambda: storage)
+    with Session(api_engine, expire_on_commit=False) as setup:
+        setup.info["organization_id"] = ORG_1
+        upload = ServiceFactories(setup, storage, settings, ctx).documents.request_upload()
+        document = documents.get_document_or_404(setup, ORG_1, upload.document_id)
+        stored = documents.get_stored_object_or_404(setup, ORG_1, document.stored_object_id)
+        object_id, locator = stored.id, (stored.bucket, stored.object_key)
+
+    return UploadDeletionRace(
+        api_engine=api_engine,
+        worker_engine=timeout_role_engines["aqs_worker"],
+        ctx=ctx,
+        settings=settings,
+        storage=storage,
+        document_id=upload.document_id,
+        object_id=object_id,
+        locator=locator,
+        expire_on_commit=expire_on_commit,
+    )
+
+
+def delete_during_upload_head(
+    scenario: UploadDeletionRace, administrator: Engine, cleanup_during_head: bool
+) -> None:
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        completing = executor.submit(scenario.complete_upload)
+        try:
+            assert scenario.storage.entered_head.wait(10)
+            with administrator.connect() as observer:
+                assert (
+                    observer.scalar(
+                        text("SELECT xact_start FROM pg_stat_activity WHERE pid=:pid"),
+                        {"pid": scenario.upload_pid},
+                    )
+                    is None
+                )
+            time.sleep(3)
+            with Session(scenario.api_engine, expire_on_commit=False) as deleting:
+                deleting.info["organization_id"] = ORG_1
+                deleted = documents.delete_document(deleting, scenario.ctx, scenario.document_id)
+                assert deleted.status == "deleted"
+            if cleanup_during_head:
+                scenario.cleanup()
+                assert scenario.storage.deleted == [scenario.locator]
+            scenario.storage.resume_head.set()
+            with pytest.raises(HTTPException) as refused:
+                completing.result(timeout=10)
+            assert refused.value.status_code == 409
+            if not cleanup_during_head:
+                scenario.cleanup()
+        finally:
+            scenario.storage.resume_head.set()
+
+
+def assert_upload_deletion_outcome(scenario: UploadDeletionRace) -> None:
+    with Session(scenario.api_engine, expire_on_commit=False) as observer:
+        observer.info["organization_id"] = ORG_1
+        deleted = documents.get_document_or_404(observer, ORG_1, scenario.document_id)
+        removed = documents.get_stored_object_or_404(observer, ORG_1, scenario.object_id)
+        assert deleted.status == "deleted" and deleted.deleted_at is not None
+        assert removed.status == "deleted" and removed.deleted_at is not None
+        events = list(
+            observer.scalars(
+                select(AuditEvent.event_type).where(
+                    AuditEvent.entity_id == str(scenario.document_id)
+                )
+            )
+        )
+        assert events.count("document.deleted") == 1
+        assert "document.upload_completed" not in events
+        jobs = list(observer.scalars(select(Job).where(Job.entity_id == str(scenario.document_id))))
+        assert len(jobs) == 1 and jobs[0].status == "succeeded"
+        with pytest.raises(HTTPException) as unavailable:
+            documents.create_download_url(
+                observer,
+                scenario.ctx,
+                scenario.document_id,
+                settings=scenario.settings,
+                storage_client=scenario.storage,
+            )
+        assert unavailable.value.status_code == 409
+    assert scenario.storage.deleted == [scenario.locator]
+
+
 @pytest.mark.parametrize("cleanup_during_head", [False, True])
 @pytest.mark.parametrize("expire_on_commit", [False, True])
 def test_upload_completion_cannot_resurrect_deletion_during_head(
@@ -64,99 +210,11 @@ def test_upload_completion_cannot_resurrect_deletion_during_head(
     cleanup_during_head: bool,
     expire_on_commit: bool,
 ) -> None:
-    api_engine = timeout_role_engines["aqs_api"]
-    worker_engine = timeout_role_engines["aqs_worker"]
-    ctx = TenantContext(organization_id=ORG_1)
-    settings = get_settings()
-    entered_head, resume_head = Event(), Event()
-    upload_pid = 0
+    scenario = build_upload_deletion_race(timeout_role_engines, monkeypatch, expire_on_commit)
 
-    class BlockingStorage(FakeStorage):
-        def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
-            captured_head = self.head
-            entered_head.set()
-            assert resume_head.wait(15)
-            return captured_head
+    delete_during_upload_head(scenario, administrator, cleanup_during_head)
 
-    storage = BlockingStorage()
-    storage.head = StoredObjectHead(content_type="application/pdf", byte_size=1234, etag='"etag"')
-    storage.deleted = []
-    monkeypatch.setattr(documents, "get_object_storage", lambda: storage)
-    with Session(api_engine, expire_on_commit=False) as setup:
-        setup.info["organization_id"] = ORG_1
-        upload = ServiceFactories(setup, storage, settings, ctx).documents.request_upload()
-        document = documents.get_document_or_404(setup, ORG_1, upload.document_id)
-        stored = documents.get_stored_object_or_404(setup, ORG_1, document.stored_object_id)
-        object_id, locator = stored.id, (stored.bucket, stored.object_key)
-
-    def complete_upload() -> str:
-        nonlocal upload_pid
-        with Session(api_engine, expire_on_commit=expire_on_commit) as completing:
-            completing.info["organization_id"] = ORG_1
-            upload_pid = cast(int, completing.scalar(text("SELECT pg_backend_pid()")))
-            result = documents.complete_upload(
-                completing, ctx, upload.document_id, settings=settings, storage_client=storage
-            )
-            return result.status
-
-    def cleanup() -> None:
-        with Session(worker_engine, expire_on_commit=False) as worker:
-            worker.info["organization_id"] = ORG_1
-            job = worker.scalar(select(Job).where(Job.entity_id == str(upload.document_id)))
-            assert job is not None
-            documents.run_document_delete(worker, job)
-            job_queue.complete(worker, job)
-
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        completing = executor.submit(complete_upload)
-        try:
-            assert entered_head.wait(10)
-            with administrator.connect() as observer:
-                assert (
-                    observer.scalar(
-                        text("SELECT xact_start FROM pg_stat_activity WHERE pid=:pid"),
-                        {"pid": upload_pid},
-                    )
-                    is None
-                )
-            time.sleep(3)
-            with Session(api_engine, expire_on_commit=False) as deleting:
-                deleting.info["organization_id"] = ORG_1
-                deleted = documents.delete_document(deleting, ctx, upload.document_id)
-                assert deleted.status == "deleted"
-            if cleanup_during_head:
-                cleanup()
-                assert storage.deleted == [locator]
-            resume_head.set()
-            with pytest.raises(HTTPException) as refused:
-                completing.result(timeout=10)
-            assert refused.value.status_code == 409
-            if not cleanup_during_head:
-                cleanup()
-        finally:
-            resume_head.set()
-
-    with Session(api_engine, expire_on_commit=False) as observer:
-        observer.info["organization_id"] = ORG_1
-        deleted = documents.get_document_or_404(observer, ORG_1, upload.document_id)
-        removed = documents.get_stored_object_or_404(observer, ORG_1, object_id)
-        assert deleted.status == "deleted" and deleted.deleted_at is not None
-        assert removed.status == "deleted" and removed.deleted_at is not None
-        events = list(
-            observer.scalars(
-                select(AuditEvent.event_type).where(AuditEvent.entity_id == str(upload.document_id))
-            )
-        )
-        assert events.count("document.deleted") == 1
-        assert "document.upload_completed" not in events
-        jobs = list(observer.scalars(select(Job).where(Job.entity_id == str(upload.document_id))))
-        assert len(jobs) == 1 and jobs[0].status == "succeeded"
-        with pytest.raises(HTTPException) as unavailable:
-            documents.create_download_url(
-                observer, ctx, upload.document_id, settings=settings, storage_client=storage
-            )
-        assert unavailable.value.status_code == 409
-    assert storage.deleted == [locator]
+    assert_upload_deletion_outcome(scenario)
 
 
 def test_upload_completion_succeeds_after_head_exceeds_idle_budget(
