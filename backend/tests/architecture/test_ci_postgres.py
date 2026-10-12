@@ -106,6 +106,7 @@ def test_local_profile_executes_selected_modules_and_full_fallback(
     "kind",
     [
         "main",
+        "merge-group",
         "missing-base",
         "unknown-base",
         "empty",
@@ -121,7 +122,7 @@ def test_uncertain_changes_run_every_shard(
     selection_repo: tuple[Path, str, Path], kind: str
 ) -> None:
     root, base, test = selection_repo
-    event = "push" if kind == "main" else "pull_request"
+    event = {"main": "push", "merge-group": "merge_group"}.get(kind, "pull_request")
     test.write_text("def test_leaf():\n    assert 2 == 2\n")
     if kind == "missing-base":
         base = ""
