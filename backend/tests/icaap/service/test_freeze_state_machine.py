@@ -76,7 +76,7 @@ class FreezeMachine(DatabaseMachine):
         self.package_id: UUID | None = None
         self.freezer: UUID | None = None
         self.frozen_contents: dict[UUID, tuple[object, ...]] = {}
-        self.report_has_text = True
+        self.has_uncommitted_changes = False
         self.committed_text = prosemirror.plain_text(
             sections.get_section(self.db, self.maker, cycle.id, "executive_summary").working_doc
         )
@@ -127,7 +127,11 @@ class FreezeMachine(DatabaseMachine):
 
     @rule(stale=st.booleans())
     def submit(self, stale: bool) -> None:
-        legal = self.status in {"draft", "returned"} and not stale
+        legal = (
+            self.status in {"draft", "returned"}
+            and not self.has_uncommitted_changes
+            and not stale
+        )
         before = self.evidence()
         stages = workflow.get_stages(self.db, self.maker, self.cycle_id)
         try:
@@ -140,6 +144,10 @@ class FreezeMachine(DatabaseMachine):
         except HTTPException as exc:
             self.db.rollback()
             assert not legal and exc.status_code == 409
+            if self.status in {"draft", "returned"} and self.has_uncommitted_changes:
+                detail = cast(object, exc.detail)
+                assert isinstance(detail, dict)
+                assert cast(dict[str, object], detail)["error_code"] == "uncommitted_changes"
             assert_refused_cycle_unchanged(self.evidence(), before)
         else:
             assert legal
@@ -244,7 +252,6 @@ class FreezeMachine(DatabaseMachine):
             and self.stage == 4
             and access.ctx.actor_user_id not in self.approvals.values()
             and not stale
-            and self.report_has_text
         )
         before = self.evidence()
         stages = workflow.get_stages(self.db, self.maker, self.cycle_id)
@@ -336,10 +343,10 @@ class FreezeMachine(DatabaseMachine):
             assert legal
             saved = sections.get_section(self.db, self.maker, self.cycle_id, "executive_summary")
             assert prosemirror.plain_text(saved.working_doc) == text
-            self.report_has_text = bool(text.strip())
+            self.has_uncommitted_changes = True
             expected_error = (
                 "section_empty"
-                if not self.report_has_text
+                if not text.strip()
                 else "no_changes"
                 if text == self.committed_text
                 else None
@@ -364,6 +371,7 @@ class FreezeMachine(DatabaseMachine):
             else:
                 assert expected_error is None
                 self.committed_text = text
+                self.has_uncommitted_changes = False
 
     @rule()
     def archive(self) -> None:
@@ -416,6 +424,12 @@ class FreezeMachine(DatabaseMachine):
             (cycle.status, cycle.current_stage_seq, cycle.round, cycle.package_id),
             (self.status, self.stage, self.round, self.package_id),
             domain="ICAAP",
+        )
+        section = sections.get_section(self.db, self.maker, self.cycle_id, "executive_summary")
+        assert_workflow_state(
+            section.has_uncommitted_changes,
+            self.has_uncommitted_changes,
+            domain="ICAAP section revisions",
         )
         stages = workflow.get_stages(self.db, self.maker, self.cycle_id)
         standing = {
@@ -609,8 +623,13 @@ def test_legacy_post_freeze_return_preserves_evidence_and_allows_refreeze(
         (("The Board requested a documented correction to the assessment.",) * 2, 1),
     ],
 )
+@pytest.mark.parametrize("status", ["draft", "returned"])
 def test_empty_and_repeated_edits_preserve_committed_history(
-    canonical_book: Session, extra_frameworks: None, texts: tuple[str, ...], new_versions: int
+    canonical_book: Session,
+    extra_frameworks: None,
+    texts: tuple[str, ...],
+    new_versions: int,
+    status: str,
 ) -> None:
     """Minimized model gaps: draft → blank edit; draft → same paragraph twice.
 
@@ -621,6 +640,10 @@ def test_empty_and_repeated_edits_preserve_committed_history(
     machine = FreezeMachine(canonical_book, actors)
     try:
         machine.reach_checkpoint("draft")
+        if status == "returned":
+            machine.submit(False)
+            machine.review(1, 2, "returned", False, False, 1)
+        assert machine.status == status
         before = sections.get_section(
             machine.db, machine.maker, machine.cycle_id, "executive_summary"
         )
@@ -632,5 +655,28 @@ def test_empty_and_repeated_edits_preserve_committed_history(
             machine.db, machine.maker, machine.cycle_id, "executive_summary"
         )
         assert after.committed_version_no == before.committed_version_no + new_versions
+        assert after.has_uncommitted_changes and machine.has_uncommitted_changes
+        before_submit = machine.evidence()
+        machine.submit(False)
+        machine.cycle_and_frozen_versions_match_model()
+        assert machine.status == status and machine.has_uncommitted_changes
+        assert_refused_cycle_unchanged(machine.evidence(), before_submit)
+        machine.advance()
+        machine.cycle_and_frozen_versions_match_model()
+        assert machine.status == status and machine.has_uncommitted_changes
+        assert_refused_cycle_unchanged(machine.evidence(), before_submit)
+        machine.edit("The revised assessment includes the agreed management action.")
+        machine.cycle_and_frozen_versions_match_model()
+        recovered = sections.get_section(
+            machine.db, machine.maker, machine.cycle_id, "executive_summary"
+        )
+        assert recovered.committed_version_no == before.committed_version_no + new_versions + 1
+        assert not recovered.has_uncommitted_changes and not machine.has_uncommitted_changes
+        machine.submit(False)
+        machine.cycle_and_frozen_versions_match_model()
+        assert (machine.status, machine.stage) == ("in_review", 2)
+        machine.advance()
+        machine.cycle_and_frozen_versions_match_model()
+        assert (machine.status, machine.stage) == ("in_review", 3)
     finally:
         machine.teardown()
