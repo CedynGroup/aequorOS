@@ -68,10 +68,9 @@ needs no permission to administer runtime roles.
 | BI (`aqs_bi`)                            | 5 minutes                   | 10 seconds by default |
 | Migrations (`aqs_migrator`, `aqs_owner`) | Disabled                    | Disabled              |
 
-The API idle limit releases locks from abandoned transactions. BI export,
-document deletion and upload-completion transaction boundaries are owned by the
-[backend API guide](../../backend/README.md#api-transactions-and-external-waits).
-The API still spans ingestion storage calls and database-direct introspection.
+The API idle limit releases locks from abandoned transactions. The
+[backend API guide](../../backend/README.md#api-transactions-and-external-waits)
+owns transaction boundaries and the remaining external-wait inventory.
 Storage reads allow up to six 60-second attempts plus backoff, so the ten-minute
 budget remains until those paths commit before external waits.
 [Issue #559](https://github.com/CedynGroup/aequorOS/issues/559) tracks removing
@@ -87,9 +86,7 @@ pool. No total transaction or idle-outside-transaction timeout is added.
 
 BI keeps its existing interactive ceiling. The query executor overrides it
 inside a savepoint for the configured interactive/export budget (exports
-default to 120 seconds), then restores the role default. The separate API
-transaction remains open while the BI pool runs; the API idle budget therefore
-exceeds the supported export ceiling. The five-minute BI idle limit protects an
+default to 120 seconds), then restores the role default. The five-minute BI idle limit protects an
 abandoned read transaction without changing those query budgets.
 
 `backend/app/db/session.py` supplies connection startup options for legacy

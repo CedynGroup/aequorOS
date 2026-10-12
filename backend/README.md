@@ -161,18 +161,19 @@ the final query commits that metadata read before checking out the BI pool.
 Delivery provenance, audit and query logs are then produced in a fresh API
 transaction, with one commit before returning the artifact or queued job.
 The single-database fallback also ends its query transaction before delivery.
-The API can ensure only query-log partitions in the previous, current or next
-UTC month through the guarded partition definer; it receives no table DDL rights.
+The [database role handoff](../docs/ops/database-roles.md#target-matrix) owns the
+API's guarded query-log partition capability.
 See [native transaction/role regressions](tests/db/test_bi_export_transactions.py).
 
-The API idle budget remains ten minutes. The external-wait audit covered BI
-export compilation/execution and document deletion/upload completion, plus
-ingestion and database-direct calls. Remaining transaction-held waits include
+Document deletion and upload-completion boundaries are documented under
+[the legacy case vertical](#legacy-case-vertical). Remaining transaction-held waits include
 `services/ingestion.py:upload_source` (institution setup and object write),
 `start_ingestion` (source download and raw-artifact write), and
 `services/database_connections.py:test_connection`, `discover_schema` and
 `sync_now` (remote database inspection or extraction). These require their own
-transaction-boundary work before lowering the API budget to about a minute.
+transaction-boundary work before lowering the API idle budget; the
+[session timeout contract](../docs/ops/database-roles.md#session-timeout-budgets)
+owns that budget and its review criteria.
 
 Health endpoints:
 

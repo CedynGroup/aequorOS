@@ -177,8 +177,8 @@ before deploying this migration in production or staging:
   SELECT/UPDATE during migration. Provision those roles first, or apply those
   narrow grants afterward when provisioning them. Preserve existing authorized
   source SELECT/INSERT grants; grant no chain INSERT/UPDATE/DELETE/TRUNCATE and
-  no definer EXECUTE to runtime identities. Avoid blanket post-migration grants
-  and bootstrap ownership reassignment.
+  no audit-chain definer EXECUTE to runtime identities. Avoid blanket
+  post-migration grants and bootstrap ownership reassignment.
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,
   truncation and function replacement fail. Confirm one sweep with zero banks
