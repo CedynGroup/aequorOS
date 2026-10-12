@@ -59,34 +59,41 @@ needs no permission to administer runtime roles.
 
 | Connection                               | Idle in an open transaction | Statement ceiling     |
 | ---------------------------------------- | --------------------------- | --------------------- |
-| API (`aqs_api`)                          | 60 seconds                  | 5 minutes             |
+| API (`aqs_api`)                          | 10 minutes                  | 5 minutes             |
 | Worker (`aqs_worker`)                    | 2 hours                     | 30 minutes            |
 | BI (`aqs_bi`)                            | 5 minutes                   | 10 seconds by default |
 | Migrations (`aqs_migrator`, `aqs_owner`) | Disabled                    | Disabled              |
 
-The API idle limit releases locks from abandoned transactions. Active SQL is
-subject to the statement ceiling, not the idle timer. The worker budget permits
-CPU, storage and provider work between SQL calls: the default AI failover/retry
-reclaim budget (`AISettings.stale_after_seconds`) is below two hours. Before
-raising provider retry/timeouts or running a job with more than two hours
-between database calls or a SQL statement exceeding 30 minutes, review and
-raise the worker role budgets explicitly. Do not route background work through
-the API pool. No total transaction or idle-outside-transaction timeout is added.
+The API idle limit releases locks from abandoned transactions. API transactions
+currently span BI exports (120 seconds) and storage reads (up to six 60-second
+attempts, or 360 seconds, plus retry backoff). Ten minutes gives these
+supported waits margin to finish provenance, audit and deletion commits.
+[Issue #559](https://github.com/CedynGroup/aequorOS/issues/559) tracks removing
+transactions around external waits; review this budget when that lands or when
+cross-service timeout/retry budgets increase. Active SQL is subject to the
+statement ceiling, not the idle timer. The worker budget permits CPU, storage
+and provider work between SQL calls: the default AI failover/retry reclaim
+budget (`AISettings.stale_after_seconds`) is below two hours. Before raising
+provider retry/timeouts or running a job with more than two hours between
+database calls or a SQL statement exceeding 30 minutes, review and raise the
+worker role budgets explicitly. Do not route background work through the API
+pool. No total transaction or idle-outside-transaction timeout is added.
 
 BI keeps its existing interactive ceiling. The query executor overrides it
-inside a savepoint for the configured interactive/export budget (exports default
-to 120 seconds), then restores the role default. Active BI queries are not
-limited by the API idle budget. The five-minute BI idle limit protects an
+inside a savepoint for the configured interactive/export budget (exports
+default to 120 seconds), then restores the role default. The separate API
+transaction remains open while the BI pool runs; the API idle budget therefore
+exceeds the supported export ceiling. The five-minute BI idle limit protects an
 abandoned read transaction without changing those query budgets.
 
 `backend/app/db/session.py` supplies connection startup options for legacy
-usernames, separately for API/operator, worker and BI pools, including when
-all URLs still share one login. This does not alter that role's defaults or
-other clients. Recognized new role usernames use their administrator-configured
-role defaults. Existing URL options, including `search_path`, are preserved.
-Alembic explicitly disables both limits on its own connection even when it uses
-an old runtime login, and retains its explicit `SET ROLE aqs_owner` handoff.
-SQLite has no timeout configuration and retains its shared engine behavior.
+usernames, separately for API/operator, worker and BI pools, including when all
+URLs still share one login. This does not alter that role's defaults or other
+clients. Recognized new role usernames use their administrator-configured role
+defaults. Existing URL options, including `search_path`, are preserved. Alembic
+explicitly disables both limits on its own connection even when it uses an old
+runtime login, and retains its explicit `SET ROLE aqs_owner` handoff. SQLite
+has no timeout configuration and retains its shared engine behavior.
 
 After configuration or credential changes, drain/reconnect the affected pools;
 role defaults apply to new logins. Eric owns the deployment switch. Record
@@ -97,9 +104,15 @@ change new-role defaults. Do not change or reset legacy role defaults.
 Validate fresh API, worker, BI and migration logins with `SHOW
 idle_in_transaction_session_timeout` and `SHOW statement_timeout`. Observe the
 pool identities in `pg_stat_activity`. Native PostgreSQL 17 tests in
-`backend/tests/db/test_database_timeouts.py` prove the real 60-second API idle
-termination and lock release, legacy connection budgets, a worker statement
-running beyond that API idle window, and BI export overrides above ten seconds.
+`backend/tests/db/test_database_timeouts.py` prove the ten-minute startup
+budgets and real API idle termination/lock release using a short
+transaction-local probe limit, legacy connection budgets, a 65-second worker
+statement and BI export overrides above ten seconds. Native regressions in
+`backend/tests/db/test_api_cross_service_timeouts.py` also prove that a
+65-second BI export commits its provenance, audit and query log, and a slow
+successful storage deletion commits matching document and stored-object
+deletion states.
+
 These tests use disposable probe logins with the configured role settings and
 service privileges; PostgreSQL role settings are not inherited via membership.
 

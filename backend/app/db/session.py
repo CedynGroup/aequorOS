@@ -73,7 +73,10 @@ def database_timeout_connect_args(database_url: str, application_name: str) -> d
     elif application_name == "aequoros-bi":
         idle_ms, statement_ms = 300_000, 10_000
     else:
-        idle_ms, statement_ms = 60_000, 300_000
+        # API transactions currently span BI exports (120s) and S3 reads
+        # (up to six 60s attempts). Ten minutes leaves retry/backoff margin
+        # until #559 removes transactions around external waits.
+        idle_ms, statement_ms = 600_000, 300_000
     existing = " ".join(url.normalized_query.get("options", ()))
     return {
         "options": (

@@ -26,7 +26,7 @@ administrator = role_tests.administrator
 role_schema = role_tests.role_schema
 
 TIMEOUTS = {
-    "aqs_api": ("1min", "5min"),
+    "aqs_api": ("10min", "5min"),
     "aqs_worker": ("2h", "30min"),
     "aqs_bi": ("5min", "10s"),
     "aqs_migrator": ("0", "0"),
@@ -124,6 +124,10 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
         bi.execute(text("SET ROLE aqs_bi"))
         pid = cast(int, api.scalar(text("SELECT pg_backend_pid()")))
         legacy_pid = cast(int, legacy_api.scalar(text("SELECT pg_backend_pid()")))
+        # Fresh-login defaults are proven separately; shorten only this probe
+        # to exercise PostgreSQL termination without a ten-minute test wait.
+        for connection in (api, legacy_api):
+            connection.execute(text("SET LOCAL idle_in_transaction_session_timeout = '1s'"))
         # A transaction-scoped advisory lock proves that termination releases locks.
         lock_key = int(uuid4().hex[:14], 16)
         api.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
@@ -139,13 +143,15 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
                 {"pids": [pid, legacy_pid]},
             ):
                 observer.rollback()
-                assert time.monotonic() < deadline, "API idle transaction survived its 60s budget"
+                assert time.monotonic() < deadline, (
+                    "API idle transaction survived the short probe budget"
+                )
                 time.sleep(1)
         for api_connection in (api, legacy_api):
             with pytest.raises(DBAPIError) as terminated:
                 api_connection.execute(text("SELECT 1"))
             assert getattr(terminated.value.orig, "sqlstate", None) == "25P03"
-        assert long_job.result(timeout=10) == 42
+        assert long_job.result(timeout=75) == 42
         assert (
             worker.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key}) is True
         )
