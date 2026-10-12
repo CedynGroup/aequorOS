@@ -370,6 +370,12 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2]
+    env:
+      S3_ENDPOINT: http://127.0.0.1:9000
+      S3_ACCESS_KEY: ciminio
+      S3_SECRET_KEY: ciminio123
+      S3_BUCKET: risk-local
+      S3_REGION: us-east-1
     steps:
       - uses: actions/checkout@v4
       - name: Set up PostgreSQL
@@ -412,6 +418,25 @@ jobs:
           GRANT aqs_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
           GRANT aequoros_audit_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
           SQL
+      - name: Start MinIO for document cleanup coverage
+        id: minio
+        uses: ./.github/actions/setup-minio
+      - name: Create document test bucket
+        working-directory: backend
+        run: |
+          uv run python - <<'PY'
+          import os
+          import boto3
+
+          client = boto3.client(
+              "s3",
+              endpoint_url=os.environ["S3_ENDPOINT"],
+              aws_access_key_id=os.environ["S3_ACCESS_KEY"],
+              aws_secret_access_key=os.environ["S3_SECRET_KEY"],
+              region_name=os.environ["S3_REGION"],
+          )
+          client.create_bucket(Bucket=os.environ["S3_BUCKET"])
+          PY
       - name: Migration chain, RLS policies and schema defaults
         env:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
@@ -430,6 +455,11 @@ jobs:
           path: ${{ runner.temp }}/pg-schema/
           if-no-files-found: error
           retention-days: 7
+      - name: Stop MinIO
+        if: always() && steps.minio.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.minio.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true
 
   postgres-locks:
     name: Postgres concurrency locks

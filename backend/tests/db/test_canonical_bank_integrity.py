@@ -38,13 +38,15 @@ CANONICAL_TABLES = tuple(
     if name.startswith("canonical_") and "lineage_id" in Base.metadata.tables[name].columns
 )
 REFERENCES = tuple(
-    (name, fk.elements[0].parent.name, fk.referred_table.name)
-    for name in (*CANONICAL_TABLES, "lineage_records")
-    for fk in Base.metadata.tables[name].foreign_key_constraints
-    if len(fk.elements) == 3
-    and fk.elements[0].parent.name not in ("superseded_by", "withdrawn_by_batch_id")
-    # The independently shipped next layer repairs this pre-existing omission.
-    and (name, fk.elements[0].parent.name) != ("canonical_loan_events", "lineage_id")
+    sorted(
+        (name, fk.elements[0].parent.name, fk.referred_table.name)
+        for name in (*CANONICAL_TABLES, "lineage_records")
+        for fk in Base.metadata.tables[name].foreign_key_constraints
+        if len(fk.elements) == 3
+        and fk.elements[0].parent.name not in ("superseded_by", "withdrawn_by_batch_id")
+        # The independently shipped next layer repairs this pre-existing omission.
+        and (name, fk.elements[0].parent.name) != ("canonical_loan_events", "lineage_id")
+    )
 )
 AS_OF = date(2026, 6, 30)
 

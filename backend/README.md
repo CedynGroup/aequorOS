@@ -421,10 +421,14 @@ for the object-store contract unless `TEST_DATABASE_URL` and `S3_*` settings
 already supply those services. The dedicated CI storage job supplies both and
 rejects any skipped test.
 
+The schema task also supplies MinIO for the document cleanup regression. Each
+CI schema shard starts it and creates the document test bucket before pytest;
+the schema aggregate continues to reject every skip.
+
 CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official
 release binaries and verify pinned SHA256 digests before execution. MinIO runs
-only for the storage contract and
+only for the storage contract, schema document cleanup coverage and
 [dashboard journeys](dashboard/README.md#end-to-end-playwright), with a disposable
 built-in KMS key named `aequoros-key`. OpenBao runs only in the suite shard owning its
 live signing tests. Both listen on loopback and stop at job cleanup. Other API,
