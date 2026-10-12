@@ -141,7 +141,7 @@ def test_existing_missing_live_links_stop_the_migration(
     column: str,
     parent: str,
 ) -> None:
-    revision = ScriptDirectory.from_config(alembic_config_for_app()).get_revision("202610110096")
+    revision = ScriptDirectory.from_config(alembic_config_for_app()).get_revision("202610110097")
     assert revision is not None
     migration = cast(CanonicalBankMigration, revision.module)
     with (

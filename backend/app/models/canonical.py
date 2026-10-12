@@ -169,22 +169,7 @@ def canonical_constraints(table_name: str) -> tuple:
             name=f"fk_{table_name}_withdrawn_by_batch_id_bank",
         ),
         UniqueConstraint("id", "organization_id", name=f"uq_{table_name}_id_org"),
-        *(
-            (
-                UniqueConstraint(
-                    "id", "organization_id", "bank_id", name=f"uq_{table_name}_id_org_bank"
-                ),
-            )
-            if table_name
-            in (
-                "canonical_gl_accounts",
-                "canonical_counterparties",
-                "canonical_products",
-                "canonical_positions",
-                "canonical_yield_curves",
-            )
-            else ()
-        ),
+        UniqueConstraint("id", "organization_id", "bank_id", name=f"uq_{table_name}_id_org_bank"),
         Index(f"ix_{table_name}_org_bank_as_of", "organization_id", "bank_id", "as_of_date"),
         Index(f"ix_{table_name}_org_batch", "organization_id", "ingestion_batch_id"),
     )

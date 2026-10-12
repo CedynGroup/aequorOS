@@ -15,8 +15,8 @@ import sqlalchemy as sa
 from alembic import op
 from app.db.session import force_rls_suspended
 
-revision = "202610110096"
-down_revision = "202610110095"
+revision = "202610110097"
+down_revision = "202610110096"
 branch_labels = None
 depends_on = None
 
@@ -27,6 +27,14 @@ CANONICAL_TABLES = (
     "canonical_positions",
     "canonical_position_snapshots",
     "canonical_yield_curves",
+    "canonical_yield_curve_points",
+    "canonical_fx_rates",
+    "canonical_market_indices",
+    "canonical_counterparty_ratings",
+    "canonical_loan_events",
+)
+NEW_SCOPED_PARENTS = (
+    "canonical_position_snapshots",
     "canonical_yield_curve_points",
     "canonical_fx_rates",
     "canonical_market_indices",
@@ -60,6 +68,11 @@ def upgrade() -> None:
             )
             if invalid:
                 raise RuntimeError(f"{table}.{column}: {invalid} invalid live scoped references")
+        connection.execute(sa.text("SET CONSTRAINTS ALL IMMEDIATE"))
+        for table in NEW_SCOPED_PARENTS:
+            op.create_unique_constraint(
+                f"uq_{table}_id_org_bank", table, ["id", "organization_id", "bank_id"]
+            )
         for table, column, parent in REFERENCES:
             supersession = column == "superseded_by"
             connection.execute(sa.text("SET CONSTRAINTS ALL IMMEDIATE"))
@@ -78,3 +91,5 @@ def downgrade() -> None:
     for table, column, _parent in reversed(REFERENCES):
         op.get_bind().execute(sa.text("SET CONSTRAINTS ALL IMMEDIATE"))
         op.drop_constraint(f"fk_{table}_{column}_bank", table, type_="foreignkey")
+    for table in reversed(NEW_SCOPED_PARENTS):
+        op.drop_constraint(f"uq_{table}_id_org_bank", table, type_="unique")
