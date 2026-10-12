@@ -298,8 +298,8 @@ coverage of the observable contract, including refusals, before accepting a chan
   across runs without reimplementing production formulas. Each domain owns one
   documented policy with separate bounds for unlike units, derived from actual
   quantization and propagated rounding. Status, identity, provenance and digests
-  compare exactly; monetary tolerances must never weaken them. Follow the
-  [assertion and tolerance contract](backend/tests/support/PROPERTY_TESTING.md#assertions-and-tolerances).
+  compare exactly; monetary tolerances must never weaken them. Find implementations
+  in the [domain assertion guide](backend/tests/support/PROPERTY_TESTING.md#assertions-and-tolerances).
 - **Model every workflow with statuses as a state machine.** Record its transition
   table (source, command, actor/scope, guard, destination and observable effects),
   including forbidden transitions, retries and terminal states. Exercise the real

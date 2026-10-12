@@ -28,15 +28,11 @@ generated initializer histories through public service commands.
 
 ## Generator contract
 
-Each generator cites the schema, engine or regulatory source in its docstring.
-Synthetic realistic inputs are the default; deliberately include valid edges and
-name invalid/adversarial inputs separately. Generator self-tests execute public
-validators or engines. Stateful initializer strategies are also exercised through
-real commands: never install a generated status directly into a database row.
-Use the source's numeric kinds, units, precision and rounding. Bias examples toward
-thresholds and their immediate neighbours without inventing regulatory values;
-label internal policy, pending calibration and synthetic market bands explicitly.
-Never query production or customer data to populate a strategy.
+The [shared testing standard](../../../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard)
+owns the generator requirements: synthetic defaults, deliberate boundaries and
+adversaries, source citations, numeric conventions and executable validity properties.
+Stateful initializer strategies are exercised through real commands: never install
+a generated status directly into a database row.
 
 Filing calendar inputs use registry cadence and deadline metadata in Accra time,
 including leap-year period ends and observations one second either side of a
@@ -47,22 +43,19 @@ The service machines retain unauthorized actors, stale digests and illegal actio
 
 ## Assertions and tolerances
 
-Assertion modules name the business invariant and report the relevant evidence.
-They compare outputs or relate runs; they must not implement the engine formula.
+The [shared testing standard](../../../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard)
+owns invariant diagnostics, metamorphic comparisons and domain tolerance requirements.
 Filing, ICAAP freeze and governed approvals compare evidence exactly: their
-`TOLERANCE` policies are zero. Each financial domain owns one policy that names
-the bounds for its quantities, units and rounding sources. The shared
+`TOLERANCE` policies are zero. The shared
 [`TolerancePolicy`](assertions.py) is an absolute Decimal comparison primitive;
 structured domain policies group money, fractions, percentage points and display
-quanta without treating them as interchangeable. Choose bounds from actual engine
-rounding, including error propagated through transformations and cancellation,
-never an arbitrary epsilon. Dashboard filing uses an equivalent exact
-`filingTolerance` policy.
+quanta without treating them as interchangeable. The linked assertion modules own
+the bounds and rounding sources for each quantity. Dashboard filing uses an
+equivalent exact `filingTolerance` policy.
 
 Metamorphic checks here cover decision-order independence, officer renaming and
 selected-bank authority under capability reordering or sibling changes. Financial
 scaling, zero-exposure and currency round trips belong with the financial domains.
-Do not carry monetary tolerance into status, identity or cryptographic comparisons.
 
 ## Reuse or extend a helper
 
