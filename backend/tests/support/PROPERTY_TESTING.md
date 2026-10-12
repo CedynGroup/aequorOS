@@ -6,11 +6,33 @@ They belong to the feature test package so Hypothesis, fast-check and assertion
 libraries stay out of production imports. Cross-feature mechanics belong in
 `tests/support`; keep financial assumptions and tolerances with their owner.
 
-Each generator cites the schema, engine or regulatory source in its docstring.
-Synthetic realistic inputs are the default; deliberately include valid edges and
-name invalid/adversarial inputs separately. Generator self-tests execute public
-validators or engines. Stateful initializer strategies are also exercised through
-real commands: never install a generated status directly into a database row.
+## Find the domain helpers
+
+Each linked package owns its generators and assertions. Backend validity properties
+live in the package's `test_generators.py`; dashboard validity properties live in
+the feature suites under `unit`. Filing, ICAAP and approval models also validate
+generated initializer histories through public service commands.
+
+| Domain                                 | Backend test package                   | Dashboard test package                                                           |
+| -------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------- |
+| Filing and reporting calendars         | [reporting](../reporting/testing/)     | [submissions](../../dashboard/unit/submissions/testing/)                         |
+| ICAAP workflow and freeze              | [icaap](../icaap/testing/)             | Shared [submissions](../../dashboard/unit/submissions/testing/) authority inputs |
+| Governed approvals and access requests | [identity](../identity/testing/)       | Shared [submissions](../../dashboard/unit/submissions/testing/) authority inputs |
+| Liquidity                              | [liquidity](../liquidity/testing/)     | [liquidity](../../dashboard/unit/liquidity/testing/)                             |
+| Capital                                | [capital](../capital/testing/)         | [capital](../../dashboard/unit/capital/testing/)                                 |
+| Credit                                 | [credit](../credit/testing/)           | [credit](../../dashboard/unit/credit/testing/)                                   |
+| FX                                     | [fx](../fx/testing/)                   | [fx](../../dashboard/unit/fx/testing/)                                           |
+| FTP                                    | [ftp](../ftp/testing/)                 | [ftp](../../dashboard/unit/ftp/testing/)                                         |
+| IRRBB                                  | [irrbb](../irrbb/testing/)             | [irrbb](../../dashboard/unit/irrbb/testing/)                                     |
+| Canonical data                         | [data_engine](../data_engine/testing/) | [data-engine](../../dashboard/unit/data-engine/testing/)                         |
+
+## Generator contract
+
+The [shared testing standard](../../../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard)
+owns the generator requirements: synthetic defaults, deliberate boundaries and
+adversaries, source citations, numeric conventions and executable validity properties.
+Stateful initializer strategies are exercised through real commands: never install
+a generated status directly into a database row.
 
 Filing calendar inputs use registry cadence and deadline metadata in Accra time,
 including leap-year period ends and observations one second either side of a
@@ -19,28 +41,52 @@ midnight observations for date-only deadlines do not claim a regulatory cutoff.
 Review histories use distinct synthetic officers and fresh decisions after returns.
 The service machines retain unauthorized actors, stale digests and illegal actions.
 
-Assertion modules name the business invariant and report the relevant evidence.
-They compare outputs or relate runs; they must not implement the engine formula.
+## Assertions and tolerances
+
+The [shared testing standard](../../../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard)
+owns invariant diagnostics, metamorphic comparisons and domain tolerance requirements.
 Filing, ICAAP freeze and governed approvals compare evidence exactly: their
-`TOLERANCE` policies are zero. New financial domains use `TolerancePolicy` with
-an absolute Decimal tolerance, units and a source citation; choose the policy from
-the engine's actual rounding, never an arbitrary epsilon. Dashboard filing uses
-an equivalent exact `filingTolerance` policy.
+`TOLERANCE` policies are zero. The shared
+[`TolerancePolicy`](assertions.py) is an absolute Decimal comparison primitive;
+structured domain policies group money, fractions, percentage points and display
+quanta without treating them as interchangeable. The linked assertion modules own
+the bounds and rounding sources for each quantity. Dashboard filing uses an
+equivalent exact `filingTolerance` policy.
 
 Metamorphic checks here cover decision-order independence, officer renaming and
 selected-bank authority under capability reordering or sibling changes. Financial
 scaling, zero-exposure and currency round trips belong with the financial domains.
-Do not carry monetary tolerance into status, identity or cryptographic comparisons.
+
+## Reuse or extend a helper
+
+1. Import the owning generator and assertion module into the feature's property
+   test; keep property-test dependencies out of production packages.
+2. Derive any new input relationship or precision from its cited public contract.
+   Prefer constructive generation over filtering arbitrary values until they pass.
+3. Add a validity property that executes the public validator, engine or API
+   conversion. For a workflow, drive the real commands from its initial state.
+   Preserve refusal cases separately so realistic defaults cannot hide them.
+4. Use the owning assertion to check an independent invariant or compare transformed
+   runs. Apply scaling, ordering, zero exposure or currency round trips only when
+   the domain contract makes that relationship meaningful.
+5. Exercise the assertion's failure message with deliberately corrupted evidence;
+   a validity check must reject a broken relationship, not merely accept fixtures.
+6. Keep the existing example budget and replay information. If a property fails,
+   minimize the example and identify whether the engine, generator or assertion
+   is wrong. Keep a regression and report a production defect explicitly rather
+   than changing a tolerance to conceal it.
+
+See the [backend capital validity properties](../capital/testing/test_generators.py)
+and [dashboard financial validity properties](../../dashboard/unit/financial-generators.spec.ts)
+for executable examples. The source notes below explain each domain's assumptions.
+
+## Bounded validation
 
 Keep the existing CI budgets and regression coverage documented in the
 [backend workflow guide](../../docs/state_machine_testing.md#bounded-reproducible-execution)
 and [dashboard testing guide](../../dashboard/README.md#unit-test-collection).
 The [shared testing standard](../../../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard)
 governs both surfaces.
-
-Issue #553 has an approved five-PR sequence: scaffolding plus filing/ICAAP/approvals
-then liquidity plus capital, credit plus FX, FTP plus IRRBB plus
-canonical data, then testing-standard documentation.
 
 ## Liquidity and capital
 
