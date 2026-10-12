@@ -85,7 +85,7 @@ run = "uv run pytest tests/architecture tests/db/test_bog_return_recode_migratio
 # locally when one is not already exported.
 [tasks."risk-service:test-postgres-schema"]
 description = "Run the Postgres schema, migration and RLS suites (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/db"
+run = "uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest tests/db"
 
 # The remaining suite against the real engine (ownership below). The hermetic
 # default runs on SQLite with row-level security switched off, so a passing run

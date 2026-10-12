@@ -65,9 +65,11 @@ needs no permission to administer runtime roles.
 | Migrations (`aqs_migrator`, `aqs_owner`) | Disabled                    | Disabled              |
 
 The API idle limit releases locks from abandoned transactions. API transactions
-currently span BI exports (120 seconds) and storage calls (up to six 60-second
+currently span BI exports (120 seconds) and other storage calls (up to six 60-second
 read-timeout attempts, or 360 seconds, plus retry backoff). Ten minutes gives these
-supported waits margin to finish provenance, audit and deletion commits.
+supported waits margin to finish their database writes. Document deletion and
+upload-completion transaction boundaries are owned by the
+[backend API guide](../../backend/README.md#legacy-case-vertical).
 [Issue #559](https://github.com/CedynGroup/aequorOS/issues/559) tracks removing
 transactions around external waits; review this budget when that lands or when
 cross-service timeout/retry budgets increase. Active SQL is subject to the
@@ -111,9 +113,8 @@ real API idle termination/lock release using a short
 transaction-local probe limit, legacy connection budgets, a 65-second worker
 statement and BI export overrides above ten seconds. Native regressions in
 `backend/tests/db/test_api_cross_service_timeouts.py` also prove that a
-65-second BI export commits its provenance, audit and query log, and a slow
-successful storage deletion commits matching document and stored-object
-deletion states.
+65-second BI export commits its provenance, audit and query log. Document deletion
+concurrency and role-timeout coverage is linked from the backend API guide above.
 
 ## Migration and local development order
 

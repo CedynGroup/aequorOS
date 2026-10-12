@@ -12,17 +12,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
-from app.api.deps import TenantContext
 from app.bi.models.marts import BiQueryLog
 from app.core.config import get_settings
 from app.db.session import get_bi_engine
-from app.models import AuditEvent, Document, StoredObject
-from app.services import documents
+from app.models import AuditEvent
 from tests.bi.api.test_bi_exports import SUMMARY_QUERY
 from tests.bi.api.test_bi_routes import AGGREGATE_ONLY, BASE, grant_only, seed_bi_mart
-from tests.conftest import FakeStorage
-from tests.services.factories import ServiceFactories
-from tests.support.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, headers
 
 pytestmark = [
     pytest.mark.committing_db,
@@ -92,37 +88,3 @@ def test_slow_bi_export_commits_provenance_audit_and_query_log(
         get_bi_engine(engine.url.render_as_string(hide_password=False)).dispose()
         get_bi_engine.cache_clear()
         get_settings.cache_clear()
-
-
-def test_slow_storage_deletion_commits_matching_document_and_object_states(
-    db_session: Session,
-) -> None:
-    class SlowStorage(FakeStorage):
-        def delete_object(self, *, bucket: str, object_key: str) -> None:
-            time.sleep(65)
-            super().delete_object(bucket=bucket, object_key=object_key)
-
-    storage = SlowStorage()
-    storage.deleted = []
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
-    factories = ServiceFactories(db_session, storage, get_settings(), ctx)
-    document = factories.documents.create_uploaded()
-    document_id, object_id = document.id, document.stored_object_id
-    engine = cast(Engine, db_session.get_bind())
-    documents.delete_document(db_session, ctx, document_id, storage_client=storage)
-    with Session(engine) as persisted:
-        deleted_document = persisted.get(Document, document_id)
-        deleted_object = persisted.get(StoredObject, object_id)
-        assert deleted_document is not None and deleted_object is not None
-        assert deleted_document.status == deleted_object.status == "deleted"
-        assert deleted_document.deleted_at is not None and deleted_object.deleted_at is not None
-        assert storage.deleted == [(deleted_object.bucket, deleted_object.object_key)]
-        assert (
-            persisted.scalar(
-                select(AuditEvent).where(
-                    AuditEvent.event_type == "document.deleted",
-                    AuditEvent.entity_id == str(document_id),
-                )
-            )
-            is not None
-        )

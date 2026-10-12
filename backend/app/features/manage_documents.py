@@ -103,11 +103,5 @@ def delete_document(
     document_id: UUID,
     db: DbSession,
     ctx: MutationTenant,
-    storage_client: Storage,
 ) -> Document:
-    return documents_service.delete_document(
-        db,
-        ctx,
-        document_id,
-        storage_client=storage_client,
-    )
+    return documents_service.delete_document(db, ctx, document_id)

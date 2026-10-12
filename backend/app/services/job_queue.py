@@ -47,6 +47,7 @@ def _as_aware(value: datetime | None) -> datetime | None:
 # enforces this; keep it green.
 JOB_TYPES = (
     "session_purge",
+    "document_delete",
     "pipeline_refresh",
     "official_run",
     "scheduled_tick",

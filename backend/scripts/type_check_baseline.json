@@ -2833,7 +2833,7 @@
  "tests.api.test_impersonation_boundary": {
   "reportAny": 26,
   "reportMissingParameterType": 3,
-  "reportUnknownArgumentType": 10,
+  "reportUnknownArgumentType": 9,
   "reportUnknownMemberType": 34,
   "reportUnknownParameterType": 3,
   "reportUnknownVariableType": 12

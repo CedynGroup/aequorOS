@@ -639,7 +639,7 @@ def test_approver_ladder_still_gates_an_approval_action(db_client: TestClient) -
 
 
 # --- 4. P0-3: the document delete ---------------------------------------------
-def test_document_delete_is_analyst_gated_and_removes_the_object(
+def test_document_delete_is_analyst_gated_and_queues_object_cleanup(
     db_client: TestClient, fake_storage
 ) -> None:
     case_id = str(CaseFactory(db_client).create().id)
@@ -664,27 +664,17 @@ def test_document_delete_is_analyst_gated_and_removes_the_object(
     deleted = db_client.delete(path, headers=headers(roles=("analyst",)))
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["status"] == "deleted"
-    assert len(fake_storage.deleted) == 1
+    assert fake_storage.deleted == []
 
 
-def test_storage_delete_failure_does_not_commit_a_false_success(
-    db_client: TestClient, fake_storage
-) -> None:
-    """P0-3 consistency: the irreversible act runs BEFORE the commit.
-
-    ``documents.delete_document`` marks the rows deleted in the session, calls
-    ``storage_client.delete_object``, and only then commits. When the object
-    store refuses, the exception propagates through ``get_tenant_db_session``,
-    which rolls the session back — so the caller sees a failure and the document
-    is still readable and still marked live. Reversing that order would trade
-    this recoverable failure for silent data loss on a commit error.
-    """
+def test_document_delete_does_not_wait_for_storage(db_client: TestClient, fake_storage) -> None:
+    """An unavailable store cannot prevent the durable logical deletion."""
     case_id = str(CaseFactory(db_client).create().id)
     documents = DocumentFactory(db_client, fake_storage)
     document_id = str(documents.create_uploaded(case_id=case_id).document_id)
 
     def _boom(*, bucket: str, object_key: str) -> None:
-        raise RuntimeError(f"object store unavailable: {bucket}/{object_key}")
+        raise RuntimeError("object store unavailable")
 
     fake_storage.delete_object = _boom  # type: ignore[method-assign]
     try:
@@ -693,12 +683,10 @@ def test_storage_delete_failure_does_not_commit_a_false_success(
         )
     finally:
         del fake_storage.delete_object
-
-    assert response.status_code >= 500, response.text
-
-    survivor = db_client.get(f"/api/v1/documents/{document_id}", headers=headers())
-    assert survivor.status_code == 200, survivor.text
-    assert survivor.json()["status"] != "deleted", "the DB committed a delete that never happened"
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "deleted"
+    download = db_client.get(f"/api/v1/documents/{document_id}/download-url", headers=headers())
+    assert download.status_code == 409
 
 
 # --- 5. regression: the treasury / regulatory plane ----------------------------

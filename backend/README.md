@@ -202,6 +202,24 @@ provenance fields. The dashboard's current capabilities are documented in
 
 ### Legacy case vertical
 
+Document deletion commits the document tombstone, the stored object's
+`pending_deletion` status, the audit event and a `document_delete` job atomically.
+The existing deleted response means logical deletion: downloads, parsing and
+upload completion refuse the document immediately. Upload completion commits its
+read transaction before storage HEAD, then reloads locked rows and revalidates
+the pending upload. Completion returns HTTP 409 if deletion committed during HEAD,
+even if cleanup has already finished. Downloads also refuse tombstones with
+inconsistent live statuses. The core worker closes its read transaction before
+deleting from storage, then commits the object's
+`deleted` acknowledgement with job completion. A transport failure or lost
+acknowledgement leaves pending cleanup safe to retry; duplicate requests preserve
+one job and one deletion event. Existing deleted records remain unchanged.
+The queue's bounded exponential retries and stale-worker reclaim apply; exhausted
+cleanup remains pending and appears as a failed job on the operator jobs board.
+See [`documents.py`](app/services/documents.py) and the
+[deletion regression tests](tests/services/test_document_deletion.py), including
+[PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout.py).
+
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
 `PATCH` routes below that path support institutions, accounts, reporting
@@ -403,10 +421,14 @@ for the object-store contract unless `TEST_DATABASE_URL` and `S3_*` settings
 already supply those services. The dedicated CI storage job supplies both and
 rejects any skipped test.
 
+The schema task also supplies MinIO for the document cleanup regression. Each
+CI schema shard starts it and creates the document test bucket before pytest;
+the schema aggregate continues to reject every skip.
+
 CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official
 release binaries and verify pinned SHA256 digests before execution. MinIO runs
-only for the storage contract and
+only for the storage contract, schema document cleanup coverage and
 [dashboard journeys](dashboard/README.md#end-to-end-playwright), with a disposable
 built-in KMS key named `aequoros-key`. OpenBao runs only in the suite shard owning its
 live signing tests. Both listen on loopback and stop at job cleanup. Other API,
