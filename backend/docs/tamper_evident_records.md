@@ -278,7 +278,7 @@ rotation and retained-key recovery are governed by
 
 ## Append-only inventory and sweep
 
-`202610110093` complements the existing attestation, governance, ICAAP, market-data
+`202610110094` complements the existing attestation, governance, ICAAP, market-data
 and filing-chain migrations. The inventory distinguishes history from live state:
 
 | Record family                                                                                                            | Database protection                                                                                                                                          |
@@ -350,7 +350,8 @@ records alongside this design and test evidence in the BoG pack (#356 / #401).
 ## Sweep integration validation (2026-10-11)
 
 The sweep follows merged audit, filing and storage protections, with revision
-`202610110093` following ICAAP revision `202610110092`. Alembic reports one head.
+`202610110094` following bank-ownership revision `202610110093`, which follows
+ICAAP revision `202610110092`. Alembic reports one head.
 The initial replay reproduced a two-head setup failure before guard execution;
 linearizing this new revision resolves it without changing the ICAAP migration.
 The signature DELETE guard remains owned by the filing-lock migration, while the
