@@ -97,12 +97,8 @@ Verified in `backend/app/api/deps.py`, `app/db/session.py`, and migration
 4. **Explicit filters are still mandatory.** Service queries always filter by
    `organization_id` (and `case_id` where applicable) even though RLS exists — for readability,
    index usage, and SQLite test compatibility.
-5. **Composite FK pattern.** Child tables carry denormalized `organization_id` (and `case_id`)
-   columns and declare composite `ForeignKeyConstraint`s to the parent's
-   `UniqueConstraint("id", "organization_id", ...)`, so a child row can never reference a parent
-   in another tenant. Exact example in
-   [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern), taken from
-   `app/models/calculation.py`.
+5. **Composite FK pattern.** Tenant-safe parent references and bank ownership constraints
+   follow the [composite-FK tenant pattern](CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern).
 
 ### 2.1 Authorization transition
 

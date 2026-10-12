@@ -159,13 +159,22 @@ class CalculationRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
 ```
 
 The `UniqueConstraint("id", "organization_id", ...)` on the parent is what lets children FK to
 the composite key. Child output tables add `ondelete="CASCADE"` on the composite FK. New
 bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
+
+A composite FK from `(organization_id, bank_id)` to `banks.(organization_id, id)` binds
+a row's bank to its organization.
+The bank's existing `(id, organization_id)` unique key supports that reference. Migration
+[`202610110093`](backend/alembic/versions/202610110093_bind_bank_organizations.py) replaces
+the bank-only references for the tables in its `TABLES` catalogue; regression coverage is in
+[`test_bank_organization_integrity.py`](backend/tests/db/test_bank_organization_integrity.py).
+Nullable `bank_id` continues to permit organization-wide macro scenarios and management
+action plans; their separate organization FK remains enforced.
 
 ### Migrations (`alembic/versions/`)
 

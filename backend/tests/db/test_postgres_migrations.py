@@ -110,7 +110,7 @@ def postgres_schema_url(database_url: str, schema_name: str, *, role: str | None
 @pytest.fixture
 def migrated_postgres_schema(monkeypatch: pytest.MonkeyPatch) -> Iterator[MigratedPostgresSchema]:
     """A schema migrated to head and downgraded to base again on teardown."""
-    yield from _migrated_schema(monkeypatch, downgrade=True)
+    yield from migrate_isolated_postgres_schema(monkeypatch, downgrade=True)
 
 
 @pytest.fixture
@@ -124,12 +124,13 @@ def forward_migrated_postgres_schema(
     service identities); the round trip itself is proven by
     :func:`migrated_postgres_schema`.
     """
-    yield from _migrated_schema(monkeypatch, downgrade=False)
+    yield from migrate_isolated_postgres_schema(monkeypatch, downgrade=False)
 
 
-def _migrated_schema(
+def migrate_isolated_postgres_schema(
     monkeypatch: pytest.MonkeyPatch, *, downgrade: bool
 ) -> Generator[MigratedPostgresSchema]:
+    """Migrate an isolated schema for a caller-owned fixture lifetime."""
     test_database_url = os.environ["TEST_DATABASE_URL"]
     if not make_url(test_database_url).drivername.startswith("postgresql"):
         pytest.skip("TEST_DATABASE_URL must point to Postgres.")
@@ -249,7 +250,7 @@ def test_superuser_migrations_use_restricted_role(
     assert admin_url == superuser_database_url
     monkeypatch.setenv("TEST_DATABASE_URL", admin_url)
     migration_role: str | None = None
-    schemas = _migrated_schema(monkeypatch, downgrade=downgrade)
+    schemas = migrate_isolated_postgres_schema(monkeypatch, downgrade=downgrade)
     try:
         schema = next(schemas)
         with schema.app_engine.connect() as connection:
