@@ -30,7 +30,9 @@ refuse startup if this window is shorter than `AUTH_REFRESH_ROTATION_GRACE`
 (seconds); increase retention or reduce grace to make the configuration valid.
 Rows with neither expiry nor revocation older than the cutoff stay, and retries
 are idempotent.
-Hourly batches drain any backlog without a single long cleanup transaction.
+The scheduler enqueues at most one purge per organization per UTC hour, including
+completed jobs; PostgreSQL transaction locks serialize enqueueing across worker
+replicas. Hourly batches drain any backlog without a single long cleanup transaction.
 Provisioning seeds the tenant's first tick in its onboarding transaction,
 including when the worker is already running. The operator's scheduling flags
 do not gate seeding; the worker decides whether a tick runs or stays inert.
