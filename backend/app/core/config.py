@@ -1338,8 +1338,8 @@ class OperatorSettings(BaseSettings):
         default="Accept,Authorization,Content-Type,X-Request-ID", alias="OPERATOR_CORS_HEADERS"
     )
     #: Dedicated DB URL for the operator role. Cross-tenant reads on the
-    #: RLS-forced primary need a BYPASSRLS role (the worker precedent) — the
-    #: use site falls back to WORKER_DATABASE_URL then DATABASE_URL, so a
+    #: RLS-forced primary retain the existing bypass credential until the
+    #: metadata-view cutover. The use site falls back to DATABASE_URL, so a
     #: local/hermetic run works without extra configuration.
     operator_database_url: str | None = Field(default=None, alias="OPERATOR_DATABASE_URL")
     #: Development bearer-token auth. NEVER valid in production: the operator

@@ -131,14 +131,10 @@ Two operational notes for a remote database:
 - **RLS hides everything without the tenant GUC.** Ad-hoc `psql` against the remote shows zero
   rows on tenant tables (`FORCE ROW LEVEL SECURITY`); set
   `SELECT set_config('app.organization_id', '<OR-XXXXXXXX>', false);` first when inspecting.
-- **The worker uses `aqs_worker` with narrow platform entry points** and per-job
-  organization/bank context. Configure its separate credential through
-  `WORKER_DATABASE_URL` after this captain-reviewed compatibility PR and migration.
-  Authentication uses `DATABASE_URL`; the operator falls back from
-  `OPERATOR_DATABASE_URL` to `DATABASE_URL`, never the worker URL. The API
-  credential switch waits for the captain-reviewed lookup-function PR. Existing credentials
-  remain supported during rollout; [the deployment runbook](../docs/ops/database-roles.md)
-  owns activation and retirement of legacy BYPASSRLS access.
+- **Worker credentials and rollout** follow
+  [the deployment runbook](../docs/ops/database-roles.md#worker-compatibility-migration),
+  including authentication/operator credential separation and the prerequisites
+  for each role's activation.
 
 Fully-local alternative (offline work):
 
@@ -520,8 +516,10 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
   ACTUAL primary database — provenance (every canonical row ingestion-traced; the
   executable form of the no-seeding order), period-spine contiguity, fact coverage,
   live-metrics presence, sign-in capability. Opt-in:
-  `LIVE_DATA_DATABASE_URL=<worker URL> uv run pytest tests/live_data` (BYPASSRLS worker
-  URL for visibility, or set `LIVE_DATA_ORG_ID`). The session is server-side read-only —
+  `LIVE_DATA_DATABASE_URL=<authorized read URL> uv run pytest tests/live_data`.
+  With a tenant-scoped credential, set `LIVE_DATA_ORG_ID` to the `OR-…` platform ID;
+  an existing authorized BYPASSRLS credential can inspect all tenants. The new
+  `aqs_worker` credential provides no unscoped tenant visibility. The session is server-side read-only —
   it cannot mutate what it certifies. Hermetic suite stays the home of mutation/logic
   tests; never point mutating tests at the primary DB.
 - Hermetic and Postgres-gated mutation checks follow [Run Tests](#run-tests), including

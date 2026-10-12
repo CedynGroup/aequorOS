@@ -69,7 +69,7 @@ chain tables, the definer functions and the shared append-only guard. The chain
 tables force RLS; an owner-only policy allows the definer to append entries and
 advance heads. Runtime roles retain their existing source SELECT/INSERT grants
 and insert through the trigger; they have no direct chain write or helper EXECUTE
-grant. The all-tenant worker has SELECT on chain entries and heads. Source-table
+grant. Worker access follows the verification boundary below. Source-table
 ownership also prevents runtime credentials from disabling the source guards;
 ownership of the shared guard prevents replacing its implementation.
 
@@ -81,9 +81,19 @@ Set `AUDIT_INTEGRITY_ENABLED=true` on the core worker. Starting with its first
 poll, it runs a single platform task independent of tenant ticks or bank
 provisioning. A singleton `audit_integrity_schedule` row records the next hour
 boundary and a recovery epoch; a row lock with SKIP LOCKED and a committed advance coordinates worker
-replicas and restarts. The worker requires SELECT/UPDATE on that schedule row.
-AI and BI workers do not run the task. The task checks both full streams using
-an all-tenant BYPASSRLS role and records successful counts in operational logs.
+replicas and restarts. Migration `202610120100` exposes this coordination and full-stream
+verification through `aqs_worker_audit_check`, with a pinned search path and UTC
+hash serialization. It returns only stream names, entry counts, validity and the
+recovery epoch; `aqs_worker` has no direct audit-source, chain or schedule-table grants.
+The function remains owned by NOLOGIN `aqs_owner`: it must lock and update the
+schedule, which the read-only `aqs_audit_verifier` cannot do. The deployment owner
+also lacks SET membership in the verifier role. The authorized fallback is a
+SELECT-only `aqs_owner` policy on `audit_events`, allowing complete payload and
+source-count verification under FORCE RLS without verifier write grants; downgrade
+removes it. Existing bypass queue writers use this function after migration;
+before migration they retain their direct verification path. Credential activation
+follows [the role handoff runbook](../../docs/ops/database-roles.md#worker-compatibility-migration).
+AI and BI workers do not run the task. Successful counts appear in operational logs.
 Tenant-readable job progress carries only its existing tenant-local scheduling
 fields. Verification recomputes every hash from the source row, verifies links
 and sequence continuity, and compares row count and final hash to the protected head. Content edits,
@@ -172,13 +182,15 @@ before deploying this migration in production or staging:
 - Prepare migration roles and owner membership through the
   [role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order)
   before running Alembic.
-- Keep worker/operator all-tenant BYPASSRLS identities separate from the
-  migrator. Existing BYPASSRLS roles receive chain SELECT and schedule
+- Keep runtime identities separate from the migrator and follow
+  [the role activation runbook](../../docs/ops/database-roles.md#worker-and-operator-activation).
+  Existing BYPASSRLS roles receive chain SELECT and schedule
   SELECT/UPDATE during migration. Provision those roles first, or apply those
   narrow grants afterward when provisioning them. Preserve existing authorized
   source SELECT/INSERT grants; grant no chain INSERT/UPDATE/DELETE/TRUNCATE and
-  no audit-chain definer EXECUTE to runtime identities. Avoid blanket
-  post-migration grants and bootstrap ownership reassignment.
+  no audit-chain helper EXECUTE to runtime identities. The worker verification
+  function is the separate boundary described above. Avoid blanket post-migration grants
+  and bootstrap ownership reassignment.
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,
   truncation and function replacement fail. Confirm one sweep with zero banks
@@ -214,8 +226,8 @@ voiding while refusing changes to the register-state digest, signature deletion
 and content-digest changes under temporary-table shadowing and altered search paths.
 
 Apply the [deployment role and grant requirements](#required-deployment-follow-up)
-to filing seals too. The worker's BYPASSRLS privilege does not grant permission
-to alter evidence.
+to filing seals too. Neither worker platform-function access nor legacy BYPASSRLS
+grants permission to alter evidence.
 
 ## Write-once objects and backups
 

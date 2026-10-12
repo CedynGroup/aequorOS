@@ -42,9 +42,9 @@ Future functions created as `aqs_owner` have no PUBLIC EXECUTE default in any
 schema; migrations grant execution explicitly.
 
 The foundation provisions dormant roles; it does not authorize switching worker
-or operator credentials. The worker PR adds tenant context to every job and
-narrowly granted platform functions/views. The operator PR adds metadata views.
-Both require the product owner's review. A fourth, captain-reviewed PR follows
+or operator credentials. The [captain-reviewed worker compatibility migration](#worker-compatibility-migration)
+supports the worker switch. The separate operator PR must add metadata views and
+receive the product owner's review before its switch. A fourth, captain-reviewed PR follows
 operator access: two narrow SECURITY DEFINER functions owned by `aqs_owner`, with
 a pinned search_path and EXECUTE granted only to `aqs_api`. One accepts a
 presented key hash and returns only its organization, bank, scopes and status;
@@ -165,7 +165,7 @@ these prerequisites; never use the primary database.
 
 ## Worker compatibility migration
 
-Migration `202610120099` follows the session-retention migration `202610120098`. This is a captain-reviewed
+Migration `202610120100` follows the API query-log partition migration `202610120099`. This is a captain-reviewed
 worker cutover: **non-breaking; works on current and new worker role; deployment switch is a separate runbook step**. It does
 not change the attributes or credentials of an existing deployment role. The
 effective migration actor needs CREATE on the target database to create the
@@ -214,22 +214,19 @@ sessions bind only the desk models to these views; tenant financial models stay
 on the ordinary RLS connection. Captures, observations and drafts share one desk
 transaction; existing per-source commits retain their crash-recovery behavior.
 The views expose public-source market research, not bank canonical financial data.
-Captures retain robot provenance; observations are append-only with supersession;
-determinations must remain robot-prepared drafts based on approved effective
+Captures retain robot provenance; observation financial values, dates and capture
+lineage remain immutable. Only current observations may update supersession,
+`updated_at`, `quality_flags` and the `attributes.cross_source_mismatch` reconciliation
+metadata; other attributes remain immutable. Writes compare the complete OLD row
+to refuse concurrent changes. `backend/tests/db/test_worker_database_access.py`
+exercises disagreeing-source ingestion, supersession and financial/lineage refusal.
+Determinations must remain robot-prepared drafts based on approved effective
 methodologies. The worker cannot approve, publish, delete, edit human drafts or
 write the underlying desk tables. Methodologies and curve definitions are read-only.
 
-`aqs_worker_audit_check` coordinates the existing hourly integrity schedule and
-returns only stream names, entry counts, validity and the recovery epoch. It
-preserves #511's database hash algorithm and append-only custody; the worker gets
-no raw chain, operator-audit or schedule-table grant. The function remains owned
-by `aqs_owner`: it must lock and update the hourly schedule, which the read-only
-`aqs_audit_verifier` cannot do. The deployment owner also lacks SET membership in
-the verifier role, so transferring even a separate read function would require
-additional administrator preparation. The authorized fallback is a SELECT-only
-`aqs_owner` policy on `audit_events`, allowing complete payload and source-count
-verification under FORCE RLS without verifier write grants. The downgrade removes
-that policy. Partition wrappers allow
+The [audit verification contract](../../backend/docs/tamper_evident_records.md#audit-chain)
+owns `aqs_worker_audit_check`, its owner-policy fallback and append-only custody.
+Partition wrappers allow
 creation only for the builder's classified mart parents and the append-only BI query log in this schema. Retention
 can drop completed months only from the two daily position marts; month-end,
 loan-event and query-log drops remain forbidden. Existing partition integrity

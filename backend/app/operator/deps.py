@@ -19,7 +19,8 @@ necessary identity evidence but grants no role by itself.
 
 The DB session here is CROSS-TENANT: it deliberately sets no
 ``organization_id`` on the session, so on the RLS-forced primary it must run
-as a BYPASSRLS role (``OPERATOR_DATABASE_URL``, the worker-role precedent).
+as an existing BYPASSRLS role until the separate metadata-view cutover
+(``docs/ops/database-roles.md``).
 Consequently EVERY query issued through it must carry an explicit
 ``organization_id`` filter — that is the #1 cross-tenant risk the staff
 console spec calls out, and the read services in this package are written to

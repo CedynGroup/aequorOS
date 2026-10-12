@@ -1,7 +1,7 @@
 """Expose narrow platform queue operations to the tenant-scoped worker.
 
-Revision ID: 202610120099
-Revises: 202610120098
+Revision ID: 202610120100
+Revises: 202610120099
 """
 
 import hashlib
@@ -11,8 +11,8 @@ from sqlalchemy import Connection, text
 
 from alembic import op
 
-revision = "202610120099"
-down_revision = "202610120098"
+revision = "202610120100"
+down_revision = "202610120099"
 branch_labels = None
 depends_on = None
 

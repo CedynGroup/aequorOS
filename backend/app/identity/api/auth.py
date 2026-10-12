@@ -1,9 +1,10 @@
 """Authentication routes: login, refresh, current user.
 
 ``users``/``organizations`` are RLS-forced, so a login (which has only an email, no
-tenant context yet) resolves the user through the cross-tenant *system* session (the
-BYPASSRLS worker role). Every authenticated request thereafter carries a verified
-token whose ``org`` claim scopes an ordinary tenant session.
+tenant context yet) resolves the user through the cross-tenant *system* session
+using the API credential. Its least-privilege cutover is separate from the worker
+cutover (``docs/ops/database-roles.md``). Every authenticated request thereafter
+carries a verified token whose ``org`` claim scopes an ordinary tenant session.
 """
 
 from __future__ import annotations
