@@ -46,6 +46,7 @@ def _as_aware(value: datetime | None) -> datetime | None:
 # ``tests/services/test_desk_capture_job.py::test_every_job_type_has_a_worker_handler``
 # enforces this; keep it green.
 JOB_TYPES = (
+    "session_purge",
     "pipeline_refresh",
     "official_run",
     "scheduled_tick",
@@ -303,6 +304,17 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
     db.add(job)
     db.flush()
     return job
+
+
+def seed_tick(db: Session, organization_id: str) -> Job:
+    """Seed the first (or a replacement) tick for one org; coalesces to one."""
+    return enqueue(
+        db,
+        organization_id,
+        "scheduled_tick",
+        run_after=utc_now(),
+        coalesce_key=f"tick:{organization_id}",
+    )
 
 
 def claim_next(

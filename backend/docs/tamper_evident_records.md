@@ -17,6 +17,41 @@ layer adds submission refusals described under [write-once objects and backups](
 The compliance-storage layer must use the regulatory retention period confirmed
 by counsel (#246).
 
+## Sign-in and inspector session retention
+
+Refresh-token state is credential bookkeeping, not the audit chain. Enable
+`AUTH_SESSION_PURGE_ENABLED=true` on the core worker to keep the existing hourly
+tenant scheduler alive and enqueue `session_purge`. Each job deletes at most
+`AUTH_SESSION_PURGE_BATCH_SIZE` rows (default 1000, maximum 10000) belonging to
+its organization. Eligibility is expiry **or** revocation strictly older than
+`AUTH_REFRESH_TOKEN_RETENTION_DAYS` (default 30 days). The configured interval
+is retained for incident investigation and is the sole cleanup window. Settings
+refuse startup if this window is shorter than `AUTH_REFRESH_ROTATION_GRACE`
+(seconds); increase retention or reduce grace to make the configuration valid.
+Rows with neither expiry nor revocation older than the cutoff stay, and retries
+are idempotent.
+The scheduler enqueues at most one purge per organization per UTC hour, including
+completed jobs; PostgreSQL transaction locks serialize enqueueing across worker
+replicas. Hourly batches drain any backlog without a single long cleanup transaction.
+Provisioning seeds the tenant's first tick in its onboarding transaction,
+including when the worker is already running. The operator's scheduling flags
+do not gate seeding; the worker decides whether a tick runs or stays inert.
+The switch defaults off and is rechecked by the handler. Monitor per-job
+`refresh_tokens_deleted`; repeated full batches indicate a growing backlog.
+
+`operator_inspector_sessions` records who accessed which tenant and why. It is
+audit evidence, including expired and ended sessions, and is excluded from the
+credential purge. As with the audit records in issue #413, no approved deletion
+period is currently specified: the regulatory period requires counsel's
+confirmation (#246), as described under
+[write-once objects and backups](#write-once-objects-and-backups). Until a policy
+explicitly permits deletion after an approved retention interval, inspector
+sessions are retained indefinitely. Migration `202610120098` enforces this with
+DELETE (including organization-cascade deletion) and TRUNCATE guards while
+allowing the existing end-session UPDATE. A future approved disposal policy
+needs an explicit migration and must never remove sessions inside its retention
+period; the storage Object Lock placeholder is not authority to delete them.
+
 ## Audit chain
 
 `202610100090` installs a separate SHA-256 chain for `audit_events` and

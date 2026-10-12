@@ -18,7 +18,7 @@ outright. A refresh token with no ``jti`` — anything minted before migration
 ``authorization_version``; tokens predating ``202608250044`` and tokens whose
 version is stale are refused, so affected sessions re-authenticate once.
 
-**Concurrency (audit finding D-30).** Every write to ``refresh_tokens`` — the
+**Concurrency (audit finding D-30).** Authentication writes to ``refresh_tokens`` — the
 INSERT in :func:`issue_tokens` and the revoking UPDATE in :func:`_revoke_where` —
 first takes a row lock on the owning ``users`` row (:func:`_lock_session_owner`).
 That is the whole guarantee, and it is a database one: see that function's
@@ -78,7 +78,7 @@ def _hash_refresh_token(token: str) -> str:
 
 
 def _lock_session_owner(db: Session, user_id: UUID) -> None:
-    """Serialize every session mutation for one user on that user's own row.
+    """Serialize token issuance and revocation on the owning user's row.
 
     **The defect this closes (audit finding D-30).** Rotation INSERTs a successor
     while holding ``FOR UPDATE`` on its ancestor; revocation is a single
