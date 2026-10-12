@@ -149,6 +149,14 @@ def migrate_isolated_postgres_schema(
             try:
                 connection.execute(
                     text(
+                        Path(__file__)
+                        .parents[2]
+                        .joinpath("scripts/database_roles_202610120096.sql")
+                        .read_text()
+                    )
+                )
+                connection.execute(
+                    text(
                         f'CREATE ROLE "{migration_role}" NOLOGIN NOSUPERUSER NOBYPASSRLS '
                         "NOINHERIT NOCREATEDB NOREPLICATION CREATEROLE"
                     )
@@ -161,6 +169,7 @@ def migrate_isolated_postgres_schema(
                             CREATE ROLE aequoros_audit_owner NOLOGIN;
                         END IF;
                     END $$;
+                    GRANT aqs_owner TO "{migration_role}" WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
                     GRANT aequoros_audit_owner TO "{migration_role}"
                         WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
                 """)
@@ -203,7 +212,7 @@ def clear_database_caches() -> None:
     get_engine.cache_clear()
 
 
-def _superuser_database_url() -> str:
+def postgres_administrator_url() -> str:
     for database_url in (os.getenv("POSTGRES_ADMIN_URL"), os.getenv("TEST_DATABASE_URL")):
         if not database_url:
             continue
@@ -227,7 +236,7 @@ def _superuser_database_url() -> str:
 
 @pytest.fixture
 def superuser_database_url() -> str:
-    return _superuser_database_url()
+    return postgres_administrator_url()
 
 
 @pytest.mark.skipif(
@@ -246,7 +255,7 @@ def test_superuser_migrations_use_restricted_role(
     assert forward_migrated_postgres_schema.tables({"audit_chain_heads"}) == {"audit_chain_heads"}
     monkeypatch.delenv("POSTGRES_ADMIN_URL", raising=False)
     monkeypatch.setenv(source, superuser_database_url)
-    admin_url = _superuser_database_url()
+    admin_url = postgres_administrator_url()
     assert admin_url == superuser_database_url
     monkeypatch.setenv("TEST_DATABASE_URL", admin_url)
     migration_role: str | None = None
@@ -303,7 +312,7 @@ def test_missing_superuser_credentials_follow_privilege_policy(
     monkeypatch.setenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED", "1" if required else "")
     outcome = pytest.fail.Exception if required else pytest.skip.Exception
     with pytest.raises(outcome, match="Superuser credentials are required"):
-        _superuser_database_url()
+        postgres_administrator_url()
 
 
 @pytest.mark.skipif(
@@ -324,7 +333,7 @@ def test_restricted_test_url_follows_privilege_policy(
     monkeypatch.setenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED", "1" if required else "")
     outcome = pytest.fail.Exception if required else pytest.skip.Exception
     with pytest.raises(outcome, match="Superuser credentials are required"):
-        _superuser_database_url()
+        postgres_administrator_url()
 
 
 @pytest.mark.skipif(

@@ -31,7 +31,13 @@ def verify_recovery_target(restore_database_url: str, primary_database_url: str 
         msg = "RESTORE_DATABASE_URL must not point at DATABASE_URL."
         raise RuntimeError(msg)
 
-    engine = create_engine(restore_database_url, pool_pre_ping=True)
+    engine = create_engine(
+        restore_database_url,
+        connect_args={"application_name": "aequoros-verify-recovery-target"}
+        if restore_database_url.startswith("postgresql")
+        else {},
+        pool_pre_ping=True,
+    )
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))

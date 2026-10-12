@@ -2506,7 +2506,6 @@
  "tests.api.test_authorization_object_reference_coverage": {
   "reportAny": 27,
   "reportPrivateUsage": 3,
-  "reportUnknownLambdaType": 1,
   "reportUnknownMemberType": 2,
   "reportUnknownVariableType": 1
  },

@@ -36,3 +36,4 @@ runs:
         END
         $$;
         SQL
+        psql --set ON_ERROR_STOP=1 --file backend/scripts/database_roles_202610120096.sql

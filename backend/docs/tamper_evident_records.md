@@ -116,7 +116,8 @@ both forward and round-trip upgrades with superuser test credentials, using and
 cleaning up an ordinary restricted migration role. Administrator regressions use
 either `POSTGRES_ADMIN_URL` or a superuser `TEST_DATABASE_URL`; without superuser
 credentials they skip locally and fail when `POSTGRES_PRIVILEGE_TESTS_REQUIRED`
-is set. Ordinary migration tests still need only `TEST_DATABASE_URL`.
+is set. Migration-test role preparation is owned by the
+[role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order).
 `tests/core/test_migration_credentials.py` exercises the migration credential
 boundary for each runtime connection role.
 `tests/core/test_audit_integrity_alerts.py` verifies SNS routing, the safe incident
@@ -133,12 +134,9 @@ before deploying this migration in production or staging:
   `BI_DATABASE_URL`. Alembic refuses a missing migration URL or a shared role in
   production/staging; local/test runs retain the existing URL fallback. Runtime
   containers must never receive migration credentials.
-- The migration identity needs CREATEROLE to create the NOLOGIN owner, or the
-  database administrator must precreate it and grant the migrator ADMIN,
-  INHERIT and SET membership. The migration grants only that administrative
-  identity owner membership. Runtime identities must have no direct or inherited
-  membership in the owner or migrator roles, no SUPERUSER/CREATEROLE/CREATEDB,
-  no ownership of the database or schema, and no schema CREATE privilege.
+- Prepare migration roles and owner membership through the
+  [role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order)
+  before running Alembic.
 - Keep worker/operator all-tenant BYPASSRLS identities separate from the
   migrator. Existing BYPASSRLS roles receive chain SELECT and schedule
   SELECT/UPDATE during migration. Provision those roles first, or apply those
@@ -146,11 +144,6 @@ before deploying this migration in production or staging:
   source SELECT/INSERT grants; grant no chain INSERT/UPDATE/DELETE/TRUNCATE and
   no definer EXECUTE to runtime identities. Avoid blanket post-migration grants
   and bootstrap ownership reassignment.
-- The legacy `scripts/bootstrap_db.sh` is incompatible with this migration:
-  it creates a NOCREATEROLE migrator without preparing audit-owner membership,
-  reassigns existing table ownership and applies blanket runtime grants.
-  Do not use it to initialize or refresh an audit-protected database; prepare
-  roles and grants as described above before running Alembic.
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,
   truncation and function replacement fail. Confirm one sweep with zero banks

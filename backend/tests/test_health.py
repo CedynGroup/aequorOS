@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from app.api import health
 from app.core.config import get_settings
 from app.core.key_management.settings import get_key_settings
+from app.db.session import get_worker_sessionmaker
 from app.main import create_app
 from app.operator.main import create_operator_app
 from app.storage.client import StorageHealth
@@ -114,8 +115,14 @@ def _worker_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     Outside `local`/`test` the worker refuses to bind to the tenant API role, so
     readiness reports it as unclaimable. That is correct, and it is a different
     failure from the one these tests are about.
+
+    Prepare the independently named worker pool while APP_ENV is still test:
+    the disposable database has local transport, even when the signing probe
+    subsequently simulates production or staging.
     """
     monkeypatch.setenv("WORKER_DATABASE_URL", os.environ["DATABASE_URL"])
+    get_settings.cache_clear()
+    get_worker_sessionmaker()
 
 
 @requires_committing_db
@@ -128,11 +135,11 @@ def test_ready_fails_in_production_when_signing_is_unconfigured(
     It has to name the missing settings and say the blast radius is limited to
     filing, because the operator reading it is deciding whether to roll back.
     """
+    _worker_url_from_env(monkeypatch)
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "0")
     monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
     monkeypatch.setenv("SIGNER_ID_PEPPER", "")
-    _worker_url_from_env(monkeypatch)
     get_settings.cache_clear()
 
     response = db_client.get("/api/health/ready")
@@ -151,10 +158,10 @@ def test_ready_ignores_the_signing_gap_outside_production(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A developer without a signing key has a healthy service, not a red probe."""
+    _worker_url_from_env(monkeypatch)
     monkeypatch.setenv("APP_ENV", "staging")
     monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
     monkeypatch.setenv("SIGNER_ID_PEPPER", "")
-    _worker_url_from_env(monkeypatch)
     get_settings.cache_clear()
 
     assert db_client.get("/api/health/ready").status_code == 200
@@ -169,12 +176,12 @@ def test_ready_ignores_the_signing_gap_when_esign_is_disabled(
     """With the ATTESTATION_ESIGN_REQUIRED kill-switch off, no return can demand
     a signature, so a production deployment that cannot sign is not a filing
     outage and must not fail its probe."""
+    _worker_url_from_env(monkeypatch)
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "0")
     monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "0")
     monkeypatch.setenv("SIGNER_ID_PEPPER", "")
     monkeypatch.setenv("ATTESTATION_ESIGN_REQUIRED", "0")
-    _worker_url_from_env(monkeypatch)
     get_settings.cache_clear()
 
     assert db_client.get("/api/health/ready").status_code == 200

@@ -37,6 +37,11 @@ RUN groupadd --system risk \
 COPY --from=builder --chown=risk:risk /opt/venv /opt/venv
 COPY --chown=risk:risk app ./app
 COPY --chown=risk:risk alembic ./alembic
+COPY --chown=risk:risk \
+    scripts/bootstrap_database.py \
+    scripts/database_roles_202610120096.sql \
+    scripts/database_roles_local.sql \
+    ./scripts/
 COPY --chown=risk:risk alembic.ini pyproject.toml uv.lock ./
 
 USER risk

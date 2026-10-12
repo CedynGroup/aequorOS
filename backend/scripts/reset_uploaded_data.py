@@ -192,7 +192,12 @@ def main() -> int:
         print("Refusing to delete without --yes.", file=sys.stderr)
         return 2
 
-    engine = create_engine(args.database_url)
+    engine = create_engine(
+        args.database_url,
+        connect_args={"application_name": "aequoros-reset-uploaded-data"}
+        if args.database_url.startswith("postgresql")
+        else {},
+    )
     with Session(engine) as session:
         deleted = reset(
             session,

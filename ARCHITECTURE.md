@@ -888,9 +888,10 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   green Postgres run is not evidence of this** — an RLS test self-skips at exit 0 when the
   `TEST_DATABASE_URL` role bypasses RLS or when `TEST_DATABASE_URL` is not exported, and
   privilege proofs need `CREATEROLE`. Check that the intended RLS and privilege proofs
-  actually ran. `risk-service:test-postgres-schema` provisions a local `NOBYPASSRLS`
-  test role with `CREATEROLE` and requires the privilege proofs to run; a supplied URL
-  must provide equivalent privileges. See [test database setup](backend/README.md#run-tests).
+  actually ran. `risk-service:test-postgres-schema` requires the privilege proofs to run;
+  local and supplied-service role preparation is owned by the
+  [database role handoff](docs/ops/database-roles.md#migration-and-local-development-order).
+  See [test database setup](backend/README.md#run-tests).
 - **Missing data is never zero, structurally.** A measure with no target has no
   `bi_fact_target` row; a widget with no data says `needs_data: <dataset>` (or
   `pending_capability` when the gap is platform work, not the bank's book); an insight may
