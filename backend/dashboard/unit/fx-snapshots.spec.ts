@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
+import {
+  adversarialFxPositions,
+  fxParameterSnapshots,
+  alternateFxParameterSnapshots,
+} from "./fx/testing/generators";
+import { assertFxStoredPositions } from "./fx/testing/assertions";
 import { RegulatoryRunReadFromJSON } from "@aequoros/risk-service-api";
 import { fxPositionSplits, fxRunParameters } from "../components/fx/params";
 
@@ -14,8 +20,6 @@ function storedRun(inputs: unknown) {
     updated_at: "2026-10-01T00:00:00Z",
   });
 }
-const cents = fc.integer({ min: -100_000_000, max: 100_000_000 });
-const currency = fc.constantFrom("EUR", "JPY", "GBP", "USD", "CHF");
 const invalid = fc.constantFrom(
   null,
   undefined,
@@ -41,39 +45,34 @@ const bands = {
 describe("stored FX run inputs", () => {
   it("round-trips independent per-currency positions without recomputing the saved net", () => {
     fc.assert(
-      fc.property(
-        fc.uniqueArray(
-          fc.tuple(currency, cents, cents, cents, cents, fc.boolean()),
-          { selector: (row) => row[0], minLength: 1, maxLength: 5 },
-        ),
-        (positions) => {
-          const facts = positions.map(
-            ([ccy, assets, liabilities, derivatives, net, strings]) => {
-              const encode = (value: number) =>
-                strings ? (value / 100).toFixed(2) : value / 100;
-              return {
-                fact_group: "fx_position",
-                attributes: {
-                  currency: ccy,
-                  assets_ccy: encode(assets),
-                  liabilities_ccy: encode(liabilities),
-                  net_derivatives_ccy: encode(derivatives),
-                  net_ccy: encode(net),
-                },
-              };
-            },
-          );
-          expect([...fxPositionSplits(storedRun({ facts })).values()]).toEqual(
-            positions.map(([ccy, assets, liabilities, derivatives, net]) => ({
-              currency: ccy,
-              assetsCcy: assets / 100,
-              liabilitiesCcy: liabilities / 100,
-              netDerivativesCcy: derivatives / 100,
-              netCcy: net / 100,
-            })),
-          );
-        },
-      ),
+      fc.property(adversarialFxPositions, (positions) => {
+        const facts = positions.map(
+          ([ccy, assets, liabilities, derivatives, net, strings]) => {
+            const encode = (value: number) =>
+              strings ? (value / 100).toFixed(2) : value / 100;
+            return {
+              fact_group: "fx_position",
+              attributes: {
+                currency: ccy,
+                assets_ccy: encode(assets),
+                liabilities_ccy: encode(liabilities),
+                net_derivatives_ccy: encode(derivatives),
+                net_ccy: encode(net),
+              },
+            };
+          },
+        );
+        assertFxStoredPositions(
+          [...fxPositionSplits(storedRun({ facts })).values()],
+          positions.map(([ccy, assets, liabilities, derivatives, net]) => ({
+            currency: ccy,
+            assetsCcy: assets / 100,
+            liabilitiesCcy: liabilities / 100,
+            netDerivativesCcy: derivatives / 100,
+            netCcy: net / 100,
+          })),
+        );
+      }),
       { numRuns: 100 },
     );
   });
@@ -156,15 +155,8 @@ describe("stored FX run inputs", () => {
   it("preserves the saved crisis, hedge bands and scenario shocks across numeric representations", () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 0, max: 500 }),
-        fc.integer({ min: 1, max: 500 }),
-        fc.integer({ min: 0, max: 100 }),
-        fc.integer({ min: 0, max: 100 }),
-        fc.integer({ min: 0, max: 100 }),
-        fc.integer({ min: 101, max: 200 }),
-        fc.integer({ min: -100, max: 100 }),
-        fc.boolean(),
-        (start, length, uplift, r2, low, high, shock, strings) => {
+        fc.oneof(fxParameterSnapshots, alternateFxParameterSnapshots),
+        ([start, length, uplift, r2, low, high, shock, strings]) => {
           const encode = (value: number) => (strings ? String(value) : value);
           expect(
             fxRunParameters(

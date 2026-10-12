@@ -3,6 +3,16 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import fc from "fast-check";
+import {
+  creditEstimates,
+  adversarialCreditEstimates,
+  creditMigrationCells,
+  creditRollRateCells,
+} from "./credit/testing/generators";
+import {
+  assertCreditPercentage,
+  assertCreditFlow,
+} from "./credit/testing/assertions";
 import type {
   CreditPdRead,
   MigrationCellRead,
@@ -79,11 +89,8 @@ describe("credit stored analytical figures", () => {
   it("preserves independently stored hazard, PD and observation counts rather than deriving another estimate", () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 0, max: 10_000 }),
-        fc.integer({ min: 0, max: 10_000 }),
-        fc.integer({ min: 100, max: 100_000 }),
-        fc.integer({ min: 0, max: 100 }),
-        (hazard, probability, loanMonths, defaults) => {
+        fc.oneof(creditEstimates, adversarialCreditEstimates),
+        ([hazard, probability, loanMonths, defaults]) => {
           render(
             <PdPanel
               pd={pd({
@@ -106,10 +113,9 @@ describe("credit stored analytical figures", () => {
             expect(
               Number((cells[2].textContent ?? "").replaceAll(",", "")),
             ).toBe(defaults);
-            expect(Number((cells[3].textContent ?? "").replace("%", ""))).toBe(
-              hazard / 100,
-            );
-            expect(Number((cells[4].textContent ?? "").replace("%", ""))).toBe(
+            assertCreditPercentage(cells[3].textContent ?? "", hazard / 100);
+            assertCreditPercentage(
+              cells[4].textContent ?? "",
               probability / 100,
             );
             expect(screen.getByText(advisory)).toBeVisible();
@@ -216,50 +222,40 @@ describe("credit stored analytical figures", () => {
     const states = ["performing", "performing_restructured", "npl"] as const;
     const labels = ["Performing", "Performing restructured", "Non-performing"];
     fc.assert(
-      fc.property(
-        fc.integer({ min: 0, max: 2 }),
-        fc.integer({ min: 0, max: 2 }),
-        fc.integer({ min: 0, max: 999 }),
-        fc.integer({ min: 0, max: 100_000 }),
-        (from, to, exposure, loans) => {
-          const cell: MigrationCellRead = {
-            fromState: states[from],
-            toState: states[to],
-            exposureGhs: String(exposure),
-            loanCount: loans,
-          };
-          render(
-            <MigrationMatrix
-              matrix={[cell]}
-              entries={[
-                { ...cell, fromState: "entry", exposureGhs: "0", loanCount: 0 },
-              ]}
-              exits={[
-                { ...cell, toState: "exit", exposureGhs: "250", loanCount: 4 },
-              ]}
-            />,
-          );
-          try {
-            const table = screen.getByRole("table");
-            const origin = rowCells(table, labels[from]);
-            expect(origin[to + 1]).toHaveTextContent(`EUR ${exposure}`);
-            expect(origin[to + 1]).toHaveTextContent(
-              `${loans.toLocaleString("en-US")} loans`,
-            );
-            expect(within(origin[4]).getByText("EUR 250")).toBeVisible();
-            expect(within(origin[4]).getByText("4 loans")).toBeVisible();
-            const arriving = rowCells(table, "New in month")[to + 1];
-            expect(within(arriving).getByText("EUR 0")).toBeVisible();
-            expect(within(arriving).getByText("0 loans")).toBeVisible();
-            for (let other = 0; other < 3; other++)
-              if (other !== to)
-                expect(origin[other + 1]).toHaveTextContent("—");
-            expect(screen.queryByText(/GHS/)).not.toBeInTheDocument();
-          } finally {
-            cleanup();
-          }
-        },
-      ),
+      fc.property(creditMigrationCells, ([from, to, exposure, loans]) => {
+        const cell: MigrationCellRead = {
+          fromState: states[from],
+          toState: states[to],
+          exposureGhs: String(exposure),
+          loanCount: loans,
+        };
+        render(
+          <MigrationMatrix
+            matrix={[cell]}
+            entries={[
+              { ...cell, fromState: "entry", exposureGhs: "0", loanCount: 0 },
+            ]}
+            exits={[
+              { ...cell, toState: "exit", exposureGhs: "250", loanCount: 4 },
+            ]}
+          />,
+        );
+        try {
+          const table = screen.getByRole("table");
+          const origin = rowCells(table, labels[from]);
+          assertCreditFlow(origin[to + 1].textContent ?? "", exposure, loans);
+          expect(within(origin[4]).getByText("EUR 250")).toBeVisible();
+          expect(within(origin[4]).getByText("4 loans")).toBeVisible();
+          const arriving = rowCells(table, "New in month")[to + 1];
+          expect(within(arriving).getByText("EUR 0")).toBeVisible();
+          expect(within(arriving).getByText("0 loans")).toBeVisible();
+          for (let other = 0; other < 3; other++)
+            if (other !== to) expect(origin[other + 1]).toHaveTextContent("—");
+          expect(screen.queryByText(/GHS/)).not.toBeInTheDocument();
+        } finally {
+          cleanup();
+        }
+      }),
       { numRuns: 100 },
     );
   }, 30_000);
@@ -284,40 +280,28 @@ describe("credit stored analytical figures", () => {
       "360+",
     ];
     fc.assert(
-      fc.property(
-        fc.integer({ min: 0, max: 6 }),
-        fc.integer({ min: 0, max: 6 }),
-        fc.integer({ min: 0, max: 1000 }),
-        fc.integer({ min: 0, max: 100_000 }),
-        (from, to, tenths, loans) => {
-          const cell: RollRateCellRead = {
-            fromBucket: buckets[from],
-            toBucket: buckets[to],
-            ratePct: String(tenths / 10),
-            loanCount: loans,
-            exposureGhs: "123",
-          };
-          render(<RollRateHeatmap rollRates={[cell]} />);
-          try {
-            const row = rowCells(screen.getByRole("table"), labels[from]);
-            expect(
-              Number((row[to + 1].textContent ?? "").replace("%", "")),
-            ).toBe(tenths / 10);
-            expect(row[to + 1]).toHaveAttribute("title", `${loans} loans`);
-            for (let other = 0; other < 7; other++)
-              if (other !== to) expect(row[other + 1]).toHaveTextContent("—");
-          } finally {
-            cleanup();
-          }
-        },
-      ),
+      fc.property(creditRollRateCells, ([from, to, tenths, loans]) => {
+        const cell: RollRateCellRead = {
+          fromBucket: buckets[from],
+          toBucket: buckets[to],
+          ratePct: String(tenths / 10),
+          loanCount: loans,
+          exposureGhs: String(loans * 10_000),
+        };
+        render(<RollRateHeatmap rollRates={[cell]} />);
+        try {
+          const row = rowCells(screen.getByRole("table"), labels[from]);
+          assertCreditPercentage(row[to + 1].textContent ?? "", tenths / 10);
+          expect(row[to + 1]).toHaveAttribute("title", `${loans} loans`);
+          for (let other = 0; other < 7; other++)
+            if (other !== to) expect(row[other + 1]).toHaveTextContent("—");
+        } finally {
+          cleanup();
+        }
+      }),
       {
         numRuns: 100,
-        examples: [
-          [0, 0, 0, 0],
-          [6, 0, 1000, 1],
-          [0, 6, 500, 3],
-        ],
+        examples: [[[0, 0, 0, 0]], [[6, 0, 1000, 1]], [[0, 6, 500, 3]]],
       },
     );
   }, 30_000);

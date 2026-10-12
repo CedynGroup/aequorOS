@@ -19,6 +19,7 @@ from app.icaap.domain.pillar2.fx import (
     revaluation_losses,
 )
 from app.icaap.domain.pillar2.types import MethodStatus, MissingParameter
+from tests.fx.testing.generators import FxBook, fx_books
 from tests.icaap.domain.pillar2.conftest import CAR_MIN_PCT, FX_SHOCK_BODY
 
 BOOK = [CurrencyPosition("USD", Decimal(100)), CurrencyPosition("EUR", Decimal(-40))]
@@ -124,12 +125,12 @@ def test_an_unresolved_parameter_is_a_typed_refusal(
 
 @settings(max_examples=300, deadline=None)
 @given(
-    net=st.decimals(min_value=Decimal(-1000), max_value=Decimal(1000), places=2),
+    book=fx_books(),
     low=st.integers(min_value=0, max_value=50),
     extra=st.integers(min_value=0, max_value=50),
 )
-def test_a_bigger_shock_never_produces_a_smaller_loss(net: Decimal, low: int, extra: int) -> None:
-    position = [CurrencyPosition("USD", net)]
+def test_a_bigger_shock_never_produces_a_smaller_loss(book: FxBook, low: int, extra: int) -> None:
+    position = [CurrencyPosition(p.currency, p.net_ghs) for p in book.positions]
     smaller = revaluation_losses(
         position,
         FxShockSet(

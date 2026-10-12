@@ -3,6 +3,8 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import fc from "fast-check";
+import { fxScenarios, adversarialFxScenarios } from "./fx/testing/generators";
+import { assertFxDisplay } from "./fx/testing/assertions";
 import type { FxScenarioNopRead } from "@aequoros/risk-service-api";
 import ScenarioStrip, { fxScenarioLabel } from "../components/fx/ScenarioStrip";
 import { setActiveJurisdiction } from "../lib/format";
@@ -62,11 +64,8 @@ describe("FX scenario disclosures", () => {
   it("preserves decimal percentages and the server verdict independently of the shown limit", () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: -20_000, max: 20_000 }),
-        fc.integer({ min: 0, max: 1_000 }),
-        fc.integer({ min: 1, max: 100 }),
-        fc.boolean(),
-        (hundredths, tenths, limit, within) => {
+        fc.oneof(fxScenarios, adversarialFxScenarios),
+        ([hundredths, tenths, limit, within]) => {
           render(
             <ScenarioStrip
               aggregateLimitPct={limit}
@@ -81,9 +80,7 @@ describe("FX scenario disclosures", () => {
           );
           try {
             const figure = screen.getByText(/^-?\d+\.\d{2}%$/);
-            expect(
-              Number((figure.textContent ?? "").replace("% of Tier 1", "")),
-            ).toBe(hundredths / 100);
+            assertFxDisplay(figure.textContent ?? "", hundredths / 100);
             const shock = screen.getByText(
               tenths === 0 ? "No shock" : /^Depreciation /,
             );
