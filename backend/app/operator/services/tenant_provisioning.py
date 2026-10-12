@@ -59,7 +59,7 @@ from app.schemas.operator import (
     ProvisioningStepRead,
     TenantProvisionCreate,
 )
-from app.services import institution_types, parameter_register, scheduler
+from app.services import institution_types, job_queue, parameter_register
 from app.services.market_desk import publication as desk_publication
 from app.storage.client import StorageLocation
 from app.storage.config import StorageEngineSettings
@@ -512,7 +512,7 @@ def provision_tenant(  # noqa: PLR0915 - one linear saga; each step is named and
         _step_parameters(db, bank, operator, state)
         _step_forecast_assumptions(db, bank, state)
         _step_readiness(db, organization.id, bank.id, state)
-        scheduler.seed_tick(db, organization.id)
+        job_queue.seed_tick(db, organization.id)
     except _SagaAbort:
         db.rollback()
         _mark_rolled_back(state)

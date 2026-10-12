@@ -470,17 +470,6 @@ def _enqueue_bi_subscription_scan(session: Session, org_id: str, now: datetime) 
     )
 
 
-def seed_tick(db: Session, organization_id: str) -> Job:
-    """Seed the first (or a replacement) tick for one org; coalesces to one."""
-    return job_queue.enqueue(
-        db,
-        organization_id,
-        SCHEDULED_TICK,
-        run_after=utc_now(),
-        coalesce_key=f"tick:{organization_id}",
-    )
-
-
 def seed_ticks(db: Session) -> int:
     """Seed a tick for every org that owns a bank. Returns the count seeded.
 
@@ -490,7 +479,7 @@ def seed_ticks(db: Session) -> int:
     """
     org_ids = list(db.scalars(select(Bank.organization_id).distinct()))
     for org_id in org_ids:
-        seed_tick(db, org_id)
+        job_queue.seed_tick(db, org_id)
     db.commit()
     return len(org_ids)
 
