@@ -1200,8 +1200,7 @@ class AuthSettings(BaseSettings):
     def retention_covers_rotation_grace(self) -> AuthSettings:
         if self.refresh_token_retention_days * 86400 < self.refresh_rotation_grace_seconds:
             raise ValueError(
-                "AUTH_REFRESH_TOKEN_RETENTION_DAYS must cover AUTH_REFRESH_ROTATION_GRACE "
-                "(seconds)"
+                "AUTH_REFRESH_TOKEN_RETENTION_DAYS must cover AUTH_REFRESH_ROTATION_GRACE (seconds)"
             )
         return self
 

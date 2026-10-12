@@ -28,7 +28,8 @@ its organization. Eligibility is expiry **or** revocation strictly older than
 is retained for incident investigation and is the sole cleanup window. Settings
 refuse startup if this window is shorter than `AUTH_REFRESH_ROTATION_GRACE`
 (seconds); increase retention or reduce grace to make the configuration valid.
-Active and recent credentials stay, and retries are idempotent.
+Rows with neither expiry nor revocation older than the cutoff stay, and retries
+are idempotent.
 Hourly batches drain any backlog without a single long cleanup transaction.
 Provisioning seeds the tenant's first tick in its onboarding transaction,
 including when the worker is already running. The operator's scheduling flags
