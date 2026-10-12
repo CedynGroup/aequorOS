@@ -14,6 +14,11 @@ TOLERANCE = TolerancePolicy(
 
 
 def assert_canonical_links(book: CanonicalBook) -> None:
+    TOLERANCE.assert_exact(
+        book.batch.records_accepted,
+        book.records.record_count,
+        because="Canonical: accepted batch count differs from records",
+    )
     scope = book.batch.organization_id, book.batch.bank_id
     for row in (book.lineage, book.counterparty, book.product, *book.positions, *book.snapshots):
         TOLERANCE.assert_exact(

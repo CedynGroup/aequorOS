@@ -184,4 +184,10 @@ def canonical_books(draw: st.DrawFn) -> CanonicalBook:
                 ifrs9_stage=1,
             )
         )
+    batch.records_extracted = records.record_count
+    batch.records_translated = records.record_count
+    batch.records_accepted = records.record_count
+    batch.records_warning = batch.records_error = batch.records_blocked = 0
+    batch.started_at = stamp
+    batch.completed_at = stamp + timedelta(seconds=1)
     return CanonicalBook(records, batch, lineage, cp, product, tuple(positions), tuple(snapshots))
