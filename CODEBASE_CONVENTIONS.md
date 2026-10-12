@@ -169,37 +169,9 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
 
 A composite FK from `(organization_id, bank_id)` to `banks.(organization_id, id)` binds
 a row's bank to its organization.
-The bank's existing `(id, organization_id)` unique key supports that reference. Migration
-[`202610110093`](backend/alembic/versions/202610110093_bind_bank_organizations.py) replaces
-the bank-only references for the tables in its `TABLES` catalogue; regression coverage is in
-[`test_bank_organization_integrity.py`](backend/tests/db/test_bank_organization_integrity.py).
-Nullable `bank_id` continues to permit organization-wide macro scenarios and management
-action plans; their separate organization FK remains enforced.
-
-Canonical parent references bind `(parent_id, organization_id, bank_id)` to the parent's
-matching `(id, organization_id, bank_id)` unique key, so two banks in one organization
-cannot share a canonical parent or ingestion batch by mistake. Migration
-[`202610110094`](backend/alembic/versions/202610110094_bind_canonical_banks.py) owns the
-affected-reference catalogue in `REFERENCES`: it locks the affected tables, backfills
-lineage bank ownership from each existing batch, and verifies all affected references
-before replacing constraints. It refuses mismatches rather than repairing them.
-Batch-bound lineage must carry that batch's bank; batchless lineage may remain
-organization-wide, but a node without a bank cannot satisfy a bank-bound canonical
-lineage reference. Regression coverage for these bank bindings is in
-[`test_canonical_bank_integrity.py`](backend/tests/db/test_canonical_bank_integrity.py).
-
-Migration
-[`202610110096`](backend/alembic/versions/202610110096_restore_loan_event_lineage.py)
-restores the loan-event lineage FK omitted by `202609010049`, along with the declared
-organization-scoped identity key and shared access indexes. It locks loan events and
-lineage records, verifies every existing reference with owner or BYPASSRLS visibility,
-and refuses missing or mismatched lineage before adding the bank-bound FK. Regression
-coverage is in
-[`test_loan_event_lineage_integrity.py`](backend/tests/db/test_loan_event_lineage_integrity.py).
-[`test_canonical_migration_structural_parity.py`](backend/tests/db/test_canonical_migration_structural_parity.py)
-compares all registered `canonical_*` tables, ingestion batches and lineage records
-against the migrated schema: complete FK signatures, primary and unique keys, and
-presence of every declared index.
+The [database integrity reference](backend/docs/database_integrity.md) owns enforced
+bank, provenance and lifecycle references, nullable scopes, deliberate exclusions,
+migration catalogues and regression coverage.
 
 ### Migrations (`alembic/versions/`)
 

@@ -59,8 +59,9 @@ workstreams. This change creates no seeding path and changes no financial figure
 
 ## Migration and validation evidence
 
-Each revision locks the affected tables, suspends FORCE RLS under table ownership
-for cross-tenant verification, and reports the table/reference plus invalid count
+Each revision locks the affected tables and verifies across tenants through
+`force_rls_suspended`: table ownership with FORCE RLS temporarily lifted, or
+existing BYPASSRLS visibility. It reports the table/reference plus invalid count
 before installing its keys. A failure rolls the transaction back; it never deletes
 or repairs financial data. The migrations are safe for empty/test-only deployments
 but do not rely on emptiness. New identity unique keys are implied by existing id
@@ -80,8 +81,9 @@ The executable contracts live in:
 - `tests/db/test_live_financial_link_integrity.py`: missing/cross-bank/cross-organization
   live links, commit-time supersession refusal, and replacement insertion after retirement.
 
-Layer verification fixtures migrate to their own revision so later guards cannot
-interfere with testing an earlier upgrade. Structural parity and live-link cases
-migrate to current head. Run these with native PostgreSQL 17 via
+Organization-bank and canonical-bank verification fixtures migrate to their own
+revision so later guards cannot interfere with testing those earlier upgrades.
+Loan-lineage, structural parity and live-link fixtures migrate to current head.
+Run these with native PostgreSQL 17 via
 `AQS_LOCAL_SERVICES=auto uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/db/test_*integrity.py tests/db/test_canonical_migration_structural_parity.py`
 from `backend/`; the service wrapper and fixtures isolate the test schemas.
