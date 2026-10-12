@@ -207,13 +207,14 @@ def test_the_new_bank_bound_foreign_keys_match_the_migrated_schema(
             and fk["referred_columns"] == ["id", "organization_id", "bank_id"]
             for fk in inspector.get_foreign_keys(table, schema=bank_integrity_schema.schema_name)
         ), (table, column)
+    referenced_parents = {parent for _, _, parent in REFERENCES}
     for name in (*CANONICAL_TABLES, "lineage_records", "ingestion_batches"):
         assert any(
             uq["column_names"] == ["id", "organization_id", "bank_id"]
             for uq in inspector.get_unique_constraints(
                 name, schema=bank_integrity_schema.schema_name
             )
-        ), name
+        ) == (name in referenced_parents), name
 
 
 @pytest.mark.parametrize(

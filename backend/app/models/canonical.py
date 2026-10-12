@@ -153,7 +153,22 @@ def canonical_constraints(table_name: str) -> tuple:
             name=f"fk_{table_name}_lineage_id_bank",
         ),
         UniqueConstraint("id", "organization_id", name=f"uq_{table_name}_id_org"),
-        UniqueConstraint("id", "organization_id", "bank_id", name=f"uq_{table_name}_id_org_bank"),
+        *(
+            (
+                UniqueConstraint(
+                    "id", "organization_id", "bank_id", name=f"uq_{table_name}_id_org_bank"
+                ),
+            )
+            if table_name
+            in (
+                "canonical_gl_accounts",
+                "canonical_counterparties",
+                "canonical_products",
+                "canonical_positions",
+                "canonical_yield_curves",
+            )
+            else ()
+        ),
         Index(f"ix_{table_name}_org_bank_as_of", "organization_id", "bank_id", "as_of_date"),
         Index(f"ix_{table_name}_org_batch", "organization_id", "ingestion_batch_id"),
     )
@@ -441,9 +456,6 @@ class CanonicalReferenceRow(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             ["lineage_records.id", "lineage_records.organization_id", "lineage_records.bank_id"],
         ),
         UniqueConstraint("id", "organization_id", name="uq_canonical_reference_rows_id_org"),
-        UniqueConstraint(
-            "id", "organization_id", "bank_id", name="uq_canonical_reference_rows_id_org_bank"
-        ),
         UniqueConstraint(
             "ingestion_batch_id",
             "dataset_kind",

@@ -50,6 +50,7 @@ REFERENCES = (
     ("canonical_position_snapshots", "gl_account_id", "canonical_gl_accounts"),
 )
 PARENTS = (*CANONICAL_TABLES, "ingestion_batches", "lineage_records")
+REFERENCED_PARENTS = tuple(dict.fromkeys(parent for _, _, parent in REFERENCES))
 
 
 def verify_reference(table: str, column: str, parent: str) -> None:
@@ -127,7 +128,7 @@ def upgrade() -> None:
         )
         if invalid:
             raise RuntimeError(f"lineage_records: {invalid} batches have no bank ownership")
-        for table in PARENTS:
+        for table in REFERENCED_PARENTS:
             op.create_unique_constraint(
                 f"uq_{table}_id_org_bank", table, ["id", "organization_id", "bank_id"]
             )
@@ -152,6 +153,6 @@ def downgrade() -> None:
         replace_reference(table, column, parent, upgrading=False)
     op.drop_constraint("fk_lineage_records_bank", "lineage_records", type_="foreignkey")
     op.drop_constraint("ck_lineage_records_batch_bank", "lineage_records", type_="check")
-    for table in reversed(PARENTS):
+    for table in reversed(REFERENCED_PARENTS):
         op.drop_constraint(f"uq_{table}_id_org_bank", table, type_="unique")
     op.drop_column("lineage_records", "bank_id")
