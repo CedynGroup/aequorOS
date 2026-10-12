@@ -10,33 +10,31 @@ export const canonicalGraphs = fc
     fc.uuid(),
     fc.uuid(),
     fc.constantFrom("2026-03-31", "2026-06-30", "2026-12-31"),
-    fc
-      .integer({ min: 1, max: 12 })
-      .chain((count) =>
-        fc
-          .tuple(
-            fc.uniqueArray(fc.uuid(), {
-              minLength: count * 2,
-              maxLength: count * 2,
-            }),
-            fc.array(
-              fc.tuple(
-                fc.oneof(
-                  fc.constant(0),
-                  fc.integer({ min: 1_000_000, max: 1_000_000_000 }),
-                ),
-                fc.integer({ min: 500, max: 3500 }),
+    fc.integer({ min: 1, max: 12 }).chain((count) =>
+      fc
+        .tuple(
+          fc.uniqueArray(fc.uuid(), {
+            minLength: count * 2,
+            maxLength: count * 2,
+          }),
+          fc.array(
+            fc.tuple(
+              fc.oneof(
+                fc.constant(0),
+                fc.integer({ min: 1_000_000, max: 1_000_000_000 }),
               ),
-              { minLength: count, maxLength: count },
+              fc.integer({ min: 500, max: 3500 }),
             ),
-          )
-          .map(([ids, amounts]) =>
-            amounts.map(
-              ([cents, rate], index) =>
-                [ids[index * 2], ids[index * 2 + 1], cents, rate] as const,
-            ),
+            { minLength: count, maxLength: count },
           ),
-      ),
+        )
+        .map(([ids, amounts]) =>
+          amounts.map(
+            ([cents, rate], index) =>
+              [ids[index * 2], ids[index * 2 + 1], cents, rate] as const,
+          ),
+        ),
+    ),
   )
   .map(([batchId, lineageId, date, rows]) => {
     const bank = "BK-000000000001";
