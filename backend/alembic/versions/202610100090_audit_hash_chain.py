@@ -36,7 +36,23 @@ def upgrade() -> None:
             END IF;
         END $$;
     """)
-    op.execute("GRANT aequoros_audit_owner TO CURRENT_USER WITH INHERIT TRUE, SET TRUE")
+    # PostgreSQL 16 added the per-grant INHERIT and SET options; on 15 they are
+    # implicit for every membership grant and the extended form is a SYNTAX
+    # ERROR. CI runs 17 and production runs 15.13, so the newer form passed
+    # every check and failed on the only server that matters.
+    server_version_info = cast(
+        "tuple[int, ...] | None", op.get_bind().dialect.server_version_info
+    )
+    if (server_version_info or (0,))[0] >= 16:
+        op.execute("GRANT aequoros_audit_owner TO CURRENT_USER WITH INHERIT TRUE, SET TRUE")
+    else:
+        op.execute("GRANT aequoros_audit_owner TO CURRENT_USER")
+    # 202608090042 revoked UPDATE, DELETE and TRUNCATE on both streams from
+    # every role INCLUDING the owner, and PostgreSQL applies that ACL check to
+    # LOCK ... IN ACCESS EXCLUSIVE MODE even for an owner. Without this the
+    # migration cannot take its own lock. The revoke loop below strips it again
+    # before this migration commits, so the identity keeps nothing.
+    op.execute("GRANT UPDATE, DELETE, TRUNCATE ON audit_events, operator_audit_log TO CURRENT_USER")
     op.execute("LOCK TABLE audit_events, operator_audit_log IN ACCESS EXCLUSIVE MODE")
     op.execute("""
         CREATE TABLE audit_chain_heads (
@@ -116,7 +132,24 @@ def upgrade() -> None:
     """)
     op.execute(f"GRANT USAGE, CREATE ON SCHEMA {quoted_schema} TO aequoros_audit_owner")
     for table in (*STREAMS, "audit_chain_heads", "audit_chain_entries", "audit_integrity_schedule"):
+        # ALTER ... OWNER rewrites the PREVIOUS owner's own ACL entry to the new
+        # owner. Where a runtime role bootstrapped the schema and still owns the
+        # streams — which is production — it silently loses the SELECT and
+        # INSERT it needs, and the next audit insert fails with permission
+        # denied. Recorded before the transfer and re-granted after; the revoke
+        # loop below still strips UPDATE, DELETE and TRUNCATE.
+        previous_owner = cast(
+            str,
+            op.get_bind()
+            .exec_driver_sql(
+                "SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = %(t)s::regclass",
+                {"t": table},
+            )
+            .scalar_one(),
+        )
         op.execute(f"ALTER TABLE {table} OWNER TO aequoros_audit_owner")
+        if table in STREAMS and previous_owner != "aequoros_audit_owner":
+            op.execute(f'GRANT SELECT, INSERT ON {table} TO "{previous_owner}"')
         if table not in STREAMS:
             op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
             op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
