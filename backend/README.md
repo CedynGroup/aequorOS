@@ -424,7 +424,8 @@ collection manifests and JUnit reports; the aggregates verify that their union
 contains every expected test exactly once, preserve the full-suite execution
 floor, and reject any skipped schema/RLS or live OpenBao test.
 
-Main always runs the full suite. On pull requests, only changes confined to the
+Main pushes and queued merge results always run the full suite. On pull requests,
+only changes confined to the
 bodies of existing, unreferenced `tests/domain/test_*.py` tests (including nested
 domain directories), or comments and formatting in those modules, select their
 affected modules. Changes to fixtures, decorators, production code, new/deleted

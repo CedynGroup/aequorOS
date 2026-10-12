@@ -278,7 +278,7 @@ rotation and retained-key recovery are governed by
 
 ## Append-only inventory and sweep
 
-`202610110094` complements the existing attestation, governance, ICAAP, market-data
+`202610110095` complements the existing attestation, governance, ICAAP, market-data
 and filing-chain migrations. The inventory distinguishes history from live state:
 
 | Record family                                                                                                            | Database protection                                                                                                                                          |
