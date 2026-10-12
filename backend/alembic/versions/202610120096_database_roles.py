@@ -15,6 +15,16 @@ branch_labels = None
 depends_on = None
 
 RUNTIME_ROLES = ("aqs_api", "aqs_worker", "aqs_bi", "aqs_operator", "aqs_audit_verifier")
+API_JOB_UPDATE = (
+    "bank_id",
+    "payload",
+    "run_after",
+    "status",
+    "started_at",
+    "completed_at",
+    "progress",
+    "error",
+)
 AUDIT_READ = ("audit_events", "operator_audit_log", "audit_chain_entries", "audit_chain_heads")
 GLOBAL_READ = ("jurisdictions", "institution_types", "regulatory_parameter")
 BI_READ = (
@@ -116,7 +126,7 @@ def upgrade() -> None:
     # No future table is automatically exposed. A later migration must grant
     # its classified rights; the catalogue test then holds that contract.
     op.execute(
-        f"ALTER DEFAULT PRIVILEGES FOR ROLE aqs_owner IN SCHEMA {qualified_schema} "
+        "ALTER DEFAULT PRIVILEGES FOR ROLE aqs_owner "
         "REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC"
     )
     tables = connection.exec_driver_sql("""
@@ -153,10 +163,18 @@ def upgrade() -> None:
             rights.append("UPDATE")
         if not no_delete and name not in NO_DELETE:
             rights.append("DELETE")
-        # The API enqueues jobs; only the worker advances queue state.
         op.execute(f"GRANT {', '.join(rights)} ON {table} TO aqs_worker")
         api_rights = [right for right in rights if name != "jobs" or right in {"SELECT", "INSERT"}]
         op.execute(f"GRANT {', '.join(api_rights)} ON {table} TO aqs_api")
+        if name == "jobs":
+            allowed = ", ".join(quote(column) for column in API_JOB_UPDATE)
+            op.execute(f"GRANT UPDATE ({allowed}) ON {table} TO aqs_api")
+            op.execute(
+                f"CREATE POLICY aqs_api_job_bank_scope ON {table} AS RESTRICTIVE "
+                "FOR ALL TO aqs_api USING (true) WITH CHECK (bank_id IS NULL OR EXISTS ("
+                f"SELECT 1 FROM {qualified_schema}.banks b WHERE b.id = jobs.bank_id "
+                "AND b.organization_id = jobs.organization_id))"
+            )
         if name in BI_READ or any(name.startswith(f"{parent}_") for parent in BI_READ):
             op.execute(f"GRANT SELECT ON {table} TO aqs_bi")
         if name == "regulatory_packages":
@@ -183,6 +201,7 @@ def downgrade() -> None:
     # or restores bypass/blanket grants. Existing deployment ownership is unchanged.
     schema = cast(str, op.get_bind().exec_driver_sql("SELECT current_schema()").scalar_one())
     quote = op.get_bind().dialect.identifier_preparer.quote_identifier
+    op.execute(f"DROP POLICY IF EXISTS aqs_api_job_bank_scope ON {quote(schema)}.jobs")
     for table in AUDIT_READ:
         op.execute(
             f"DROP POLICY IF EXISTS aqs_audit_verifier_read ON {quote(schema)}.{quote(table)}"

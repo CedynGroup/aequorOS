@@ -5,18 +5,31 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterator
+from datetime import timedelta
 from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, text
+from openpyxl import load_workbook
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
+from app.core.tenancy import TenantContext
 from app.db.session import get_engine
+from app.models import Bank, Job
+from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.services import assessments, documents, ingestion, job_queue
+from tests.adapters.excel_csv import fixtures as workbooks
+from tests.api.test_ingestion import FULL_MAPPING
+from tests.conftest import FakeStorage
 from tests.db import test_postgres_migrations as migrations
+from tests.services.factories import ServiceFactories
 from tests.support.helpers import ORG_1, ORG_2
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
 ROLES = ("aqs_api", "aqs_worker", "aqs_bi", "aqs_operator", "aqs_audit_verifier")
@@ -157,6 +170,35 @@ def role_engines(administrator: Engine) -> Iterator[dict[str, Engine]]:
         with administrator.begin() as connection:
             for name in names:
                 connection.execute(text(f"DROP ROLE {name}"))
+
+
+@pytest.fixture(scope="module")
+def role_banks(administrator: Engine) -> dict[str, str]:
+    with Session(administrator) as session:
+        banks = [
+            Bank(
+                organization_id=org,
+                name="Privilege fixture",
+                short_name="Privilege",
+                currency="GHS",
+                jurisdiction_code="GH",
+                license_type="bank",
+                institution_type="universal_bank",
+            )
+            for org in (ORG_1, ORG_2)
+        ]
+        session.add_all(banks)
+        session.commit()
+        return {bank.organization_id: bank.id for bank in banks}
+
+
+@pytest.fixture
+def api_session(role_engines: dict[str, Engine]) -> Iterator[Session]:
+    with role_engines["aqs_api"].connect() as connection, connection.begin() as transaction:
+        with Session(connection, join_transaction_mode="create_savepoint") as session:
+            session.info["organization_id"] = ORG_1
+            yield session
+        transaction.rollback()
 
 
 def test_grants_match_reviewed_matrix(role_schema: migrations.MigratedPostgresSchema) -> None:
@@ -332,21 +374,197 @@ def test_read_only_roles_refuse_tenant_writes(role_engines: dict[str, Engine], r
 
 
 @pytest.mark.parametrize("role", ["aqs_api", "aqs_worker"])
-def test_jobs_require_tenant_context_and_only_worker_can_advance_them(
-    role_engines: dict[str, Engine], role: str
-) -> None:
+def test_jobs_require_tenant_context(role_engines: dict[str, Engine], role: str) -> None:
     with role_engines[role].connect() as connection, connection.begin():
         assert connection.execute(text("SELECT id FROM organizations")).scalars().all() == []
         assert connection.execute(text("SELECT id FROM jobs")).scalars().all() == []
-        if role == "aqs_api":
-            with pytest.raises(DBAPIError) as error:
-                connection.execute(text("UPDATE jobs SET status='running' WHERE false"))
-            assert getattr(error.value.orig, "sqlstate", None) == "42501"
-        else:
-            assert (
-                connection.execute(text("UPDATE jobs SET status='running' WHERE false")).rowcount
-                == 0
+        assert connection.execute(text("UPDATE jobs SET status='running'")).rowcount == 0
+        with pytest.raises(DBAPIError) as error, connection.begin_nested():
+            connection.execute(
+                text(
+                    "INSERT INTO jobs (id,organization_id,job_type,status,queued_at) "
+                    "VALUES (:id,:org,'document_parse','queued',now())"
+                ),
+                {"id": uuid4(), "org": ORG_1},
             )
+        assert getattr(error.value.orig, "sqlstate", None) == "42501"
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "DELETE FROM jobs WHERE false",
+        "UPDATE jobs SET organization_id='OR-DENIED01' WHERE false",
+        "UPDATE jobs SET attempts=1 WHERE false",
+        "UPDATE jobs SET max_attempts=100 WHERE false",
+        "UPDATE jobs SET claimed_by='api' WHERE false",
+        "UPDATE jobs SET job_type='official_run' WHERE false",
+        "UPDATE jobs SET coalesce_key='changed' WHERE false",
+        "UPDATE jobs SET entity_type='changed' WHERE false",
+        "UPDATE jobs SET entity_id='changed' WHERE false",
+        "UPDATE jobs SET queued_at=now() WHERE false",
+        "UPDATE jobs SET id=gen_random_uuid() WHERE false",
+    ],
+)
+def test_api_refuses_worker_and_identity_job_writes(api_session: Session, statement: str) -> None:
+    with pytest.raises(DBAPIError) as error, api_session.begin_nested():
+        api_session.execute(text(statement))
+    assert getattr(error.value.orig, "sqlstate", None) == "42501"
+
+
+def test_api_coalesces_two_accepted_uploads_before_pickup(
+    api_session: Session, role_banks: dict[str, str], tmp_path: Path
+) -> None:
+    ctx = TenantContext(organization_id=ORG_1)
+    bank_id = role_banks[ORG_1]
+    ingestion.create_mapping_config(
+        api_session,
+        ctx,
+        bank_id,
+        MappingConfigCreate(
+            source_system="EXCEL_CSV",
+            name="Privilege workbook",
+            config=FULL_MAPPING,
+            activate=True,
+            reason="Test upload compatibility",
+        ),
+    )
+    storage = InMemoryStorageClient()
+    first_job_id = None
+    first_run_after = None
+    for name in ("first.xlsx", "second.xlsx"):
+        path = workbooks.build_well_formed(tmp_path / name)
+        if name == "second.xlsx":
+            workbook = load_workbook(path)
+            workbook["Loans"]["D2"] = 1600000.50
+            workbook.save(path)
+            workbook.close()
+        result = ingestion.start_ingestion(
+            api_session,
+            ctx,
+            bank_id,
+            IngestionBatchCreate(
+                source_system="EXCEL_CSV",
+                as_of_date=workbooks.AS_OF,
+                location=str(path),
+                reason="Test upload compatibility",
+            ),
+            storage,
+        )
+        assert not result.reused
+        assert result.batch.status == "accepted"
+        jobs = api_session.scalars(
+            select(Job).where(Job.coalesce_key == f"refresh:{bank_id}:{workbooks.AS_OF}")
+        ).all()
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert job.status == "queued"
+        assert job.started_at is None
+        assert job.bank_id == bank_id
+        assert job.payload == {"as_of_date": workbooks.AS_OF.isoformat()}
+        assert job.run_after is not None
+        if first_job_id is None:
+            first_job_id, first_run_after = job.id, job.run_after
+        else:
+            assert job.id == first_job_id
+            assert first_run_after is not None and job.run_after > first_run_after
+
+
+def test_api_coalescing_updates_payload_schedule_and_bank(
+    api_session: Session, role_banks: dict[str, str]
+) -> None:
+    first = job_queue.enqueue(
+        api_session, ORG_1, "pipeline_refresh", payload={"first": True}, coalesce_key="probe"
+    )
+    api_session.commit()
+    second = job_queue.enqueue(
+        api_session,
+        ORG_1,
+        "pipeline_refresh",
+        bank_id=role_banks[ORG_1],
+        payload={"second": True},
+        run_after=first.queued_at + timedelta(seconds=30),
+        coalesce_key="probe",
+    )
+    api_session.commit()
+    api_session.refresh(second)
+    assert second.id == first.id
+    assert second.payload == {"first": True, "second": True}
+    assert second.bank_id == role_banks[ORG_1]
+    assert second.run_after == first.queued_at + timedelta(seconds=30)
+
+
+@pytest.mark.parametrize("operation", ["insert", "update", "coalesce"])
+def test_api_jobs_refuse_another_tenants_bank(
+    api_session: Session, role_banks: dict[str, str], operation: str
+) -> None:
+    job = job_queue.enqueue(
+        api_session,
+        ORG_1,
+        "pipeline_refresh",
+        bank_id=role_banks[ORG_1],
+        coalesce_key="bank-scope",
+    )
+    with pytest.raises(DBAPIError) as error, api_session.begin_nested():
+        if operation == "update":
+            job.bank_id = role_banks[ORG_2]
+            api_session.flush()
+        else:
+            job_queue.enqueue(
+                api_session,
+                ORG_1,
+                "pipeline_refresh",
+                bank_id=role_banks[ORG_2],
+                coalesce_key="bank-scope" if operation == "coalesce" else None,
+            )
+    assert getattr(error.value.orig, "sqlstate", None) == "42501"
+    api_session.refresh(job)
+    assert job.bank_id == role_banks[ORG_1]
+
+
+def test_api_document_parse_updates_job_lifecycle(
+    api_session: Session, fake_storage: FakeStorage
+) -> None:
+    ctx = TenantContext(organization_id=ORG_1)
+    factories = ServiceFactories(api_session, fake_storage, get_settings(), ctx)
+    document = factories.documents.create_uploaded()
+    result = documents.request_parse(api_session, ctx, document.id)
+    api_session.expire_all()
+    job = api_session.get(Job, result.job_id)
+    assert job is not None
+    assert result.status == job.status == "completed"
+    assert job.started_at is not None
+    assert job.completed_at is not None and job.completed_at >= job.started_at
+    assert job.progress == {"parsed_chunks": 1}
+    assert job.error is None
+    assert document.parse_status == "parsed"
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_api_assessment_updates_job_lifecycle(
+    api_session: Session, fake_storage: FakeStorage, monkeypatch: pytest.MonkeyPatch, fail: bool
+) -> None:
+    ctx = TenantContext(organization_id=ORG_1)
+    factories = ServiceFactories(api_session, fake_storage, get_settings(), ctx)
+    assessment = factories.assessments.create()
+    if fail:
+
+        def refuse_scoring(*args: object, **kwargs: object) -> None:
+            raise ValueError("Scoring unavailable")
+
+        monkeypatch.setattr(assessments, "run_scoring", refuse_scoring)
+    result = assessments.run_assessment(api_session, ctx, assessment.id)
+    api_session.expire_all()
+    job = api_session.get(Job, result.job_id)
+    assert job is not None
+    assert result.status == job.status == ("failed" if fail else "completed")
+    assert job.started_at is not None
+    assert job.completed_at is not None and job.completed_at >= job.started_at
+    if fail:
+        assert job.error == "Scoring unavailable"
+    else:
+        assert cast(object, job.progress["findings_created"]) == 1
+        assert job.error is None
 
 
 def test_bi_and_verifier_have_their_specific_read_surfaces(role_engines: dict[str, Engine]) -> None:
@@ -387,6 +605,32 @@ def test_migrator_sets_owner_and_future_objects_have_no_implicit_app_grants(
                 {"role": role},
             )
         connection.rollback()
+
+
+@pytest.mark.parametrize("role", ROLES)
+def test_future_function_requires_an_explicit_execution_grant(
+    role_engines: dict[str, Engine], role: str
+) -> None:
+    name = f"future_private_function_{uuid4().hex}"
+    with role_engines["aqs_migrator"].begin() as connection:
+        connection.execute(text("SET LOCAL ROLE aqs_owner"))
+        connection.execute(
+            text(f"CREATE FUNCTION {name}() RETURNS integer LANGUAGE sql AS 'SELECT 42'")
+        )
+        assert connection.scalar(text(f"SELECT {name}()")) == 42
+    try:
+        with role_engines[role].connect() as connection, pytest.raises(DBAPIError) as error:
+            connection.execute(text(f"SELECT {name}()"))
+        assert getattr(error.value.orig, "sqlstate", None) == "42501"
+        with role_engines["aqs_migrator"].begin() as connection:
+            connection.execute(text("SET LOCAL ROLE aqs_owner"))
+            connection.execute(text(f"GRANT EXECUTE ON FUNCTION {name}() TO {role}"))
+        with role_engines[role].connect() as connection:
+            assert connection.scalar(text(f"SELECT {name}()")) == 42
+    finally:
+        with role_engines["aqs_migrator"].begin() as connection:
+            connection.execute(text("SET LOCAL ROLE aqs_owner"))
+            connection.execute(text(f"DROP FUNCTION {name}()"))
 
 
 def test_shared_url_pools_have_distinct_application_names(

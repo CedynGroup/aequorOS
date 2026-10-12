@@ -238,12 +238,7 @@ def main() -> None:
     if "sqlite" not in database_url:
         msg = "e2e bootstrap only ever runs against a disposable sqlite file"
         raise SystemExit(msg)
-    engine = create_engine(
-        database_url,
-        connect_args={"application_name": "aequoros-e2e-bootstrap"}
-        if database_url.startswith("postgresql")
-        else {},
-    )
+    engine = create_engine(database_url)
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         # Every GLOBAL registry a migration would have seeded. create_all builds

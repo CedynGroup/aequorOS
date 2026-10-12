@@ -1,5 +1,13 @@
 {
   "columns": [
+    ["jobs", "bank_id", "aqs_api", "UPDATE", false],
+    ["jobs", "completed_at", "aqs_api", "UPDATE", false],
+    ["jobs", "error", "aqs_api", "UPDATE", false],
+    ["jobs", "payload", "aqs_api", "UPDATE", false],
+    ["jobs", "progress", "aqs_api", "UPDATE", false],
+    ["jobs", "run_after", "aqs_api", "UPDATE", false],
+    ["jobs", "started_at", "aqs_api", "UPDATE", false],
+    ["jobs", "status", "aqs_api", "UPDATE", false],
     ["regulatory_packages", "attestation_cycle", "aqs_api", "UPDATE", false],
     ["regulatory_packages", "attestation_cycle", "aqs_worker", "UPDATE", false],
     ["regulatory_packages", "attestation_state", "aqs_api", "UPDATE", false],

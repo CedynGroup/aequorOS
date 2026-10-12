@@ -11,7 +11,7 @@ existing application URLs, ownership, credentials or BYPASSRLS roles.
 | -------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `aqs_owner`          | NOLOGIN object owner     | DDL and explicit migration work through SET ROLE                                                                        | Application connections                                                         |
 | `aqs_migrator`       | Deployment only          | SET ROLE `aqs_owner`; no automatic inheritance                                                                          | Runtime use, elevated attributes                                                |
-| `aqs_api`            | Tenant API               | Tenant SELECT/INSERT/UPDATE/DELETE under forced RLS, audit append, filing lifecycle columns, enqueue jobs               | Schema DDL, ownership, audit or immutable evidence changes, queue state changes |
+| `aqs_api`            | Tenant API               | Tenant SELECT/INSERT/UPDATE/DELETE under forced RLS, audit append, filing lifecycle columns, enqueue/coalesce jobs and parse/assessment lifecycle updates | Schema DDL, ownership, audit or immutable evidence changes, job DELETE or worker-only job columns |
 | `aqs_worker`         | Background jobs          | API tenant rights plus queue state changes under RLS                                                                    | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes        |
 | `aqs_bi`             | Interactive BI           | SELECT on BI marts/dimensions and public jurisdiction/parameter reference tables under RLS; 10-second statement timeout | Writes, operational queue or identity-table access                              |
 | `aqs_operator`       | Staff operations         | Dedicated cross-bank metadata views, introduced in the operator PR                                                      | Direct tenant-table access; financial inspection outside the governed #351 flow |
@@ -25,6 +25,16 @@ preserved. No application sequence or platform-function grants are installed. Ex
 PUBLIC execution on non-definer trigger functions remains unchanged.
 Existing integrity triggers and restrictive policies remain authoritative for
 completed runs, sealed registers and filed-content immutability (#511).
+
+The API has column-scoped job UPDATE on `bank_id`, `payload`, `run_after`,
+`status`, `started_at`, `completed_at`, `progress` and `error`: upload coalescing
+and synchronous document parsing/assessment runs write these today. It cannot
+delete jobs or change queue identity, retry counters or worker claimant fields.
+Forced RLS checks the organization on both existing and new rows; the API's
+restrictive bank-reference check also rejects INSERT/UPDATE targeting another
+organization's bank. Banks within one organization share the tenant boundary.
+Future functions created as `aqs_owner` have no PUBLIC EXECUTE default in any
+schema; migrations grant execution explicitly.
 
 The foundation provisions dormant roles; it does not authorize switching worker
 or operator credentials. The worker PR adds tenant context to every job and
