@@ -65,8 +65,8 @@ needs no permission to administer runtime roles.
 | Migrations (`aqs_migrator`, `aqs_owner`) | Disabled                    | Disabled              |
 
 The API idle limit releases locks from abandoned transactions. API transactions
-currently span BI exports (120 seconds) and storage reads (up to six 60-second
-attempts, or 360 seconds, plus retry backoff). Ten minutes gives these
+currently span BI exports (120 seconds) and storage calls (up to six 60-second
+read-timeout attempts, or 360 seconds, plus retry backoff). Ten minutes gives these
 supported waits margin to finish provenance, audit and deletion commits.
 [Issue #559](https://github.com/CedynGroup/aequorOS/issues/559) tracks removing
 transactions around external waits; review this budget when that lands or when
@@ -104,17 +104,16 @@ change new-role defaults. Do not change or reset legacy role defaults.
 Validate fresh API, worker, BI and migration logins with `SHOW
 idle_in_transaction_session_timeout` and `SHOW statement_timeout`. Observe the
 pool identities in `pg_stat_activity`. Native PostgreSQL 17 tests in
-`backend/tests/db/test_database_timeouts.py` prove the ten-minute startup
-budgets and real API idle termination/lock release using a short
+`backend/tests/db/test_database_timeouts.py` prove fresh-login budgets using
+disposable probe logins with the configured role settings and service privileges
+(PostgreSQL role settings are not inherited via membership). They also prove
+real API idle termination/lock release using a short
 transaction-local probe limit, legacy connection budgets, a 65-second worker
 statement and BI export overrides above ten seconds. Native regressions in
 `backend/tests/db/test_api_cross_service_timeouts.py` also prove that a
 65-second BI export commits its provenance, audit and query log, and a slow
 successful storage deletion commits matching document and stored-object
 deletion states.
-
-These tests use disposable probe logins with the configured role settings and
-service privileges; PostgreSQL role settings are not inherited via membership.
 
 ## Migration and local development order
 
