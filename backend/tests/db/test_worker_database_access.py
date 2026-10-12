@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from alembic import command
 from app import worker
 from app.bi.service import partitions, query_log
+from app.bi.service.versions import BUILDER_VERSION
 from app.core import audit_integrity, security
 from app.core.config import get_settings
 from app.core.key_management.local import LocalKeyProvider
@@ -34,6 +35,7 @@ from app.identity.public import Bank
 from app.models import AuditEvent, DeskDetermination, DeskMethodology, Job, OperatorAuditLog, User
 from app.operator.deps import resolve_operator_database_url
 from app.services import job_queue, scheduler
+from app.services.market_desk import capture_job
 from app.storage.client import StorageLocation
 from app.storage.encryption import ObjectEncryption
 from tests.db import test_database_roles as foundation
@@ -858,11 +860,13 @@ def test_scoped_ticks_preserve_platform_daily_cadence(
     monkeypatch.setenv("BI_SCHEDULER_ENABLED", "1")
     monkeypatch.setattr(scheduler, "utc_now", lambda: NOW)
     get_settings.cache_clear()
-    for org in (ORG_1, ORG_2, ORG_1):
+    for index, org in enumerate((ORG_1, ORG_2, ORG_1)):
         with scoped(role_engines["aqs_worker"], org) as session:
             tick = job_queue.enqueue(session, org, "scheduled_tick")
             scheduler.run_tick(session, tick)
             session.commit()
+            assert tick.progress["desk_capture_enqueued"] is (index == 0)
+            assert tick.progress["bi_retention_enqueued"] is (index == 0)
         if org == ORG_1:
             with Session(administrator) as admin:
                 for job in admin.scalars(
@@ -875,11 +879,62 @@ def test_scoped_ticks_preserve_platform_daily_cadence(
             jobs = session.scalars(select(Job).where(Job.job_type == kind)).all()
             assert len(jobs) == 1
             assert jobs[0].organization_id == ORG_1
+            assert jobs[0].status == "succeeded"
+            assert jobs[0].bank_id is None
+            assert jobs[0].payload == (
+                {"cob_date": NOW.date().isoformat()}
+                if kind == "desk_capture"
+                else {"builder_version": BUILDER_VERSION}
+            )
+    tomorrow = NOW + timedelta(days=1)
+    monkeypatch.setattr(scheduler, "utc_now", lambda: tomorrow)
+    for index, org in enumerate((ORG_2, ORG_1)):
+        with scoped(role_engines["aqs_worker"], org) as session:
+            tick = job_queue.enqueue(session, org, "scheduled_tick")
+            scheduler.run_tick(session, tick)
+            session.commit()
+            assert tick.progress["desk_capture_enqueued"] is (index == 0)
+            assert tick.progress["bi_retention_enqueued"] is (index == 0)
+    with Session(administrator) as session:
+        for kind, prefix in (("desk_capture", "desk_capture"), ("bi_retention", "bi-retention")):
+            jobs = session.scalars(select(Job).where(Job.job_type == kind)).all()
+            assert len(jobs) == 2
+            next_job = next(job for job in jobs if job.organization_id == ORG_2)
+            assert next_job.coalesce_key == f"{prefix}:{tomorrow.date().isoformat()}"
+            assert next_job.status == "queued"
     with scoped(role_engines["aqs_worker"], ORG_2) as session, pytest.raises(DBAPIError):
         session.execute(
             text("SELECT aqs_worker_enqueue_platform_daily('pipeline_refresh', :day, '{}')"),
             {"day": NOW.date()},
         )
+    get_settings.cache_clear()
+
+
+@pytest.mark.parametrize("enabled, hour", ((False, 18), (True, 17), (True, 18)))
+def test_scoped_desk_caller_only_persists_due_captures(
+    role_engines: dict[str, Engine],
+    administrator: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    enabled: bool,
+    hour: int,
+) -> None:
+    monkeypatch.setenv("DESK_CAPTURE_ENABLED", str(enabled))
+    monkeypatch.setenv("DESK_CAPTURE_HOUR_UTC", "18")
+    get_settings.cache_clear()
+    friday = (NOW + timedelta(days=4)).replace(hour=hour)
+    due = enabled and hour >= 18
+    with scoped(role_engines["aqs_worker"], ORG_2) as session:
+        job = capture_job.enqueue_due_desk_capture(session, ORG_2, now=friday)
+        assert (job is not None) is due
+        session.commit()
+    with Session(administrator) as session:
+        jobs = session.scalars(select(Job).where(Job.job_type == "desk_capture")).all()
+        assert len(jobs) == int(due)
+        if due:
+            assert jobs[0].organization_id == ORG_2
+            assert jobs[0].bank_id is None
+            assert jobs[0].coalesce_key == f"desk_capture:{friday.date().isoformat()}"
+            assert jobs[0].payload == {"cob_date": friday.date().isoformat(), "auction_pass": True}
     get_settings.cache_clear()
 
 

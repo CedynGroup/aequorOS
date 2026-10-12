@@ -20,7 +20,7 @@ only found ``job_queue.enqueue`` calls, would have passed on the broken code.
 What it does
 ------------
 1. Parses every module under ``app/`` and builds a static call graph.
-2. Finds ordinary and platform-daily queue enqueue calls and resolves their ``job_type``
+2. Finds every ``job_queue.enqueue`` call and resolves its ``job_type``
    argument through module-level string constants, across modules.
 3. Walks the graph from the platform's real entry points: route handlers
    (``@router.get`` … ``@router.post``), the worker module, and any function
@@ -233,7 +233,7 @@ class _Index:
         names, aliases = self.imports[module]
         if (
             isinstance(func, ast.Attribute)
-            and func.attr in {"enqueue", "enqueue_platform_daily"}
+            and func.attr == "enqueue"
             and isinstance(func.value, ast.Name)
         ):
             return any(
@@ -373,7 +373,7 @@ def _value_mentions(
 
 
 def _enqueue_argument(node: ast.Call) -> ast.expr | None:
-    """Both queue entry points take ``job_type`` as their third parameter."""
+    """``job_type`` is the third positional parameter of ``job_queue.enqueue``."""
 
     for keyword in node.keywords:
         if keyword.arg == "job_type":
@@ -527,7 +527,7 @@ def _synthetic_app(root: Path) -> None:
         "def enqueue_reachable(db, org):\n"
         "    return job_queue.enqueue(db, org, REACHABLE)\n"
         "def enqueue_through_the_seam(db, org):\n"
-        "    return job_queue.enqueue_platform_daily(db, org, SEAM, day, payload)\n"
+        "    return job_queue.enqueue(db, org, SEAM)\n"
         "def enqueue_via_callback(db, org):\n"
         "    return job_queue.enqueue(db, org, CALLBACK)\n"
         "def enqueue_orphan(db, org):\n"

@@ -46,6 +46,7 @@ from app.models import (
     User,
 )
 from app.services import job_queue, module_scope
+from app.services.job_queue import enqueue_platform_daily
 
 SCHEDULED_TICK = "scheduled_tick"
 OFFICIAL_RUN = "official_run"
@@ -422,7 +423,7 @@ def _enqueue_bi_retention(session: Session, org_id: str, now: datetime) -> Job |
     payload is the contract's ``{"builder_version"}`` and nothing else: the
     action names no bank.
     """
-    return job_queue.enqueue_platform_daily(
+    return enqueue_platform_daily(
         session, org_id, BI_RETENTION, now.date(), {"builder_version": BUILDER_VERSION}
     )
 
