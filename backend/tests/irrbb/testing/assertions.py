@@ -59,11 +59,11 @@ def assert_irrbb_scaled(after: SfResult, before: SfResult, scale: int) -> None:
 def assert_irrbb_ratio_scaled(
     after: SfResult, before: SfResult, scale: int, *, tier1: Decimal
 ) -> None:
-    before_rounding = TOLERANCE.money.absolute / 2 * sum(
-        currency.material for currency in before.currencies
+    before_rounding = (
+        TOLERANCE.money.absolute / 2 * sum(currency.material for currency in before.currencies)
     )
-    after_rounding = TOLERANCE.money.absolute / 2 * sum(
-        currency.material for currency in after.currencies
+    after_rounding = (
+        TOLERANCE.money.absolute / 2 * sum(currency.material for currency in after.currencies)
     )
     policy = TolerancePolicy(
         (before_rounding / tier1 + after_rounding / (tier1 * scale)) * 100

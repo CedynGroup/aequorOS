@@ -116,7 +116,12 @@ negative-rate adversaries remain explicit. SF money and percentage output uses
 six-place HALF_UP; the ICAAP bridge uses four-place amounts. One IRRBB policy keeps
 these units distinct and preserves the existing much tighter behavioural-survival
 conservation budget. Metamorphic checks compare native scenario deltas, risk,
-capital scaling, ordering and improvement without duplicating discounting.
+capital scaling, ordering and improvement without duplicating discounting. Ratio
+scaling propagates each run's half-quantum monetary rounding per material currency
+through its Tier 1 denominator, then adds one percentage quantum; cancellation
+can make a fixed percentage-only tolerance too small. Dashboard mandatory and
+outlier-set measure membership is derived from the corresponding scenario flags
+and checked exactly before and after normalization; stored figures remain exact.
 
 Canonical helpers live under `tests/data_engine/testing` and dashboard
 `unit/data-engine/testing`. Synthetic UUIDs, source references and one bank scope
