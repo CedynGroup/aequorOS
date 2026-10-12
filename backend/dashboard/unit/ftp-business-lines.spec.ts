@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import type { FtpProductRead } from "@aequoros/risk-service-api";
+import {
+  adversarialFtpRows,
+  ftpCategories as categories,
+} from "./ftp/testing/generators";
+import {
+  assertFtpMargin as expectImpliedMargin,
+  assertFtpTotal,
+  assertFtpScaling,
+} from "./ftp/testing/assertions";
 import { aggregateBusinessLines } from "../components/ftp/businessLines";
 
 function product(overrides: Partial<FtpProductRead> = {}): FtpProductRead {
@@ -20,38 +29,6 @@ function product(overrides: Partial<FtpProductRead> = {}): FtpProductRead {
     ...overrides,
   };
 }
-const categories = [
-  ["Corporate lending", "asset", "corporate_sme"],
-  ["Retail mortgage", "asset", "retail_lending"],
-  ["Treasury bills", "asset", "treasury"],
-  ["Special facility", "asset", "other_assets"],
-  ["Savings account", "liability", "transactional_deposits"],
-  ["Wholesale borrowing", "liability", "term_wholesale"],
-  ["Special facility", "liability", "other_funding"],
-] as const;
-
-function expectImpliedMargin(
-  actual: number | null | undefined,
-  balanceCents: number,
-  contributionsCents: number[],
-) {
-  const contributionCents = contributionsCents.reduce(
-    (sum, value) => sum + value,
-    0,
-  );
-  const expected = (contributionCents * 100) / balanceCents;
-  const magnitude =
-    (contributionsCents.reduce((sum, value) => sum + Math.abs(value), 0) *
-      100) /
-    balanceCents;
-  const errorBudget =
-    4 *
-    (contributionsCents.length + 4) *
-    Number.EPSILON *
-    Math.max(1, magnitude);
-  expect(Math.abs((actual ?? NaN) - expected)).toBeLessThanOrEqual(errorBudget);
-}
-
 describe("FTP business-line view aggregation", () => {
   it("groups by the disclosed name/category rule and keeps asset and funding books separate", () => {
     const rows = categories.map(([name, category]) =>
@@ -79,80 +56,91 @@ describe("FTP business-line view aggregation", () => {
   });
 
   it("conserves independently generated balances, contributions and server flags for every grouping", () => {
-    const row = fc.record({
-      group: fc.integer({ min: 0, max: categories.length - 1 }),
-      balance: fc.integer({ min: 1, max: 10_000_000 }),
-      contribution: fc.integer({ min: -1_000_000, max: 1_000_000 }),
-      flagged: fc.boolean(),
-      uppercase: fc.boolean(),
-    });
     fc.assert(
-      fc.property(
-        fc.array(row, { minLength: 1, maxLength: 25 }),
-        (generated) => {
-          const products = generated.map((r) => {
-            const [name, category] = categories[r.group];
-            return product({
-              product: r.uppercase ? name.toUpperCase() : name,
-              category,
-              balanceGhs: (r.balance / 100).toFixed(2),
-              contributionGhs: (r.contribution / 100).toFixed(2),
-              belowMinMargin: r.flagged,
-              netMarginPct: "999",
-            });
+      fc.property(adversarialFtpRows, (generated) => {
+        const products = generated.map((r) => {
+          const [name, category] = categories[r.group];
+          return product({
+            product: r.uppercase ? name.toUpperCase() : name,
+            category,
+            balanceGhs: (r.balance / 100).toFixed(2),
+            contributionGhs: (r.contribution / 100).toFixed(2),
+            belowMinMargin: r.flagged,
+            netMarginPct: "999",
           });
-          const lines = aggregateBusinessLines(products);
-          for (let group = 0; group < categories.length; group++) {
-            const members = generated.filter((r) => r.group === group);
-            const line = lines.find((r) => r.key === categories[group][2]);
-            if (!members.length) {
-              expect(line).toBeUndefined();
-              continue;
-            }
-            expect(line).toBeDefined();
-            const balance = members.reduce((sum, r) => sum + r.balance, 0);
-            const contribution = members.reduce(
-              (sum, r) => sum + r.contribution,
-              0,
-            );
-            expect(line?.balanceGhs).toBeCloseTo(balance / 100, 8);
-            expect(line?.contributionGhs).toBeCloseTo(contribution / 100, 8);
-            expectImpliedMargin(
-              line?.impliedMarginPct,
-              balance,
-              members.map((r) => r.contribution),
-            );
-            expect(line?.belowFloorCount).toBe(
-              members.filter((r) => r.flagged).length,
-            );
-            expect(line?.products).toHaveLength(members.length);
+        });
+        const lines = aggregateBusinessLines(products);
+        for (let group = 0; group < categories.length; group++) {
+          const members = generated.filter((r) => r.group === group);
+          const line = lines.find((r) => r.key === categories[group][2]);
+          if (!members.length) {
+            expect(line).toBeUndefined();
+            continue;
           }
-          expect(
-            lines.reduce((sum, line) => sum + line.products.length, 0),
-          ).toBe(products.length);
-          const reversed = aggregateBusinessLines([...products].reverse());
-          expect(reversed.map((line) => line.key)).toEqual(
-            lines.map((line) => line.key),
+          expect(line).toBeDefined();
+          const balance = members.reduce((sum, r) => sum + r.balance, 0);
+          assertFtpTotal(
+            line?.balanceGhs,
+            members.map((r) => r.balance / 100),
           );
-          lines.forEach((line, index) => {
-            const members = generated.filter(
-              (r) => categories[r.group][2] === line.key,
-            );
-            expectImpliedMargin(
-              reversed[index].impliedMarginPct,
-              members.reduce((sum, r) => sum + r.balance, 0),
-              members.map((r) => r.contribution),
-            );
-            expect(reversed[index].balanceGhs).toBeCloseTo(line.balanceGhs, 8);
-            expect(reversed[index].contributionGhs).toBeCloseTo(
-              line.contributionGhs,
-              8,
-            );
-            expect(reversed[index].belowFloorCount).toBe(line.belowFloorCount);
-          });
-        },
-      ),
+          assertFtpTotal(
+            line?.contributionGhs,
+            members.map((r) => r.contribution / 100),
+          );
+          expectImpliedMargin(
+            line?.impliedMarginPct,
+            balance,
+            members.map((r) => r.contribution),
+          );
+          expect(line?.belowFloorCount).toBe(
+            members.filter((r) => r.flagged).length,
+          );
+          expect(line?.products).toHaveLength(members.length);
+        }
+        expect(lines.reduce((sum, line) => sum + line.products.length, 0)).toBe(
+          products.length,
+        );
+        const reversed = aggregateBusinessLines([...products].reverse());
+        expect(reversed.map((line) => line.key)).toEqual(
+          lines.map((line) => line.key),
+        );
+        lines.forEach((line, index) => {
+          const members = generated.filter(
+            (r) => categories[r.group][2] === line.key,
+          );
+          expectImpliedMargin(
+            reversed[index].impliedMarginPct,
+            members.reduce((sum, r) => sum + r.balance, 0),
+            members.map((r) => r.contribution),
+          );
+          expect(reversed[index].balanceGhs).toBeCloseTo(line.balanceGhs, 8);
+          expect(reversed[index].contributionGhs).toBeCloseTo(
+            line.contributionGhs,
+            8,
+          );
+          expect(reversed[index].belowFloorCount).toBe(line.belowFloorCount);
+        });
+      }),
       { numRuns: 100 },
+    );
+  });
+
+  it("scales cancelling contributions within input-magnitude roundoff", () => {
+    // Minimized counterexample from the realistic generator: scale 3, large
+    // opposing contributions with a small net. Budget gross inputs, not net.
+    const products = [
+      product({ balanceGhs: "7229400.0000", contributionGhs: "-112522.6469" }),
+      product({ balanceGhs: "2804985.0000", contributionGhs: "116978.3090" }),
+    ];
+    const scaled = products.map((row) => ({
+      ...row,
+      balanceGhs: (Number(row.balanceGhs) * 3).toFixed(4),
+      contributionGhs: (Number(row.contributionGhs) * 3).toFixed(4),
+    }));
+    assertFtpScaling(
+      aggregateBusinessLines(scaled),
+      aggregateBusinessLines(products),
+      3,
     );
   });
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import { RegulatoryRunReadFromJSON } from "@aequoros/risk-service-api";
+import { adversarialFtpParameters } from "./ftp/testing/generators";
+import { assertFtpStored } from "./ftp/testing/assertions";
 import { ftpRunParameters } from "../components/ftp/params";
 
 function storedRun(inputs: unknown) {
@@ -30,10 +32,7 @@ describe("stored FTP pricing assumptions", () => {
   it("preserves every saved threshold and overlay independently across decimal strings and numbers", () => {
     fc.assert(
       fc.property(
-        fc.array(fc.integer({ min: -100_000, max: 100_000 }), {
-          minLength: 8,
-          maxLength: 8,
-        }),
+        adversarialFtpParameters,
         fc.boolean(),
         (hundredths, strings) => {
           const values = hundredths.map((v) => v / 100);
@@ -44,11 +43,10 @@ describe("stored FTP pricing assumptions", () => {
           const stress_overlays_bps = Object.fromEntries(
             fields.slice(6).map(([key], i) => [key, encode(values[i + 6])]),
           );
-          expect(
+          assertFtpStored(
             ftpRunParameters(
               storedRun({ parameters: { thresholds, stress_overlays_bps } }),
             ),
-          ).toEqual(
             Object.fromEntries(fields.map(([, key], i) => [key, values[i]])),
           );
         },
