@@ -422,20 +422,8 @@ def _enqueue_bi_retention(session: Session, org_id: str, now: datetime) -> Job |
     payload is the contract's ``{"builder_version"}`` and nothing else: the
     action names no bank.
     """
-    coalesce_key = f"bi-retention:{now.date().isoformat()}"
-    existing = session.scalar(
-        select(Job.id)
-        .where(Job.job_type == BI_RETENTION, Job.coalesce_key == coalesce_key)
-        .limit(1)
-    )
-    if existing is not None:
-        return None
-    return job_queue.enqueue(
-        session,
-        org_id,
-        BI_RETENTION,
-        payload={"builder_version": BUILDER_VERSION},
-        coalesce_key=coalesce_key,
+    return job_queue.enqueue_platform_daily(
+        session, org_id, BI_RETENTION, now.date(), {"builder_version": BUILDER_VERSION}
     )
 
 

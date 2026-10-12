@@ -133,7 +133,10 @@ Two operational notes for a remote database:
   `SELECT set_config('app.organization_id', '<OR-XXXXXXXX>', false);` first when inspecting.
 - **The worker uses `aqs_worker` with narrow platform entry points** and per-job
   organization/bank context. Configure its separate credential through
-  `WORKER_DATABASE_URL` after the reviewed compatibility migration. Existing credentials
+  `WORKER_DATABASE_URL` after this captain-reviewed compatibility PR and migration.
+  Authentication uses `DATABASE_URL`; the operator falls back from
+  `OPERATOR_DATABASE_URL` to `DATABASE_URL`, never the worker URL. The API
+  credential switch waits for the captain-reviewed lookup-function PR. Existing credentials
   remain supported during rollout; [the deployment runbook](../docs/ops/database-roles.md)
   owns activation and retirement of legacy BYPASSRLS access.
 

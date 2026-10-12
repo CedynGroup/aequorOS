@@ -1,7 +1,7 @@
 """Expose narrow platform queue operations to the tenant-scoped worker.
 
-Revision ID: 202610120098
-Revises: 202610120096
+Revision ID: 202610120099
+Revises: 202610120098
 """
 
 import hashlib
@@ -11,8 +11,8 @@ from sqlalchemy import Connection, text
 
 from alembic import op
 
-revision = "202610120098"
-down_revision = "202610120096"
+revision = "202610120099"
+down_revision = "202610120098"
 branch_labels = None
 depends_on = None
 
@@ -20,6 +20,7 @@ FUNCTIONS = (
     "aqs_worker_claim_job(timestamptz,text[],text)",
     "aqs_worker_reclaim_jobs(timestamptz,jsonb)",
     "aqs_worker_seed_ticks(timestamptz)",
+    "aqs_worker_enqueue_platform_daily(text,date,jsonb)",
     "aqs_worker_overdue_jobs(double precision,text[],boolean)",
     "aqs_worker_bank_key(text)",
     "aqs_worker_storage_key_required(text)",
@@ -142,6 +143,7 @@ def upgrade() -> None:
                 AND (job_type = ANY(p_types)) <> p_exclude
         $fn$
     """)
+    _platform_enqueue(schema)
     _key_access(schema)
     _desk_access(schema)
     _audit_access(schema)
@@ -165,8 +167,9 @@ def upgrade() -> None:
         op.execute(f"ALTER FUNCTION {function} OWNER TO aqs_owner")
         op.execute(f"REVOKE ALL ON FUNCTION {function} FROM PUBLIC")
         op.execute(f"GRANT EXECUTE ON FUNCTION {function} TO aqs_worker")
-        for role in legacy_roles:
-            op.execute(f"GRANT EXECUTE ON FUNCTION {function} TO {quote(role)}")
+        if signature != "aqs_worker_enqueue_platform_daily(text,date,jsonb)":
+            for role in legacy_roles:
+                op.execute(f"GRANT EXECUTE ON FUNCTION {function} TO {quote(role)}")
 
 
 def downgrade() -> None:
@@ -465,7 +468,15 @@ def _partition_access(schema: str) -> None:
     """)
 
     for cadence, parents in (
-        ("month", ("bi_fact_position_daily", "bi_agg_position_daily", "bi_fact_loan_event")),
+        (
+            "month",
+            (
+                "bi_fact_position_daily",
+                "bi_agg_position_daily",
+                "bi_fact_loan_event",
+                "bi_query_log",
+            ),
+        ),
         ("year", ("bi_fact_position_eom",)),
     ):
         permitted = ", ".join(f"'{schema}.{parent}'::regclass" for parent in parents)
@@ -481,3 +492,43 @@ def _partition_access(schema: str) -> None:
                 RETURN {schema}.bi_ensure_{cadence}_partition(p_parent, p_date);
             END $fn$
         """)
+
+
+def _platform_enqueue(schema: str) -> None:
+    op.execute(f"""
+        CREATE FUNCTION {schema}.aqs_worker_enqueue_platform_daily(
+            p_kind text, p_day date, p_payload jsonb
+        ) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+        SET search_path = pg_catalog, {schema}, pg_temp SET row_security = on AS $fn$
+        DECLARE org text := nullif(current_setting('app.organization_id', true), '');
+            key text; created uuid;
+        BEGIN
+            IF p_kind IS NULL OR p_kind NOT IN ('desk_capture', 'bi_retention')
+                OR p_day IS NULL OR org IS NULL
+                OR NOT EXISTS (SELECT 1 FROM {schema}.banks WHERE organization_id = org)
+                OR jsonb_typeof(p_payload) IS DISTINCT FROM 'object'
+            THEN RAISE EXCEPTION 'A scoped platform daily job is required'; END IF;
+            IF p_kind = 'desk_capture' THEN
+                IF p_payload IS DISTINCT FROM jsonb_build_object('cob_date', p_day::text)
+                    AND p_payload IS DISTINCT FROM
+                        jsonb_build_object('cob_date', p_day::text, 'auction_pass', true)
+                THEN RAISE EXCEPTION 'Invalid desk capture payload'; END IF;
+                key := 'desk_capture:' || p_day::text;
+            ELSE
+                IF NOT (p_payload ? 'builder_version')
+                    OR p_payload - 'builder_version' <> '{{}}'::jsonb
+                    OR jsonb_typeof(p_payload -> 'builder_version') <> 'number'
+                THEN RAISE EXCEPTION 'Invalid retention payload'; END IF;
+                key := 'bi-retention:' || p_day::text;
+            END IF;
+            PERFORM pg_advisory_xact_lock(hashtextextended(key, 520099));
+            IF EXISTS (SELECT 1 FROM {schema}.jobs
+                WHERE job_type = p_kind AND coalesce_key = key)
+            THEN RETURN NULL; END IF;
+            INSERT INTO {schema}.jobs(id, organization_id, job_type, status,
+                payload, progress, queued_at, coalesce_key)
+            VALUES (gen_random_uuid(), org, p_kind, 'queued', p_payload, '{{}}', now(), key)
+            RETURNING id INTO created;
+            RETURN created;
+        END $fn$
+    """)

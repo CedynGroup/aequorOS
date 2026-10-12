@@ -15,6 +15,7 @@ ENSURE_MONTH_SIGNATURE = "aqs_worker_ensure_month_partition(regclass,date)"
 ENSURE_YEAR_SIGNATURE = "aqs_worker_ensure_year_partition(regclass,date)"
 DROP_SIGNATURE = "aqs_worker_drop_daily_partition(regclass,date)"
 OVERDUE_SIGNATURE = "aqs_worker_overdue_jobs(double precision,text[],boolean)"
+PLATFORM_ENQUEUE_SIGNATURE = "aqs_worker_enqueue_platform_daily(text,date,jsonb)"
 SEED_SIGNATURE = "aqs_worker_seed_ticks(timestamp with time zone)"
 
 

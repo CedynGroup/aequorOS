@@ -208,18 +208,14 @@ def require_operator_admin(
 
 # -- database ------------------------------------------------------------------
 def resolve_operator_database_url() -> str | None:
-    """OPERATOR_DATABASE_URL → WORKER_DATABASE_URL → DATABASE_URL.
+    """OPERATOR_DATABASE_URL → DATABASE_URL.
 
     Real deployments set OPERATOR_DATABASE_URL to the operator's own
     BYPASSRLS role; the fallbacks keep local/hermetic runs zero-config (the
     tenant-scoped app role would simply see zero rows on RLS-forced tables).
     """
     settings = get_settings()
-    return (
-        get_operator_settings().operator_database_url
-        or settings.worker.worker_database_url
-        or settings.database.database_url
-    )
+    return get_operator_settings().operator_database_url or settings.database.database_url
 
 
 def get_operator_sessionmaker() -> sessionmaker:
@@ -227,8 +223,7 @@ def get_operator_sessionmaker() -> sessionmaker:
     if url is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Operator database is not configured "
-            "(OPERATOR_DATABASE_URL / WORKER_DATABASE_URL / DATABASE_URL).",
+            detail="Operator database is not configured (OPERATOR_DATABASE_URL / DATABASE_URL).",
         )
     return sessionmaker(
         bind=get_engine(url, "aequoros-operator"), autoflush=False, expire_on_commit=False

@@ -27,7 +27,7 @@ from app.api.deps import (
 )
 from app.core.authorization import RoleBundle
 from app.core.config import get_settings
-from app.db.session import get_worker_sessionmaker
+from app.db.session import get_api_sessionmaker
 from app.identity.api.manage_authorization import binding_response, binding_scope, grant_conflict
 from app.identity.models.bank import Bank
 from app.identity.models.user import User
@@ -52,8 +52,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _system_session() -> Iterator[Session]:
-    """Cross-tenant session for auth lookups (BYPASSRLS worker role)."""
-    session = get_worker_sessionmaker()()
+    """Authentication uses the API credential; its least-privilege cutover is separate."""
+    session = get_api_sessionmaker()()
     try:
         yield session
     finally:

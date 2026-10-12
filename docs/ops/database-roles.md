@@ -165,8 +165,8 @@ these prerequisites; never use the primary database.
 
 ## Worker compatibility migration
 
-Migration `202610120098` follows `202610120096`. This is a captain-reviewed
-worker cutover: **non-breaking; deployment switch is a separate step**. It does
+Migration `202610120099` follows the session-retention migration `202610120098`. This is a captain-reviewed
+worker cutover: **non-breaking; works on current and new worker role; deployment switch is a separate runbook step**. It does
 not change the attributes or credentials of an existing deployment role. The
 effective migration actor needs CREATE on the target database to create the
 worker-view namespace. When `aqs_migrator` connects, Alembic uses SET ROLE
@@ -183,6 +183,17 @@ to the worker and existing non-superuser bypass roles that already have schema
 USAGE and SELECT/UPDATE on the job queue. Read-only legacy credentials gain no queue or desk
 write access. Other application roles cannot execute them. No new role receives
 BYPASSRLS.
+
+`aqs_worker_enqueue_platform_daily` accepts only `desk_capture` and `bi_retention`,
+serializes each daily key across tenants and retains completed-job cadence. Only
+`aqs_worker` can execute it; tenant job kinds are refused. Legacy credentials keep
+the existing global enqueue path.
+
+Authentication explicitly uses `DATABASE_URL`; the operator resolves
+`OPERATOR_DATABASE_URL` then `DATABASE_URL`, never `WORKER_DATABASE_URL`. The
+worker credential switch requires this PR's compatibility code and migration.
+Keep the current API credential until the captain-reviewed lookup-function PR;
+switching it to `aqs_api` remains blocked before that follow-up.
 
 Each handler transaction sets `app.organization_id` and `app.bank_id`. A bank
 carried in the payload must agree with the dispatch envelope and belong to that
@@ -212,7 +223,7 @@ write the underlying desk tables. Methodologies and curve definitions are read-o
 returns only stream names, entry counts, validity and the recovery epoch. It
 preserves #511's database hash algorithm and append-only custody; the worker gets
 no raw chain, operator-audit or schedule-table grant. Partition wrappers allow
-creation only for the builder's classified mart parents in this schema. Retention
+creation only for the builder's classified mart parents and the append-only BI query log in this schema. Retention
 can drop completed months only from the two daily position marts; month-end,
 loan-event and query-log drops remain forbidden. Existing partition integrity
 checks stay authoritative. Role timeout budgets remain the separate #518 work.
@@ -297,7 +308,8 @@ After the new connections are healthy and old pools drained, Eric removes
 BYPASSRLS from the old deployment roles or retires their credentials. No
 engineering migration alters those existing role attributes. **Do not switch the
 API credential yet:** `aqs_api` cannot authenticate integration keys or look up
-bank encryption keys. Its switch waits for the separate captain-reviewed
+bank encryption keys, and pre-tenant password/refresh/SSO lookups still use the
+current API credential. Its switch waits for the separate captain-reviewed
 pre-authentication PR after the operator PR, followed by verification of both
 lookup paths, refusal of direct table access and refusal of other-bank
 enumeration. Keep the existing API URL secret until that gate passes.

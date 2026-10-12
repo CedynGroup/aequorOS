@@ -111,6 +111,7 @@
     ],
     ["aqs_worker_desk_schema", "", "aqs_worker"],
     ["aqs_worker_drop_daily_partition", "regclass, date", "aqs_worker"],
+    ["aqs_worker_enqueue_platform_daily", "text, date, jsonb", "aqs_worker"],
     ["aqs_worker_ensure_month_partition", "regclass, date", "aqs_worker"],
     ["aqs_worker_ensure_year_partition", "regclass, date", "aqs_worker"],
     [

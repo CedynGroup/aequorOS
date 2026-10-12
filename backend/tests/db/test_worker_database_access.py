@@ -8,6 +8,8 @@ from typing import cast
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 from sqlalchemy import create_engine, select, text
@@ -17,8 +19,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
 from app import worker
-from app.bi.service import partitions
-from app.core import audit_integrity
+from app.bi.service import partitions, query_log
+from app.core import audit_integrity, security
+from app.core.config import get_settings
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.registry import DatabaseEnvelopeStore
@@ -26,8 +29,10 @@ from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyUnavailableError
 from app.db import session as database
 from app.db.session import get_storage_session, worker_tenant_context
+from app.identity.api import auth as auth_api
 from app.identity.public import Bank
-from app.models import DeskDetermination, DeskMethodology, Job, OperatorAuditLog
+from app.models import DeskDetermination, DeskMethodology, Job, OperatorAuditLog, User
+from app.operator.deps import resolve_operator_database_url
 from app.services import job_queue, scheduler
 from app.storage.client import StorageLocation
 from app.storage.encryption import ObjectEncryption
@@ -121,6 +126,7 @@ def test_context_survives_transactions_and_clears_on_pool_reuse(
         "SELECT * FROM aqs_worker_claim_job(now(), ARRAY['pipeline_refresh'], 'intruder')",
         "SELECT aqs_worker_reclaim_jobs(now(), jsonb_build_object('pipeline_refresh', 900))",
         "SELECT aqs_worker_seed_ticks(now())",
+        "SELECT aqs_worker_enqueue_platform_daily('desk_capture', CURRENT_DATE, '{}')",
         "SELECT * FROM aqs_worker_bank_key('synthetic')",
         "SELECT aqs_worker_storage_key_required('synthetic')",
         "SELECT * FROM aqs_worker_audit_check(now())",
@@ -500,12 +506,11 @@ def test_partition_wrappers_allow_builder_parents_and_refuse_other_drops(
                     {"parent": forbidden, "month": date(2025, 2, 1)},
                 )
             session.rollback()
-        with pytest.raises(DBAPIError):
-            session.execute(
-                text("SELECT aqs_worker_ensure_month_partition('bi_query_log'::regclass, :month)"),
-                {"month": date(2025, 2, 1)},
-            )
-        session.rollback()
+        query_partition = partitions.ensure_month_partition(
+            session, "bi_query_log", date(2025, 2, 1)
+        )
+        assert query_partition is not None
+        session.commit()
         with pytest.raises(DBAPIError):
             session.execute(text("CREATE TABLE forbidden_worker_ddl (id integer)"))
 
@@ -650,7 +655,7 @@ def test_platform_functions_keep_nologin_ownership_and_pinned_paths(administrato
                 )
             ).all(),
         )
-        assert len(rows) == 14
+        assert len(rows) == 15
         for name, owner, definer, config in rows:
             assert owner == "aqs_owner", name
             assert definer, name
@@ -813,3 +818,127 @@ def test_compatibility_migration_does_not_promote_readonly_legacy_bypass_role(
         with administrator.begin() as connection:
             connection.execute(text(f"DROP OWNED BY {name}"))
             connection.execute(text(f"DROP ROLE {name}"))
+
+
+def test_scoped_ticks_preserve_platform_daily_cadence(
+    role_engines: dict[str, Engine],
+    administrator: Engine,
+    role_banks: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DESK_CAPTURE_ENABLED", "1")
+    monkeypatch.setenv("DESK_CAPTURE_HOUR_UTC", "0")
+    monkeypatch.setenv("BI_SCHEDULER_ENABLED", "1")
+    monkeypatch.setattr(scheduler, "utc_now", lambda: NOW)
+    get_settings.cache_clear()
+    for org in (ORG_1, ORG_2, ORG_1):
+        with scoped(role_engines["aqs_worker"], org) as session:
+            tick = job_queue.enqueue(session, org, "scheduled_tick")
+            scheduler.run_tick(session, tick)
+            session.commit()
+        if org == ORG_1:
+            with Session(administrator) as admin:
+                for job in admin.scalars(
+                    select(Job).where(Job.job_type.in_(("desk_capture", "bi_retention")))
+                ):
+                    job_queue.complete(admin, job)
+                admin.commit()
+    with Session(administrator) as session:
+        for kind in ("desk_capture", "bi_retention"):
+            jobs = session.scalars(select(Job).where(Job.job_type == kind)).all()
+            assert len(jobs) == 1
+            assert jobs[0].organization_id == ORG_1
+    with scoped(role_engines["aqs_worker"], ORG_2) as session, pytest.raises(DBAPIError):
+        session.execute(
+            text("SELECT aqs_worker_enqueue_platform_daily('pipeline_refresh', :day, '{}')"),
+            {"day": NOW.date()},
+        )
+    get_settings.cache_clear()
+
+
+def test_worker_secret_switch_does_not_change_authentication_or_operator_fallback(
+    administrator: Engine,
+    role_engines: dict[str, Engine],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # DATABASE_URL retains the current pre-authentication credential until the
+    # separately reviewed API lookup-function cutover. All rows are disposable.
+    monkeypatch.setenv("DATABASE_URL", administrator.url.render_as_string(hide_password=False))
+    monkeypatch.setenv(
+        "WORKER_DATABASE_URL", role_engines["aqs_worker"].url.render_as_string(hide_password=False)
+    )
+    monkeypatch.setenv("OPERATOR_DATABASE_URL", "")
+    monkeypatch.setenv("AUTH_JWT_SECRET", "worker-cutover-test-signing-secret-0000000000")
+    get_settings.cache_clear()
+    password = "worker-cutover-test-password-00000000"  # noqa: S105 - fixture only
+    email = f"worker-cutover-{uuid4().hex}@example.test"
+    with Session(administrator) as session:
+        session.add(
+            User(
+                organization_id=ORG_1,
+                email=email,
+                role="account_admin",
+                is_active=True,
+                password_hash=security.hash_password(password),
+            )
+        )
+        session.commit()
+    app = FastAPI()
+    app.include_router(auth_api.router, prefix="/api/v1")
+    with TestClient(app) as client:
+        login = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+        assert login.status_code == 200, login.text
+        tokens = cast(dict[str, object], login.json())
+        refresh = client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        )
+        assert refresh.status_code == 200, refresh.text
+        rotated = cast(dict[str, object], refresh.json())
+        logout = client.post(
+            "/api/v1/auth/logout", json={"refresh_token": rotated["refresh_token"]}
+        )
+        assert logout.status_code == 204, logout.text
+        refused = client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": rotated["refresh_token"]}
+        )
+        assert refused.status_code == 401, refused.text
+    assert resolve_operator_database_url() == administrator.url.render_as_string(
+        hide_password=False
+    )
+    database.get_engine(administrator.url.render_as_string(hide_password=False)).dispose()
+    get_settings.cache_clear()
+
+
+def test_worker_records_bi_export_queries_without_unrestricted_partition_access(
+    administrator: Engine,
+    role_engines: dict[str, Engine],
+    role_banks: dict[str, str],
+) -> None:
+    identifier = uuid4()
+    with Session(administrator) as admin:
+        admin.add(
+            User(
+                id=identifier,
+                organization_id=ORG_1,
+                email=f"bi-query-{identifier.hex}@example.test",
+                role="analyst",
+            )
+        )
+        admin.commit()
+    with scoped(role_engines["aqs_worker"], ORG_1, role_banks[ORG_1]) as session:
+        session.info["worker_access"] = True
+        row = query_log.record(
+            session,
+            query_log.QueryRecord(
+                organization_id=ORG_1,
+                bank_id=role_banks[ORG_1],
+                principal_user_id=identifier,
+                surface="export",
+                query_hash="a" * 64,
+                decision="allowed",
+                catalogue_version="fixture",
+            ),
+        )
+        session.commit()
+        assert row.organization_id == ORG_1
+        assert row.principal_user_id == identifier
