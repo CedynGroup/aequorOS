@@ -32,11 +32,16 @@ from tests.identity.api.test_grant_administration import BANK_A, BANK_B, GRANTEE
 from tests.identity.api.test_grant_administration import (
     grant_client as grant_client,  # noqa: PLC0414 - shared pytest fixture
 )
+from tests.identity.testing.assertions import (
+    assert_refused_approval_unchanged,
+    assert_sealed_approval_unchanged,
+)
+from tests.identity.testing.generators import ACCESS_ROUTES, engagement_reasons, request_checkpoints
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.support.stateful import DatabaseMachine, run_database_machine, success_events
 
 ROOT = "/api/v1/authorization"
-ROUTES = ("/fx", "/liquidity/forecast", "/liquidity/monitoring")
+ROUTES = ACCESS_ROUTES
 BANKS = (BANK_A, BANK_B)
 type Actor = Literal["owner", "member", "outsider"]
 
@@ -117,11 +122,7 @@ class AccessRequestMachine(DatabaseMachine):
         self.db.commit()
         return public, grants, events, version
 
-    @initialize(
-        checkpoint=st.sampled_from(
-            ("pending", "approved", "rejected", "revoked", "refiled", "shared")
-        )
-    )
+    @initialize(checkpoint=request_checkpoints())
     def reach_checkpoint(self, checkpoint: str) -> None:
         self.file(0, 0, "Initial request")
         key = next(iter(self.requests))
@@ -146,7 +147,7 @@ class AccessRequestMachine(DatabaseMachine):
     @rule(
         bank=st.integers(0, 1),
         route=st.integers(0, 2),
-        reason=st.text(alphabet="abc XYZ", min_size=1, max_size=30),
+        reason=engagement_reasons(),
     )
     def file(self, bank: int, route: int, reason: str) -> None:
         bank_id, route_name = BANKS[bank], ROUTES[route]
@@ -175,7 +176,8 @@ class AccessRequestMachine(DatabaseMachine):
         assert response.status_code == 201, response.text
         row = AccessRequestRead.model_validate_json(response.text)
         if pending is not None:
-            assert row.id == pending and self.evidence() == before
+            assert row.id == pending
+            assert_refused_approval_unchanged(self.evidence(), before)
         else:
             assert row.id not in self.requests and row.status == "pending"
             self.requests[row.id] = Request(
@@ -245,7 +247,7 @@ class AccessRequestMachine(DatabaseMachine):
                 else 409
             )
             assert response.status_code == status, response.text
-            assert self.evidence() == before
+            assert_refused_approval_unchanged(self.evidence(), before)
         else:
             assert response.status_code == 200, response.text
             self.resolve(BindingCreateResponse.model_validate_json(response.text).binding, key)
@@ -262,7 +264,7 @@ class AccessRequestMachine(DatabaseMachine):
         )
         if actor != "owner" or expected.status != "pending":
             assert response.status_code == (403 if actor == "member" else 404), response.text
-            assert self.evidence() == before
+            assert_refused_approval_unchanged(self.evidence(), before)
         else:
             assert response.status_code == 200, response.text
             assert AccessRequestRead.model_validate_json(response.text).status == "rejected"
@@ -280,7 +282,7 @@ class AccessRequestMachine(DatabaseMachine):
         response = self.client.post(f"{ROOT}/bindings", headers=self.credentials(), json=payload)
         if duplicate:
             assert response.status_code == 409, response.text
-            assert self.evidence() == before
+            assert_refused_approval_unchanged(self.evidence(), before)
         else:
             assert response.status_code == 201, response.text
             self.resolve(BindingCreateResponse.model_validate_json(response.text).binding)
@@ -303,7 +305,7 @@ class AccessRequestMachine(DatabaseMachine):
             expected.active = False
         else:
             assert response.status_code == 409, response.text
-            assert self.evidence() == before
+            assert_refused_approval_unchanged(self.evidence(), before)
 
     @invariant()
     def complete_scope_and_resolution_history_are_preserved(self) -> None:
@@ -313,7 +315,9 @@ class AccessRequestMachine(DatabaseMachine):
         for row in mine:
             expected = self.requests[row.id]
             assert row.status == expected.status
-            assert row.model_dump_json(exclude={"status"}) == expected.original
+            assert_sealed_approval_unchanged(
+                row.model_dump_json(exclude={"status"}), expected.original
+            )
             if row.status == "pending":
                 key = (expected.bank, expected.route)
                 assert key not in pending_keys

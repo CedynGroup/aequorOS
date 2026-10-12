@@ -20,7 +20,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import IcaapAccess, TenantContext
 from app.icaap.domain.frameworks import registry
 from app.icaap.schemas.workspace import (
-    IcaapStageInput,
     IcaapWorkflowTemplateCreate,
     IcaapWorkflowTemplateDecision,
     IcaapWorkflowTemplateListRead,
@@ -31,7 +30,6 @@ from app.icaap.schemas.workspace import (
 from app.icaap.service import workflow_templates as icaap
 from app.models import Bank
 from app.reporting.schemas.filing_workflow import (
-    FilingStageInput,
     FilingWorkflowTemplateCreate,
     FilingWorkflowTemplateDecision,
     FilingWorkflowTemplateListRead,
@@ -41,10 +39,18 @@ from app.reporting.schemas.filing_workflow import (
 )
 from app.reporting.service.filing_workflow import templates as filing
 from tests.icaap.service.p3_support import FRAMEWORK_ROOT
+from tests.icaap.testing.generators import icaap_stages
 from tests.identity.api.test_grant_administration import BANK_A, BANK_B, GRANTEE
 from tests.identity.api.test_grant_administration import (
     grant_client as grant_client,  # noqa: PLC0414 - shared pytest fixture
 )
+from tests.identity.testing.assertions import (
+    assert_maker_checker,
+    assert_refused_approval_unchanged,
+    assert_sealed_approval_unchanged,
+)
+from tests.identity.testing.generators import template_checkpoints
+from tests.reporting.testing.generators import filing_stages, stage_titles
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.support.stateful import DatabaseMachine, run_database_machine, success_events
 
@@ -95,33 +101,6 @@ class TemplateMachine(DatabaseMachine):
             return filing.list_templates(self.db, access.ctx, access.bank)
         return icaap.list_templates(self.db, access, self.framework)
 
-    def filing_stages(self, title: str) -> list[FilingStageInput]:
-        return [
-            FilingStageInput(seq=1, stage_key="preparer", title=title, decision_kind="prepare"),
-            FilingStageInput(
-                seq=2,
-                stage_key="validator",
-                title="Validator",
-                decision_kind="approve",
-                transmit_on_approve=True,
-            ),
-        ]
-
-    def icaap_stages(self, title: str) -> list[IcaapStageInput]:
-        return [
-            IcaapStageInput(seq=1, stage_key="preparer", title=title, decision_kind="prepare"),
-            IcaapStageInput(
-                seq=2,
-                stage_key="board",
-                title="Board",
-                decision_kind="approve",
-                freeze_on_approve=True,
-            ),
-            IcaapStageInput(
-                seq=3, stage_key="attestation", title="Board attestation", decision_kind="attest"
-            ),
-        ]
-
     def command(  # noqa: PLR0911, PLR0913 - two public service contracts, one model
         self,
         action: str,
@@ -138,13 +117,13 @@ class TemplateMachine(DatabaseMachine):
                     self.db,
                     access.ctx,
                     access.bank,
-                    FilingWorkflowTemplateCreate(stages=self.filing_stages(title), reason=REASON),
+                    FilingWorkflowTemplateCreate(stages=filing_stages(title), reason=REASON),
                 )
             return icaap.propose_template(
                 self.db,
                 access,
                 self.framework,
-                IcaapWorkflowTemplateCreate(stages=self.icaap_stages(title), reason=REASON),
+                IcaapWorkflowTemplateCreate(stages=icaap_stages(title), reason=REASON),
             )
         assert template_id is not None
         if self.kind == "filing":
@@ -154,7 +133,7 @@ class TemplateMachine(DatabaseMachine):
                     access.ctx,
                     access.bank,
                     template_id,
-                    FilingWorkflowTemplateUpdate(stages=self.filing_stages(title), reason=REASON),
+                    FilingWorkflowTemplateUpdate(stages=filing_stages(title), reason=REASON),
                 )
             if action == "submit":
                 return filing.submit_template(
@@ -176,7 +155,7 @@ class TemplateMachine(DatabaseMachine):
                 self.db,
                 access,
                 template_id,
-                IcaapWorkflowTemplateUpdate(stages=self.icaap_stages(title), reason=REASON),
+                IcaapWorkflowTemplateUpdate(stages=icaap_stages(title), reason=REASON),
             )
         if action == "submit":
             return icaap.submit_template(
@@ -228,7 +207,7 @@ class TemplateMachine(DatabaseMachine):
         except HTTPException as exc:
             self.db.rollback()
             assert not legal and exc.status_code == (404 if wrong != "none" else 409)
-            assert self.evidence() == before
+            assert_refused_approval_unchanged(self.evidence(), before)
             return
         assert legal
         if action == "propose":
@@ -257,11 +236,7 @@ class TemplateMachine(DatabaseMachine):
         # Approval content remains sealed when a later version supersedes it.
         return row.model_dump_json(exclude={"status", "superseded_at", "updated_at"})
 
-    @initialize(
-        checkpoint=st.sampled_from(
-            ("draft", "pending_approval", "approved", "rejected", "superseded")
-        )
-    )
+    @initialize(checkpoint=template_checkpoints())
     def reach_checkpoint(self, checkpoint: str) -> None:
         self.apply("propose")
         if checkpoint == "draft":
@@ -277,7 +252,7 @@ class TemplateMachine(DatabaseMachine):
             self.apply("submit", actor=1)
             self.apply("decide", actor=0)
 
-    @rule(actor=st.integers(0, 1), title=st.text(alphabet="abcXYZ", min_size=1, max_size=30))
+    @rule(actor=st.integers(0, 1), title=stage_titles())
     def propose(self, actor: int, title: str) -> None:
         self.apply("propose", actor=actor, title=title)
 
@@ -285,7 +260,7 @@ class TemplateMachine(DatabaseMachine):
         action=st.sampled_from(("update", "submit", "decide")),
         actor=st.integers(0, 1),
         index=st.integers(0, 20),
-        title=st.text(alphabet="abcXYZ", min_size=1, max_size=30),
+        title=stage_titles(),
         decision=st.sampled_from(("approved", "rejected")),
         wrong=st.sampled_from(("none", "bank", "tenant")),
     )
@@ -321,8 +296,8 @@ class TemplateMachine(DatabaseMachine):
             )
             assert len(success_events(self.db, row.id, self.prefix)) == expected.audit_events
             if expected.sealed is not None:
-                assert self.content(row) == expected.sealed
-                assert row.decided_by != row.proposed_by
+                assert_sealed_approval_unchanged(self.content(row), expected.sealed)
+                assert_maker_checker(row.proposed_by, row.decided_by)
             if row.status == "superseded":
                 assert row.superseded_at is not None
         if self.current is None:

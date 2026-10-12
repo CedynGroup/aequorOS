@@ -96,6 +96,10 @@ The freeze machine exercises review ordering, stale rounds/digests, officer-titl
 and maker-checker refusals, duplicate freezes, edits in locked/sealed/archived
 states, governed returns, archival, and bank/tenant isolation. Every frozen version
 keeps its original snapshot and both digests through reopening and later freezes.
+`test_empty_and_repeated_edits_preserve_committed_history` covers blank and repeated
+section-commit refusals in draft/returned cycles. The model tracks uncommitted
+revisions separately from committed text: refused commits preserve evidence and
+leave submit/advance blocked until a changed, nonempty paragraph is committed.
 Board signatures, channel submission, rebase and regulator hooks retain their
 dedicated example tests; this machine concentrates on the freeze boundary.
 

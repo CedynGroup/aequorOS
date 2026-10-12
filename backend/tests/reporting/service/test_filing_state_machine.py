@@ -29,8 +29,21 @@ from app.reporting.service.filing_workflow import chain
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.reporting.testing.assertions import (
+    assert_distinct_reviewers,
+    assert_filed_record_unchanged,
+    assert_refused_filing_unchanged,
+)
+from tests.reporting.testing.generators import (
+    OUTCOMES,
+    filing_checkpoints,
+    filing_review_histories,
+    regulator_outcomes,
+)
+from tests.support.assertions import assert_workflow_state
 from tests.support.factories.attestation import relax_signing
 from tests.support.factories.authorization import grant_institution_authority
+from tests.support.generators import ReviewHistory
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.support.stateful import DatabaseMachine, run_database_machine, success_events
 
@@ -40,8 +53,6 @@ CHECKER = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 OFFICERS = (USER_1, APPROVER, CHECKER)
 OTHER_BANK = "BK-STM00001"
 OTHER_TENANT_BANK = "BK-STM00002"
-OUTCOMES = ("acknowledged", "rejected", "declined")
-CHECKPOINTS = ("prepared", "review", "decided", "validation", "approved", "submitted", *OUTCOMES)
 
 
 def context(actor: UUID = USER_1, organization: str = ORG_1) -> TenantContext:
@@ -137,8 +148,8 @@ class FilingMachine(DatabaseMachine):
             success_events(self.db, self.package_id, "regulatory_package."),
         )
 
-    @initialize(checkpoint=st.sampled_from(CHECKPOINTS))
-    def reach_checkpoint(self, checkpoint: str) -> None:
+    @initialize(checkpoint=filing_checkpoints(), history=filing_review_histories())
+    def reach_checkpoint(self, checkpoint: str, history: ReviewHistory | None = None) -> None:
         # Reach important states through actual commands, never by assigning status.
         self.prepare()
         if checkpoint == "prepared":
@@ -153,6 +164,17 @@ class FilingMachine(DatabaseMachine):
         if checkpoint == "validation":
             return
         self.approve(2, False)
+        if history is not None:
+            for fact in history.decisions:
+                if fact.decision != "returned":
+                    continue
+                assert fact.return_to_seq is not None
+                self.send_back(2, False, fact.return_to_seq)
+                for _ in range(4):  # Preparation, approval, hand-off, final approval.
+                    if self.status == "approved":
+                        break
+                    self.advance("acknowledged")
+                assert self.status == "approved", "Filing: valid return history failed to advance"
         if checkpoint == "approved":
             return
         self.submit()
@@ -170,7 +192,7 @@ class FilingMachine(DatabaseMachine):
         except HTTPException as exc:
             self.db.rollback()
             assert not legal and exc.status_code == 409
-            assert self.evidence() == before
+            assert_refused_filing_unchanged(self.evidence(), before)
         else:
             assert legal
             self.stage, self.status = 2, "pending_approval"
@@ -185,7 +207,7 @@ class FilingMachine(DatabaseMachine):
         }
 
     @precondition(can_advance)
-    @rule(outcome=st.sampled_from(OUTCOMES))
+    @rule(outcome=regulator_outcomes())
     def advance(self, outcome: str) -> None:
         """Bias some steps toward progress without excluding adversarial rules."""
         if self.status in {"generated", "validated"}:
@@ -210,7 +232,7 @@ class FilingMachine(DatabaseMachine):
         except HTTPException as exc:
             self.db.rollback()
             assert not legal and exc.status_code == 409
-            assert self.evidence() == before
+            assert_refused_filing_unchanged(self.evidence(), before)
         else:
             assert legal and out.status == "validated"
             self.status = "validated"
@@ -255,7 +277,7 @@ class FilingMachine(DatabaseMachine):
         except HTTPException as exc:
             self.db.rollback()
             assert not legal and exc.status_code in {409, 422}
-            assert self.evidence() == before
+            assert_refused_filing_unchanged(self.evidence(), before)
         else:
             assert legal
             assert self.stage is not None
@@ -284,7 +306,7 @@ class FilingMachine(DatabaseMachine):
         except HTTPException as exc:
             self.db.rollback()
             assert not legal and exc.status_code == 409
-            assert self.evidence() == before
+            assert_refused_filing_unchanged(self.evidence(), before)
         else:
             assert legal
             if self.stage == 2:
@@ -306,12 +328,12 @@ class FilingMachine(DatabaseMachine):
         except HTTPException as exc:
             self.db.rollback()
             assert not legal and exc.status_code == 409
-            assert self.evidence() == before
+            assert_refused_filing_unchanged(self.evidence(), before)
         else:
             assert legal
             self.status = "submitted"
 
-    @rule(outcome=st.sampled_from(OUTCOMES))
+    @rule(outcome=regulator_outcomes())
     def regulator(self, outcome: str) -> None:
         legal = self.status == "submitted"
         before = self.evidence()
@@ -327,7 +349,7 @@ class FilingMachine(DatabaseMachine):
         except HTTPException as exc:
             self.db.rollback()
             assert not legal and exc.status_code == 409
-            assert self.evidence() == before
+            assert_refused_filing_unchanged(self.evidence(), before)
         else:
             assert legal
             self.status = outcome
@@ -350,17 +372,17 @@ class FilingMachine(DatabaseMachine):
                 assert exc.status_code == 404
             else:
                 raise AssertionError("Another tenant/bank accessed the return")
-        assert self.evidence() == before
+        assert_refused_filing_unchanged(self.evidence(), before)
 
     @invariant()
     def return_matches_independent_model(self) -> None:
         row = self.row()
-        assert (row.status, row.current_stage_seq, row.workflow_round) == (
-            self.status,
-            self.stage,
-            self.round,
+        assert_workflow_state(
+            (row.status, row.current_stage_seq, row.workflow_round),
+            (self.status, self.stage, self.round),
+            domain="Filing",
         )
-        assert row.snapshot == self.snapshot
+        assert_filed_record_unchanged(row.snapshot, self.snapshot)
         read = chain.read_chain(self.db, context(), row)
         standing = {
             stage.seq: decision.decided_by
@@ -369,8 +391,7 @@ class FilingMachine(DatabaseMachine):
             if decision.decision == "approved" and decision.still_stands
         }
         assert standing == self.approvals
-        assert USER_1 not in standing.values()
-        assert len(set(standing.values())) == len(standing)
+        assert_distinct_reviewers(standing, USER_1)
         events = workflow.list_submission_events(
             self.db, context(), SAMPLE_BANK_ID, self.package_id
         )
