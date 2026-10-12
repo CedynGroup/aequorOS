@@ -17,7 +17,7 @@ def report_narratives() -> st.SearchStrategy[str]:
     """ProseMirror text contract; icaap/domain/prosemirror.py treats whitespace as empty.
 
     Useful synthetic report sentences dominate, with blank content deliberately
-    mixed in to retain the freeze machine's fail-closed readiness coverage.
+    mixed in to exercise commit refusal and blocked review submission.
     """
     return st.one_of(
         st.sampled_from(

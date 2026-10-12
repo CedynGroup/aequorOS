@@ -128,9 +128,7 @@ class FreezeMachine(DatabaseMachine):
     @rule(stale=st.booleans())
     def submit(self, stale: bool) -> None:
         legal = (
-            self.status in {"draft", "returned"}
-            and not self.has_uncommitted_changes
-            and not stale
+            self.status in {"draft", "returned"} and not self.has_uncommitted_changes and not stale
         )
         before = self.evidence()
         stages = workflow.get_stages(self.db, self.maker, self.cycle_id)
@@ -631,7 +629,7 @@ def test_empty_and_repeated_edits_preserve_committed_history(
     new_versions: int,
     status: str,
 ) -> None:
-    """Minimized model gaps: draft → blank edit; draft → same paragraph twice.
+    """Blank/repeated commits leave draft/returned revisions dirty until recovery.
 
     Both refusals are the public service contract, not production defects.
     The generated machine must model them without discarding these inputs.

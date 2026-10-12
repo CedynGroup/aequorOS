@@ -32,16 +32,12 @@ selected-bank authority under capability reordering or sibling changes. Financia
 scaling, zero-exposure and currency round trips belong with the financial domains.
 Do not carry monetary tolerance into status, identity or cryptographic comparisons.
 
-Keep the existing CI budgets: backend profile 25 examples, database machines
-12 examples and 20 steps; dashboard pure properties 100 runs and filing models
-20 runs. Preserve minimized failures as regressions and report real defects.
-The full testing standard is in `CODEBASE_CONVENTIONS.md`; the remaining domain
-migrations and standard-wide guidance follow in the sequential domain changes.
+Keep the existing CI budgets and regression coverage documented in the
+[backend workflow guide](../../docs/state_machine_testing.md#bounded-reproducible-execution)
+and [dashboard testing guide](../../dashboard/README.md#unit-test-collection).
+The [shared testing standard](../../../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard)
+governs both surfaces.
 
-The ICAAP narrative migration exposed two gaps in the previous test model:
-`draft → blank paragraph → commit` correctly returns `422 section_empty`, and
-`draft → commit paragraph → save/commit the same paragraph` correctly returns
-`409 no_changes`. The model now tracks the last committed text and asserts
-refusal evidence. `test_empty_and_repeated_edits_preserve_committed_history`
-retains both minimal examples. These are model corrections, not product defects;
-production section-commit behavior is unchanged.
+Issue #553 has an approved five-PR sequence: scaffolding plus filing/ICAAP/approvals
+(this delivery), liquidity plus capital, credit plus FX, FTP plus IRRBB plus
+canonical data, then testing-standard documentation.
