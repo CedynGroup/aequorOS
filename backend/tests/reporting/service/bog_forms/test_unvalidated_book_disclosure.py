@@ -79,6 +79,7 @@ def _seed_loan(session: Session, *, validation_status: str, withdrawn: bool = Fa
     session.flush()
     lineage = LineageRecord(
         organization_id=DEMO_ORG_ID,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="unvalidated-disclosure-test",

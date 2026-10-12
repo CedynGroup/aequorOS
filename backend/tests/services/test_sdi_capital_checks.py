@@ -57,6 +57,7 @@ def _seed_capital_structure(db: Session, bank: Bank, rows: list[tuple[str, str]]
     db.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="sdi-capital-checks-test",

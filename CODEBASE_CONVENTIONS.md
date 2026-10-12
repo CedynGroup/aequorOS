@@ -176,6 +176,20 @@ the bank-only references for the tables in its `TABLES` catalogue; regression co
 Nullable `bank_id` continues to permit organization-wide macro scenarios and management
 action plans; their separate organization FK remains enforced.
 
+Canonical parent references bind `(parent_id, organization_id, bank_id)` to the parent's
+matching `(id, organization_id, bank_id)` unique key, so two banks in one organization
+cannot share a canonical parent or ingestion batch by mistake. Migration
+[`202610110094`](backend/alembic/versions/202610110094_bind_canonical_banks.py) owns the
+affected-reference catalogue in `REFERENCES`: it locks the affected tables, backfills
+lineage bank ownership from each existing batch, and verifies all affected references
+before replacing constraints. It refuses mismatches rather than repairing them.
+Batch-bound lineage must carry that batch's bank; batchless lineage may remain
+organization-wide, but a node without a bank cannot satisfy a bank-bound canonical
+lineage reference. The pre-existing migrated-schema omission for
+`canonical_loan_events.lineage_id` remains for the next stack layer. Regression coverage
+for this layer is in
+[`test_canonical_bank_integrity.py`](backend/tests/db/test_canonical_bank_integrity.py).
+
 ### Migrations (`alembic/versions/`)
 
 - Filename and revision id: `YYYYMMDDNNNN_short_description.py` (e.g.

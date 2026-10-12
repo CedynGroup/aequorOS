@@ -50,6 +50,7 @@ def _canonical_metadata(db_session: Session) -> dict[str, object]:
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_ID,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="rating-canonical-fixture",

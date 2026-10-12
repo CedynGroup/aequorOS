@@ -400,6 +400,7 @@ def test_sdi_irr_trend_batches_net_own_funds_and_matches_scalar_path(
     db_session.flush()
     lineage = LineageRecord(
         organization_id=DEMO_ORG_ID,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="sdi-irr-query-shape",

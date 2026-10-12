@@ -139,14 +139,36 @@ def canonical_constraints(table_name: str) -> tuple:
             ["banks.id", "banks.organization_id"],
         ),
         ForeignKeyConstraint(
-            ["ingestion_batch_id", "organization_id"],
-            ["ingestion_batches.id", "ingestion_batches.organization_id"],
+            ["ingestion_batch_id", "organization_id", "bank_id"],
+            [
+                "ingestion_batches.id",
+                "ingestion_batches.organization_id",
+                "ingestion_batches.bank_id",
+            ],
+            name=f"fk_{table_name}_ingestion_batch_id_bank",
         ),
         ForeignKeyConstraint(
-            ["lineage_id", "organization_id"],
-            ["lineage_records.id", "lineage_records.organization_id"],
+            ["lineage_id", "organization_id", "bank_id"],
+            ["lineage_records.id", "lineage_records.organization_id", "lineage_records.bank_id"],
+            name=f"fk_{table_name}_lineage_id_bank",
         ),
         UniqueConstraint("id", "organization_id", name=f"uq_{table_name}_id_org"),
+        *(
+            (
+                UniqueConstraint(
+                    "id", "organization_id", "bank_id", name=f"uq_{table_name}_id_org_bank"
+                ),
+            )
+            if table_name
+            in (
+                "canonical_gl_accounts",
+                "canonical_counterparties",
+                "canonical_products",
+                "canonical_positions",
+                "canonical_yield_curves",
+            )
+            else ()
+        ),
         Index(f"ix_{table_name}_org_bank_as_of", "organization_id", "bank_id", "as_of_date"),
         Index(f"ix_{table_name}_org_batch", "organization_id", "ingestion_batch_id"),
     )
@@ -191,8 +213,12 @@ class CanonicalGlAccount(CanonicalMetadataMixin, Base):
             name="ck_canonical_gl_accounts_account_class",
         ),
         ForeignKeyConstraint(
-            ["parent_account_id", "organization_id"],
-            ["canonical_gl_accounts.id", "canonical_gl_accounts.organization_id"],
+            ["parent_account_id", "organization_id", "bank_id"],
+            [
+                "canonical_gl_accounts.id",
+                "canonical_gl_accounts.organization_id",
+                "canonical_gl_accounts.bank_id",
+            ],
         ),
         _current_generation_unique(
             "canonical_gl_accounts", "organization_id", "bank_id", "account_code", "as_of_date"
@@ -418,12 +444,16 @@ class CanonicalReferenceRow(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             ["banks.id", "banks.organization_id"],
         ),
         ForeignKeyConstraint(
-            ["ingestion_batch_id", "organization_id"],
-            ["ingestion_batches.id", "ingestion_batches.organization_id"],
+            ["ingestion_batch_id", "organization_id", "bank_id"],
+            [
+                "ingestion_batches.id",
+                "ingestion_batches.organization_id",
+                "ingestion_batches.bank_id",
+            ],
         ),
         ForeignKeyConstraint(
-            ["lineage_id", "organization_id"],
-            ["lineage_records.id", "lineage_records.organization_id"],
+            ["lineage_id", "organization_id", "bank_id"],
+            ["lineage_records.id", "lineage_records.organization_id", "lineage_records.bank_id"],
         ),
         UniqueConstraint("id", "organization_id", name="uq_canonical_reference_rows_id_org"),
         UniqueConstraint(
@@ -511,8 +541,12 @@ class CanonicalYieldCurvePoint(CanonicalMetadataMixin, Base):
             name="ck_canonical_yield_curve_points_rate",
         ),
         ForeignKeyConstraint(
-            ["yield_curve_id", "organization_id"],
-            ["canonical_yield_curves.id", "canonical_yield_curves.organization_id"],
+            ["yield_curve_id", "organization_id", "bank_id"],
+            [
+                "canonical_yield_curves.id",
+                "canonical_yield_curves.organization_id",
+                "canonical_yield_curves.bank_id",
+            ],
         ),
         _current_generation_unique(
             "canonical_yield_curve_points",
@@ -671,20 +705,36 @@ class CanonicalPositionSnapshot(CanonicalMetadataMixin, Base):
             name="ck_canonical_position_snapshots_deposit_account_type",
         ),
         ForeignKeyConstraint(
-            ["position_id", "organization_id"],
-            ["canonical_positions.id", "canonical_positions.organization_id"],
+            ["position_id", "organization_id", "bank_id"],
+            [
+                "canonical_positions.id",
+                "canonical_positions.organization_id",
+                "canonical_positions.bank_id",
+            ],
         ),
         ForeignKeyConstraint(
-            ["counterparty_id", "organization_id"],
-            ["canonical_counterparties.id", "canonical_counterparties.organization_id"],
+            ["counterparty_id", "organization_id", "bank_id"],
+            [
+                "canonical_counterparties.id",
+                "canonical_counterparties.organization_id",
+                "canonical_counterparties.bank_id",
+            ],
         ),
         ForeignKeyConstraint(
-            ["product_id", "organization_id"],
-            ["canonical_products.id", "canonical_products.organization_id"],
+            ["product_id", "organization_id", "bank_id"],
+            [
+                "canonical_products.id",
+                "canonical_products.organization_id",
+                "canonical_products.bank_id",
+            ],
         ),
         ForeignKeyConstraint(
-            ["gl_account_id", "organization_id"],
-            ["canonical_gl_accounts.id", "canonical_gl_accounts.organization_id"],
+            ["gl_account_id", "organization_id", "bank_id"],
+            [
+                "canonical_gl_accounts.id",
+                "canonical_gl_accounts.organization_id",
+                "canonical_gl_accounts.bank_id",
+            ],
         ),
         _current_generation_unique(
             "canonical_position_snapshots", "organization_id", "position_id", "as_of_date"

@@ -83,6 +83,7 @@ def _seed_snapshot_history(bank_id: str) -> None:
         session.flush()
         lineage = LineageRecord(
             organization_id=ORG_1,
+            bank_id=batch.bank_id,
             ingestion_batch_id=batch.id,
             operation_type="ADAPTER_TRANSLATE",
             operation_ref="sdi-as-of-history",

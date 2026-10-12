@@ -124,6 +124,7 @@ def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture scri
     session.flush()
     lineage = LineageRecord(
         organization_id=organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="canonical-fixture",
@@ -525,6 +526,7 @@ def seed_hedge_and_swap_positions(
     session.flush()
     lineage = LineageRecord(
         organization_id=organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="hedge-swap-fixture",
@@ -654,6 +656,7 @@ def seed_directional_swap_positions(
     session.flush()
     lineage = LineageRecord(
         organization_id=organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="directional-swap-fixture",

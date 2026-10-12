@@ -149,7 +149,7 @@ Below is the entity list with primary purpose. Full DDL is expanded in `/schema/
 
 - `position` — a unified abstraction for anything on or off the balance sheet at a point in time
   - `position_type`: `LOAN`, `DEPOSIT`, `SECURITY_HOLDING`, `DERIVATIVE`, `CASH`, `INTERBANK_PLACEMENT`, `INTERBANK_BORROWING`, `LC_GUARANTEE`, `COMMITMENT_UNDRAWN`, etc.
-  - Every position has: `institution_id`, `counterparty_id`, `product_id`, `currency`, `notional`, `balance`, `origination_date`, `contractual_maturity`, `next_repricing_date`, `interest_rate`, `rate_type` (`FIXED`/`FLOATING`), `rate_index`, `rate_spread`, `ifrs9_stage`, `collateral_id`, and full metadata
+  - Position state covers counterparties, products, currency, balances and notionals, maturity and repricing, interest terms, credit classification and collateral, with [mandatory metadata](#43-mandatory-metadata-columns). The implemented split between position identity and dated snapshots is owned by [`CanonicalPosition` and `CanonicalPositionSnapshot`](../backend/app/models/canonical.py).
 - `position_snapshot` — the position's state as of a specific `as_of_date` (this is the immutable record)
 - `cashflow_schedule` — projected cashflows from a position (amortization schedules)
 - `collateral` — collateral pledged against loans, with type, value, haircut
@@ -186,20 +186,14 @@ Below is the entity list with primary purpose. Full DDL is expanded in `/schema/
 
 ### 4.3 Mandatory Metadata Columns
 
-Every entity in the canonical model carries:
-
-- `id` (UUID)
-- `institution_id` (tenant scope)
-- `as_of_date` (business date this record represents)
-- `ingested_at` (system timestamp of ingestion)
-- `source_system` (adapter that produced this record: `T24`, `EXCEL`, `MANUAL`, etc.)
-- `source_reference` (the source system's own identifier for this record; e.g., T24 arrangement ID)
-- `ingestion_batch_id` (links to the specific ingestion run)
-- `validation_status` (`ACCEPTED`, `WARNING`, `ERROR`, `BLOCKED`)
-- `lineage_id` (foreign key into the lineage table; see section 8)
-- `superseded_by` (nullable; points to a newer version of this record if restated)
-- `created_by` (system or user)
-- `created_at` (row insertion timestamp)
+The implemented column names, types, nullability and validation values are owned by
+[`CanonicalMetadataMixin` and the concrete canonical models](../backend/app/models/canonical.py).
+Metadata identifies the tenant and reporting entity,
+business date, ingestion time, source, batch, validation state, lineage and restatement.
+The source reference is the source system's own identifier (for example, a T24 arrangement ID).
+The database ownership contract is the
+[composite-FK tenant pattern](../CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern);
+the lineage graph is described in section 8.
 
 Fields cannot be nullable that describe _what_ a record is (e.g., `position_type`, `currency`). Fields can be nullable that describe _behavioral overlays_ (e.g., `behavioral_maturity`) because those are enriched, not raw.
 
@@ -599,7 +593,7 @@ This is the audit trail. Without it, no BoG examiner accepts AequorOS. With it, 
 
 ### 8.2 The Lineage Table
 
-A dedicated `lineage` table stores a graph of transformations:
+A dedicated [`lineage_records` table](../backend/app/models/ingestion.py) stores a graph of transformations:
 
 ```
 lineage_id | operation      | input_lineage_ids | operation_type | operation_ref     | timestamp
@@ -971,9 +965,10 @@ For banks with international operations, SWIFT message feeds provide interbank p
 
 ### 14.1 Multi-Tenancy
 
-- Every canonical record is stamped with `institution_id`.
-- Every database query is scoped to `institution_id`.
-- Row-level security enforced at the database level, not just the application.
+- Tenant identity, mandatory query filters and database row-level security follow
+  [the tenancy model](../ARCHITECTURE.md#2-tenancy-model).
+- Canonical metadata follows [§4.3](#43-mandatory-metadata-columns); database parent
+  ownership follows the [composite-FK contract](../CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern).
 - Cross-tenant queries impossible except through explicit, audited, aggregated-only administrative interfaces.
 
 ### 14.2 Encryption

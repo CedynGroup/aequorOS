@@ -492,6 +492,7 @@ def _seed_second_source_book(db_session: Session, bank: Bank, *, reference: str)
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="second-source-fixture",

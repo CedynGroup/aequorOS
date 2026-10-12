@@ -113,6 +113,7 @@ def new_batch(db: Session, as_of: date, *, source_system: str = "EXCEL_CSV") -> 
     db.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="bi-test",

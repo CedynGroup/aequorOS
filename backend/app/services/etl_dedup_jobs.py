@@ -801,6 +801,7 @@ def _record_dedup_lineage(  # noqa: PLR0913 - mirrors the inline lineage node's 
     )
     node = LineageRecord(
         organization_id=ctx.organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ML_ETL_DEDUP",
         operation_ref="ml_etl/dedup",
