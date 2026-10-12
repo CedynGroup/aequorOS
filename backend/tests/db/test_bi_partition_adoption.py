@@ -721,7 +721,7 @@ def test_a_hardened_child_whose_bounds_are_not_the_months_is_not_reported_as_cov
 # --- (5) EXECUTE on the definer functions --------------------------------------
 
 
-def test_execute_is_held_by_the_migrating_role_and_bypassrls_logins_and_nobody_else(
+def test_partition_execution_grants_match_maintenance_and_api_capabilities(
     adoption_schema: MigratedPostgresSchema,
 ) -> None:
     """The grant set the migration installs, read back from the ACL.
@@ -732,8 +732,10 @@ def test_execute_is_held_by_the_migrating_role_and_bypassrls_logins_and_nobody_e
     after the migration holds no grant, and ``query_log.record`` is deliberately
     unguarded, so exports and subscription deliveries under such a role fail with
     ``permission denied for function``. This test pins the installed set exactly —
-    no PUBLIC, the owner, and precisely the roles the predicate names — and the
-    next test pins the landmine itself so the runbook sentence is executable.
+    no PUBLIC, the owner, and precisely the roles the predicate names. Migration
+    ``202610120099`` also grants the guarded monthly entry point to the API;
+    real-login tests pin its query-log-only authority. The next test pins the
+    remaining maintenance-role landmine so the runbook sentence is executable.
     """
     with adoption_schema.app_engine.connect() as connection:
         expected = {connection.scalar(text("SELECT current_user"))} | set(
@@ -763,10 +765,15 @@ def test_execute_is_held_by_the_migrating_role_and_bypassrls_logins_and_nobody_e
                 },
             ).all()
             executors = {grantee for grantee, privilege in grantees if privilege == "EXECUTE"}
+            permitted = (
+                expected | {"aqs_api"}
+                if signature == "bi_ensure_month_partition(regclass, date)"
+                else expected
+            )
             assert "PUBLIC" not in executors, f"{signature}: PUBLIC may execute"
-            assert executors == expected, (
+            assert executors == permitted, (
                 f"{signature}: EXECUTE is held by {sorted(executors)}, the migration's "
-                f"predicate names {sorted(expected)}"
+                f"predicate names {sorted(permitted)}"
             )
 
 

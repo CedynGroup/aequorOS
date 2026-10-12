@@ -33,7 +33,7 @@ parameter (it is a utility statement), which is why ``set_config`` is used.
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -102,9 +102,21 @@ def _run(session: Session, statement: Select[Any], *, timeout_ms: int) -> Sequen
 
 
 def run_select(
-    db: Session, statement: Select[Any], *, organization_id: str, timeout_ms: int
+    db: Session,
+    statement: Select[Any],
+    *,
+    organization_id: str,
+    timeout_ms: int,
+    before_query: Callable[[], None] | None = None,
 ) -> Sequence[Row[Any]]:
-    """Run one read statement under the guards, on the BI session when configured."""
+    """Run one guarded read, releasing caller state before pool checkout if requested.
+
+    Exports pass their API session's commit here. Compiler discovery statements
+    use this same boundary, so metadata reads cannot leave an API transaction
+    open while a pivot probe or the final query waits on the BI pool.
+    """
+    if before_query is not None:
+        before_query()
     maker = get_bi_sessionmaker()
     if maker is None:
         return _run(db, statement, timeout_ms=timeout_ms)
@@ -113,14 +125,25 @@ def run_select(
         return _run(bi_session, statement, timeout_ms=timeout_ms)
 
 
-def execute(db: Session, compiled: CompiledQuery, *, timeout_ms: int, row_cap: int) -> QueryResult:
+def execute(
+    db: Session,
+    compiled: CompiledQuery,
+    *,
+    timeout_ms: int,
+    row_cap: int,
+    before_query: Callable[[], None] | None = None,
+) -> QueryResult:
     """Run ``compiled`` and return at most ``row_cap`` rows plus a truncation flag."""
     if timeout_ms < 1:
         raise ValueError("timeout_ms must be positive")
     statement, limit = compiled.with_row_cap(row_cap)
     started = time.perf_counter()
     rows = run_select(
-        db, statement, organization_id=compiled.organization_id, timeout_ms=timeout_ms
+        db,
+        statement,
+        organization_id=compiled.organization_id,
+        timeout_ms=timeout_ms,
+        before_query=before_query,
     )
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     truncated = len(rows) > limit

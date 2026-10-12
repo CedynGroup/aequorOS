@@ -153,6 +153,27 @@ App-session API requests use an access token issued by password or SSO login:
 Authorization: Bearer <app-access-token>
 ```
 
+### API transactions and external waits
+
+Governed BI exports commit authorization before running the query. Certified
+measure metadata stays on the API role; every compiler discovery statement and
+the final query commits that metadata read before checking out the BI pool.
+Delivery provenance, audit and query logs are then produced in a fresh API
+transaction, with one commit before returning the artifact or queued job.
+The single-database fallback also ends its query transaction before delivery.
+The API can ensure only query-log partitions in the previous, current or next
+UTC month through the guarded partition definer; it receives no table DDL rights.
+See [native transaction/role regressions](tests/db/test_bi_export_transactions.py).
+
+The API idle budget remains ten minutes. The external-wait audit covered BI
+export compilation/execution and document deletion/upload completion, plus
+ingestion and database-direct calls. Remaining transaction-held waits include
+`services/ingestion.py:upload_source` (institution setup and object write),
+`start_ingestion` (source download and raw-artifact write), and
+`services/database_connections.py:test_connection`, `discover_schema` and
+`sync_now` (remote database inspection or extraction). These require their own
+transaction-boundary work before lowering the API budget to about a minute.
+
 Health endpoints:
 
 - `GET /api/health/live`

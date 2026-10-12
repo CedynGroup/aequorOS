@@ -101,7 +101,8 @@
     ["aequoros_signed_package_guard", "", "aqs_audit_verifier"],
     ["aequoros_signed_package_guard", "", "aqs_bi"],
     ["aequoros_signed_package_guard", "", "aqs_operator"],
-    ["aequoros_signed_package_guard", "", "aqs_worker"]
+    ["aequoros_signed_package_guard", "", "aqs_worker"],
+    ["bi_ensure_month_partition", "regclass, date", "aqs_api"]
   ],
   "sequences": [],
   "tables": {
