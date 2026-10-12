@@ -10,6 +10,11 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it } from "vitest";
 import fc from "fast-check";
+import {
+  transmitStepArbitrary,
+  type TransmitStep,
+} from "./submissions/testing/generators";
+import { assertFilingReceipt } from "./submissions/testing/assertions";
 import TransmitConfirmDialog from "../components/submissions/TransmitConfirmDialog";
 import type { TransmitPreview } from "../components/submissions/transmitPreview";
 import { setActiveJurisdiction } from "../lib/format";
@@ -98,11 +103,9 @@ function observe(model: Model) {
   ).toBeVisible();
 }
 
-type Step =
-  "acknowledge" | "pending" | "refused" | "confirm" | "cancelAndReopen";
 class DialogCommand implements fc.AsyncCommand<Model, Real> {
   constructor(
-    readonly step: Step,
+    readonly step: TransmitStep,
     readonly value: boolean,
   ) {}
   check() {
@@ -130,7 +133,8 @@ class DialogCommand implements fc.AsyncCommand<Model, Real> {
       await real.user.click(
         screen.getByRole("button", { name: "Transmit (simulated)" }),
       );
-      expect(real.outcome).toBe(
+      assertFilingReceipt(
+        real.outcome,
         model.acknowledged && !model.pending ? "confirm" : null,
       );
     } else {
@@ -140,7 +144,7 @@ class DialogCommand implements fc.AsyncCommand<Model, Real> {
       await real.user.click(
         dialog.getAllByRole("button", { name: "Cancel" }).at(-1)!,
       );
-      expect(real.outcome).toBe("cancel");
+      assertFilingReceipt(real.outcome, "cancel");
       real.view.unmount();
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       Object.assign(model, {
@@ -164,18 +168,9 @@ class DialogCommand implements fc.AsyncCommand<Model, Real> {
 }
 
 it("requires fresh acknowledgment, blocks duplicate submission while pending and supports refusal and retry", async () => {
-  const command = fc
-    .tuple(
-      fc.constantFrom<Step>(
-        "acknowledge",
-        "pending",
-        "refused",
-        "confirm",
-        "cancelAndReopen",
-      ),
-      fc.boolean(),
-    )
-    .map(([step, value]) => new DialogCommand(step, value));
+  const command = transmitStepArbitrary.map(
+    ([step, value]) => new DialogCommand(step, value),
+  );
   const run = async (sequence: Iterable<fc.AsyncCommand<Model, Real>>) => {
     setActiveJurisdiction({ submissionPortal: "Sample portal" });
     try {

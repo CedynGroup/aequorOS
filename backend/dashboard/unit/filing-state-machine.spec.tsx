@@ -9,10 +9,17 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it } from "vitest";
 import fc from "fast-check";
-import type {
-  EffectiveAuthorityRead,
-  PackageStatus,
-} from "@aequoros/risk-service-api";
+import type { PackageStatus } from "@aequoros/risk-service-api";
+import {
+  filingTransitions as transitions,
+  filingStatuses,
+  filingStatusArbitrary,
+  officers,
+  officerArbitrary,
+  officerProjection as projection,
+  type Officer,
+} from "./submissions/testing/generators";
+import { assertFilingReceipt } from "./submissions/testing/assertions";
 import { PrimaryActionButton } from "../components/submissions/ReturnCommandBar";
 import { filingAuthorityFor } from "../lib/submissions/filingAuthority";
 import {
@@ -53,7 +60,6 @@ it("does not offer preparation or approval again while the regulator holds the f
   }
 });
 
-type Officer = "preparer" | "approver" | "validator" | "reader";
 type Model = {
   status: PackageStatus;
   officer: Officer;
@@ -69,48 +75,6 @@ type Real = {
   receipt: string | null;
   onAct: (label: string) => void;
 };
-
-// Server response sequences are generated independently of the UI's stage helpers.
-// These tests check offered acts; backend state machines own transition enforcement
-// and the final maker-checker decision, including for contextual capabilities.
-const transitions: Record<PackageStatus, readonly PackageStatus[]> = {
-  draft: ["generated"],
-  generated: ["validated", "superseded"],
-  validated: ["pending_approval", "superseded"],
-  pending_approval: ["approved", "rejected"],
-  approved: ["submitted", "superseded"],
-  submitted: ["acknowledged", "rejected", "declined"],
-  rejected: ["superseded"],
-  acknowledged: [],
-  declined: [],
-  superseded: [],
-};
-
-function projection(officer: Officer): EffectiveAuthorityRead {
-  const permissions = {
-    preparer: ["create", "validate", "export"],
-    approver: ["approve"],
-    validator: ["submit"],
-    reader: [],
-  } as const;
-  return {
-    authv: 1,
-    organizationCapabilities: [],
-    institutionCapabilities: [
-      {
-        institutionId: "BK-A",
-        capabilities: permissions[officer].map((permission) => ({
-          module: "reg",
-          sensitivity: "restricted",
-          permission,
-          dataScope: { kind: "all", branches: [], regions: [] },
-          requiresContextualAuthorization:
-            permission === "approve" || permission === "submit",
-        })),
-      },
-    ],
-  };
-}
 
 function FilingControl({
   model,
@@ -255,7 +219,8 @@ class TryAct implements fc.AsyncCommand<Model, Real> {
     real.receipt = null;
     const button = screen.queryByRole("button");
     if (button) await real.user.click(button);
-    expect(real.receipt).toBe(
+    assertFilingReceipt(
+      real.receipt,
       expectedAct(model)?.enabled ? expectedAct(model)!.label : null,
     );
     // Clicking asks for an act. A server response must settle before another
@@ -268,8 +233,7 @@ class TryAct implements fc.AsyncCommand<Model, Real> {
 }
 
 it("keeps filing controls scoped and frozen across generated server and officer sequences", async () => {
-  const statuses = Object.keys(transitions) as PackageStatus[];
-  const officers: Officer[] = ["preparer", "approver", "validator", "reader"];
+  const statuses = filingStatuses;
   const initial = (status: PackageStatus): Model => ({
     status,
     officer: "preparer",
@@ -303,10 +267,8 @@ it("keeps filing controls scoped and frozen across generated server and officer 
     }
   const commands = fc.commands(
     [
-      fc.constantFrom(...statuses).map((status) => new ServerStatus(status)),
-      fc
-        .constantFrom(...officers)
-        .map((officer) => new Change("officer", officer)),
+      filingStatusArbitrary.map((status) => new ServerStatus(status)),
+      officerArbitrary.map((officer) => new Change("officer", officer)),
       fc
         .constantFrom("BK-A" as const, "BK-B" as const)
         .map((bank) => new Change("bank", bank)),
@@ -367,8 +329,7 @@ it("keeps filing controls scoped and frozen across generated server and officer 
     new Change("officer", "approver"),
     new TryAct(),
   ]);
-  await fc.assert(
-    fc.asyncProperty(fc.constantFrom(...statuses), commands, run),
-    { numRuns: 20 },
-  );
+  await fc.assert(fc.asyncProperty(filingStatusArbitrary, commands, run), {
+    numRuns: 20,
+  });
 }, 20_000);

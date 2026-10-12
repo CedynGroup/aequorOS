@@ -1,36 +1,15 @@
 import { expect, it } from "vitest";
 import fc from "fast-check";
-import type {
-  EffectiveAuthorityRead,
-  EffectiveCapabilityRead,
-} from "@aequoros/risk-service-api";
+import type { EffectiveAuthorityRead } from "@aequoros/risk-service-api";
+import { capabilitySetArbitrary } from "./submissions/testing/generators";
+import { assertFilingAuthorityUnchanged } from "./submissions/testing/assertions";
 import { filingAuthorityFor } from "../lib/submissions/filingAuthority";
-
-const capability: fc.Arbitrary<EffectiveCapabilityRead> = fc.record({
-  module: fc.constantFrom("reg" as const, "credit" as const, "fx" as const),
-  sensitivity: fc.constantFrom(
-    "published" as const,
-    "aggregated" as const,
-    "confidential" as const,
-    "restricted" as const,
-  ),
-  permission: fc.constantFrom(
-    "view" as const,
-    "create" as const,
-    "validate" as const,
-    "export" as const,
-    "approve" as const,
-    "submit" as const,
-  ),
-  requiresContextualAuthorization: fc.boolean(),
-  dataScope: fc.constant({ kind: "all" as const, branches: [], regions: [] }),
-});
 
 it("offers filing acts only from the selected institution's exact regulatory capabilities", () => {
   fc.assert(
     fc.property(
-      fc.array(capability, { maxLength: 25 }),
-      fc.array(capability, { maxLength: 25 }),
+      capabilitySetArbitrary,
+      capabilitySetArbitrary,
       fc.boolean(),
       fc.boolean(),
       (selected, sibling, resolved, readOnly) => {
@@ -47,6 +26,23 @@ it("offers filing acts only from the selected institution's exact regulatory cap
           resolved,
           readOnly,
         });
+        assertFilingAuthorityUnchanged(
+          filingAuthorityFor(
+            {
+              ...projection,
+              institutionCapabilities: [
+                { institutionId: "BK-B", capabilities: [] },
+                {
+                  institutionId: "BK-A",
+                  capabilities: [...selected].reverse(),
+                },
+              ],
+            },
+            "BK-A",
+            { resolved, readOnly },
+          ),
+          actual,
+        );
         const gates = [
           ["mayPrepare", "create", false],
           ["mayRunChecks", "validate", false],
