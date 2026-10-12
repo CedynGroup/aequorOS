@@ -194,7 +194,7 @@ def test_dashboard_journeys_have_an_always_reported_sharded_gate() -> None:
         dict[str, dict[str, dict[str, object]]],
         yaml.load((WORKFLOWS / "dashboard-journeys.yml").read_text(), Loader=yaml.BaseLoader),
     )
-    assert set(document["on"]) == {"pull_request", "push", "workflow_dispatch"}
+    assert set(document["on"]) == {"pull_request", "push", "workflow_dispatch", "merge_group"}
     assert document["on"]["push"]["branches"] == ["main"]
     jobs = document["jobs"]
     assert jobs["gate"]["name"] == "Dashboard journeys gate"

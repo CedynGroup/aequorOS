@@ -170,6 +170,8 @@ name: Risk Service CI
 # not made here.
 
 on:
+  merge_group:
+    types: [checks_requested]
   # No `paths:` filter, on purpose — see BRANCH PROTECTION above. The filtering
   # lives in the `if:` conditions on the expensive jobs, so that this workflow
   # always reports a status and can therefore be made a required check.

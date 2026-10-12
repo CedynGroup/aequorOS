@@ -1164,6 +1164,14 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
 
 ### CI enforcement
 
+- **Merge-queue checks run on the queued merge result.** The backend, dashboard,
+  web, dashboard-journey and secret-scan workflows trigger on pull requests,
+  pushes to `main`, and `merge_group` events of type `checks_requested`.
+  Merge groups select every CI area rather than applying PR path filters;
+  [Postgres suite selection](backend/README.md#run-tests) governs shard coverage.
+  [The merge-queue guard](backend/tests/architecture/test_merge_queue.py) pins
+  the triggers and required-check names. Enabling the queue and configuring
+  required checks on `main` remain repository-settings work.
 - **CI enforces every surface.** `risk-service.yml` gates the backend; `dashboard.yml`
   enforces the dashboard gates listed above; `web.yml` gates `frontend` lint+build
   and `console` typecheck+test+build, and `dashboard-journeys.yml` gates browser

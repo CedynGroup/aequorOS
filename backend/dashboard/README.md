@@ -671,9 +671,8 @@ step-up return. To drive the issuer by hand:
 cd backend && E2E_IDP_PORT=8120 uv run python scripts/e2e_idp.py
 ```
 
-The `Dashboard Playwright journeys` workflow in
-`.github/workflows/dashboard-journeys.yml` runs automatically on pull requests
-and pushes to main, and remains available through the Actions UI or
+The `Dashboard Playwright journeys` workflow's automatic triggers are governed by
+[CI enforcement](../../ARCHITECTURE.md#ci-enforcement). It also remains available through the Actions UI or
 `gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`.
 Journeys run for every change except PRs whose entire diff is on this ignore list:
 
@@ -689,7 +688,7 @@ workspace manifest, lockfile, interpreter file, workflow, action and script,
 select the suite. Dashboard images and runtime Markdown also select it.
 The shared detector's ignore mode is used only by this workflow; other workflows
 keep their inclusion predicates. Renames consider both the old and new path.
-Main pushes and manual dispatch run every shard; unknown or empty change
+All events other than pull requests run every shard; unknown or empty change
 decisions fail closed. The **`Dashboard journeys gate`** is the stable check to
 require before merge: it always reports and accepts a skipped suite only after
 successful detection of an ignored-only PR.

@@ -58,6 +58,8 @@ name: Dashboard CI
 # `dashboard` job itself, which legitimately reports `skipped`.
 
 on:
+  merge_group:
+    types: [checks_requested]
   pull_request:
   push:
     branches: [main]

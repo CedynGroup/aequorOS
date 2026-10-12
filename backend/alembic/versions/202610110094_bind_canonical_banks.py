@@ -3,7 +3,6 @@
 Lineage bank ownership is backfilled from its existing ingestion batch. Nodes
 without a batch remain organization-wide and cannot anchor financial rows.
 Every affected reference is verified under table ownership before replacement.
-The loan-event lineage omission is repaired by the following revision.
 """
 
 from __future__ import annotations

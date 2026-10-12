@@ -207,6 +207,29 @@ def test_other_workflows_keep_inclusion_selection(
     assert output == f"{output_name}={str(selected).lower()}"
 
 
+@pytest.mark.parametrize(
+    ("workflow", "job", "step_id", "output_name"),
+    [
+        ("dashboard.yml", "changes", "areas", "dashboard"),
+        ("risk-service.yml", "preflight", "backend", "backend"),
+        ("risk-service.yml", "preflight", "guards", "guards"),
+        ("risk-service.yml", "preflight", "api_client", "api_client"),
+        ("web.yml", "changes", "areas", "web"),
+        ("dashboard-journeys.yml", "changes", "areas", "journeys"),
+    ],
+)
+def test_merge_group_runs_every_area_even_for_a_docs_only_diff(
+    tmp_path: Path, workflow: str, job: str, step_id: str, output_name: str
+) -> None:
+    output = _run_change_detector(
+        tmp_path,
+        ("README.md",),
+        _workflow_detector_command(workflow, step_id, job),
+        event="merge_group",
+    )
+    assert output == f"{output_name}=true"
+
+
 def _workflow_detector_command(
     workflow: str = "dashboard-journeys.yml", step_id: str = "areas", job: str = "changes"
 ) -> str:
