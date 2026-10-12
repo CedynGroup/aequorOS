@@ -1179,6 +1179,13 @@ class AuthSettings(BaseSettings):
     #: user out. Outside the window a re-presented token revokes its whole
     #: family. Set to 0 for strict single-use rotation.
     refresh_rotation_grace_seconds: int = Field(default=30, alias="AUTH_REFRESH_ROTATION_GRACE")
+    session_purge_enabled: bool = Field(default=False, alias="AUTH_SESSION_PURGE_ENABLED")
+    refresh_token_retention_days: int = Field(
+        default=30, gt=0, alias="AUTH_REFRESH_TOKEN_RETENTION_DAYS"
+    )
+    session_purge_batch_size: int = Field(
+        default=1000, gt=0, le=10000, alias="AUTH_SESSION_PURGE_BATCH_SIZE"
+    )
     max_failed_logins: int = Field(default=5, alias="AUTH_MAX_FAILED_LOGINS")
     lockout_seconds: int = Field(default=900, alias="AUTH_LOCKOUT_SECONDS")
     # SSO (own OIDC relying party — no third-party broker): connections live in

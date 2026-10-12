@@ -46,6 +46,7 @@ def _as_aware(value: datetime | None) -> datetime | None:
 # ``tests/services/test_desk_capture_job.py::test_every_job_type_has_a_worker_handler``
 # enforces this; keep it green.
 JOB_TYPES = (
+    "session_purge",
     "pipeline_refresh",
     "official_run",
     "scheduled_tick",

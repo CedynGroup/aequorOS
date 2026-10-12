@@ -32,6 +32,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -69,6 +70,13 @@ class RefreshToken(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_refresh_tokens_organization_id", "organization_id"),
         # Supports purging spent rows; the table is otherwise append-mostly.
         Index("ix_refresh_tokens_expires_at", "expires_at"),
+        Index("ix_refresh_tokens_org_expires", "organization_id", "expires_at"),
+        Index(
+            "ix_refresh_tokens_org_revoked",
+            "organization_id",
+            "revoked_at",
+            postgresql_where=text("revoked_at IS NOT NULL"),
+        ),
     )
 
     organization_id: Mapped[str] = mapped_column(

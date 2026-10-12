@@ -126,6 +126,7 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # the product; tests that need one ON set it themselves via monkeypatch.
     for _scheduling_flag in (
         "AUDIT_INTEGRITY_ENABLED",
+        "AUTH_SESSION_PURGE_ENABLED",
         "OFFICIAL_RUN_ENABLED",
         "MARKET_DATA_PULL_ENABLED",
         "TEMENOS_PULL_ENABLED",
@@ -139,6 +140,8 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "AUDIT_INTEGRITY_ALERT_TOPIC_ARN": "",
         "STORAGE_OBJECT_LOCK_ENABLED": "0",
         "BACKUP_WORM_BUCKET": "",
+        "AUTH_REFRESH_TOKEN_RETENTION_DAYS": "30",
+        "AUTH_SESSION_PURGE_BATCH_SIZE": "1000",
     }.items():
         monkeypatch.setenv(_setting, _value)
     # Same guard, same reason, for the ICAAP signing switch: it ships OFF, and a

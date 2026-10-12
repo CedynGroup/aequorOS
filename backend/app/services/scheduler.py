@@ -8,8 +8,9 @@ enqueues the next tick at the following hour boundary. It is inert (no enqueue,
 no reschedule) while every scheduling flag — ``OFFICIAL_RUN_ENABLED``,
 ``MARKET_DATA_PULL_ENABLED``, ``TEMENOS_PULL_ENABLED``,
 ``DATABASE_DIRECT_HEALTH_ENABLED``, ``LIVE_REFRESH_ENABLED``,
-``DESK_CAPTURE_ENABLED``, ``BI_SCHEDULER_ENABLED`` and
-``BI_SUBSCRIPTIONS_ENABLED`` — is off, so no environment auto-mints heavy runs,
+``DESK_CAPTURE_ENABLED``, ``BI_SCHEDULER_ENABLED``,
+``BI_SUBSCRIPTIONS_ENABLED`` and ``AUTH_SESSION_PURGE_ENABLED`` — is off,
+so no environment auto-mints heavy runs,
 vendor pulls or scheduled email, and tests stay deterministic.
 
 Actor eligibility and queue attribution are owned by
@@ -46,6 +47,7 @@ from app.services import job_queue, module_scope
 SCHEDULED_TICK = "scheduled_tick"
 OFFICIAL_RUN = "official_run"
 BI_RETENTION = "bi_retention"
+SESSION_PURGE = "session_purge"
 #: The hourly BI subscription sweep. A LITERAL, like ``BI_RETENTION``: this
 #: module may import only the two thin BI seam modules (``bi.enqueue``,
 #: ``bi.versions``) — ``tests/architecture/test_bi_plane_boundary.py`` rule (a)
@@ -79,6 +81,7 @@ def any_scheduling_enabled(settings: Settings) -> bool:
         # exist. An alert recovery sweep, if one is ever added, belongs here in
         # the same change that adds it.
         or settings.bi.subscriptions_enabled
+        or settings.auth.session_purge_enabled
     )
 
 
@@ -102,6 +105,11 @@ def run_tick(session: Session, job: Job) -> None:
     now = utc_now()
 
     enqueued: list[str] = []
+    session_purge_enqueued = (
+        _enqueue_session_purge(session, org_id, now) is not None
+        if settings.auth.session_purge_enabled
+        else None
+    )
     if official_enabled:
         enqueued = _enqueue_due_official_runs(session, org_id, settings, now)
 
@@ -178,6 +186,11 @@ def run_tick(session: Session, job: Job) -> None:
     )
     session.commit()
     job.progress = {
+        **(
+            {"session_purge_enqueued": session_purge_enqueued}
+            if session_purge_enqueued is not None
+            else {}
+        ),
         "official_runs_enqueued": enqueued,
         "market_data_pulls_enqueued": market_data_pulls,
         "temenos_pulls_enqueued": temenos_pulls,
@@ -200,6 +213,23 @@ def run_tick(session: Session, job: Job) -> None:
             else {}
         ),
     }
+
+
+def _enqueue_session_purge(session: Session, org_id: str, now: datetime) -> Job | None:
+    """One bounded purge per tenant per hour, including completed jobs."""
+    key = f"session-purge:{org_id}:{now.strftime('%Y-%m-%dT%H')}"
+    existing = session.scalar(
+        select(Job.id)
+        .where(
+            Job.organization_id == org_id,
+            Job.job_type == SESSION_PURGE,
+            Job.coalesce_key == key,
+        )
+        .limit(1)
+    )
+    if existing is not None:
+        return None
+    return job_queue.enqueue(session, org_id, SESSION_PURGE, coalesce_key=key)
 
 
 def _enqueue_due_official_runs(
