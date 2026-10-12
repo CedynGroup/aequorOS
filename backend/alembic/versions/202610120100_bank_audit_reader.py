@@ -9,8 +9,9 @@ No bindings are backfilled: a bank must explicitly assign its officers.
 from typing import cast
 
 import sqlalchemy as sa
+
 from alembic import op
-from app.core.audit_attribution import SUBJECT_TABLES, subject_bank_sql, uuid_sql
+from app.core.audit_attribution import SUBJECT_TABLES, staff_bank_sql, subject_bank_sql, uuid_sql
 
 revision = "202610120100"
 down_revision = "202610120099"
@@ -42,18 +43,13 @@ _TENANT_MATCH = f"""
     AND (e.entity_type IS DISTINCT FROM 'authorization_access_request'
          OR e.details->>'institution_id' IS NULL OR e.details->>'institution_id' = {_BANK})
 """
-_STAFF_OWNED_BANK = subject_bank_sql(
-    "e.target_org",
-    "'ingestion_batch'",
-    "e.detail->>'batch_id'",
-    postgresql=True,
-    subject="ingestion_batch",
-)
+_STAFF_OWNED_BANK = staff_bank_sql("e.target_org", "e.detail", postgresql=True)
 _STAFF_MATCH = f"""
     e.target_org = {_ORG}
     AND (e.detail->>'bank_id' = {_BANK} OR {_STAFF_OWNED_BANK} = {_BANK})
     AND (e.detail->>'bank_id' IS NULL OR e.detail->>'bank_id' = {_BANK})
     AND ({_STAFF_OWNED_BANK} IS NULL OR {_STAFF_OWNED_BANK} = {_BANK})
+    AND (e.detail->'after'->>'bank_id' IS NULL OR e.detail->'after'->>'bank_id' = {_BANK})
 """
 
 

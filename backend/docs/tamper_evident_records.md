@@ -162,7 +162,8 @@ ingestion batch. Deleted ICAAP children resolve through the recorded cycle.
 Historical events resolve through the same tenant-scoped ownership catalogue
 without rewriting sealed records.
 Contradictory bank markers or subject ownership refuse visibility. Staff events
-use `detail.bank_id` or the tenant-scoped ownership of `detail.batch_id`. The
+use `detail.bank_id`, the retained batch/mapping ownership, or a mapping
+change’s `detail.after.bank_id`. The
 shared staff writer snapshots that ownership, and historical reads and integrity
 verification resolve it through the same catalogue. Recorded `note` explanations
 become the public `reason`; batch actions name the batch as their target, and bank
@@ -175,7 +176,50 @@ event's bank attribution, session tenant and operator identity before returning
 only reason/reference. The API has no inspector-session table read grant. This
 historical context supplements the sealed event payload; it is not included in
 the event's integrity claim.
-Tenant-wide records without a provable bank association remain outside this feed.
+The staff writer receives the actual returned/affected resources and writes one
+separate event per bank, validating each bank's organization. It stores identities,
+not the response data; one bank's event never contains another bank's payload.
+An empty bank-specific result retains a platform event rather than inventing bank
+access. Shared tenant identity/configuration accesses apply to every bank in that
+tenant. A fleet operation without an Inspector session automatically records its
+operation purpose and a nullable support reference. An available caller-owned
+active session supplements the automatic evidence; no new fleet request fields
+are mandatory.
+
+### Staff operation coverage catalogue
+
+Every operator surface is classified below; new surfaces must choose an explicit
+bank-resource or platform-only policy. Platform-only activity is owned by AequorOS.
+Historical sealed reads with no provable resource association remain platform-only.
+The migration's source RLS, chain-entry visibility, previous-link verifier and
+session-evidence helper use the same historical batch/mapping ownership catalogue
+as the read API. Shared configuration mutations snapshot each affected bank before
+commit; ownership is retained even when a resource is later removed.
+
+| Operator surface                                                                                                                                           | Recording/ownership policy                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `tenants` list/get                                                                                                                                         | Actual returned bank rows, separately by organization and bank.                                                        |
+| Tenant users, storage, entitlements                                                                                                                        | Shared tenant configuration: every bank of that organization.                                                          |
+| `activity`                                                                                                                                                 | Bank identities of the returned ingestion/job/run/package/audit items, after paging.                                   |
+| `inspector_reads` metrics/findings/ingestion/config                                                                                                        | Banks named by actual response resources; batch detail resolves its retained batch.                                    |
+| `inspector_fix` recompute/official-run/ingestion/dedup                                                                                                     | Actual resolved bank or batch, with session evidence and remediation note.                                             |
+| `inspector_fix` mapping/threshold config                                                                                                                   | Mapping's retained bank; threshold applicability by tenant, jurisdiction and institution class. Before/after retained. |
+| Inspector session start/list/end/act-token                                                                                                                 | Shared tenant access window; each affected tenant bank. Token material is never recorded.                              |
+| `bi_backfill`                                                                                                                                              | Resolved target bank and session evidence.                                                                             |
+| `data_engines`, `jobs` and stranded-dedup boards                                                                                                           | Banks in the actual returned resources, including page/limit selection.                                                |
+| Staff `audit_log` read                                                                                                                                     | Banks named by returned staff evidence; reading itself is audited.                                                     |
+| Encryption-key get/connect/rotate/retire                                                                                                                   | Explicit bank, with existing safe key metadata.                                                                        |
+| Provisioning                                                                                                                                               | Created bank and existing success/failure step evidence; rollback failures remain platform-visible.                    |
+| Desk entitlement read/grant-tier/grant-dataset/revoke                                                                                                      | Shared tenant entitlement/configuration access: each tenant bank.                                                      |
+| Desk methodology approval                                                                                                                                  | All banks addressed by the refresh policy, including banks without current live data.                                  |
+| Desk determination/curve/operating-environment publish                                                                                                     | Actual per-bank publication results, including failed deliveries.                                                      |
+| Desk publication history read                                                                                                                              | Banks in the returned publication results.                                                                             |
+| Regulatory parameter approval                                                                                                                              | Same jurisdiction/type/class bank selection as refresh scheduling, including banks without current live data.          |
+| Regulatory parameter list/proposal; desk methodology list/create/default/propose/PDF                                                                       | Platform policy/register work, before bank applicability changes.                                                      |
+| Desk observation/capture/snippet reads/writes; unpublished determination list/get/package/create/compute/adjust/submit/approve/reject/supersede            | Platform research and maker/checker workflow; no bank-owned resource access. Existing mutation audit retained.         |
+| Curve definitions/create/propose/approve/construct/stage/submit/approve; FX-forward construct; operating-environment preview/stage/list/get/submit/approve | Platform research/calculation work before publication; existing mutation audit retained.                               |
+| Staff authentication and operator list/create/password-reset/deactivate/reactivate                                                                         | Platform staff identity; existing authentication/management evidence retained.                                         |
+| `overview`, `worker_health`                                                                                                                                | Aggregate fleet counts and runtime heartbeats, no identifiable bank resources.                                         |
 
 Password sign-in, SSO and signing re-authentication retain success and refusal
 events before returning. Known users are attributed only to banks reachable

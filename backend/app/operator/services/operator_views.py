@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import JSON, String, bindparam, func, select, text
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.audit_attribution import SUBJECT_TABLES, subject_bank_sql
 from app.db.base import utc_now
 from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, STUCK_DEDUP_STATUSES
 from app.identity.public import Bank, SsoConnection, User
@@ -544,6 +547,7 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
             ActivityItemRead(
                 ts=batch.completed_at or batch.created_at,
                 kind="ingestion_batch",
+                bank_id=batch.bank_id,
                 summary=(
                     f"{batch.source_system} ingestion for {batch.bank_id} "
                     f"as of {batch.as_of_date.isoformat()} — "
@@ -563,6 +567,7 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
             ActivityItemRead(
                 ts=job.completed_at or job.started_at or job.queued_at,
                 kind="job",
+                bank_id=job.bank_id,
                 summary=(
                     f"{job.job_type} job"
                     + (f" for {job.bank_id}" if job.bank_id else "")
@@ -582,6 +587,7 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
             ActivityItemRead(
                 ts=run.completed_at or run.created_at,
                 kind="official_run",
+                bank_id=run.bank_id,
                 summary=(f"official {run.module} run ({run.scenario_code}) for {run.bank_id}"),
                 status=run.status,
             )
@@ -597,6 +603,7 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
             ActivityItemRead(
                 ts=package.generated_at,
                 kind="package",
+                bank_id=package.bank_id,
                 summary=(
                     f"{package.return_code} v{package.version} "
                     f"({package.reporting_date.isoformat()}, {package.basis}) "
@@ -616,6 +623,7 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
             ActivityItemRead(
                 ts=event.created_at,
                 kind="audit_event",
+                bank_id=_activity_event_bank(db, event),
                 summary=f"{event.event_type}"
                 + (f" ({event.entity_type} {event.entity_id})" if event.entity_type else ""),
                 status="recorded",
@@ -829,3 +837,40 @@ def list_data_engine_connections(db: Session) -> DataEnginesRead:
                 )
             )
     return DataEnginesRead(connections=connections)
+
+
+def _activity_event_bank(db: Session, event: AuditEvent) -> str | None:
+    details = event.details or {}
+    marker: object = details.get("bank_id")
+    if isinstance(marker, str):
+        return marker
+    if event.entity_type == "bank":
+        return event.entity_id
+    scope: object = details.get("scope")
+    institution: object = details.get("institution_id")
+    if isinstance(scope, dict):
+        institution = cast(dict[str, object], scope).get("institution_id") or institution
+    if isinstance(institution, str):
+        return institution
+    if event.entity_type not in SUBJECT_TABLES:
+        return None
+    sql = subject_bank_sql(
+        ":org",
+        ":kind",
+        ":id",
+        postgresql=db.get_bind().dialect.name == "postgresql",
+        subject=event.entity_type,
+        details="CAST(:details AS jsonb)"
+        if db.get_bind().dialect.name == "postgresql"
+        else ":details",
+    )
+    statement = text(sql)
+    params: dict[str, object] = {
+        "org": event.organization_id,
+        "kind": event.entity_type,
+        "id": event.entity_id,
+    }
+    if ":details" in sql:
+        statement = statement.bindparams(bindparam("details", type_=JSON))
+        params["details"] = details
+    return db.scalar(select(sql_cast(statement, String)), params)

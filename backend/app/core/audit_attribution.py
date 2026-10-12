@@ -128,3 +128,25 @@ def subject_bank_sql(  # noqa: PLR0913
                 f" WHERE s.id = {identifier} AND s.organization_id = {organization})"
             )
     return "(SELECT bank_id FROM (" + " UNION ALL ".join(queries) + ") audit_subject_owner)"
+
+
+def staff_bank_sql(organization: str, detail: str, *, postgresql: bool) -> str:
+    """Retained ownership for historical batch and mapping staff operations."""
+    batch = subject_bank_sql(
+        organization,
+        "'ingestion_batch'",
+        f"{detail}->>'batch_id'",
+        postgresql=postgresql,
+        subject="ingestion_batch",
+    )
+    mapping = subject_bank_sql(
+        organization,
+        "'mapping_config'",
+        f"{detail}->>'target_id'",
+        postgresql=postgresql,
+        subject="mapping_config",
+    )
+    return (
+        f"COALESCE({batch}, CASE WHEN {detail}->>'kind' = 'mapping_active'"
+        f" THEN {mapping} END, {detail}->'after'->>'bank_id')"
+    )

@@ -144,6 +144,7 @@ type ActivityKind = Literal["ingestion_batch", "job", "official_run", "package",
 
 
 class ActivityItemRead(ClosedModel):
+    bank_id: str | None = None
     ts: datetime
     kind: ActivityKind
     summary: str

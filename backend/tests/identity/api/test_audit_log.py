@@ -6,7 +6,7 @@ from contextvars import ContextVar
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException, Request
@@ -55,9 +55,11 @@ from app.models import (
     EnterpriseStressSignoff,
     IlaapSnapshot,
     IngestionBatch,
+    Job,
     LineageRecord,
     MacroScenario,
     ManagementActionPlan,
+    MappingConfigRecord,
     OperatorAuditLog,
     OperatorInspectorSession,
     RegulatoryArtifactVersion,
@@ -69,7 +71,15 @@ from app.models import (
     User,
 )
 from app.operator.deps import OperatorContext, record_operator_action
-from app.operator.features.inspector_reads import get_tenant_ingestion_batch
+from app.operator.features.activity import get_tenant_activity
+from app.operator.features.audit_log import read_audit_log
+from app.operator.features.inspector_reads import (
+    get_tenant_config,
+    get_tenant_ingestion,
+    get_tenant_ingestion_batch,
+    get_tenant_metrics,
+)
+from app.operator.features.jobs import list_jobs
 from app.operator.services import inspector
 from app.reporting.domain import workflow as filing_domain
 from app.reporting.schemas.filing_workflow import (
@@ -552,16 +562,16 @@ def test_real_data_and_filing_writers_retain_bank_attribution(db_client: TestCli
     ctx = TenantContext(ORG_1, actor_user_id=USER_1, authorization_version=1)
     with _session() as db:
         batch, package, run = _owned_subjects(db, BANK)
-        ingestion._record_batch_event(db, ctx, batch, "Accepted source data")
+        ingestion._record_batch_event(db, ctx, batch, "Accepted source data")  # pyright: ignore[reportPrivateUsage]
         batch.status = "failed"
-        ingestion._record_batch_event(db, ctx, batch, "Source data failed")
+        ingestion._record_batch_event(db, ctx, batch, "Source data failed")  # pyright: ignore[reportPrivateUsage]
         workflow.transition(db, ctx, package, "validated")
-        workflow._add_approval(
+        workflow._add_approval(  # pyright: ignore[reportPrivateUsage]
             db, ctx, package, action="approved", actor_user_id=USER_1, reason="Reviewed return"
         )
         workflow.add_submission_event(db, ctx, package, channel="manual", event="submitted")
         db.commit()
-        regulatory_capital._persist_failure(
+        regulatory_capital._persist_failure(  # pyright: ignore[reportPrivateUsage]
             db, ctx, run.id, regulatory_capital.CapitalRunError("missing_parameter", "Unavailable")
         )
     response = db_client.get(PATH, headers=headers(ORG_1))
@@ -613,7 +623,7 @@ def test_capital_success_writer_retains_bank_attribution(db_client: TestClient) 
     params = CapitalParams({}, one, one, one, one, one, one, one, one, one, one)
     with _session() as db:
         _, _, run = _owned_subjects(db, BANK)
-        regulatory_capital._persist_success(
+        regulatory_capital._persist_success(  # pyright: ignore[reportPrivateUsage]
             db, TenantContext(ORG_1, actor_user_id=USER_1), run, rwa, ratios, params, None, "GHS"
         )
     response = db_client.get(PATH, headers=headers(ORG_1))
@@ -891,6 +901,36 @@ def test_real_position_override_exposes_change_and_indexed_ownership(db_client: 
     assert Decimal(str(rows[0].after["balance"])) == Decimal("12")
 
 
+def _authentication_subject(
+    db: Session, claims: dict[str, object], password: str
+) -> tuple[User, SsoConnection]:
+    user = User(
+        organization_id=ORG_1,
+        email=str(claims["email"]),
+        password_hash=security.hash_password(password),
+        auth_provider="oidc",
+        sso_subject=str(claims["sub"]),
+    )
+    db.add(user)
+    db.flush()
+    grant_institution_authority(
+        db,
+        organization_id=ORG_1,
+        bank_id=BANK,
+        user_id=user.id,
+        bundle=RoleBundle.ANALYST,
+    )
+    connection = SsoConnection(
+        organization_id=ORG_1,
+        issuer=str(claims["iss"]),
+        client_id=str(claims["aud"]),
+        enabled=True,
+    )
+    db.add(connection)
+    db.commit()
+    return user, connection
+
+
 @pytest.mark.parametrize("method", ["password", "sso", "password_step_up", "oidc_step_up"])
 def test_real_authentication_success_and_refusal_are_bank_visible(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch, method: str
@@ -920,30 +960,7 @@ def test_real_authentication_success_and_refusal_are_bank_visible(
     monkeypatch.setattr(security, "unverified_claims", hints)
     monkeypatch.setattr(security, "verify_oidc_id_token", verified)
     with _session() as db:
-        user = User(
-            organization_id=ORG_1,
-            email=str(claims["email"]),
-            password_hash=security.hash_password(password),
-            auth_provider="oidc",
-            sso_subject=str(claims["sub"]),
-        )
-        db.add(user)
-        db.flush()
-        grant_institution_authority(
-            db,
-            organization_id=ORG_1,
-            bank_id=BANK,
-            user_id=user.id,
-            bundle=RoleBundle.ANALYST,
-        )
-        connection = SsoConnection(
-            organization_id=ORG_1,
-            issuer=str(claims["iss"]),
-            client_id=str(claims["aud"]),
-            enabled=True,
-        )
-        db.add(connection)
-        db.commit()
+        user, connection = _authentication_subject(db, claims, password)
         user_id = user.id
         ctx = TenantContext(ORG_1, actor_user_id=user_id, authorization_version=1)
         if method == "password":
@@ -1547,3 +1564,207 @@ def test_historical_staff_session_evidence_does_not_cross_ownership(
     rows = AuditLogRead.model_validate_json(response.text).events
     assert len(rows) == 1 and rows[0].integrity == "verified"
     assert rows[0].reason is None and rows[0].support_reference is None
+
+
+@pytest.mark.parametrize("operation", ["metrics", "ingestion", "config"])
+def test_actual_inspector_resources_are_separated_per_bank(
+    db_client: TestClient, operation: str
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    operator = OperatorContext("catalogue@example.test", "dev", "super_admin")
+    with _session() as db:
+        for bank_id in (BANK, SIBLING):
+            _owned_subjects(db, bank_id)
+        inspector.start_session(
+            db,
+            organization_id=ORG_1,
+            started_by=operator.email,
+            reason="Review returned resources",
+            support_reference="SUP-CATALOGUE",
+            mode="consent",
+            ttl_minutes=30,
+        )
+        db.commit()
+        if operation == "metrics":
+            get_tenant_metrics(ORG_1, db, operator)
+        elif operation == "ingestion":
+            get_tenant_ingestion(ORG_1, db, operator, limit=1)
+        else:
+            get_tenant_config(ORG_1, db, operator)
+        recorded = list(
+            db.scalars(
+                select(OperatorAuditLog).where(
+                    OperatorAuditLog.action == f"inspector.read.{operation}"
+                )
+            )
+        )
+        assert len(recorded) == (1 if operation == "ingestion" else 2)
+        expected = {row.id for row in recorded if row.detail["bank_id"] == BANK}
+        assert all(row.detail["support_reference"] == "SUP-CATALOGUE" for row in recorded)
+    response = db_client.get(
+        PATH, headers=headers(ORG_1), params={"event_type": f"inspector.read.{operation}"}
+    )
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert {row.id for row in rows} == expected
+    assert all(
+        row.integrity == "verified" and row.reason == "Review returned resources" for row in rows
+    )
+
+
+def test_fleet_job_page_auto_records_only_returned_banks(db_client: TestClient) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    operator = OperatorContext("fleet@example.test", "dev", "super_admin")
+    with _session() as db:
+        for bank_id, org in ((BANK, ORG_1), (SIBLING, ORG_1), (FOREIGN, ORG_2)):
+            db.add(
+                Job(
+                    organization_id=org,
+                    bank_id=bank_id,
+                    job_type="pipeline_refresh",
+                    status="queued",
+                    payload={},
+                )
+            )
+        db.commit()
+        result = list_jobs(db, operator, limit=1, status=None)
+        assert len(result.jobs) == 1
+        recorded = list(
+            db.scalars(select(OperatorAuditLog).where(OperatorAuditLog.action == "jobs.list"))
+        )
+        assert len(recorded) == 1
+        assert recorded[0].detail["bank_id"] == result.jobs[0].bank_id
+        assert recorded[0].target_org == result.jobs[0].organization_id
+        assert recorded[0].detail["reason"] == "jobs list"
+        assert recorded[0].detail["support_reference"] is None
+        expected: set[UUID] = {recorded[0].id} if result.jobs[0].bank_id == BANK else set()
+    response = db_client.get(PATH, headers=headers(ORG_1), params={"event_type": "jobs.list"})
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert {row.id for row in rows} == expected
+    assert all(row.integrity == "verified" for row in rows)
+
+
+@pytest.mark.parametrize("historical", [False, True])
+def test_mapping_change_ownership_and_change_evidence(
+    db_client: TestClient, historical: bool
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    with _session() as db:
+        mapping = MappingConfigRecord(
+            organization_id=ORG_1,
+            bank_id=BANK,
+            source_system="API_PUSH",
+            source_ref="catalogue",
+            version=1,
+            name="Catalogue",
+            status="active",
+            config={},
+        )
+        db.add(mapping)
+        db.flush()
+        detail: dict[str, JsonValue] = {
+            "kind": "mapping_active",
+            "target_id": str(mapping.id),
+            "before": {"status": "inactive"},
+            "after": {"status": "active", "bank_id": BANK},
+            "note": "Correct mapping",
+        }
+        if historical:
+            event = OperatorAuditLog(
+                operator_email="mapping@example.test",
+                auth_mode="dev",
+                action="inspector.fix.config",
+                target_org=ORG_1,
+                detail=detail,
+            )
+            db.add(event)
+        else:
+            event = record_operator_action(
+                db,
+                OperatorContext("mapping@example.test", "dev", "super_admin"),
+                action="inspector.fix.config",
+                target_org=ORG_1,
+                detail=detail,
+            )
+        db.commit()
+        event_id = event.id
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert len(rows) == 1 and rows[0].id == event_id
+    assert rows[0].target_type == "mapping_config" and rows[0].target_id == str(mapping.id)
+    assert rows[0].before == {"status": "inactive"} and rows[0].after == {
+        "status": "active",
+        "bank_id": BANK,
+    }
+    assert rows[0].integrity == "verified"
+
+
+@pytest.mark.parametrize("surface", ["activity", "audit"])
+def test_staff_feed_reads_resolve_retained_bank_subjects(
+    db_client: TestClient, surface: str
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    operator = OperatorContext("feed@example.test", "dev", "super_admin")
+    with _session() as db:
+        batch, _, _ = _owned_subjects(db, BANK)
+        inspector.start_session(
+            db,
+            organization_id=ORG_1,
+            started_by=operator.email,
+            reason="Review retained bank evidence",
+            support_reference="SUP-FEEDS",
+            mode="consent",
+            ttl_minutes=30,
+        )
+        db.add(
+            AuditEvent(
+                organization_id=ORG_1,
+                actor_user_id=USER_1,
+                event_type="ingestion_batch.accepted",
+                entity_type="ingestion_batch",
+                entity_id=str(batch.id),
+                details={},
+            )
+        )
+        db.add(
+            OperatorAuditLog(
+                operator_email=operator.email,
+                auth_mode="dev",
+                action="inspector.read.ingestion_batch",
+                target_org=ORG_1,
+                detail={"batch_id": str(batch.id)},
+            )
+        )
+        db.commit()
+        if surface == "activity":
+            get_tenant_activity(ORG_1, db, operator, limit=100)
+            action = "inspector.read.activity"
+        else:
+            read_audit_log(
+                db,
+                operator,
+                operator_email=operator.email,
+                target_org=None,
+                action=None,
+                from_=None,
+                to=None,
+                limit=100,
+                offset=0,
+            )
+            action = "audit.read"
+        recorded = list(
+            db.scalars(select(OperatorAuditLog).where(OperatorAuditLog.action == action))
+        )
+        assert len(recorded) == 1
+        assert recorded[0].detail["bank_id"] == BANK and recorded[0].target_org == ORG_1
+        expected_id = recorded[0].id
+    response = db_client.get(PATH, headers=headers(ORG_1), params={"event_type": action})
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert len(rows) == 1 and rows[0].id == expected_id and rows[0].integrity == "verified"
+    assert (
+        rows[0].support_reference == "SUP-FEEDS"
+        and rows[0].reason == "Review retained bank evidence"
+    )

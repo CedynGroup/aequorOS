@@ -32,7 +32,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.core.audit_attribution import subject_bank_sql
+from app.core.audit_attribution import staff_bank_sql, subject_bank_sql
 from app.core.audit_projection import EVENT_OUTCOMES, normalize_event_details
 from app.core.authorization import (
     DataScope,
@@ -234,12 +234,10 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
         else _STAFF.c.detail
     )
     staff_owned_bank = literal_column(
-        subject_bank_sql(
+        staff_bank_sql(
             "operator_audit_log.target_org",
-            "'ingestion_batch'",
-            "operator_audit_log.detail->>'batch_id'",
+            "operator_audit_log.detail",
             postgresql=db.get_bind().dialect.name == "postgresql",
-            subject="ingestion_batch",
         ),
         String,
     )
@@ -252,11 +250,18 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
         _STAFF.c.action,
         func.coalesce(
             _json_text(_STAFF.c.detail, "entity_type"),
-            case((staff_owned_bank.is_not(None), "ingestion_batch"), else_="bank"),
+            case(
+                (batch_target.is_not(None), "ingestion_batch"),
+                (_json_text(_STAFF.c.detail, "kind") == "mapping_active", "mapping_config"),
+                (_json_text(_STAFF.c.detail, "kind") == "threshold_value", "threshold_register"),
+                else_="bank",
+            ),
         ).label("target_type"),
         func.coalesce(
             _json_text(_STAFF.c.detail, "entity_id"),
-            case((staff_owned_bank.is_not(None), batch_target), else_=staff_bank),
+            func.coalesce(
+                batch_target, _json_text(_STAFF.c.detail, "target_id"), staff_bank, staff_owned_bank
+            ),
         ).label("target_id"),
         staff_details.label("details"),
         _STAFF.c.created_at,
@@ -265,6 +270,10 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
         or_(staff_bank == bank.id, staff_owned_bank == bank.id),
         or_(staff_bank.is_(None), staff_bank == bank.id),
         or_(staff_owned_bank.is_(None), staff_owned_bank == bank.id),
+        or_(
+            _json_text(_STAFF.c.detail, "after", "bank_id").is_(None),
+            _json_text(_STAFF.c.detail, "after", "bank_id") == bank.id,
+        ),
     )
     feed = tenant_events.union_all(staff_events).subquery()
     query = select(feed)

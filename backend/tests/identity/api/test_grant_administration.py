@@ -5,6 +5,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -239,7 +240,7 @@ def test_create_and_list_keep_every_scalar_dimension_exact(
         params={"principal_user_id": str(GRANTEE)},
     )
     assert listed.status_code == 200, listed.text
-    assert len(listed.json()["bindings"]) == 1
+    assert len(cast(list[object], listed.json()["bindings"])) == 1
     assert listed.json()["bindings"][0]["sensitivity_scope"] == "confidential"
 
     with _session() as db:

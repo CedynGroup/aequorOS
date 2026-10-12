@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
+from pydantic import JsonValue
 from sqlalchemy import String, select, text
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session
@@ -23,7 +24,9 @@ def record_event(  # noqa: PLR0913
     details: dict[str, Any] | None = None,
     bank_id: str | None = None,
 ) -> AuditEvent:
-    merged_details: dict[str, Any] = normalize_event_details(event_type, dict(details or {}))
+    merged_details: dict[str, JsonValue] = normalize_event_details(
+        event_type, cast(dict[str, JsonValue], dict(details or {}))
+    )
     if bank_id is not None:
         merged_details.setdefault("bank_id", bank_id)
     if entity_type == "authorization_access_request" and isinstance(

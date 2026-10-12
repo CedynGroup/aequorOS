@@ -32,9 +32,7 @@ def test_requires_authentication(operator_client: TestClient) -> None:
     assert operator_client.get(AUDIT).status_code == 401
 
 
-def test_developer_role_is_forbidden(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_developer_role_is_forbidden(operator_client: TestClient, operator_db: Session) -> None:
     make_operator(operator_db)  # developer
     headers = bearer(login(operator_client, "ama@aequoros.com", PASSWORD))
     assert operator_client.get(AUDIT, headers=headers).status_code == 403
@@ -80,20 +78,28 @@ def test_action_filter_is_a_prefix_match(operator_client: TestClient) -> None:
 
 def test_target_org_filter(operator_client: TestClient) -> None:
     organization_id = _seed_actions(operator_client)
-    # tenants.provision carries the target_org; tenants.list does not.
+    # Every bank returned by the directory gets its own tenant-scoped evidence.
     scoped = operator_client.get(
         f"{AUDIT}?target_org={organization_id}", headers=operator_headers()
     ).json()
-    assert [i["action"] for i in scoped["items"]] == ["tenants.provision"]
-    assert scoped["total"] == 1
+    assert [i["action"] for i in scoped["items"]] == [
+        "tenants.list",
+        "tenants.list",
+        "tenants.provision",
+    ]
+    assert scoped["total"] == 3
 
 
 def test_limit_and_offset_page_without_changing_total(operator_client: TestClient) -> None:
     _seed_actions(operator_client)
-    page1 = operator_client.get(f"{AUDIT}?limit=2&offset=0", headers=operator_headers()).json()
+    page1 = operator_client.get(
+        f"{AUDIT}?action=tenants.&limit=2&offset=0", headers=operator_headers()
+    ).json()
     assert len(page1["items"]) == 2
     assert page1["total"] == 3
-    page2 = operator_client.get(f"{AUDIT}?limit=2&offset=2", headers=operator_headers()).json()
+    page2 = operator_client.get(
+        f"{AUDIT}?action=tenants.&limit=2&offset=2", headers=operator_headers()
+    ).json()
     assert len(page2["items"]) == 1
     assert page2["total"] == 3
     # Distinct rows across pages (no overlap).

@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import OperatorAuditLog, OperatorInspectorSession
+from app.schemas.operator import InspectorSessionRead
 from tests.operator.conftest import operator_headers, provision_payload
 from tests.operator.test_operator_auth import PASSWORD, bearer, login, make_operator
 
@@ -55,7 +56,10 @@ def test_start_consent_session_returns_read_only_window_and_audits(
     assert body["started_by"] == "dev@aequoros.com"
     assert body["ended_at"] is None
     assert body["support_reference"] == "SUP-TEST"
-    retained = operator_db.get(OperatorInspectorSession, uuid.UUID(body["session_id"]))
+    retained = operator_db.get(
+        OperatorInspectorSession,
+        uuid.UUID(str(InspectorSessionRead.model_validate_json(response.text).session_id)),
+    )
     assert retained is not None and retained.support_reference == "SUP-TEST"
     assert body["session_id"]
     # No tenant credential / act-as-user material leaks into the response.
