@@ -222,7 +222,14 @@ write the underlying desk tables. Methodologies and curve definitions are read-o
 `aqs_worker_audit_check` coordinates the existing hourly integrity schedule and
 returns only stream names, entry counts, validity and the recovery epoch. It
 preserves #511's database hash algorithm and append-only custody; the worker gets
-no raw chain, operator-audit or schedule-table grant. Partition wrappers allow
+no raw chain, operator-audit or schedule-table grant. The function remains owned
+by `aqs_owner`: it must lock and update the hourly schedule, which the read-only
+`aqs_audit_verifier` cannot do. The deployment owner also lacks SET membership in
+the verifier role, so transferring even a separate read function would require
+additional administrator preparation. The authorized fallback is a SELECT-only
+`aqs_owner` policy on `audit_events`, allowing complete payload and source-count
+verification under FORCE RLS without verifier write grants. The downgrade removes
+that policy. Partition wrappers allow
 creation only for the builder's classified mart parents and the append-only BI query log in this schema. Retention
 can drop completed months only from the two daily position marts; month-end,
 loan-event and query-log drops remain forbidden. Existing partition integrity

@@ -204,6 +204,7 @@ def downgrade() -> None:
             op.execute(f"REVOKE EXECUTE ON FUNCTION {schema}.{function} FROM aqs_owner")
     for signature in reversed(FUNCTIONS):
         op.execute(f"DROP FUNCTION {schema}.{signature}")
+    op.execute(f"DROP POLICY aqs_owner_worker_audit_read ON {schema}.audit_events")
     op.execute(f"DROP POLICY aqs_worker_job_bank_scope ON {schema}.jobs")
     op.execute(f"DROP POLICY aqs_owner_worker_banks ON {schema}.banks")
     op.execute(f"DROP POLICY aqs_owner_worker_queue ON {schema}.jobs")
@@ -388,6 +389,10 @@ def _desk_access(schema: str) -> None:
 
 
 def _audit_access(schema: str) -> None:
+    op.execute(
+        f"CREATE POLICY aqs_owner_worker_audit_read ON {schema}.audit_events "
+        "FOR SELECT TO aqs_owner USING (true)"
+    )
     op.execute(f"""
         CREATE FUNCTION {schema}.aqs_worker_audit_check(p_now timestamptz)
         RETURNS TABLE(recovery_epoch bigint, results jsonb)

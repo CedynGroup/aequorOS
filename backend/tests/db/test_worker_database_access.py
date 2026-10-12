@@ -31,7 +31,7 @@ from app.db import session as database
 from app.db.session import get_storage_session, worker_tenant_context
 from app.identity.api import auth as auth_api
 from app.identity.public import Bank
-from app.models import DeskDetermination, DeskMethodology, Job, OperatorAuditLog, User
+from app.models import AuditEvent, DeskDetermination, DeskMethodology, Job, OperatorAuditLog, User
 from app.operator.deps import resolve_operator_database_url
 from app.services import job_queue, scheduler
 from app.storage.client import StorageLocation
@@ -232,24 +232,51 @@ def test_optional_encryption_refuses_foreign_and_same_org_other_bank_storage(
         get_key_settings.cache_clear()
 
 
+@pytest.mark.parametrize("organization_id", (None, ORG_1, ORG_2))
 def test_worker_can_verify_both_audit_streams_without_reading_them(
     role_engines: dict[str, Engine],
     administrator: Engine,
     monkeypatch: pytest.MonkeyPatch,
+    organization_id: str | None,
 ) -> None:
     monkeypatch.setenv("AUDIT_INTEGRITY_ENABLED", "1")
+    for org in (ORG_1, ORG_2):
+        with scoped(role_engines["aqs_api"], org) as session:
+            session.add(
+                AuditEvent(organization_id=org, event_type="worker.integrity.probe", details={})
+            )
+            session.commit()
     with administrator.begin() as connection:
+        entries = connection.scalar(text("SELECT count(*) FROM audit_events"))
+        epoch = cast(
+            int, connection.scalar(text("SELECT recovery_epoch FROM audit_integrity_schedule"))
+        )
         connection.execute(
             text("UPDATE audit_integrity_schedule SET run_after = :now"), {"now": NOW}
         )
-    factory = sessionmaker(role_engines["aqs_worker"])
+    factory = sessionmaker(role_engines["aqs_worker"], info={"organization_id": organization_id})
     results = audit_integrity.AuditIntegrityTask().run(factory, NOW)
     assert results is not None
     assert {result.stream for result in results} == {"audit_events", "operator_audit_log"}
     assert all(result.valid for result in results)
+    assert next(result.entries for result in results if result.stream == "audit_events") == entries
     assert audit_integrity.AuditIntegrityTask().run(factory, NOW) is None
-    with factory() as session, pytest.raises(DBAPIError):
-        session.execute(text("SELECT * FROM audit_chain_entries"))
+    with administrator.connect() as connection:
+        assert tuple(
+            connection.execute(
+                text("SELECT run_after, recovery_epoch FROM audit_integrity_schedule")
+            ).one()
+        ) == (NOW + timedelta(hours=1), epoch + 1)
+    with Session(role_engines["aqs_worker"]) as session:
+        assert session.scalar(text("SELECT count(*) FROM audit_events")) == 0
+    for table in (
+        "operator_audit_log",
+        "audit_chain_entries",
+        "audit_chain_heads",
+        "audit_integrity_schedule",
+    ):
+        with factory() as session, pytest.raises(DBAPIError):
+            session.execute(text(f"SELECT * FROM {table}"))
 
 
 def test_desk_views_allow_robot_drafts_and_refuse_approval_or_base_writes(
