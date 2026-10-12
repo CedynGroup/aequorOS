@@ -18,10 +18,13 @@ function storedRun(metrics: Record<string, unknown>) {
   });
 }
 
-const cents = fc.integer({ min: -100_000_000, max: 100_000_000 });
-const series = fc.array(cents, { minLength: 5, maxLength: 5 });
-const decimalStrings = (values: number[]) =>
-  values.map((value) => (value / 100).toFixed(2));
+import {
+  currencyLadders,
+  adversarialStoredStressFigures,
+  liquidityAmountQuanta as cents,
+  decimalStrings,
+} from "./liquidity/testing/generators";
+import { assertLadderReconciles } from "./liquidity/testing/assertions";
 const gap = (values: unknown = ["100", "0", "-25", "10.50", "2"]) => ({
   currency: "EUR",
   assets: values,
@@ -43,14 +46,14 @@ describe("stored liquidity ladder figures", () => {
   it("preserves currency isolation and amount ordering when a stored horizon changes", () => {
     fc.assert(
       fc.property(
-        series,
+        currencyLadders,
         cents,
         fc.integer({ min: 0, max: 4 }),
-        (amounts, increment, horizon) => {
-          const original = [
-            { ...gap(decimalStrings(amounts)), currency: "EUR" },
-            { ...gap(decimalStrings(amounts.toReversed())), currency: "JPY" },
-          ];
+        (ladder, increment, horizon) => {
+          const amounts = ladder.assets.map((v) =>
+            Math.round(Number(v) * 10_000),
+          );
+          const original = [ladder, { ...ladder, currency: "JPY" }];
           const updatedAmounts = [...amounts];
           updatedAmounts[horizon] += Math.abs(increment);
           const changed = [
@@ -66,14 +69,16 @@ describe("stored liquidity ladder figures", () => {
           expect(after[0].assets[horizon]).toBeGreaterThanOrEqual(
             before[0].assets[horizon],
           );
-          expect(after[0].assets[horizon]).toBe(updatedAmounts[horizon] / 100);
+          expect(after[0].assets[horizon]).toBe(
+            updatedAmounts[horizon] / 10_000,
+          );
           expect(after[0].liabilities).toEqual(before[0].liabilities);
           expect(after[0].net).toEqual(before[0].net);
           expect(after[0].cumulative).toEqual(before[0].cumulative);
           expect(after[1]).toEqual(before[1]);
           amounts.forEach((amount, index) => {
             if (index !== horizon)
-              expect(after[0].assets[index]).toBe(amount / 100);
+              expect(after[0].assets[index]).toBe(amount / 10_000);
           });
           expect(
             parseCurrencyGaps(
@@ -111,80 +116,49 @@ describe("stored liquidity ladder figures", () => {
     ]);
   });
 
-  it("round-trips all contractual horizon amounts without recomputing persisted figures", () => {
+  it("round-trips valid contractual ladders and reconciles stored horizons", () => {
     fc.assert(
-      fc.property(
-        series,
-        series,
-        series,
-        series,
-        (assets, liabilities, net, cumulative) => {
-          const result = parseCurrencyGaps(
-            storedRun({
-              currency_gaps: [
-                {
-                  currency: "JPY",
-                  assets: decimalStrings(assets),
-                  liabilities: decimalStrings(liabilities),
-                  net: decimalStrings(net),
-                  cumulative: decimalStrings(cumulative),
-                },
-              ],
-            }),
-          );
-          expect(result).toEqual([
-            {
-              currency: "JPY",
-              assets: assets.map((v) => v / 100),
-              liabilities: liabilities.map((v) => v / 100),
-              net: net.map((v) => v / 100),
-              cumulative: cumulative.map((v) => v / 100),
-            },
-          ]);
-        },
-      ),
+      fc.property(currencyLadders, (ladder) => {
+        const parsed = parseCurrencyGaps(
+          storedRun({ currency_gaps: [ladder] }),
+        );
+        expect(parsed).toHaveLength(1);
+        assertLadderReconciles(
+          parsed[0],
+          ladder.assetsTotal,
+          ladder.liabilitiesTotal,
+        );
+        for (const field of [
+          "assets",
+          "liabilities",
+          "net",
+          "cumulative",
+        ] as const)
+          expect(parsed[0][field]).toEqual(ladder[field].map(Number));
+        expect(parsed[0].currency).toBe(ladder.currency);
+      }),
       { numRuns: 100 },
     );
   });
 
   it("round-trips stressed horizons and deposit assumptions independently", () => {
     fc.assert(
-      fc.property(
-        series,
-        series,
-        series,
-        series,
-        cents,
-        cents,
-        (contractual, stressed, net, cumulative, demand, core) => {
-          const result = parseStressedLadder(
-            storedRun({
-              stressed_ladder: [
-                {
-                  currency: "GBP",
-                  contractual_liabilities: decimalStrings(contractual),
-                  stressed_liabilities: decimalStrings(stressed),
-                  stressed_net: decimalStrings(net),
-                  stressed_cumulative: decimalStrings(cumulative),
-                  demand_deposits: (demand / 100).toFixed(2),
-                  stable_core: (core / 100).toFixed(2),
-                },
-              ],
-            }),
-          );
-          expect(result).toEqual([
-            {
-              currency: "GBP",
-              contractualLiabilities: contractual.map((v) => v / 100),
-              stressedLiabilities: stressed.map((v) => v / 100),
-              stressedNet: net.map((v) => v / 100),
-              stressedCumulative: cumulative.map((v) => v / 100),
-              demandDeposits: demand / 100,
-              stableCore: core / 100,
-            },
-          ]);
-        },
-      ),
+      fc.property(adversarialStoredStressFigures, (stored) => {
+        const parsed = parseStressedLadder(
+          storedRun({ stressed_ladder: [stored] }),
+        );
+        expect(parsed).toEqual([
+          {
+            currency: stored.currency,
+            contractualLiabilities: stored.contractual_liabilities.map(Number),
+            stressedLiabilities: stored.stressed_liabilities.map(Number),
+            stressedNet: stored.stressed_net.map(Number),
+            stressedCumulative: stored.stressed_cumulative.map(Number),
+            demandDeposits: Number(stored.demand_deposits),
+            stableCore: Number(stored.stable_core),
+          },
+        ]);
+      }),
       { numRuns: 100 },
     );
   });
