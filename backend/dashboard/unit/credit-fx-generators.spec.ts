@@ -14,7 +14,10 @@ import {
   creditMigrationCells,
   creditRollRateCells,
 } from "./credit/testing/generators";
-import { assertCreditPercentage } from "./credit/testing/assertions";
+import {
+  assertCreditEstimateConsistent,
+  assertCreditPercentage,
+} from "./credit/testing/assertions";
 import {
   fxPositions,
   adversarialFxPositions,
@@ -39,26 +42,38 @@ function run(inputs: unknown) {
     updated_at: "2026-10-01T00:00:00Z",
   });
 }
+function decodeCreditEstimate([
+  hazard,
+  probability,
+  loanMonths,
+  defaults,
+]: readonly [number, number, number, number]) {
+  return PdEstimateReadFromJSON({
+    grade: "standard",
+    loan_months: loanMonths,
+    defaults_observed: defaults,
+    monthly_hazard_pct: String(hazard / 100),
+    pd_12m_pct: String(probability / 100),
+  });
+}
 describe("credit and FX generator validity", () => {
-  it("keeps realistic estimate counts and independent stored adversaries within the wire range", () => {
+  it("keeps realistic estimates consistent and independent stored adversaries within the wire range", () => {
     fc.assert(
       fc.property(
         creditEstimates,
         adversarialCreditEstimates,
         (realistic, adversarial) => {
-          expect(realistic[3]).toBe(realistic[0]);
-          expect(realistic[1]).toBeGreaterThanOrEqual(realistic[0]);
+          assertCreditEstimateConsistent(decodeCreditEstimate(realistic));
           for (const [hazard, probability, loanMonths, defaults] of [
             realistic,
             adversarial,
           ]) {
-            const decoded = PdEstimateReadFromJSON({
-              grade: "standard",
-              loan_months: loanMonths,
-              defaults_observed: defaults,
-              monthly_hazard_pct: String(hazard / 100),
-              pd_12m_pct: String(probability / 100),
-            });
+            const decoded = decodeCreditEstimate([
+              hazard,
+              probability,
+              loanMonths,
+              defaults,
+            ]);
             expect(decoded.loanMonths).toBe(loanMonths);
             expect(defaults).toBeLessThanOrEqual(loanMonths);
             expect(Number(decoded.pd12mPct)).toBeLessThanOrEqual(100);
@@ -71,6 +86,18 @@ describe("credit and FX generator validity", () => {
       ),
       { numRuns: 100 },
     );
+  });
+  it("accepts 30.62% annual PD for a 3% monthly hazard and rejects inconsistent estimates", () => {
+    assertCreditEstimateConsistent(
+      decodeCreditEstimate([300, 3062, 10_000, 300]),
+    );
+    for (const probability of [1800, 4000]) {
+      expect(() =>
+        assertCreditEstimateConsistent(
+          decodeCreditEstimate([300, probability, 10_000, 300]),
+        ),
+      ).toThrow(/Credit: annual PD .* is inconsistent/);
+    }
   });
   it("keeps migration flows and roll cells finite with matching counts", () => {
     fc.assert(
