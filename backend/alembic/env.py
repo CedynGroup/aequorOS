@@ -10,6 +10,7 @@ from alembic import context
 from app.core.config import get_migration_database_url
 from app.core.tls import database_connect_args
 from app.db.base import Base
+from app.db.session import database_timeout_connect_args
 
 #: The registry: importing it maps every feature's tables onto ``Base.metadata``.
 _ = app.models
@@ -46,6 +47,7 @@ def run_migrations_online() -> None:
     url = get_migration_database_url()
     connect_args = database_connect_args(url)
     if make_url(url).drivername.startswith("postgresql"):
+        connect_args.update(database_timeout_connect_args(url, "aequoros-migrator"))
         connect_args["application_name"] = "aequoros-migrator"
     connectable = engine_from_config(
         configuration,

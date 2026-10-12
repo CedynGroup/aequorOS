@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Any
 
 from sqlalchemy import Engine, bindparam, create_engine, event, text
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -47,6 +47,42 @@ _FORCED_RLS_TABLES_SQL = text(
 _CROSS_TENANT_TABLES: tuple[str, ...] = ("jobs",)
 
 
+def database_timeout_connect_args(database_url: str, application_name: str) -> dict[str, str]:
+    """Scope legacy-role budgets to each connection; new roles use role defaults.
+
+    Preserve URL options such as the disposable test schema's search_path.
+    Migration connections explicitly opt out even when sharing a runtime login.
+    """
+    url = make_url(database_url)
+    if not url.drivername.startswith("postgresql"):
+        return {}
+    if application_name == "aequoros-migrator":
+        idle_ms, statement_ms = 0, 0
+    elif url.username in {
+        "aqs_api",
+        "aqs_worker",
+        "aqs_bi",
+        "aqs_operator",
+        "aqs_audit_verifier",
+        "aqs_migrator",
+        "aqs_owner",
+    }:
+        return {}
+    elif application_name == "aequoros-worker":
+        idle_ms, statement_ms = 7_200_000, 1_800_000
+    elif application_name == "aequoros-bi":
+        idle_ms, statement_ms = 300_000, 10_000
+    else:
+        idle_ms, statement_ms = 60_000, 300_000
+    existing = " ".join(url.normalized_query.get("options", ()))
+    return {
+        "options": (
+            f"{existing} -c idle_in_transaction_session_timeout={idle_ms} "
+            f"-c statement_timeout={statement_ms}"
+        ).strip()
+    }
+
+
 @lru_cache
 def get_engine(database_url: str, application_name: str = "aequoros-api") -> Engine:
     # SQLite has no application_name; keep fallback users on the same cached
@@ -69,6 +105,7 @@ def get_engine(database_url: str, application_name: str = "aequoros-api") -> Eng
             pool_recycle=1800,
             connect_args={
                 **tls_args,
+                **database_timeout_connect_args(database_url, application_name),
                 "application_name": application_name,
                 "keepalives": 1,
                 "keepalives_idle": 30,
@@ -116,6 +153,7 @@ def get_bi_engine(database_url: str) -> Engine:
             pool_recycle=1800,
             connect_args={
                 **tls_args,
+                **database_timeout_connect_args(database_url, "aequoros-bi"),
                 "application_name": "aequoros-bi",
                 "keepalives": 1,
                 "keepalives_idle": 30,
