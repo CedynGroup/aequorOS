@@ -30,6 +30,38 @@ from tests.services.factories import ServiceFactories
 from tests.support.helpers import ORG_2
 
 
+@pytest.mark.parametrize("tombstone", ["document", "stored_object"])
+def test_download_refuses_tombstone_with_live_statuses(
+    db_session: Session,
+    service_factories: ServiceFactories,
+    monkeypatch: pytest.MonkeyPatch,
+    tombstone: str,
+) -> None:
+    factories = service_factories
+    document = factories.documents.create_uploaded()
+    stored = db_session.get(StoredObject, document.stored_object_id)
+    assert stored is not None
+    if tombstone == "document":
+        document.deleted_at = utc_now()
+    else:
+        stored.deleted_at = utc_now()
+    db_session.commit()
+
+    def forbidden_download(*, bucket: str, object_key: str, expires_seconds: int) -> str:
+        pytest.fail("tombstoned storage must not receive a download URL")
+
+    monkeypatch.setattr(factories.storage, "create_presigned_download_url", forbidden_download)
+    with pytest.raises(HTTPException) as refused:
+        documents.create_download_url(
+            db_session,
+            factories.ctx,
+            document.id,
+            settings=factories.settings,
+            storage_client=factories.storage,
+        )
+    assert refused.value.status_code == 409
+
+
 @pytest.mark.committing_db
 def test_storage_failure_leaves_committed_pending_cleanup_that_worker_retries(
     db_session: Session, service_factories: ServiceFactories, monkeypatch: pytest.MonkeyPatch

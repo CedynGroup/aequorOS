@@ -43,27 +43,31 @@ class ParseResult:
     status: str
 
 
-def get_document_or_404(db: Session, organization_id: str, document_id: UUID) -> Document:
-    document = db.scalar(
-        select(Document).where(
-            Document.id == document_id,
-            Document.organization_id == organization_id,
-        )
+def get_document_or_404(
+    db: Session, organization_id: str, document_id: UUID, *, for_update: bool = False
+) -> Document:
+    query = select(Document).where(
+        Document.id == document_id,
+        Document.organization_id == organization_id,
     )
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    document = db.scalar(query)
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
     return document
 
 
 def get_stored_object_or_404(
-    db: Session, organization_id: str, stored_object_id: UUID
+    db: Session, organization_id: str, stored_object_id: UUID, *, for_update: bool = False
 ) -> StoredObject:
-    stored_object = db.scalar(
-        select(StoredObject).where(
-            StoredObject.id == stored_object_id,
-            StoredObject.organization_id == organization_id,
-        )
+    query = select(StoredObject).where(
+        StoredObject.id == stored_object_id,
+        StoredObject.organization_id == organization_id,
     )
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    stored_object = db.scalar(query)
     if stored_object is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Stored object not found."
@@ -142,6 +146,23 @@ def request_upload(
     )
 
 
+def _require_pending_upload(document: Document, stored_object: StoredObject) -> None:
+    if (
+        document.deleted_at is not None
+        or document.status == "deleted"
+        or stored_object.deleted_at is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Deleted documents cannot complete upload.",
+        )
+    if document.status != "upload_requested" or stored_object.status != "pending_upload":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document upload is not pending.",
+        )
+
+
 def complete_upload(
     db: Session,
     ctx: TenantContext,
@@ -152,19 +173,15 @@ def complete_upload(
 ) -> Document:
     document = get_document_or_404(db, ctx.organization_id, document_id)
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
-    if document.deleted_at is not None or document.status == "deleted":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Deleted documents cannot complete upload.",
-        )
-    if document.status != "upload_requested" or stored_object.status != "pending_upload":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Document upload is not pending.",
-        )
-    head = storage_client.head_object(
-        bucket=stored_object.bucket, object_key=stored_object.object_key
+    _require_pending_upload(document, stored_object)
+    bucket, object_key = stored_object.bucket, stored_object.object_key
+    db.commit()
+    head = storage_client.head_object(bucket=bucket, object_key=object_key)
+    document = get_document_or_404(db, ctx.organization_id, document_id, for_update=True)
+    stored_object = get_stored_object_or_404(
+        db, ctx.organization_id, document.stored_object_id, for_update=True
     )
+    _require_pending_upload(document, stored_object)
     if head is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
@@ -215,7 +232,12 @@ def create_download_url(
 ) -> DownloadUrlResult:
     document = get_document_or_404(db, ctx.organization_id, document_id)
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
-    if document.status != "uploaded" or stored_object.status != "available":
+    if (
+        document.deleted_at is not None
+        or stored_object.deleted_at is not None
+        or document.status != "uploaded"
+        or stored_object.status != "available"
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Document is not available."
         )
@@ -318,13 +340,7 @@ def delete_document(
     a failed database commit cannot destroy its object. Physical cleanup retries
     through the worker; the API's existing deleted response means logical deletion.
     """
-    document = db.scalar(
-        select(Document)
-        .where(Document.id == document_id, Document.organization_id == ctx.organization_id)
-        .with_for_update()
-    )
-    if document is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+    document = get_document_or_404(db, ctx.organization_id, document_id, for_update=True)
     if document.deleted_at is not None:
         db.commit()
         return document
