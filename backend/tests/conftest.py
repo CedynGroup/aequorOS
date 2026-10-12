@@ -558,10 +558,10 @@ def _rollback_sessionmaker_lifecycle(
     original_get_engine = session_mod.get_engine
     original_sessionmaker = session_mod.sessionmaker
 
-    def shared_engine(database_url: str) -> Engine:
+    def shared_engine(database_url: str, application_name: str = "aequoros-api") -> Engine:
         if database_url == database.database_url:
             return database.engine
-        return original_get_engine(database_url)
+        return original_get_engine(database_url, application_name)
 
     def shared_sessionmaker(*args, **kwargs) -> sessionmaker:
         bind = kwargs.get("bind")

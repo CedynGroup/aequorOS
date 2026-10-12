@@ -146,11 +146,11 @@ before deploying this migration in production or staging:
   source SELECT/INSERT grants; grant no chain INSERT/UPDATE/DELETE/TRUNCATE and
   no definer EXECUTE to runtime identities. Avoid blanket post-migration grants
   and bootstrap ownership reassignment.
-- The legacy `scripts/bootstrap_db.sh` is incompatible with this migration:
-  it creates a NOCREATEROLE migrator without preparing audit-owner membership,
-  reassigns existing table ownership and applies blanket runtime grants.
-  Do not use it to initialize or refresh an audit-protected database; prepare
-  roles and grants as described above before running Alembic.
+- Local `scripts/bootstrap_db.sh` now prepares the versioned role foundation and
+  migrations without ownership reassignment, blanket grants or tenant seeding.
+  It accepts only a local service. Deployment administrators follow the
+  [role handoff runbook](../../docs/ops/database-roles.md); never run the local
+  password preparation SQL on a deployment.
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,
   truncation and function replacement fail. Confirm one sweep with zero banks

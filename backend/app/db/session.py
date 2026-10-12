@@ -48,7 +48,11 @@ _CROSS_TENANT_TABLES: tuple[str, ...] = ("jobs",)
 
 
 @lru_cache
-def get_engine(database_url: str) -> Engine:
+def get_engine(database_url: str, application_name: str = "aequoros-api") -> Engine:
+    # SQLite has no application_name; keep fallback users on the same cached
+    # engine, particularly when its in-memory database is connection-local.
+    if not database_url.startswith("postgresql") and application_name != "aequoros-api":
+        return get_engine(database_url)
     # The primary database is remote (~40ms away), so connection handling — not
     # query cost — dominates latency. Without TCP keepalives a firewall/NAT silently
     # drops idle pooled connections, forcing a full TLS+auth reconnect (~200ms) on the
@@ -66,6 +70,7 @@ def get_engine(database_url: str) -> Engine:
             pool_recycle=1800,
             connect_args={
                 **tls_args,
+                "application_name": application_name,
                 "keepalives": 1,
                 "keepalives_idle": 30,
                 "keepalives_interval": 10,
@@ -162,7 +167,7 @@ def get_worker_sessionmaker() -> sessionmaker[Session]:
         msg = "DATABASE_URL (or WORKER_DATABASE_URL) is required for the worker."
         raise RuntimeError(msg)
     return sessionmaker(
-        bind=get_engine(url),
+        bind=get_engine(url, "aequoros-worker"),
         autoflush=False,
         expire_on_commit=False,
     )

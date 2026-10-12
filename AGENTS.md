@@ -163,6 +163,7 @@ new topic, add a row here.
 | TLS enforcement and bank-reviewable transport evidence             | [backend/docs/transport_security.md](backend/docs/transport_security.md)                                                                 |
 | Bank-held keys, onboarding, rotation and backup recovery           | [backend/docs/bank_encryption.md](backend/docs/bank_encryption.md)                                                                       |
 | Database institution ownership and deliberate reference exclusions | [backend/docs/database_integrity.md](backend/docs/database_integrity.md)                                                                 |
+| Database role matrix and deployment handoff for Eric           | [docs/ops/database-roles.md](docs/ops/database-roles.md)                                                                                 |
 | Audit chains, filed-input seals and compliance retention           | [backend/docs/tamper_evident_records.md](backend/docs/tamper_evident_records.md)                                                         |
 | Coolify deployment rules                                           | [deploy/README.md](deploy/README.md#coolify-compose-rules)                                                                               |
 | Host change to `bank.aequoros.com`                                 | [backend/dashboard/README.md](backend/dashboard/README.md#deploy-to-bankaequoroscom)                                                     |

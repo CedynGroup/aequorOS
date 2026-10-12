@@ -275,7 +275,11 @@ def coverage(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Coverage]:
     originals = (session_mod.get_sessionmaker, deps_mod.get_sessionmaker, session_mod.get_engine)
     session_mod.get_sessionmaker = lambda: bound_sessionmaker
     deps_mod.get_sessionmaker = lambda: bound_sessionmaker
-    session_mod.get_engine = lambda _url=None: engine
+
+    def replacement_engine(_url: str | None = None, _application_name: str | None = None) -> Engine:
+        return engine
+
+    session_mod.get_engine = replacement_engine
 
     app = create_app()
     fake_storage = _FakeStorage()

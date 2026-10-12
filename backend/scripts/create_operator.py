@@ -115,7 +115,12 @@ def main() -> int:
         )
         return 1
 
-    engine = create_engine(database_url)
+    engine = create_engine(
+        database_url,
+        connect_args={"application_name": "aequoros-create-operator"}
+        if database_url.startswith("postgresql")
+        else {},
+    )
     try:
         with Session(engine) as session:
             _, generated_password = provision(session, args)

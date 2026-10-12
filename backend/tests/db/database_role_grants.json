@@ -1,0 +1,920 @@
+{
+  "columns": [
+    ["regulatory_packages", "attestation_cycle", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "attestation_cycle", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "attestation_state", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "attestation_state", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "certification_digest", "aqs_api", "UPDATE", false],
+    [
+      "regulatory_packages",
+      "certification_digest",
+      "aqs_worker",
+      "UPDATE",
+      false
+    ],
+    ["regulatory_packages", "certified_at", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "certified_at", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "checks_passed", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "checks_passed", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "content_digest", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "content_digest", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "created_at", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "created_at", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "current_stage_seq", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "current_stage_seq", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "fully_certified_at", "aqs_api", "UPDATE", false],
+    [
+      "regulatory_packages",
+      "fully_certified_at",
+      "aqs_worker",
+      "UPDATE",
+      false
+    ],
+    ["regulatory_packages", "id", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "id", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "notes", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "notes", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "regulator_comments", "aqs_api", "UPDATE", false],
+    [
+      "regulatory_packages",
+      "regulator_comments",
+      "aqs_worker",
+      "UPDATE",
+      false
+    ],
+    ["regulatory_packages", "status", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "status", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "submission_revision", "aqs_api", "UPDATE", false],
+    [
+      "regulatory_packages",
+      "submission_revision",
+      "aqs_worker",
+      "UPDATE",
+      false
+    ],
+    ["regulatory_packages", "updated_at", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "updated_at", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "validation_report", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "validation_report", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "void_reason", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "void_reason", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "voided_at", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "voided_at", "aqs_worker", "UPDATE", false],
+    ["regulatory_packages", "workflow_round", "aqs_api", "UPDATE", false],
+    ["regulatory_packages", "workflow_round", "aqs_worker", "UPDATE", false]
+  ],
+  "functions": [
+    ["aequoros_binding_revocation_guard", "", "aqs_api"],
+    ["aequoros_binding_revocation_guard", "", "aqs_audit_verifier"],
+    ["aequoros_binding_revocation_guard", "", "aqs_bi"],
+    ["aequoros_binding_revocation_guard", "", "aqs_operator"],
+    ["aequoros_binding_revocation_guard", "", "aqs_worker"],
+    ["aequoros_completed_run_guard", "", "aqs_api"],
+    ["aequoros_completed_run_guard", "", "aqs_audit_verifier"],
+    ["aequoros_completed_run_guard", "", "aqs_bi"],
+    ["aequoros_completed_run_guard", "", "aqs_operator"],
+    ["aequoros_completed_run_guard", "", "aqs_worker"],
+    ["aequoros_governed_row_guard", "", "aqs_api"],
+    ["aequoros_governed_row_guard", "", "aqs_audit_verifier"],
+    ["aequoros_governed_row_guard", "", "aqs_bi"],
+    ["aequoros_governed_row_guard", "", "aqs_operator"],
+    ["aequoros_governed_row_guard", "", "aqs_worker"],
+    ["aequoros_regulatory_event_append_only_guard", "", "aqs_api"],
+    ["aequoros_regulatory_event_append_only_guard", "", "aqs_audit_verifier"],
+    ["aequoros_regulatory_event_append_only_guard", "", "aqs_bi"],
+    ["aequoros_regulatory_event_append_only_guard", "", "aqs_operator"],
+    ["aequoros_regulatory_event_append_only_guard", "", "aqs_worker"],
+    ["aequoros_retained_register_guard", "", "aqs_api"],
+    ["aequoros_retained_register_guard", "", "aqs_audit_verifier"],
+    ["aequoros_retained_register_guard", "", "aqs_bi"],
+    ["aequoros_retained_register_guard", "", "aqs_operator"],
+    ["aequoros_retained_register_guard", "", "aqs_worker"],
+    ["aequoros_signed_package_guard", "", "aqs_api"],
+    ["aequoros_signed_package_guard", "", "aqs_audit_verifier"],
+    ["aequoros_signed_package_guard", "", "aqs_bi"],
+    ["aequoros_signed_package_guard", "", "aqs_operator"],
+    ["aequoros_signed_package_guard", "", "aqs_worker"]
+  ],
+  "sequences": [],
+  "tables": {
+    "ai_commentary_drafts": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "ai_commentary_settings": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "alembic_version": {},
+    "attestation_signatures": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "audit_chain_entries": {
+      "aqs_audit_verifier": ["SELECT"]
+    },
+    "audit_chain_heads": {
+      "aqs_audit_verifier": ["SELECT"]
+    },
+    "audit_events": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_audit_verifier": ["SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "audit_integrity_schedule": {},
+    "authorization_access_requests": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "authorization_bindings": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "bank_encryption_keys": {},
+    "bank_financial_facts": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bank_licenses": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bank_name_history": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bank_products": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bank_reporting_periods": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bank_supervisory_addons": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "banks": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_agg_position_daily": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_agg_position_daily_default": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_alert_events": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_alerts": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_dashboard_shares": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_dashboard_versions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "bi_dashboards": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_dim_branch": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_dim_counterparty": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_dim_date": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_dim_gl_account": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_dim_product": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_fact_engine_metric": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_fact_gl_branch_monthly": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_fact_gl_monthly": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_fact_loan_event": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_fact_loan_event_default": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_fact_position_daily": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_fact_position_daily_default": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_fact_position_eom": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_fact_position_eom_default": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_fact_target": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_mart_builds": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_measures": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_query_log": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "bi_query_log_default": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "bi_subscription_deliveries": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "bi_subscriptions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "calculation_forecast_periods": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "calculation_runs": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_counterparties": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_counterparty_ratings": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_fx_rates": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_gl_accounts": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_loan_events": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_market_indices": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_position_snapshots": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_positions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_products": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_reference_rows": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_withdrawals": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_yield_curve_points": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "canonical_yield_curves": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "capital_indicators": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "capital_plans": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "capital_projection_findings": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "capital_projections": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "cfp_activation_events": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "contingency_funding_plans": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "current_financial_facts": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "database_direct_connections": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "desk_curve_definitions": {},
+    "desk_determinations": {},
+    "desk_methodologies": {},
+    "desk_observations": {},
+    "desk_operating_environment_assessments": {},
+    "desk_publications": {},
+    "desk_source_captures": {},
+    "document_chunks": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "document_extractions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "documents": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "enterprise_stress_signoffs": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "filing_workflow_templates": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "financial_accounts": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "financial_balances": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "financial_cash_flows": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "financial_covenants": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "financial_institutions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "financial_manual_edit_history": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "financial_obligations": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "financial_record_source_links": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "financial_reporting_periods": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "financial_source_rows": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "financial_validation_issues": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "forecast_assumption_versions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_ai_suggestion_decisions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "icaap_ai_suggestions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_appetite_metrics": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_attachment_withdrawals": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "icaap_attachments": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "icaap_audit_reviews": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_block_bindings": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "icaap_capital_allocations": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_challenge_responses": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "icaap_challenges": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "icaap_control_explanations": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_cycle_stages": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "icaap_cycles": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_data_blocks": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_disclosures": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_pillar2_item_revisions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "icaap_pillar2_items": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_requirement_reconciliation_lines": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_resources_reconciliation_lines": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_risk_assessments": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_section_versions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "icaap_sections": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "icaap_stage_decisions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "icaap_workflow_templates": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "ilaap_snapshots": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "implied_rating_runs": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "ingestion_batches": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "initial_admin_role_demotions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "institution_profiles": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "institution_types": {
+      "aqs_api": ["SELECT"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["SELECT"]
+    },
+    "integration_keys": {},
+    "jobs": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "jurisdictions": {
+      "aqs_api": ["SELECT"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["SELECT"]
+    },
+    "lineage_records": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "liquidity_analysis_results": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "liquidity_ewi_indicators": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "live_findings": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "live_metric_snapshots": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "live_metrics": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "macro_scenario_paths": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "macro_scenarios": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "management_action_items": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "management_action_plans": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "mapping_configs": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "market_data_connections": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "market_data_entitlements": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "market_data_overlays": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "market_data_quota_usage": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "market_data_source_preferences": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "notifications": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "object_key_envelopes": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "operator_audit_log": {
+      "aqs_audit_verifier": ["SELECT"]
+    },
+    "operator_inspector_sessions": {},
+    "operator_users": {},
+    "organization_owner_assignments": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "organizations": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "outlets": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "package_signature_placements": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "package_signature_recipients": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "package_stage_decisions": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "package_workflow_stages": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "param_capital_threshold": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "param_concentration_limit": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "param_credit_threshold": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "param_crm_haircut": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "param_ecl_assumption": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "param_lcr_runoff_rate": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "param_liquidity_haircut": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "param_liquidity_threshold": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "param_nsfr_weight": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "param_risk_weight": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "param_stress_shock": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "platform_id_legacy_map": {},
+    "reconciliation_exceptions": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "refresh_tokens": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "regulatory_artifact_versions": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "regulatory_channel_configs": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "regulatory_line_items": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "regulatory_metric_results": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "regulatory_package_approvals": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "regulatory_package_artifacts": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "regulatory_package_attachment_withdrawals": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "regulatory_package_attachments": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "regulatory_packages": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "regulatory_parameter": {
+      "aqs_api": ["SELECT"],
+      "aqs_bi": ["SELECT"],
+      "aqs_worker": ["SELECT"]
+    },
+    "regulatory_reporting_settings": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "regulatory_resubmission_requests": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "regulatory_runs": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "regulatory_submission_events": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "regulatory_validations": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "related_parties": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "related_party_roles": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "retained_bank_keys": {},
+    "return_signature_placements": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "return_signing_policies": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "risk_assessment_runs": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "risk_assessments": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "risk_case_decisions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "risk_cases": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "risk_finding_evidence": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "risk_findings": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "risk_scenarios": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "risk_scores": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "scenario_analyses": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "scenario_assumption_history": {
+      "aqs_api": ["INSERT", "SELECT"],
+      "aqs_worker": ["INSERT", "SELECT"]
+    },
+    "scenario_assumptions": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "shareholdings": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "signature_appearances": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "signer_identities": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT"]
+    },
+    "signer_keys": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "signing_authorizations": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "sso_connections": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "stored_objects": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "stress_scenarios": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "system_of_record_declarations": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "temenos_connections": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "tenant_storage": {},
+    "translation_failures": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "users": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "worker_heartbeats": {}
+  }
+}

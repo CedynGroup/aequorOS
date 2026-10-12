@@ -230,7 +230,9 @@ def get_operator_sessionmaker() -> sessionmaker:
             detail="Operator database is not configured "
             "(OPERATOR_DATABASE_URL / WORKER_DATABASE_URL / DATABASE_URL).",
         )
-    return sessionmaker(bind=get_engine(url), autoflush=False, expire_on_commit=False)
+    return sessionmaker(
+        bind=get_engine(url, "aequoros-operator"), autoflush=False, expire_on_commit=False
+    )
 
 
 def get_operator_db_session(

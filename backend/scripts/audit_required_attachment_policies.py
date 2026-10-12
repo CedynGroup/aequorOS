@@ -62,7 +62,13 @@ def _engine() -> Engine:
     # absent psycopg2 driver and fails at connect time.
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return create_engine(url, future=True)
+    return create_engine(
+        url,
+        connect_args={"application_name": "aequoros-audit-required-attachment-policies"}
+        if url.startswith("postgresql")
+        else {},
+        future=True,
+    )
 
 
 _POLICY_SQL = text(

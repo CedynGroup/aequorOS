@@ -345,7 +345,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     if not url:
         parser.error("no database URL: pass --database-url or set WORKER_DATABASE_URL")
-    engine = create_engine(url)
+    engine = create_engine(
+        url,
+        connect_args={"application_name": "aequoros-authorization-access-impact"}
+        if url.startswith("postgresql")
+        else {},
+    )
     rows: list[UserAccess] = []
     for organization_id in _organizations(engine, args.organization):
         with Session(engine) as db:
