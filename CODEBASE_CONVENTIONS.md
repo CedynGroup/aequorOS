@@ -185,10 +185,21 @@ lineage bank ownership from each existing batch, and verifies all affected refer
 before replacing constraints. It refuses mismatches rather than repairing them.
 Batch-bound lineage must carry that batch's bank; batchless lineage may remain
 organization-wide, but a node without a bank cannot satisfy a bank-bound canonical
-lineage reference. The pre-existing migrated-schema omission for
-`canonical_loan_events.lineage_id` remains for the next stack layer. Regression coverage
-for this layer is in
+lineage reference. Regression coverage for these bank bindings is in
 [`test_canonical_bank_integrity.py`](backend/tests/db/test_canonical_bank_integrity.py).
+
+Migration
+[`202610110096`](backend/alembic/versions/202610110096_restore_loan_event_lineage.py)
+restores the loan-event lineage FK omitted by `202609010049`, along with the declared
+organization-scoped identity key and shared access indexes. It locks loan events and
+lineage records, verifies every existing reference with owner or BYPASSRLS visibility,
+and refuses missing or mismatched lineage before adding the bank-bound FK. Regression
+coverage is in
+[`test_loan_event_lineage_integrity.py`](backend/tests/db/test_loan_event_lineage_integrity.py).
+[`test_canonical_migration_structural_parity.py`](backend/tests/db/test_canonical_migration_structural_parity.py)
+compares all registered `canonical_*` tables, ingestion batches and lineage records
+against the migrated schema: complete FK signatures, primary and unique keys, and
+presence of every declared index.
 
 ### Migrations (`alembic/versions/`)
 
