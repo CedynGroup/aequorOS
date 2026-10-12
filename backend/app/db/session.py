@@ -1,18 +1,54 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any
+from typing import cast
 
 from sqlalchemy import Engine, bindparam, create_engine, event, text
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, SessionTransaction, sessionmaker
 
 from app.core.config import get_settings
 from app.core.tls import database_connect_args
+
+_worker_tenant: ContextVar[tuple[str, str | None] | None] = ContextVar(
+    "worker_tenant", default=None
+)
+
+
+@contextmanager
+def worker_tenant_context(organization_id: str, bank_id: str | None) -> Generator[None]:
+    """Carry a handler's tenant into separately opened storage sessions."""
+    token = _worker_tenant.set((organization_id, bank_id))
+    try:
+        yield
+    finally:
+        _worker_tenant.reset(token)
+
+
+def get_storage_session() -> Session:
+    tenant = _worker_tenant.get()
+    factory = (
+        get_worker_sessionmaker()
+        if tenant is not None
+        else cast(sessionmaker[Session], get_sessionmaker())
+    )
+    session = factory()
+    if tenant is not None:
+        session.info["organization_id"], session.info["bank_id"] = tenant
+        session.info["worker_context"] = True
+    return session
+
+
+def apply_worker_tenant_context(session: Session) -> None:
+    """Apply the active handler context before this session starts a transaction."""
+    tenant = _worker_tenant.get()
+    if tenant is not None:
+        session.info["organization_id"], session.info["bank_id"] = tenant
 
 
 class RlsBlindError(RuntimeError):
@@ -189,7 +225,7 @@ def get_bi_sessionmaker() -> sessionmaker | None:
 
 
 def get_worker_sessionmaker() -> sessionmaker[Session]:
-    """Sessionmaker for the cross-tenant background worker.
+    """Sessionmaker for background jobs and their narrow platform entry points.
 
     Production and staging workers require ``WORKER_DATABASE_URL``: accepting
     the tenant API role here makes a FORCE-RLS job queue look empty forever.
@@ -300,13 +336,12 @@ class WorkerVisibility:
 def worker_visibility() -> WorkerVisibility:
     """Report whether ``claim_next`` can match rows, without raising.
 
-    ``jobs`` is FORCE-RLS (migration 202607180014) and the worker claims across
-    tenants with no organization set, so a role without BYPASSRLS matches zero
-    rows for every tenant, forever, with no error and no log. Readiness reads
-    this so the condition is visible from outside the worker process.
+    Prefer the dedicated claim function. Legacy deployments may still claim
+    directly when their role bypasses RLS or the queue is not forced. A tenant
+    role lacking this entry point must fail visibly rather than silently idle.
     """
     try:
-        engine = get_worker_sessionmaker().kw["bind"]
+        engine = cast(Engine, get_worker_sessionmaker().kw["bind"])
     except RuntimeError as exc:
         return WorkerVisibility(can_claim=False, role=None, detail=str(exc))
 
@@ -319,9 +354,20 @@ def worker_visibility() -> WorkerVisibility:
 
     try:
         with engine.connect() as connection:
-            role = connection.scalar(text("SELECT current_user"))
+            role = cast(str, connection.scalar(text("SELECT current_user")))
             bypasses = role_bypasses_rls(connection)
             forced = forced_rls_tables(connection, _CROSS_TENANT_TABLES)
+            narrow_claim = cast(
+                bool | None,
+                connection.scalar(
+                    text(
+                        "SELECT has_function_privilege(current_user, "
+                        "to_regprocedure('aqs_worker_claim_job("
+                        "timestamp with time zone,text[],text)'), "
+                        "'EXECUTE')"
+                    )
+                ),
+            )
     except SQLAlchemyError as exc:
         return WorkerVisibility(
             can_claim=False,
@@ -329,10 +375,13 @@ def worker_visibility() -> WorkerVisibility:
             detail=f"Worker database is unreachable: {exc.__class__.__name__}.",
         )
 
-    if bypasses:
-        return WorkerVisibility(
-            can_claim=True, role=role, detail=f"{role} bypasses row-level security."
+    if narrow_claim or bypasses:
+        detail = (
+            f"{role} can execute the worker claim function."
+            if narrow_claim
+            else f"{role} bypasses row-level security."
         )
+        return WorkerVisibility(can_claim=True, role=role, detail=detail)
     if not forced:
         return WorkerVisibility(
             can_claim=True,
@@ -345,7 +394,7 @@ def worker_visibility() -> WorkerVisibility:
         detail=(
             f"{role} does not bypass row-level security, so cross-tenant claims on "
             f"{', '.join(forced)} match zero rows for every tenant. Point "
-            "WORKER_DATABASE_URL at a BYPASSRLS role."
+            "WORKER_DATABASE_URL at aqs_worker after applying the worker access migration."
         ),
     )
 
@@ -360,16 +409,22 @@ def assert_worker_database_access() -> None:
 @event.listens_for(Session, "after_begin")
 def set_tenant_rls_context(
     session: Session,
-    _transaction: Any,
+    _transaction: SessionTransaction,
     connection: Connection,
 ) -> None:
-    organization_id = session.info.get("organization_id")
-    if organization_id is None or connection.dialect.name != "postgresql":
+    organization_id = cast(str | None, session.info.get("organization_id"))
+    if connection.dialect.name != "postgresql":
         return
 
     connection.execute(
         text("SELECT set_config('app.organization_id', :organization_id, true)"),
-        {"organization_id": str(organization_id)},
+        {"organization_id": "" if organization_id is None else str(organization_id)},
+    )
+
+    bank_id = cast(str | None, session.info.get("bank_id"))
+    connection.execute(
+        text("SELECT set_config('app.bank_id', :bank_id, true)"),
+        {"bank_id": "" if bank_id is None else str(bank_id)},
     )
 
 

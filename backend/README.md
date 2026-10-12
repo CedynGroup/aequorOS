@@ -131,9 +131,11 @@ Two operational notes for a remote database:
 - **RLS hides everything without the tenant GUC.** Ad-hoc `psql` against the remote shows zero
   rows on tenant tables (`FORCE ROW LEVEL SECURITY`); set
   `SELECT set_config('app.organization_id', '<OR-XXXXXXXX>', false);` first when inspecting.
-- **The cross-tenant worker needs a BYPASSRLS role** to claim queued jobs from FORCE-RLS
-  tables. Configure that separate role through `WORKER_DATABASE_URL`; keep the application
-  role `NOBYPASSRLS`.
+- **The worker uses `aqs_worker` with narrow platform entry points** and per-job
+  organization/bank context. Configure its separate credential through
+  `WORKER_DATABASE_URL` after the reviewed compatibility migration. Existing credentials
+  remain supported during rollout; [the deployment runbook](../docs/ops/database-roles.md)
+  owns activation and retirement of legacy BYPASSRLS access.
 
 Fully-local alternative (offline work):
 

@@ -1118,11 +1118,9 @@ class WorkerSettings(BaseSettings):
     #: Unchanged and structurally unavailable rows are never refreshed by age.
     #: Default off; authoritative input mutations enqueue directly.
     live_refresh_enabled: bool = Field(default=False, alias="LIVE_REFRESH_ENABLED")
-    # The worker claims and processes jobs across every tenant, so its DB
-    # connection must see all rows. On an RLS-forced Postgres this requires a
-    # BYPASSRLS role (the app role is deliberately tenant-scoped). When unset,
-    # the worker falls back to DATABASE_URL (correct for SQLite tests and any
-    # deployment whose main role already bypasses RLS).
+    # The worker claims through narrow platform functions and binds each
+    # handler to its organization/bank. Production/staging require a separate
+    # URL; local and hermetic development may fall back to DATABASE_URL.
     worker_database_url: str | None = Field(default=None, alias="WORKER_DATABASE_URL")
     # Which job types THIS worker process claims and reaps. Unset means "every
     # type in the default (core) lane" — the AI lane is never in the default,

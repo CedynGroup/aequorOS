@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
@@ -11,6 +11,7 @@ from app.core.config import Settings, get_settings
 from app.core.key_management.settings import get_key_settings
 from app.core.logging import logger
 from app.db.session import get_engine, get_worker_sessionmaker, worker_visibility
+from app.db.worker_access import OVERDUE_SIGNATURE, has_worker_function
 from app.schemas.health import ComponentHealth, HealthResponse, ReadinessResponse
 from app.services import job_queue
 from app.storage.factory import get_storage_client
@@ -121,6 +122,17 @@ def _overdue_job_count(stale_after_seconds: float) -> int | None:
             # starved whenever the optional AI app is simply not deployed.
             # ``_ai_health`` reports that backlog separately, and never 503s.
             ai_types = job_queue.job_types_in_lane("ai")
+            if has_worker_function(session, OVERDUE_SIGNATURE):
+                return cast(
+                    int,
+                    session.scalar(
+                        text(
+                            "SELECT aqs_worker_overdue_jobs(:stale_after, "
+                            "CAST(:types AS text[]), true)"
+                        ),
+                        {"stale_after": stale_after_seconds, "types": list(ai_types)},
+                    ),
+                )
             return session.execute(
                 text(
                     "SELECT count(*) FROM jobs WHERE status = 'queued' "
@@ -136,11 +148,9 @@ def _overdue_job_count(stale_after_seconds: float) -> int | None:
 def _worker_health(settings: Settings) -> ComponentHealth:
     """Whether the background worker can claim jobs at all, and whether it is.
 
-    ``jobs`` is FORCE-RLS and the worker claims across tenants with no
-    organization set, so a role without BYPASSRLS matches zero rows for every
-    tenant forever — no error, no log, no signal (audit finding P0-16). The
-    condition is deterministic, so readiness states it outright instead of
-    inferring it from a backlog.
+    Readiness checks the dedicated claim capability and obtains backlog
+    metadata through the platform count function. Legacy deployments keep
+    their existing access path during the credential transition.
 
     The verdict is public; the EVIDENCE for it is not. ``worker_visibility()``
     reports the role name, the FORCE-RLS tables and the setting to repoint, and
@@ -217,6 +227,20 @@ def _ai_overdue_count(stale_after_seconds: float) -> int | None:
         if engine.dialect.name != "postgresql":
             return None
         with Session(engine) as session:
+            if has_worker_function(session, OVERDUE_SIGNATURE):
+                return cast(
+                    int,
+                    session.scalar(
+                        text(
+                            "SELECT aqs_worker_overdue_jobs(:stale_after, "
+                            "CAST(:types AS text[]), false)"
+                        ),
+                        {
+                            "stale_after": stale_after_seconds,
+                            "types": list(job_queue.job_types_in_lane("ai")),
+                        },
+                    ),
+                )
             return session.execute(
                 text(
                     "SELECT count(*) FROM jobs WHERE status = 'queued' "

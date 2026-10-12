@@ -12,7 +12,7 @@ existing application URLs, ownership, credentials or BYPASSRLS roles.
 | `aqs_owner`          | NOLOGIN object owner     | DDL and explicit migration work through SET ROLE                                                                                                          | Application connections                                                                           |
 | `aqs_migrator`       | Deployment only          | SET ROLE `aqs_owner`; no automatic inheritance                                                                                                            | Runtime use, elevated attributes                                                                  |
 | `aqs_api`            | Tenant API               | Tenant SELECT/INSERT/UPDATE/DELETE under forced RLS, audit append, filing lifecycle columns, enqueue/coalesce jobs and parse/assessment lifecycle updates | Schema DDL, ownership, audit or immutable evidence changes, job DELETE or worker-only job columns |
-| `aqs_worker`         | Background jobs          | API tenant rights plus queue state changes under RLS                                                                                                      | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes                          |
+| `aqs_worker`         | Background jobs          | API tenant rights, job-scoped organization/bank context, heartbeat metadata, and classified platform functions/views                                      | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes                          |
 | `aqs_bi`             | Interactive BI           | SELECT on BI marts/dimensions and public jurisdiction/parameter reference tables under RLS; 10-second statement timeout                                   | Writes, operational queue or identity-table access                                                |
 | `aqs_operator`       | Staff operations         | Dedicated cross-bank metadata views, introduced in the operator PR                                                                                        | Direct tenant-table access; financial inspection outside the governed #351 flow                   |
 | `aqs_audit_verifier` | Independent audit checks | SELECT audit sources, chain entries and heads, including cross-bank verification                                                                          | Other tenant tables, writes or chain ownership                                                    |
@@ -25,7 +25,8 @@ preserved. No application sequence grants are installed. The API's sole partitio
 function grant is `bi_ensure_month_partition(regclass,date)`: its definer pins the
 search path and restricts API logins to the query-log parent in its own schema,
 for the previous, current or next UTC month. It adds no table-level grants or
-mart/drop-partition capability. Existing PUBLIC execution on non-definer trigger
+mart/drop-partition capability. The worker follow-up adds explicit platform-function
+grants only for its classified operations. Existing PUBLIC execution on non-definer trigger
 functions remains unchanged.
 Existing integrity triggers and restrictive policies remain authoritative for
 completed runs, sealed registers and filed-content immutability (#511).
@@ -162,6 +163,76 @@ running the migration suites. Real-login role proofs in
 test database to create and remove probe logins. The local runner and CI prepare
 these prerequisites; never use the primary database.
 
+## Worker compatibility migration
+
+Migration `202610120098` follows `202610120096`. This is a captain-reviewed
+worker cutover: **non-breaking; deployment switch is a separate step**. It does
+not change the attributes or credentials of an existing deployment role. The
+effective migration actor needs CREATE on the target database to create the
+worker-view namespace. When `aqs_migrator` connects, Alembic uses SET ROLE
+`aqs_owner`, so Eric grants this database permission to `aqs_owner`, not only to
+the login. Local bootstrap prepares the NOLOGIN owner's CREATE grant automatically.
+
+`aqs_worker` still cannot read tenant jobs or financial rows without organization
+context. `aqs_worker_claim_job` locks and transitions one due job across tenants;
+`aqs_worker_reclaim_jobs` applies the caller's per-type stale windows; and
+`aqs_worker_seed_ticks` serializes startup seeding for bank-owning organizations.
+`aqs_worker_overdue_jobs` exposes only backlog counts for readiness. All are owned
+by NOLOGIN `aqs_owner`, have pinned search paths, and explicitly grant execution
+to the worker and existing non-superuser bypass roles that already have schema
+USAGE and SELECT/UPDATE on the job queue. Read-only legacy credentials gain no queue or desk
+write access. Other application roles cannot execute them. No new role receives
+BYPASSRLS.
+
+Each handler transaction sets `app.organization_id` and `app.bank_id`. A bank
+carried in the payload must agree with the dispatch envelope and belong to that
+organization. Organization-wide ticks may have no bank. Commit, rollback and pool
+reuse cannot carry a job's context into the next job. Separately opened storage
+sessions use the worker credential and the same handler context; cached storage
+clients resolve their session factory on each operation. The worker key-reference
+function locks only the requested storage slug within that context, without
+SELECT privileges on the pre-tenant registry. A companion storage check distinguishes
+an authorized unconnected bank from an unknown or foreign slug, so refusal cannot
+become a plaintext fallback when optional encryption is disabled. Jobs prepare
+stable bank storage setup metadata before handler work starts, allowing separate
+storage connections to see a first-use slug without committing financial work. The API lookup remains blocked
+pending its separate pre-authentication follow-up.
+
+The `aqs_worker_<schema hash>` namespace contains five market-desk views. Worker
+sessions bind only the desk models to these views; tenant financial models stay
+on the ordinary RLS connection. Captures, observations and drafts share one desk
+transaction; existing per-source commits retain their crash-recovery behavior.
+The views expose public-source market research, not bank canonical financial data.
+Captures retain robot provenance; observations are append-only with supersession;
+determinations must remain robot-prepared drafts based on approved effective
+methodologies. The worker cannot approve, publish, delete, edit human drafts or
+write the underlying desk tables. Methodologies and curve definitions are read-only.
+
+`aqs_worker_audit_check` coordinates the existing hourly integrity schedule and
+returns only stream names, entry counts, validity and the recovery epoch. It
+preserves #511's database hash algorithm and append-only custody; the worker gets
+no raw chain, operator-audit or schedule-table grant. Partition wrappers allow
+creation only for the builder's classified mart parents in this schema. Retention
+can drop completed months only from the two daily position marts; month-end,
+loan-event and query-log drops remain forbidden. Existing partition integrity
+checks stay authoritative. Role timeout budgets remain the separate #518 work.
+
+| Queue source            | Command                               | Scope/guard                       | Destination and effect                            |
+| ----------------------- | ------------------------------------- | --------------------------------- | ------------------------------------------------- |
+| queued                  | claim                                 | Due time, selected lane, row lock | running; claimant and start recorded              |
+| running                 | handler success                       | Job's organization/bank context   | succeeded; completion recorded                    |
+| running                 | handler error                         | Retry budget available            | queued; attempt increment and delayed retry       |
+| running                 | handler error                         | Retry budget exhausted            | failed; completion recorded                       |
+| running                 | reclaim                               | Per-type stale deadline exceeded  | queued with used attempt, or failed at exhaustion |
+| queued/succeeded/failed | reclaim                               | No running overdue row            | unchanged                                         |
+| succeeded/failed        | claim                                 | Not queued                        | unchanged                                         |
+| any tenant row          | direct read/write from another tenant | Forced RLS                        | invisible; no mutation                            |
+
+Native real-login tests cover the transition model, cross-tenant refusal,
+concurrent claims, key isolation, desk governance, audit verification and partition
+allow-lists. The grant ratchet includes both the application schema and worker-view
+namespace.
+
 ## Eric's deployment runbook
 
 ### Preparation and verification
@@ -249,5 +320,7 @@ Restore recorded ACLs/owners only under the maintenance plan; do not relax audit
 or filing integrity guards. The foundation downgrade revokes its own runtime
 schema/table grants and verifier policies, but never drops cluster-wide roles,
 changes existing deployed credentials or restores BYPASSRLS. Disabling a new
-credential is Eric's separate administrator action. Coordinate later migrations
+credential is Eric's separate administrator action. The worker downgrade removes
+its views, functions and delegated rights while preserving privileges on tables
+and partition functions already owned by `aqs_owner`. Coordinate later migrations
 before downgrading so their grants are not accidentally removed.

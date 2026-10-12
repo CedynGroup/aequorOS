@@ -736,6 +736,8 @@ def test_partition_execution_grants_match_maintenance_and_api_capabilities(
     ``202610120099`` also grants the guarded monthly entry point to the API;
     real-login tests pin its query-log-only authority. The next test pins the
     remaining maintenance-role landmine so the runbook sentence is executable.
+    The worker-access migration additionally delegates these functions to the
+    NOLOGIN owner; runtime workers receive only the bounded wrapper functions.
     """
     with adoption_schema.app_engine.connect() as connection:
         expected = {connection.scalar(text("SELECT current_user"))} | set(
@@ -770,6 +772,8 @@ def test_partition_execution_grants_match_maintenance_and_api_capabilities(
                 if signature == "bi_ensure_month_partition(regclass, date)"
                 else expected
             )
+            if not signature.startswith("bi_drop_year_partition"):
+                permitted |= {"aqs_owner"}
             assert "PUBLIC" not in executors, f"{signature}: PUBLIC may execute"
             assert executors == permitted, (
                 f"{signature}: EXECUTE is held by {sorted(executors)}, the migration's "

@@ -9,16 +9,18 @@ allow-list here is the single source of truth for valid types.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
+from app.db.worker_access import CLAIM_SIGNATURE, RECLAIM_SIGNATURE, has_worker_function
 from app.models import Job
 
 
@@ -333,6 +335,24 @@ def claim_next(
     """
     for job_type in job_types:
         _validate_job_type(job_type)
+    if has_worker_function(db, CLAIM_SIGNATURE):
+        envelope = cast(
+            Job | None,
+            db.scalar(
+                select(Job).from_statement(
+                    text(
+                        "SELECT * FROM aqs_worker_claim_job(:now, "
+                        "CAST(:job_types AS text[]), :claimed_by)"
+                    )
+                ),
+                {"now": now, "job_types": list(job_types), "claimed_by": claimed_by},
+            ),
+        )
+        if envelope is not None:
+            # Claim envelopes must not reload under an unscoped RLS session.
+            db.expunge(envelope)
+        db.commit()
+        return envelope
     stmt = (
         select(Job)
         .where(
@@ -460,6 +480,23 @@ def reclaim_stale(
     batch ended ``failed`` with "worker presumed dead" despite nothing having
     died.
     """
+    if has_worker_function(db, RECLAIM_SIGNATURE):
+        selected = JOB_TYPES if job_types is None else job_types
+        for job_type in selected:
+            _validate_job_type(job_type)
+        windows = {
+            job_type: stale_after_for(job_type, stale_after).total_seconds()
+            for job_type in selected
+        }
+        count = cast(
+            int,
+            db.scalar(
+                text("SELECT aqs_worker_reclaim_jobs(:now, CAST(:windows AS jsonb))"),
+                {"now": now, "windows": json.dumps(windows)},
+            ),
+        )
+        db.commit()
+        return int(count or 0)
     statement = select(Job).where(Job.status == "running", Job.completed_at.is_(None))
     if job_types is not None:
         # Each worker reaps only its OWN lane, so a core worker can never apply

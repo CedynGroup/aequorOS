@@ -368,7 +368,7 @@
   "reportAny": 17
  },
  "app.db.session": {
-  "reportAny": 17,
+  "reportAny": 1,
   "reportDeprecated": 1,
   "reportMissingTypeArgument": 2,
   "reportUnknownMemberType": 1,
@@ -5124,10 +5124,8 @@
   "reportAny": 3
  },
  "tests.test_worker": {
-  "reportAny": 48,
+  "reportAny": 20,
   "reportPrivateUsage": 2,
-  "reportUnknownArgumentType": 2,
-  "reportUnknownLambdaType": 10,
-  "reportUnknownMemberType": 1
+  "reportUnknownLambdaType": 1
  }
 }

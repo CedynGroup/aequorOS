@@ -36,6 +36,12 @@ from app.bi.models.marts import (
     BiFactPositionDaily,
     BiFactPositionEom,
 )
+from app.db.worker_access import (
+    DROP_SIGNATURE,
+    ENSURE_MONTH_SIGNATURE,
+    ENSURE_YEAR_SIGNATURE,
+    has_worker_function,
+)
 
 #: The monthly parents the BUILDER writes (``bi_query_log`` is the query path's).
 MONTHLY_BUILD_PARENTS: tuple[str, ...] = (
@@ -114,18 +120,32 @@ def ensure_month_partition(db: Session, parent: str, month: date) -> str | None:
     ``None`` when the parent is not partitioned here."""
     if not is_partitioned(db, parent):
         return None
-    created = db.scalar(
-        select(func.bi_ensure_month_partition(_regclass(parent), literal(month.replace(day=1))))
+    ensure = (
+        func.aqs_worker_ensure_month_partition
+        if has_worker_function(db, ENSURE_MONTH_SIGNATURE)
+        and (
+            db.info.get("worker_access") is True
+            or not has_worker_function(db, "bi_ensure_month_partition(regclass,date)")
+        )
+        else func.bi_ensure_month_partition
     )
+    created = db.scalar(select(ensure(_regclass(parent), literal(month.replace(day=1)))))
     return str(created) if created is not None else None
 
 
 def ensure_year_partition(db: Session, parent: str, year: date) -> str | None:
     if not is_partitioned(db, parent):
         return None
-    created = db.scalar(
-        select(func.bi_ensure_year_partition(_regclass(parent), literal(year.replace(day=1))))
+    ensure = (
+        func.aqs_worker_ensure_year_partition
+        if has_worker_function(db, ENSURE_YEAR_SIGNATURE)
+        and (
+            db.info.get("worker_access") is True
+            or not has_worker_function(db, "bi_ensure_year_partition(regclass,date)")
+        )
+        else func.bi_ensure_year_partition
     )
+    created = db.scalar(select(ensure(_regclass(parent), literal(year.replace(day=1)))))
     return str(created) if created is not None else None
 
 
@@ -133,9 +153,16 @@ def drop_month_partition(db: Session, parent: str, month: date) -> bool:
     """Drop ``parent``'s child for ``month`` through the definer; False when absent."""
     if not is_partitioned(db, parent):
         return False
-    dropped = db.scalar(
-        select(func.bi_drop_month_partition(_regclass(parent), literal(month.replace(day=1))))
+    drop = (
+        func.aqs_worker_drop_daily_partition
+        if has_worker_function(db, DROP_SIGNATURE)
+        and (
+            db.info.get("worker_access") is True
+            or not has_worker_function(db, "bi_drop_month_partition(regclass,date)")
+        )
+        else func.bi_drop_month_partition
     )
+    dropped = db.scalar(select(drop(_regclass(parent), literal(month.replace(day=1)))))
     return bool(dropped)
 
 
