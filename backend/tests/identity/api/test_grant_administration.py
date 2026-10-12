@@ -2048,3 +2048,30 @@ def test_capital_request_requires_whole_institution_coverage(
         assert request is not None
         assert request.status == "approved"
         assert str(request.binding_id) == resolved.json()["binding"]["id"]
+
+
+@pytest.mark.parametrize("role", ["security_officer", "compliance_officer"])
+def test_owner_explicitly_assigns_audit_officers(grant_client: TestClient, role: str) -> None:
+    response = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(grant_client, role=role, module="audit", sensitivity="restricted"),
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["binding"]["role_bundle"] == role
+    assert response.json()["binding"]["module_scope"] == "audit"
+
+
+@pytest.mark.parametrize("role", ["security_officer", "compliance_officer"])
+def test_audit_officers_cannot_be_granted_product_modules(
+    grant_client: TestClient, role: str
+) -> None:
+    response = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json={
+            **_payload(role=role, module="liq", sensitivity="restricted"),
+            "expected_authority_sentence": "Unsupported audit officer product grant",
+        },
+    )
+    assert response.status_code == 409, response.text

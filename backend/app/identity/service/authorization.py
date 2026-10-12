@@ -809,6 +809,10 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
             "baseline membership requires a permanent system-granted "
             "organization-wide Account/restricted human binding"
         )
+    if role_bundle in {RoleBundle.SECURITY_OFFICER, RoleBundle.COMPLIANCE_OFFICER} and (
+        scope.module_scope is not ModuleScope.AUDIT or scope.data_scope is not DataScope.ALL
+    ):
+        raise AuthorizationInvariantError("audit officers require whole-institution Audit coverage")
     data_scope_values = data_scope_column_values(scope)
     _validate_scope(db, organization_id, scope)
     _validate_grantor(db, organization_id, grantor)

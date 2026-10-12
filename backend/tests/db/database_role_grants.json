@@ -102,6 +102,8 @@
     ["aequoros_signed_package_guard", "", "aqs_bi"],
     ["aequoros_signed_package_guard", "", "aqs_operator"],
     ["aequoros_signed_package_guard", "", "aqs_worker"],
+    ["bank_audit_previous_link", "text, bigint, text", "aqs_api"],
+    ["bank_audit_previous_link", "text, bigint, text", "aqs_audit_verifier"],
     ["bi_ensure_month_partition", "regclass, date", "aqs_api"]
   ],
   "sequences": [],
@@ -120,7 +122,8 @@
       "aqs_worker": ["INSERT", "SELECT"]
     },
     "audit_chain_entries": {
-      "aqs_audit_verifier": ["SELECT"]
+      "aqs_audit_verifier": ["SELECT"],
+      "aqs_api": ["SELECT"]
     },
     "audit_chain_heads": {
       "aqs_audit_verifier": ["SELECT"]
@@ -668,7 +671,8 @@
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
     "operator_audit_log": {
-      "aqs_audit_verifier": ["SELECT"]
+      "aqs_audit_verifier": ["SELECT"],
+      "aqs_api": ["SELECT"]
     },
     "operator_inspector_sessions": {},
     "operator_users": {},

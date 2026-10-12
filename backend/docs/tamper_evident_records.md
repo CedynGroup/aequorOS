@@ -127,6 +127,63 @@ not an independent ledger against a compromised database administrator. Retained
 provide the independently retained comparison boundary. Preserve the first
 backup after migration and later manifests for examiner comparison.
 
+## Bank audit read API
+
+`GET /api/v1/banks/{bank_id}/audit-log` merges bank-attributable tenant and
+staff audit events, newest first. The inclusive `start` and exclusive `end`
+require timezone-aware timestamps. Exact actor, event-type and outcome filters
+combine before cursor pagination; cursors are bound to their organization and
+bank. Each event contains its detail, recorded before/after values where present,
+source, actor identity, outcome and sequence within its own stream. Staff actors
+are explicitly classified as `aequoros_staff`; their detail is projected through
+an allow-list rather than exposing internal operator context.
+
+A complete active human binding for Audit/restricted over the requested bank
+is required. Security officer and Compliance officer carry VIEW and EXPORT;
+Auditor retains VIEW only. Viewer, Analyst, administrator and owner bundles do
+not themselves authorize this feed. The officer bundles are grantable through
+the existing owner API and confined to whole-institution Audit coverage by
+service validation and a database CHECK. No officer binding is backfilled.
+Every successful page read appends `audit_log.viewed` in the same transaction;
+a failure to retain that event refuses the read. Streaming export and the
+Members composer options are the following delivery stages of issue #494.
+
+Attribution requires an explicit `details.bank_id`, bank entity target or
+binding `details.scope.institution_id`; contradictory bank markers refuse
+visibility. Staff events require `detail.bank_id`. Tenant-wide and historical
+records without a provable bank association remain outside this feed. The
+read API does not invent missing sign-in/MFA events or infer an institution from
+an organization. Banks own incidents observable in their audit events;
+AequorOS owns incidents outside that visibility boundary.
+
+Migration `202610120100` enables forced RLS on the staff source and adds scoped
+chain-entry reads. The new API role gains SELECT on these two tables and
+EXECUTE on `bank_audit_previous_link`; it gains no global-head access, chain
+write permission or BYPASSRLS. The helper returns only a predecessor-link
+boolean for an attributable event. Its NOLOGIN audit owner, pinned search path
+and temporary schema-CREATE grant follow the existing chain custody pattern.
+Existing all-tenant operator and verifier policies retain their own reads.
+Legacy runtime credentials need their existing source/chain SELECT grants and
+the new helper EXECUTE grant, which the migration adds for existing chain
+readers. Before switching a legacy tenant API role without chain SELECT, apply
+the same narrow SELECT grants and helper EXECUTE grant as `aqs_api`; forced RLS
+continues to restrict these reads. Do not grant global-head SELECT to the API.
+
+`integrity=verified` means the source payload matches its database-generated
+hash and its previous-hash link matches the preceding stored entry. It does
+not certify the complete platform stream, its tail/head, events hidden by
+bank visibility, or a predecessor's source payload. The explicit
+`integrity_scope=event_payload_and_previous_link` preserves this distinction.
+Missing entries and mismatches report `failed`; SQLite reports `unavailable`.
+The platform worker still owns full-chain verification and paging.
+
+Executable evidence lives in `tests/identity/api/test_audit_log.py` and
+`tests/db/test_bank_audit_reader.py`: scoped authority, filtering, cursor ties,
+view auditing, staff projection, real NOBYPASSRLS reads and privileged tampering.
+The API tests use their own migrated PostgreSQL schema and execute HTTP reads
+as `aqs_api`; they deliberately skip without `TEST_DATABASE_URL`. Run both
+modules under the native `local_services.py run --postgres --role-admin` wrapper.
+
 ## Verification evidence
 
 `tests/db/test_audit_integrity.py` executes real migrated PostgreSQL guards,
