@@ -382,8 +382,8 @@ jobs:
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       # NOBYPASSRLS on purpose, and this is a HARD REQUIREMENT, not hygiene: the
-      # migration chain and the RLS policies must be correct for the
-      # tenant-scoped role production actually deploys with. A superuser here
+      # migration chain and the RLS policies must be exercised without a
+      # superuser bypass. Owner membership below is test infrastructure. A superuser here
       # hides exactly the class of defect audit finding P0-18 is about — and it
       # does not hide it quietly in one direction only. Measured 2026-08-22, the
       # same `tests/db` against two roles:

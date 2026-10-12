@@ -116,7 +116,8 @@ both forward and round-trip upgrades with superuser test credentials, using and
 cleaning up an ordinary restricted migration role. Administrator regressions use
 either `POSTGRES_ADMIN_URL` or a superuser `TEST_DATABASE_URL`; without superuser
 credentials they skip locally and fail when `POSTGRES_PRIVILEGE_TESTS_REQUIRED`
-is set. Ordinary migration tests still need only `TEST_DATABASE_URL`.
+is set. Migration-test role preparation is owned by the
+[role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order).
 `tests/core/test_migration_credentials.py` exercises the migration credential
 boundary for each runtime connection role.
 `tests/core/test_audit_integrity_alerts.py` verifies SNS routing, the safe incident

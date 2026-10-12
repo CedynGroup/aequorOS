@@ -76,6 +76,9 @@ on its owned PostgreSQL 17 cluster. Docker's `risk-migrate` runs
 `python -m scripts.bootstrap_database` before starting services, including with
 an existing local volume. `backend/scripts/bootstrap_db.sh` runs the same local
 bootstrap against a running local service. No tenant financial data is seeded.
+It requires `APP_ENV=local` (the default) and an administrator `DATABASE_URL`
+whose host is `localhost`, `127.0.0.1` or `risk-postgres`. The shell wrapper defaults
+to the bundled local PostgreSQL service at `127.0.0.1:15432`.
 The bootstrap pins Alembic to the validated local URL, including when a shell
 has a separate migration URL configured. The local SQL sets clearly identified
 development passwords equal to role names;
