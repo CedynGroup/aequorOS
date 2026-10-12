@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from alembic import op
 from app.db.session import force_rls_suspended
 
-revision = "202610110095"
-down_revision = "202610110094"
+revision = "202610110096"
+down_revision = "202610110095"
 branch_labels = None
 depends_on = None
 

@@ -60,7 +60,7 @@ def test_existing_invalid_loan_lineage_stops_the_migration(
     bank_integrity_schema: MigratedPostgresSchema,
     lineage: str,
 ) -> None:
-    revision = ScriptDirectory.from_config(alembic_config_for_app()).get_revision("202610110095")
+    revision = ScriptDirectory.from_config(alembic_config_for_app()).get_revision("202610110096")
     assert revision is not None
     migration = cast(CanonicalBankMigration, revision.module)
     with (
