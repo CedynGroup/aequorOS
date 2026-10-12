@@ -145,6 +145,8 @@ export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/risk_
 The bundled compose uses local superuser credentials and does not demonstrate
 production credential separation. Local role preparation and the staged deployment
 switches follow the [database role handoff](../docs/ops/database-roles.md#migration-and-local-development-order).
+Runtime connection budgets and migration exemptions follow the
+[session timeout runbook](../docs/ops/database-roles.md#session-timeout-budgets).
 App-session API requests use an access token issued by password or SSO login:
 
 ```http

@@ -157,6 +157,14 @@ def migrate_isolated_postgres_schema(
                 )
                 connection.execute(
                     text(
+                        Path(__file__)
+                        .parents[2]
+                        .joinpath("scripts/database_session_timeouts.sql")
+                        .read_text()
+                    )
+                )
+                connection.execute(
+                    text(
                         f'CREATE ROLE "{migration_role}" NOLOGIN NOSUPERUSER NOBYPASSRLS '
                         "NOINHERIT NOCREATEDB NOREPLICATION CREATEROLE"
                     )

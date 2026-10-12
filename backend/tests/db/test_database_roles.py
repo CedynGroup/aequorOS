@@ -356,9 +356,12 @@ def test_runtime_attributes_ownership_membership_and_grant_options(administrator
             )
             == 0
         )
-        assert connection.scalar(text("SELECT rolconfig FROM pg_roles WHERE rolname='aqs_bi'")) == [
-            "statement_timeout=10s"
-        ]
+        assert set(
+            cast(
+                list[str],
+                connection.scalar(text("SELECT rolconfig FROM pg_roles WHERE rolname='aqs_bi'")),
+            )
+        ) == {"statement_timeout=10s", "idle_in_transaction_session_timeout=5min"}
 
 
 @pytest.mark.parametrize("role", ROLES)

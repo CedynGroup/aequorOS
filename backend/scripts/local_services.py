@@ -420,6 +420,14 @@ class LocalServices:
                 )
             )
             connection.execute(
+                sql.SQL(
+                    cast(
+                        LiteralString,
+                        (Path(__file__).parent / "database_session_timeouts.sql").read_text(),
+                    )
+                )
+            )
+            connection.execute(
                 "GRANT aqs_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE"
             )
             connection.execute(

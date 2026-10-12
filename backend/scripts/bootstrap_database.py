@@ -29,7 +29,11 @@ def main() -> None:
     engine = create_engine(url, connect_args={"application_name": "aequoros-local-bootstrap"})
     try:
         with engine.begin() as connection:
-            for filename in ("database_roles_202610120096.sql", "database_roles_local.sql"):
+            for filename in (
+                "database_roles_202610120096.sql",
+                "database_roles_local.sql",
+                "database_session_timeouts.sql",
+            ):
                 connection.execute(text((root / "scripts" / filename).read_text()))
     finally:
         engine.dispose()

@@ -47,9 +47,73 @@ the other accepts a bank id and returns only that bank's key reference. That
 follow-up must prove the API still cannot SELECT either underlying table or
 enumerate other banks. Direct table grants remain absent.
 
-API, worker and migration timeout budgets are deferred to
-[session cleanup and timeouts #518](https://github.com/CedynGroup/aequorOS/issues/518);
-this foundation retains the existing interactive BI ceiling.
+## Session timeout budgets
+
+[Session cleanup and timeouts #518](https://github.com/CedynGroup/aequorOS/issues/518)
+adds administrator configuration in `backend/scripts/database_session_timeouts.sql`.
+Apply it after the role foundation and before switching credentials. It uses
+`ALTER ROLE ... SET` only for dormant `aqs_*` roles; no historical deployment
+role, password, grant or ownership changes. Reapplying it is safe. This is role
+configuration rather than a schema migration, so the least-privilege migrator
+needs no permission to administer runtime roles.
+
+| Connection                               | Idle in an open transaction | Statement ceiling     |
+| ---------------------------------------- | --------------------------- | --------------------- |
+| API (`aqs_api`)                          | 10 minutes                  | 5 minutes             |
+| Worker (`aqs_worker`)                    | 2 hours                     | 30 minutes            |
+| BI (`aqs_bi`)                            | 5 minutes                   | 10 seconds by default |
+| Migrations (`aqs_migrator`, `aqs_owner`) | Disabled                    | Disabled              |
+
+The API idle limit releases locks from abandoned transactions. API transactions
+currently span BI exports (120 seconds) and storage calls (up to six 60-second
+read-timeout attempts, or 360 seconds, plus retry backoff). Ten minutes gives these
+supported waits margin to finish provenance, audit and deletion commits.
+[Issue #559](https://github.com/CedynGroup/aequorOS/issues/559) tracks removing
+transactions around external waits; review this budget when that lands or when
+cross-service timeout/retry budgets increase. Active SQL is subject to the
+statement ceiling, not the idle timer. The worker budget permits CPU, storage
+and provider work between SQL calls: the default AI failover/retry reclaim
+budget (`AISettings.stale_after_seconds`) is below two hours. Before raising
+provider retry/timeouts or running a job with more than two hours between
+database calls or a SQL statement exceeding 30 minutes, review and raise the
+worker role budgets explicitly. Do not route background work through the API
+pool. No total transaction or idle-outside-transaction timeout is added.
+
+BI keeps its existing interactive ceiling. The query executor overrides it
+inside a savepoint for the configured interactive/export budget (exports
+default to 120 seconds), then restores the role default. The separate API
+transaction remains open while the BI pool runs; the API idle budget therefore
+exceeds the supported export ceiling. The five-minute BI idle limit protects an
+abandoned read transaction without changing those query budgets.
+
+`backend/app/db/session.py` supplies connection startup options for legacy
+usernames, separately for API/operator, worker and BI pools, including when all
+URLs still share one login. This does not alter that role's defaults or other
+clients. Recognized new role usernames use their administrator-configured role
+defaults. Existing URL options, including `search_path`, are preserved. Alembic
+explicitly disables both limits on its own connection even when it uses an old
+runtime login, and retains its explicit `SET ROLE aqs_owner` handoff. SQLite
+has no timeout configuration and retains its shared engine behavior.
+
+After configuration or credential changes, drain/reconnect the affected pools;
+role defaults apply to new logins. Eric owns the deployment switch. Record
+`rolconfig` before applying the script so rollback can restore the exact prior
+values through administrator tooling; restoring URL secrets alone does not
+change new-role defaults. Do not change or reset legacy role defaults.
+
+Validate fresh API, worker, BI and migration logins with `SHOW
+idle_in_transaction_session_timeout` and `SHOW statement_timeout`. Observe the
+pool identities in `pg_stat_activity`. Native PostgreSQL 17 tests in
+`backend/tests/db/test_database_timeouts.py` prove fresh-login budgets using
+disposable probe logins with the configured role settings and service privileges
+(PostgreSQL role settings are not inherited via membership). They also prove
+real API idle termination/lock release using a short
+transaction-local probe limit, legacy connection budgets, a 65-second worker
+statement and BI export overrides above ten seconds. Native regressions in
+`backend/tests/db/test_api_cross_service_timeouts.py` also prove that a
+65-second BI export commits its provenance, audit and query log, and a slow
+successful storage deletion commits matching document and stored-object
+deletion states.
 
 ## Migration and local development order
 
@@ -87,7 +151,8 @@ and worker/operator fallbacks keep working. All runtime pools identify API,
 worker, BI and operator connections separately through `application_name`.
 
 For externally supplied test services, an administrator must prepare the versioned
-foundation SQL and the test actor's ADMIN, INHERIT and SET owner memberships before
+foundation SQL, `backend/scripts/database_session_timeouts.sql`, and the test actor's
+ADMIN, INHERIT and SET owner memberships before
 running the migration suites. Real-login role proofs in
 `backend/tests/db/test_database_roles.py` also require a superuser
 `POSTGRES_ADMIN_URL` (or a superuser `TEST_DATABASE_URL`) on the same disposable
@@ -100,7 +165,8 @@ these prerequisites; never use the primary database.
 
 Take the usual restorable backup and record current owners, role attributes,
 ACLs and URL-secret versions. Use an administrator credential in the maintenance
-session only. Apply the versioned foundation SQL and the schema migration; do
+session only. Apply the versioned foundation SQL, `backend/scripts/database_session_timeouts.sql`,
+and the schema migration; do
 not copy local development credentials. Verify the runtime attributes:
 
 ```sql
@@ -109,7 +175,7 @@ SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplicatio
 FROM pg_roles WHERE rolname LIKE 'aqs_%' ORDER BY rolname;
 SELECT pg_get_userbyid(relowner), relname
 FROM pg_class WHERE relnamespace = 'public'::regnamespace;
-SELECT rolname, rolconfig FROM pg_roles WHERE rolname = 'aqs_bi';
+SELECT rolname, rolconfig FROM pg_roles WHERE rolname IN ('aqs_api', 'aqs_worker', 'aqs_bi', 'aqs_migrator', 'aqs_owner');
 ```
 
 Inspect PUBLIC and inherited grants before activation: PostgreSQL grants cannot
