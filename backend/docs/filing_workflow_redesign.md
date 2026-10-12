@@ -236,6 +236,12 @@ and asks them to infer, from greyed-out controls, that none of it is theirs.
   already has the right primitive: `DisabledWithReason` renders `role="link"`/control with
   `aria-disabled="true"` and the reason on hover, and is already used by the navigation.
 
+Waiting applies only to a stage ahead of the return; a completed stage's control is
+absent. Once the return is `submitted`, preparation and approval are complete, so
+neither is offered again, even disabled. An officer with filing authority retains
+the channel follow-up action: re-upload when required, otherwise check for the
+regulator's decision when the channel supports polling.
+
 Getting this backwards in either direction is the current failure: everything is disabled, so
 nothing communicates.
 
