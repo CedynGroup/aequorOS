@@ -93,3 +93,36 @@ exactly. Saved analytical estimates, FX nets and verdicts retain explicitly name
 adversarial inputs: presentation must preserve saved observations even when
 independent values disagree. Existing malformed/missing cases remain alongside
 valid defaults. Status and identity are exact.
+
+## FTP, IRRBB and canonical data
+
+FTP's feature-owned books align products to a monotone synthetic transfer curve
+through the public engine. Monotonicity is a fixture assumption; the engine also
+accepts inverted curves, which retain their golden tests. NMD shares favour the
+bank policy band's endpoints and neighbours. `BANK_FTP_THRESHOLDS` supplies
+pricing caps and the core band: these are internal policy, not regulatory minima.
+Money uses four-decimal HALF_UP and percentages six-decimal HALF_UP. The one
+FTP tolerance policy names both units; sums allow accumulated independent rounding.
+Dashboard defaults have coherent margins/contributions; independent stored-value
+adversaries remain separate so presentation never silently reprices saved figures.
+
+IRRBB strategies share the existing governed Standardised Framework parameter
+fixture and its public parser. Positive principal is an asset and negative
+principal is funding; each schedule's outstanding matches its remaining principal.
+Synthetic zero-coupon maturities generate repricing differences under the standard
+shock set, with capital biased around the parsed outlier threshold. The fixture's
+15% threshold and calibration remain pending exposure-draft data. Mixed-sign and
+negative-rate adversaries remain explicit. SF money and percentage output uses
+six-place HALF_UP; the ICAAP bridge uses four-place amounts. One IRRBB policy keeps
+these units distinct and preserves the existing much tighter behavioural-survival
+conservation budget. Metamorphic checks compare native scenario deltas, risk,
+capital scaling, ordering and improvement without duplicating discounting.
+
+Canonical helpers live under `tests/data_engine/testing` and dashboard
+`unit/data-engine/testing`. Synthetic UUIDs, source references and one bank scope
+link batches, lineage, products, borrowers, positions and their snapshots. Amounts
+use the canonical six-place storage precision and fractional rates ten places.
+Validity properties run the public ingestion validator and API conversions;
+identity, provenance and Decimal strings compare exactly. Canonical reordering
+and amount scaling preserve record acceptance. No fixture provisions bank data
+through a product route, and no generator queries production or customer data.
