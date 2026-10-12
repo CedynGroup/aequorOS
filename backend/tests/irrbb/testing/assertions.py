@@ -56,6 +56,28 @@ def assert_irrbb_scaled(after: SfResult, before: SfResult, scale: int) -> None:
             )
 
 
+def assert_irrbb_ratio_scaled(
+    after: SfResult, before: SfResult, scale: int, *, tier1: Decimal
+) -> None:
+    before_rounding = TOLERANCE.money.absolute / 2 * sum(
+        currency.material for currency in before.currencies
+    )
+    after_rounding = TOLERANCE.money.absolute / 2 * sum(
+        currency.material for currency in after.currencies
+    )
+    policy = TolerancePolicy(
+        (before_rounding / tier1 + after_rounding / (tier1 * scale)) * 100
+        + TOLERANCE.ratios.absolute,
+        TOLERANCE.ratios.unit,
+        TOLERANCE.ratios.source,
+    )
+    policy.assert_close(
+        after.pct_tier1,
+        before.pct_tier1,
+        because="IRRBB: scaling book and capital changed outlier percentage",
+    )
+
+
 def assert_principal_conserved(actual: Decimal, opening: Decimal, *, operation: str) -> None:
     # Decimal exponentiation in behavioural survival is inexact; preserve the
     # original test_sf_properties budget, much tighter than the reporting quantum.

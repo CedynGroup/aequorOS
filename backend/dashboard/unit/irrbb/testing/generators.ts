@@ -65,8 +65,18 @@ export const irrbbSnapshots = fc
       scenarios,
       measures: {
         allScenarios: measure,
-        mandatory: measure,
-        outlierSet: { ...measure, scenarios: codes.slice(0, 2) },
+        mandatory: {
+          ...measure,
+          scenarios: scenarios
+            .filter((row) => row.mandatory)
+            .map((row) => row.code),
+        },
+        outlierSet: {
+          ...measure,
+          scenarios: scenarios
+            .filter((row) => row.inOutlierSet)
+            .map((row) => row.code),
+        },
       },
     };
   });

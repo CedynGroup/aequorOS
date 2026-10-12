@@ -126,7 +126,30 @@ describe("shared FTP, IRRBB and canonical generators", () => {
             Number(snapshot.measures.allScenarios.measure),
           );
         });
-        assertIrrbbStored(normalizeStandardisedFramework(snapshot), snapshot);
+        const normalized = normalizeStandardisedFramework(snapshot);
+        for (const disclosure of [snapshot, normalized]) {
+          expect(
+            disclosure.measures.allScenarios.scenarios,
+            "IRRBB: all-scenario measure membership disagrees with scenarios",
+          ).toEqual(disclosure.scenarios.map((row) => row.code));
+          expect(
+            disclosure.measures.mandatory.scenarios,
+            "IRRBB: mandatory measure membership disagrees with scenario flags",
+          ).toEqual(
+            disclosure.scenarios
+              .filter((row) => row.mandatory)
+              .map((row) => row.code),
+          );
+          expect(
+            disclosure.measures.outlierSet.scenarios,
+            "IRRBB: outlier measure membership disagrees with scenario flags",
+          ).toEqual(
+            disclosure.scenarios
+              .filter((row) => row.inOutlierSet)
+              .map((row) => row.code),
+          );
+        }
+        assertIrrbbStored(normalized, snapshot);
         expect(() =>
           assertIrrbbStored(
             { ...normalizeStandardisedFramework(snapshot), tier1: "0" },
