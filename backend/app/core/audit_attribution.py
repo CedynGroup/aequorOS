@@ -150,3 +150,15 @@ def staff_bank_sql(organization: str, detail: str, *, postgresql: bool) -> str:
         f"COALESCE({batch}, CASE WHEN {detail}->>'kind' = 'mapping_active'"
         f" THEN {mapping} END, {detail}->'after'->>'bank_id')"
     )
+
+
+def organization_binding_sql(
+    organization: str, entity_type: str, entity_id: str, *, postgresql: bool
+) -> str:
+    identifier = uuid_sql(entity_id, postgresql=postgresql)
+    return (
+        f"({entity_type} = 'authorization_binding' AND EXISTS ("
+        "SELECT 1 FROM authorization_bindings s"
+        f" WHERE s.organization_id = {organization} AND s.id = {identifier}"
+        " AND s.institution_scope = 'organization' AND s.institution_id IS NULL))"
+    )

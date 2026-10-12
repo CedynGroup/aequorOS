@@ -316,22 +316,18 @@ def record_operator_action(  # noqa: PLR0913 - actor, scope, evidence and access
         scoped = dict(evidence)
         if bank_id is not None:
             scoped["bank_id"] = bank_id
-        if org is not None and session_id is None:
-            inspection = db.scalar(
-                select(OperatorInspectorSession)
-                .where(
-                    OperatorInspectorSession.organization_id == org,
-                    OperatorInspectorSession.started_by == operator.email,
-                    OperatorInspectorSession.ended_at.is_(None),
-                    OperatorInspectorSession.expires_at > utc_now(),
-                )
-                .order_by(OperatorInspectorSession.started_at.desc())
-                .limit(1)
-            )
-            if inspection is not None:
-                scoped["session_id"] = str(inspection.id)
-                scoped["reason"] = evidence.get("note") or inspection.reason
-                scoped["support_reference"] = inspection.support_reference
+        if action in {
+            "desk.determination.publish",
+            "desk.curve.publish",
+            "desk.operating_environment.publish",
+        }:
+            delivery_status = owners.get((org, bank_id)) if org and bank_id else None
+            scoped["status"] = delivery_status
+            scoped["outcome"] = {
+                "complete": "success",
+                "failed": "failure",
+                "skipped": "skipped",
+            }.get(delivery_status or "", "unspecified")
         entry = OperatorAuditLog(
             operator_email=operator.email,
             auth_mode=operator.auth_mode,
@@ -364,7 +360,7 @@ def _organization_surface(action: str, evidence: dict[str, JsonValue]) -> bool:
 
 def _resource_banks(
     db: Session, value: JsonValue, organization: str | None
-) -> Iterator[tuple[str | None, str]]:
+) -> Iterator[tuple[str | None, str, str | None]]:
     """Collect identities from response resources, never copy their data to the log."""
     if isinstance(value, list):
         for item in value:
@@ -380,7 +376,8 @@ def _resource_banks(
         ):
             bank = _retained_staff_bank(db, org, value)
         if isinstance(bank, str):
-            yield org, bank
+            status = value.get("status")
+            yield org, bank, status if isinstance(status, str) else None
         for key, item in value.items():
             if key not in {"metrics", "config", "raw_record", "validation_report", "etl_report"}:
                 yield from _resource_banks(db, item, org)
@@ -392,16 +389,25 @@ def _accessed_banks(
     target_org: str | None,
     evidence: dict[str, JsonValue],
     resources: BaseModel | list[dict[str, JsonValue]] | None,
-) -> set[tuple[str, str]]:
-    owners: set[tuple[str, str]] = set()
+) -> dict[tuple[str, str], str | None]:
+    owners: dict[tuple[str, str], str | None] = {}
     if resources is not None:
         payload: JsonValue = TypeAdapter[JsonValue](JsonValue).validate_python(
             resources.model_dump(mode="json") if isinstance(resources, BaseModel) else resources
         )
-        for org, bank_id in _resource_banks(db, payload, target_org):
-            bank = db.scalar(select(Bank).where(Bank.id == bank_id))
-            if bank is not None and (org is None or bank.organization_id == org):
-                owners.add((bank.organization_id, bank.id))
+        identities = {
+            (org, bank_id): status
+            for org, bank_id, status in _resource_banks(db, payload, target_org)
+        }
+        bank_ids = {bank_id for _, bank_id in identities}
+        if bank_ids:
+            banks = {
+                bank.id: bank for bank in db.scalars(select(Bank).where(Bank.id.in_(bank_ids)))
+            }
+            for (org, bank_id), status in identities.items():
+                bank = banks.get(bank_id)
+                if bank is not None and (org is None or bank.organization_id == org):
+                    owners[(bank.organization_id, bank.id)] = status
     elif (
         target_org is not None
         and evidence.get("bank_id") is None
@@ -418,7 +424,7 @@ def _accessed_banks(
                 stmt = stmt.join(
                     InstitutionType, InstitutionType.type_code == Bank.institution_type
                 ).where(InstitutionType.institution_class == institution_class)
-        owners.update((bank.organization_id, bank.id) for bank in db.scalars(stmt))
+        owners.update(((bank.organization_id, bank.id), None) for bank in db.scalars(stmt))
     return owners
 
 

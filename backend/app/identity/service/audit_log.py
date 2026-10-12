@@ -32,7 +32,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.core.audit_attribution import staff_bank_sql, subject_bank_sql
+from app.core.audit_attribution import organization_binding_sql, staff_bank_sql, subject_bank_sql
 from app.core.audit_projection import EVENT_OUTCOMES, normalize_event_details
 from app.core.authorization import (
     DataScope,
@@ -211,6 +211,14 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
             and_(event.c.entity_type == "bank", event.c.entity_id == bank.id),
             _json_text(event.c.details, "scope", "institution_id") == bank.id,
             owned_bank == bank.id,
+            literal_column(
+                organization_binding_sql(
+                    "audit_events.organization_id",
+                    "audit_events.entity_type",
+                    "audit_events.entity_id",
+                    postgresql=db.get_bind().dialect.name == "postgresql",
+                )
+            ),
         ),
         or_(
             _json_text(event.c.details, "bank_id").is_(None),

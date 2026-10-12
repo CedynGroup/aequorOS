@@ -150,6 +150,10 @@ Members composer options are the following delivery stages of issue #494.
 
 Attribution uses an explicit `details.bank_id`, bank entity target,
 binding `details.scope.institution_id`, or the retained subject's bank ownership.
+Organization-wide binding grants and removals cover every bank in that
+organization, including after revocation. Feed selection, chain visibility,
+verification, inspection evidence and operator activity use the same retained
+binding scope.
 The shared event writer snapshots bank ownership for ingestion batches, mapping
 configs, position snapshots, regulatory runs, packages and their artifact records,
 core-database connections, filing templates, capital/ILAAP and contingency funding
@@ -182,9 +186,12 @@ not the response data; one bank's event never contains another bank's payload.
 An empty bank-specific result retains a platform event rather than inventing bank
 access. Shared tenant identity/configuration accesses apply to every bank in that
 tenant. A fleet operation without an Inspector session automatically records its
-operation purpose and a nullable support reference. An available caller-owned
-active session supplements the automatic evidence; no new fleet request fields
-are mandatory.
+operation purpose and a nullable support reference. Only an explicitly supplied
+session ID attaches inspection evidence; no new fleet request fields are mandatory.
+Repeated response identities are deduplicated and bank ownership is validated in
+one batch. Publication actions record each bank's delivery status and outcome:
+complete is success, failed is failure, skipped remains skipped, and unknown or
+missing statuses remain unspecified.
 
 ### Staff operation coverage catalogue
 

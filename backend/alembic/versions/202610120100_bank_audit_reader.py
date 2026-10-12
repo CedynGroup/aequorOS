@@ -11,7 +11,13 @@ from typing import cast
 import sqlalchemy as sa
 
 from alembic import op
-from app.core.audit_attribution import SUBJECT_TABLES, staff_bank_sql, subject_bank_sql, uuid_sql
+from app.core.audit_attribution import (
+    SUBJECT_TABLES,
+    organization_binding_sql,
+    staff_bank_sql,
+    subject_bank_sql,
+    uuid_sql,
+)
 
 revision = "202610120100"
 down_revision = "202610120099"
@@ -27,6 +33,9 @@ _ORG = "current_setting('app.organization_id', true)"
 _OWNED_BANK = subject_bank_sql(
     "e.organization_id", "e.entity_type", "e.entity_id", postgresql=True, details="e.details"
 )
+_ORGANIZATION_BINDING = organization_binding_sql(
+    "e.organization_id", "e.entity_type", "e.entity_id", postgresql=True
+)
 _TENANT_MATCH = f"""
     e.organization_id = {_ORG}
     AND (e.details->>'bank_id' = {_BANK}
@@ -34,7 +43,8 @@ _TENANT_MATCH = f"""
          OR e.details->'scope'->>'institution_id' = {_BANK}
          OR (e.entity_type = 'authorization_access_request'
              AND e.details->>'institution_id' = {_BANK})
-         OR {_OWNED_BANK} = {_BANK})
+         OR {_OWNED_BANK} = {_BANK}
+         OR {_ORGANIZATION_BINDING})
     AND (e.details->>'bank_id' IS NULL OR e.details->>'bank_id' = {_BANK})
     AND (e.details->'scope'->>'institution_id' IS NULL
          OR e.details->'scope'->>'institution_id' = {_BANK})

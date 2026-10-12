@@ -21,7 +21,7 @@ from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.audit_attribution import SUBJECT_TABLES, subject_bank_sql
+from app.core.audit_attribution import SUBJECT_TABLES, organization_binding_sql, subject_bank_sql
 from app.db.base import utc_now
 from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, STUCK_DEDUP_STATUSES
 from app.identity.public import Bank, SsoConnection, User
@@ -619,16 +619,17 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
         .order_by(AuditEvent.created_at.desc())
         .limit(limit)
     ):
-        items.append(
-            ActivityItemRead(
-                ts=event.created_at,
-                kind="audit_event",
-                bank_id=_activity_event_bank(db, event),
-                summary=f"{event.event_type}"
-                + (f" ({event.entity_type} {event.entity_id})" if event.entity_type else ""),
-                status="recorded",
+        for bank_id in _activity_event_banks(db, event):
+            items.append(
+                ActivityItemRead(
+                    ts=event.created_at,
+                    kind="audit_event",
+                    bank_id=bank_id,
+                    summary=f"{event.event_type}"
+                    + (f" ({event.entity_type} {event.entity_id})" if event.entity_type else ""),
+                    status="recorded",
+                )
             )
-        )
 
     items.sort(key=_activity_sort_key, reverse=True)
     return TenantActivityRead(organization_id=organization_id, items=items[:limit])
@@ -839,21 +840,35 @@ def list_data_engine_connections(db: Session) -> DataEnginesRead:
     return DataEnginesRead(connections=connections)
 
 
-def _activity_event_bank(db: Session, event: AuditEvent) -> str | None:
+def _activity_event_banks(db: Session, event: AuditEvent) -> list[str | None]:
     details = event.details or {}
     marker: object = details.get("bank_id")
     if isinstance(marker, str):
-        return marker
+        return [marker]
     if event.entity_type == "bank":
-        return event.entity_id
+        return [event.entity_id]
     scope: object = details.get("scope")
     institution: object = details.get("institution_id")
     if isinstance(scope, dict):
         institution = cast(dict[str, object], scope).get("institution_id") or institution
     if isinstance(institution, str):
-        return institution
+        return [institution]
     if event.entity_type not in SUBJECT_TABLES:
-        return None
+        return [None]
+    organization_binding = organization_binding_sql(
+        ":org", ":kind", ":id", postgresql=db.get_bind().dialect.name == "postgresql"
+    )
+    params: dict[str, object] = {
+        "org": event.organization_id,
+        "kind": event.entity_type,
+        "id": event.entity_id,
+    }
+    if event.entity_type == "authorization_binding" and db.scalar(
+        select(text(organization_binding)), params
+    ):
+        return list(
+            db.scalars(select(Bank.id).where(Bank.organization_id == event.organization_id))
+        )
     sql = subject_bank_sql(
         ":org",
         ":kind",
@@ -865,12 +880,7 @@ def _activity_event_bank(db: Session, event: AuditEvent) -> str | None:
         else ":details",
     )
     statement = text(sql)
-    params: dict[str, object] = {
-        "org": event.organization_id,
-        "kind": event.entity_type,
-        "id": event.entity_id,
-    }
     if ":details" in sql:
         statement = statement.bindparams(bindparam("details", type_=JSON))
         params["details"] = details
-    return db.scalar(select(sql_cast(statement, String)), params)
+    return [db.scalar(select(sql_cast(statement, String)), params)]

@@ -12,9 +12,10 @@ import pytest
 from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field, JsonValue, TypeAdapter
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, event as sqlalchemy_event, select, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import ORMExecuteState, Session, sessionmaker
+from sqlalchemy.sql import Select
 
 from app.api import deps
 from app.api.deps import IcaapAccess
@@ -42,7 +43,7 @@ from app.icaap.service import cycles, sections
 from app.identity.schemas.audit_log import AuditLogRead
 from app.identity.schemas.auth import MeResponse
 from app.identity.schemas.banks import BankListRead
-from app.identity.service import audit_log, authentication, authorization
+from app.identity.service import audit_log, authentication, authorization, grant_administration
 from app.main import create_app
 from app.models import (
     AuditEvent,
@@ -80,7 +81,7 @@ from app.operator.features.inspector_reads import (
     get_tenant_metrics,
 )
 from app.operator.features.jobs import list_jobs
-from app.operator.services import inspector
+from app.operator.services import inspector, operator_views
 from app.reporting.domain import workflow as filing_domain
 from app.reporting.schemas.filing_workflow import (
     FilingWorkflowTemplateCreate,
@@ -1764,7 +1765,274 @@ def test_staff_feed_reads_resolve_retained_bank_subjects(
     assert response.status_code == 200, response.text
     rows = AuditLogRead.model_validate_json(response.text).events
     assert len(rows) == 1 and rows[0].id == expected_id and rows[0].integrity == "verified"
-    assert (
-        rows[0].support_reference == "SUP-FEEDS"
-        and rows[0].reason == "Review retained bank evidence"
+    if surface == "activity":
+        assert (
+            rows[0].support_reference == "SUP-FEEDS"
+            and rows[0].reason == "Review retained bank evidence"
+        )
+    else:
+        assert rows[0].support_reference is None and rows[0].reason == "audit read"
+
+
+def test_organization_binding_grants_and_removals_cover_each_tenant_bank(
+    db_client: TestClient,
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    grant(RoleBundle.SECURITY_OFFICER, bank=SIBLING)
+    operator = OperatorContext("binding-review@example.test", "dev", "super_admin")
+    expected: dict[str, set[UUID]] = {}
+    with _session() as db:
+        for org in (ORG_1, ORG_2):
+            principal = User(
+                id=uuid4(), organization_id=org, email=f"org-officer-{org}@example.test"
+            )
+            db.add(principal)
+            db.flush()
+            grantor = authorization.GrantorRef(GrantorType.SYSTEM, "audit-fixture")
+            binding = authorization.create_role_binding(
+                db,
+                organization_id=org,
+                principal_user_id=principal.id,
+                principal_type=PrincipalType.HUMAN,
+                role_bundle=RoleBundle.SECURITY_OFFICER,
+                scope=authorization.BindingScope(
+                    InstitutionScope.ORGANIZATION,
+                    None,
+                    ModuleScope.AUDIT,
+                    SensitivityScope.RESTRICTED,
+                ),
+                grantor=grantor,
+                reason="Organization-wide security coverage",
+                commit=False,
+            )
+            authorization.record_binding_grant_audit(
+                db, binding=binding, grantor=grantor, authority_sentence="Organization-wide audit"
+            )
+            grant_administration.revoke_scoped_grant(
+                db,
+                organization_id=org,
+                binding_id=binding.id,
+                actor_user_id=USER_1 if org == ORG_1 else principal.id,
+                reason="End organization-wide appointment",
+                commit=False,
+            )
+            db.flush()
+            expected[org] = set(
+                db.scalars(
+                    select(AuditEvent.id).where(
+                        AuditEvent.organization_id == org,
+                        AuditEvent.entity_id == str(binding.id),
+                    )
+                )
+            )
+            if org == ORG_1:
+                inspection = inspector.start_session(
+                    db,
+                    organization_id=org,
+                    started_by=operator.email,
+                    reason="Review organization-wide access",
+                    support_reference="SUP-ORG-GRANT",
+                    mode="consent",
+                    ttl_minutes=30,
+                )
+                db.add(
+                    AuditEvent(
+                        organization_id=org,
+                        entity_type="authorization_binding",
+                        entity_id=str(binding.id),
+                        event_type="authorization.binding_probe",
+                        details={
+                            "act_operator": operator.email,
+                            "impersonation_session_id": str(inspection.id),
+                        },
+                    )
+                )
+        db.commit()
+        activity = operator_views.get_tenant_activity(db, ORG_1, 100)
+        for action in ("authorization.binding_granted", "authorization.binding_revoked"):
+            assert {item.bank_id for item in activity.items if item.summary.startswith(action)} == {
+                BANK,
+                SIBLING,
+            }
+    for bank in (BANK, SIBLING):
+        found: set[UUID] = set()
+        for action in ("authorization.binding_granted", "authorization.binding_revoked"):
+            response = db_client.get(
+                f"/api/v1/banks/{bank}/audit-log",
+                headers=headers(ORG_1),
+                params={"event_type": action},
+            )
+            assert response.status_code == 200, response.text
+            rows = AuditLogRead.model_validate_json(response.text).events
+            found.update(row.id for row in rows)
+            assert all(row.integrity == "verified" and row.sequence for row in rows)
+        assert found == expected[ORG_1] and found.isdisjoint(expected[ORG_2])
+        response = db_client.get(
+            f"/api/v1/banks/{bank}/audit-log",
+            headers=headers(ORG_1),
+            params={"event_type": "authorization.binding_probe"},
+        )
+        assert response.status_code == 200, response.text
+        rows = AuditLogRead.model_validate_json(response.text).events
+        assert len(rows) == 1 and rows[0].integrity == "verified"
+        assert rows[0].reason == "Review organization-wide access"
+        assert rows[0].support_reference == "SUP-ORG-GRANT"
+
+
+@pytest.mark.parametrize(
+    "action",
+    ["desk.determination.publish", "desk.curve.publish", "desk.operating_environment.publish"],
+)
+@pytest.mark.parametrize(
+    ("status", "outcome"),
+    [
+        ("complete", "success"),
+        ("failed", "failure"),
+        ("skipped", "skipped"),
+        ("unknown", "unspecified"),
+        (None, "unspecified"),
+    ],
+)
+def test_publication_audit_outcome_matches_each_bank_delivery(
+    db_client: TestClient, action: str, status: str | None, outcome: str
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    grant(RoleBundle.SECURITY_OFFICER, bank=SIBLING)
+    with _session() as db:
+        resources: list[dict[str, JsonValue]] = [
+            {"bank_id": BANK, "status": status},
+            {"bank_id": SIBLING, "status": "complete"},
+            {"bank_id": FOREIGN, "status": "failed"},
+        ]
+        record_operator_action(
+            db,
+            OperatorContext("publisher@example.test", "dev", "super_admin"),
+            action=action,
+            resources=resources,
+            detail={"status": "partial"},
+        )
+        db.commit()
+        recorded = list(
+            db.scalars(select(OperatorAuditLog).where(OperatorAuditLog.action == action))
+        )
+        assert len(recorded) == 3
+        own = next(row for row in recorded if row.detail["bank_id"] == BANK)
+        assert own.detail["status"] == status and own.detail["outcome"] == outcome
+    for bank, expected_outcome in ((BANK, outcome), (SIBLING, "success")):
+        response = db_client.get(
+            f"/api/v1/banks/{bank}/audit-log",
+            headers=headers(ORG_1),
+            params={"event_type": action, "outcome": expected_outcome},
+        )
+        assert response.status_code == 200, response.text
+        rows = AuditLogRead.model_validate_json(response.text).events
+        assert len(rows) == 1 and rows[0].integrity == "verified"
+        assert rows[0].outcome == expected_outcome and rows[0].target_id == bank
+    if outcome != "success":
+        response = db_client.get(
+            PATH, headers=headers(ORG_1), params={"event_type": action, "outcome": "success"}
+        )
+        assert response.status_code == 200, response.text
+        assert AuditLogRead.model_validate_json(response.text).events == []
+
+
+@pytest.mark.parametrize("evidence_kind", ["automatic", "caller", "session"])
+def test_only_explicit_session_id_attaches_inspection_evidence(
+    db_client: TestClient, evidence_kind: str
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    operator = OperatorContext("purpose@example.test", "dev", "super_admin")
+    with _session() as db:
+        inspection = inspector.start_session(
+            db,
+            organization_id=ORG_1,
+            started_by=operator.email,
+            reason="Investigate unrelated upload",
+            support_reference="SUP-UPLOAD",
+            mode="consent",
+            ttl_minutes=30,
+        )
+        db.commit()
+        detail: dict[str, JsonValue] = {}
+        reason = "regulatory parameter approve"
+        reference = None
+        if evidence_kind == "caller":
+            detail = {"reason": "Approve reviewed policy", "support_reference": "POLICY-42"}
+            reason, reference = "Approve reviewed policy", "POLICY-42"
+        elif evidence_kind == "session":
+            detail = {"session_id": str(inspection.id)}
+            reason, reference = inspection.reason, inspection.support_reference
+        record_operator_action(
+            db,
+            operator,
+            action="regulatory_parameter.approve",
+            target_org=ORG_1,
+            resources=[{"bank_id": BANK}, {"bank_id": SIBLING}],
+            detail=detail,
+        )
+        db.commit()
+        recorded = list(
+            db.scalars(
+                select(OperatorAuditLog).where(
+                    OperatorAuditLog.action == "regulatory_parameter.approve"
+                )
+            )
+        )
+        assert len(recorded) == 2
+        assert all(row.detail["reason"] == reason for row in recorded)
+        assert all(row.detail["support_reference"] == reference for row in recorded)
+        assert all(("session_id" in row.detail) == (evidence_kind == "session") for row in recorded)
+    response = db_client.get(
+        PATH, headers=headers(ORG_1), params={"event_type": "regulatory_parameter.approve"}
     )
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert len(rows) == 1 and rows[0].integrity == "verified"
+    assert rows[0].reason == reason and rows[0].support_reference == reference
+
+
+def test_repeated_resource_banks_are_verified_in_one_batch(db_client: TestClient) -> None:
+    with _session() as db:
+        bank_queries = 0
+
+        def count_bank_queries(state: ORMExecuteState) -> None:
+            nonlocal bank_queries
+            statement = state.statement
+            if isinstance(statement, Select) and any(
+                column.get("entity") is Bank for column in statement.column_descriptions
+            ):
+                bank_queries += 1
+
+        resources: list[dict[str, JsonValue]] = [
+            {"bank_id": bank} for _ in range(100) for bank in (BANK, SIBLING, FOREIGN)
+        ]
+        resources.extend(
+            [
+                {"organization_id": ORG_2, "bank_id": BANK},
+                {"organization_id": ORG_1, "bank_id": FOREIGN},
+                {"bank_id": "BK-MISSING1"},
+            ]
+        )
+        sqlalchemy_event.listen(db, "do_orm_execute", count_bank_queries)
+        try:
+            record_operator_action(
+                db,
+                OperatorContext("history@example.test", "dev", "super_admin"),
+                action="desk.publications.read",
+                resources=resources,
+            )
+        finally:
+            sqlalchemy_event.remove(db, "do_orm_execute", count_bank_queries)
+        assert bank_queries == 1
+        db.commit()
+        recorded = list(
+            db.scalars(
+                select(OperatorAuditLog).where(OperatorAuditLog.action == "desk.publications.read")
+            )
+        )
+        assert {(row.target_org, row.detail["bank_id"]) for row in recorded} == {
+            (ORG_1, BANK),
+            (ORG_1, SIBLING),
+            (ORG_2, FOREIGN),
+        }
+        assert len(recorded) == 3 and all(row.detail["outcome"] == "success" for row in recorded)
