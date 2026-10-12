@@ -3,9 +3,12 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import String, select, text
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.audit_attribution import SUBJECT_TABLES, subject_bank_sql
 from app.models import AuditEvent
 
 
@@ -19,6 +22,19 @@ def record_event(  # noqa: PLR0913
     details: dict[str, Any] | None = None,
 ) -> AuditEvent:
     merged_details: dict[str, Any] = dict(details or {})
+    if entity_type in SUBJECT_TABLES:
+        db.flush()
+        bank_id = db.scalar(
+            select(
+                sql_cast(
+                    text(subject_bank_sql(":org", ":kind", ":id", subject=entity_type)),
+                    String,
+                )
+            ),
+            {"org": ctx.organization_id, "kind": entity_type, "id": str(entity_id)},
+        )
+        if bank_id is not None:
+            merged_details.setdefault("bank_id", bank_id)
     if ctx.impersonation_context is not None:
         # Best-effort provenance: an event produced under an operator
         # act-as-examiner session has no tenant actor (actor_user_id is None),

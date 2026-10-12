@@ -148,12 +148,17 @@ Every successful page read appends `audit_log.viewed` in the same transaction;
 a failure to retain that event refuses the read. Streaming export and the
 Members composer options are the following delivery stages of issue #494.
 
-Attribution requires an explicit `details.bank_id`, bank entity target or
-binding `details.scope.institution_id`; contradictory bank markers refuse
-visibility. Staff events require `detail.bank_id`. Tenant-wide and historical
-records without a provable bank association remain outside this feed. The
-read API does not invent missing sign-in/MFA events or infer an institution from
-an organization. Banks own incidents observable in their audit events;
+Attribution uses an explicit `details.bank_id`, bank entity target,
+binding `details.scope.institution_id`, or the retained subject's bank ownership.
+The shared event writer snapshots bank ownership for ingestion batches, mapping
+configs, position snapshots, regulatory runs, packages and their artifact records;
+all their lifecycle events use this boundary. Historical events resolve through
+the same tenant-scoped ownership catalogue without rewriting sealed records.
+Contradictory bank markers or subject ownership refuse visibility. Staff events
+require `detail.bank_id`; recorded `note` explanations become the public `reason`,
+and bank actions without a more specific target name their bank as the target.
+Tenant-wide records without a provable bank association remain outside this feed.
+Banks own incidents observable in their audit events;
 AequorOS owns incidents outside that visibility boundary.
 
 Migration `202610120100` enables forced RLS on the staff source and adds scoped
@@ -162,6 +167,8 @@ EXECUTE on `bank_audit_previous_link`; it gains no global-head access, chain
 write permission or BYPASSRLS. The helper returns only a predecessor-link
 boolean for an attributable event. Its NOLOGIN audit owner, pinned search path
 and temporary schema-CREATE grant follow the existing chain custody pattern.
+The audit owner has tenant-scoped SELECT on the ownership catalogue's subject
+tables so the predecessor check applies the same historical attribution rule.
 Existing all-tenant operator and verifier policies retain their own reads.
 Legacy runtime credentials need their existing source/chain SELECT grants and
 the new helper EXECUTE grant, which the migration adds for existing chain

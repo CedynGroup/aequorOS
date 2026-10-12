@@ -9,6 +9,7 @@ No bindings are backfilled: a bank must explicitly assign its officers.
 from typing import cast
 
 from alembic import op
+from app.core.audit_attribution import SUBJECT_TABLES, subject_bank_sql
 
 revision = "202610120100"
 down_revision = "202610120099"
@@ -21,15 +22,18 @@ _BEFORE = (
 )
 _BANK = "current_setting('app.audit_bank_id', true)"
 _ORG = "current_setting('app.organization_id', true)"
+_OWNED_BANK = subject_bank_sql("e.organization_id", "e.entity_type", "e.entity_id")
 _TENANT_MATCH = f"""
     e.organization_id = {_ORG}
     AND (e.details->>'bank_id' = {_BANK}
          OR (e.entity_type = 'bank' AND e.entity_id = {_BANK})
-         OR e.details->'scope'->>'institution_id' = {_BANK})
+         OR e.details->'scope'->>'institution_id' = {_BANK}
+         OR {_OWNED_BANK} = {_BANK})
     AND (e.details->>'bank_id' IS NULL OR e.details->>'bank_id' = {_BANK})
     AND (e.details->'scope'->>'institution_id' IS NULL
          OR e.details->'scope'->>'institution_id' = {_BANK})
     AND (e.entity_type IS DISTINCT FROM 'bank' OR e.entity_id = {_BANK})
+    AND ({_OWNED_BANK} IS NULL OR {_OWNED_BANK} = {_BANK})
 """
 _STAFF_MATCH = f"e.target_org = {_ORG} AND e.detail->>'bank_id' = {_BANK}"
 
@@ -53,6 +57,9 @@ def upgrade() -> None:
         return
     schema = cast(str, op.get_bind().exec_driver_sql("SELECT current_schema()").scalar_one())
     quoted = op.get_bind().dialect.identifier_preparer.quote_identifier(schema)
+    op.execute(
+        f"GRANT SELECT ON {', '.join(SUBJECT_TABLES.values())} TO aequoros_audit_owner"
+    )
     op.execute(f"""
         ALTER TABLE operator_audit_log ENABLE ROW LEVEL SECURITY;
         ALTER TABLE operator_audit_log FORCE ROW LEVEL SECURITY;
@@ -123,6 +130,9 @@ def downgrade() -> None:
         op.execute("ALTER TABLE operator_audit_log NO FORCE ROW LEVEL SECURITY")
         op.execute("ALTER TABLE operator_audit_log DISABLE ROW LEVEL SECURITY")
         op.execute("REVOKE SELECT ON operator_audit_log, audit_chain_entries FROM aqs_api")
+        op.execute(
+            f"REVOKE SELECT ON {', '.join(SUBJECT_TABLES.values())} FROM aequoros_audit_owner"
+        )
     op.drop_constraint(
         "ck_authorization_bindings_role_bundle", "authorization_bindings", type_="check"
     )

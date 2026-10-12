@@ -3,7 +3,8 @@
 import os
 from collections.abc import Iterator
 from contextvars import ContextVar
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -14,12 +15,37 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api import deps
-from app.core.authorization import ModuleScope, Permission, RoleBundle, SensitivityScope
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    Permission,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.core.tenancy import TenantContext
+from app.domain.capital.engine import CapitalParams, CapitalRatiosResult, RwaResult
 from app.identity.schemas.audit_log import AuditLogRead
-from app.identity.service import audit_log
+from app.identity.schemas.auth import MeResponse
+from app.identity.schemas.banks import BankListRead
+from app.identity.service import audit_log, authorization
 from app.main import create_app
-from app.models import AuditEvent, Bank, OperatorAuditLog
+from app.models import (
+    AuditEvent,
+    Bank,
+    BankReportingPeriod,
+    IngestionBatch,
+    OperatorAuditLog,
+    RegulatoryArtifactVersion,
+    RegulatoryPackage,
+    RegulatoryPackageArtifact,
+    RegulatoryRun,
+    User,
+)
+from app.reporting.service import workflow
+from app.services import ingestion, regulatory_capital
+from app.services.audit import record_event
 from tests.conftest import (
     ApiTestDatabase,
     rollback_sessionmaker_lifecycle,
@@ -269,7 +295,13 @@ def test_cursor_pages_equal_timestamps_without_duplicates_and_is_bank_bound(
     assert len(found) == len(expected)
 
 
-def test_staff_is_labelled_and_private_staff_detail_is_not_exposed(db_client: TestClient) -> None:
+@pytest.mark.parametrize(
+    "action", ["inspector.fix.recompute", "inspector.fix.official_run", "bi.backfill"]
+)
+@pytest.mark.parametrize("reason_field", ["reason", "note"])
+def test_staff_is_labelled_and_private_staff_detail_is_not_exposed(
+    db_client: TestClient, action: str, reason_field: str
+) -> None:
     grant(RoleBundle.COMPLIANCE_OFFICER)
     with _session() as db:
         db.add_all(
@@ -277,12 +309,12 @@ def test_staff_is_labelled_and_private_staff_detail_is_not_exposed(db_client: Te
                 OperatorAuditLog(
                     operator_email="staff@example.test",
                     auth_mode="dev",
-                    action="inspector.recompute",
+                    action=action,
                     target_org=ORG_1,
                     created_at=NOW,
                     detail={
                         "bank_id": bank,
-                        "reason": "Investigate discrepancy",
+                        reason_field: "Investigate discrepancy",
                         "support_reference": "SUP-123",
                         "internal_note": "private operator context",
                     },
@@ -297,6 +329,8 @@ def test_staff_is_labelled_and_private_staff_detail_is_not_exposed(db_client: Te
     assert len(rows) == 1
     assert rows[0].actor_kind == "aequoros_staff"
     assert rows[0].reason == "Investigate discrepancy"
+    assert rows[0].details["reason"] == "Investigate discrepancy"
+    assert (rows[0].target_type, rows[0].target_id) == ("bank", BANK)
     assert rows[0].support_reference == "SUP-123"
     assert "internal_note" not in rows[0].details
 
@@ -368,3 +402,258 @@ def test_unknown_outcome_can_be_filtered_without_implying_success(db_client: Tes
     assert response.status_code == 200, response.text
     rows = AuditLogRead.model_validate_json(response.text).events
     assert len(rows) == 1 and rows[0].outcome == "unspecified"
+
+
+@pytest.mark.parametrize("bundle", [RoleBundle.SECURITY_OFFICER, RoleBundle.COMPLIANCE_OFFICER])
+@pytest.mark.parametrize("organization_wide", [False, True])
+def test_officer_only_authority_discovers_covered_banks(
+    db_client: TestClient, bundle: RoleBundle, organization_wide: bool
+) -> None:
+    user_id = uuid4()
+    with _session() as db:
+        user = User(id=user_id, organization_id=ORG_1, email="officer@example.test")
+        db.add(user)
+        db.flush()
+        authorization.create_role_binding(
+            db,
+            organization_id=ORG_1,
+            principal_user_id=user_id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=bundle,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION
+                if organization_wide
+                else InstitutionScope.INSTITUTION,
+                None if organization_wide else BANK,
+                ModuleScope.AUDIT,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "audit-fixture"),
+            reason="Explicit audit officer appointment",
+            commit=False,
+        )
+        user.authorization_version = 1
+        db.commit()
+    auth = headers(ORG_1, user_id=user_id, roles=())
+    expected = {BANK, SIBLING} if organization_wide else {BANK}
+    profile = db_client.get("/api/v1/auth/me", headers=auth)
+    assert profile.status_code == 200, profile.text
+    projected = (
+        MeResponse.model_validate_json(profile.text).effective_authority.institution_capabilities
+    )
+    assert {item.institution_id for item in projected} == expected
+    assert all(cap.module.value == "audit" for item in projected for cap in item.capabilities)
+    listed = db_client.get("/api/v1/banks", headers=auth)
+    assert listed.status_code == 200, listed.text
+    assert {bank.id for bank in BankListRead.model_validate_json(listed.text).banks} == expected
+    for bank in expected:
+        assert db_client.get(f"/api/v1/banks/{bank}", headers=auth).status_code == 200
+        assert db_client.get(f"/api/v1/banks/{bank}/audit-log", headers=auth).status_code == 200
+    assert db_client.get(f"/api/v1/banks/{FOREIGN}", headers=auth).status_code == 404
+    if not organization_wide:
+        assert db_client.get(f"/api/v1/banks/{SIBLING}", headers=auth).status_code == 404
+
+
+def _owned_subjects(
+    db: Session, bank_id: str, organization: str = ORG_1
+) -> tuple[IngestionBatch, RegulatoryPackage, RegulatoryRun]:
+    period = BankReportingPeriod(
+        organization_id=organization,
+        bank_id=bank_id,
+        period_start=date(2026, 9, 1),
+        period_end=date(2026, 9, 30),
+        label="September",
+        status="open",
+    )
+    db.add(period)
+    db.flush()
+    batch = IngestionBatch(
+        organization_id=organization,
+        bank_id=bank_id,
+        source_system="API_PUSH",
+        adapter_version="1",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=period.period_end,
+    )
+    package = RegulatoryPackage(
+        organization_id=organization,
+        bank_id=bank_id,
+        return_family="capital",
+        return_code="CAR-RWA",
+        reporting_date=period.period_end,
+        frequency="monthly",
+        status="generated",
+        version=1,
+        generated_by=USER_1,
+    )
+    run = RegulatoryRun(
+        organization_id=organization,
+        bank_id=bank_id,
+        reporting_period_id=period.id,
+        module="capital",
+        scenario_code="base",
+        status="queued",
+        engine_version="audit-fixture",
+        input_schema_version="1",
+        output_schema_version="1",
+        input_hash="a" * 64,
+        inputs={},
+        created_by=USER_1,
+    )
+    db.add_all([batch, package, run])
+    db.commit()
+    return batch, package, run
+
+
+def test_real_data_and_filing_writers_retain_bank_attribution(db_client: TestClient) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    ctx = TenantContext(ORG_1, actor_user_id=USER_1, authorization_version=1)
+    with _session() as db:
+        batch, package, run = _owned_subjects(db, BANK)
+        ingestion._record_batch_event(db, ctx, batch, "Accepted source data")
+        workflow._add_approval(
+            db, ctx, package, action="approved", actor_user_id=USER_1, reason="Reviewed return"
+        )
+        workflow.add_submission_event(db, ctx, package, channel="manual", event="submitted")
+        db.commit()
+        regulatory_capital._persist_failure(
+            db, ctx, run.id, regulatory_capital.CapitalRunError("missing_parameter", "Unavailable")
+        )
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert {row.action for row in rows} == {
+        "ingestion_batch.accepted",
+        "regulatory_package.approval_approved",
+        "regulatory_package.submission_submitted",
+        "regulatory_run.failed",
+    }
+    assert all(row.details["bank_id"] == BANK and row.integrity == "verified" for row in rows)
+
+
+def test_capital_success_writer_retains_bank_attribution(db_client: TestClient) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    one = Decimal("1")
+    rwa = RwaResult(one, one, one, Decimal("3"), one, one, one, one, 1, one, ())
+    ratios = CapitalRatiosResult(
+        cet1_capital=one,
+        at1_capital=one,
+        tier1_capital=one,
+        tier2_capital=one,
+        total_capital=one,
+        general_provisions_amount=one,
+        general_provisions_cap=one,
+        gp_cap_applied=False,
+        leverage_exposure=one,
+        cet1_ratio_pct=one,
+        tier1_ratio_pct=one,
+        car_pct=one,
+        leverage_ratio_pct=one,
+        cet1_status="green",
+        tier1_status="green",
+        car_status="green",
+        leverage_status="green",
+        line_items=(),
+    )
+    params = CapitalParams({}, one, one, one, one, one, one, one, one, one, one)
+    with _session() as db:
+        _, _, run = _owned_subjects(db, BANK)
+        regulatory_capital._persist_success(
+            db, TenantContext(ORG_1, actor_user_id=USER_1), run, rwa, ratios, params, None, "GHS"
+        )
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert [row.action for row in rows] == ["regulatory_run.succeeded"]
+    assert rows[0].details["bank_id"] == BANK and rows[0].integrity == "verified"
+
+
+def test_historical_subject_ownership_is_scoped_and_verified(db_client: TestClient) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    expected: set[str] = set()
+    with _session() as db:
+        for bank, organization in ((BANK, ORG_1), (SIBLING, ORG_1), (FOREIGN, ORG_2)):
+            batch, package, run = _owned_subjects(db, bank, organization)
+            for kind, subject in (
+                ("ingestion_batch", batch),
+                ("regulatory_package", package),
+                ("regulatory_run", run),
+            ):
+                row = AuditEvent(
+                    organization_id=organization,
+                    event_type=f"{kind}.historical",
+                    entity_type=kind,
+                    entity_id=str(subject.id),
+                    details={},
+                )
+                db.add(row)
+                db.flush()
+                if bank == BANK:
+                    expected.add(str(row.id))
+            db.add(
+                AuditEvent(
+                    organization_id=organization,
+                    event_type="conflicting.subject",
+                    entity_type="ingestion_batch",
+                    entity_id=str(batch.id),
+                    details={"bank_id": SIBLING if bank == BANK else BANK},
+                )
+            )
+        db.commit()
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert {str(row.id) for row in rows} == expected
+    assert all(row.integrity == "verified" and row.sequence for row in rows)
+    with _session() as db:
+        for row in rows:
+            stored = db.get(AuditEvent, row.id)
+            assert stored is not None and stored.details == {}
+
+
+@pytest.mark.parametrize("kind", ["regulatory_package_artifact", "regulatory_artifact_version"])
+def test_artifact_writers_and_historical_reads_use_package_ownership(
+    db_client: TestClient, kind: str
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    with _session() as db:
+        _, package, _ = _owned_subjects(db, BANK)
+        model = (
+            RegulatoryPackageArtifact
+            if kind == "regulatory_package_artifact"
+            else RegulatoryArtifactVersion
+        )
+        artifact = model(
+            organization_id=ORG_1,
+            package_id=package.id,
+            kind="pdf",
+            object_path="synthetic/return.pdf",
+            checksum_sha256="b" * 64,
+            size_bytes=1,
+        )
+        db.add(artifact)
+        db.flush()
+        recorded = record_event(
+            db,
+            TenantContext(ORG_1, actor_user_id=USER_1),
+            event_type=f"{kind}.downloaded",
+            entity_type=kind,
+            entity_id=artifact.id,
+        )
+        assert recorded.details["bank_id"] == BANK
+        db.add(
+            AuditEvent(
+                organization_id=ORG_1,
+                event_type=f"{kind}.historical",
+                entity_type=kind,
+                entity_id=str(artifact.id),
+                details={},
+            )
+        )
+        db.commit()
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert {row.action for row in rows} == {f"{kind}.downloaded", f"{kind}.historical"}
+    assert all(row.integrity == "verified" for row in rows)

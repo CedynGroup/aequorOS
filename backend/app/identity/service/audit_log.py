@@ -20,6 +20,7 @@ from sqlalchemy import (
     column,
     func,
     literal,
+    literal_column,
     or_,
     select,
     table,
@@ -30,6 +31,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.core.audit_attribution import subject_bank_sql
 from app.core.authorization import (
     DataScope,
     InstitutionScope,
@@ -173,6 +175,12 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
     if db.get_bind().dialect.name == "postgresql":
         db.execute(text("SELECT set_config('app.audit_bank_id', :bank, true)"), {"bank": bank.id})
     event = AuditEvent.__table__
+    owned_bank = literal_column(
+        subject_bank_sql(
+            "audit_events.organization_id", "audit_events.entity_type", "audit_events.entity_id"
+        ),
+        String,
+    )
     tenant_events = select(
         event.c.id,
         literal("audit_events").label("stream"),
@@ -188,6 +196,7 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
             _json_text(event.c.details, "bank_id") == bank.id,
             and_(event.c.entity_type == "bank", event.c.entity_id == bank.id),
             _json_text(event.c.details, "scope", "institution_id") == bank.id,
+            owned_bank == bank.id,
         ),
         or_(
             _json_text(event.c.details, "bank_id").is_(None),
@@ -202,6 +211,7 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
             event.c.entity_type.is_(None),
             event.c.entity_id == bank.id,
         ),
+        or_(owned_bank.is_(None), owned_bank == bank.id),
     )
     staff_details = (
         sql_cast(_STAFF.c.detail, JSONB)
@@ -213,8 +223,10 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
         literal("operator_audit_log").label("stream"),
         _STAFF.c.operator_email.label("actor"),
         _STAFF.c.action,
-        _json_text(_STAFF.c.detail, "entity_type").label("target_type"),
-        _json_text(_STAFF.c.detail, "entity_id").label("target_id"),
+        func.coalesce(_json_text(_STAFF.c.detail, "entity_type"), "bank").label("target_type"),
+        func.coalesce(
+            _json_text(_STAFF.c.detail, "entity_id"), _json_text(_STAFF.c.detail, "bank_id")
+        ).label("target_id"),
         staff_details.label("details"),
         _STAFF.c.created_at,
     ).where(
@@ -303,6 +315,10 @@ def _present(row: StoredEvent) -> AuditEventRead:
     details = row.details
     staff = row.stream == "operator_audit_log"
     if staff:
+        details = {
+            **details,
+            "reason": _string(details.get("reason")) or _string(details.get("note")),
+        }
         details = {key: details[key] for key in _STAFF_FIELDS if key in details}
     actor = _string(details.get("act_operator")) or row.actor
     if actor and not staff and not _string(details.get("act_operator")):

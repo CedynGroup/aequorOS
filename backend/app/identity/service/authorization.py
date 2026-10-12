@@ -335,7 +335,7 @@ def record_binding_revoke_audit(
 
 
 _ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT)
-_INSTITUTION_MODULES = tuple(module for module in Module if module not in _ORGANIZATION_MODULES)
+_INSTITUTION_MODULES = tuple(module for module in Module if module is not Module.ACCOUNT)
 _REQUIRED_RUNTIME_CONDITIONS: dict[Permission, tuple[ConditionKind, ...]] = {
     Permission.APPROVE: (ConditionKind.MAKER_CHECKER,),
     Permission.SIGN_OFF: (ConditionKind.MAKER_CHECKER, ConditionKind.STEP_UP),
@@ -559,6 +559,7 @@ def project_examiner_authority(
             data_scope=data_scope_read(ALL_INSTITUTION_DATA),
         )
         for module in _INSTITUTION_MODULES
+        if module is not Module.AUDIT
         for sensitivity in Sensitivity
     ]
     return EffectiveAuthorityRead(
