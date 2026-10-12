@@ -186,10 +186,13 @@ def _wait_for_purge_lock(bind: Engine | Connection, pid: int) -> None:
     deadline = monotonic() + 10
     while monotonic() < deadline:
         with Session(bind) as observer:
-            if observer.scalar(
-                text("SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = :pid"),
-                {"pid": pid},
-            ) is True:
+            if (
+                observer.scalar(
+                    text("SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = :pid"),
+                    {"pid": pid},
+                )
+                is True
+            ):
                 return
         sleep(0.01)
     pytest.fail("The concurrent tenant tick did not wait for the transaction lock.")
@@ -207,8 +210,7 @@ def test_concurrent_tenant_ticks_serialize_hourly_purge(
     monkeypatch.setattr(scheduler, "utc_now", lambda: NOW)
     get_settings.cache_clear()
     ticks = [
-        job_queue.enqueue(db_session, org_id, "scheduled_tick")
-        for org_id in (ORG_1, ORG_1, ORG_2)
+        job_queue.enqueue(db_session, org_id, "scheduled_tick") for org_id in (ORG_1, ORG_1, ORG_2)
     ]
     for tick in ticks:
         tick.status = "running"
