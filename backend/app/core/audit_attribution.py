@@ -13,8 +13,20 @@ PACKAGE_SUBJECTS = {"regulatory_package_artifact", "regulatory_artifact_version"
 
 
 def subject_bank_sql(
-    organization: str, entity_type: str, entity_id: str, *, subject: str | None = None
+    organization: str,
+    entity_type: str,
+    entity_id: str,
+    *,
+    postgresql: bool,
+    subject: str | None = None,
 ) -> str:
+    identifier = (
+        f"CASE WHEN {entity_id} ~ '^[0-9a-fA-F]{{8}}-[0-9a-fA-F]{{4}}-"
+        f"[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{12}}$'"
+        f" THEN CAST({entity_id} AS uuid) END"
+        if postgresql
+        else f"lower(replace({entity_id}, '-', ''))"
+    )
     queries: list[str] = []
     for kind, table in SUBJECT_TABLES.items():
         if subject is not None and kind != subject:
@@ -29,6 +41,6 @@ def subject_bank_sql(
         queries.append(
             f"SELECT {owner}.bank_id FROM {table} s{join}"
             f" WHERE {entity_type} = '{kind}' AND s.organization_id = {organization}"
-            f" AND replace(CAST(s.id AS varchar), '-', '') = replace({entity_id}, '-', '')"
+            f" AND s.id = {identifier}"
         )
     return "(SELECT bank_id FROM (" + " UNION ALL ".join(queries) + ") audit_subject_owner)"

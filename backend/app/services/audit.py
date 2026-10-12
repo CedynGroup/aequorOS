@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.audit_attribution import SUBJECT_TABLES, subject_bank_sql
+from app.core.audit_projection import normalize_event_details
 from app.models import AuditEvent
 
 
@@ -21,13 +22,21 @@ def record_event(  # noqa: PLR0913
     entity_id: UUID | str,
     details: dict[str, Any] | None = None,
 ) -> AuditEvent:
-    merged_details: dict[str, Any] = dict(details or {})
+    merged_details: dict[str, Any] = normalize_event_details(event_type, dict(details or {}))
     if entity_type in SUBJECT_TABLES:
         db.flush()
         bank_id = db.scalar(
             select(
                 sql_cast(
-                    text(subject_bank_sql(":org", ":kind", ":id", subject=entity_type)),
+                    text(
+                        subject_bank_sql(
+                            ":org",
+                            ":kind",
+                            ":id",
+                            postgresql=db.get_bind().dialect.name == "postgresql",
+                            subject=entity_type,
+                        )
+                    ),
                     String,
                 )
             ),

@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Uuid,
     and_,
+    case,
     column,
     func,
     literal,
@@ -32,6 +33,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.audit_attribution import subject_bank_sql
+from app.core.audit_projection import EVENT_OUTCOMES, normalize_event_details
 from app.core.authorization import (
     DataScope,
     InstitutionScope,
@@ -63,6 +65,7 @@ _STAFF = table(
 )
 _STAFF_FIELDS = (
     "bank_id",
+    "batch_id",
     "session_id",
     "reason",
     "support_reference",
@@ -177,7 +180,10 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
     event = AuditEvent.__table__
     owned_bank = literal_column(
         subject_bank_sql(
-            "audit_events.organization_id", "audit_events.entity_type", "audit_events.entity_id"
+            "audit_events.organization_id",
+            "audit_events.entity_type",
+            "audit_events.entity_id",
+            postgresql=db.get_bind().dialect.name == "postgresql",
         ),
         String,
     )
@@ -218,20 +224,38 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
         if db.get_bind().dialect.name == "postgresql"
         else _STAFF.c.detail
     )
+    staff_owned_bank = literal_column(
+        subject_bank_sql(
+            "operator_audit_log.target_org",
+            "'ingestion_batch'",
+            "operator_audit_log.detail->>'batch_id'",
+            postgresql=db.get_bind().dialect.name == "postgresql",
+            subject="ingestion_batch",
+        ),
+        String,
+    )
+    batch_target = _json_text(_STAFF.c.detail, "batch_id")
+    staff_bank = _json_text(_STAFF.c.detail, "bank_id")
     staff_events = select(
         _STAFF.c.id,
         literal("operator_audit_log").label("stream"),
         _STAFF.c.operator_email.label("actor"),
         _STAFF.c.action,
-        func.coalesce(_json_text(_STAFF.c.detail, "entity_type"), "bank").label("target_type"),
         func.coalesce(
-            _json_text(_STAFF.c.detail, "entity_id"), _json_text(_STAFF.c.detail, "bank_id")
+            _json_text(_STAFF.c.detail, "entity_type"),
+            case((staff_owned_bank.is_not(None), "ingestion_batch"), else_="bank"),
+        ).label("target_type"),
+        func.coalesce(
+            _json_text(_STAFF.c.detail, "entity_id"),
+            case((staff_owned_bank.is_not(None), batch_target), else_=staff_bank),
         ).label("target_id"),
         staff_details.label("details"),
         _STAFF.c.created_at,
     ).where(
         _STAFF.c.target_org == ctx.organization_id,
-        _json_text(_STAFF.c.detail, "bank_id") == bank.id,
+        or_(staff_bank == bank.id, staff_owned_bank == bank.id),
+        or_(staff_bank.is_(None), staff_bank == bank.id),
+        or_(staff_owned_bank.is_(None), staff_owned_bank == bank.id),
     )
     feed = tenant_events.union_all(staff_events).subquery()
     query = select(feed)
@@ -254,7 +278,11 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
         query = query.where(feed.c.action == filters.event_type)
     if filters.outcome is not None:
         query = query.where(
-            func.coalesce(_json_text(feed.c.details, "outcome"), "unspecified") == filters.outcome
+            func.coalesce(
+                _json_text(feed.c.details, "outcome"),
+                case(EVENT_OUTCOMES, value=feed.c.action, else_="unspecified"),
+            )
+            == filters.outcome
         )
     if cursor is not None:
         after = _decode_cursor(cursor, ctx, bank)
@@ -312,7 +340,7 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
 
 
 def _present(row: StoredEvent) -> AuditEventRead:
-    details = row.details
+    details = normalize_event_details(row.action, row.details)
     staff = row.stream == "operator_audit_log"
     if staff:
         details = {

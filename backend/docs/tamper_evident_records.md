@@ -155,9 +155,25 @@ configs, position snapshots, regulatory runs, packages and their artifact record
 all their lifecycle events use this boundary. Historical events resolve through
 the same tenant-scoped ownership catalogue without rewriting sealed records.
 Contradictory bank markers or subject ownership refuse visibility. Staff events
-require `detail.bank_id`; recorded `note` explanations become the public `reason`,
-and bank actions without a more specific target name their bank as the target.
+use `detail.bank_id` or the tenant-scoped ownership of `detail.batch_id`. The
+shared staff writer snapshots that ownership, and historical reads and integrity
+verification resolve it through the same catalogue. Recorded `note` explanations
+become the public `reason`; batch actions name the batch as their target, and bank
+actions without a more specific target name their bank.
 Tenant-wide records without a provable bank association remain outside this feed.
+
+Password sign-in, SSO and signing re-authentication retain success and refusal
+events before returning. Known users are attributed only to banks reachable
+through their complete active scoped bindings; unidentified attempts and users
+without bank authority remain platform-visible. Verified IdP `acr` and `amr`
+claims are retained; an explicit `mfa` method also records MFA success. Password
+authentication never invents MFA evidence or stores credentials.
+
+The shared event writer and historical presentation normalize known ingestion,
+capital-run and dedup outcomes, filing status transitions and position override
+values. Outcome filters use the same mapping; events without a known or explicitly
+recorded outcome remain unspecified. Historical sealed payloads remain unchanged.
+
 Banks own incidents observable in their audit events;
 AequorOS owns incidents outside that visibility boundary.
 

@@ -22,7 +22,7 @@ _BEFORE = (
 )
 _BANK = "current_setting('app.audit_bank_id', true)"
 _ORG = "current_setting('app.organization_id', true)"
-_OWNED_BANK = subject_bank_sql("e.organization_id", "e.entity_type", "e.entity_id")
+_OWNED_BANK = subject_bank_sql("e.organization_id", "e.entity_type", "e.entity_id", postgresql=True)
 _TENANT_MATCH = f"""
     e.organization_id = {_ORG}
     AND (e.details->>'bank_id' = {_BANK}
@@ -35,7 +35,19 @@ _TENANT_MATCH = f"""
     AND (e.entity_type IS DISTINCT FROM 'bank' OR e.entity_id = {_BANK})
     AND ({_OWNED_BANK} IS NULL OR {_OWNED_BANK} = {_BANK})
 """
-_STAFF_MATCH = f"e.target_org = {_ORG} AND e.detail->>'bank_id' = {_BANK}"
+_STAFF_OWNED_BANK = subject_bank_sql(
+    "e.target_org",
+    "'ingestion_batch'",
+    "e.detail->>'batch_id'",
+    postgresql=True,
+    subject="ingestion_batch",
+)
+_STAFF_MATCH = f"""
+    e.target_org = {_ORG}
+    AND (e.detail->>'bank_id' = {_BANK} OR {_STAFF_OWNED_BANK} = {_BANK})
+    AND (e.detail->>'bank_id' IS NULL OR e.detail->>'bank_id' = {_BANK})
+    AND ({_STAFF_OWNED_BANK} IS NULL OR {_STAFF_OWNED_BANK} = {_BANK})
+"""
 
 
 def upgrade() -> None:
@@ -57,9 +69,7 @@ def upgrade() -> None:
         return
     schema = cast(str, op.get_bind().exec_driver_sql("SELECT current_schema()").scalar_one())
     quoted = op.get_bind().dialect.identifier_preparer.quote_identifier(schema)
-    op.execute(
-        f"GRANT SELECT ON {', '.join(SUBJECT_TABLES.values())} TO aequoros_audit_owner"
-    )
+    op.execute(f"GRANT SELECT ON {', '.join(SUBJECT_TABLES.values())} TO aequoros_audit_owner")
     op.execute(f"""
         ALTER TABLE operator_audit_log ENABLE ROW LEVEL SECURITY;
         ALTER TABLE operator_audit_log FORCE ROW LEVEL SECURITY;
@@ -69,7 +79,7 @@ def upgrade() -> None:
         CREATE POLICY bank_audit_staff_verifier ON operator_audit_log FOR SELECT
             TO aqs_audit_verifier, aqs_operator USING (true);
         CREATE POLICY bank_audit_staff_read ON operator_audit_log FOR SELECT USING (
-            target_org = {_ORG} AND detail->>'bank_id' = {_BANK});
+            {_STAFF_MATCH.replace("e.", "operator_audit_log.")});
         CREATE POLICY bank_audit_entries_read ON audit_chain_entries FOR SELECT USING (
             (stream = 'audit_events' AND EXISTS (
                 SELECT 1 FROM audit_events e WHERE e.id = audit_chain_entries.event_id

@@ -5,16 +5,22 @@ from collections.abc import Iterator
 from contextvars import ContextVar
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import cast
 from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
+from pydantic import BaseModel, Field, JsonValue, TypeAdapter
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api import deps
+from app.attestation.service import stepup
+from app.core import security
+from app.core.audit_attribution import subject_bank_sql
+from app.core.config import AuthSettings
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
@@ -29,21 +35,27 @@ from app.domain.capital.engine import CapitalParams, CapitalRatiosResult, RwaRes
 from app.identity.schemas.audit_log import AuditLogRead
 from app.identity.schemas.auth import MeResponse
 from app.identity.schemas.banks import BankListRead
-from app.identity.service import audit_log, authorization
+from app.identity.service import audit_log, authentication, authorization
 from app.main import create_app
 from app.models import (
     AuditEvent,
     Bank,
     BankReportingPeriod,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
     IngestionBatch,
+    LineageRecord,
     OperatorAuditLog,
     RegulatoryArtifactVersion,
     RegulatoryPackage,
     RegulatoryPackageArtifact,
     RegulatoryRun,
+    SsoConnection,
     User,
 )
+from app.operator.deps import OperatorContext, record_operator_action
 from app.reporting.service import workflow
+from app.schemas.ingestion import PositionSnapshotOverrideCreate
 from app.services import ingestion, regulatory_capital
 from app.services.audit import record_event
 from tests.conftest import (
@@ -438,9 +450,9 @@ def test_officer_only_authority_discovers_covered_banks(
     expected = {BANK, SIBLING} if organization_wide else {BANK}
     profile = db_client.get("/api/v1/auth/me", headers=auth)
     assert profile.status_code == 200, profile.text
-    projected = (
-        MeResponse.model_validate_json(profile.text).effective_authority.institution_capabilities
-    )
+    projected = MeResponse.model_validate_json(
+        profile.text
+    ).effective_authority.institution_capabilities
     assert {item.institution_id for item in projected} == expected
     assert all(cap.module.value == "audit" for item in projected for cap in item.capabilities)
     listed = db_client.get("/api/v1/banks", headers=auth)
@@ -512,6 +524,9 @@ def test_real_data_and_filing_writers_retain_bank_attribution(db_client: TestCli
     with _session() as db:
         batch, package, run = _owned_subjects(db, BANK)
         ingestion._record_batch_event(db, ctx, batch, "Accepted source data")
+        batch.status = "failed"
+        ingestion._record_batch_event(db, ctx, batch, "Source data failed")
+        workflow.transition(db, ctx, package, "validated")
         workflow._add_approval(
             db, ctx, package, action="approved", actor_user_id=USER_1, reason="Reviewed return"
         )
@@ -525,11 +540,21 @@ def test_real_data_and_filing_writers_retain_bank_attribution(db_client: TestCli
     rows = AuditLogRead.model_validate_json(response.text).events
     assert {row.action for row in rows} == {
         "ingestion_batch.accepted",
+        "ingestion_batch.failed",
+        "regulatory_package.status_changed",
         "regulatory_package.approval_approved",
         "regulatory_package.submission_submitted",
         "regulatory_run.failed",
     }
     assert all(row.details["bank_id"] == BANK and row.integrity == "verified" for row in rows)
+    transition = next(row for row in rows if row.action == "regulatory_package.status_changed")
+    assert transition.before == {"status": "generated"}
+    assert transition.after == {"status": "validated"}
+    assert transition.outcome == "success"
+    response = db_client.get(PATH, headers=headers(ORG_1), params={"outcome": "failure"})
+    failures = AuditLogRead.model_validate_json(response.text).events
+    assert {row.action for row in failures} == {"regulatory_run.failed", "ingestion_batch.failed"}
+    assert all(row.outcome == "failure" for row in failures)
 
 
 def test_capital_success_writer_retains_bank_attribution(db_client: TestClient) -> None:
@@ -567,6 +592,15 @@ def test_capital_success_writer_retains_bank_attribution(db_client: TestClient) 
     rows = AuditLogRead.model_validate_json(response.text).events
     assert [row.action for row in rows] == ["regulatory_run.succeeded"]
     assert rows[0].details["bank_id"] == BANK and rows[0].integrity == "verified"
+    assert rows[0].outcome == "success"
+    response = db_client.get(
+        PATH,
+        headers=headers(ORG_1),
+        params={"outcome": "success", "event_type": "regulatory_run.succeeded"},
+    )
+    assert [row.id for row in AuditLogRead.model_validate_json(response.text).events] == [
+        rows[0].id
+    ]
 
 
 def test_historical_subject_ownership_is_scoped_and_verified(db_client: TestClient) -> None:
@@ -657,3 +691,358 @@ def test_artifact_writers_and_historical_reads_use_package_ownership(
     rows = AuditLogRead.model_validate_json(response.text).events
     assert {row.action for row in rows} == {f"{kind}.downloaded", f"{kind}.historical"}
     assert all(row.integrity == "verified" for row in rows)
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "inspector.read.ingestion_batch",
+        "inspector.fix.rerun_ingestion",
+        "inspector.fix.redrive_dedup",
+    ],
+)
+@pytest.mark.parametrize("historical", [False, True])
+def test_staff_batch_actions_are_owned_projected_and_verified(
+    db_client: TestClient, action: str, historical: bool
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    expected: set[str] = set()
+    with _session() as db:
+        for bank, organization in ((BANK, ORG_1), (SIBLING, ORG_1), (FOREIGN, ORG_2)):
+            batch, _, _ = _owned_subjects(db, bank, organization)
+            detail = {
+                "batch_id": str(batch.id),
+                "note": "Support review",
+                "private_error": "secret",
+            }
+            if historical:
+                entry = OperatorAuditLog(
+                    operator_email="staff@example.test",
+                    auth_mode="dev",
+                    action=action,
+                    target_org=organization,
+                    detail=detail,
+                )
+                db.add(entry)
+            else:
+                entry = record_operator_action(
+                    db,
+                    OperatorContext("staff@example.test", "dev", "super_admin"),
+                    action=action,
+                    target_org=organization,
+                    detail=detail,
+                )
+                assert entry.detail["bank_id"] == bank
+            db.flush()
+            if bank == BANK:
+                expected.add(str(entry.id))
+            db.add(
+                OperatorAuditLog(
+                    operator_email="staff@example.test",
+                    auth_mode="dev",
+                    action=action,
+                    target_org=organization,
+                    detail={
+                        "batch_id": str(batch.id),
+                        "bank_id": SIBLING if bank == BANK else BANK,
+                    },
+                )
+            )
+        db.add(
+            OperatorAuditLog(
+                operator_email="staff@example.test",
+                auth_mode="dev",
+                action=action,
+                target_org=ORG_1,
+                detail={"batch_id": "invalid-uuid"},
+            )
+        )
+        db.commit()
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert {str(row.id) for row in rows} == expected
+    assert all(row.actor_kind == "aequoros_staff" and row.integrity == "verified" for row in rows)
+    assert all(
+        row.target_type == "ingestion_batch" and row.target_id == row.details["batch_id"]
+        for row in rows
+    )
+    assert all(
+        row.reason == "Support review" and "private_error" not in row.details for row in rows
+    )
+
+
+class _QueryPlan(BaseModel):
+    index_condition: str = Field(default="", alias="Index Cond")
+    plans: list["_QueryPlan"] = Field(default_factory=list, alias="Plans")
+
+
+class _PlanEnvelope(BaseModel):
+    plan: _QueryPlan = Field(alias="Plan")
+
+
+def test_real_position_override_exposes_change_and_indexed_ownership(db_client: TestClient) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    ctx = TenantContext(ORG_1, actor_user_id=USER_1)
+    with _session() as db:
+        batch, _, _ = _owned_subjects(db, BANK)
+        lineage = LineageRecord(
+            organization_id=ORG_1,
+            bank_id=BANK,
+            ingestion_batch_id=batch.id,
+            operation_type="VALIDATION",
+            operation_ref="audit-fixture",
+        )
+        db.add(lineage)
+        db.flush()
+        metadata = {
+            "organization_id": ORG_1,
+            "bank_id": BANK,
+            "as_of_date": batch.as_of_date,
+            "source_system": "API_PUSH",
+            "source_reference": "audit-position",
+            "ingestion_batch_id": batch.id,
+            "lineage_id": lineage.id,
+            "validation_status": "accepted",
+        }
+        position = CanonicalPosition(**metadata, position_type="LOAN", currency="GHS")
+        db.add(position)
+        db.flush()
+        snapshot = CanonicalPositionSnapshot(
+            **metadata, position_id=position.id, balance=Decimal("10")
+        )
+        db.add(snapshot)
+        db.commit()
+        updated = ingestion.override_position_snapshot(
+            db,
+            ctx,
+            BANK,
+            snapshot.id,
+            PositionSnapshotOverrideCreate(
+                field="balance", value="12", reason="Reviewed source correction"
+            ),
+        )
+        query = "SELECT " + subject_bank_sql(
+            ":org",
+            "'canonical_position_snapshot'",
+            ":id",
+            postgresql=True,
+            subject="canonical_position_snapshot",
+        )
+        parameters = {"org": ORG_1, "id": str(updated.id)}
+        assert cast("str | None", db.scalar(text(query), parameters)) == BANK
+        db.execute(text("SET LOCAL enable_seqscan = off"))
+        plan = TypeAdapter(list[_PlanEnvelope]).validate_python(
+            cast("object", db.scalar(text("EXPLAIN (FORMAT JSON) " + query), parameters))
+        )
+        nodes = [plan[0].plan]
+        indexed_id = False
+        while nodes:
+            node = nodes.pop()
+            indexed_id |= "id =" in node.index_condition
+            nodes.extend(node.plans)
+        assert indexed_id, plan
+        assert (
+            cast("str | None", db.scalar(text(query), {"org": ORG_1, "id": "invalid-uuid"})) is None
+        )
+        assert (
+            cast("str | None", db.scalar(text(query), {"org": ORG_2, "id": str(updated.id)}))
+            is None
+        )
+    response = db_client.get(
+        PATH,
+        headers=headers(ORG_1),
+        params={"event_type": "position_snapshot.overridden", "outcome": "success"},
+    )
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    assert len(rows) == 1 and rows[0].integrity == "verified"
+    assert isinstance(rows[0].before, dict) and isinstance(rows[0].after, dict)
+    assert Decimal(str(rows[0].before["balance"])) == Decimal("10")
+    assert Decimal(str(rows[0].after["balance"])) == Decimal("12")
+
+
+@pytest.mark.parametrize("method", ["password", "sso", "password_step_up", "oidc_step_up"])
+def test_real_authentication_success_and_refusal_are_bank_visible(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch, method: str
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    password = "disposable-audit-password"
+    settings = AuthSettings.model_validate(
+        {"AUTH_JWT_SECRET": "audit-test-signing-secret-0000000000"}
+    )
+    claims: dict[str, object] = {
+        "iss": "https://audit-idp.example.test",
+        "aud": "audit-client",
+        "sub": "audit-subject",
+        "email": "audit-user@example.test",
+        "email_verified": True,
+        "auth_time": int(datetime.now(UTC).timestamp()),
+        "amr": ["pwd", "mfa"],
+    }
+
+    def hints(_token: str) -> dict[str, object]:
+        return claims
+
+    def verified(_token: str, *, issuer: str, audience: str) -> dict[str, object]:
+        assert issuer == claims["iss"] and audience == claims["aud"]
+        return claims
+
+    monkeypatch.setattr(security, "unverified_claims", hints)
+    monkeypatch.setattr(security, "verify_oidc_id_token", verified)
+    with _session() as db:
+        user = User(
+            organization_id=ORG_1,
+            email=str(claims["email"]),
+            password_hash=security.hash_password(password),
+            auth_provider="oidc",
+            sso_subject=str(claims["sub"]),
+        )
+        db.add(user)
+        db.flush()
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=BANK,
+            user_id=user.id,
+            bundle=RoleBundle.ANALYST,
+        )
+        connection = SsoConnection(
+            organization_id=ORG_1,
+            issuer=str(claims["iss"]),
+            client_id=str(claims["aud"]),
+            enabled=True,
+        )
+        db.add(connection)
+        db.commit()
+        user_id = user.id
+        ctx = TenantContext(ORG_1, actor_user_id=user_id, authorization_version=1)
+        if method == "password":
+            assert authentication.login_with_password(
+                db, email=user.email, password=password, settings=settings
+            ).access_token
+        elif method == "sso":
+            assert authentication.login_with_sso(
+                db, id_token="boundary-token", settings=settings
+            ).access_token
+        else:
+            evidence = stepup.verify_step_up(
+                db,
+                ctx,
+                user_id,
+                password=password if method == "password_step_up" else None,
+                id_token="boundary-token" if method == "oidc_step_up" else None,
+                request_metadata={"amr": ["mfa"]} if method == "password_step_up" else None,
+            )
+            assert evidence["method"] in {"password_reauth", "oidc_reauth"}
+        with pytest.raises(HTTPException):
+            if method == "password":
+                authentication.login_with_password(
+                    db, email=user.email, password="incorrect", settings=settings
+                )
+            elif method == "sso":
+                connection.allowed_email_domains = ["forbidden.example"]
+                db.commit()
+                authentication.login_with_sso(db, id_token="boundary-token", settings=settings)
+            else:
+                if method == "oidc_step_up":
+                    claims["auth_time"] = 1
+                stepup.verify_step_up(
+                    db,
+                    ctx,
+                    user_id,
+                    password="incorrect" if method == "password_step_up" else None,
+                    id_token="boundary-token" if method == "oidc_step_up" else None,
+                )
+        db.rollback()
+    response = db_client.get(PATH, headers=headers(ORG_1), params={"actor": str(user_id)})
+    assert response.status_code == 200, response.text
+    rows = AuditLogRead.model_validate_json(response.text).events
+    actions = {f"authentication.{method}.succeeded", f"authentication.{method}.failed"}
+    if method in {"sso", "oidc_step_up"}:
+        actions.add("authentication.mfa.succeeded")
+    assert {row.action for row in rows} == actions
+    assert all(row.integrity == "verified" and row.details["bank_id"] == BANK for row in rows)
+    assert all(row.source == "authentication" and row.target_id == str(user_id) for row in rows)
+    assert {row.outcome for row in rows} == {"success", "failure"}
+    with _session() as db:
+        retained = list(db.scalars(select(AuditEvent).where(AuditEvent.actor_user_id == user_id)))
+        assert all(row.details["bank_id"] == BANK for row in retained)
+        assert all(
+            "password" not in row.details and "id_token" not in row.details for row in retained
+        )
+    response = db_client.get(
+        PATH, headers=headers(ORG_1), params={"actor": str(user_id), "outcome": "failure"}
+    )
+    assert [row.action for row in AuditLogRead.model_validate_json(response.text).events] == [
+        f"authentication.{method}.failed"
+    ]
+
+
+def test_unknown_authentication_refusals_remain_platform_only(db_client: TestClient) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    with _session() as db:
+        with pytest.raises(HTTPException) as refusal:
+            authentication.login_with_password(
+                db, email="unknown@example.test", password="incorrect"
+            )
+        assert refusal.value.status_code == 401
+        db.rollback()
+        row = db.scalar(
+            select(AuditEvent).where(AuditEvent.event_type == "authentication.password.failed")
+        )
+        assert row is not None and row.organization_id is None and row.actor_user_id is None
+        assert "bank_id" not in row.details
+    response = db_client.get(
+        PATH, headers=headers(ORG_1), params={"event_type": "authentication.password.failed"}
+    )
+    assert AuditLogRead.model_validate_json(response.text).events == []
+
+
+def test_historical_production_shapes_normalize_without_changing_seals(
+    db_client: TestClient,
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    evidence: dict[str, dict[str, JsonValue]] = {
+        "regulatory_run.failed": {},
+        "ingestion_batch.failed": {},
+        "regulatory_package.status_changed": {"from_status": "generated", "to_status": "validated"},
+        "position_snapshot.overridden": {
+            "field": "ifrs9_stage",
+            "original_value": "1",
+            "new_value": "2",
+        },
+        "data.unknown": {},
+        "regulatory_run.succeeded": {"outcome": "refused"},
+    }
+    with _session() as db:
+        for action, detail in evidence.items():
+            db.add(
+                AuditEvent(
+                    organization_id=ORG_1,
+                    event_type=action,
+                    entity_type="bank",
+                    entity_id=BANK,
+                    details={"bank_id": BANK, **detail},
+                )
+            )
+        db.commit()
+    response = db_client.get(PATH, headers=headers(ORG_1))
+    assert response.status_code == 200, response.text
+    rows = {row.action: row for row in AuditLogRead.model_validate_json(response.text).events}
+    assert rows["regulatory_package.status_changed"].before == {"status": "generated"}
+    assert rows["regulatory_package.status_changed"].after == {"status": "validated"}
+    assert rows["position_snapshot.overridden"].before == {"ifrs9_stage": "1"}
+    assert rows["position_snapshot.overridden"].after == {"ifrs9_stage": "2"}
+    assert rows["data.unknown"].outcome == "unspecified"
+    assert rows["regulatory_run.succeeded"].outcome == "refused"
+    assert all(row.integrity == "verified" for row in rows.values())
+    response = db_client.get(PATH, headers=headers(ORG_1), params={"outcome": "failure"})
+    assert {row.action for row in AuditLogRead.model_validate_json(response.text).events} == {
+        "regulatory_run.failed",
+        "ingestion_batch.failed",
+    }
+    with _session() as db:
+        for action, row in rows.items():
+            stored = db.get(AuditEvent, row.id)
+            assert stored is not None and stored.details == {"bank_id": BANK, **evidence[action]}

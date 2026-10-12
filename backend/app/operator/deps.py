@@ -35,10 +35,13 @@ from typing import Annotated, Any, Literal, cast
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from pydantic import JsonValue
+from sqlalchemy import String, select, text
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core import security
+from app.core.audit_attribution import subject_bank_sql
 from app.core.config import (
     OperatorSettings,
     get_operator_settings,
@@ -272,12 +275,34 @@ def record_operator_action(
     Never put credential material — one-time passwords included — in
     ``detail``: the row is append-only and readable by every operator.
     """
+    evidence: dict[str, JsonValue] = dict(detail or {})
+    batch_id = evidence.get("batch_id")
+    if target_org is not None and isinstance(batch_id, str):
+        bank_id = db.scalar(
+            select(
+                sql_cast(
+                    text(
+                        subject_bank_sql(
+                            ":org",
+                            "'ingestion_batch'",
+                            ":id",
+                            postgresql=db.get_bind().dialect.name == "postgresql",
+                            subject="ingestion_batch",
+                        )
+                    ),
+                    String,
+                )
+            ),
+            {"org": target_org, "id": batch_id},
+        )
+        if bank_id is not None:
+            evidence.setdefault("bank_id", bank_id)
     entry = OperatorAuditLog(
         operator_email=operator.email,
         auth_mode=operator.auth_mode,
         action=action,
         target_org=target_org,
-        detail=detail or {},
+        detail=evidence,
     )
     db.add(entry)
     return entry
