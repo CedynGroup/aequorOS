@@ -264,7 +264,7 @@ def test_worker_can_verify_both_audit_streams_without_reading_them(
             )
             session.commit()
     with administrator.begin() as connection:
-        entries = connection.scalar(text("SELECT count(*) FROM audit_events"))
+        entries = cast(int, connection.scalar(text("SELECT count(*) FROM audit_events")))
         epoch = cast(
             int, connection.scalar(text("SELECT recovery_epoch FROM audit_integrity_schedule"))
         )
