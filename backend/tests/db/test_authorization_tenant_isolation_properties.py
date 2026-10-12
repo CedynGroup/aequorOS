@@ -7,8 +7,8 @@ joins the property automatically instead of waiting for a hand-maintained list.
 
 This proof needs a migrated Postgres schema with FORCE RLS.  Every tenant setup
 or reset sets ``app.organization_id`` in the same transaction.  Users and
-organizations are never deleted during example reset; only generated binding
-rows are replaced.
+organizations are never deleted during example reset; previous bindings are
+revoked and new grants are appended.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import os
 from datetime import date
 from enum import Enum
 from typing import Any, Literal, get_args, get_origin
-from uuid import UUID, uuid5
+from uuid import UUID, uuid4, uuid5
 
 import pytest
 from fastapi import FastAPI
@@ -59,7 +59,6 @@ _ORG_B = "OR-RLSPRP02"
 _BANK_A = "BK-RLSPRP01"
 _BANK_B = "BK-RLSPRP02"
 _USER_NAMESPACE = UUID("2f352abc-f5f9-4ef4-8d68-e7bcf01197a1")
-_BINDING_NAMESPACE = UUID("20d962b5-87dc-4169-b3d2-272745d4edcf")
 _USERS_A = tuple(uuid5(_USER_NAMESPACE, f"{_ORG_A}:{index}") for index in range(3))
 _USERS_B = tuple(uuid5(_USER_NAMESPACE, f"{_ORG_B}:{index}") for index in range(3))
 _FACT_A = UUID("30000000-0000-4000-8000-000000000001")
@@ -214,10 +213,6 @@ def _seed_tenant(
             )
 
 
-def _binding_id(organization_id: str, index: int, suffix: str) -> UUID:
-    return uuid5(_BINDING_NAMESPACE, f"{organization_id}:{index}:{suffix}")
-
-
 def _insert_binding(  # noqa: PLR0913 - the complete binding sentence is explicit
     connection,
     *,
@@ -268,11 +263,15 @@ def _replace_generated_bindings(
     user_ids: tuple[UUID, ...],
     specs: list[tuple[int, RoleBundle, ModuleScope, SensitivityScope, InstitutionScope]],
 ) -> set[str]:
-    binding_ids: set[str] = set()
     with schema.app_engine.begin() as connection:
         _set_tenant(connection, organization_id)
         connection.execute(
-            text("DELETE FROM authorization_bindings WHERE organization_id = :organization_id"),
+            text(
+                "UPDATE authorization_bindings SET status = 'revoked', revoked_at = now(),"
+                " revoked_by_type = 'system', revoked_by_id = 'rls-property',"
+                " revoked_reason = 'Next property example', updated_at = now()"
+                " WHERE organization_id = :organization_id AND status <> 'revoked'"
+            ),
             {"organization_id": organization_id},
         )
         fixed = (
@@ -289,11 +288,10 @@ def _replace_generated_bindings(
                 SensitivityScope.ALL,
             ),
         )
-        for index, (user_id, role, module, sensitivity) in enumerate(fixed):
-            binding_id = _binding_id(organization_id, index, "fixed")
+        for user_id, role, module, sensitivity in fixed:
             _insert_binding(
                 connection,
-                binding_id=binding_id,
+                binding_id=uuid4(),
                 organization_id=organization_id,
                 user_id=user_id,
                 role=role,
@@ -302,12 +300,7 @@ def _replace_generated_bindings(
                 institution_scope=InstitutionScope.ORGANIZATION,
                 bank_id=bank_id,
             )
-            binding_ids.add(str(binding_id))
-
-        for index, (user_slot, role, module, sensitivity, institution_scope) in enumerate(
-            specs,
-            start=len(fixed),
-        ):
+        for user_slot, role, module, sensitivity, institution_scope in specs:
             effective_module = ModuleScope.ACCOUNT if role is RoleBundle.ACCOUNT_ADMIN else module
             effective_sensitivity = (
                 SensitivityScope.ALL if role is RoleBundle.ACCOUNT_ADMIN else sensitivity
@@ -317,10 +310,9 @@ def _replace_generated_bindings(
                 if role is RoleBundle.ACCOUNT_ADMIN
                 else institution_scope
             )
-            binding_id = _binding_id(organization_id, index, "generated")
             _insert_binding(
                 connection,
-                binding_id=binding_id,
+                binding_id=uuid4(),
                 organization_id=organization_id,
                 user_id=user_ids[user_slot],
                 role=role,
@@ -329,8 +321,14 @@ def _replace_generated_bindings(
                 institution_scope=effective_institution_scope,
                 bank_id=bank_id,
             )
-            binding_ids.add(str(binding_id))
-    return binding_ids
+        # Include retained grants in the foreign-identifier leak check too.
+        return {
+            str(identifier)
+            for identifier in connection.scalars(
+                text("SELECT id FROM authorization_bindings WHERE organization_id = :org"),
+                {"org": organization_id},
+            )
+        }
 
 
 def _product_read_routes(app: FastAPI) -> tuple[list[APIRoute], list[APIRoute]]:
