@@ -37,7 +37,13 @@ from tests.irrbb.testing.assertions import (
     assert_irrbb_scaled,
     assert_principal_conserved,
 )
-from tests.irrbb.testing.generators import amounts, behavioural_rates, ladder, zero_rates
+from tests.irrbb.testing.generators import (
+    amounts,
+    behavioural_rates,
+    currency_inputs,
+    ladder,
+    zero_rates,
+)
 
 AS_OF = date(2026, 12, 31)
 PARAMS = sf_parameters()
@@ -54,14 +60,7 @@ _ZERO_RATES = zero_rates
 _ladder = ladder
 
 
-def _currency(currency: str, rate: Decimal, size: Decimal) -> CurrencyInputs:
-    return CurrencyInputs(
-        currency=currency,
-        zero_cc=tuple(rate for _ in range(PARAMS.bucket_count)),
-        fx_to_reporting=Decimal(1),
-        bb_assets_rep=size,
-        bb_liabilities_rep=size,
-    )
+_currency = currency_inputs
 
 
 def _run(
