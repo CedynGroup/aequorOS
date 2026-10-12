@@ -65,3 +65,31 @@ assertions compare scaling, reordering and zero-exposure results without copying
 production ratio formulas. Keep malformed/missing-value examples alongside the
 valid defaults: decoder tests still verify that persisted figures are presented
 without recomputation, including deliberate mismatches and signed-value edges.
+
+## Credit and FX
+
+Credit books use the control-plane bank five-grade classification grid. DPD
+inputs mix performing loans with grade-boundary neighbors; IFRS 9 stages and booked provisions
+remain consistent with classification. Zero facilities are deliberate edges.
+The public classification engine supplies provisions, so the generator does
+not duplicate its formula. Connected-group examples split facilities around
+the seeded large-exposure limit, supplied explicitly as a synthetic Board
+limit to the concentration monitor. That monitor does not invent a limit.
+
+Credit money is four-decimal, and its six-decimal NPL ratio is a fraction,
+not a percentage. Its policy distinguishes NPL fractions from concentration percentage points.
+Classification uses Decimal's HALF_EVEN quantization. FX
+uses four-decimal HALF_UP money and six-decimal percentage ratios. Its one
+policy names currency and ratio tolerances separately so unlike units cannot
+share an epsilon. FX spot bands surround hand-constructed golden fixtures,
+not current market quotes. Currency legs reconcile and round-trip through
+the reporting currency; open positions favor source-register limit neighbors.
+
+Dashboard credit flows match synthetic facility counts and amounts. Realistic PD
+estimates pair observed defaults and loan-months with an independently compounded
+annual PD, rounded to two decimal places in percentage points. The consistency assertion
+allows half that display quantum for annual PD; displayed figures still compare
+exactly. Saved analytical estimates, FX nets and verdicts retain explicitly named
+adversarial inputs: presentation must preserve saved observations even when
+independent values disagree. Existing malformed/missing cases remain alongside
+valid defaults. Status and identity are exact.
