@@ -19,6 +19,7 @@ Actor eligibility and queue attribution are owned by
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -217,6 +218,11 @@ def run_tick(session: Session, job: Job) -> None:
 
 def _enqueue_session_purge(session: Session, org_id: str, now: datetime) -> Job | None:
     """One bounded purge per tenant per hour, including completed jobs."""
+    if session.get_bind().dialect.name == "postgresql":
+        lock_key = int.from_bytes(
+            hashlib.sha256(f"session-purge:{org_id}".encode()).digest()[:8], signed=True
+        )
+        _ = session.execute(select(func.pg_advisory_xact_lock(lock_key)))
     key = f"session-purge:{org_id}:{now.strftime('%Y-%m-%dT%H')}"
     existing = session.scalar(
         select(Job.id)
