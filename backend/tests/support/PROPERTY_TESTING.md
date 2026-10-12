@@ -85,8 +85,11 @@ share an epsilon. FX spot bands surround hand-constructed golden fixtures,
 not current market quotes. Currency legs reconcile and round-trip through
 the reporting currency; open positions favor source-register limit neighbors.
 
-Dashboard credit flows match synthetic facility counts and amounts. Saved
-analytical estimates, FX nets and verdicts also retain explicitly named
+Dashboard credit flows match synthetic facility counts and amounts. Realistic PD
+estimates pair observed defaults and loan-months with an independently compounded
+annual PD, rounded to two decimal places in percentage points. The consistency assertion
+allows half that display quantum for annual PD; displayed figures still compare
+exactly. Saved analytical estimates, FX nets and verdicts retain explicitly named
 adversarial inputs: presentation must preserve saved observations even when
 independent values disagree. Existing malformed/missing cases remain alongside
-valid defaults. Display quanta compare exactly; status and identity are exact.
+valid defaults. Status and identity are exact.

@@ -7,12 +7,13 @@ import fc from "fast-check";
 export const creditEstimates = fc
   .integer({ min: 1, max: 300 })
   .map(
-    (hazard) => [
-      hazard,
-      Math.round((1 - (1 - hazard / 10_000) ** 12) * 10_000),
-      10_000,
-      hazard,
-    ] as const,
+    (hazard) =>
+      [
+        hazard,
+        Math.round((1 - (1 - hazard / 10_000) ** 12) * 10_000),
+        10_000,
+        hazard,
+      ] as const,
   );
 
 /** Explicit decoder/display stress cases: independent stored 0–100% figures.
