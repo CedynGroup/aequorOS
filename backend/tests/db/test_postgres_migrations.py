@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 from alembic.config import Config
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine, make_url
+from sqlalchemy.engine import Connection, Engine, make_url
 
 from alembic import command
 from app.core.config import get_settings
@@ -169,6 +169,12 @@ def migrate_isolated_postgres_schema(
                         "NOINHERIT NOCREATEDB NOREPLICATION CREATEROLE"
                     )
                 )
+                quoted_database = connection.dialect.identifier_preparer.quote_identifier(
+                    cast(str, connection.scalar(text("SELECT current_database()")))
+                )
+                connection.execute(
+                    text(f'GRANT CREATE ON DATABASE {quoted_database} TO "{migration_role}"')
+                )
                 # The per-grant ADMIN/INHERIT/SET options are PostgreSQL 16+. CI
                 # runs 17 and production 15.13, so a fixture pinned to the newer
                 # syntax cannot catch a migration that uses it — which is how one
@@ -214,10 +220,40 @@ def migrate_isolated_postgres_schema(
         clear_database_caches()
         app_engine.dispose()
         with admin_engine.connect() as connection:
+            _drop_worker_view_schema(connection, schema_name)
             connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
             if migration_role is not None:
+                database_name = cast(str, connection.scalar(text("SELECT current_database()")))
+                quoted_database = connection.dialect.identifier_preparer.quote_identifier(
+                    database_name
+                )
+                connection.execute(
+                    text(f'REVOKE CREATE ON DATABASE {quoted_database} FROM "{migration_role}"')
+                )
                 connection.execute(text(f'DROP ROLE "{migration_role}"'))
         admin_engine.dispose()
+
+
+def _drop_worker_view_schema(connection: Connection, schema_name: str) -> None:
+    # The worker's dedicated views live outside the tenant schema;
+    # remove their disposable namespace before dropping its function.
+    function = cast(
+        str | None,
+        connection.scalar(
+            text("SELECT to_regprocedure(:signature)"),
+            {"signature": f'"{schema_name}".aqs_worker_desk_schema()'},
+        ),
+    )
+    if function is not None:
+        worker_schema = cast(
+            str | None,
+            connection.scalar(text(f'SELECT "{schema_name}".aqs_worker_desk_schema()')),
+        )
+        if isinstance(worker_schema, str):
+            quoted_worker_schema = connection.dialect.identifier_preparer.quote_identifier(
+                worker_schema
+            )
+            connection.execute(text(f"DROP SCHEMA IF EXISTS {quoted_worker_schema} CASCADE"))
 
 
 def alembic_config_for_app() -> Config:

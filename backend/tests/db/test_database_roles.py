@@ -36,7 +36,7 @@ ROLES = ("aqs_api", "aqs_worker", "aqs_bi", "aqs_operator", "aqs_audit_verifier"
 MATRIX = Path(__file__).with_name("database_role_grants.json")
 
 
-def privilege_snapshot(connection: Connection) -> dict[str, object]:
+def _schema_privilege_snapshot(connection: Connection) -> dict[str, object]:
     """Effective rights include PUBLIC/inherited grants, so they cannot hide drift."""
     tables: dict[str, dict[str, list[str]]] = {}
     for name, oid in cast(
@@ -122,6 +122,24 @@ def privilege_snapshot(connection: Connection) -> dict[str, object]:
     }
 
 
+def privilege_snapshot(connection: Connection) -> dict[str, object]:
+    """Include the isolated worker view namespace in the same grant ratchet."""
+    result = _schema_privilege_snapshot(connection)
+    view_schema = cast(str, connection.scalar(text("SELECT aqs_worker_desk_schema()")))
+    previous = cast(str, connection.scalar(text("SELECT current_setting('search_path')")))
+    try:
+        connection.execute(
+            text("SELECT set_config('search_path', quote_ident(:schema), true)"),
+            {"schema": view_schema},
+        )
+        result["worker_views"] = _schema_privilege_snapshot(connection)
+    finally:
+        connection.execute(
+            text("SELECT set_config('search_path', :path, true)"), {"path": previous}
+        )
+    return result
+
+
 @pytest.fixture(scope="module")
 def role_schema() -> Iterator[migrations.MigratedPostgresSchema]:
     with pytest.MonkeyPatch.context() as monkeypatch:
@@ -167,7 +185,12 @@ def role_engines(administrator: Engine) -> Iterator[dict[str, Engine]]:
                     )
                 )
                 names.append(name)
-                connection.execute(text(f"GRANT {role} TO {name} WITH INHERIT TRUE, SET TRUE"))
+                options = (
+                    " WITH INHERIT TRUE, SET TRUE"
+                    if (connection.dialect.server_version_info or (0,))[0] >= 16
+                    else ""
+                )
+                connection.execute(text(f"GRANT {role} TO {name}{options}"))
             url = make_url(administrator.url).set(username=name, password=password)
             engines[role] = create_engine(url)
         yield engines

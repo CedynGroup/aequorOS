@@ -69,7 +69,7 @@ chain tables, the definer functions and the shared append-only guard. The chain
 tables force RLS; an owner-only policy allows the definer to append entries and
 advance heads. Runtime roles retain their existing source SELECT/INSERT grants
 and insert through the trigger; they have no direct chain write or helper EXECUTE
-grant. The all-tenant worker has SELECT on chain entries and heads. Source-table
+grant. Worker access follows the verification boundary below. Source-table
 ownership also prevents runtime credentials from disabling the source guards;
 ownership of the shared guard prevents replacing its implementation.
 
@@ -81,9 +81,26 @@ Set `AUDIT_INTEGRITY_ENABLED=true` on the core worker. Starting with its first
 poll, it runs a single platform task independent of tenant ticks or bank
 provisioning. A singleton `audit_integrity_schedule` row records the next hour
 boundary and a recovery epoch; a row lock with SKIP LOCKED and a committed advance coordinates worker
-replicas and restarts. The worker requires SELECT/UPDATE on that schedule row.
-AI and BI workers do not run the task. The task checks both full streams using
-an all-tenant BYPASSRLS role and records successful counts in operational logs.
+replicas and restarts. Migration `202610120100` exposes this coordination and full-stream
+verification through `aqs_worker_audit_check`, with a pinned search path and UTC
+hash serialization. It returns only stream names, entry counts, validity and the
+recovery epoch; `aqs_worker` has no unscoped audit-source visibility or direct chain
+or schedule-table grants. Its tenant-scoped audit SELECT/INSERT rights remain.
+The function remains owned by NOLOGIN `aqs_owner`: it must lock and update the
+schedule, which the read-only `aqs_audit_verifier` cannot do. The deployment owner
+also lacks SET membership in the verifier role. The migration grants `aqs_owner`
+explicit SELECT and SELECT-only RLS policies on both audit sources, chain entries,
+chain heads and the schedule, plus UPDATE on the schedule's `run_after` and
+`recovery_epoch` columns with an owner-only UPDATE policy. These permissions work
+with NOINHERIT on PostgreSQL 15 without relying on audit-owner membership.
+It also grants the owner EXECUTE on the append-only guard so partition creation
+can clone the query-log trigger; audit ownership and runtime refusals remain intact.
+Downgrade removes these policies, schedule/chain privileges and guard execution,
+retaining the owner's pre-existing source SELECT grants.
+Existing bypass queue writers use this function after migration;
+before migration they retain their direct verification path. Credential activation
+follows [the role handoff runbook](../../docs/ops/database-roles.md#worker-compatibility-migration).
+AI and BI workers do not run the task. Successful counts appear in operational logs.
 Tenant-readable job progress carries only its existing tenant-local scheduling
 fields. Verification recomputes every hash from the source row, verifies links
 and sequence continuity, and compares row count and final hash to the protected head. Content edits,
@@ -165,20 +182,22 @@ Complete [deployment follow-up #509](https://github.com/CedynGroup/aequorOS/issu
 before deploying this migration in production or staging:
 
 - Give the migration container its own `MIGRATION_DATABASE_URL`, distinct from
-  API `DATABASE_URL`, `WORKER_DATABASE_URL`, `OPERATOR_DATABASE_URL` and
+  API `DATABASE_URL`, `PREAUTH_DATABASE_URL`, `WORKER_DATABASE_URL`, `OPERATOR_DATABASE_URL` and
   `BI_DATABASE_URL`. Alembic refuses a missing migration URL or a shared role in
   production/staging; local/test runs retain the existing URL fallback. Runtime
   containers must never receive migration credentials.
 - Prepare migration roles and owner membership through the
   [role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order)
   before running Alembic.
-- Keep worker/operator all-tenant BYPASSRLS identities separate from the
-  migrator. Existing BYPASSRLS roles receive chain SELECT and schedule
+- Keep runtime identities separate from the migrator and follow
+  [the role activation runbook](../../docs/ops/database-roles.md#worker-and-operator-activation).
+  Existing BYPASSRLS roles receive chain SELECT and schedule
   SELECT/UPDATE during migration. Provision those roles first, or apply those
   narrow grants afterward when provisioning them. Preserve existing authorized
   source SELECT/INSERT grants; grant no chain INSERT/UPDATE/DELETE/TRUNCATE and
-  no audit-chain definer EXECUTE to runtime identities. Avoid blanket
-  post-migration grants and bootstrap ownership reassignment.
+  no audit-chain helper EXECUTE to runtime identities. The worker verification
+  function is the separate boundary described above. Avoid blanket post-migration grants
+  and bootstrap ownership reassignment.
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,
   truncation and function replacement fail. Confirm one sweep with zero banks
@@ -214,8 +233,8 @@ voiding while refusing changes to the register-state digest, signature deletion
 and content-digest changes under temporary-table shadowing and altered search paths.
 
 Apply the [deployment role and grant requirements](#required-deployment-follow-up)
-to filing seals too. The worker's BYPASSRLS privilege does not grant permission
-to alter evidence.
+to filing seals too. Neither worker platform-function access nor legacy BYPASSRLS
+grants permission to alter evidence.
 
 ## Write-once objects and backups
 

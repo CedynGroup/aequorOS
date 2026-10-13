@@ -53,8 +53,8 @@ def auth_client(
     rolled-back connection.
 
     login / sso / refresh run on the cross-tenant system session (the BYPASSRLS
-    worker role in production, ``get_worker_sessionmaker``). Under the app-role
-    URL that would open a SECOND connection outside the test transaction — the
+    pre-authentication credential in production, ``get_preauth_sessionmaker``).
+    Under the app-role URL that would open a SECOND connection outside the test transaction — the
     login side-effects (throttle counters, last_login_at, SSO linking, JIT
     stubs) would COMMIT to the primary — and see no users at all under RLS.
     Bind it to the shared connection scoped to the real org instead: every auth
@@ -64,7 +64,7 @@ def auth_client(
     def _scoped_system_session() -> Session:
         return _real_bound_sessionmaker(info={"organization_id": REAL_ORG_ID})
 
-    monkeypatch.setattr(auth_api, "get_worker_sessionmaker", lambda: _scoped_system_session)
+    monkeypatch.setattr(auth_api, "get_preauth_sessionmaker", lambda: _scoped_system_session)
     return real_client
 
 
