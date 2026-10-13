@@ -58,7 +58,8 @@ function stepIndexFor(
   hasReference: boolean,
 ): number {
   if (latestPollStatus === "acknowledged") return 3;
-  if (latestPollStatus === "rejected" || latestPollStatus === "declined") return 3;
+  if (latestPollStatus === "rejected" || latestPollStatus === "declined")
+    return 3;
   if (latestPollStatus === "pending") return 2;
   return hasReference ? 1 : 0;
 }

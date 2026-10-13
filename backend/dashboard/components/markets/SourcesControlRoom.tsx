@@ -49,7 +49,9 @@ function availableMap(
   };
   if (!planes) return map;
   for (const source of MARKET_DATA_SOURCES) {
-    const plane = planes.planes.find((candidate) => candidate.source === source);
+    const plane = planes.planes.find(
+      (candidate) => candidate.source === source,
+    );
     map[source] = plane ? plane.available : false;
   }
   return map;

@@ -238,7 +238,10 @@ export default function ConnectionCard({
           </ActionButton>
           <ActionButton
             onClick={() =>
-              run(() => validate.mutateAsync(connection.id), "Credential health check completed.")
+              run(
+                () => validate.mutateAsync(connection.id),
+                "Credential health check completed.",
+              )
             }
             disabled={busy || isDisabled}
             icon={<CheckCircle2 size={13} aria-hidden />}
@@ -259,7 +262,10 @@ export default function ConnectionCard({
           {isDisabled ? (
             <ActionButton
               onClick={() =>
-                run(() => enable.mutateAsync(connection.id), "Connection re-validated and enabled.")
+                run(
+                  () => enable.mutateAsync(connection.id),
+                  "Connection re-validated and enabled.",
+                )
               }
               disabled={busy}
               icon={<PlayCircle size={13} aria-hidden />}

@@ -169,7 +169,12 @@ function CrmEditor({
 
   const currentByClass = useMemo(
     () =>
-      new Map(register.haircuts.map((row) => [row.collateralClass, String(row.haircutPct)])),
+      new Map(
+        register.haircuts.map((row) => [
+          row.collateralClass,
+          String(row.haircutPct),
+        ]),
+      ),
     [register],
   );
 

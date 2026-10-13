@@ -188,7 +188,9 @@ function ThresholdEditor({
   // Editable rows: the resolved bank-class thresholds, plus an adoption row
   // for each limit-shaped extra code the Board has not adopted yet.
   const rows = useMemo(() => {
-    const bankRows = register.thresholds.filter((r) => r.institutionClass === "bank");
+    const bankRows = register.thresholds.filter(
+      (r) => r.institutionClass === "bank",
+    );
     const present = new Set(bankRows.map((r) => r.thresholdCode));
     const extras = ADOPTABLE_EXTRA_CODES.filter((code) => !present.has(code));
     return { bankRows, extras };
@@ -196,7 +198,8 @@ function ThresholdEditor({
 
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
-    for (const row of rows.bankRows) initial[row.thresholdCode] = String(row.thresholdPct);
+    for (const row of rows.bankRows)
+      initial[row.thresholdCode] = String(row.thresholdPct);
     for (const code of rows.extras) initial[code] = "";
     return initial;
   });
@@ -207,7 +210,12 @@ function ThresholdEditor({
 
   const currentByCode = useMemo(
     () =>
-      new Map(rows.bankRows.map((row) => [row.thresholdCode, String(row.thresholdPct)])),
+      new Map(
+        rows.bankRows.map((row) => [
+          row.thresholdCode,
+          String(row.thresholdPct),
+        ]),
+      ),
     [rows],
   );
 

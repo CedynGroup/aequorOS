@@ -111,7 +111,9 @@ export default function AddConnectionPanel({
       setDisplayName(`Core ${modeName(key)}`);
     }
     if (!endpoint) {
-      setEndpoint(MODES.find((option) => option.key === key)?.endpointHint ?? "");
+      setEndpoint(
+        MODES.find((option) => option.key === key)?.endpointHint ?? "",
+      );
     }
   };
 

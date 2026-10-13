@@ -124,7 +124,9 @@ export default function RatesBoard({
           !claimed.has(`${index.indexCode}-${index.scenario}`) &&
           group.matches(index.indexCode),
       );
-      members.forEach((index) => claimed.add(`${index.indexCode}-${index.scenario}`));
+      members.forEach((index) =>
+        claimed.add(`${index.indexCode}-${index.scenario}`),
+      );
       return { group, members };
     })
     .filter(({ members }) => members.length > 0);

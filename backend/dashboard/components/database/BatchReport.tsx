@@ -81,7 +81,11 @@ function ReportSection({ data }: { data: Record<string, unknown> }) {
           if (value.length === 0) {
             return <StatChip key={key} label={key} value={0} />;
           }
-          if (value.every((item) => typeof item === "string" || typeof item === "number")) {
+          if (
+            value.every(
+              (item) => typeof item === "string" || typeof item === "number",
+            )
+          ) {
             return (
               <div key={key}>
                 <p className="text-caption font-medium text-slate mb-1">

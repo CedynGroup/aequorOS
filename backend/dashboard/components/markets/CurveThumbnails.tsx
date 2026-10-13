@@ -22,7 +22,9 @@ function CurveThumbnail({
   curve: YieldCurveViewRead;
   onOpen?: (curveName: string) => void;
 }) {
-  const sorted = [...curve.points].sort((a, b) => a.tenorMonths - b.tenorMonths);
+  const sorted = [...curve.points].sort(
+    (a, b) => a.tenorMonths - b.tenorMonths,
+  );
   const series = sorted.map((point) => num(point.rate) * 100);
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
@@ -74,7 +76,9 @@ export default function CurveThumbnails({
   curves: YieldCurveViewRead[];
   onOpen?: (curveName: string) => void;
 }) {
-  const sorted = [...curves].sort((a, b) => a.curveName.localeCompare(b.curveName));
+  const sorted = [...curves].sort((a, b) =>
+    a.curveName.localeCompare(b.curveName),
+  );
   return (
     <div className="overflow-x-auto border border-border rounded-lg bg-surface-raised">
       <div className="min-w-3xl">

@@ -253,7 +253,13 @@ export function SsoOutcomeNotice({ outcome }: { outcome: string }) {
 export function PreviewError({ error }: { error: unknown }) {
   const code = isApiError(error) ? error.errorCode : null;
   const help = attestationErrorHelp(code);
-  if (!help) return <ErrorPanel error={error} title="Could not load the certification preview" />;
+  if (!help)
+    return (
+      <ErrorPanel
+        error={error}
+        title="Could not load the certification preview"
+      />
+    );
   return (
     <div
       role="alert"

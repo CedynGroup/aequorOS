@@ -141,8 +141,10 @@ function PlaneColumnHeader({ plane }: { plane: MarketDataPlane }) {
 }
 
 function deltaText(entry: OverlayDeltaEntry): string {
-  if (entry.delta_bps !== undefined) return `${num(entry.delta_bps).toFixed(1)} bps`;
-  if (entry.delta !== undefined) return `${num(entry.delta) >= 0 ? "+" : ""}${num(entry.delta)}`;
+  if (entry.delta_bps !== undefined)
+    return `${num(entry.delta_bps).toFixed(1)} bps`;
+  if (entry.delta !== undefined)
+    return `${num(entry.delta) >= 0 ? "+" : ""}${num(entry.delta)}`;
   if (entry.adjusted !== undefined && entry.base !== undefined) {
     return `${num(entry.base)} → ${num(entry.adjusted)}`;
   }
@@ -165,7 +167,8 @@ export default function PlaneComparison({
 }) {
   // Preserve the AequorOS → Bank → Vendor order; keep only planes present.
   const bySource = new Map(data.planes.map((plane) => [plane.source, plane]));
-  const planes = MARKET_DATA_SOURCES.map((source) => bySource.get(source),
+  const planes = MARKET_DATA_SOURCES.map((source) =>
+    bySource.get(source),
   ).filter((plane): plane is MarketDataPlane => plane !== undefined);
 
   // Pivot: union of row keys across planes, seeded from the selected plane so

@@ -9,9 +9,9 @@
  * stylesheet is planned; until then keep the values in sync by hand.
  *
  * The console is DARK-ONLY: the dashboard's `:root[data-theme='light']`
- * block is intentionally dropped (staff tooling, no theme toggle). Every
- * color token is stored as space-separated RGB channels so Tailwind opacity
- * modifiers keep working (`text-navy/85` → `rgb(var(--heading) / .85)`).
+ * block is intentionally dropped (staff tooling, no theme toggle). The
+ * `@theme` block below maps runtime RGB channel tokens to Tailwind colors,
+ * including opacity modifiers such as `text-navy/85`.
  * ------------------------------------------------------------------------- */
 
 :root,
@@ -73,7 +73,7 @@
 }
 
 /*
- * Tailwind theme. Every value points at a runtime token above, so the theme is
+ * Tailwind theme. Color and shadow mappings use runtime tokens above, so it is
  * `inline` (utilities read the runtime token directly) and `reference`
  * (Tailwind emits no `--color-*`/`--shadow-*` variables of its own, which would
  * otherwise shadow tokens such as `--shadow-subtle`).

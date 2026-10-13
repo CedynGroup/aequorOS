@@ -49,7 +49,9 @@ export default function TemplatesPanel() {
       config.status === "active" && config.sourceSystem === "EXCEL_CSV",
   );
   const mappingReady = activeConfig?.name === requiredName;
-  const starter = STARTER_TEMPLATES.find((template) => template.name === requiredName);
+  const starter = STARTER_TEMPLATES.find(
+    (template) => template.name === requiredName,
+  );
   const activeFormat = FORMATS.find((entry) => entry.key === format)!;
 
   return (
