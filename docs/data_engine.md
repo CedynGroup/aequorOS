@@ -621,15 +621,19 @@ After acceptance, every attempted identity-field change produces a non-configura
 
 ### 8.4 Audit Log
 
-Separate from the lineage graph, a linear audit log records every user action:
+Separate from the lineage graph, `audit_events` records selected business and
+authorization actions. Database-enforced audit chains, append-only guards and
+verification follow [the tamper-evident records contract](../backend/docs/tamper_evident_records.md#audit-chain).
+The storage access recorder has a separate hash chain. Neither establishes
+complete login history, a bank SIEM feed or an approved operational retention
+period.
 
-- Login and logout
-- Report generation
-- Configuration changes (mapping, validation rules, assumptions)
-- Manual overrides
-- Data acceptance decisions (accepting a batch with warnings, forcing through an error, etc.)
-- Model retraining events
-- Any change to a canonical record
+**Planned:** login history and account audit visibility under
+[#297](https://github.com/CedynGroup/aequorOS/issues/297) and
+[#131](https://github.com/CedynGroup/aequorOS/issues/131); bank-visible staff
+access under [#351](https://github.com/CedynGroup/aequorOS/issues/351).
+**To confirm:** the security owner must provide the log coverage, SIEM delivery
+plan and retention schedule. See the [BoG evidence pack](compliance/bog-evidence-pack.md).
 
 Database audit-chain enforcement and verification are governed by
 [the tamper-evident records contract](../backend/docs/tamper_evident_records.md).
@@ -965,48 +969,57 @@ For banks with international operations, SWIFT message feeds provide interbank p
 
 ### 14.1 Multi-Tenancy
 
-- Tenant identity, mandatory query filters and database row-level security follow
-  [the tenancy model](../ARCHITECTURE.md#2-tenancy-model).
-- Canonical metadata follows [§4.3](#43-mandatory-metadata-columns); database parent
-  ownership follows the [composite-FK contract](../CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern).
-- Cross-tenant queries impossible except through explicit, audited, aggregated-only administrative interfaces.
+[Architecture §2](../ARCHITECTURE.md#2-tenancy-model) owns the organization RLS
+boundary and bank query scope. Canonical metadata follows
+[§4.3](#43-mandatory-metadata-columns); database parent ownership follows the
+[composite-FK contract](../CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern).
+Staff access is not an aggregated-only interface; deployment confirmations and
+bank-visible access evidence are requested in the
+[BoG evidence pack §4](compliance/bog-evidence-pack.md#4-staff-and-bank-user-access).
 
 ### 14.2 Encryption
 
-- Bank files at rest: governed by
-  [the bank key setup guide](../backend/docs/bank_key_setup.md).
-- In transit: governed by
-  [the transport control and evidence contract](../backend/docs/transport_security.md).
-- Sensitive canonical fields (customer PII where present): field-level encryption in addition to database encryption.
-- PII masking in non-production environments; synthetic data only for development and testing.
+[The bank encryption contract](../backend/docs/bank_encryption.md) owns connected
+bank-key object access and the optional rollout boundary.
+[The transport control and evidence contract](../backend/docs/transport_security.md)
+owns service transport enforcement and required deployment evidence. These
+implementations do not establish active pilot key custody, backup coverage or
+TLS 1.3 on every connection. The
+[BoG evidence pack §5](compliance/bog-evidence-pack.md#5-encryption-and-key-custody)
+records the dated baseline and the asset-by-asset confirmations still required.
+Environment isolation and masking evidence remain owner confirmations; see
+[§9](compliance/bog-evidence-pack.md#9-supporting-assurance-documents).
 
 ### 14.3 Access Control
 
-- SSO integration with bank Active Directory / LDAP.
-- MFA required for all users.
-- Role-based access control with defined roles: CRO, Treasurer, ALCO member, risk analyst, IT admin, external auditor (read-only).
-- Segregation of duties: maker/checker workflow for sensitive operations (mapping changes, validation rule changes, manual overrides above threshold).
+The [SSO onboarding guide](sso-onboarding.md#security-notes-your-reviewers-will-ask-about)
+owns bank sign-in guidance, including local password fallback and IdP MFA.
+Universal MFA is not established. The
+[authorization foundation](../backend/docs/authorization_foundation.md#standing-rules-at-a-glance)
+owns scoped authority; the
+[BoG evidence pack §4](compliance/bog-evidence-pack.md#4-staff-and-bank-user-access)
+records staff access gaps and planned controls.
 
 ### 14.4 Data Residency
 
-- AWS Cape Town region for African customers requiring in-country residency.
-- Configurable per-institution.
-- Analytical/aggregated data may reside elsewhere if permitted; transactional data respects residency requirements.
+Ghana residency and per-bank region selection are not established. Deployment
+locations, transfer questions and planned residency work are owned by the
+[BoG evidence pack §2](compliance/bog-evidence-pack.md#2-hosting-backups-and-sub-processors).
 
 ### 14.5 Compliance Certifications
 
-- SOC 2 Type II: target Year 2.
-- ISO 27001: follow SOC 2.
-- Ghana Data Protection Act compliance from day one.
-- Banking secrecy compliance: no cross-institution data visibility, no data reuse without consent.
+[README, “License & security”](../README.md#license--security) owns the public
+certification status. The
+[BoG evidence pack §9](compliance/bog-evidence-pack.md#9-supporting-assurance-documents)
+records planned independent assessment, privacy and counsel work and the
+outstanding registration and assurance evidence. Compliance is not asserted.
 
 ### 14.6 Business Continuity
 
-- RPO ≤ 1 hour (backup frequency).
-- RTO ≤ 4 hours (DR failover).
-- Uptime SLA: 99.9%.
-- Multi-AZ deployment with automatic failover.
-- Quarterly DR drills with documented results.
+The [BoG evidence pack §8](compliance/bog-evidence-pack.md#8-recovery-evidence-and-service-objectives)
+owns recovery evidence, its limits and the planned restore, backup and failover
+issues. A one-hour RPO, four-hour service RTO, 99.9% SLA, Multi-AZ failover and
+quarterly drills are not achieved guarantees.
 
 ---
 

@@ -322,6 +322,10 @@ test.describe("session cookie hygiene", () => {
         env: {
           ...process.env,
           NEXT_DIST_DIR: distDir,
+          NEXT_FONT_GOOGLE_MOCKED_RESPONSES: path.join(
+            dashboardDir,
+            "e2e/support/google-font-responses.cjs",
+          ),
           AUTH_URL: "http://localhost:3001",
           AUTH_SECRET: E2E_AUTH_SECRET,
           AUTH_TRUST_HOST: "true",
@@ -385,6 +389,10 @@ test.describe("session cookie hygiene", () => {
         env: {
           ...process.env,
           NEXT_DIST_DIR: ".next-outage",
+          NEXT_FONT_GOOGLE_MOCKED_RESPONSES: path.join(
+            dashboardDir,
+            "e2e/support/google-font-responses.cjs",
+          ),
           NEXT_PUBLIC_RISK_API_BASE_URL: `http://127.0.0.1:${backendPort}/api/v1`,
           AUTH_SECRET: E2E_AUTH_SECRET,
           AUTH_TRUST_HOST: "true",

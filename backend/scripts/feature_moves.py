@@ -32,8 +32,14 @@ _TEXT_SUFFIXES = (
     frozenset({".py", ".md", ".toml", ".yml", ".yaml", ".ini", ".cfg"}) | _SCRIPT_SUFFIXES
 )
 _SKIPPED_PREFIXES = ("packages/",)
-#: Files that name old paths on purpose: this script and its own tests.
-_FROZEN_FILES = frozenset({"scripts/feature_moves.py", "tests/scripts/test_feature_moves.py"})
+#: Repository-relative files that name old paths on purpose, including dated evidence.
+_FROZEN_FILES = frozenset(
+    {
+        "backend/scripts/feature_moves.py",
+        "backend/tests/scripts/test_feature_moves.py",
+        "docs/compliance/bog-evidence-pack.md",
+    }
+)
 #: The architecture guards address source files relative to ``app/``.
 _ARCHITECTURE_DIR = "tests/architecture/"
 _LINE_LENGTH = 100
@@ -675,7 +681,7 @@ def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
         relative = (
             path.relative_to(backend).as_posix() if path.is_relative_to(backend) else path.name
         )
-        if relative in _FROZEN_FILES:
+        if path.relative_to(backend.parent).as_posix() in _FROZEN_FILES:
             continue
         original = path.read_text(encoding="utf-8")
         updated = rewrite_text(relative, original, rename, backend, frozen)
