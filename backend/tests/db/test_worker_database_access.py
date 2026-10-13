@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Generator, Iterator, Mapping
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from inspect import unwrap
 from pathlib import Path
 from typing import cast
 from uuid import uuid4
@@ -37,8 +38,8 @@ from app.core.key_management.types import KeyReference, KeyUnavailableError
 from app.db import session as database
 from app.db.session import get_storage_session, worker_tenant_context
 from app.identity.api import auth as auth_api
-from app.identity.service import sso_config
 from app.identity.public import Bank
+from app.identity.service import sso_config
 from app.models import (
     AuditEvent,
     DeskDetermination,
@@ -185,7 +186,7 @@ def test_live_data_session_preserves_readonly_tenant_across_transactions(
         live_data, "_URL", role_engines["aqs_api"].url.render_as_string(hide_password=False)
     )
     monkeypatch.setenv("LIVE_DATA_ORG_ID", ORG_1)
-    fixture = cast(Callable[[], Iterator[Session]], getattr(live_data.live_db, "__wrapped__"))
+    fixture = cast(Callable[[], Generator[Session]], unwrap(live_data.live_db))
     sessions = fixture()
     try:
         session = next(sessions)
@@ -792,38 +793,48 @@ def test_worker_query_log_partition_after_owner_handoff_without_audit_inheritanc
     with administrator.connect() as admin, admin.begin():
         if (admin.dialect.server_version_info or (0,))[0] >= 16:
             admin.execute(text("GRANT aequoros_audit_owner TO aqs_owner WITH INHERIT FALSE"))
-        assert admin.scalar(
-            text("SELECT pg_has_role('aqs_owner', 'aequoros_audit_owner', 'USAGE')")
-        ) is False
+        assert (
+            admin.scalar(text("SELECT pg_has_role('aqs_owner', 'aequoros_audit_owner', 'USAGE')"))
+            is False
+        )
         admin.execute(text("ALTER TABLE bi_query_log OWNER TO aqs_owner"))
         admin.execute(
             text("ALTER FUNCTION bi_ensure_month_partition(regclass,date) OWNER TO aqs_owner")
         )
-        assert admin.scalar(
-            text(
-                "SELECT pg_get_userbyid(proowner) FROM pg_proc "
-                "WHERE oid='aequoros_append_only_guard()'::regprocedure"
+        assert (
+            admin.scalar(
+                text(
+                    "SELECT pg_get_userbyid(proowner) FROM pg_proc "
+                    "WHERE oid='aequoros_append_only_guard()'::regprocedure"
+                )
             )
-        ) == "aequoros_audit_owner"
+            == "aequoros_audit_owner"
+        )
         admin.execute(text("SET LOCAL ROLE aqs_worker"))
         with Session(admin, join_transaction_mode="create_savepoint") as session:
             session.info.update(organization_id=ORG_1, worker_access=True)
             created = partitions.ensure_month_partition(session, "bi_query_log", date(2025, 3, 1))
             assert created is not None
             session.commit()
-            assert session.scalar(
-                text(
-                    "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class "
-                    "WHERE oid=CAST(:oid AS regclass)"
-                ),
-                {"oid": created},
-            ) is True
-            assert session.scalar(
-                text(
-                    "SELECT has_function_privilege(current_user, "
-                    "'aequoros_append_only_guard()', 'EXECUTE')"
+            assert (
+                session.scalar(
+                    text(
+                        "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class "
+                        "WHERE oid=CAST(:oid AS regclass)"
+                    ),
+                    {"oid": created},
                 )
-            ) is False
+                is True
+            )
+            assert (
+                session.scalar(
+                    text(
+                        "SELECT has_function_privilege(current_user, "
+                        "'aequoros_append_only_guard()', 'EXECUTE')"
+                    )
+                )
+                is False
+            )
         admin.rollback()
 
 
@@ -863,7 +874,9 @@ def test_worker_audit_check_without_inherited_audit_ownership(administrator: Eng
     with administrator.connect() as admin, admin.begin():
         if (admin.dialect.server_version_info or (0,))[0] >= 16:
             admin.execute(text("GRANT aequoros_audit_owner TO aqs_owner WITH INHERIT FALSE"))
-        assert admin.scalar(text("SELECT rolinherit FROM pg_roles WHERE rolname='aqs_owner'")) is False
+        assert (
+            admin.scalar(text("SELECT rolinherit FROM pg_roles WHERE rolname='aqs_owner'")) is False
+        )
         assert (
             admin.scalar(text("SELECT pg_has_role('aqs_owner', 'aequoros_audit_owner', 'USAGE')"))
             is False
@@ -894,7 +907,9 @@ def test_worker_audit_check_without_inherited_audit_ownership(administrator: Eng
         before = cast(
             int,
             admin.execute(
-                text("UPDATE audit_integrity_schedule SET run_after = :now RETURNING recovery_epoch"),
+                text(
+                    "UPDATE audit_integrity_schedule SET run_after = :now RETURNING recovery_epoch"
+                ),
                 {"now": NOW},
             ).scalar_one(),
         )
@@ -1328,29 +1343,15 @@ def test_split_credentials_preserve_authentication_and_operator_visibility(
     app = FastAPI()
     app.include_router(auth_api.router, prefix="/api/v1")
     with TestClient(app) as client:
-        login = client.post("/api/v1/auth/login", json={"email": email, "password": password})
-        assert login.status_code == 200, login.text
-        tokens = cast(dict[str, object], login.json())
-        refresh = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
-        )
-        assert refresh.status_code == 200, refresh.text
-        rotated = cast(dict[str, object], refresh.json())
-        logout = client.post(
-            "/api/v1/auth/logout", json={"refresh_token": rotated["refresh_token"]}
-        )
-        assert logout.status_code == 204, logout.text
-        refused = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": rotated["refresh_token"]}
-        )
-        assert refused.status_code == 401, refused.text
+        assert_password_session_lifecycle(client, email, password)
         assert_sso_lookup(client, email, user_id, monkeypatch)
     with database.get_preauth_sessionmaker()() as session:
         assert session.scalar(text("SELECT current_user")) == legacy_engines["preauth"].url.username
         assert session.scalar(text("SHOW application_name")) == "aequoros-preauth"
-        assert session.scalar(
-            text("SELECT rolsuper FROM pg_roles WHERE rolname=current_user")
-        ) is False
+        assert (
+            session.scalar(text("SELECT rolsuper FROM pg_roles WHERE rolname=current_user"))
+            is False
+        )
     assert resolve_operator_database_url() == (operator_url if explicit else legacy_url)
     with get_operator_sessionmaker()() as session:
         assert set(session.scalars(select(Organization.id))) == {ORG_1, ORG_2}
@@ -1375,6 +1376,19 @@ def test_split_credentials_preserve_authentication_and_operator_visibility(
             session.execute(text("SELECT * FROM operator_users"))
     database.get_engine(api_url).dispose()
     get_settings.cache_clear()
+
+
+def assert_password_session_lifecycle(client: TestClient, email: str, password: str) -> None:
+    login = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    assert login.status_code == 200, login.text
+    tokens = cast(dict[str, object], login.json())
+    refresh = client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    assert refresh.status_code == 200, refresh.text
+    rotated = cast(dict[str, object], refresh.json())
+    logout = client.post("/api/v1/auth/logout", json={"refresh_token": rotated["refresh_token"]})
+    assert logout.status_code == 204, logout.text
+    refused = client.post("/api/v1/auth/refresh", json={"refresh_token": rotated["refresh_token"]})
+    assert refused.status_code == 401, refused.text
 
 
 def assert_sso_lookup(
