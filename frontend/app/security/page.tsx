@@ -101,15 +101,16 @@ const facts = [
     body: (
       <>
         Stored integration credentials use an encrypted vault. Object storage
-        supports server-side encryption with a configured key. Planned work
-        covers bank-held keys for{" "}
+        supports server-side encryption with a configured key. Optional
+        bank-held key encryption is implemented for{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/352"
         >
           files
-        </a>
-        ,{" "}
+        </a>{" "}
+        when a bank connects its own key. Active key custody requires deployment
+        confirmation. Planned work covers bank-held keys for{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/353"
