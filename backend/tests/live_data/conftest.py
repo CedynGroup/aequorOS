@@ -6,10 +6,9 @@ covered, the live engine current. It is opt-in and physically cannot write:
 
     LIVE_DATA_DATABASE_URL=<postgresql+psycopg URL> uv run pytest tests/live_data -q
 
-Use the BYPASSRLS worker URL (WORKER_DATABASE_URL in backend/.env) so FORCE-RLS
-tables are visible; with a tenant-scoped app role, set LIVE_DATA_ORG_ID to the
-organization UUID and the session pins the RLS GUC instead. A dedicated env var
-(never DATABASE_URL) keeps the hermetic suite's leak guard intact.
+Credential selection and tenant visibility follow
+``backend/README.md#test-databases-and-the-primary-database``.
+A dedicated env var (never DATABASE_URL) keeps the hermetic suite's leak guard intact.
 """
 
 from __future__ import annotations
@@ -51,8 +50,9 @@ def live_db() -> Iterator[Session]:
     visible = session.execute(text("SELECT count(*) FROM organizations")).scalar()
     if not visible:
         pytest.fail(
-            "The connected role sees no organizations — use the BYPASSRLS worker URL "
-            "or set LIVE_DATA_ORG_ID so FORCE-RLS tables are visible."
+            "The connected role sees no organizations. Configure LIVE_DATA_DATABASE_URL "
+            "and LIVE_DATA_ORG_ID following "
+            "backend/README.md#test-databases-and-the-primary-database."
         )
     try:
         yield session

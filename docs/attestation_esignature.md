@@ -214,20 +214,10 @@ transaction**. 126 call sites; the regulatory-reporting family covers
 generation, supersession, validation, status changes, approvals, submissions,
 exports, downloads and resubmissions.
 
-**Append-only is a convention, not a guarantee.** Verified against the live
-primary:
-
-- No `UPDATE`/`DELETE` against `audit_events` in application code, and the seed
-  cleanup allowlist deliberately excludes it.
-- **Zero triggers exist in the entire database.**
-- The application role owns the table with ACL `arwdDxt` — it holds **UPDATE,
-  DELETE and TRUNCATE**. The worker role additionally has `BYPASSRLS`.
-- The single RLS policy is `FOR ALL` — it scopes writes to the tenant, it does
-  not forbid them. No restrictive policy, no `FOR SELECT`-only policy.
-- `actor_user_id` is `ON DELETE SET NULL`, so deleting a user silently strips
-  attribution from their history. Approval and package tables store the actor
-  as a **bare UUID with no FK at all** and no name snapshot — the UI degrades to
-  `userId.slice(0, 8)` when the user is gone.
+Audit immutability, actor custody and verification follow
+[the audit-chain contract](../backend/docs/tamper_evident_records.md#audit-chain).
+Database ownership, runtime grants and credential activation follow
+[the role handoff runbook](ops/database-roles.md).
 
 Tenant isolation, by contrast, is genuinely strong: 85 of 89 tables are RLS
 `ENABLE` **and** `FORCE`, the GUC is transaction-local and fails closed when

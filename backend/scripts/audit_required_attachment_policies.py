@@ -56,8 +56,10 @@ def _engine() -> Engine:
     url = os.environ.get("LIVE_DATA_DATABASE_URL") or os.environ.get("WORKER_DATABASE_URL")
     if not url:
         sys.exit(
-            "Set LIVE_DATA_DATABASE_URL (or WORKER_DATABASE_URL) to the BYPASSRLS "
-            "worker URL. This script reads every tenant and writes nothing."
+            "Set LIVE_DATA_DATABASE_URL to an authorized all-tenant read credential; "
+            "aqs_worker has no unscoped tenant visibility. See "
+            "docs/ops/database-roles.md#worker-compatibility-migration. "
+            "This script reads every tenant and writes nothing."
         )
     # psycopg v3 is what is installed; a bare postgresql:// URL selects the
     # absent psycopg2 driver and fails at connect time.

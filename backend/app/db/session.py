@@ -280,10 +280,8 @@ def force_rls_suspended(connection: Connection, *table_names: str) -> Iterator[t
     A data migration rewrites rows for ALL tenants at once, so it cannot set
     ``app.organization_id`` to any single value; on a FORCE-RLS table a
     tenant-scoped role's ``UPDATE`` therefore matches zero rows and reports
-    success. Alembic runs as whichever role owns ``DATABASE_URL``, which in
-    production is deliberately tenant-scoped — that is audit finding P0-18, and
-    the remediation it shipped with was "remember to re-run it by hand under
-    ``WORKER_DATABASE_URL``".
+    success. Migration credentials and the ``aqs_owner`` handoff follow
+    ``docs/ops/database-roles.md#migration-and-local-development-order``.
 
     This lifts FORCE for the duration instead. RLS stays ENABLED, so any other
     session keeps its policies; only the table OWNER — which is the role that
@@ -311,8 +309,9 @@ def force_rls_suspended(connection: Connection, *table_names: str) -> Iterator[t
             "Cross-tenant data migration cannot see tenant rows: "
             f"{', '.join(suspended)} enforce row-level security and the current role "
             "neither bypasses it nor owns the table, so every write would silently "
-            "match zero rows. Re-run this migration with the BYPASSRLS worker role "
-            "(WORKER_DATABASE_URL)."
+            "match zero rows. Configure MIGRATION_DATABASE_URL with the deployment "
+            "migration credential and owner membership described in "
+            "docs/ops/database-roles.md#migration-and-local-development-order."
         )
         raise RlsBlindError(msg) from exc
 
