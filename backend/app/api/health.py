@@ -280,7 +280,7 @@ async def ready(settings: Annotated[Settings, Depends(get_settings)]) -> Readine
 
 
 def _probe_readiness(settings: Settings) -> Future[ReadinessResponse]:
-    global _readiness_future
+    global _readiness_future  # noqa: PLW0603 - process-wide future is shared under the lock
     with _readiness_lock:
         if _readiness_future is None or _readiness_future.done():
             _readiness_future = _readiness_executor.submit(_check_readiness, settings)

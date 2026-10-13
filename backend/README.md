@@ -25,8 +25,7 @@ Audit-chain verification, paging, filing and session retention, backup
 publication and required migration-role preparation are in
 [the tamper-evident records contract](docs/tamper_evident_records.md).
 
-- Health and readiness under `/api/health`; readiness reports database, storage,
-  worker and signing subsystems independently
+- [Deployment health](#deployment-health): process liveness and dependency readiness
 - Password and OIDC SSO authentication (AequorOS is its own relying party — no
   third-party broker), integration-key service accounts, RLS-forced tenancy
 - Scoped authorization bindings with deny-by-default, explainable evaluation
@@ -175,17 +174,17 @@ transaction-boundary work before lowering the API idle budget; the
 [session timeout contract](../docs/ops/database-roles.md#session-timeout-budgets)
 owns that budget and its review criteria.
 
-Health endpoints:
+### Deployment health
 
 - `GET /api/health/live`: process liveness, HTTP 200 with
   `{"service":"risk-service","environment":"production","status":"ok","bank_key_required":false}`
-  (environment and bank-key policy reflect deployment settings). This never
-  queries dependencies; use it for process restart decisions.
+  (service name, environment and bank-key policy reflect deployment settings).
+  This never queries dependencies; use it for process restart decisions.
 - `GET /api/health/ready`: existing dependency readiness contract. HTTP 200
   contains `service`, `environment`, `status` and `checks` for database, storage,
-  worker, AI and signing. `status: "degraded"` remains HTTP 200 for a queued
-  backlog or optional AI outage; monitors wanting that signal must inspect the
-  JSON. Required dependency/configuration failures return HTTP 503 in the
+  worker, AI and signing. `status: "degraded"` remains HTTP 200 for overdue core
+  or AI jobs; monitors wanting that signal must inspect the JSON.
+  Required dependency/configuration failures return HTTP 503 in the
   standard error envelope, for example
   `{"error":{"code":"service_unavailable","message":"Storage connectivity check failed.","request_id":"…"}}`.
   Each caller has a five-second response deadline. Overlapping callers share

@@ -785,9 +785,10 @@ curl --fail-with-body --max-time 6 --include https://bank.aequoros.com/api/healt
 ```
 
 For installations using `NEXT_PUBLIC_BASE_PATH`, prepend that configured path
-to the health URL. The exact health path bypasses the auth proxy; other routes
-remain protected. Use the backend's separate
-[`/api/health/live` and `/api/health/ready`](../README.md#run-the-api)
+to the external health URL and update the container healthcheck URL to match;
+the compose wrapper uses the unprefixed path. The exact health path bypasses
+the auth proxy; other health paths remain protected. Use the backend's separate
+[`/api/health/live` and `/api/health/ready`](../README.md#deployment-health)
 for API process and dependency monitoring.
 
 ## Deploy to bank.aequoros.com
