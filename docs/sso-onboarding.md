@@ -142,9 +142,9 @@ specific refusal reason.
   supports local password sign-in. Staff provisioning generates an initial
   administrator password and can reveal it once in the console
   (`backend/app/operator/services/tenant_provisioning.py:306`,
-  `console/app/(shell)/(developer)/onboard/page.tsx:508`). Accounts with a local
+  `console/app/(shell)/(developer)/onboard/page.tsx:613`). Accounts with a local
   password retain that fallback after linking SSO
-  (`backend/app/services/authentication.py:284`). **Planned:** enforced SSO and
+  (`backend/app/identity/service/authentication.py:286`). **Planned:** enforced SSO and
   removal of that fallback under [#130](https://github.com/CedynGroup/aequorOS/issues/130).
   SSO support alone does not mean MFA is required for every user.
 - **Pre-provisioning gate:** a valid corporate identity alone is not enough;
