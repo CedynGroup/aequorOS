@@ -1,13 +1,21 @@
-'use client';
+"use client";
 
-import { useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle } from 'lucide-react';
-import { Button, Field, FormError, Input, Select, StatusPill, Textarea } from '@/components/ui';
+import { useMemo, useState, type ReactNode } from "react";
+import { AlertTriangle } from "lucide-react";
+import {
+  Button,
+  Field,
+  FormError,
+  Input,
+  Select,
+  StatusPill,
+  Textarea,
+} from "@/components/ui";
 import type {
   DeskCurveDefinition,
   DeskCurveDefinitionFields,
   DeskCurveKind,
-} from '@/lib/api';
+} from "@/lib/api";
 
 /**
  * Shared bits for the desk Curve Construction workspace (FC-4, spec §4.1).
@@ -29,51 +37,57 @@ import type {
  * and the FX-forward grid both import this so a new calendar is added in one
  * place, not diverged per page.
  */
-export const CALENDAR_OPTIONS = ['GHANA', 'USA', 'NIGERIA', 'KENYA', 'SOUTH_AFRICA'] as const;
+export const CALENDAR_OPTIONS = [
+  "GHANA",
+  "USA",
+  "NIGERIA",
+  "KENYA",
+  "SOUTH_AFRICA",
+] as const;
 
 export const CURVE_KIND_OPTIONS: { value: DeskCurveKind; label: string }[] = [
-  { value: 'forward', label: 'Forward' },
-  { value: 'zero', label: 'Zero' },
-  { value: 'discount', label: 'Discount' },
+  { value: "forward", label: "Forward" },
+  { value: "zero", label: "Zero" },
+  { value: "discount", label: "Discount" },
 ];
 
 export const INTERPOLATION_OPTIONS: { value: string; label: string }[] = [
-  { value: 'monotone_convex', label: 'Hagan–West monotone convex' },
-  { value: 'log_linear_df', label: 'Log-linear on discount factors' },
-  { value: 'pchip', label: 'PCHIP (piecewise cubic Hermite)' },
-  { value: 'linear_zero', label: 'Linear on zero rates' },
+  { value: "monotone_convex", label: "Hagan–West monotone convex" },
+  { value: "log_linear_df", label: "Log-linear on discount factors" },
+  { value: "pchip", label: "PCHIP (piecewise cubic Hermite)" },
+  { value: "linear_zero", label: "Linear on zero rates" },
 ];
 
 /** Output basis — the Eikon "Convert to" contract (DayCount.value strings). */
 export const DAYCOUNT_OPTIONS: { value: string; label: string }[] = [
-  { value: 'ACT/360', label: 'Actual/360 — money-market' },
-  { value: 'ACT/365F', label: 'Actual/365 Fixed' },
-  { value: 'ACT/364', label: 'Actual/364 — GFIM standard' },
-  { value: '30/360', label: '30/360 — bond' },
-  { value: 'ACT/ACT', label: 'Actual/Actual — ISDA' },
+  { value: "ACT/360", label: "Actual/360 — money-market" },
+  { value: "ACT/365F", label: "Actual/365 Fixed" },
+  { value: "ACT/364", label: "Actual/364 — GFIM standard" },
+  { value: "30/360", label: "30/360 — bond" },
+  { value: "ACT/ACT", label: "Actual/Actual — ISDA" },
 ];
 
 export const ROLL_CONVENTION_OPTIONS: { value: string; label: string }[] = [
-  { value: 'modified_following', label: 'Modified following' },
-  { value: 'following', label: 'Following' },
-  { value: 'preceding', label: 'Preceding' },
-  { value: 'modified_preceding', label: 'Modified preceding' },
-  { value: 'unadjusted', label: 'Unadjusted' },
+  { value: "modified_following", label: "Modified following" },
+  { value: "following", label: "Following" },
+  { value: "preceding", label: "Preceding" },
+  { value: "modified_preceding", label: "Modified preceding" },
+  { value: "unadjusted", label: "Unadjusted" },
 ];
 
 export const EXTRAPOLATION_OPTIONS: { value: string; label: string }[] = [
-  { value: 'flat_forward', label: 'Flat forward (hold terminal forward)' },
-  { value: 'flat_zero', label: 'Flat zero (hold terminal zero)' },
+  { value: "flat_forward", label: "Flat forward (hold terminal forward)" },
+  { value: "flat_zero", label: "Flat zero (hold terminal zero)" },
 ];
 
 /** FC-6d distribution tier — an org sees a published curve only at/below its own tier. */
 export const ENTITLEMENT_TIER_OPTIONS: {
-  value: 'core' | 'standard' | 'premium';
+  value: "core" | "standard" | "premium";
   label: string;
 }[] = [
-  { value: 'core', label: 'Core — rates + FX' },
-  { value: 'standard', label: 'Standard — + sovereign & discount curves' },
-  { value: 'premium', label: 'Premium — + credit curves' },
+  { value: "core", label: "Core — rates + FX" },
+  { value: "standard", label: "Standard — + sovereign & discount curves" },
+  { value: "premium", label: "Premium — + credit curves" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -82,9 +96,10 @@ export const ENTITLEMENT_TIER_OPTIONS: {
 
 /** Curve-definition lifecycle pill: draft ▸ approved. */
 export function CurveDefinitionStatusPill({ status }: { status: string }) {
-  if (status === 'approved') return <StatusPill tone="success">approved</StatusPill>;
-  if (status === 'draft') return <StatusPill tone="pending">draft</StatusPill>;
-  return <StatusPill tone="amber">{status.replace(/_/g, ' ')}</StatusPill>;
+  if (status === "approved")
+    return <StatusPill tone="success">approved</StatusPill>;
+  if (status === "draft") return <StatusPill tone="pending">draft</StatusPill>;
+  return <StatusPill tone="amber">{status.replace(/_/g, " ")}</StatusPill>;
 }
 
 /**
@@ -94,7 +109,7 @@ export function CurveDefinitionStatusPill({ status }: { status: string }) {
  */
 export function CeremonyBanner({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
+    <div className="flex items-start gap-2 rounded-sm border border-warning/50 bg-warning-light p-3">
       <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warning" />
       <div className="min-w-0 text-caption text-slate">{children}</div>
     </div>
@@ -115,7 +130,12 @@ export function activeDefinitionFor(
   asOf: string,
 ): DeskCurveDefinition | null {
   const eligible = definitions
-    .filter((d) => d.status === 'approved' && d.effective_from !== null && d.effective_from <= asOf)
+    .filter(
+      (d) =>
+        d.status === "approved" &&
+        d.effective_from !== null &&
+        d.effective_from <= asOf,
+    )
     .sort((a, b) => b.version - a.version);
   return eligible[0] ?? null;
 }
@@ -142,7 +162,7 @@ export function DefinitionForm({
   onSubmit,
   onCancel,
 }: {
-  mode: 'create' | 'propose';
+  mode: "create" | "propose";
   /** Prefill source: an existing version (propose) or undefined (create). */
   base?: DeskCurveDefinition;
   busy: boolean;
@@ -150,46 +170,69 @@ export function DefinitionForm({
   onSubmit: (fields: DeskCurveDefinitionFields, curveCode: string) => void;
   onCancel: () => void;
 }) {
-  const [curveCode, setCurveCode] = useState(base?.curve_code ?? '');
-  const [currency, setCurrency] = useState(base?.currency ?? '');
-  const [calendar, setCalendar] = useState(base?.calendar_name ?? 'GHANA');
-  const [kind, setKind] = useState<DeskCurveKind>((base?.curve_kind as DeskCurveKind) ?? 'forward');
+  const [curveCode, setCurveCode] = useState(base?.curve_code ?? "");
+  const [currency, setCurrency] = useState(base?.currency ?? "");
+  const [calendar, setCalendar] = useState(base?.calendar_name ?? "GHANA");
+  const [kind, setKind] = useState<DeskCurveKind>(
+    (base?.curve_kind as DeskCurveKind) ?? "forward",
+  );
   const [interpolation, setInterpolation] = useState(
-    base?.interpolation_method ?? 'monotone_convex',
+    base?.interpolation_method ?? "monotone_convex",
   );
-  const [outputDaycount, setOutputDaycount] = useState(base?.output_daycount ?? 'ACT/360');
-  const [roll, setRoll] = useState(base?.roll_convention ?? 'modified_following');
-  const [extrapolation, setExtrapolation] = useState(base?.extrapolation_rule ?? 'flat_forward');
-  const [entitlementTier, setEntitlementTier] = useState<'core' | 'standard' | 'premium'>(
-    (base?.entitlement_tier as 'core' | 'standard' | 'premium') ?? 'standard',
+  const [outputDaycount, setOutputDaycount] = useState(
+    base?.output_daycount ?? "ACT/360",
   );
-  const [curveFrequency, setCurveFrequency] = useState(base?.curve_frequency ?? '3M');
+  const [roll, setRoll] = useState(
+    base?.roll_convention ?? "modified_following",
+  );
+  const [extrapolation, setExtrapolation] = useState(
+    base?.extrapolation_rule ?? "flat_forward",
+  );
+  const [entitlementTier, setEntitlementTier] = useState<
+    "core" | "standard" | "premium"
+  >((base?.entitlement_tier as "core" | "standard" | "premium") ?? "standard");
+  const [curveFrequency, setCurveFrequency] = useState(
+    base?.curve_frequency ?? "3M",
+  );
   const [paymentIntervalMonths, setPaymentIntervalMonths] = useState(
     String(base?.payment_interval_months ?? 3),
   );
-  const [paymentFrequency, setPaymentFrequency] = useState(base?.payment_frequency ?? '');
-  const [spotLagDays, setSpotLagDays] = useState(String(base?.spot_lag_days ?? 2));
-  const [projectionIndex, setProjectionIndex] = useState(base?.projection_index ?? '');
-  const [discountCurveCode, setDiscountCurveCode] = useState(base?.discount_curve_code ?? '');
-  const [instrumentSetRef, setInstrumentSetRef] = useState(base?.instrument_set_ref ?? '');
+  const [paymentFrequency, setPaymentFrequency] = useState(
+    base?.payment_frequency ?? "",
+  );
+  const [spotLagDays, setSpotLagDays] = useState(
+    String(base?.spot_lag_days ?? 2),
+  );
+  const [projectionIndex, setProjectionIndex] = useState(
+    base?.projection_index ?? "",
+  );
+  const [discountCurveCode, setDiscountCurveCode] = useState(
+    base?.discount_curve_code ?? "",
+  );
+  const [instrumentSetRef, setInstrumentSetRef] = useState(
+    base?.instrument_set_ref ?? "",
+  );
   const [paramsText, setParamsText] = useState(
     JSON.stringify(base?.params ?? {}, null, 2),
   );
-  const [rationale, setRationale] = useState('');
+  const [rationale, setRationale] = useState("");
 
   const paramsParse = useMemo(():
     | { ok: true; value: Record<string, unknown> }
     | { ok: false; error: string } => {
     const text = paramsText.trim();
-    if (text === '') return { ok: true, value: {} };
+    if (text === "") return { ok: true, value: {} };
     try {
       const parsed: unknown = JSON.parse(text);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return { ok: false, error: 'Params must be a JSON object.' };
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return { ok: false, error: "Params must be a JSON object." };
       }
       return { ok: true, value: parsed as Record<string, unknown> };
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : 'Invalid JSON.' };
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : "Invalid JSON.",
+      };
     }
   }, [paramsText]);
 
@@ -197,15 +240,15 @@ export function DefinitionForm({
   const lag = Number(spotLagDays);
   const currencyOk = /^[A-Za-z]{3}$/.test(currency.trim());
   const valid =
-    (mode === 'propose' || curveCode.trim() !== '') &&
+    (mode === "propose" || curveCode.trim() !== "") &&
     currencyOk &&
-    instrumentSetRef.trim() !== '' &&
-    curveFrequency.trim() !== '' &&
+    instrumentSetRef.trim() !== "" &&
+    curveFrequency.trim() !== "" &&
     Number.isInteger(interval) &&
     interval > 0 &&
     Number.isInteger(lag) &&
     lag >= 0 &&
-    rationale.trim() !== '' &&
+    rationale.trim() !== "" &&
     paramsParse.ok;
 
   function submit() {
@@ -234,13 +277,16 @@ export function DefinitionForm({
     );
   }
 
-  const intervalInvalid = paymentIntervalMonths.trim() !== '' && !(Number.isInteger(interval) && interval > 0);
-  const lagInvalid = spotLagDays.trim() !== '' && !(Number.isInteger(lag) && lag >= 0);
+  const intervalInvalid =
+    paymentIntervalMonths.trim() !== "" &&
+    !(Number.isInteger(interval) && interval > 0);
+  const lagInvalid =
+    spotLagDays.trim() !== "" && !(Number.isInteger(lag) && lag >= 0);
 
   return (
     <div className="space-y-4">
       <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-        {mode === 'create' && (
+        {mode === "create" && (
           <Field
             label="Curve code"
             required
@@ -259,19 +305,26 @@ export function DefinitionForm({
           label="Currency"
           required
           hint="ISO-4217 (3 letters)"
-          error={currency.trim() !== '' && !currencyOk ? 'Must be exactly three letters.' : undefined}
+          error={
+            currency.trim() !== "" && !currencyOk
+              ? "Must be exactly three letters."
+              : undefined
+          }
         >
           <Input
             className="font-mono uppercase"
             value={currency}
             maxLength={3}
-            invalid={currency.trim() !== '' && !currencyOk}
+            invalid={currency.trim() !== "" && !currencyOk}
             onChange={(e) => setCurrency(e.target.value.toUpperCase())}
             placeholder="GHS"
           />
         </Field>
         <Field label="Calendar">
-          <Select value={calendar} onChange={(e) => setCalendar(e.target.value)}>
+          <Select
+            value={calendar}
+            onChange={(e) => setCalendar(e.target.value)}
+          >
             {CALENDAR_OPTIONS.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -280,7 +333,10 @@ export function DefinitionForm({
           </Select>
         </Field>
         <Field label="Curve kind">
-          <Select value={kind} onChange={(e) => setKind(e.target.value as DeskCurveKind)}>
+          <Select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as DeskCurveKind)}
+          >
             {CURVE_KIND_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -288,25 +344,35 @@ export function DefinitionForm({
             ))}
           </Select>
         </Field>
-        <Field label="Projection index" hint="Forward Curve — e.g. GHS-SOV, SOFR (optional)">
+        <Field
+          label="Projection index"
+          hint="Forward Curve — e.g. GHS-SOV, SOFR (optional)"
+        >
           <Input
             className="font-mono"
-            value={projectionIndex ?? ''}
+            value={projectionIndex ?? ""}
             onChange={(e) => setProjectionIndex(e.target.value)}
             placeholder="GHS-SOV"
             spellCheck={false}
           />
         </Field>
-        <Field label="Discount curve" hint="OIS / AGD code (optional — self-discounting if unset)">
+        <Field
+          label="Discount curve"
+          hint="OIS / AGD code (optional — self-discounting if unset)"
+        >
           <Input
             className="font-mono"
-            value={discountCurveCode ?? ''}
+            value={discountCurveCode ?? ""}
             onChange={(e) => setDiscountCurveCode(e.target.value)}
             placeholder="AEQ.GHS.OIS"
             spellCheck={false}
           />
         </Field>
-        <Field label="Instrument set" required hint="Governed 'Swap style' identifier">
+        <Field
+          label="Instrument set"
+          required
+          hint="Governed 'Swap style' identifier"
+        >
           <Input
             className="font-mono"
             value={instrumentSetRef}
@@ -316,7 +382,10 @@ export function DefinitionForm({
           />
         </Field>
         <Field label="Interpolation">
-          <Select value={interpolation} onChange={(e) => setInterpolation(e.target.value)}>
+          <Select
+            value={interpolation}
+            onChange={(e) => setInterpolation(e.target.value)}
+          >
             {INTERPOLATION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -325,7 +394,10 @@ export function DefinitionForm({
           </Select>
         </Field>
         <Field label="Output basis (Convert to)">
-          <Select value={outputDaycount} onChange={(e) => setOutputDaycount(e.target.value)}>
+          <Select
+            value={outputDaycount}
+            onChange={(e) => setOutputDaycount(e.target.value)}
+          >
             {DAYCOUNT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -333,7 +405,11 @@ export function DefinitionForm({
             ))}
           </Select>
         </Field>
-        <Field label="Curve frequency" required hint="Forward-grid period length, e.g. 3M / 1M">
+        <Field
+          label="Curve frequency"
+          required
+          hint="Forward-grid period length, e.g. 3M / 1M"
+        >
           <Input
             className="font-mono"
             value={curveFrequency}
@@ -343,7 +419,9 @@ export function DefinitionForm({
         </Field>
         <Field
           label="Payment interval (months)"
-          error={intervalInvalid ? 'Must be a positive whole number.' : undefined}
+          error={
+            intervalInvalid ? "Must be a positive whole number." : undefined
+          }
         >
           <Input
             type="number"
@@ -356,14 +434,16 @@ export function DefinitionForm({
         </Field>
         <Field label="Payment frequency" hint="Descriptive label (optional)">
           <Input
-            value={paymentFrequency ?? ''}
+            value={paymentFrequency ?? ""}
             onChange={(e) => setPaymentFrequency(e.target.value)}
             placeholder="quarterly"
           />
         </Field>
         <Field
           label="Spot lag (days)"
-          error={lagInvalid ? 'Must be zero or a positive whole number.' : undefined}
+          error={
+            lagInvalid ? "Must be zero or a positive whole number." : undefined
+          }
         >
           <Input
             type="number"
@@ -384,7 +464,10 @@ export function DefinitionForm({
           </Select>
         </Field>
         <Field label="Extrapolation">
-          <Select value={extrapolation} onChange={(e) => setExtrapolation(e.target.value)}>
+          <Select
+            value={extrapolation}
+            onChange={(e) => setExtrapolation(e.target.value)}
+          >
             {EXTRAPOLATION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -398,7 +481,11 @@ export function DefinitionForm({
         >
           <Select
             value={entitlementTier}
-            onChange={(e) => setEntitlementTier(e.target.value as 'core' | 'standard' | 'premium')}
+            onChange={(e) =>
+              setEntitlementTier(
+                e.target.value as "core" | "standard" | "premium",
+              )
+            }
           >
             {ENTITLEMENT_TIER_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -409,7 +496,7 @@ export function DefinitionForm({
         </Field>
       </div>
 
-      <details className="rounded border border-border-light bg-surface">
+      <details className="rounded-sm border border-border-light bg-surface">
         <summary className="cursor-pointer px-3 py-2 text-caption font-medium text-slate">
           Advanced params (JSON — QA tolerances, grid overrides)
         </summary>
@@ -422,10 +509,13 @@ export function DefinitionForm({
             value={paramsText}
             onChange={(e) => setParamsText(e.target.value)}
           />
-          {!paramsParse.ok && <FormError>JSON error: {paramsParse.error}</FormError>}
+          {!paramsParse.ok && (
+            <FormError>JSON error: {paramsParse.error}</FormError>
+          )}
           <p className="mt-1 text-micro text-slate-light">
-            Optional overrides: grid_periods, qa_grid_points, oscillation_tolerance,
-            pillar_min_count, enforce_positive_forwards, end_of_month.
+            Optional overrides: grid_periods, qa_grid_points,
+            oscillation_tolerance, pillar_min_count, enforce_positive_forwards,
+            end_of_month.
           </p>
         </div>
       </details>
@@ -472,7 +562,7 @@ export interface ChartPoint {
  */
 export function LineChart({
   points,
-  color = 'var(--chart-1)',
+  color = "var(--chart-1)",
   height = 220,
   yFormat = (v) => v.toFixed(2),
   xFormat = (v) => String(v),
@@ -495,7 +585,11 @@ export function LineChart({
   const padB = 30;
 
   if (points.length === 0) {
-    return <div className="p-6 text-center text-caption text-slate">No data to plot.</div>;
+    return (
+      <div className="p-6 text-center text-caption text-slate">
+        No data to plot.
+      </div>
+    );
   }
 
   const xs = points.map((p) => p.x);
@@ -518,11 +612,21 @@ export function LineChart({
     maxY += margin;
   }
 
-  const sx = (x: number) => padL + ((x - minX) / (maxX - minX)) * (W - padL - padR);
-  const sy = (y: number) => padT + (1 - (y - minY) / (maxY - minY)) * (H - padT - padB);
+  const sx = (x: number) =>
+    padL + ((x - minX) / (maxX - minX)) * (W - padL - padR);
+  const sy = (y: number) =>
+    padT + (1 - (y - minY) / (maxY - minY)) * (H - padT - padB);
 
-  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`).join(' ');
-  const gridYs = Array.from({ length: yTicks + 1 }, (_, i) => minY + ((maxY - minY) * i) / yTicks);
+  const path = points
+    .map(
+      (p, i) =>
+        `${i === 0 ? "M" : "L"} ${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`,
+    )
+    .join(" ");
+  const gridYs = Array.from(
+    { length: yTicks + 1 },
+    (_, i) => minY + ((maxY - minY) * i) / yTicks,
+  );
 
   return (
     <svg
@@ -587,7 +691,13 @@ export function LineChart({
         {xFormat(points[points.length - 1].x)}
       </text>
       {/* series */}
-      <path d={path} fill="none" stroke={color} strokeWidth={1.75} strokeLinejoin="round" />
+      <path
+        d={path}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinejoin="round"
+      />
       {points.map((p, i) => (
         <circle key={i} cx={sx(p.x)} cy={sy(p.y)} r={2.4} fill={color} />
       ))}

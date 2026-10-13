@@ -73,7 +73,7 @@ export default function VersionHistory({
                   <p className="text-body text-navy">
                     Version {fmtInt(entry.version)}
                     {entry.current && (
-                      <span className="ml-2 rounded border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
+                      <span className="ml-2 rounded-sm border border-border bg-surface px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
                         Shown now
                       </span>
                     )}

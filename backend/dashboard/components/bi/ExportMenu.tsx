@@ -102,7 +102,7 @@ export default function ExportMenu({
                 setOpen(false);
                 option.onSelect();
               }}
-              className="flex w-full flex-col items-start gap-0.5 rounded px-3 py-2 text-left hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+              className="flex w-full flex-col items-start gap-0.5 rounded-sm px-3 py-2 text-left hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
             >
               <span className="flex items-center gap-1.5 text-body text-navy">
                 {option.id === "print" && <Printer size={13} aria-hidden />}
