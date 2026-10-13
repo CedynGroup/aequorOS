@@ -37,7 +37,7 @@ export default async function LoginPage() {
   const withSso = await ssoEnabled();
   return (
     <>
-      <div className="min-h-screen grid lg:grid-cols-[1.1fr,minmax(0,520px)]">
+      <div className="min-h-screen grid lg:grid-cols-[1.1fr_minmax(0,520px)]">
         {/* Brand panel — editorial statement, one accent, one line of geometry. */}
         <div className="hidden lg:flex flex-col justify-between bg-nav text-white p-12 relative overflow-hidden">
           <style>{`

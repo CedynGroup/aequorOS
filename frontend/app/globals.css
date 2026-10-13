@@ -1,10 +1,59 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-navy-deep: #0f1845;
+  --color-navy: #1e2761;
+  --color-accent: #4fc3f7;
+  --color-ice-blue: #cadcfc;
+  --color-soft-bg: #f8fafc;
+  --color-text-primary: #16203a;
+  --color-text-muted: #5b6478;
+  --color-border-light: #e2e8f0;
+  --color-paper: #fbfaf7;
+  --color-stone: #f2f0e9;
+  --color-ink: #16203a;
+  --color-ink-soft: #3d4560;
+  --color-hairline: #e4e2db;
+  --color-kicker: #b45309;
+  --color-action: #2d7ff9;
+  --color-action-dark: #1f6ce0;
+  --color-live: #10b981;
+  --color-watch: #fbbf24;
+
+  --font-serif: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --container-8xl: 1200px;
+}
+
+/*
+ * Tailwind v4 changed a few preflight defaults; these restore the v3 ones the
+ * UI was designed against: gray-200 default borders, gray-400 placeholders and
+ * a pointer cursor on buttons.
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
 
 :root {
-  --font-fraunces: 'Fraunces Variable';
-  --font-inter: 'Inter Variable';
+  --font-fraunces: "Fraunces Variable";
+  --font-inter: "Inter Variable";
   --navy-deep: #0f1845;
   --navy: #1e2761;
   --accent: #4fc3f7;
@@ -15,20 +64,31 @@
   --border-light: #e2e8f0;
 }
 
-html {
-  scroll-behavior: smooth;
+/* Global element styles sit in the base layer so utilities still override them. */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    color: #16203a;
+    background: #fbfaf7;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
-body {
-  color: #16203a;
-  background: #fbfaf7;
-  font-feature-settings: 'ss01', 'cv11';
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-*:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 2px;
+/*
+ * Focus ring. In the utilities layer, after the generated utilities, so it
+ * keeps its v3 standing: it overrides bare utilities of equal specificity
+ * (`outline-hidden`, `rounded-md`) on a focused element, while variant
+ * utilities such as `focus:outline-hidden` still opt an element out.
+ */
+@layer utilities {
+  *:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
 }
