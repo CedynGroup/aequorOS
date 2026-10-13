@@ -127,15 +127,10 @@ mise run risk-service:dev
 
 Database: configure `backend/.env` and apply the migration chain before starting the API.
 
-Pre-authentication uses `PREAUTH_DATABASE_URL`, then the legacy `WORKER_DATABASE_URL`,
-then `DATABASE_URL`. Operator sessions use `OPERATOR_DATABASE_URL` with the same
-legacy fallbacks. Before switching the worker to restricted `aqs_worker`, Eric must
-set both explicit URLs to their existing cross-tenant credentials. Restricted
-PostgreSQL credentials on these paths return a configuration error, not empty
-tenant results. These broad identity/operator credentials remain temporary;
-the [database-role handoff](../docs/ops/database-roles.md#worker-compatibility-migration)
-owns the approved stages and rollback. The API credential stays unchanged during
-this worker-only delivery.
+Configure `PREAUTH_DATABASE_URL` and `OPERATOR_DATABASE_URL` through the
+[database-role handoff](../docs/ops/database-roles.md#worker-compatibility-migration),
+which owns credential resolution, the temporary broad-access requirement,
+activation prerequisites and rollback.
 Two operational notes for a remote database:
 
 - **RLS hides everything without the tenant GUC.** Ad-hoc `psql` against the remote shows zero

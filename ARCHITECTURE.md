@@ -326,14 +326,9 @@ on one canonical store — the live tier for intraday awareness, the official ti
   `RUN_INPROCESS_WORKER`) claims → dispatches by `job_type` → completes/retries. It reads the
   queue through narrowly granted platform functions using `aqs_worker` on
   `WORKER_DATABASE_URL`. Per-job work sets organization and bank context under forced RLS.
-  [The deployment runbook](docs/ops/database-roles.md) owns the credential switch and
-  retirement of legacy bypass access; existing deployment roles remain supported. When
-  `WORKER_DATABASE_URL` is unset in local/hermetic runs it falls back to `DATABASE_URL`;
-  production and staging require the separate worker URL.
-  Pre-authentication and operator access retain their existing cross-tenant credentials
-  on explicit `PREAUTH_DATABASE_URL` and `OPERATOR_DATABASE_URL` before that worker
-  switch. Their legacy worker/API fallbacks remain for pre-cutover compatibility;
-  restricted PostgreSQL credentials are refused at both session boundaries.
+  [The deployment runbook](docs/ops/database-roles.md#worker-compatibility-migration)
+  owns credential resolution, the staged switch, temporary broad pre-authentication
+  and operator access, and retirement of legacy bypass access.
 - **Live tier** — `pipeline.run_refresh` (`job_type=pipeline_refresh`): re-derives facts, then for
   each cheap module computes a baseline metric + limit evaluation (`compute_live`, reusing the
   same domain engines as the detail views), **upserts** one `live_metrics` row, and reconciles open `live_findings`

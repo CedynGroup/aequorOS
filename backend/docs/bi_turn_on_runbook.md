@@ -31,7 +31,7 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
    documented in the [database role handoff](../../docs/ops/database-roles.md#target-matrix).
    Partition-function permissions and the worker's restricted wrappers follow
    [the worker compatibility contract](../../docs/ops/database-roles.md#worker-compatibility-migration).
-   Apply that migration before activating the least-privilege BI worker; do not
+   Apply `202610120100` before activating the least-privilege BI worker; do not
    grant the unrestricted partition helpers to `aqs_worker` by hand.
 2. **Deploy `risk-worker-bi`** (`WORKER_JOB_TYPES=lane:bi`, `docker-compose.prod.yml`),
    flags still off. The `bi` lane is seven job types (`job_queue.JOB_LANES`):

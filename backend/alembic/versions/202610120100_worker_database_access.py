@@ -204,7 +204,9 @@ def downgrade() -> None:
             op.execute(f"REVOKE EXECUTE ON FUNCTION {schema}.{function} FROM aqs_owner")
     for signature in reversed(FUNCTIONS):
         op.execute(f"DROP FUNCTION {schema}.{signature}")
-    migration_role = quote(cast(str, connection.exec_driver_sql("SELECT current_user").scalar_one()))
+    migration_role = quote(
+        cast(str, connection.exec_driver_sql("SELECT current_user").scalar_one())
+    )
     op.execute("SET LOCAL ROLE aequoros_audit_owner")
     op.execute(f"REVOKE EXECUTE ON FUNCTION {schema}.aequoros_append_only_guard() FROM aqs_owner")
     for table in (
@@ -217,9 +219,7 @@ def downgrade() -> None:
         op.execute(f"DROP POLICY aqs_owner_worker_audit_read ON {schema}.{table}")
         if table not in {"audit_events", "operator_audit_log"}:
             op.execute(f"REVOKE SELECT ON {schema}.{table} FROM aqs_owner")
-    op.execute(
-        f"DROP POLICY aqs_owner_worker_audit_schedule ON {schema}.audit_integrity_schedule"
-    )
+    op.execute(f"DROP POLICY aqs_owner_worker_audit_schedule ON {schema}.audit_integrity_schedule")
     op.execute(
         f"REVOKE UPDATE (run_after, recovery_epoch) "
         f"ON {schema}.audit_integrity_schedule FROM aqs_owner"
@@ -414,7 +414,9 @@ def _desk_access(schema: str) -> None:
 def _audit_access(schema: str) -> None:
     connection = op.get_bind()
     quote = connection.dialect.identifier_preparer.quote_identifier
-    migration_role = quote(cast(str, connection.exec_driver_sql("SELECT current_user").scalar_one()))
+    migration_role = quote(
+        cast(str, connection.exec_driver_sql("SELECT current_user").scalar_one())
+    )
     op.execute("SET LOCAL ROLE aequoros_audit_owner")
     # Partition creation clones the query-log trigger. NOINHERIT owners on
     # PostgreSQL 15 need this explicit right while audit custody stays separate.

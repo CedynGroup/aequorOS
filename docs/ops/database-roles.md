@@ -91,7 +91,7 @@ default to 120 seconds), then restores the role default. The five-minute BI idle
 abandoned read transaction without changing those query budgets.
 
 `backend/app/db/session.py` supplies connection startup options for legacy
-usernames, separately for API/operator, worker and BI pools, including when all
+usernames, separately for API/pre-authentication/operator, worker and BI pools, including when all
 URLs still share one login. This does not alter that role's defaults or other
 clients. Recognized new role usernames use their administrator-configured role
 defaults. Existing URL options, including `search_path`, are preserved. Alembic
@@ -152,7 +152,7 @@ has a separate migration URL configured. The local SQL sets clearly identified
 development passwords equal to role names;
 never execute `database_roles_local.sql` on a deployment. Existing DATABASE_URL
 and worker/operator fallbacks keep working. All runtime pools identify API,
-worker, BI and operator connections separately through `application_name`.
+pre-authentication, worker, BI and operator connections separately through `application_name`.
 
 For externally supplied test services, an administrator must prepare the versioned
 foundation SQL, `backend/scripts/database_session_timeouts.sql`, and the test actor's
@@ -345,11 +345,13 @@ WHERE rolname IN ('aqs_worker', 'aqs_operator');
 
 After the new connections are healthy and old pools drained, Eric removes
 BYPASSRLS from the retired worker/operator roles or retires their credentials.
-Preserve any legacy role still used by the API or an operator awaiting its cutover. No
+Preserve any legacy role still used by the API, pre-authentication pool or an
+operator awaiting its cutover. No
 engineering migration alters those existing role attributes. **Do not switch the
 API credential yet:** `aqs_api` cannot authenticate integration keys or look up
-bank encryption keys, and pre-tenant password/refresh/SSO lookups still use the
-current API credential. Its switch waits for the separate captain-reviewed
+bank encryption keys. Pre-tenant authentication follows the explicit credential
+handoff in [Worker compatibility migration](#worker-compatibility-migration).
+The API switch waits for the separate captain-reviewed
 pre-authentication PR after the operator PR, followed by verification of both
 lookup paths, refusal of direct table access and refusal of other-bank
 enumeration. Keep the existing API URL secret until that gate passes.

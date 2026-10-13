@@ -88,10 +88,16 @@ recovery epoch; `aqs_worker` has no unscoped audit-source visibility or direct c
 or schedule-table grants. Its tenant-scoped audit SELECT/INSERT rights remain.
 The function remains owned by NOLOGIN `aqs_owner`: it must lock and update the
 schedule, which the read-only `aqs_audit_verifier` cannot do. The deployment owner
-also lacks SET membership in the verifier role. The authorized fallback is a
-SELECT-only `aqs_owner` policy on `audit_events`, allowing complete payload and
-source-count verification under FORCE RLS without verifier write grants; downgrade
-removes it. Existing bypass queue writers use this function after migration;
+also lacks SET membership in the verifier role. The migration grants `aqs_owner`
+explicit SELECT and SELECT-only RLS policies on both audit sources, chain entries,
+chain heads and the schedule, plus UPDATE on the schedule's `run_after` and
+`recovery_epoch` columns with an owner-only UPDATE policy. These permissions work
+with NOINHERIT on PostgreSQL 15 without relying on audit-owner membership.
+It also grants the owner EXECUTE on the append-only guard so partition creation
+can clone the query-log trigger; audit ownership and runtime refusals remain intact.
+Downgrade removes these policies, schedule/chain privileges and guard execution,
+retaining the owner's pre-existing source SELECT grants.
+Existing bypass queue writers use this function after migration;
 before migration they retain their direct verification path. Credential activation
 follows [the role handoff runbook](../../docs/ops/database-roles.md#worker-compatibility-migration).
 AI and BI workers do not run the task. Successful counts appear in operational logs.
@@ -176,7 +182,7 @@ Complete [deployment follow-up #509](https://github.com/CedynGroup/aequorOS/issu
 before deploying this migration in production or staging:
 
 - Give the migration container its own `MIGRATION_DATABASE_URL`, distinct from
-  API `DATABASE_URL`, `WORKER_DATABASE_URL`, `OPERATOR_DATABASE_URL` and
+  API `DATABASE_URL`, `PREAUTH_DATABASE_URL`, `WORKER_DATABASE_URL`, `OPERATOR_DATABASE_URL` and
   `BI_DATABASE_URL`. Alembic refuses a missing migration URL or a shared role in
   production/staging; local/test runs retain the existing URL fallback. Runtime
   containers must never receive migration credentials.

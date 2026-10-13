@@ -236,9 +236,7 @@ def get_operator_sessionmaker() -> sessionmaker[Session]:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
-    return sessionmaker(
-        bind=engine, autoflush=False, expire_on_commit=False
-    )
+    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
 def get_operator_db_session(

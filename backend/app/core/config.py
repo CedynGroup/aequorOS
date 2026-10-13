@@ -58,7 +58,9 @@ class DatabaseSettings(BaseSettings):
     preauth_database_url: str | None = Field(default=None, alias="PREAUTH_DATABASE_URL")
     migration_database_url: str | None = Field(default=None, alias="MIGRATION_DATABASE_URL")
 
-    @field_validator("database_url", "preauth_database_url", "migration_database_url", mode="before")
+    @field_validator(
+        "database_url", "preauth_database_url", "migration_database_url", mode="before"
+    )
     @classmethod
     def empty_means_unconfigured(cls, value: str | None) -> str | None:
         """An empty runtime or migration database URL means unconfigured.
@@ -1338,10 +1340,8 @@ class OperatorSettings(BaseSettings):
     operator_cors_headers_raw: str = Field(
         default="Accept,Authorization,Content-Type,X-Request-ID", alias="OPERATOR_CORS_HEADERS"
     )
-    #: Dedicated DB URL for the operator role. Cross-tenant reads on the
-    #: RLS-forced primary retain the existing bypass credential until the
-    #: metadata-view cutover. The use site falls back to DATABASE_URL, so a
-    #: local/hermetic run works without extra configuration.
+    #: Operator credential resolution and staged activation follow
+    #: docs/ops/database-roles.md#worker-compatibility-migration.
     operator_database_url: str | None = Field(default=None, alias="OPERATOR_DATABASE_URL")
     #: Development bearer-token auth. NEVER valid in production: the operator
     #: app refuses to boot when this is on with APP_ENV=production.
