@@ -103,20 +103,13 @@ export default function AddSourcePanel({
     return groups;
   }, [vendorScopes]);
 
-  const selectedInfos = vendorScopes.filter((scope) =>
-    selected.has(scope.scope),
-  );
-  const unitsPerPull = selectedInfos.reduce(
-    (sum, scope) => sum + scope.quotaUnits,
-    0,
-  );
+  const selectedInfos = vendorScopes.filter((scope) => selected.has(scope.scope));
+  const unitsPerPull = selectedInfos.reduce((sum, scope) => sum + scope.quotaUnits, 0);
   const monthlyUnits = selectedInfos.reduce((sum, scope) => {
     const frequency = schedule[scope.category] ?? scope.defaultFrequency;
     return sum + scope.quotaUnits * (PULLS_PER_MONTH[frequency] ?? 1);
   }, 0);
-  const selectedCategories = [
-    ...new Set(selectedInfos.map((scope) => scope.category)),
-  ];
+  const selectedCategories = [...new Set(selectedInfos.map((scope) => scope.category))];
 
   const chooseVendor = (key: VendorKey) => {
     setVendor(key);

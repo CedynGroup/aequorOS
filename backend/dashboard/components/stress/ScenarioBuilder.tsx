@@ -90,8 +90,7 @@ function gridFromScenario(scenario: MacroScenario): Grid {
   const grid: Grid = {};
   for (const p of scenario.paths) {
     const meta = MACRO_VAR_BY_KEY[p.variable];
-    const toDisplay = (v: string) =>
-      meta?.kind === "fraction" ? String(Number(v) * 100) : v;
+    const toDisplay = (v: string) => meta?.kind === "fraction" ? String(Number(v) * 100) : v;
     if (!grid[p.variable]) grid[p.variable] = {};
     grid[p.variable][p.year_index] = {
       base: toDisplay(p.base_value),
@@ -138,10 +137,7 @@ export default function ScenarioBuilder({
   const update = useUpdateMacroScenario();
   const submit = useSubmitMacroScenario();
 
-  const years = useMemo(
-    () => Array.from({ length: horizon }, (_, i) => i + 1),
-    [horizon],
-  );
+  const years = useMemo(() => Array.from({ length: horizon }, (_, i) => i + 1), [horizon]);
   const includedVars = Object.keys(grid);
 
   const toggleVar = (key: string) => {
@@ -149,9 +145,7 @@ export default function ScenarioBuilder({
       const next = { ...g };
       if (next[key]) delete next[key];
       else
-        next[key] = Object.fromEntries(
-          years.map((y) => [y, { base: "", stress: "" }]),
-        );
+        next[key] = Object.fromEntries(years.map((y) => [y, { base: "", stress: "" }]));
       return next;
     });
   };
@@ -181,9 +175,7 @@ export default function ScenarioBuilder({
       for (const [variable, { base, stress }] of Object.entries(
         preset.shocks,
       )) {
-        next[variable] = Object.fromEntries(
-          years.map((y) => [y, { base: String(base), stress: String(stress) }]),
-        );
+        next[variable] = Object.fromEntries(years.map((y) => [y, { base: String(base), stress: String(stress) }]));
       }
       return next;
     });
@@ -193,17 +185,11 @@ export default function ScenarioBuilder({
     const paths: MacroPathIn[] = [];
     for (const variable of includedVars) {
       const meta = MACRO_VAR_BY_KEY[variable];
-      const toStore = (v: string) =>
-        meta?.kind === "fraction" ? String(Number(v) / 100) : v;
+      const toStore = (v: string) => meta?.kind === "fraction" ? String(Number(v) / 100) : v;
       for (const year of years) {
         const cell = grid[variable]?.[year];
-        if (!cell || cell.base.trim() === "" || cell.stress.trim() === "")
-          continue;
-        if (
-          !Number.isFinite(Number(cell.base)) ||
-          !Number.isFinite(Number(cell.stress))
-        )
-          continue;
+        if (!cell || cell.base.trim() === "" || cell.stress.trim() === "") continue;
+        if (!Number.isFinite(Number(cell.base)) || !Number.isFinite(Number(cell.stress))) continue;
         paths.push({
           variable,
           year_index: year,
@@ -216,11 +202,9 @@ export default function ScenarioBuilder({
   };
 
   const validate = (paths: MacroPathIn[]): string | null => {
-    if (!isEdit && !/^[a-z0-9_]{1,60}$/.test(code))
-      return "Code must be a lowercase slug (a-z, 0-9, underscore).";
+    if (!isEdit && !/^[a-z0-9_]{1,60}$/.test(code)) return "Code must be a lowercase slug (a-z, 0-9, underscore).";
     if (!name.trim()) return "Name is required.";
-    if (paths.length === 0)
-      return "Add at least one macro-variable path (base + stress).";
+    if (paths.length === 0) return "Add at least one macro-variable path (base + stress).";
     if (!reason.trim()) return "A change reason is required (governance).";
     return null;
   };

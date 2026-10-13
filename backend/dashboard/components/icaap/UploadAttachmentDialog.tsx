@@ -34,9 +34,7 @@ export default function UploadAttachmentDialog({
   requirements: readonly IcaapAttachmentRequirementStatusRead[];
   onClose: () => void;
 }) {
-  const applicable = requirements.filter(
-    (requirement) => requirement.applicable,
-  );
+  const applicable = requirements.filter((requirement) => requirement.applicable);
   const [kind, setKind] = useState(applicable[0]?.kind ?? "");
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
