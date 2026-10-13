@@ -115,9 +115,7 @@ const viewColumns: Column<ViewRow>[] = [
 ];
 
 function toViewRows(register: CreditThresholdRegisterRead): ViewRow[] {
-  const byCode = new Map(
-    register.thresholds.map((row) => [row.thresholdCode, row]),
-  );
+  const byCode = new Map(register.thresholds.map((row) => [row.thresholdCode, row]));
   return THRESHOLDS.map(({ code, label, hint }) => {
     const row = byCode.get(code);
     return {

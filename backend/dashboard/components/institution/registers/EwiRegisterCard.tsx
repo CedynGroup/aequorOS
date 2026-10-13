@@ -145,9 +145,7 @@ function thresholdText(row: EwiRow, level: string): string {
 }
 
 function buildRows(dashboard: EwiDashboardRead): EwiRow[] {
-  const byCode = new Map(
-    dashboard.indicators.map((entry) => [entry.code, entry]),
-  );
+  const byCode = new Map(dashboard.indicators.map((entry) => [entry.code, entry]));
   const rows: EwiRow[] = [];
   for (const starter of STARTER_INDICATORS) {
     const live = byCode.get(starter.code);
@@ -191,8 +189,7 @@ function buildRows(dashboard: EwiDashboardRead): EwiRow[] {
   }
   // Board additions beyond the directive starters.
   for (const entry of dashboard.indicators) {
-    if (STARTER_INDICATORS.some((starter) => starter.code === entry.code))
-      continue;
+    if (STARTER_INDICATORS.some((starter) => starter.code === entry.code)) continue;
     rows.push({
       code: entry.code,
       name: entry.name,
@@ -273,10 +270,7 @@ export default function EwiRegisterCard({
   const query = useEwiDashboard(bankId, periodId);
   const [editing, setEditing] = useState(false);
 
-  const rows = useMemo(
-    () => (query.data ? buildRows(query.data) : []),
-    [query.data],
-  );
+  const rows = useMemo(() => (query.data ? buildRows(query.data) : []), [query.data]);
 
   return (
     <SectionCard

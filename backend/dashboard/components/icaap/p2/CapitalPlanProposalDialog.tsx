@@ -51,9 +51,7 @@ export default function CapitalPlanProposalDialog({
 
   // Only an item whose approval is CURRENT may be carried: an approval on an
   // earlier revision is not an approval of the amount this would copy.
-  const approved = (register.items ?? []).filter(
-    (item) => item.approvalCurrent,
-  );
+  const approved = (register.items ?? []).filter((item) => item.approvalCurrent);
 
   const draftExists =
     mutation.isError &&

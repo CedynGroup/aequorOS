@@ -127,20 +127,19 @@ function FieldBox({
   const [dragging, setDragging] = useState(false);
   const fieldType = fieldTypeOf(slot.placement);
 
-  const begin =
-    (mode: Drag["mode"]) => (event: ReactPointerEvent<HTMLElement>) => {
-      if (!editable) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      drag.current = {
-        mode,
-        pointerX: event.clientX,
-        pointerY: event.clientY,
-        origin: rect,
-      };
-      setDragging(true);
+  const begin = (mode: Drag["mode"]) => (event: ReactPointerEvent<HTMLElement>) => {
+    if (!editable) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = {
+      mode,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      origin: rect,
     };
+    setDragging(true);
+  };
 
   const move = (event: ReactPointerEvent<HTMLElement>) => {
     const state = drag.current;

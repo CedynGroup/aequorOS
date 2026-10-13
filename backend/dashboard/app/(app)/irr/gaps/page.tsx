@@ -158,9 +158,7 @@ export default function IrrGapsPage() {
                 rows={rows}
                 density="compact"
                 onRowClick={(r) =>
-                  setSelectedBucket((cur) =>
-                    cur === r.bucket ? null : r.bucket,
-                  )
+                  setSelectedBucket((cur) => cur === r.bucket ? null : r.bucket)
                 }
                 rowClassName={(r) =>
                   r.bucket === selectedBucket ? "bg-action-light/40" : ""
