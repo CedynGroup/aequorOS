@@ -177,8 +177,37 @@ owns that budget and its review criteria.
 
 Health endpoints:
 
-- `GET /api/health/live`
-- `GET /api/health/ready`
+- `GET /api/health/live`: process liveness, HTTP 200 with
+  `{"service":"risk-service","environment":"production","status":"ok","bank_key_required":false}`
+  (environment and bank-key policy reflect deployment settings). This never
+  queries dependencies; use it for process restart decisions.
+- `GET /api/health/ready`: existing dependency readiness contract. HTTP 200
+  contains `service`, `environment`, `status` and `checks` for database, storage,
+  worker, AI and signing. `status: "degraded"` remains HTTP 200 for a queued
+  backlog or optional AI outage; monitors wanting that signal must inspect the
+  JSON. Required dependency/configuration failures return HTTP 503 in the
+  standard error envelope, for example
+  `{"error":{"code":"service_unavailable","message":"Storage connectivity check failed.","request_id":"…"}}`.
+  Dependency checks have a five-second response deadline. A timeout returns 503
+  with `Readiness check timed out.`; subsequent probes return 503 with
+  `Readiness check is still in progress.` until that driver call finishes.
+  At most one readiness check runs per API process.
+
+Both URLs are unauthenticated, return `Cache-Control: no-store` on health
+responses, and require HTTPS on deployed services. The existing container
+monitor already calls `https://risk-api:8000/api/health/ready` with the service
+CA and an eight-second client timeout. Keep using readiness to gate deployment,
+and liveness for process checks; do not restart a healthy process merely because
+an external dependency is down. External monitors can request the same paths on
+the configured API origin without cookies, bearer tokens or following redirects:
+
+```bash
+curl --fail-with-body --max-time 8 --include "$API_ORIGIN/api/health/live"
+curl --fail-with-body --max-time 8 --include "$API_ORIGIN/api/health/ready"
+```
+
+The dashboard server has its own independent
+[process liveness endpoint](dashboard/README.md#deployment-health).
 
 Business API endpoints use URL path major versioning under `/api/v1`. See
 `docs/architecture.md` for the API versioning policy.

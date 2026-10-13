@@ -765,6 +765,31 @@ Reporting-date selection and exact snapshot matching are governed by
 The fixture bootstrap described under [End-to-end (Playwright)](#end-to-end-playwright)
 supplies the snapshots those package-generation journeys require.
 
+## Deployment health
+
+The aequorOS dashboard exposes `GET /api/health/live` without authentication or
+redirects. It returns HTTP 200 with
+`{"service":"aequoros-dashboard","status":"ok"}` and
+`Cache-Control: no-store`. This checks the Next.js server process; backend,
+database and SSO availability are independent. No credentials or tenant data
+are read, and no session cookies are set.
+
+The existing container healthcheck calls
+`https://dashboard:3000/api/health/live` with the existing service trust CA,
+rejects redirects, and bounds the request to four seconds. The external
+deployment monitor should call
+`https://bank.aequoros.com/api/health/live` without cookies or bearer tokens:
+
+```bash
+curl --fail-with-body --max-time 6 --include https://bank.aequoros.com/api/health/live
+```
+
+For installations using `NEXT_PUBLIC_BASE_PATH`, prepend that configured path
+to the health URL. The exact health path bypasses the auth proxy; other routes
+remain protected. Use the backend's separate
+[`/api/health/live` and `/api/health/ready`](../README.md#run-the-api)
+for API process and dependency monitoring.
+
 ## Deploy to bank.aequoros.com
 
 Use [the repository-root compose wrapper](../../docker-compose.dashboard.yml)

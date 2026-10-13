@@ -38,7 +38,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          'node -e "fetch(''https://dashboard:3000/login'').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"',
+          'node -e "fetch(''https://dashboard:3000/api/health/live'', {redirect:''manual'', signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"',
         ]
       interval: 30s
       timeout: 6s

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+from threading import Lock
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -15,9 +17,16 @@ from app.schemas.health import ComponentHealth, HealthResponse, ReadinessRespons
 from app.services import job_queue
 from app.storage.factory import get_storage_client
 
-router = APIRouter(prefix="/health", tags=["health"])
+
+def _disable_cache(response: Response) -> None:
+    response.headers["Cache-Control"] = "no-store"
+
+
+router = APIRouter(prefix="/health", tags=["health"], dependencies=[Depends(_disable_cache)])
 
 _OK = ComponentHealth(status="ok")
+_READINESS_TIMEOUT_SECONDS = 5.0
+_readiness_lock = Lock()
 
 # ---------------------------------------------------------------------------
 # What an UNAUTHENTICATED caller is allowed to be told (audit finding D-28).
@@ -72,7 +81,11 @@ def live(settings: Annotated[Settings, Depends(get_settings)]) -> HealthResponse
 
 
 def _unavailable(detail: str) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=detail,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 def _storage_health(settings: Settings) -> ComponentHealth:
@@ -252,7 +265,28 @@ def _ai_health(settings: Settings) -> ComponentHealth:
 
 
 @router.get("/ready", response_model=ReadinessResponse)
-def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResponse:
+async def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResponse:
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_probe_readiness, settings), timeout=_READINESS_TIMEOUT_SECONDS
+        )
+    except TimeoutError as exc:
+        logger.warning("Readiness: dependency checks exceeded the probe deadline.")
+        raise _unavailable("Readiness check timed out.") from exc
+
+
+def _probe_readiness(settings: Settings) -> ReadinessResponse:
+    # Cancelling a response cannot interrupt a synchronous driver. Keep its
+    # lock until it finishes so repeated probes cannot accumulate stalled checks.
+    if not _readiness_lock.acquire(blocking=False):
+        raise _unavailable("Readiness check is still in progress.")
+    try:
+        return _check_readiness(settings)
+    finally:
+        _readiness_lock.release()
+
+
+def _check_readiness(settings: Settings) -> ReadinessResponse:
     checks: dict[str, ComponentHealth] = {}
 
     if settings.database.database_url is None:

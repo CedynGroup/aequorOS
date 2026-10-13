@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from threading import Event
+from time import monotonic
 
 import pytest
 from fastapi import APIRouter
@@ -483,6 +485,8 @@ def test_live_health(client: TestClient, monkeypatch: pytest.MonkeyPatch, requir
     try:
         response = client.get("/api/health/live")
         assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+        assert "location" not in response.headers
         assert response.json() == {
             "service": "risk-service",
             "environment": "test",
@@ -506,6 +510,8 @@ def test_ready_health_skips_database_when_unconfigured_in_test(client: TestClien
     response = client.get("/api/health/ready")
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert "location" not in response.headers
     body = response.json()
     assert body["service"] == "risk-service"
     assert body["environment"] == "test"
@@ -515,6 +521,63 @@ def test_ready_health_skips_database_when_unconfigured_in_test(client: TestClien
         "detail": "DATABASE_URL is unset.",
     }
     assert body["checks"]["worker"]["status"] == "skipped"
+
+
+def test_readiness_deadline_preserves_liveness_and_recovers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entered, release, finished = Event(), Event(), Event()
+
+    class SlowStorage:
+        def health_check(self) -> StorageHealth:
+            entered.set()
+            try:
+                assert release.wait(timeout=5)
+                return StorageHealth(healthy=True, backend="s3")
+            finally:
+                finished.set()
+
+    monkeypatch.setattr(health, "get_storage_client", SlowStorage)
+    monkeypatch.setattr(health, "_READINESS_TIMEOUT_SECONDS", 0.1)
+    with TestClient(create_app()) as client:
+        try:
+            started = monotonic()
+            response = client.get("/api/health/ready")
+            assert entered.is_set()
+            assert monotonic() - started < 2
+            assert response.status_code == 503
+            assert response.json()["error"]["message"] == "Readiness check timed out."
+            assert response.headers["cache-control"] == "no-store"
+
+            response = client.get("/api/health/ready")
+            assert response.status_code == 503
+            assert response.json()["error"]["message"] == "Readiness check is still in progress."
+            assert response.headers["cache-control"] == "no-store"
+            assert client.get("/api/health/live").status_code == 200
+        finally:
+            release.set()
+            assert finished.wait(timeout=2)
+
+        # A new probe succeeds after the outstanding dependency call returns.
+        assert client.get("/api/health/ready").status_code == 200
+
+
+def test_ready_dependency_failure_is_uncached_and_sanitized(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class UnreachableStorage:
+        def health_check(self) -> StorageHealth:
+            raise RuntimeError("synthetic-private-credential-and-driver-detail")
+
+    monkeypatch.setattr(health, "get_storage_client", UnreachableStorage)
+    response = client.get("/api/health/ready")
+
+    assert response.status_code == 503
+    assert response.headers["cache-control"] == "no-store"
+    assert "location" not in response.headers
+    assert response.json()["error"]["message"] == "Storage connectivity check failed."
+    assert "synthetic-private" not in response.text
+    assert client.get("/api/health/live").status_code == 200
 
 
 def test_request_id_is_propagated(client: TestClient) -> None:
