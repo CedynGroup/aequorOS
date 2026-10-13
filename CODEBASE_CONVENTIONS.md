@@ -159,13 +159,19 @@ class CalculationRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
 ```
 
 The `UniqueConstraint("id", "organization_id", ...)` on the parent is what lets children FK to
 the composite key. Child output tables add `ondelete="CASCADE"` on the composite FK. New
 bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
+
+A composite FK from `(organization_id, bank_id)` to `banks.(organization_id, id)` binds
+a row's bank to its organization.
+The [database integrity reference](backend/docs/database_integrity.md) owns enforced
+bank, provenance and lifecycle references, nullable scopes, deliberate exclusions,
+migration catalogues and regression coverage.
 
 ### Migrations (`alembic/versions/`)
 
@@ -273,6 +279,27 @@ coverage of the observable contract, including refusals, before accepting a chan
   including missing values, using the contract's numeric kinds. Assert an independent
   invariant or oracle, not a copy of the implementation. Keep example tests for
   concrete business outcomes and minimized regressions alongside properties.
+- **Share realistic domain generators.** Reuse feature-owned Hypothesis strategies
+  and fast-check arbitraries from the
+  [domain helper guide](backend/tests/support/PROPERTY_TESTING.md#find-the-domain-helpers).
+  Generate synthetic bank data with coherent financial relationships, workflow
+  histories and provenance; never read production or customer data. Mix deliberate
+  edges into realistic defaults and bias inputs toward source-defined thresholds.
+  Cite the engine, schema or regulatory source in each generator's docstring,
+  including units, precision and rounding. Distinguish internal bank policy and
+  draft calibration from in-force regulatory requirements. Every valid generator
+  needs a property proving its instances satisfy the public validator or engine
+  contract. Keep named invalid/adversarial generators and missing-value cases.
+- **Share domain assertions and tolerance policies.** Name the invariant and include
+  the relevant amounts, units, statuses or identities in failure messages. Check
+  metamorphic relationships where applicable: scaling amounts preserves ratios,
+  reordering preserves totals, zero exposure leaves capital unchanged, and currency
+  round trips stay within the domain's tolerance. Compare public observations
+  across runs without reimplementing production formulas. Each domain owns one
+  documented policy with separate bounds for unlike units, derived from actual
+  quantization and propagated rounding. Status, identity, provenance and digests
+  compare exactly; monetary tolerances must never weaken them. Find implementations
+  in the [domain assertion guide](backend/tests/support/PROPERTY_TESTING.md#assertions-and-tolerances).
 - **Model every workflow with statuses as a state machine.** Record its transition
   table (source, command, actor/scope, guard, destination and observable effects),
   including forbidden transitions, retries and terminal states. Exercise the real
@@ -295,8 +322,11 @@ coverage of the observable contract, including refusals, before accepting a chan
   its reported seed and path. Every stateful example gets isolated data and cleanup;
   use disposable schemas for mutating Postgres tests. Larger profiles belong in a
   scheduled nightly job only when one exists; document any justified budget change.
+  Migrating tests to shared helpers preserves their existing example budgets unless
+  profiling justifies a change; never depend on wall-clock timing for correctness.
   Turn a discovered defect's minimized example into a regression test and describe
-  the defect and minimal fix in the PR.
+  the defect and minimal fix in the PR. Distinguish a production defect from a
+  generator or assertion correction rather than silently loosening a property.
 
 Examples of observable assertions:
 
@@ -489,7 +519,7 @@ feature. New code goes in the target layout; existing code moves one feature per
 - **Target shape.** `app/<feature>/` holds `public.py` (the cross-feature interface: re-exports
   only, no logic), `api/` (one router module per use case, today's `verb_noun` names kept),
   `service.py` or `service/`, `domain/` (pure engines under the same purity rule as
-  `app/domain`), `models.py` or `models/`, `schemas.py` or `schemas/`, and `jobs.py` where the
+  `app/domain`), `models.py` or `models/`, `schemas.py` or `schemas/`, and `jobs.py` or `jobs/` where the
   feature has worker handlers. A role is one module until it passes about 1,000 lines. The
   kernel stays in `app/core/`, `app/db/`, `app/storage/` and `app/integrations/`; the
   composition root is `app/main.py`, `app/worker.py`, `app/api/router.py`,
@@ -530,9 +560,9 @@ feature. New code goes in the target layout; existing code moves one feature per
   imports, string patch targets, slash paths and doc references in the text files selected by
   `tracked_text_files()` in `backend/scripts/feature_moves.py`. This includes Dockerfile COPY
   paths and generated Python in Python, JavaScript and TypeScript strings; generated
-  `packages/` files and the codemod's own source and tests are excluded. Schema class docstrings are
-  preserved because Pydantic publishes them as OpenAPI descriptions; a move must not churn
-  the generated client. The boundary baseline
+  `packages/` files and the codemod's own source and tests are excluded. Schema class and
+  routed function docstrings are preserved because Pydantic and FastAPI publish them as OpenAPI
+  descriptions; a move must not churn the generated client. The boundary baseline
   retains its historical names as described above.
   It validates a batch before changing files; overlapping moves run as separate commands.
   It leaves no compatibility shim at the old path. After rebasing onto a move, in-flight

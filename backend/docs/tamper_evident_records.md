@@ -7,15 +7,50 @@ No reported financial figure or calculation rule changes.
 
 The four-layer delivery contract assigns
 [PR #504](https://github.com/CedynGroup/aequorOS/pull/504)
-to audit chaining; [PR #505](https://github.com/CedynGroup/aequorOS/pull/505)
-delivers filing locks; [PR #506](https://github.com/CedynGroup/aequorOS/pull/506)
+to audit chaining; [PR #530](https://github.com/CedynGroup/aequorOS/pull/530)
+delivers filing locks; [PR #533](https://github.com/CedynGroup/aequorOS/pull/533)
 delivers compliance storage; and [PR #507](https://github.com/CedynGroup/aequorOS/pull/507)
 delivers the append-only sweep. Each layer is validated separately. The audit
-and filing layers alone do not certify all of issue #413. No user-visible change;
-screenshots are not applicable.
+and filing layers alone do not certify all of issue #413. The compliance-storage
+layer adds submission refusals described under [write-once objects and backups](#write-once-objects-and-backups).
 
 The compliance-storage layer must use the regulatory retention period confirmed
 by counsel (#246).
+
+## Sign-in and inspector session retention
+
+Refresh-token state is credential bookkeeping, not the audit chain. Enable
+`AUTH_SESSION_PURGE_ENABLED=true` on the core worker to keep the existing hourly
+tenant scheduler alive and enqueue `session_purge`. Each job deletes at most
+`AUTH_SESSION_PURGE_BATCH_SIZE` rows (default 1000, maximum 10000) belonging to
+its organization. Eligibility is expiry **or** revocation strictly older than
+`AUTH_REFRESH_TOKEN_RETENTION_DAYS` (default 30 days). The configured interval
+is retained for incident investigation and is the sole cleanup window. Settings
+refuse startup if this window is shorter than `AUTH_REFRESH_ROTATION_GRACE`
+(seconds); increase retention or reduce grace to make the configuration valid.
+Rows with neither expiry nor revocation older than the cutoff stay, and retries
+are idempotent.
+The scheduler enqueues at most one purge per organization per UTC hour, including
+completed jobs; PostgreSQL transaction locks serialize enqueueing across worker
+replicas. Hourly batches drain any backlog without a single long cleanup transaction.
+Provisioning seeds the tenant's first tick in its onboarding transaction,
+including when the worker is already running. The operator's scheduling flags
+do not gate seeding; the worker decides whether a tick runs or stays inert.
+The switch defaults off and is rechecked by the handler. Monitor per-job
+`refresh_tokens_deleted`; repeated full batches indicate a growing backlog.
+
+`operator_inspector_sessions` records who accessed which tenant and why. It is
+audit evidence, including expired and ended sessions, and is excluded from the
+credential purge. As with the audit records in issue #413, no approved deletion
+period is currently specified: the regulatory period requires counsel's
+confirmation (#246), as described under
+[write-once objects and backups](#write-once-objects-and-backups). Until a policy
+explicitly permits deletion after an approved retention interval, inspector
+sessions are retained indefinitely. Migration `202610120098` enforces this with
+DELETE (including organization-cascade deletion) and TRUNCATE guards while
+allowing the existing end-session UPDATE. A future approved disposal policy
+needs an explicit migration and must never remove sessions inside its retention
+period; the storage Object Lock placeholder is not authority to delete them.
 
 ## Audit chain
 
@@ -116,7 +151,8 @@ both forward and round-trip upgrades with superuser test credentials, using and
 cleaning up an ordinary restricted migration role. Administrator regressions use
 either `POSTGRES_ADMIN_URL` or a superuser `TEST_DATABASE_URL`; without superuser
 credentials they skip locally and fail when `POSTGRES_PRIVILEGE_TESTS_REQUIRED`
-is set. Ordinary migration tests still need only `TEST_DATABASE_URL`.
+is set. Migration-test role preparation is owned by the
+[role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order).
 `tests/core/test_migration_credentials.py` exercises the migration credential
 boundary for each runtime connection role.
 `tests/core/test_audit_integrity_alerts.py` verifies SNS routing, the safe incident
@@ -133,24 +169,16 @@ before deploying this migration in production or staging:
   `BI_DATABASE_URL`. Alembic refuses a missing migration URL or a shared role in
   production/staging; local/test runs retain the existing URL fallback. Runtime
   containers must never receive migration credentials.
-- The migration identity needs CREATEROLE to create the NOLOGIN owner, or the
-  database administrator must precreate it and grant the migrator ADMIN,
-  INHERIT and SET membership. The migration grants only that administrative
-  identity owner membership. Runtime identities must have no direct or inherited
-  membership in the owner or migrator roles, no SUPERUSER/CREATEROLE/CREATEDB,
-  no ownership of the database or schema, and no schema CREATE privilege.
+- Prepare migration roles and owner membership through the
+  [role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order)
+  before running Alembic.
 - Keep worker/operator all-tenant BYPASSRLS identities separate from the
   migrator. Existing BYPASSRLS roles receive chain SELECT and schedule
   SELECT/UPDATE during migration. Provision those roles first, or apply those
   narrow grants afterward when provisioning them. Preserve existing authorized
   source SELECT/INSERT grants; grant no chain INSERT/UPDATE/DELETE/TRUNCATE and
-  no definer EXECUTE to runtime identities. Avoid blanket post-migration grants
-  and bootstrap ownership reassignment.
-- The legacy `scripts/bootstrap_db.sh` is incompatible with this migration:
-  it creates a NOCREATEROLE migrator without preparing audit-owner membership,
-  reassigns existing table ownership and applies blanket runtime grants.
-  Do not use it to initialize or refresh an audit-protected database; prepare
-  roles and grants as described above before running Alembic.
+  no audit-chain definer EXECUTE to runtime identities. Avoid blanket
+  post-migration grants and bootstrap ownership reassignment.
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,
   truncation and function replacement fail. Confirm one sweep with zero banks
@@ -188,3 +216,190 @@ and content-digest changes under temporary-table shadowing and altered search pa
 Apply the [deployment role and grant requirements](#required-deployment-follow-up)
 to filing seals too. The worker's BYPASSRLS privilege does not grant permission
 to alter evidence.
+
+## Write-once objects and backups
+
+Set `STORAGE_OBJECT_LOCK_ENABLED=true` for the AWS deployment. Local MinIO and
+hermetic fixtures retain their existing behavior with this flag off. Provisioning
+creates lock-capable output buckets and refuses an existing output bucket without Object
+Lock or with `Rule.DefaultRetention` in any mode. Bucket defaults retain every new
+version, including working drafts. Provisioning, application writes, presigned uploads
+and filing retention refuse incompatible Object Lock configurations before writing
+objects or changing retention. Default-retention refusals name the bucket and rule.
+They never rewrite an existing Object Lock configuration.
+The enabled application and provisioning roles need `s3:GetBucketObjectLockConfiguration`
+on output buckets to verify this policy; inability to read it refuses the operation.
+Enable Object Lock/versioning without a default retention rule on existing output buckets through the
+infrastructure owner before switching on the flag. At the shared submission boundary,
+all artifacts admitted by `filing_admits_artifact()` receive confirmed `COMPLIANCE`
+retention on their exact archived object versions before channel delivery or a
+manual submission commits. This includes previously signed versions created with
+the flag off, canonical exports, and the official BoG formula workbook. Internal
+SDI working sheets, ICAAP Word drafts and unrelated outputs remain unlocked in the
+supported output-bucket configuration. Dedicated backup buckets may carry a default
+retention rule; each dump and manifest still receives explicit confirmed `COMPLIANCE`
+retention.
+Exports and signing archive bytes without automatically locking every output;
+read-only filing previews do not apply retention. Attachments are recorded as a
+manifest, not transmitted artifacts, and are outside this object retention set.
+Retention can be extended but is never shortened, including an existing longer
+governance interval. Required deadlines round up to whole seconds so storage
+timestamp precision cannot shorten the interval. A retention PUT is followed by
+a version-specific GET; submission refuses if compliance mode or the required
+date cannot be confirmed.
+The shared submission preparation boundary returns HTTP 409 with
+`error_code=filing_retention_unconfirmed` for storage failures during auto-export
+or exact-version retention, including output buckets without Object Lock or with
+`Rule.DefaultRetention`. Refusal precedes channel delivery and the submission
+event; package status and financial content stay unchanged. Resolve
+the storage capability, permissions or archived-version problem before retrying.
+The submission event records each retained `storage_version_id`.
+
+For historical filings, run the tenant- and bank-scoped inventory from `backend`:
+
+```bash
+uv run python -m scripts.retain_filed_objects --organization-id OR-XXXXXXXX --bank-id BK-XXXXXXXX
+```
+
+This is a dry-run by default: it reads submission manifests and archived version
+rows and prints bucket/key/version/date locators, without provisioning buckets or
+writing database or object-store state. Resolve missing manifests, missing version
+rows or nonconcrete versions before rollout; the command refuses those records.
+For older manifests without version IDs it resolves the latest matching archived
+kind/path/checksum at or before the submission, never the current object-store key.
+Review the inventory and counsel-approved period, enable Object Lock on the
+existing buckets, then explicitly pass `--apply` with the retention flag enabled
+to apply and verify retention. This is an irreversible deployment-time operator
+decision; never run it against real buckets during development or validation.
+Re-running only extends retention and never shortens existing compliance locks.
+Presigned writes keep normal encryption rules; they cannot bypass the shared
+filing boundary's exact-version retention requirement.
+
+A delete marker hides the current key but does not remove a
+locked version. Apply an IAM deny on DeleteObject for evidence buckets if hiding
+current keys must also be prevented.
+
+`STORAGE_OBJECT_LOCK_RETENTION_DAYS` sets the interval in days; its default in
+[`StorageEngineSettings`](../app/storage/config.py) is **an operational placeholder,
+confirm with counsel, #246**. This is not a statement of BoG law or legal sign-off.
+Counsel and the infrastructure owner must approve the production
+period before enabling compliance retention, which cannot be shortened on stored
+versions. In AWS, even account administrators cannot delete or shorten a locked
+version during that interval. See [AWS Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html).
+
+`backup_database.py` publishes both its dump and manifest when the flag is on.
+Configure `BACKUP_WORM_BUCKET` to an existing versioned Object Lock bucket and
+`STORAGE_KMS_KEY_ID` to the platform backup encryption key. Uploads use unique
+prefixes, SSE-KMS and compliance retention, verify concrete version IDs, and print
+those locators for the backup runner's evidence record. Publication errors fail
+rather than claiming a retained backup; local recovery artifacts remain available.
+Off-flag backup runs continue to write local files. The retained manifest includes
+the chain tables in its schema fingerprints. Object-store backups copy ciphertext
+and envelope metadata; keep the paired database backup for the envelopes.
+Keep the platform backup KMS key decrypt-capable for the full retained backup
+interval.
+
+Object Lock retains ciphertext; it does not grant permission to decrypt it or
+prevent cryptographic loss of access through key destruction. Bank-key enforcement,
+rotation and retained-key recovery are governed by
+[the bank encryption contract](bank_encryption.md#rotation-backups-and-recovery).
+
+## Append-only inventory and sweep
+
+`202610110095` complements the existing attestation, governance, ICAAP, market-data
+and filing-chain migrations. The inventory distinguishes history from live state:
+
+| Record family                                                                                                            | Database protection                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tenant and operator audit logs                                                                                           | Existing UPDATE/DELETE guards; database hash chain; TRUNCATE guard                                                                                           |
+| Signature and artifact versions, filing approvals/submission events, pinned stages/decisions and attachments/withdrawals | Existing UPDATE guards and signature DELETE guard; sweep closes other DELETE gaps and adds TRUNCATE guards                                                   |
+| Scenario assumption and financial manual-edit histories                                                                  | Added UPDATE/DELETE/TRUNCATE guards                                                                                                                          |
+| Eleven `param_*` board registers (risk weights, limits, thresholds, haircuts, shocks, ECL assumptions)                   | Values/scope/approval evidence sealed from insert; only effective-to and timestamp bookkeeping may update; DELETE/TRUNCATE refused                           |
+| Approved/rejected forecast assumption generations                                                                        | All updates and deletion refused; drafts retain their editing lifecycle                                                                                      |
+| Authorization bindings                                                                                                   | Grant/scope evidence sealed from insert; revocation fields write-once; revoked status cannot be reversed; DELETE/TRUNCATE refused                            |
+| Completed regulatory runs and package financial snapshots                                                                | Filing/input seals above; added TRUNCATE guard                                                                                                               |
+| Live scenario assumptions, current financial workspace, working artifact pointers                                        | Mutable operational state; immutable histories/version records retain their evidence                                                                         |
+| Regulatory parameter control plane and system-of-record declarations                                                     | Existing governed-row seals; approved rows cannot be deleted; all TRUNCATE refused; draft, effective-date and revocation lifecycles preserved                |
+| Reconciliation exceptions and canonical withdrawals                                                                      | Existing governed-row seals; all exceptions and applied/reversed withdrawals cannot be deleted; all TRUNCATE refused; pending withdrawal lifecycle preserved |
+
+No application-set reset flag bypasses the new deletion guards. Destructive test
+setup must use fresh disposable schemas or privileged fixture restoration, never
+a production mutation capability. Every authority mutation continues to use the
+existing transactional authorization invalidation service.
+
+`tests/db/test_signed_filing_locks.py` verifies locked edits/deletes, completion,
+void-and-rework, and linked resubmission. `tests/db/test_append_only_sweep.py`
+exercises each board register plus assumption approvals, grant scope/revocation
+and legacy history. `tests/db/test_retained_filing_evidence.py` tests UPDATE, DELETE
+and cascading TRUNCATE against all eight retained filing-child tables.
+`tests/storage/test_object_lock.py` uses Moto plus real local
+bank-key encryption to verify retention metadata, refusal of version deletion,
+idempotence, no shortening by the retention helper, and revocation refusal.
+Moto's missing GetObjectRetention action is adapted to its real HEAD retention
+headers; uploads, retention writes and version deletion guards remain emulator
+operations. Vendor errors are translated to a safe storage-layer failure.
+These are executable contract tests; actual AWS compliance immutability and pager
+delivery require deployment acceptance evidence, not an emulator assertion.
+
+## Historical local validation record (2026-10-10)
+
+This records the original stack at `94643538`; it does not validate the restacked
+branch. Current-parent validation remains required before shipping.
+
+The exact `risk-service:format`, `risk-service:lint` and
+`risk-service:typecheck` tasks passed. The strict type-check baseline added no
+errors and removed three legacy Any errors. No financial figures or rules changed.
+
+The hermetic suite passed **16,154 tests**, with **671 skips** and **one expected
+failure**, using four workers. It preceded the final cloud-endpoint,
+output-bucket and tenant-progress refinements. The final focused run below
+exercised those refinements and passed **all 74 tests**, including complete
+upgrade/downgrade of the migration chain. All PostgreSQL writes used disposable
+schemas in this worktree's isolated local PostgreSQL service.
+
+```bash
+env -u TEST_DATABASE_URL -u REAL_DATA_DATABASE_URL \
+  uv run pytest -n 4 --dist loadfile --tb=short -q
+
+uv run python scripts/local_services.py run --postgres --role-admin -- \
+  uv run pytest -n 4 --dist loadfile --tb=short -q \
+  tests/db/test_postgres_migrations.py \
+  tests/db/test_audit_integrity.py tests/db/test_signed_filing_locks.py \
+  tests/db/test_append_only_sweep.py tests/db/test_retained_filing_evidence.py \
+  tests/db/test_governance_append_only.py tests/core/test_audit_integrity_alerts.py \
+  tests/services/test_audit_integrity_schedule.py tests/storage/test_object_lock.py \
+  tests/db/test_regulatory_event_append_only.py
+```
+
+Production acceptance still needs counsel's retention period, an AWS locked-version
+deletion/shortening refusal, and an SNS-to-pager receipt. Attach those deployment
+records alongside this design and test evidence in the BoG pack (#356 / #401).
+
+## Sweep integration validation (2026-10-11)
+
+The sweep follows merged audit, filing and storage protections, with revision
+`202610110095` following canonical bank-binding revision `202610110094` and
+bank-ownership revision `202610110093`, which follows ICAAP revision
+`202610110092`. Alembic reports one head.
+The initial replay reproduced a two-head setup failure before guard execution;
+linearizing this new revision resolves it without changing the ICAAP migration.
+The signature DELETE guard remains owned by the filing-lock migration, while the
+sweep adds its owner-level TRUNCATE guard.
+
+Native PostgreSQL validation with four workers passed **81 migration, audit,
+filing and sweep checks** in 218.02 seconds, including restricted migration
+upgrade/downgrade and linked correction. A separate **66-case matrix** passed in
+31.62 seconds: each of the 33 retained tables refuses cascading TRUNCATE both for
+its actual owner and for the runtime role. Owner cases temporarily restore
+TRUNCATE privileges, including cascade dependencies, inside rolled-back fixtures
+to reach the statement trigger; runtime cases retain revoked privileges. These
+checks prove both enforcement layers without adding a production bypass.
+
+The disposable native cluster used `max_locks_per_transaction=1024`. A prior run
+passed 80 checks but exhausted its default lock table during three schema
+teardowns; the retry cleaned those known schemas and completed. This is test
+capacity evidence, not a production configuration requirement. All managed
+services stopped after validation. Exact Ruff lint, strict BasedPyright baseline
+and changed-file Python/Markdown formatting passed without baseline growth.
+This pre-pipeline evidence supplements the historical record above; final CI
+and live pipeline evidence belong to the published sweep head.

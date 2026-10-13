@@ -152,6 +152,40 @@ def test_a_move_relocates_files_without_shims(repository: Path) -> None:
     assert not (backend / "app/domain/fx").exists()
 
 
+@pytest.mark.parametrize("destination", ["app.fx.api", "app.fx.api.rates"])
+@pytest.mark.parametrize("definition", ["def", "async def"])
+def test_route_descriptions_stay_frozen_while_the_endpoint_moves(
+    repository: Path, destination: str, definition: str
+) -> None:
+    features = repository / "backend/app/features"
+    features.mkdir()
+    (features / "__init__.py").write_text("")
+    (features / "rates.py").write_text(
+        "from fastapi import APIRouter\n"
+        "from app.services.regulatory_fx import run\n\n"
+        "router = APIRouter()\n\n"
+        '@router.get("/rate")\n'
+        f"{definition} read_rate() -> int:\n"
+        '    """Uses app.services.regulatory_fx (app/services/regulatory_fx.py)."""\n'
+        "    return run()\n"
+    )
+    _git(repository, "add", ".")
+    probe = (
+        "import json\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n"
+        "from app.features.rates import router\n"
+        "app = FastAPI()\napp.include_router(router)\n"
+        "assert TestClient(app).get('/rate').json() == 1\n"
+        "print(json.dumps(app.openapi(), sort_keys=True))"
+    )
+    before = _python(repository, probe)
+    _run(repository, "move", [MOVES[0], ("app.features.rates", destination)])
+    moved_probe = probe.replace("app.features.rates", destination)
+    assert _python(repository, moved_probe) == before
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+    assert _python(repository, moved_probe) == before
+
+
 @pytest.mark.parametrize("command", ["move", "rewrite"])
 @pytest.mark.parametrize(
     "dockerfile",

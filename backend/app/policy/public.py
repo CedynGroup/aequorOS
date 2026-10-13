@@ -6,7 +6,7 @@ from app.models.parameter_register import (
     ParamLiquidityHaircut,
     ParamLiquidityThreshold,
 )
-from app.services import institution_types, jurisdictions, regulatory_parameters
+from app.services import institution_types, jurisdictions, params, regulatory_parameters
 from app.services.institution_types import InstitutionTypeUnresolved, institution_class
 from app.services.jurisdictions import (
     base_currency,
@@ -14,7 +14,7 @@ from app.services.jurisdictions import (
     jurisdiction_code,
     regulator_short,
 )
-from app.services.params import get_active_params
+from app.services.params import PrefetchedActiveParams, get_active_params
 
 __all__ = [
     "InstitutionTypeUnresolved",
@@ -22,6 +22,7 @@ __all__ = [
     "ParamEclAssumption",
     "ParamLiquidityHaircut",
     "ParamLiquidityThreshold",
+    "PrefetchedActiveParams",
     "base_currency",
     "get_active_params",
     "get_jurisdiction",
@@ -29,6 +30,7 @@ __all__ = [
     "institution_types",
     "jurisdiction_code",
     "jurisdictions",
+    "params",
     "regulator_short",
     "regulatory_parameters",
 ]

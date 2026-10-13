@@ -1,10 +1,16 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, RotateCcw, Search } from 'lucide-react';
-import { getAudit, type AuditLogItem } from '@/lib/api';
-import { useApi } from '@/lib/use-api';
-import { DASH, fmtTimestamp, fmtTs } from '@/lib/format';
+import { useState } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  RotateCcw,
+  Search,
+} from "lucide-react";
+import { getAudit, type AuditLogItem } from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { DASH, fmtTimestamp, fmtTs } from "@/lib/format";
 import {
   Button,
   Chip,
@@ -20,9 +26,9 @@ import {
   SectionCard,
   Select,
   SkeletonRows,
-} from '@/components/ui';
-import { AdminBoundary } from './AdminBoundary';
-import { downloadCsv, prettyDetail, toCsv } from './util';
+} from "@/components/ui";
+import { AdminBoundary } from "./AdminBoundary";
+import { downloadCsv, prettyDetail, toCsv } from "./util";
 
 interface Filters {
   operatorEmail: string;
@@ -33,11 +39,11 @@ interface Filters {
 }
 
 const BLANK_FILTERS: Filters = {
-  operatorEmail: '',
-  targetOrg: '',
-  action: '',
-  from: '',
-  to: '',
+  operatorEmail: "",
+  targetOrg: "",
+  action: "",
+  from: "",
+  to: "",
 };
 
 const LIMIT_OPTIONS = [25, 50, 100, 200];
@@ -86,60 +92,82 @@ export default function AuditView() {
     const items = data?.items ?? [];
     if (items.length === 0) return;
     const csv = toCsv(
-      ['id', 'created_at', 'operator_email', 'auth_mode', 'action', 'target_org', 'detail'],
+      [
+        "id",
+        "created_at",
+        "operator_email",
+        "auth_mode",
+        "action",
+        "target_org",
+        "detail",
+      ],
       items.map((i) => [
         i.id,
         i.created_at,
         i.operator_email,
         i.auth_mode,
         i.action,
-        i.target_org ?? '',
-        i.detail ?? '',
+        i.target_org ?? "",
+        i.detail ?? "",
       ]),
     );
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
     downloadCsv(`operator-audit-${stamp}.csv`, csv);
   }
 
   const total = data?.total ?? 0;
   const shown = data?.items.length ?? 0;
   const rangeLabel =
-    total > 0 ? `${offset + 1}–${offset + shown} of ${total}` : loading ? 'Loading…' : 'No entries';
+    total > 0
+      ? `${offset + 1}–${offset + shown} of ${total}`
+      : loading
+        ? "Loading…"
+        : "No entries";
   const canPrev = offset > 0;
   const canNext = offset + limit < total;
   const hasFilters = Object.values(applied).some(Boolean);
 
   const columns: Column<AuditLogItem>[] = [
     {
-      key: 'ts',
-      header: 'Timestamp (UTC)',
+      key: "ts",
+      header: "Timestamp (UTC)",
       sortable: true,
       sortAccessor: (i) => i.created_at,
-      render: (i) => <span className="font-mono text-caption text-navy">{fmtTimestamp(i.created_at)}</span>,
+      render: (i) => (
+        <span className="font-mono text-caption text-navy">
+          {fmtTimestamp(i.created_at)}
+        </span>
+      ),
     },
     {
-      key: 'action',
-      header: 'Action',
+      key: "action",
+      header: "Action",
       sortable: true,
       sortAccessor: (i) => i.action,
-      render: (i) => <span className="font-mono text-caption text-ink">{i.action}</span>,
+      render: (i) => (
+        <span className="font-mono text-caption text-ink">{i.action}</span>
+      ),
     },
     {
-      key: 'operator',
-      header: 'Operator',
+      key: "operator",
+      header: "Operator",
       sortable: true,
       sortAccessor: (i) => i.operator_email,
       render: (i) => <span className="text-ink">{i.operator_email}</span>,
     },
     {
-      key: 'target',
-      header: 'Target org',
+      key: "target",
+      header: "Target org",
       render: (i) =>
-        i.target_org ? <MonoId id={i.target_org} /> : <span className="text-slate-light">{DASH}</span>,
+        i.target_org ? (
+          <MonoId id={i.target_org} />
+        ) : (
+          <span className="text-slate-light">{DASH}</span>
+        ),
     },
     {
-      key: 'auth',
-      header: 'Auth',
+      key: "auth",
+      header: "Auth",
       render: (i) => <Chip mono>{i.auth_mode}</Chip>,
     },
   ];
@@ -147,7 +175,7 @@ export default function AuditView() {
   return (
     <div>
       <PageHeader
-        breadcrumbs={[{ label: 'Admin' }, { label: 'Audit Log' }]}
+        breadcrumbs={[{ label: "Admin" }, { label: "Audit Log" }]}
         title="Audit Log"
         subtitle="The append-only operator_audit_log — every staff mutation, filterable."
       />
@@ -163,7 +191,9 @@ export default function AuditView() {
                 id="f-email"
                 placeholder="analyst@aequoros.com"
                 value={draft.operatorEmail}
-                onChange={(e) => setDraft((d) => ({ ...d, operatorEmail: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, operatorEmail: e.target.value }))
+                }
               />
             </Field>
             <Field label="Target org" htmlFor="f-org">
@@ -171,7 +201,9 @@ export default function AuditView() {
                 id="f-org"
                 placeholder="OR-XXXXXXXX"
                 value={draft.targetOrg}
-                onChange={(e) => setDraft((d) => ({ ...d, targetOrg: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, targetOrg: e.target.value }))
+                }
               />
             </Field>
             <Field label="Action prefix" htmlFor="f-action">
@@ -179,7 +211,9 @@ export default function AuditView() {
                 id="f-action"
                 placeholder="operator. / inspector. / tenant."
                 value={draft.action}
-                onChange={(e) => setDraft((d) => ({ ...d, action: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, action: e.target.value }))
+                }
               />
             </Field>
             <Field label="From" htmlFor="f-from">
@@ -187,7 +221,9 @@ export default function AuditView() {
                 id="f-from"
                 type="date"
                 value={draft.from}
-                onChange={(e) => setDraft((d) => ({ ...d, from: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, from: e.target.value }))
+                }
               />
             </Field>
             <Field label="To" htmlFor="f-to">
@@ -195,7 +231,9 @@ export default function AuditView() {
                 id="f-to"
                 type="date"
                 value={draft.to}
-                onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, to: e.target.value }))
+                }
               />
             </Field>
             <div className="flex items-end gap-2">
@@ -219,9 +257,10 @@ export default function AuditView() {
             <span className="inline-flex items-center gap-1.5">
               Operator audit log
               <InfoTip label="About the audit log" width="w-80">
-                This is the append-only OPERATOR action log — immutable by a database trigger
-                (UPDATE and DELETE are blocked). Every operator mutation across all tenants lands
-                here with the acting operator, auth mode, and target org.
+                This is the append-only OPERATOR action log — immutable by a
+                database trigger (UPDATE and DELETE are blocked). Every operator
+                mutation across all tenants lands here with the acting operator,
+                auth mode, and target org.
               </InfoTip>
             </span>
           }
@@ -291,9 +330,11 @@ export default function AuditView() {
               columns={columns}
               rows={data?.items ?? []}
               onRowClick={(row) => setSelected(row)}
-              initialSort={{ key: 'ts', dir: 'desc' }}
+              initialSort={{ key: "ts", dir: "desc" }}
               emptyMessage={
-                hasFilters ? 'No audit entries match these filters.' : 'No audit entries yet.'
+                hasFilters
+                  ? "No audit entries match these filters."
+                  : "No audit entries yet."
               }
             />
           </AdminBoundary>
@@ -314,7 +355,10 @@ export default function AuditView() {
                 <MonoId id={selected.id} />
               </FieldRow>
               <FieldRow label="When">
-                <span className="font-mono text-caption" title={fmtTs(selected.created_at)}>
+                <span
+                  className="font-mono text-caption"
+                  title={fmtTs(selected.created_at)}
+                >
                   {fmtTimestamp(selected.created_at)}
                 </span>
               </FieldRow>
@@ -323,7 +367,9 @@ export default function AuditView() {
                 <Chip mono>{selected.auth_mode}</Chip>
               </FieldRow>
               <FieldRow label="Action">
-                <span className="font-mono text-caption">{selected.action}</span>
+                <span className="font-mono text-caption">
+                  {selected.action}
+                </span>
               </FieldRow>
               <FieldRow label="Target org">
                 {selected.target_org ? (
@@ -335,9 +381,11 @@ export default function AuditView() {
             </div>
 
             <div>
-              <p className="mb-1.5 text-caption font-medium text-slate">Detail</p>
+              <p className="mb-1.5 text-caption font-medium text-slate">
+                Detail
+              </p>
               {selected.detail ? (
-                <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border-light bg-surface p-3 font-mono text-caption text-ink">
+                <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap wrap-break-word rounded-md border border-border-light bg-surface p-3 font-mono text-caption text-ink">
                   {prettyDetail(selected.detail)}
                 </pre>
               ) : (

@@ -27,6 +27,7 @@ from app.models import (
     User,
 )
 from app.services import implied_rating
+from tests.bi.service.test_catalogue_parity import assert_published_metrics
 
 ORG_ID = "OR-RAT00001"
 BANK_ID = "BK-RAT00001"
@@ -49,6 +50,7 @@ def _canonical_metadata(db_session: Session) -> dict[str, object]:
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_ID,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="rating-canonical-fixture",
@@ -299,6 +301,7 @@ def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(  # n
     assert bank is not None
     live = implied_rating.compute_live(db_session, CTX, bank, period)
 
+    assert_published_metrics("rating", live.metrics)
     assert live.metrics["pit_rating_grade"] == "ccc+"
     assert live.metrics["pit_pd_upper_pct"]
     # Driver metrics the live card depends on are present on the success path.

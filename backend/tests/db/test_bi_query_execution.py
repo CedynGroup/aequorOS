@@ -27,17 +27,17 @@ from sqlalchemy import func, literal, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from app.bi.domain.catalogue import Catalogue, catalogue
+from app.bi.models.content import BiMeasure
+from app.bi.models.marts import BiAggPositionDaily, BiDimBranch, BiDimDate, BiFactPositionDaily
+from app.bi.schemas.query import BiQuery
+from app.bi.service import execution
+from app.bi.service.compiler import compile_query
+from app.bi.service.content import expression_digest
+from app.bi.service.errors import BiQueryTimeout, InvalidQuery
+from app.bi.service.execution import execute, run_select
 from app.core.config import get_settings
-from app.domain.bi.catalogue import Catalogue, catalogue
 from app.models import Bank
-from app.models.bi import BiAggPositionDaily, BiDimBranch, BiDimDate, BiFactPositionDaily
-from app.models.bi_content import BiMeasure
-from app.schemas.bi import BiQuery
-from app.services.bi import execution
-from app.services.bi.compiler import compile_query
-from app.services.bi.content import expression_digest
-from app.services.bi.errors import BiQueryTimeout, InvalidQuery
-from app.services.bi.execution import execute, run_select
 from tests.support.helpers import ORG_1, USER_1
 
 pytestmark = pytest.mark.skipif(

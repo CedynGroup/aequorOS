@@ -72,6 +72,11 @@ description = "Run risk service pytest"
 dir = "backend"
 run = "mise run risk-service:test"
 
+[tasks."risk-service:test-fast"]
+description = "Run local affected risk service tests with four workers"
+dir = "backend"
+run = "mise run risk-service:test-fast"
+
 [tasks."risk-service:test-postgres"]
 description = "Run risk service pytest against local Postgres"
 dir = "backend"

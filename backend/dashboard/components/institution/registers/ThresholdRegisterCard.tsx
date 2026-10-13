@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Board threshold register editor (LMTD 2026 ¶11(b)–(e)).
@@ -13,28 +13,28 @@
  * action mirrors that gate.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import type {
   LiquidityThresholdRegisterRead,
   LiquidityThresholdRead,
   LiquidityThresholdUpdate,
-} from '@aequoros/risk-service-api';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { SkeletonTable } from '@/components/ui/Skeleton';
+} from "@aequoros/risk-service-api";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import {
   useLiquidityThresholdRegister,
   useUpdateLiquidityThresholdRegister,
-} from '@/lib/api/hooks';
-import { fmtDateUTC, num } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { fmtDateUTC, num } from "@/lib/api/values";
+import { fmtPct } from "@/lib/format";
 import {
   FormActions,
   ReasonField,
   textOrNull,
-} from '@/components/institution/shared';
+} from "@/components/institution/shared";
 import {
   EditRegisterAction,
   EvidenceFields,
@@ -42,19 +42,19 @@ import {
   parseDecimalInput,
   sameDecimal,
   useApproverGate,
-} from './common';
+} from "./common";
 
 /** LMTD Table 1 ratio vocabulary (the backend's threshold codes). */
 const THRESHOLD_LABELS: Record<string, string> = {
-  narrow_to_volatile: 'Narrow liquid assets / volatile funds',
-  broad_to_volatile: 'Broad liquid assets / volatile funds',
-  narrow_to_short_term: 'Narrow liquid assets / short-term liabilities',
-  broad_to_short_term: 'Broad liquid assets / short-term liabilities',
-  narrow_to_total_deposits: 'Narrow liquid assets / total deposits',
-  broad_to_total_deposits: 'Broad liquid assets / total deposits',
-  narrow_to_total_assets: 'Narrow liquid assets / total assets',
-  broad_to_total_assets: 'Broad liquid assets / total assets',
-  currency_mismatch_limit_pct: 'Currency mismatch limit',
+  narrow_to_volatile: "Narrow liquid assets / volatile funds",
+  broad_to_volatile: "Broad liquid assets / volatile funds",
+  narrow_to_short_term: "Narrow liquid assets / short-term liabilities",
+  broad_to_short_term: "Broad liquid assets / short-term liabilities",
+  narrow_to_total_deposits: "Narrow liquid assets / total deposits",
+  broad_to_total_deposits: "Broad liquid assets / total deposits",
+  narrow_to_total_assets: "Narrow liquid assets / total assets",
+  broad_to_total_assets: "Broad liquid assets / total assets",
+  currency_mismatch_limit_pct: "Currency mismatch limit",
 };
 
 /**
@@ -62,7 +62,7 @@ const THRESHOLD_LABELS: Record<string, string> = {
  * mirrors the backend's EXTRA_THRESHOLD_CODES: no directive default exists,
  * so absent a Board row no check runs (¶11(c)–(e) are Board obligations).
  */
-const ADOPTABLE_EXTRA_CODES = ['currency_mismatch_limit_pct'];
+const ADOPTABLE_EXTRA_CODES = ["currency_mismatch_limit_pct"];
 
 function thresholdLabel(code: string): string {
   return THRESHOLD_LABELS[code] ?? code;
@@ -70,41 +70,43 @@ function thresholdLabel(code: string): string {
 
 const viewColumns: Column<LiquidityThresholdRead>[] = [
   {
-    key: 'code',
-    header: 'Threshold',
-    width: '34%',
+    key: "code",
+    header: "Threshold",
+    width: "34%",
     render: (r) => (
       <div>
-        <p className="font-medium text-navy">{thresholdLabel(r.thresholdCode)}</p>
+        <p className="font-medium text-navy">
+          {thresholdLabel(r.thresholdCode)}
+        </p>
         <p className="text-caption text-slate font-mono">{r.thresholdCode}</p>
       </div>
     ),
   },
   {
-    key: 'level',
-    header: 'Active level',
+    key: "level",
+    header: "Active level",
     numeric: true,
     render: (r) => fmtPct(num(r.thresholdPct), 2),
   },
   {
-    key: 'source',
-    header: 'Source',
+    key: "source",
+    header: "Source",
     render: (r) =>
-      r.source === 'board_register' ? (
+      r.source === "board_register" ? (
         <StatusPill tone="success">Board register</StatusPill>
       ) : (
         <StatusPill tone="slate">Directive minimum</StatusPill>
       ),
   },
   {
-    key: 'evidence',
-    header: 'Approval evidence',
+    key: "evidence",
+    header: "Approval evidence",
     render: (r) =>
       r.approvedBy ? (
         <div>
           <p className="text-body text-navy">{r.approvedBy}</p>
           <p className="text-caption text-slate">
-            Effective {r.effectiveFrom ? fmtDateUTC(r.effectiveFrom) : '—'}
+            Effective {r.effectiveFrom ? fmtDateUTC(r.effectiveFrom) : "—"}
           </p>
         </div>
       ) : (
@@ -161,7 +163,11 @@ export default function ThresholdRegisterCard({ bankId }: { bankId: string }) {
             onClose={() => setEditing(false)}
           />
         ) : (
-          <DataTable columns={viewColumns} rows={query.data.thresholds} density="compact" />
+          <DataTable
+            columns={viewColumns}
+            rows={query.data.thresholds}
+            density="compact"
+          />
         )
       ) : null}
     </SectionCard>
@@ -182,7 +188,9 @@ function ThresholdEditor({
   // Editable rows: the resolved bank-class thresholds, plus an adoption row
   // for each limit-shaped extra code the Board has not adopted yet.
   const rows = useMemo(() => {
-    const bankRows = register.thresholds.filter((r) => r.institutionClass === 'bank');
+    const bankRows = register.thresholds.filter(
+      (r) => r.institutionClass === "bank",
+    );
     const present = new Set(bankRows.map((r) => r.thresholdCode));
     const extras = ADOPTABLE_EXTRA_CODES.filter((code) => !present.has(code));
     return { bankRows, extras };
@@ -190,19 +198,25 @@ function ThresholdEditor({
 
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
-    for (const row of rows.bankRows) initial[row.thresholdCode] = String(row.thresholdPct);
-    for (const code of rows.extras) initial[code] = '';
+    for (const row of rows.bankRows)
+      initial[row.thresholdCode] = String(row.thresholdPct);
+    for (const code of rows.extras) initial[code] = "";
     return initial;
   });
-  const [effectiveFrom, setEffectiveFrom] = useState('');
-  const [approvedBy, setApprovedBy] = useState('');
-  const [notes, setNotes] = useState('');
-  const [reason, setReason] = useState('');
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const [approvedBy, setApprovedBy] = useState("");
+  const [notes, setNotes] = useState("");
+  const [reason, setReason] = useState("");
 
   const currentByCode = useMemo(
     () =>
-      new Map(rows.bankRows.map((row) => [row.thresholdCode, String(row.thresholdPct)])),
-    [rows]
+      new Map(
+        rows.bankRows.map((row) => [
+          row.thresholdCode,
+          String(row.thresholdPct),
+        ]),
+      ),
+    [rows],
   );
 
   // Changed-only payload; a filled input must be a positive number.
@@ -212,7 +226,7 @@ function ThresholdEditor({
     for (const [code, input] of Object.entries(values)) {
       const current = currentByCode.get(code);
       if (sameDecimal(input, current ?? null)) continue;
-      if (input.trim() === '') continue; // an emptied extra row simply is not adopted
+      if (input.trim() === "") continue; // an emptied extra row simply is not adopted
       const parsed = parseDecimalInput(input);
       if (parsed === null || parsed <= 0) {
         invalidCodes.push(code);
@@ -235,7 +249,7 @@ function ThresholdEditor({
     event.preventDefault();
     if (!canSubmit) return;
     const payload: LiquidityThresholdUpdate = {
-      institutionClass: 'bank',
+      institutionClass: "bank",
       effectiveFrom: new Date(effectiveFrom),
       approvedBy: approvedBy.trim(),
       thresholds: changed,
@@ -257,11 +271,11 @@ function ThresholdEditor({
             key={row.thresholdCode}
             code={row.thresholdCode}
             hint={
-              row.source === 'board_register'
+              row.source === "board_register"
                 ? `Board level ${fmtPct(num(row.thresholdPct), 2)}`
                 : `Directive minimum ${fmtPct(num(row.thresholdPct), 2)}`
             }
-            value={values[row.thresholdCode] ?? ''}
+            value={values[row.thresholdCode] ?? ""}
             invalid={invalid.includes(row.thresholdCode)}
             onChange={(next) =>
               setValues((prev) => ({ ...prev, [row.thresholdCode]: next }))
@@ -273,9 +287,11 @@ function ThresholdEditor({
             key={code}
             code={code}
             hint="No directive default — adopted only by a Board row; leave blank to keep it unadopted"
-            value={values[code] ?? ''}
+            value={values[code] ?? ""}
             invalid={invalid.includes(code)}
-            onChange={(next) => setValues((prev) => ({ ...prev, [code]: next }))}
+            onChange={(next) =>
+              setValues((prev) => ({ ...prev, [code]: next }))
+            }
           />
         ))}
       </div>
@@ -296,12 +312,15 @@ function ThresholdEditor({
 
       <p className="text-caption text-slate">
         {changedCount === 0
-          ? 'No levels changed yet — only changed codes are recorded; the rest keep their current resolution.'
-          : `${changedCount} threshold${changedCount === 1 ? '' : 's'} will be recorded in this generation.`}
+          ? "No levels changed yet — only changed codes are recorded; the rest keep their current resolution."
+          : `${changedCount} threshold${changedCount === 1 ? "" : "s"} will be recorded in this generation.`}
       </p>
 
       {update.error && (
-        <ErrorPanel error={update.error} title="Could not record the threshold generation" />
+        <ErrorPanel
+          error={update.error}
+          title="Could not record the threshold generation"
+        />
       )}
 
       <FormActions
@@ -328,7 +347,7 @@ function ThresholdEditRow({
   onChange: (next: string) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded border border-border-light px-3 py-2">
+    <div className="flex items-center justify-between gap-4 rounded-sm border border-border-light px-3 py-2">
       <div className="min-w-0">
         <label
           htmlFor={`thr-${code}`}
@@ -346,7 +365,7 @@ function ThresholdEditRow({
           inputMode="decimal"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`${numericInputCls} w-28 ${invalid ? 'border-critical' : ''}`}
+          className={`${numericInputCls} w-28 ${invalid ? "border-critical" : ""}`}
           aria-invalid={invalid}
         />
         <span className="text-caption text-slate">%</span>

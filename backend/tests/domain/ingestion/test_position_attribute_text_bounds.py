@@ -20,6 +20,12 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+from app.bi.models.marts import (
+    BiAggPositionDaily,
+    BiFactLoanEvent,
+    BiFactPositionDaily,
+    BiFactPositionEom,
+)
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.domain.ingestion.contracts import CanonicalRecords, PositionData
 from app.domain.ingestion.optional_position_fields import (
@@ -36,12 +42,6 @@ from app.domain.ingestion.validation import (
     ValidationOutcome,
     default_validation_config,
     run_validation,
-)
-from app.models.bi import (
-    BiAggPositionDaily,
-    BiFactLoanEvent,
-    BiFactPositionDaily,
-    BiFactPositionEom,
 )
 
 AS_OF = date(2026, 6, 30)

@@ -586,17 +586,37 @@ def rewrite_text(
     """Every rewrite pass for one backend-relative file, leaving ``frozen`` strings alone."""
     module, is_package = _module_of(relative)
     path = Path(relative)
-    if (
-        module is not None
-        and relative.startswith("app/")
-        and ("schemas" in path.parts or path.stem == "schemas")
-    ):
-        # Pydantic publishes class docstrings as OpenAPI descriptions. A file move
-        # must preserve those strings so generated clients do not change.
+    if module is not None and relative.startswith("app/"):
+        # Pydantic class and FastAPI route docstrings become OpenAPI descriptions.
+        # Preserve this emitted contract while rewriting imports and internal docs.
         starts = _offsets(text)
         descriptions: set[str] = set()
         for node in ast.walk(ast.parse(text)):
-            if not isinstance(node, ast.ClassDef) or not node.body:
+            if not isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            schema = isinstance(node, ast.ClassDef) and (
+                "schemas" in path.parts or path.stem == "schemas"
+            )
+            route = isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and any(
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and isinstance(decorator.func.value, ast.Name)
+                and decorator.func.value.id in {"router", "app"}
+                and decorator.func.attr
+                in {
+                    "get",
+                    "post",
+                    "put",
+                    "patch",
+                    "delete",
+                    "options",
+                    "head",
+                    "trace",
+                    "api_route",
+                }
+                for decorator in node.decorator_list
+            )
+            if not (schema or route) or not node.body:
                 continue
             first = node.body[0]
             if not isinstance(first, ast.Expr) or not isinstance(first.value, ast.Constant):

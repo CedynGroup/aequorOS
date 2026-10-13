@@ -161,7 +161,7 @@ OFFICER_ID_MAX_LENGTH = 120
 #:
 #: Two consumers read this table and MUST agree, which is why it lives once, here,
 #: upstream of both: ``validation.py`` reports an over-long value at ingestion
-#: (rule ``position_attribute_text_bounds``), and ``app/domain/bi/extract.py``
+#: (rule ``position_attribute_text_bounds``), and ``app/bi/domain/extract.py``
 #: refuses to carry it — the mart column is NULL, never a truncation, because a
 #: branch code cut to 120 characters is a DIFFERENT branch, and an identifier that
 #: is nearly right is worse than one that is absent and labelled. A test pins each

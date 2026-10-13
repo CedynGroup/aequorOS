@@ -2205,7 +2205,7 @@
   "reportUnknownVariableType": 5
  },
  "app.storage.s3_compatible": {
-  "reportAny": 31,
+  "reportAny": 28,
   "reportMissingTypeStubs": 5,
   "reportUnknownArgumentType": 9,
   "reportUnknownLambdaType": 7,
@@ -2506,7 +2506,6 @@
  "tests.api.test_authorization_object_reference_coverage": {
   "reportAny": 27,
   "reportPrivateUsage": 3,
-  "reportUnknownLambdaType": 1,
   "reportUnknownMemberType": 2,
   "reportUnknownVariableType": 1
  },
@@ -2834,7 +2833,7 @@
  "tests.api.test_impersonation_boundary": {
   "reportAny": 26,
   "reportMissingParameterType": 3,
-  "reportUnknownArgumentType": 10,
+  "reportUnknownArgumentType": 9,
   "reportUnknownMemberType": 34,
   "reportUnknownParameterType": 3,
   "reportUnknownVariableType": 12
@@ -3908,10 +3907,7 @@
   "reportAny": 15
  },
  "tests.operator.test_worker_health_api": {
-  "reportAny": 2,
-  "reportMissingParameterType": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 1
+  "reportAny": 2
  },
  "tests.scripts.test_authorization_access_impact": {
   "reportMissingParameterType": 1,
@@ -3998,7 +3994,7 @@
   "reportPrivateUsage": 23
  },
  "tests.services.bi.test_catalogue_parity": {
-  "reportAny": 3,
+  "reportAny": 2,
   "reportPrivateUsage": 7
  },
  "tests.services.bi.test_commentary_job": {

@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Final, Literal, get_args
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -1179,6 +1179,13 @@ class AuthSettings(BaseSettings):
     #: user out. Outside the window a re-presented token revokes its whole
     #: family. Set to 0 for strict single-use rotation.
     refresh_rotation_grace_seconds: int = Field(default=30, alias="AUTH_REFRESH_ROTATION_GRACE")
+    session_purge_enabled: bool = Field(default=False, alias="AUTH_SESSION_PURGE_ENABLED")
+    refresh_token_retention_days: int = Field(
+        default=30, gt=0, alias="AUTH_REFRESH_TOKEN_RETENTION_DAYS"
+    )
+    session_purge_batch_size: int = Field(
+        default=1000, gt=0, le=10000, alias="AUTH_SESSION_PURGE_BATCH_SIZE"
+    )
     max_failed_logins: int = Field(default=5, alias="AUTH_MAX_FAILED_LOGINS")
     lockout_seconds: int = Field(default=900, alias="AUTH_LOCKOUT_SECONDS")
     # SSO (own OIDC relying party — no third-party broker): connections live in
@@ -1188,6 +1195,14 @@ class AuthSettings(BaseSettings):
     # OIDC client config (the only path that ever reads the secret back). Unset =
     # that internal endpoint is disabled, so browser SSO cannot start.
     sso_internal_key: str | None = Field(default=None, alias="SSO_INTERNAL_KEY")
+
+    @model_validator(mode="after")
+    def retention_covers_rotation_grace(self) -> AuthSettings:
+        if self.refresh_token_retention_days * 86400 < self.refresh_rotation_grace_seconds:
+            raise ValueError(
+                "AUTH_REFRESH_TOKEN_RETENTION_DAYS must cover AUTH_REFRESH_ROTATION_GRACE (seconds)"
+            )
+        return self
 
     @field_validator("sso_internal_key", mode="before")
     @classmethod

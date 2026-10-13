@@ -1,14 +1,14 @@
 /**
  * The Explore controls cannot build a question the compiler refuses.
  *
- * `app/services/bi/compiler.py` is deny-by-default and answers a malformed
+ * `app/bi/service/compiler.py` is deny-by-default and answers a malformed
  * query with a 422 and no rows. That is correct on the server and it makes one
  * thing the client's job: every rule about the SHAPE of a query has to be
  * enforced before the request is sent, or a reader clicks a control and gets an
  * error instead of an answer. Each case below is one of those rules, named for
  * the compiler refusal it prevents.
  *
- * The caps are checked against `app/schemas/bi.py` itself, not against a copy of
+ * The caps are checked against `app/bi/schemas/query.py` itself, not against a copy of
  * it, because a cap the client believes is smaller than the server's would hide
  * a legal question, and one it believes is larger would send a refused one.
  *
@@ -16,8 +16,7 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { runBackend } from "../../unit/backend";
 
 import {
   BI_DIMENSION_CAP,
@@ -50,35 +49,56 @@ function test(name: string, fn: () => void): void {
 
 // --- the caps are the server's -----------------------------------------------
 
-function repoRoot(): string {
-  let dir = __dirname;
-  for (let index = 0; index < 10; index += 1) {
-    if (existsSync(join(dir, "backend", "app"))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
+test("request caps match the backend wire validators", () => {
+  const caps = {
+    measures: BI_MEASURE_CAP,
+    dimensions: BI_DIMENSION_CAP,
+    filters: BI_FILTER_CAP,
+    sort: BI_SORT_CAP,
+    top_n: BI_TOP_N_CAP,
+    pivot: BI_PIVOT_COLUMN_CAP,
+  };
+  const results = runBackend<Record<string, boolean[]>>(
+    `
+from app.bi.schemas.query import BiQuery, BiTopN, BiPivot
+
+def accepts(model, value):
+    try:
+        model.model_validate(value)
+    except ValueError:
+        return False
+    return True
+
+results = {}
+for field, cap in payload.items():
+    outcomes = []
+    for size in (cap, cap + 1):
+        if field == "top_n":
+            ok = accepts(BiTopN, {"dimension": "branch", "n": size})
+        elif field == "pivot":
+            ok = accepts(BiPivot, {"dimension": "branch", "max_columns": size})
+            assert BiPivot(dimension="branch").max_columns == cap
+        else:
+            values = [f"member{i}" for i in range(size)]
+            if field == "filters":
+                values = [{"member": m, "op": "eq", "values": [1]} for m in values]
+            elif field == "sort":
+                values = [{"member": m, "direction": "asc"} for m in values]
+            ok = accepts(BiQuery, {"measures": ["loans.balance_rc"],
+                "time": {"as_of": "2026-06-30"}, field: values})
+        outcomes.append(ok)
+    results[field] = outcomes
+print(json.dumps(results))
+`,
+    caps,
+  );
+  for (const field of Object.keys(caps)) {
+    assert.deepEqual(
+      results[field],
+      field === "pivot" ? [true, true] : [true, false],
+      field,
+    );
   }
-  throw new Error(`could not locate the repository root from ${__dirname}`);
-}
-
-const SCHEMA_SOURCE = readFileSync(
-  join(repoRoot(), "backend", "app", "schemas", "bi.py"),
-  "utf8",
-);
-
-function serverCap(name: string): number {
-  const match = new RegExp(`^${name}\\s*=\\s*(\\d+)`, "m").exec(SCHEMA_SOURCE);
-  assert.ok(match, `${name} is no longer declared in app/schemas/bi.py`);
-  return Number(match![1]);
-}
-
-test("every request cap mirrors app/schemas/bi.py", () => {
-  assert.equal(BI_MEASURE_CAP, serverCap("BI_MAX_MEASURES"));
-  assert.equal(BI_DIMENSION_CAP, serverCap("BI_MAX_DIMENSIONS"));
-  assert.equal(BI_FILTER_CAP, serverCap("BI_MAX_FILTERS"));
-  assert.equal(BI_SORT_CAP, serverCap("BI_MAX_SORTS"));
-  assert.equal(BI_TOP_N_CAP, serverCap("BI_TOP_N_MAX"));
-  assert.equal(BI_PIVOT_COLUMN_CAP, serverCap("BI_PIVOT_MAX_COLUMNS"));
 });
 
 // --- a catalogue to ask questions of ----------------------------------------
@@ -203,7 +223,9 @@ test("stock and flow measures never reach the compiler together", () => {
     TIME,
   );
   assert.equal(plan.query, null);
-  assert.ok(plan.problems.some((problem) => problem.id === "mixed-time-behaviour"));
+  assert.ok(
+    plan.problems.some((problem) => problem.id === "mixed-time-behaviour"),
+  );
 });
 
 test("a break-down field the measures cannot be split by is set aside, and named", () => {
@@ -296,9 +318,7 @@ test("Top-N names one of the row fields, and never the pivot field", () => {
   );
   assert.equal(notARow.query?.topN, undefined);
   assert.ok(
-    notARow.problems.some(
-      (problem) => problem.id === "top-n-not-a-row-field",
-    ),
+    notARow.problems.some((problem) => problem.id === "top-n-not-a-row-field"),
   );
 
   const alsoThePivot = buildExploreQuery(
@@ -330,9 +350,7 @@ test("a pivoted answer is never sorted by a measure", () => {
   );
   assert.deepEqual(plan.query?.sort, [{ member: "grade", direction: "asc" }]);
   assert.ok(
-    plan.problems.some(
-      (problem) => problem.id === "sort-measure-under-pivot",
-    ),
+    plan.problems.some((problem) => problem.id === "sort-measure-under-pivot"),
   );
 });
 

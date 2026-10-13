@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * "Connect a market data source" — the §9.2 onboarding flow as a stepper:
@@ -9,7 +9,7 @@
  * stored representation shown is the fingerprint on the source card.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -17,20 +17,20 @@ import {
   Loader2,
   Plug,
   XCircle,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   MarketDataConnectionRead,
   ScopeInfoRead,
   TestPullRead,
-} from '@aequoros/risk-service-api';
-import { isApiError } from '@/lib/api/client';
+} from "@aequoros/risk-service-api";
+import { isApiError } from "@/lib/api/client";
 import {
   useCreateMarketDataConnection,
   useMarketDataScopes,
   useTestMarketDataConnection,
-} from '@/lib/api/hooks';
-import CredentialFields from './CredentialFields';
-import { fmtLocale } from '@/lib/format';
+} from "@/lib/api/hooks";
+import CredentialFields from "./CredentialFields";
+import { fmtLocale } from "@/lib/format";
 import {
   CATEGORY_LABELS,
   ConnectionStatusPill,
@@ -39,7 +39,7 @@ import {
   scopeShortLabel,
   vendorName,
   type VendorKey,
-} from './shared';
+} from "./shared";
 
 // Mirrors the backend quota tracker's pulls-per-month model (§11.1).
 const PULLS_PER_MONTH: Record<string, number> = {
@@ -50,12 +50,12 @@ const PULLS_PER_MONTH: Record<string, number> = {
   MONTHLY: 1,
 };
 
-type Step = 'vendor' | 'credentials' | 'scopes' | 'schedule' | 'activate';
+type Step = "vendor" | "credentials" | "scopes" | "schedule" | "activate";
 
 function stepsFor(vendor: VendorKey | null): Step[] {
-  return vendor === 'manual_upload'
-    ? ['vendor', 'scopes', 'activate']
-    : ['vendor', 'credentials', 'scopes', 'schedule', 'activate'];
+  return vendor === "manual_upload"
+    ? ["vendor", "scopes", "activate"]
+    : ["vendor", "credentials", "scopes", "schedule", "activate"];
 }
 
 export default function AddSourcePanel({
@@ -72,9 +72,9 @@ export default function AddSourcePanel({
   const test = useTestMarketDataConnection(bankId);
 
   const [vendor, setVendor] = useState<VendorKey | null>(null);
-  const [displayName, setDisplayName] = useState('');
+  const [displayName, setDisplayName] = useState("");
   const [credValues, setCredValues] = useState<Record<string, string>>({});
-  const [expiresAt, setExpiresAt] = useState('');
+  const [expiresAt, setExpiresAt] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [schedule, setSchedule] = useState<Record<string, string>>({});
   const [stepIndex, setStepIndex] = useState(0);
@@ -89,7 +89,7 @@ export default function AddSourcePanel({
   const vendorScopes = useMemo(() => {
     if (!vendor || !scopesQuery.data) return [];
     return scopesQuery.data.scopes.filter((scope) =>
-      scope.supportedBy.includes(vendor)
+      scope.supportedBy.includes(vendor),
     );
   }, [vendor, scopesQuery.data]);
 
@@ -103,13 +103,20 @@ export default function AddSourcePanel({
     return groups;
   }, [vendorScopes]);
 
-  const selectedInfos = vendorScopes.filter((scope) => selected.has(scope.scope));
-  const unitsPerPull = selectedInfos.reduce((sum, scope) => sum + scope.quotaUnits, 0);
+  const selectedInfos = vendorScopes.filter((scope) =>
+    selected.has(scope.scope),
+  );
+  const unitsPerPull = selectedInfos.reduce(
+    (sum, scope) => sum + scope.quotaUnits,
+    0,
+  );
   const monthlyUnits = selectedInfos.reduce((sum, scope) => {
     const frequency = schedule[scope.category] ?? scope.defaultFrequency;
     return sum + scope.quotaUnits * (PULLS_PER_MONTH[frequency] ?? 1);
   }, 0);
-  const selectedCategories = [...new Set(selectedInfos.map((scope) => scope.category))];
+  const selectedCategories = [
+    ...new Set(selectedInfos.map((scope) => scope.category)),
+  ];
 
   const chooseVendor = (key: VendorKey) => {
     setVendor(key);
@@ -138,16 +145,16 @@ export default function AddSourcePanel({
       const connection = await create.mutateAsync({
         vendor,
         displayName: displayName.trim() || vendorName(vendor),
-        credentials: vendor === 'manual_upload' ? undefined : credValues,
+        credentials: vendor === "manual_upload" ? undefined : credValues,
         credentialExpiresAt:
-          vendor !== 'manual_upload' && expiresAt
+          vendor !== "manual_upload" && expiresAt
             ? new Date(`${expiresAt}T00:00:00Z`)
             : undefined,
         scopes: [...selected].sort(),
         schedule: Object.keys(schedule).length ? schedule : undefined,
       });
       setCreated(connection);
-      if (vendor !== 'manual_upload' && !connection.validationError) {
+      if (vendor !== "manual_upload" && !connection.validationError) {
         setTestResult(await test.mutateAsync(connection.id));
       }
     } catch (caught) {
@@ -156,7 +163,7 @@ export default function AddSourcePanel({
           ? caught.message
           : caught instanceof Error
             ? caught.message
-            : 'Could not create the connection.'
+            : "Could not create the connection.",
       );
     } finally {
       setRunning(false);
@@ -165,7 +172,7 @@ export default function AddSourcePanel({
 
   const credentialsIncomplete =
     vendor !== null &&
-    vendor !== 'manual_upload' &&
+    vendor !== "manual_upload" &&
     Object.values(credValues).every((value) => !value.trim());
 
   return (
@@ -174,8 +181,9 @@ export default function AddSourcePanel({
         <div>
           <h2 className="text-h2 text-navy">Configure a market data source</h2>
           <p className="mt-1 text-body text-slate">
-            Save vendor credentials, scopes, and schedules for onboarding. Bloomberg and LSEG
-            live transport is not enabled in this deployment; credentials are encrypted at rest.
+            Save vendor credentials, scopes, and schedules for onboarding.
+            Bloomberg and LSEG live transport is not enabled in this deployment;
+            credentials are encrypted at rest.
           </p>
         </div>
         <button
@@ -193,10 +201,10 @@ export default function AddSourcePanel({
             key={name}
             className={`px-2.5 py-1 rounded border font-medium uppercase tracking-wider ${
               index === stepIndex
-                ? 'border-action text-action bg-action-light'
+                ? "border-action text-action bg-action-light"
                 : index < stepIndex
-                  ? 'border-success/30 text-success bg-success-light'
-                  : 'border-border text-slate'
+                  ? "border-success/30 text-success bg-success-light"
+                  : "border-border text-slate"
             }`}
           >
             {index + 1}. {name}
@@ -204,13 +212,12 @@ export default function AddSourcePanel({
         ))}
       </ol>
 
-      {step === 'vendor' && (
+      {step === "vendor" && (
         <div className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-3">
             {VENDORS.map((option) => {
               const taken =
-                existingVendors.includes(option.key) &&
-                option.key !== vendor;
+                existingVendors.includes(option.key) && option.key !== vendor;
               const active = vendor === option.key;
               return (
                 <button
@@ -220,8 +227,8 @@ export default function AddSourcePanel({
                   onClick={() => chooseVendor(option.key)}
                   className={`text-left rounded border p-4 space-y-1 disabled:opacity-40 disabled:cursor-not-allowed ${
                     active
-                      ? 'border-action bg-action-light/60'
-                      : 'border-border hover:border-action/50'
+                      ? "border-action bg-action-light/60"
+                      : "border-border hover:border-action/50"
                   }`}
                 >
                   <p className="text-h3 text-navy">{option.name}</p>
@@ -247,18 +254,18 @@ export default function AddSourcePanel({
               type="text"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              className="w-full px-3 py-1.5 rounded border border-border text-body text-navy"
+              className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy"
             />
           </div>
         </div>
       )}
 
-      {step === 'credentials' && vendor && vendor !== 'manual_upload' && (
+      {step === "credentials" && vendor && vendor !== "manual_upload" && (
         <div className="space-y-4">
           <p className="text-body text-slate">
-            {vendor === 'refinitiv'
-              ? 'Save the credentials issued for your LSEG Data Platform account (formerly Refinitiv Data Platform). They are retained for vendor onboarding; this deployment does not validate them against LSEG.'
-              : 'Save the credentials issued by your Bloomberg administrator for vendor onboarding. This deployment does not validate them against Bloomberg.'}
+            {vendor === "refinitiv"
+              ? "Save the credentials issued for your LSEG Data Platform account (formerly Refinitiv Data Platform). They are retained for vendor onboarding; this deployment does not validate them against LSEG."
+              : "Save the credentials issued by your Bloomberg administrator for vendor onboarding. This deployment does not validate them against Bloomberg."}
           </p>
           <CredentialFields
             vendor={vendor}
@@ -280,16 +287,17 @@ export default function AddSourcePanel({
               type="date"
               value={expiresAt}
               onChange={(event) => setExpiresAt(event.target.value)}
-              className="px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
+              className="px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
             />
             <p className="mt-1 text-caption text-slate">
-              AequorOS warns 30 days before expiry and guides you through rotation.
+              AequorOS warns 30 days before expiry and guides you through
+              rotation.
             </p>
           </div>
         </div>
       )}
 
-      {step === 'scopes' && (
+      {step === "scopes" && (
         <div className="space-y-4">
           <p className="text-body text-slate">
             Which market data should AequorOS pull through this source?
@@ -298,7 +306,10 @@ export default function AddSourcePanel({
             <p className="text-body text-slate">Loading the scope catalog…</p>
           )}
           {[...byCategory.entries()].map(([category, scopes]) => (
-            <fieldset key={category} className="rounded border border-border p-4">
+            <fieldset
+              key={category}
+              className="rounded-sm border border-border p-4"
+            >
               <legend className="px-1 text-caption font-medium uppercase tracking-wider text-slate">
                 {CATEGORY_LABELS[category] ?? category}
               </legend>
@@ -312,7 +323,7 @@ export default function AddSourcePanel({
                       type="checkbox"
                       checked={selected.has(scope.scope)}
                       onChange={() => toggleScope(scope)}
-                      className="rounded border-border"
+                      className="rounded-sm border-border"
                     />
                     <span>{scopeShortLabel(scope.scope, scope.category)}</span>
                     <span className="ml-auto text-caption font-mono text-slate">
@@ -324,15 +335,18 @@ export default function AddSourcePanel({
             </fieldset>
           ))}
           <p className="text-body text-navy">
-            Selected scopes will consume approximately{' '}
-            <span className="font-mono font-medium">{unitsPerPull}</span> units per pull,
-            roughly <span className="font-mono font-medium">{monthlyUnits.toLocaleString(fmtLocale())}</span>{' '}
+            Selected scopes will consume approximately{" "}
+            <span className="font-mono font-medium">{unitsPerPull}</span> units
+            per pull, roughly{" "}
+            <span className="font-mono font-medium">
+              {monthlyUnits.toLocaleString(fmtLocale())}
+            </span>{" "}
             units per month against your subscription.
           </p>
         </div>
       )}
 
-      {step === 'schedule' && (
+      {step === "schedule" && (
         <div className="space-y-4">
           <p className="text-body text-slate">
             When should AequorOS refresh this data? Defaults follow each
@@ -345,7 +359,7 @@ export default function AddSourcePanel({
             {selectedCategories.map((category) => {
               const defaultFrequency =
                 vendorScopes.find((scope) => scope.category === category)
-                  ?.defaultFrequency ?? 'END_OF_DAY';
+                  ?.defaultFrequency ?? "END_OF_DAY";
               return (
                 <div key={category}>
                   <label
@@ -363,7 +377,7 @@ export default function AddSourcePanel({
                         [category]: event.target.value,
                       }))
                     }
-                    className="w-full px-3 py-1.5 rounded border border-border text-body text-navy bg-surface-raised"
+                    className="w-full px-3 py-1.5 rounded-sm border border-border text-body text-navy bg-surface-raised"
                   >
                     {FREQUENCY_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -378,29 +392,29 @@ export default function AddSourcePanel({
         </div>
       )}
 
-      {step === 'activate' && (
+      {step === "activate" && (
         <div className="space-y-4">
           {!created && (
             <>
               <p className="text-body text-slate">
-                AequorOS will store the connection and validate its local configuration. It does
-                not dispatch vendor requests in this deployment. Use manual upload for current
-                market data.
+                AequorOS will store the connection and validate its local
+                configuration. It does not dispatch vendor requests in this
+                deployment. Use manual upload for current market data.
               </p>
               <button
                 type="button"
                 onClick={() => void createAndTest()}
                 disabled={running || !vendor || selected.size === 0}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {running ? (
                   <Loader2 size={15} className="animate-spin" aria-hidden />
                 ) : (
                   <Plug size={15} aria-hidden />
                 )}
-                {vendor === 'manual_upload'
-                  ? 'Create manual upload source'
-                  : 'Save vendor configuration'}
+                {vendor === "manual_upload"
+                  ? "Create manual upload source"
+                  : "Save vendor configuration"}
               </button>
             </>
           )}
@@ -410,45 +424,60 @@ export default function AddSourcePanel({
               <div className="flex items-center gap-2">
                 <ConnectionStatusPill status={created.status} />
                 <p className="text-body text-navy">
-                  {created.status === 'TESTING'
-                    ? 'Connection stored, but credential validation failed — fix the credentials from the source card (Rotate credentials).'
-                    : created.vendor === 'manual_upload'
-                      ? 'Manual upload source active.'
+                  {created.status === "TESTING"
+                    ? "Connection stored, but credential validation failed — fix the credentials from the source card (Rotate credentials)."
+                    : created.vendor === "manual_upload"
+                      ? "Manual upload source active."
                       : `${vendorName(created.vendor)} configuration saved. Live vendor transport remains unavailable.`}
                 </p>
               </div>
               {created.validationError && (
-                <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
-                  <p className="text-body text-navy">{created.validationError}</p>
+                <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
+                  <p className="text-body text-navy">
+                    {created.validationError}
+                  </p>
                 </div>
               )}
               {testResult && (
                 <div
                   className={`rounded border px-4 py-3 space-y-2 ${
                     testResult.success
-                      ? 'border-success/30 bg-success-light/50'
-                      : 'border-critical/30 bg-critical-light/40'
+                      ? "border-success/30 bg-success-light/50"
+                      : "border-critical/30 bg-critical-light/40"
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     {testResult.success ? (
-                      <CheckCircle2 size={15} className="text-success" aria-hidden />
+                      <CheckCircle2
+                        size={15}
+                        className="text-success"
+                        aria-hidden
+                      />
                     ) : (
-                      <XCircle size={15} className="text-critical" aria-hidden />
+                      <XCircle
+                        size={15}
+                        className="text-critical"
+                        aria-hidden
+                      />
                     )}
                     <p className="text-body font-medium text-navy">
                       {testResult.success
-                        ? 'Configuration check complete.'
-                        : 'Live vendor transport unavailable'}
+                        ? "Configuration check complete."
+                        : "Live vendor transport unavailable"}
                     </p>
                   </div>
                   {testResult.success ? (
                     <ul className="space-y-1">
-                      {Object.entries(testResult.sampleValues).map(([label, value]) => (
-                        <li key={label} className="text-body text-navy font-mono">
-                          {label}: {value}
-                        </li>
-                      ))}
+                      {Object.entries(testResult.sampleValues).map(
+                        ([label, value]) => (
+                          <li
+                            key={label}
+                            className="text-body text-navy font-mono"
+                          >
+                            {label}: {value}
+                          </li>
+                        ),
+                      )}
                     </ul>
                   ) : (
                     <p className="text-body text-navy">{testResult.error}</p>
@@ -458,7 +487,7 @@ export default function AddSourcePanel({
               <button
                 type="button"
                 onClick={onDone}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover"
               >
                 Done
               </button>
@@ -468,7 +497,7 @@ export default function AddSourcePanel({
       )}
 
       {error && (
-        <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">
+        <div className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3">
           <p className="text-body text-critical">{error}</p>
         </div>
       )}
@@ -479,22 +508,22 @@ export default function AddSourcePanel({
             type="button"
             onClick={() => setStepIndex((index) => Math.max(0, index - 1))}
             disabled={stepIndex === 0 || running}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-border text-caption font-medium text-navy hover:bg-surface disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-border text-caption font-medium text-navy hover:bg-surface disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ArrowLeft size={13} aria-hidden />
             Back
           </button>
-          {step !== 'activate' && (
+          {step !== "activate" && (
             <button
               type="button"
               onClick={() => setStepIndex((index) => index + 1)}
               disabled={
                 running ||
-                (step === 'vendor' && !vendor) ||
-                (step === 'credentials' && credentialsIncomplete) ||
-                (step === 'scopes' && selected.size === 0)
+                (step === "vendor" && !vendor) ||
+                (step === "credentials" && credentialsIncomplete) ||
+                (step === "scopes" && selected.size === 0)
               }
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Continue
               <ArrowRight size={13} aria-hidden />

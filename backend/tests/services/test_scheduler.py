@@ -14,6 +14,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.bi.models.marts import MART_BUILD_SCOPES
+from app.bi.service import enqueue as bi_enqueue
+from app.bi.service.versions import BUILDER_VERSION
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
@@ -35,11 +38,8 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.models.bi import MART_BUILD_SCOPES
 from app.schemas.live import OfficialRunRequest
 from app.services import job_queue, live_view, pipeline, regulatory_fx, scheduler
-from app.services.bi import enqueue as bi_enqueue
-from app.services.bi.versions import BUILDER_VERSION
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF
 from tests.support.helpers import ORG_1, ORG_2, USER_1

@@ -67,6 +67,7 @@ from app.identity.service.scoped_authorization import (
     require_resolved_bank_permission,
     resolve_bank,
 )
+from app.identity.service.session_retention import run_session_purge
 from app.identity.service.sso_config import find_enabled_by_issuer_audience
 
 __all__ = [
@@ -129,4 +130,5 @@ __all__ = [
     "require_resolved_bank_permission",
     "resolve_bank",
     "resolve_bank_reference",
+    "run_session_purge",
 ]

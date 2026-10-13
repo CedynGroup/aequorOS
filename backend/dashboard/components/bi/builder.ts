@@ -99,7 +99,7 @@ export const MAX_WIDGETS = 24;
  * The shapes a reader may put a figure in here.
  *
  * The intersection of what the server's widget model admits
- * (`app/schemas/bi.py::BiWidgetKind`) and what `WidgetRenderer` actually draws: a
+ * (`app/bi/schemas/query.py::BiWidgetKind`) and what `WidgetRenderer` actually draws: a
  * kind with no renderer degrades to the answer's own table, which is honest but
  * not something to offer as a choice. `record_grid`, `heatmap`, `waterfall` and
  * `panel` are the server's and are deliberately absent — the first three have no

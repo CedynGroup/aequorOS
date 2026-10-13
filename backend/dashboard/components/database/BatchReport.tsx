@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Renders the two reports a sync batch carries: the ETL preprocess report
@@ -8,8 +8,8 @@
  * back to a generic key/value view.
  */
 
-import type { IngestionBatchRead } from '@aequoros/risk-service-api';
-import { fmtLocale } from '@/lib/format';
+import type { IngestionBatchRead } from "@aequoros/risk-service-api";
+import { fmtLocale } from "@/lib/format";
 
 type ReportFinding = {
   rule?: string;
@@ -32,34 +32,34 @@ type ValidationReportShape = {
 };
 
 const SEVERITY_TONE: Record<string, string> = {
-  BLOCKER: 'text-critical',
-  ERROR: 'text-critical',
-  WARNING: 'text-warning',
-  INFO: 'text-slate',
+  BLOCKER: "text-critical",
+  ERROR: "text-critical",
+  WARNING: "text-warning",
+  INFO: "text-slate",
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function humanize(key: string): string {
   return key
-    .replace(/_/g, ' ')
+    .replace(/_/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function scalarText(value: unknown): string {
-  if (value == null) return '—';
-  if (typeof value === 'number') return value.toLocaleString(fmtLocale());
-  if (typeof value === 'boolean') return value ? 'yes' : 'no';
-  if (typeof value === 'string') return value;
+  if (value == null) return "—";
+  if (typeof value === "number") return value.toLocaleString(fmtLocale());
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (typeof value === "string") return value;
   return JSON.stringify(value);
 }
 
 /** Compact stat chip for a scalar entry (count, flag, boolean). */
 function StatChip({ label, value }: { label: string; value: unknown }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded border border-border px-2.5 py-1 text-caption font-mono text-navy">
+    <span className="inline-flex items-center gap-2 rounded-sm border border-border px-2.5 py-1 text-caption font-mono text-navy">
       {humanize(label)}
       <span className="text-slate tabular-nums">{scalarText(value)}</span>
     </span>
@@ -81,15 +81,21 @@ function ReportSection({ data }: { data: Record<string, unknown> }) {
           if (value.length === 0) {
             return <StatChip key={key} label={key} value={0} />;
           }
-          if (value.every((item) => typeof item === 'string' || typeof item === 'number')) {
+          if (
+            value.every(
+              (item) => typeof item === "string" || typeof item === "number",
+            )
+          ) {
             return (
               <div key={key}>
-                <p className="text-caption font-medium text-slate mb-1">{humanize(key)}</p>
+                <p className="text-caption font-medium text-slate mb-1">
+                  {humanize(key)}
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {value.map((item, index) => (
                     <span
                       key={index}
-                      className="rounded bg-surface border border-border-light px-2 py-0.5 text-caption font-mono text-navy"
+                      className="rounded-sm bg-surface border border-border-light px-2 py-0.5 text-caption font-mono text-navy"
                     >
                       {scalarText(item)}
                     </span>
@@ -98,12 +104,16 @@ function ReportSection({ data }: { data: Record<string, unknown> }) {
               </div>
             );
           }
-          return <StatChip key={key} label={`${key} (count)`} value={value.length} />;
+          return (
+            <StatChip key={key} label={`${key} (count)`} value={value.length} />
+          );
         }
         if (isPlainObject(value)) {
           return (
             <div key={key}>
-              <p className="text-caption font-medium text-slate mb-1">{humanize(key)}</p>
+              <p className="text-caption font-medium text-slate mb-1">
+                {humanize(key)}
+              </p>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(value).map(([nestedKey, nestedValue]) => (
                   <StatChip
@@ -136,7 +146,7 @@ export default function BatchReport({ batch }: { batch: IngestionBatchRead }) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded border border-border p-4 bg-surface space-y-2">
+      <section className="rounded-sm border border-border p-4 bg-surface space-y-2">
         <h4 className="text-body font-medium text-navy">ETL preprocess</h4>
         {etl && isPlainObject(etl) ? (
           <ReportSection data={etl} />
@@ -147,11 +157,13 @@ export default function BatchReport({ batch }: { batch: IngestionBatchRead }) {
         )}
       </section>
 
-      <section className="rounded border border-border p-4 bg-surface space-y-3">
+      <section className="rounded-sm border border-border p-4 bg-surface space-y-3">
         <div className="flex items-baseline justify-between gap-3">
           <h4 className="text-body font-medium text-navy">Validation report</h4>
           {report.status && (
-            <span className="text-caption font-mono text-slate">{report.status}</span>
+            <span className="text-caption font-mono text-slate">
+              {report.status}
+            </span>
           )}
         </div>
 
@@ -161,10 +173,10 @@ export default function BatchReport({ batch }: { batch: IngestionBatchRead }) {
 
         {Object.keys(suppressed).length > 0 && (
           <p className="text-caption text-slate">
-            Large batch:{' '}
+            Large batch:{" "}
             {Object.entries(suppressed)
               .map(([rule, count]) => `${count} further ${rule} findings`)
-              .join(', ')}{' '}
+              .join(", ")}{" "}
             counted in the totals but not listed.
           </p>
         )}
@@ -179,17 +191,21 @@ export default function BatchReport({ batch }: { batch: IngestionBatchRead }) {
               <div key={index} className="py-2.5 flex items-start gap-3">
                 <span
                   className={`shrink-0 w-16 text-caption font-medium ${
-                    SEVERITY_TONE[finding.severity ?? ''] ?? 'text-slate'
+                    SEVERITY_TONE[finding.severity ?? ""] ?? "text-slate"
                   }`}
                 >
-                  {finding.severity ?? 'INFO'}
+                  {finding.severity ?? "INFO"}
                 </span>
                 <div className="min-w-0">
                   <p className="text-body text-navy">{finding.detail}</p>
                   <p className="mt-0.5 text-caption font-mono text-slate truncate">
                     {finding.rule}
-                    {finding.source_reference ? ` · ${finding.source_reference}` : ''}
-                    {finding.source_locator ? ` · ${finding.source_locator}` : ''}
+                    {finding.source_reference
+                      ? ` · ${finding.source_reference}`
+                      : ""}
+                    {finding.source_locator
+                      ? ` · ${finding.source_locator}`
+                      : ""}
                   </p>
                 </div>
               </div>

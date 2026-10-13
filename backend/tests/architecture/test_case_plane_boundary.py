@@ -132,6 +132,7 @@ CASE_PLANE_OWNERS: frozenset[str] = CASE_PLANE_MEMBERS
 #: proves the patterns actually resolve to the modules that matter.
 REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "domain/**/*.py",
+    "bi/domain/**/*.py",
     "icaap/domain/**/*.py",
     "reporting/domain/**/*.py",
     "services/regulatory_*.py",

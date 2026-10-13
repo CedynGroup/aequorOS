@@ -21,7 +21,8 @@ and local-development exceptions are governed by
 Bank-held object encryption and optional rollout are in
 [the bank key setup guide](docs/bank_key_setup.md).
 
-Audit-chain verification, paging and required migration-role preparation are in
+Audit-chain verification, paging, filing and session retention, backup
+publication and required migration-role preparation are in
 [the tamper-evident records contract](docs/tamper_evident_records.md).
 
 - Health and readiness under `/api/health`; readiness reports database, storage,
@@ -142,14 +143,37 @@ export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/risk_
 ```
 
 The bundled compose uses local superuser credentials and does not demonstrate
-production credential separation. For separate local roles, follow the
-[audit ownership contract](docs/tamper_evident_records.md#required-deployment-follow-up),
-including its legacy-bootstrap limitation. App-session API requests use an
-access token issued by password or SSO login:
+production credential separation. Local role preparation and the staged deployment
+switches follow the [database role handoff](../docs/ops/database-roles.md#migration-and-local-development-order).
+Runtime connection budgets and migration exemptions follow the
+[session timeout runbook](../docs/ops/database-roles.md#session-timeout-budgets).
+App-session API requests use an access token issued by password or SSO login:
 
 ```http
 Authorization: Bearer <app-access-token>
 ```
+
+### API transactions and external waits
+
+Governed BI exports commit authorization before running the query. Certified
+measure metadata stays on the API role; every compiler discovery statement and
+the final query commits that metadata read before checking out the BI pool.
+Delivery provenance, audit and query logs are then produced in a fresh API
+transaction, with one commit before returning the artifact or queued job.
+The single-database fallback also ends its query transaction before delivery.
+The [database role handoff](../docs/ops/database-roles.md#target-matrix) owns the
+API's guarded query-log partition capability.
+See [native transaction/role regressions](tests/db/test_bi_export_transactions.py).
+
+Document deletion and upload-completion boundaries are documented under
+[the legacy case vertical](#legacy-case-vertical). Remaining transaction-held waits include
+`services/ingestion.py:upload_source` (institution setup and object write),
+`start_ingestion` (source download and raw-artifact write), and
+`services/database_connections.py:test_connection`, `discover_schema` and
+`sync_now` (remote database inspection or extraction). These require their own
+transaction-boundary work before lowering the API idle budget; the
+[session timeout contract](../docs/ops/database-roles.md#session-timeout-budgets)
+owns that budget and its review criteria.
 
 Health endpoints:
 
@@ -199,6 +223,24 @@ provenance fields. The dashboard's current capabilities are documented in
 [Forecasting tools](dashboard/README.md#forecasting-tools).
 
 ### Legacy case vertical
+
+Document deletion commits the document tombstone, the stored object's
+`pending_deletion` status, the audit event and a `document_delete` job atomically.
+The existing deleted response means logical deletion: downloads, parsing and
+upload completion refuse the document immediately. Upload completion commits its
+read transaction before storage HEAD, then reloads locked rows and revalidates
+the pending upload. Completion returns HTTP 409 if deletion committed during HEAD,
+even if cleanup has already finished. Downloads also refuse tombstones with
+inconsistent live statuses. The core worker closes its read transaction before
+deleting from storage, then commits the object's
+`deleted` acknowledgement with job completion. A transport failure or lost
+acknowledgement leaves pending cleanup safe to retry; duplicate requests preserve
+one job and one deletion event. Existing deleted records remain unchanged.
+The queue's bounded exponential retries and stale-worker reclaim apply; exhausted
+cleanup remains pending and appears as a failed job on the operator jobs board.
+See [`documents.py`](app/services/documents.py) and the
+[deletion regression tests](tests/services/test_document_deletion.py), including
+[PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout.py).
 
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
@@ -349,6 +391,9 @@ for that scenario without altering acknowledged or dismissed history.
 
 ## Run Tests
 
+The [workflow inventory and stateful-test guide](docs/state_machine_testing.md)
+records transition guards, coverage boundaries, and bounded Hypothesis profiles.
+
 ```bash
 mise run risk-service:test
 ```
@@ -356,6 +401,16 @@ mise run risk-service:test
 The default test run uses isolated SQLite databases and never touches Postgres —
 the suite explicitly neutralizes any `DATABASE_URL` from `.env` (empty env value =
 unconfigured), so a configured remote database cannot leak into tests implicitly.
+For a local feedback loop, run `mise run risk-service:test-fast`. It compares the
+current branch and staged/unstaged edits with the merge base of `origin/main`.
+It reuses CI's conservative affected-module rules described below. When those
+rules cannot narrow the selection, it runs the complete hermetic suite instead.
+Untracked files, a missing base and an empty diff also force this fallback, with
+an explicit message.
+Both modes use four workers and `--dist loadfile` to keep each module's fixtures
+together.
+This profile is local and opt-in; the default test tasks and full main CI stay unchanged.
+
 To reuse an existing Postgres service for the gated tests (migrations, RLS),
 provide `TEST_DATABASE_URL` for a dedicated test database, never the primary database.
 Fixtures create disposable `risk_service_test_<hex>` schemas and drop them afterward.
@@ -371,7 +426,8 @@ native PostgreSQL 17 when Docker is unavailable. Set `AQS_LOCAL_SERVICES=native`
 to force that mode. Native MinIO setup, isolation and shutdown are documented
 in the dashboard's [local service guide](dashboard/README.md#local-services-without-docker-or-orbstack).
 The existing `docker compose up -d risk-postgres` alternative also remains
-available; point `TEST_DATABASE_URL` at it to reuse that service.
+available; point `TEST_DATABASE_URL` at it to reuse that service. Supplied services
+must also meet the [role-test preparation requirements](../docs/ops/database-roles.md#migration-and-local-development-order).
 
 CI starts native PostgreSQL 17 through
 [`setup-postgres`](../.github/actions/setup-postgres/action.yml), shared by the
@@ -387,10 +443,14 @@ for the object-store contract unless `TEST_DATABASE_URL` and `S3_*` settings
 already supply those services. The dedicated CI storage job supplies both and
 rejects any skipped test.
 
+The schema task also supplies MinIO for the document cleanup regression. Each
+CI schema shard starts it and creates the document test bucket before pytest;
+the schema aggregate continues to reject every skip.
+
 CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official
 release binaries and verify pinned SHA256 digests before execution. MinIO runs
-only for the storage contract and
+only for the storage contract, schema document cleanup coverage and
 [dashboard journeys](dashboard/README.md#end-to-end-playwright), with a disposable
 built-in KMS key named `aequoros-key`. OpenBao runs only in the suite shard owning its
 live signing tests. Both listen on loopback and stop at job cleanup. Other API,
@@ -410,15 +470,17 @@ collection manifests and JUnit reports; the aggregates verify that their union
 contains every expected test exactly once, preserve the full-suite execution
 floor, and reject any skipped schema/RLS or live OpenBao test.
 
-Main always runs the full suite. On pull requests, only changes confined to the
+Main pushes and queued merge results always run the full suite. On pull requests,
+only changes confined to the
 bodies of existing, unreferenced `tests/domain/test_*.py` tests (including nested
 domain directories), or comments and formatting in those modules, select their
 affected modules. Changes to fixtures, decorators, production code, new/deleted
 tests, configuration or an uncertain diff select the full suite. Schema/RLS,
 locks, architecture and storage gates keep their coverage. The stdlib planner/coverage verifier is
 [`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via
-[`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py), so local mise
-commands continue to run their complete suites.
+[`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py). Default local test
+tasks continue to run their complete suites; `risk-service:test-fast` uses the
+local profile described above.
 
 Architecture guards still scan every module and run every check. Their shared
 scanner memoizes immutable facts by source text and import/table context within

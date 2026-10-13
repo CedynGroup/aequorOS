@@ -73,6 +73,10 @@ from app.reporting.service.common import (
     read_package,
     require_actor,
 )
+from app.reporting.service.filing_retention import (
+    filing_retention_errors,
+    retain_filing,
+)
 from app.reporting.service.registry import ReturnDefinition, get_definition
 from app.services.audit import record_event
 
@@ -608,13 +612,18 @@ def submit_package(  # noqa: PLR0913
 ) -> RegulatoryPackageRead:
     """Record a channel submission: ``approved -> submitted`` + submission event.
 
-    Concrete channels (export/submission wave) obtain ``external_ref`` from
-    :class:`~app.reporting.service.channels.base.SubmissionChannel`
-    and delegate here; this function never talks to a channel itself.
+    Channel delivery and governed email-to-ORASS re-uploads use
+    :func:`submit_package_via_channel`; they do not delegate here.
     """
     require_actor(ctx)
     get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)
+    if package.status == "submitted":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This package is already submitted. A governed ORASS re-upload must "
+            "use the channel submission workflow.",
+        )
     # Transmission is the last moment the platform can refuse (audit D-2).
     filing_reconciliation.assert_package_reconciled(db, ctx, package, purpose="package_submission")
     transition(db, ctx, package, "submitted", details={"channel": channel})
@@ -954,6 +963,17 @@ def _filing_set(
     return filed, detail
 
 
+def _submission_filing_set(
+    db: Session, ctx: TenantContext, package: RegulatoryPackage, *, mint_missing: bool = True
+) -> tuple[list[FiledArtifact], dict[str, Any]]:
+    with filing_retention_errors():
+        artifacts, detail = _filing_set(db, ctx, package, mint_missing=mint_missing)
+        retained = retain_filing(db, ctx, package, artifacts)
+    if retained is not None:
+        detail["filed_artifacts"] = retained
+    return artifacts, detail
+
+
 def _package_artifacts(db: Session, package: RegulatoryPackage) -> list[RegulatoryPackageArtifact]:
     return list(
         db.scalars(
@@ -1219,7 +1239,7 @@ def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its nam
         # ``mint_missing=False``: recording a submission that happened outside
         # the platform must not have the side effect of minting an artifact
         # nobody filed. What the record says was filed is what already existed.
-        _filed, filing_detail = _filing_set(db, ctx, package, mint_missing=False)
+        _filed, filing_detail = _submission_filing_set(db, ctx, package, mint_missing=False)
         transition(db, ctx, package, "submitted", details={"channel": channel_code})
         add_submission_event(
             db,
@@ -1236,7 +1256,7 @@ def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its nam
         db.commit()
         return read_package(db, package)
 
-    artifacts, filing_detail = _filing_set(db, ctx, package)
+    artifacts, filing_detail = _submission_filing_set(db, ctx, package)
 
     prior_events = _submission_events_asc(db, package)
     config, credentials = _load_channel_context(db, ctx, bank.id, channel_code)

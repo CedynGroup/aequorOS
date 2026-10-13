@@ -63,36 +63,37 @@ the second check can only refuse. Every export writes `bi_query_log` and an
 ## What is in the file
 
 Every format carries the same provenance fields, in this order, as the
-platform names them (`services/bi/exports/context.py::METADATA_FIELDS` — read the
+platform names them (`app/bi/service/exports/context.py::METADATA_FIELDS` — read the
 tuple for the authoritative list; one entry below is marked removed):
 
-| Field | What to do with it in your model |
-|---|---|
-| **Query** | The catalogue member ids the export answers. Keep it as a text measure or in a provenance table; it is the only unambiguous statement of what a column is. |
-| **As at** | The reporting date (or window) the figures describe. Put it on the report page. A Stage A model has no other freshness signal. |
-| **Data confidence** | **REMOVED BY FOUNDER DECISION 2026-09-29.** This field carried a reconciliation verdict (`Reconciled` / `Reconciled with exceptions` / `Does not reconcile` / `Not assessed`) of the BI figures against the platform's regulatory returns. BI is analytics over your institution's own treasury data and carries no such verdict; the row is kept so a file exported before the change still reads. Freshness is **As at** together with the build the export records. |
-| **Catalogue version** | Which measure definitions produced the file. A version change means a column may have changed meaning; do not merge exports across versions without reading the change. |
-| **Data scope** | `Whole institution`, or the slice the exporter's grant admits (`Branches: B001, B002`; `Regions: Northern · 4 branches in scope`). A file that looks institution-wide and is not is exactly the misreading this field exists to prevent — display it. |
-| **Exported by** | The person. The watermark repeats it. |
+| Field                 | What to do with it in your model                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Query**             | The query's measures, dimensions, filters and window in readable catalogue labels. Keep it as a text measure or in a provenance table so a reader can identify the question the file answers.                                                                                                                                                                                                                                                                          |
+| **As at**             | The reporting date (or window) the figures describe. Put it on the report page. A Stage A model has no other freshness signal.                                                                                                                                                                                                                                                                                                                                         |
+| **Data confidence**   | **REMOVED BY FOUNDER DECISION 2026-09-29.** This field carried a reconciliation verdict (`Reconciled` / `Reconciled with exceptions` / `Does not reconcile` / `Not assessed`) of the BI figures against the platform's regulatory returns. BI is analytics over your institution's own treasury data and carries no such verdict; the row is kept so a file exported before the change still reads. Freshness is **As at** together with the build the export records. |
+| **Catalogue version** | Which measure definitions produced the file. A version change means a column may have changed meaning; do not merge exports across versions without reading the change.                                                                                                                                                                                                                                                                                                |
+| **Data scope**        | `Whole institution`, or the slice the exporter's grant admits (`Branches: B001, B002`; `Regions: Northern · 4 branches in scope`). A file that looks institution-wide and is not is exactly the misreading this field exists to prevent — display it.                                                                                                                                                                                                                  |
+| **Exported by**       | The person. The watermark repeats it.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 Then the grid: the header row in the compiler's column order, then the rows.
-Column names are **catalogue member ids** (`loans.balance_rc`, `branch.code`) —
-stable wire keys, never display labels.
+Column headings are readable catalogue labels, with the institution's reporting
+currency appended to amount columns. For stable member-id column names, use the
+[Stage B feed](powerbi_stage_b.md#2-what-you-connect-to).
 
-- **CSV** (`services/bi/exports/csv.py`): a `field,value` provenance block (the
-  six fields, then supplementary ones), one blank line, the header, the rows.
+- **CSV** (`app/bi/service/exports/csv.py`): a `field,value` provenance block (the
+  required fields, then supplementary ones), one blank line, the header, the rows.
   Cells are plain decimals with a minus sign, no thousands separators and no unit
   symbols; the unit is stated once in the provenance block and in the amount
   columns' headings. Any text cell that could execute in a spreadsheet is made
   inert before it is written.
-- **XLSX** (`services/bi/exports/xlsx.py`): two sheets, both protected against
+- **XLSX** (`app/bi/service/exports/xlsx.py`): two sheets, both protected against
   in-place edits. **`Data`** is the grid and nothing else — header row, then rows,
   native numeric types — so a pivot or Power Query reads it without a skip count.
   **`Export metadata`** is the provenance block. The page header carries the
   watermark (`<institution> · <exporter>`) and the footer the standing note
-  *"Management information. Not a regulatory return and not a signed record of
-  filing."*
-- **PDF** (`services/bi/exports/pdf.py`): byte-deterministic, the same block and
+  _"Management information. Not a regulatory return and not a signed record of
+  filing."_
+- **PDF** (`app/bi/service/exports/pdf.py`): byte-deterministic, the same block and
   grid, for circulation rather than modelling.
 
 **Prefer the workbook for Power BI.** Its `Data` sheet needs no parsing of the

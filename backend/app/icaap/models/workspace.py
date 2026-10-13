@@ -678,11 +678,12 @@ class IcaapStageDecision(UuidV7PrimaryKeyMixin, Base):
         CheckConstraint("round >= 1", name="ck_icaap_stage_decisions_round"),
         CheckConstraint("stage_seq BETWEEN 1 AND 20", name="ck_icaap_stage_decisions_stage_seq"),
         CheckConstraint("length(review_digest) = 64", name="ck_icaap_stage_decisions_digest"),
-        # A return names an EARLIER stage and says why. Without both it is an
-        # unexplained rejection, which the preparer cannot act on.
+        # In-review returns go backwards. A post-freeze return may reopen the
+        # freeze stage itself, and names the sealed package it is returning.
         CheckConstraint(
             "decision <> 'returned' OR (return_to_seq IS NOT NULL AND return_to_seq >= 1 "
-            "AND return_to_seq < stage_seq AND comment IS NOT NULL)",
+            "AND (return_to_seq < stage_seq OR "
+            "(return_to_seq = stage_seq AND package_id IS NOT NULL)) AND comment IS NOT NULL)",
             name="ck_icaap_stage_decisions_return",
         ),
         Index(

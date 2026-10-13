@@ -34,7 +34,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -325,6 +325,7 @@ def _insert_decision(  # noqa: PLR0913 - a row is its named columns
     return_to_seq: int | None = None,
     comment: str | None = None,
     digest: str = _DIGEST,
+    package_id: UUID | None = None,
 ) -> None:
     connection.execute(
         text(
@@ -332,10 +333,10 @@ def _insert_decision(  # noqa: PLR0913 - a row is its named columns
             INSERT INTO icaap_stage_decisions
               (id, organization_id, bank_id, cycle_id, stage_seq, stage_key, round, decision,
                return_to_seq, review_digest, comment, decided_by, decided_by_name,
-               authority, created_at)
+               authority, created_at, package_id)
             VALUES
               (:id, :org, :bank, :cycle, :seq, 'cro_review', :round, :decision,
-               :return_to, :digest, :comment, :actor, 'Ama Mensah', '{}'::json, :now)
+               :return_to, :digest, :comment, :actor, 'Ama Mensah', '{}'::json, :now, :package)
             """
         ),
         {
@@ -351,6 +352,7 @@ def _insert_decision(  # noqa: PLR0913 - a row is its named columns
             "comment": comment,
             "actor": str(uuid4()),
             "now": _NOW,
+            "package": None if package_id is None else str(package_id),
         },
     )
 
@@ -875,6 +877,7 @@ def test_a_return_must_name_an_earlier_stage_and_say_why(connection: Connection)
     for return_to, comment, _case in (
         (None, "no target", "no target"),
         (2, None, "no reason given"),
+        (2, "same-stage review return", "same stage without a frozen package"),
         (3, "target is not earlier", "target is not earlier"),
     ):
         savepoint = connection.begin_nested()
@@ -901,6 +904,44 @@ def test_a_return_must_name_an_earlier_stage_and_say_why(connection: Connection)
         return_to_seq=1,
         comment="The concentration figures predate the December book.",
     )
+
+
+def test_post_freeze_return_can_reopen_its_freeze_stage(connection: Connection) -> None:
+    """The migrated CHECK permits the service's documented same-stage return."""
+    cycle_id, package_id, decision_id = uuid4(), uuid4(), uuid4()
+    _insert_package(connection, package_id)
+    _insert_cycle(connection, cycle_id, status="frozen", package_id=package_id)
+    _insert_decision(
+        connection,
+        cycle_id,
+        decision_id,
+        decision="returned",
+        stage_seq=3,
+        return_to_seq=3,
+        comment="The Board requested another approval of this frozen report.",
+        package_id=package_id,
+    )
+    observed = cast(
+        tuple[int, int],
+        connection.execute(
+            text("SELECT stage_seq, return_to_seq FROM icaap_stage_decisions WHERE id = :id"),
+            {"id": str(decision_id)},
+        ).one(),
+    )
+    assert observed == (3, 3)
+    savepoint = connection.begin_nested()
+    with pytest.raises(DatabaseError, match="ck_icaap_stage_decisions_return"):
+        _insert_decision(
+            connection,
+            cycle_id,
+            uuid4(),
+            decision="returned",
+            stage_seq=3,
+            return_to_seq=4,
+            comment="A frozen report still cannot return forwards.",
+            package_id=package_id,
+        )
+    savepoint.rollback()
 
 
 def test_a_cycle_sourced_attachment_must_name_the_upload_it_came_from(

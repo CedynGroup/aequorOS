@@ -2,8 +2,10 @@
 
 One call provisions everything a new institution needs: four tier buckets,
 versioning on the retained tiers, and the aggressive lifecycle rule on
-``temp``. Idempotent by design — re-running against an already-provisioned
-institution is a no-op, so onboarding automation can safely retry.
+``temp``. Retries reconcile existing bucket settings and can refuse an
+incompatible output bucket. Output-bucket requirements and deployment preparation
+are governed by ``backend/docs/tamper_evident_records.md`` (Write-once objects
+and backups).
 
 Manual bucket creation in a console is prohibited outside debugging; this
 module is the only sanctioned path (Terraform takes over for GCS/S3 in
@@ -14,12 +16,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
 from botocore.exceptions import ClientError
 
 from app.storage.client import RETAINED_TIERS, TIERS, StorageLocation, Tier
 from app.storage.config import StorageEngineSettings
+from app.storage.retention import RetentionClient, require_object_lock
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +48,11 @@ class ProvisioningClient(Protocol):
 
 
 def _create_bucket(
-    s3_client: ProvisioningClient, settings: StorageEngineSettings, bucket: str
+    s3_client: ProvisioningClient,
+    settings: StorageEngineSettings,
+    bucket: str,
+    *,
+    object_lock: bool = False,
 ) -> None:
     """Create a bucket, branching on the S3 dialect (developer.md §2a).
 
@@ -56,13 +63,17 @@ def _create_bucket(
     probed behavior of the managed MinIO deployment, preserved exactly) or
     when the region genuinely needs it; omit it only for bare AWS us-east-1.
     """
+    kwargs: dict[str, object] = {}
+    if object_lock:
+        kwargs["ObjectLockEnabledForBucket"] = True
     if settings.endpoint is not None or settings.region != "us-east-1":
         s3_client.create_bucket(
             Bucket=bucket,
             CreateBucketConfiguration={"LocationConstraint": settings.region},
+            **kwargs,
         )
     else:
-        s3_client.create_bucket(Bucket=bucket)
+        s3_client.create_bucket(Bucket=bucket, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -153,8 +164,15 @@ def provision_bucket(
 ) -> bool:
     created = not _bucket_exists(s3_client, bucket)
     if created:
-        _create_bucket(s3_client, settings, bucket)
+        _create_bucket(
+            s3_client,
+            settings,
+            bucket,
+            object_lock=settings.object_lock_enabled and tier == "outputs",
+        )
         logger.info("provisioned bucket %s", bucket)
+    if settings.object_lock_enabled and tier == "outputs":
+        require_object_lock(cast(RetentionClient, s3_client), bucket)
     if tier in (*RETAINED_TIERS, "audit-logs"):
         _ = s3_client.put_bucket_versioning(
             Bucket=bucket, VersioningConfiguration={"Status": "Enabled"}

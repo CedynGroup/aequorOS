@@ -4,7 +4,7 @@
  * What the platform is prepared to SAY about a reporting date.
  *
  * Every statement is composed server-side from typed facts
- * (`app/services/bi/insights/`), with its figures already formatted in the
+ * (`app/bi/service/insights/`), with its figures already formatted in the
  * institution's own unit and its reservations already attached — the advisory
  * basis of a measure, a gap in the data it would have needed. The strip
  * renders those words as given: it does
@@ -136,7 +136,7 @@ function InsightCard({ insight }: { insight: BiInsight }) {
         {insight.qualifiers.map((qualifier) => (
           <span
             key={qualifier}
-            className="rounded border border-border bg-surface px-1.5 py-0.5 text-micro text-slate"
+            className="rounded-sm border border-border bg-surface px-1.5 py-0.5 text-micro text-slate"
           >
             {qualifier}
           </span>

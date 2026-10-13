@@ -12,7 +12,8 @@ parents, covering same-org cross-parent nesting).  That is where generation earn
 its cost: it checks isolation across a bounded sample of caller authority
 combinations.
 
-For each generated caller and layout the property replaces bank A's bindings,
+For each generated caller and layout the property revokes bank A's previous
+bindings and appends new grants,
 sweeps every applicable route, checks for foreign identifiers beyond those sent
 in the request, rejects successful mutations, and checks that every table digest
 in both organizations is unchanged.  It runs against a migrated Postgres schema
@@ -161,8 +162,11 @@ def _replace_home_bindings(engine: Engine, bindings: list[AuthorizationBinding])
     with _tenant_session(engine, ORG_A) as session:
         session.execute(
             text(
-                "DELETE FROM authorization_bindings"
+                "UPDATE authorization_bindings SET status = 'revoked', revoked_at = now(),"
+                " revoked_by_type = 'system', revoked_by_id = 'object-reference-property',"
+                " revoked_reason = 'Next property example', updated_at = now()"
                 " WHERE organization_id = :organization_id AND grant_reason = :reason"
+                " AND status <> 'revoked'"
             ),
             {"organization_id": ORG_A, "reason": GRANT_REASON},
         )

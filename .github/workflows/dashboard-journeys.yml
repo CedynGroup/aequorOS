@@ -6,6 +6,8 @@ name: Dashboard Playwright journeys
 # It is a plain Python process started as a Playwright web server, so unlike
 # MinIO below it needs no step of its own here.
 on:
+  merge_group:
+    types: [checks_requested]
   pull_request:
   push:
     branches: [main]

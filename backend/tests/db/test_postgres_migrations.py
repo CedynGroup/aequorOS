@@ -110,7 +110,7 @@ def postgres_schema_url(database_url: str, schema_name: str, *, role: str | None
 @pytest.fixture
 def migrated_postgres_schema(monkeypatch: pytest.MonkeyPatch) -> Iterator[MigratedPostgresSchema]:
     """A schema migrated to head and downgraded to base again on teardown."""
-    yield from _migrated_schema(monkeypatch, downgrade=True)
+    yield from migrate_isolated_postgres_schema(monkeypatch, downgrade=True)
 
 
 @pytest.fixture
@@ -124,12 +124,13 @@ def forward_migrated_postgres_schema(
     service identities); the round trip itself is proven by
     :func:`migrated_postgres_schema`.
     """
-    yield from _migrated_schema(monkeypatch, downgrade=False)
+    yield from migrate_isolated_postgres_schema(monkeypatch, downgrade=False)
 
 
-def _migrated_schema(
-    monkeypatch: pytest.MonkeyPatch, *, downgrade: bool
+def migrate_isolated_postgres_schema(
+    monkeypatch: pytest.MonkeyPatch, *, downgrade: bool, revision: str = "head"
 ) -> Generator[MigratedPostgresSchema]:
+    """Migrate an isolated schema for a caller-owned fixture lifetime."""
     test_database_url = os.environ["TEST_DATABASE_URL"]
     if not make_url(test_database_url).drivername.startswith("postgresql"):
         pytest.skip("TEST_DATABASE_URL must point to Postgres.")
@@ -148,9 +149,37 @@ def _migrated_schema(
             try:
                 connection.execute(
                     text(
+                        Path(__file__)
+                        .parents[2]
+                        .joinpath("scripts/database_roles_202610120096.sql")
+                        .read_text()
+                    )
+                )
+                connection.execute(
+                    text(
+                        Path(__file__)
+                        .parents[2]
+                        .joinpath("scripts/database_session_timeouts.sql")
+                        .read_text()
+                    )
+                )
+                connection.execute(
+                    text(
                         f'CREATE ROLE "{migration_role}" NOLOGIN NOSUPERUSER NOBYPASSRLS '
                         "NOINHERIT NOCREATEDB NOREPLICATION CREATEROLE"
                     )
+                )
+                # The per-grant ADMIN/INHERIT/SET options are PostgreSQL 16+. CI
+                # runs 17 and production 15.13, so a fixture pinned to the newer
+                # syntax cannot catch a migration that uses it — which is how one
+                # reached production and took the API down.
+                server_version = cast(
+                    int, connection.exec_driver_sql("SHOW server_version_num").scalar_one()
+                )
+                admin_grant_options = (
+                    "WITH ADMIN TRUE, INHERIT TRUE, SET TRUE"
+                    if int(server_version) >= 160000
+                    else "WITH ADMIN OPTION"
                 )
                 connection.execute(
                     text(f"""
@@ -160,8 +189,9 @@ def _migrated_schema(
                             CREATE ROLE aequoros_audit_owner NOLOGIN;
                         END IF;
                     END $$;
+                    GRANT aqs_owner TO "{migration_role}" {admin_grant_options};
                     GRANT aequoros_audit_owner TO "{migration_role}"
-                        WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
+                        {admin_grant_options};
                 """)
                 )
             finally:
@@ -176,7 +206,7 @@ def _migrated_schema(
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"{authorization}'))
 
     try:
-        command.upgrade(alembic_config, "head")
+        command.upgrade(alembic_config, revision)
         yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
         if downgrade:
             command.downgrade(alembic_config, "base")
@@ -202,7 +232,7 @@ def clear_database_caches() -> None:
     get_engine.cache_clear()
 
 
-def _superuser_database_url() -> str:
+def postgres_administrator_url() -> str:
     for database_url in (os.getenv("POSTGRES_ADMIN_URL"), os.getenv("TEST_DATABASE_URL")):
         if not database_url:
             continue
@@ -226,7 +256,7 @@ def _superuser_database_url() -> str:
 
 @pytest.fixture
 def superuser_database_url() -> str:
-    return _superuser_database_url()
+    return postgres_administrator_url()
 
 
 @pytest.mark.skipif(
@@ -245,11 +275,11 @@ def test_superuser_migrations_use_restricted_role(
     assert forward_migrated_postgres_schema.tables({"audit_chain_heads"}) == {"audit_chain_heads"}
     monkeypatch.delenv("POSTGRES_ADMIN_URL", raising=False)
     monkeypatch.setenv(source, superuser_database_url)
-    admin_url = _superuser_database_url()
+    admin_url = postgres_administrator_url()
     assert admin_url == superuser_database_url
     monkeypatch.setenv("TEST_DATABASE_URL", admin_url)
     migration_role: str | None = None
-    schemas = _migrated_schema(monkeypatch, downgrade=downgrade)
+    schemas = migrate_isolated_postgres_schema(monkeypatch, downgrade=downgrade)
     try:
         schema = next(schemas)
         with schema.app_engine.connect() as connection:
@@ -302,7 +332,7 @@ def test_missing_superuser_credentials_follow_privilege_policy(
     monkeypatch.setenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED", "1" if required else "")
     outcome = pytest.fail.Exception if required else pytest.skip.Exception
     with pytest.raises(outcome, match="Superuser credentials are required"):
-        _superuser_database_url()
+        postgres_administrator_url()
 
 
 @pytest.mark.skipif(
@@ -323,7 +353,7 @@ def test_restricted_test_url_follows_privilege_policy(
     monkeypatch.setenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED", "1" if required else "")
     outcome = pytest.fail.Exception if required else pytest.skip.Exception
     with pytest.raises(outcome, match="Superuser credentials are required"):
-        _superuser_database_url()
+        postgres_administrator_url()
 
 
 @pytest.mark.skipif(

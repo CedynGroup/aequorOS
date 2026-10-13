@@ -93,6 +93,7 @@ def _insert_ledger(session: Session) -> None:
     session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="bsd7-test-ledger",
@@ -376,7 +377,8 @@ def test_pl_line_quarter_differs_from_period_to_date_off_q1(db_client: TestClien
         session.add(batch)
         session.flush()
         lineage = LineageRecord(
-            organization_id=ORG_1, ingestion_batch_id=batch.id, operation_type="ADAPTER_TRANSLATE",
+            organization_id=ORG_1, bank_id=batch.bank_id,
+            ingestion_batch_id=batch.id, operation_type="ADAPTER_TRANSLATE",
             operation_ref="q", input_lineage_ids=[],
         )  # fmt: skip
         session.add(lineage)
@@ -444,7 +446,8 @@ def test_pl_line_period_basis_reads_the_latest_generation_per_month(db_client: T
         session.add(batch)
         session.flush()
         lineage = LineageRecord(
-            organization_id=ORG_1, ingestion_batch_id=batch.id, operation_type="ADAPTER_TRANSLATE",
+            organization_id=ORG_1, bank_id=batch.bank_id,
+            ingestion_batch_id=batch.id, operation_type="ADAPTER_TRANSLATE",
             operation_ref="weekly", input_lineage_ids=[],
         )  # fmt: skip
         session.add(lineage)

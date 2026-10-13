@@ -183,6 +183,7 @@ def _seed_events(events: list[dict[str, Any]]) -> None:
         session.flush()
         lineage = LineageRecord(
             organization_id=ORG_1,
+            bank_id=batch.bank_id,
             ingestion_batch_id=batch.id,
             operation_type="ADAPTER_TRANSLATE",
             operation_ref="credit-scope-events",

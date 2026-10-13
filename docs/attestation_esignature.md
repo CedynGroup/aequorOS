@@ -233,9 +233,8 @@ Tenant isolation, by contrast, is genuinely strong: 85 of 89 tables are RLS
 `ENABLE` **and** `FORCE`, the GUC is transaction-local and fails closed when
 unset, and the app role is not `BYPASSRLS`.
 
-Storage: buckets are versioned; only the `temp` tier has a lifecycle rule;
-**no S3 Object Lock / WORM anywhere** — versioning is deletable by any holder
-of the bucket credentials.
+Storage retention is governed by
+[the write-once objects and backups contract](../backend/docs/tamper_evident_records.md#write-once-objects-and-backups).
 
 Time: every timestamp is `utc_now()` — the _application host's_ wall clock.
 `audit_events.created_at` has no `server_default`. There is **no trusted time
@@ -252,7 +251,7 @@ source, no RFC 3161, nothing** (exhaustive grep: zero hits).
 | **G5**  | No step-up authentication — a 15-minute bearer token is the only thing between a stolen session and an approval                                                                                                                                             | zero MFA/ACR implementation                                        | **Blocker**                                                                            |
 | **G6**  | Maker-checker covers only the approval decision; submit, resubmission-decide, and `requested_by` are unguarded                                                                                                                                              | `workflow.py:245` is the sole check                                | High                                                                                   |
 | **G7**  | No permanent, opaque per-user identifier                                                                                                                                                                                                                    | `public_ids.py` has `BK`/`OR` only                                 | High                                                                                   |
-| **G8**  | No WORM on `outputs`; versioning only                                                                                                                                                                                                                       | `provisioning.py` — no Object Lock                                 | High                                                                                   |
+| **G8**  | Storage retention is governed by [the write-once objects and backups contract](../backend/docs/tamper_evident_records.md#write-once-objects-and-backups)                                                                                                    | See that contract for rollout requirements                         | High                                                                                   |
 | **G9**  | **A `consolidated` package renders a PDF that says "Solo"** — `basis` is stamped into the snapshot but templates hard-code the solo string, and no generator branches on basis                                                                              | `templates.py:40, 98`; `generation.py:116`                         | High — _signing a document that misstates its own basis is a defect in the instrument_ |
 | **G10** | Attribution is destroyed by user deletion (`SET NULL`) or degraded to a UUID fragment; no name snapshot at write time                                                                                                                                       | `audit_event.py:26-30`; `hooks.ts:2056`                            | High                                                                                   |
 | **G11** | No approval policy — one approver releases any return; officers/quorum are not modelled                                                                                                                                                                     | grep: no `required_approvals` concept                              | High                                                                                   |
@@ -800,9 +799,8 @@ Delivered before the first signature is possible:
 - **Artifacts become append-only** (G2): a new immutable
   `regulatory_package_artifact_versions` row per export, persisting the S3
   `version_id`; the signature record pins the exact version it signed.
-- **Object Lock (WORM)** in compliance mode on the `outputs` and audit buckets
-  (G8) — noting this requires bucket re-creation on MinIO and is therefore a
-  migration, not a toggle.
+- **Object Lock (WORM)** (G8): scope, retention and deployment preparation are
+  governed by [the write-once objects and backups contract](../backend/docs/tamper_evident_records.md#write-once-objects-and-backups).
 - **`snapshot_sha256` verified** at export, at download and at signing (G3).
 - **Trusted time** (G4): an RFC 3161 TSA, used for both the PAdES timestamp and
   the detached attestation.

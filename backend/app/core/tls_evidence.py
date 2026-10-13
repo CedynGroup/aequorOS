@@ -48,7 +48,10 @@ def probe_database(url: str) -> dict[str, str | bool | None]:
     args = database_connect_args(url, settings=secure)
     if args.get("sslmode") != "verify-full":
         raise TransportSecurityError("Database evidence requires verify-full, even in local mode.")
-    engine = create_engine(url, connect_args={**args, "connect_timeout": 10})
+    engine = create_engine(
+        url,
+        connect_args={**args, "connect_timeout": 10, "application_name": "aequoros-tls-evidence"},
+    )
     try:
         with engine.connect() as connection:
             row = connection.execute(

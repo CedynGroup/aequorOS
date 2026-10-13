@@ -1,7 +1,7 @@
 /**
  * A pack's tiles cannot be narrowed by a field their figures do not carry.
  *
- * `app/services/bi/compiler.py` treats a FILTER as a slice: it checks every
+ * `app/bi/service/compiler.py` treats a FILTER as a slice: it checks every
  * filter's dimension against each measure's `allowed_dimensions` and refuses
  * with `<measure> cannot be sliced by <dimension>`. An engine-copied figure —
  * net interest margin, a capital ratio — is one institution-level number the
@@ -210,10 +210,10 @@ test("a field no widget on the page can carry is not offered at all", () => {
 
 test("with no widgets named, the whole catalogue is offered (Explore)", () => {
   const offered = narrowingFieldsFor(CATALOGUE, []);
-  assert.deepEqual(offered.map((dimension) => dimension.id), [
-    "position.product_family",
-    "position.branch",
-  ]);
+  assert.deepEqual(
+    offered.map((dimension) => dimension.id),
+    ["position.product_family", "position.branch"],
+  );
 });
 
 if (failures > 0) {

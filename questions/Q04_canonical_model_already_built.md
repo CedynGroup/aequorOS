@@ -7,11 +7,9 @@ the built one as authoritative.
 DDL files under `/schema/canonical_v1/*.sql`, mirrored in Snowflake.
 
 **What actually exists (and is good):** the canonical model is implemented as SQLAlchemy
-models in `backend/app/models/canonical.py` + Alembic migrations — 11 provenance-mandatory
-entity types via `CanonicalMetadataMixin` (which already carries every §4.3 mandatory
-metadata column: `institution_id`, `as_of_date`, `ingested_at`, `source_system`,
-`source_reference`, `ingestion_batch_id`, `validation_status`, `lineage_id`,
-`superseded_by`, …), immutable supersession, `NUMERIC(28,6)` money, rates-as-fractions.
+models in `backend/app/models/canonical.py` + Alembic migrations, with provenance metadata
+owned by [Data Engine §4.3](../docs/data_engine.md#43-mandatory-metadata-columns),
+immutable supersession, `NUMERIC(28,6)` money, rates-as-fractions.
 There is no `/schema/` tree and no Snowflake mirror.
 
 **Default I'm proceeding on:** the existing SQLAlchemy model **is** the realized §4

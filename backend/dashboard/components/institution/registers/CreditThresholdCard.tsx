@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Board credit early-warning threshold register (credit module).
@@ -12,23 +12,23 @@
  * the Board evidence; breaches surface as credit validations and alerts.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import type {
   CreditThresholdRegisterRead,
   CreditThresholdUpdate,
-} from '@aequoros/risk-service-api';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { SkeletonTable } from '@/components/ui/Skeleton';
+} from "@aequoros/risk-service-api";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import {
   useCreditThresholdRegister,
   useUpdateCreditThresholdRegister,
-} from '@/lib/api/hooks';
-import { fmtDateUTC, num } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
-import { FormActions, ReasonField } from '@/components/institution/shared';
+} from "@/lib/api/hooks";
+import { fmtDateUTC, num } from "@/lib/api/values";
+import { fmtPct } from "@/lib/format";
+import { FormActions, ReasonField } from "@/components/institution/shared";
 import {
   EditRegisterAction,
   EvidenceFields,
@@ -36,29 +36,29 @@ import {
   parseDecimalInput,
   sameDecimal,
   useApproverGate,
-} from './common';
+} from "./common";
 
 /** The closed code list (mirrors the backend's CREDIT_THRESHOLD_CODES). */
 const THRESHOLDS: { code: string; label: string; hint: string }[] = [
   {
-    code: 'npl_board_trigger_pct',
-    label: 'NPL Board trigger',
-    hint: 'Early-warning NPL level below the regulatory ceiling',
+    code: "npl_board_trigger_pct",
+    label: "NPL Board trigger",
+    hint: "Early-warning NPL level below the regulatory ceiling",
   },
   {
-    code: 'provision_coverage_floor_pct',
-    label: 'Provision coverage floor',
-    hint: 'Minimum specific-provisions-to-NPL coverage the Board expects',
+    code: "provision_coverage_floor_pct",
+    label: "Provision coverage floor",
+    hint: "Minimum specific-provisions-to-NPL coverage the Board expects",
   },
   {
-    code: 'employer_par30_ewi_pct',
-    label: 'Employer PAR30 early warning',
-    hint: 'Per-employer PAR30 level for the payroll / check-off book',
+    code: "employer_par30_ewi_pct",
+    label: "Employer PAR30 early warning",
+    hint: "Per-employer PAR30 level for the payroll / check-off book",
   },
   {
-    code: 'restructured_ratio_watch_pct',
-    label: 'Restructured ratio watch',
-    hint: 'Restructured share of the book worth Board attention',
+    code: "restructured_ratio_watch_pct",
+    label: "Restructured ratio watch",
+    hint: "Restructured share of the book worth Board attention",
   },
 ];
 
@@ -73,9 +73,9 @@ type ViewRow = {
 
 const viewColumns: Column<ViewRow>[] = [
   {
-    key: 'threshold',
-    header: 'Threshold',
-    width: '40%',
+    key: "threshold",
+    header: "Threshold",
+    width: "40%",
     render: (r) => (
       <div>
         <p className="text-body font-medium text-navy">{r.label}</p>
@@ -84,25 +84,28 @@ const viewColumns: Column<ViewRow>[] = [
     ),
   },
   {
-    key: 'level',
-    header: 'Level',
+    key: "level",
+    header: "Level",
     numeric: true,
     render: (r) =>
       r.valuePct !== null ? (
-        <span className="font-mono tnum text-navy">{fmtPct(num(r.valuePct), 2)}</span>
+        <span className="font-mono tnum text-navy">
+          {fmtPct(num(r.valuePct), 2)}
+        </span>
       ) : (
         <StatusPill tone="slate">Not set</StatusPill>
       ),
   },
   {
-    key: 'evidence',
-    header: 'Approval evidence',
+    key: "evidence",
+    header: "Approval evidence",
     render: (r) =>
       r.approvedBy ? (
         <div>
           <p className="text-body text-navy">{r.approvedBy}</p>
           <p className="text-caption text-slate">
-            Effective {r.effectiveFrom ? fmtDateUTC(new Date(r.effectiveFrom)) : '—'}
+            Effective{" "}
+            {r.effectiveFrom ? fmtDateUTC(new Date(r.effectiveFrom)) : "—"}
           </p>
         </div>
       ) : (
@@ -112,7 +115,9 @@ const viewColumns: Column<ViewRow>[] = [
 ];
 
 function toViewRows(register: CreditThresholdRegisterRead): ViewRow[] {
-  const byCode = new Map(register.thresholds.map((row) => [row.thresholdCode, row]));
+  const byCode = new Map(
+    register.thresholds.map((row) => [row.thresholdCode, row]),
+  );
   return THRESHOLDS.map(({ code, label, hint }) => {
     const row = byCode.get(code);
     return {
@@ -172,7 +177,11 @@ export default function CreditThresholdCard({ bankId }: { bankId: string }) {
             onClose={() => setEditing(false)}
           />
         ) : (
-          <DataTable columns={viewColumns} rows={toViewRows(query.data)} density="compact" />
+          <DataTable
+            columns={viewColumns}
+            rows={toViewRows(query.data)}
+            density="compact"
+          />
         )
       ) : null}
     </SectionCard>
@@ -193,26 +202,29 @@ function ThresholdEditor({
   const currentByCode = useMemo(
     () =>
       new Map(
-        register.thresholds.map((row) => [row.thresholdCode, String(row.valuePct)])
+        register.thresholds.map((row) => [
+          row.thresholdCode,
+          String(row.valuePct),
+        ]),
       ),
-    [register]
+    [register],
   );
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     for (const { code } of THRESHOLDS) {
-      initial[code] = currentByCode.get(code) ?? '';
+      initial[code] = currentByCode.get(code) ?? "";
     }
     return initial;
   });
-  const [effectiveFrom, setEffectiveFrom] = useState('');
-  const [approvedBy, setApprovedBy] = useState('');
-  const [reason, setReason] = useState('');
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const [approvedBy, setApprovedBy] = useState("");
+  const [reason, setReason] = useState("");
 
   const { changed, invalid } = useMemo(() => {
     const changedCodes: Record<string, string> = {};
     const invalidCodes: string[] = [];
     for (const { code } of THRESHOLDS) {
-      const input = values[code] ?? '';
+      const input = values[code] ?? "";
       // Blank leaves an unset code unset and a set code unchanged — the
       // register has no "unset" operation; a generation supersedes per code.
       if (input.trim().length === 0) continue;
@@ -257,29 +269,32 @@ function ThresholdEditor({
         {THRESHOLDS.map(({ code, label, hint }) => (
           <div
             key={code}
-            className="flex items-center justify-between gap-4 rounded border border-border-light px-3 py-2"
+            className="flex items-center justify-between gap-4 rounded-sm border border-border-light px-3 py-2"
           >
             <div className="min-w-0">
-              <label htmlFor={`cth-${code}`} className="block text-body font-medium text-navy">
+              <label
+                htmlFor={`cth-${code}`}
+                className="block text-body font-medium text-navy"
+              >
                 {label}
               </label>
               <p className="text-caption text-slate">
-                {hint} ·{' '}
+                {hint} ·{" "}
                 {currentByCode.has(code)
                   ? `currently ${fmtPct(num(currentByCode.get(code)!), 2)}`
-                  : 'not set — leave blank to keep it unevaluated'}
+                  : "not set — leave blank to keep it unevaluated"}
               </p>
             </div>
             <div className="shrink-0 flex items-center gap-1.5">
               <input
                 id={`cth-${code}`}
                 inputMode="decimal"
-                value={values[code] ?? ''}
+                value={values[code] ?? ""}
                 onChange={(e) =>
                   setValues((prev) => ({ ...prev, [code]: e.target.value }))
                 }
                 className={`${numericInputCls} w-28 ${
-                  invalid.includes(code) ? 'border-critical' : ''
+                  invalid.includes(code) ? "border-critical" : ""
                 }`}
                 aria-invalid={invalid.includes(code)}
               />
@@ -303,12 +318,15 @@ function ThresholdEditor({
 
       <p className="text-caption text-slate">
         {changedCount === 0
-          ? 'No levels changed yet — only changed thresholds are recorded.'
-          : `${changedCount} threshold${changedCount === 1 ? '' : 's'} will be recorded in this generation.`}
+          ? "No levels changed yet — only changed thresholds are recorded."
+          : `${changedCount} threshold${changedCount === 1 ? "" : "s"} will be recorded in this generation.`}
       </p>
 
       {update.error && (
-        <ErrorPanel error={update.error} title="Could not record the threshold generation" />
+        <ErrorPanel
+          error={update.error}
+          title="Could not record the threshold generation"
+        />
       )}
 
       <FormActions

@@ -6,11 +6,13 @@ from decimal import Decimal
 
 import pytest
 from hypothesis import given, settings
-from hypothesis import strategies as st
 
+from app.domain.irr.standardised import SfInputs
 from app.icaap.domain.pillar2.irrbb import ScenarioDelta, interim_delta_eve
 from app.icaap.domain.pillar2.types import MethodStatus, MissingParameter
 from tests.icaap.domain.pillar2.conftest import OUTLIER_THRESHOLD_PCT
+from tests.irrbb.testing.assertions import assert_interim_not_increased
+from tests.irrbb.testing.generators import interim_deltas, irrbb_books
 
 #: The audit §6.2 ladder, in the engine's sign convention.
 LADDER = (
@@ -132,25 +134,24 @@ def test_an_unresolved_parameter_is_a_typed_refusal(
 
 
 @settings(max_examples=300, deadline=None)
-@given(
-    values=st.lists(
-        st.decimals(min_value=Decimal(-1000), max_value=Decimal(1000), places=4),
-        min_size=1,
-        max_size=6,
-    )
-)
-def test_an_improving_scenario_can_never_raise_the_charge(values: list[Decimal]) -> None:
-    codes = [f"s{index}" for index, _ in enumerate(values)]
-    deltas = tuple(ScenarioDelta(code, value) for code, value in zip(codes, values, strict=True))
+@given(book=irrbb_books())
+def test_an_improving_scenario_can_never_raise_the_charge(book: SfInputs) -> None:
+    deltas = interim_deltas(book)
+    codes = [delta.code for delta in deltas]
     result = interim_delta_eve(
         deltas=deltas,
         scenario_codes=codes,
-        required_codes=[],
-        tier1=Decimal(1000),
+        required_codes=codes,
+        tier1=book.tier1,
         outlier_threshold_pct_tier1=OUTLIER_THRESHOLD_PCT,
     )
-    worst_loss = max((-value for value in values), default=Decimal(0))
-    if worst_loss <= Decimal(0):
-        assert result.baseline_amount == Decimal(0)
-    else:
-        assert result.baseline_amount == worst_loss.quantize(Decimal("0.0001"))
+    improved = interim_delta_eve(
+        deltas=tuple(
+            ScenarioDelta(delta.code, delta.delta_eve + Decimal("100")) for delta in deltas
+        ),
+        scenario_codes=codes,
+        required_codes=codes,
+        tier1=book.tier1,
+        outlier_threshold_pct_tier1=OUTLIER_THRESHOLD_PCT,
+    )
+    assert_interim_not_increased(improved, result)

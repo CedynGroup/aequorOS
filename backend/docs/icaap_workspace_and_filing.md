@@ -255,6 +255,19 @@ A freeze must satisfy, in one transaction:
 - the framework digest, still matching the published version;
 - the framework's own attachment requirements, notably the Board resolution.
 
+**A governed post-freeze return closes the frozen round.** It may target any
+stage at or before the approval/freeze stage, including that stage itself;
+in-review returns must still target an earlier stage. The return decision names
+the sealed package and is recorded before the round increments, so fresh
+approvals in the reopened round can stand. For persisted legacy returns recorded
+in the incremented round, `workflow.load_state` uses the matching package's
+frozen decision to determine the closed round for approval validity. Stored
+decisions and their displayed rounds remain unchanged, as do sealed snapshots.
+Migration `202610110092` admits same-stage returns with a package reference;
+downgrade refuses while such history exists. The
+[freeze regressions](../tests/icaap/service/test_freeze_state_machine.py) cover
+all return targets and legacy-history refreeze without rewriting evidence.
+
 **The Board resolution is required by the FRAMEWORK, not by the signing
 policy** (D-031). `ATTESTATION_ESIGN_REQUIRED=0` suspends signatures; it must
 never also suspend a document the regulator requires the return to carry

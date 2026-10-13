@@ -108,7 +108,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("DATABASE_URL is not set.", file=sys.stderr)
         return 2
 
-    engine = create_engine(database_url)
+    engine = create_engine(
+        database_url,
+        connect_args={"application_name": "aequoros-provision-signer-identities"}
+        if database_url.startswith("postgresql")
+        else {},
+    )
     total_minted = 0
     total_skipped = 0
     with Session(engine) as session:

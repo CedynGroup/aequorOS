@@ -21,8 +21,8 @@
  *
  * The same rule covers every other token the provenance drawer shows — an
  * aggregation, a component's role, an engine tier, a capital regime. Each is a
- * closed server vocabulary; each has its copy here; `labels.test.ts` reads the
- * server's own source for the vocabularies and fails when one of them gains a
+ * closed server vocabulary; each has its copy here; `labels.test.ts` loads the
+ * server's catalogue and schema vocabularies and fails when one of them gains a
  * value this file has not named.
  */
 
@@ -77,7 +77,7 @@ export function designationLabel(designation: string | null): string | null {
 /**
  * How a measure is computed, in words (`BiMeasureRead.aggregation`).
  *
- * The vocabulary is the catalogue's (`app/domain/bi/catalogue/*.py`); the
+ * The vocabulary is the catalogue's (`app/bi/domain/catalogue/*.py`); the
  * drawer printed the token itself — "Aggregation ratio_of_sums" — and a
  * reviewer opening Explain on the net interest margin was handed an identifier
  * where the one sentence that explains the figure belongs.

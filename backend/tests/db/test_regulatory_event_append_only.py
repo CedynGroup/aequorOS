@@ -42,6 +42,12 @@ def test_regulatory_approval_and_submission_events_are_append_only(
         command.upgrade(alembic_config_for_app(), "head")
         with app_engine.begin() as connection:
             _seed_regulatory_evidence(connection)
+            connection.execute(
+                text(
+                    "GRANT UPDATE, DELETE ON regulatory_package_approvals, "
+                    "regulatory_submission_events TO CURRENT_USER"
+                )
+            )
         for table, column in (
             ("regulatory_package_approvals", "action"),
             ("regulatory_submission_events", "event"),
@@ -53,17 +59,14 @@ def test_regulatory_approval_and_submission_events_are_append_only(
                 _set_org(connection)
                 connection.execute(text(f"DELETE FROM {table}"))
 
-        # The canonical test fixture uses this transaction-local switch while
-        # resetting disposable sample data. It cannot authorize an UPDATE.
-        with app_engine.begin() as connection:
-            _set_org(connection)
-            connection.execute(
-                text(
-                    "SELECT set_config('app.aequoros_regulatory_event_test_reset', '1', true)"
+        # A caller-supplied test flag must never bypass retention.
+        for table in ("regulatory_package_approvals", "regulatory_submission_events"):
+            with pytest.raises(DBAPIError, match="append-only"), app_engine.begin() as connection:
+                _set_org(connection)
+                connection.execute(
+                    text("SELECT set_config('app.aequoros_regulatory_event_test_reset', '1', true)")
                 )
-            )
-            connection.execute(text("DELETE FROM regulatory_package_approvals"))
-            connection.execute(text("DELETE FROM regulatory_submission_events"))
+                connection.execute(text(f"DELETE FROM {table}"))
     finally:
         clear_database_caches()
         app_engine.dispose()

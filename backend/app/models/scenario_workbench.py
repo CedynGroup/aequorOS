@@ -41,6 +41,11 @@ WORKBENCH_MODULE_VALUES = ("liquidity", "capital", "irr", "fx", "ftp")
 class StressScenario(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "stress_scenarios"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "bank_id"],
+            ["banks.organization_id", "banks.id"],
+            name="fk_stress_scenarios_org_bank",
+        ),
         CheckConstraint(
             f"module IN {WORKBENCH_MODULE_VALUES!r}", name="ck_stress_scenarios_module"
         ),
@@ -52,7 +57,7 @@ class StressScenario(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id"), nullable=False
     )
-    bank_id: Mapped[str] = mapped_column(String(16), ForeignKey("banks.id"), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     module: Mapped[str] = mapped_column(String(16), nullable=False)
     code: Mapped[str] = mapped_column(String(60), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)

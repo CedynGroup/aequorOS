@@ -26,6 +26,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -42,6 +43,11 @@ CAPITAL_PLAN_STATUSES = ("draft", "approved", "superseded")
 class CapitalPlan(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "capital_plans"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "bank_id"],
+            ["banks.organization_id", "banks.id"],
+            name="fk_capital_plans_org_bank",
+        ),
         CheckConstraint(f"status IN {CAPITAL_PLAN_STATUSES!r}", name="ck_capital_plans_status"),
         UniqueConstraint("organization_id", "bank_id", "version", name="uq_capital_plans_version"),
     )
@@ -49,7 +55,7 @@ class CapitalPlan(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id"), nullable=False
     )
-    bank_id: Mapped[str] = mapped_column(String(16), ForeignKey("banks.id"), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="draft")
     # Shape-validated by ``schemas.capital_plan.CapitalPlanContent``.
@@ -68,12 +74,28 @@ class IlaapSnapshot(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     """Append-only quarterly ILAAP component (LRMD ¶12/¶24/¶26)."""
 
     __tablename__ = "ilaap_snapshots"
-    __table_args__ = (Index("ix_ilaap_snapshots_bank", "organization_id", "bank_id"),)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "bank_id"],
+            ["banks.organization_id", "banks.id"],
+            name="fk_ilaap_snapshots_org_bank",
+        ),
+        ForeignKeyConstraint(
+            ["reporting_period_id", "organization_id", "bank_id"],
+            [
+                "bank_reporting_periods.id",
+                "bank_reporting_periods.organization_id",
+                "bank_reporting_periods.bank_id",
+            ],
+            name="fk_ilaap_snapshots_reporting_period_id_bank",
+        ),
+        Index("ix_ilaap_snapshots_bank", "organization_id", "bank_id"),
+    )
 
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id"), nullable=False
     )
-    bank_id: Mapped[str] = mapped_column(String(16), ForeignKey("banks.id"), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     reporting_period_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
     # Assembled liquidity-adequacy evidence — stored runs, Board thresholds,

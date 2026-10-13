@@ -13,7 +13,7 @@
  *
  * * It will not decide whether a formula is valid. `POST …/bi/measures/validation`
  *   is the authority and its verdict is rendered as the server worded it. A
- *   TypeScript parser that disagreed with `app/domain/bi/expr.py` would be worse
+ *   TypeScript parser that disagreed with `app/bi/domain/expr.py` would be worse
  *   than no preview at all.
  * * It will not offer a decision control to the person who proposed a measure, and
  *   it says why rather than quietly leaving the button out.

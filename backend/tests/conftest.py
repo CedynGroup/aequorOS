@@ -22,6 +22,7 @@ from uuid import uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from hypothesis import settings as hypothesis_settings
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
@@ -50,6 +51,18 @@ from tests.support.api_factories import ApiFactories
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.support.inmemory_storage import InMemoryStorageClient
 
+# No scheduled property-test job exists: local and PR runs share this bounded,
+# reproducible budget. Expensive database machines may lower it explicitly.
+hypothesis_settings.register_profile(
+    "ci",
+    max_examples=25,
+    stateful_step_count=20,
+    deadline=None,
+    derandomize=True,
+    print_blob=True,
+)
+hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
+
 #: Each feature keeps its fixtures in ``tests/<feature>/fixtures.py``. They are
 #: registered here because pytest accepts ``pytest_plugins`` only in the root
 #: conftest; a module becomes its feature's ``conftest.py`` once every test that
@@ -57,6 +70,7 @@ from tests.support.inmemory_storage import InMemoryStorageClient
 #: whole suite shares: settings, the database, session and client, storage fakes
 #: and the demo tenants.
 pytest_plugins = [
+    "tests.bi.fixtures",
     "tests.capital.fixtures",
     "tests.credit.fixtures",
     "tests.forecasting.fixtures",
@@ -112,6 +126,7 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # the product; tests that need one ON set it themselves via monkeypatch.
     for _scheduling_flag in (
         "AUDIT_INTEGRITY_ENABLED",
+        "AUTH_SESSION_PURGE_ENABLED",
         "OFFICIAL_RUN_ENABLED",
         "MARKET_DATA_PULL_ENABLED",
         "TEMENOS_PULL_ENABLED",
@@ -120,9 +135,14 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "DESK_CAPTURE_ENABLED",
     ):
         monkeypatch.setenv(_scheduling_flag, "0")
-    # Production paging must not send fixture data to AWS.
+    # Production paging and retention must not send fixture data to AWS.
     for _setting, _value in {
         "AUDIT_INTEGRITY_ALERT_TOPIC_ARN": "",
+        "STORAGE_OBJECT_LOCK_ENABLED": "0",
+        "BACKUP_WORM_BUCKET": "",
+        "AUTH_REFRESH_TOKEN_RETENTION_DAYS": "30",
+        "AUTH_REFRESH_ROTATION_GRACE": "30",
+        "AUTH_SESSION_PURGE_BATCH_SIZE": "1000",
     }.items():
         monkeypatch.setenv(_setting, _value)
     # Same guard, same reason, for the ICAAP signing switch: it ships OFF, and a
@@ -542,10 +562,10 @@ def _rollback_sessionmaker_lifecycle(
     original_get_engine = session_mod.get_engine
     original_sessionmaker = session_mod.sessionmaker
 
-    def shared_engine(database_url: str) -> Engine:
+    def shared_engine(database_url: str, application_name: str = "aequoros-api") -> Engine:
         if database_url == database.database_url:
             return database.engine
-        return original_get_engine(database_url)
+        return original_get_engine(database_url, application_name)
 
     def shared_sessionmaker(*args, **kwargs) -> sessionmaker:
         bind = kwargs.get("bind")

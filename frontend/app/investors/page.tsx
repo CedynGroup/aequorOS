@@ -1,24 +1,24 @@
-import type { Metadata } from 'next';
-import PageHeader from '@/components/PageHeader';
+import type { Metadata } from "next";
+import PageHeader from "@/components/PageHeader";
 
 export const metadata: Metadata = {
-  title: 'Investors — AequorOS',
+  title: "Investors — AequorOS",
   description:
-    'AequorOS is raising a $500K seed round: Treasury and ALM infrastructure for African banks, starting from a working product. Pitch deck and financial model available.',
+    "AequorOS is raising a $500K seed round: Treasury and ALM infrastructure for African banks, starting from a working product. Pitch deck and financial model available.",
 };
 
 const thesis = [
   {
-    label: 'WORKING PRODUCT',
+    label: "WORKING PRODUCT",
     body: "Seven calculation engines, a governed data spine, and Bank of Ghana returns generated in the regulator's own formats. The interface is public on this site.",
   },
   {
-    label: 'REGULATORY TAILWIND',
+    label: "REGULATORY TAILWIND",
     body: "Ghana's new prudential directives carry a stated effective date of 1 January 2027, and other African regulators are moving the same way. Compliance is the wedge.",
   },
   {
-    label: 'FOUNDER-LED',
-    body: 'A quantitative-risk founder and a systems CTO, both verifiable on LinkedIn. Ghanaian roots, US market discipline, building in public.',
+    label: "FOUNDER-LED",
+    body: "A quantitative-risk founder and a systems CTO, both verifiable on LinkedIn. Ghanaian roots, US market discipline, building in public.",
   },
 ];
 
@@ -45,7 +45,9 @@ export default function InvestorsPage() {
             <p className="text-[13px] font-semibold tracking-[0.06em] text-text-muted">
               {item.label}
             </p>
-            <p className="text-[15px] leading-[1.6] text-ink-soft">{item.body}</p>
+            <p className="text-[15px] leading-[1.6] text-ink-soft">
+              {item.body}
+            </p>
           </div>
         ))}
       </div>
@@ -56,9 +58,9 @@ export default function InvestorsPage() {
             <h2 className="font-serif font-medium text-[26px] md:text-[30px] tracking-tight text-white">
               Raising our seed round.
             </h2>
-            <p className="text-[15.5px] leading-relaxed text-white/[0.72]">
-              The deck and the financial model are available on request, and
-              the best diligence is the product itself.
+            <p className="text-[15.5px] leading-relaxed text-white/72">
+              The deck and the financial model are available on request, and the
+              best diligence is the product itself.
             </p>
           </div>
           <div className="flex flex-wrap gap-3.5 shrink-0">
@@ -67,7 +69,7 @@ export default function InvestorsPage() {
                 href={pitchDeckUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex h-12 items-center rounded bg-white px-6 text-[14.5px] font-semibold text-navy-deep hover:bg-ice-blue transition-colors"
+                className="inline-flex h-12 items-center rounded-sm bg-white px-6 text-[14.5px] font-semibold text-navy-deep hover:bg-ice-blue transition-colors"
               >
                 Pitch deck
               </a>
@@ -77,14 +79,14 @@ export default function InvestorsPage() {
                 href={financialModelUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex h-12 items-center rounded border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
+                className="inline-flex h-12 items-center rounded-sm border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
               >
                 Financial model
               </a>
             ) : null}
             <a
               href="mailto:eric@aequoros.com"
-              className="inline-flex h-12 items-center rounded border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
+              className="inline-flex h-12 items-center rounded-sm border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
             >
               Request the materials
             </a>

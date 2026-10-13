@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Any
 
 from sqlalchemy import Engine, bindparam, create_engine, event, text
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -47,14 +47,56 @@ _FORCED_RLS_TABLES_SQL = text(
 _CROSS_TENANT_TABLES: tuple[str, ...] = ("jobs",)
 
 
+def database_timeout_connect_args(database_url: str, application_name: str) -> dict[str, str]:
+    """Scope legacy-role budgets to each connection; new roles use role defaults.
+
+    Preserve URL options such as the disposable test schema's search_path.
+    Migration connections explicitly opt out even when sharing a runtime login.
+    """
+    url = make_url(database_url)
+    if not url.drivername.startswith("postgresql"):
+        return {}
+    if application_name == "aequoros-migrator":
+        idle_ms, statement_ms = 0, 0
+    elif url.username in {
+        "aqs_api",
+        "aqs_worker",
+        "aqs_bi",
+        "aqs_operator",
+        "aqs_audit_verifier",
+        "aqs_migrator",
+        "aqs_owner",
+    }:
+        return {}
+    elif application_name == "aequoros-worker":
+        idle_ms, statement_ms = 7_200_000, 1_800_000
+    elif application_name == "aequoros-bi":
+        idle_ms, statement_ms = 300_000, 10_000
+    else:
+        # Ingestion storage calls and database-direct introspection still span
+        # API transactions. Ten minutes leaves retry/backoff margin until
+        # these remaining external waits have explicit commit boundaries.
+        idle_ms, statement_ms = 600_000, 300_000
+    existing = " ".join(url.normalized_query.get("options", ()))
+    return {
+        "options": (
+            f"{existing} -c idle_in_transaction_session_timeout={idle_ms} "
+            f"-c statement_timeout={statement_ms}"
+        ).strip()
+    }
+
+
 @lru_cache
-def get_engine(database_url: str) -> Engine:
+def get_engine(database_url: str, application_name: str = "aequoros-api") -> Engine:
+    # SQLite has no application_name; keep fallback users on the same cached
+    # engine, particularly when its in-memory database is connection-local.
+    if not database_url.startswith("postgresql") and application_name != "aequoros-api":
+        return get_engine(database_url)
     # The primary database is remote (~40ms away), so connection handling — not
     # query cost — dominates latency. Without TCP keepalives a firewall/NAT silently
     # drops idle pooled connections, forcing a full TLS+auth reconnect (~200ms) on the
-    # next request; a small default pool also starves under the API + in-process worker
-    # sharing it. Keep connections warm, size the pool for both, and recycle before any
-    # server-side idle timeout.
+    # next request; a small default pool also starves under concurrent requests.
+    # Keep each pool's connections warm and recycle before any server-side idle timeout.
     tls_args = database_connect_args(database_url)
     if database_url.startswith("postgresql"):
         return create_engine(
@@ -66,6 +108,8 @@ def get_engine(database_url: str) -> Engine:
             pool_recycle=1800,
             connect_args={
                 **tls_args,
+                **database_timeout_connect_args(database_url, application_name),
+                "application_name": application_name,
                 "keepalives": 1,
                 "keepalives_idle": 30,
                 "keepalives_interval": 10,
@@ -112,6 +156,7 @@ def get_bi_engine(database_url: str) -> Engine:
             pool_recycle=1800,
             connect_args={
                 **tls_args,
+                **database_timeout_connect_args(database_url, "aequoros-bi"),
                 "application_name": "aequoros-bi",
                 "keepalives": 1,
                 "keepalives_idle": 30,
@@ -162,7 +207,7 @@ def get_worker_sessionmaker() -> sessionmaker[Session]:
         msg = "DATABASE_URL (or WORKER_DATABASE_URL) is required for the worker."
         raise RuntimeError(msg)
     return sessionmaker(
-        bind=get_engine(url),
+        bind=get_engine(url, "aequoros-worker"),
         autoflush=False,
         expire_on_commit=False,
     )

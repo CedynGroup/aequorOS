@@ -169,6 +169,7 @@ def _seed_positions(session: Any) -> None:  # noqa: PLR0915 — one linear fixtu
     session.flush()
     lineage = LineageRecord(
         organization_id=DEMO_ORG_ID,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="bsd6-test",

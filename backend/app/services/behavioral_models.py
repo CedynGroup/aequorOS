@@ -230,6 +230,7 @@ def apply_estimates(  # noqa: PLR0913
         LineageRecord(
             id=lineage_id,
             organization_id=ctx.organization_id,
+            bank_id=bank.id,
             ingestion_batch_id=batch_id,
             operation_type="ENRICHMENT",
             operation_ref=f"behavioral_ml/{model}/{as_of_date.isoformat()}",

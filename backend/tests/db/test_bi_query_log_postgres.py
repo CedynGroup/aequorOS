@@ -35,12 +35,12 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from alembic import command
+from app.bi.models.marts import BiQueryLog
+from app.bi.service import query_log
 
 # Imported for the side effect as much as for the name: importing
 # ``app.db.session`` registers the ``after_begin`` listener that sets the GUC.
 from app.db.session import set_tenant_rls_context
-from app.models.bi import BiQueryLog
-from app.services.bi import query_log
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,

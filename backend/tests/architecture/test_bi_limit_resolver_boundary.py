@@ -1,6 +1,6 @@
 """BI reads a governed limit through ONE door, and that door records nothing.
 
-``app/services/bi/limits.py`` is the only BI module that may speak to the
+``app/bi/service/limits.py`` is the only BI module that may speak to the
 regulatory-parameter control plane or to the tenant's board register (D-069,
 mirroring ``app/icaap/service/parameters.py`` and the guard in
 ``test_icaap_boundaries.py``). Two separate invariants are pinned here, and they
@@ -42,7 +42,7 @@ from tests.architecture.test_bi_plane_boundary import BI_OWNED
 BACKEND = APP.parent
 
 #: The one BI module permitted to speak to either register.
-PARAMETER_DOOR = "app/services/bi/limits.py"
+PARAMETER_DOOR = "app/bi/service/limits.py"
 
 #: The mart builder's build FINGERPRINT covers the grid parameters a build read,
 #: so a staff change to a provisioning rate rebuilds the marts rather than
@@ -51,7 +51,7 @@ PARAMETER_DOOR = "app/services/bi/limits.py"
 #: promise — pinned below by reading the resolver's own source. The exception is
 #: therefore one file, one function, and is not a limit: it never reaches a
 #: measure's ``thresholds_source``.
-FINGERPRINT_EXCEPTION: tuple[str, str] = ("app/services/bi/mart_builder.py", "seed_values")
+FINGERPRINT_EXCEPTION: tuple[str, str] = ("app/bi/service/mart_builder.py", "seed_values")
 
 #: Entry points DERIVED from the resolver module rather than listed, so a new
 #: read path is covered the day it is written. A function defined elsewhere and
@@ -165,7 +165,9 @@ def _resolver_aliases(source: str, tree: ast.AST) -> set[str]:
             for alias in node.names:
                 if alias.name == "app.services.regulatory_parameters":
                     aliases.add(alias.asname or alias.name.rsplit(".", 1)[-1])
-        elif isinstance(node, ast.ImportFrom) and (node.module or "").startswith("app.services"):
+        elif isinstance(node, ast.ImportFrom) and (
+            (node.module or "").startswith("app.services") or node.module == "app.policy.public"
+        ):
             aliases.update(
                 alias.asname or alias.name
                 for alias in node.names
@@ -214,7 +216,7 @@ def test_no_bi_module_but_the_door_reads_a_governed_parameter(path: Path) -> Non
     assert not offending, (
         f"{relative} calls regulatory_parameters.{offending} directly. BI seals no "
         f"RegulatoryRun, so its reads must not enter the session consumption ledger and a "
-        f"limit must be resolved in one place — go through app.services.bi.limits."
+        f"limit must be resolved in one place — go through app.bi.service.limits."
     )
 
 
@@ -298,6 +300,12 @@ def test_no_bi_module_but_the_door_imports_a_register(path: Path) -> None:
     relative = str(path.relative_to(BACKEND))
     source = path.read_text(encoding="utf-8")
     imported = imported_modules(source, module=module_name(path))
+    imported = {
+        name.replace(
+            "app.policy.public.regulatory_parameters", "app.services.regulatory_parameters"
+        ).replace("app.policy.public.params", "app.services.params")
+        for name in imported
+    }
     allowed = (
         {"app.services.regulatory_parameters"} if relative == FINGERPRINT_EXCEPTION[0] else set()
     )
@@ -308,7 +316,7 @@ def test_no_bi_module_but_the_door_imports_a_register(path: Path) -> None:
     )
     assert not offending, (
         f"{relative} imports {offending}. The board register, the control plane and the "
-        f"tighten-only rules are reached through app.services.bi.limits, so BI states one "
+        f"tighten-only rules are reached through app.bi.service.limits, so BI states one "
         f"limit per figure rather than two."
     )
 
@@ -319,7 +327,7 @@ def test_no_bi_module_but_the_door_names_a_register_table_or_rule(path: Path) ->
     offending = sorted(referenced_names(path.read_text(encoding="utf-8")) & DOOR_ONLY_NAMES)
     assert not offending, (
         f"{relative} names {offending}. A hand-rolled query against a register is the same "
-        f"second opinion as a hand-rolled resolve — go through app.services.bi.limits."
+        f"second opinion as a hand-rolled resolve — go through app.bi.service.limits."
     )
 
 

@@ -78,7 +78,7 @@ def test_required_check_refuses_missing_or_malformed_results(results: str) -> No
         ("backend/scripts/local_services.py", "true"),
         ("backend/tests/__init__.py", "true"),
         ("backend/tests/fixtures/canonical_bank_fixture.py", "true"),
-        ("backend/tests/fixtures/bi_plane.py", "true"),
+        ("backend/tests/bi/fixtures.py", "true"),
         ("backend/tests/fixtures/live_plane.py", "true"),
         ("backend/tests/fixtures/reference_data.py", "true"),
         ("backend/tests/fixtures/icaap/frameworks/gh/test_icaap_e2e.json", "true"),
@@ -205,6 +205,29 @@ def test_other_workflows_keep_inclusion_selection(
         tmp_path, (path,), _workflow_detector_command(workflow, step_id, job)
     )
     assert output == f"{output_name}={str(selected).lower()}"
+
+
+@pytest.mark.parametrize(
+    ("workflow", "job", "step_id", "output_name"),
+    [
+        ("dashboard.yml", "changes", "areas", "dashboard"),
+        ("risk-service.yml", "preflight", "backend", "backend"),
+        ("risk-service.yml", "preflight", "guards", "guards"),
+        ("risk-service.yml", "preflight", "api_client", "api_client"),
+        ("web.yml", "changes", "areas", "web"),
+        ("dashboard-journeys.yml", "changes", "areas", "journeys"),
+    ],
+)
+def test_merge_group_runs_every_area_even_for_a_docs_only_diff(
+    tmp_path: Path, workflow: str, job: str, step_id: str, output_name: str
+) -> None:
+    output = _run_change_detector(
+        tmp_path,
+        ("README.md",),
+        _workflow_detector_command(workflow, step_id, job),
+        event="merge_group",
+    )
+    assert output == f"{output_name}=true"
 
 
 def _workflow_detector_command(
