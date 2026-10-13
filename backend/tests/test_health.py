@@ -9,6 +9,7 @@ import pytest
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from pydantic import JsonValue, TypeAdapter
 
 from app.api import health
 from app.core.config import get_settings
@@ -569,7 +570,11 @@ def test_overlapping_readiness_callers_share_dependency_result(
                         assert response.json()["error"]["message"] == (
                             "Storage connectivity check failed."
                         )
-                assert responses[0].json().get("checks") == responses[1].json().get("checks")
+                response_bodies = [
+                    TypeAdapter(dict[str, JsonValue]).validate_json(response.content)
+                    for response in responses
+                ]
+                assert response_bodies[0].get("checks") == response_bodies[1].get("checks")
                 assert calls == ["probed"]
             finally:
                 release.set()
