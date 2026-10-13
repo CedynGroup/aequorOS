@@ -770,7 +770,7 @@ def test_partition_execution_grants_match_maintenance_and_api_capabilities(
             permitted = (
                 expected | {"aqs_api"}
                 if signature == "bi_ensure_month_partition(regclass, date)"
-                else expected
+                else expected.copy()
             )
             if not signature.startswith("bi_drop_year_partition"):
                 permitted |= {"aqs_owner"}

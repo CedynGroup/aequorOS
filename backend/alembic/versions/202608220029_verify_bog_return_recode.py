@@ -46,9 +46,7 @@ CODE_ONLY_TABLES: tuple[str, ...] = (
 GUARDED_TABLES: tuple[str, ...] = ("regulatory_packages", *CODE_ONLY_TABLES)
 #: The families the pre-template BSD2/BSD3 reconstructions were registered under.
 LEGACY_FAMILIES = "'capital', 'liquidity'"
-LEGACY_PACKAGES = (
-    f"return_code IN ('BSD2', 'BSD3') AND return_family IN ({LEGACY_FAMILIES})"
-)
+LEGACY_PACKAGES = f"return_code IN ('BSD2', 'BSD3') AND return_family IN ({LEGACY_FAMILIES})"
 
 
 def upgrade() -> None:
@@ -82,7 +80,7 @@ def upgrade() -> None:
                 f"{remaining} legacy BoG return code(s) survive in regulatory_packages "
                 "after the repair, so migration 202608150013 never applied and cannot be "
                 "replayed by this role. Re-run with a role that can write through "
-                "row-level security (WORKER_DATABASE_URL)."
+                "row-level security (MIGRATION_DATABASE_URL)."
             )
             raise RuntimeError(msg)
 
