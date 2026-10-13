@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from threading import Event
 from time import monotonic
@@ -7,6 +8,7 @@ from time import monotonic
 import pytest
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
 from app.api import health
 from app.core.config import get_settings
@@ -523,13 +525,70 @@ def test_ready_health_skips_database_when_unconfigured_in_test(client: TestClien
     assert body["checks"]["worker"]["status"] == "skipped"
 
 
-def test_readiness_deadline_preserves_liveness_and_recovers(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("healthy", [True, False])
+def test_overlapping_readiness_callers_share_dependency_result(
+    monkeypatch: pytest.MonkeyPatch, healthy: bool
 ) -> None:
-    entered, release, finished = Event(), Event(), Event()
+    entered, release = Event(), Event()
+    calls: list[str] = []
 
     class SlowStorage:
         def health_check(self) -> StorageHealth:
+            calls.append("probed")
+            entered.set()
+            assert release.wait(timeout=5)
+            return StorageHealth(
+                healthy=healthy, backend="s3", detail="synthetic-private-storage-detail"
+            )
+
+    monkeypatch.setattr(health, "get_storage_client", SlowStorage)
+    monkeypatch.setattr(health, "_READINESS_TIMEOUT_SECONDS", 2)
+
+    async def exercise() -> None:
+        async with AsyncClient(
+            transport=ASGITransport(app=create_app()), base_url="http://testserver"
+        ) as client:
+            requests = [asyncio.create_task(client.get("/api/health/ready"))]
+            try:
+                assert await asyncio.to_thread(entered.wait, 2)
+                requests.append(asyncio.create_task(client.get("/api/health/ready")))
+                done, _ = await asyncio.wait(requests, timeout=0.05)
+                assert not done
+                assert calls == ["probed"]
+                assert (await client.get("/api/health/live")).status_code == 200
+                release.set()
+                responses = await asyncio.gather(*requests)
+                for response in responses:
+                    assert response.status_code == (200 if healthy else 503)
+                    assert response.headers["cache-control"] == "no-store"
+                    assert "synthetic-private" not in response.text
+                    if healthy:
+                        assert response.json()["status"] == "ok"
+                        assert response.json()["checks"]["storage"]["status"] == "ok"
+                    else:
+                        assert response.json()["error"]["message"] == (
+                            "Storage connectivity check failed."
+                        )
+                assert responses[0].json().get("checks") == responses[1].json().get("checks")
+                assert calls == ["probed"]
+            finally:
+                release.set()
+                await asyncio.gather(*requests, return_exceptions=True)
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def test_readiness_deadline_preserves_liveness_and_recovers(
+    monkeypatch: pytest.MonkeyPatch,
+    cancel: bool,
+) -> None:
+    entered, release, finished = Event(), Event(), Event()
+    calls: list[str] = []
+
+    class SlowStorage:
+        def health_check(self) -> StorageHealth:
+            calls.append("probed")
             entered.set()
             try:
                 assert release.wait(timeout=5)
@@ -539,27 +598,49 @@ def test_readiness_deadline_preserves_liveness_and_recovers(
 
     monkeypatch.setattr(health, "get_storage_client", SlowStorage)
     monkeypatch.setattr(health, "_READINESS_TIMEOUT_SECONDS", 0.1)
-    with TestClient(create_app()) as client:
-        try:
+
+    async def exercise() -> None:
+        async with AsyncClient(
+            transport=ASGITransport(app=create_app()), base_url="http://testserver"
+        ) as client:
             started = monotonic()
-            response = client.get("/api/health/ready")
-            assert entered.is_set()
-            assert monotonic() - started < 2
-            assert response.status_code == 503
-            assert response.json()["error"]["message"] == "Readiness check timed out."
-            assert response.headers["cache-control"] == "no-store"
+            requests = [asyncio.create_task(client.get("/api/health/ready"))]
+            try:
+                assert await asyncio.to_thread(entered.wait, 2)
+                monkeypatch.setattr(health, "_READINESS_TIMEOUT_SECONDS", 1)
+                requests.append(asyncio.create_task(client.get("/api/health/ready")))
+                done, _ = await asyncio.wait([requests[1]], timeout=0.05)
+                assert not done
+                if cancel:
+                    requests[0].cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await requests[0]
+                else:
+                    response = await requests[0]
+                    assert monotonic() - started < 2
+                    assert response.status_code == 503
+                    assert response.json()["error"]["message"] == "Readiness check timed out."
+                    assert response.headers["cache-control"] == "no-store"
+                assert not requests[1].done()
+                assert not finished.is_set()
+                requests.append(asyncio.create_task(client.get("/api/health/ready")))
+                done, _ = await asyncio.wait(requests[1:], timeout=0.05)
+                assert not done
+                assert calls == ["probed"]
+                assert (await client.get("/api/health/live")).status_code == 200
+                release.set()
+                for response in await asyncio.gather(*requests[1:]):
+                    assert response.status_code == 200
+                    assert response.headers["cache-control"] == "no-store"
+                assert calls == ["probed"]
+                assert (await client.get("/api/health/ready")).status_code == 200
+                assert calls == ["probed", "probed"]
+            finally:
+                release.set()
+                await asyncio.gather(*requests, return_exceptions=True)
+                assert await asyncio.to_thread(finished.wait, 2)
 
-            response = client.get("/api/health/ready")
-            assert response.status_code == 503
-            assert response.json()["error"]["message"] == "Readiness check is still in progress."
-            assert response.headers["cache-control"] == "no-store"
-            assert client.get("/api/health/live").status_code == 200
-        finally:
-            release.set()
-            assert finished.wait(timeout=2)
-
-        # A new probe succeeds after the outstanding dependency call returns.
-        assert client.get("/api/health/ready").status_code == 200
+    asyncio.run(exercise())
 
 
 def test_ready_dependency_failure_is_uncached_and_sanitized(

@@ -188,10 +188,12 @@ Health endpoints:
   JSON. Required dependency/configuration failures return HTTP 503 in the
   standard error envelope, for example
   `{"error":{"code":"service_unavailable","message":"Storage connectivity check failed.","request_id":"…"}}`.
-  Dependency checks have a five-second response deadline. A timeout returns 503
-  with `Readiness check timed out.`; subsequent probes return 503 with
-  `Readiness check is still in progress.` until that driver call finishes.
-  At most one readiness check runs per API process.
+  Each caller has a five-second response deadline. Overlapping callers share
+  the active dependency check and receive its result if it finishes within their
+  own deadline. A timeout returns 503 with `Readiness check timed out.` without
+  cancelling the shared check; later callers can still await it. At most one
+  dependency check runs per API process, and the next request after completion
+  starts a fresh check. Liveness stays independent while readiness is waiting.
 
 Both URLs are unauthenticated, return `Cache-Control: no-store` on health
 responses, and require HTTPS on deployed services. The existing container

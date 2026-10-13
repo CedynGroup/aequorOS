@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Lock
 from typing import Annotated
 
@@ -27,6 +28,8 @@ router = APIRouter(prefix="/health", tags=["health"], dependencies=[Depends(_dis
 _OK = ComponentHealth(status="ok")
 _READINESS_TIMEOUT_SECONDS = 5.0
 _readiness_lock = Lock()
+_readiness_executor = ThreadPoolExecutor(max_workers=1)
+_readiness_future: Future[ReadinessResponse] | None = None
 
 # ---------------------------------------------------------------------------
 # What an UNAUTHENTICATED caller is allowed to be told (audit finding D-28).
@@ -268,22 +271,20 @@ def _ai_health(settings: Settings) -> ComponentHealth:
 async def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResponse:
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(_probe_readiness, settings), timeout=_READINESS_TIMEOUT_SECONDS
+            asyncio.shield(asyncio.wrap_future(_probe_readiness(settings))),
+            timeout=_READINESS_TIMEOUT_SECONDS,
         )
     except TimeoutError as exc:
         logger.warning("Readiness: dependency checks exceeded the probe deadline.")
         raise _unavailable("Readiness check timed out.") from exc
 
 
-def _probe_readiness(settings: Settings) -> ReadinessResponse:
-    # Cancelling a response cannot interrupt a synchronous driver. Keep its
-    # lock until it finishes so repeated probes cannot accumulate stalled checks.
-    if not _readiness_lock.acquire(blocking=False):
-        raise _unavailable("Readiness check is still in progress.")
-    try:
-        return _check_readiness(settings)
-    finally:
-        _readiness_lock.release()
+def _probe_readiness(settings: Settings) -> Future[ReadinessResponse]:
+    global _readiness_future
+    with _readiness_lock:
+        if _readiness_future is None or _readiness_future.done():
+            _readiness_future = _readiness_executor.submit(_check_readiness, settings)
+        return _readiness_future
 
 
 def _check_readiness(settings: Settings) -> ReadinessResponse:
