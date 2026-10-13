@@ -26,8 +26,11 @@ from app.core.errors import (
     UnhandledExceptionMiddleware,
     register_exception_handlers,
 )
+from app.core.key_management.settings import get_key_settings
 from app.core.logging import configure_logging
 from app.core.request_id import RequestIdMiddleware
+from app.core.tls import RequireTLSMiddleware, database_connect_args, validate_service_transports
+from app.operator.api.bank_encryption import router as bank_encryption_router
 from app.operator.features.activity import router as activity_router
 from app.operator.features.audit_log import router as audit_log_router
 from app.operator.features.auth import router as auth_router
@@ -60,15 +63,15 @@ def generate_operation_id(route: APIRoute) -> str:
 def create_operator_app() -> FastAPI:
     settings = get_settings()
     operator_settings = get_operator_settings()
+    if operator_settings.operator_database_url:
+        database_connect_args(operator_settings.operator_database_url, settings=settings)
     # HARD guard, not a warning: dev-token auth on a DEPLOYED host would be a
     # static shared secret protecting cross-tenant god-mode. The app refuses
     # to exist rather than serve a single request that way. The test is an
     # allow-list of undeployed environments, not ``!= "production"`` — the
     # latter left ``staging`` (same containers, same primary database, a host
     # somebody else can reach) wide open.
-    if operator_settings.dev_auth_enabled and not is_undeployed_environment(
-        settings.app.app_env
-    ):
+    if operator_settings.dev_auth_enabled and not is_undeployed_environment(settings.app.app_env):
         msg = (
             f"OPERATOR_DEV_AUTH_ENABLED=1 with APP_ENV={settings.app.app_env}: dev-token "
             "auth exists only for local development and is forbidden on a deployed "
@@ -77,6 +80,7 @@ def create_operator_app() -> FastAPI:
         )
         raise RuntimeError(msg)
 
+    validate_service_transports(settings)
     configure_logging(settings.logging.log_level)
 
     app = FastAPI(
@@ -86,6 +90,8 @@ def create_operator_app() -> FastAPI:
     )
     # Same middleware order as the tenant app (see app.main for the reasoning:
     # unhandled exceptions become 500s inside the request-id and CORS layers).
+    if settings.app.app_env in {"production", "staging"}:
+        app.add_middleware(RequireTLSMiddleware)
     app.add_middleware(UnhandledExceptionMiddleware)
     app.add_middleware(RequestIdMiddleware)
     if operator_settings.cors_origins:
@@ -104,6 +110,7 @@ def create_operator_app() -> FastAPI:
             service=OPERATOR_APP_NAME,
             environment=settings.app.app_env,
             status="ok",
+            bank_key_required=get_key_settings().bank_key_required,
         )
 
     # Session issuance sits beside /operator/health, not under /v1: it is the
@@ -114,6 +121,7 @@ def create_operator_app() -> FastAPI:
     operator_router.include_router(overview_router)
     operator_router.include_router(tenants_router)
     operator_router.include_router(provision_router)
+    operator_router.include_router(bank_encryption_router)
     operator_router.include_router(activity_router)
     operator_router.include_router(audit_log_router)
     operator_router.include_router(inspector_router)

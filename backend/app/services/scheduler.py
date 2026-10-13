@@ -8,8 +8,9 @@ enqueues the next tick at the following hour boundary. It is inert (no enqueue,
 no reschedule) while every scheduling flag — ``OFFICIAL_RUN_ENABLED``,
 ``MARKET_DATA_PULL_ENABLED``, ``TEMENOS_PULL_ENABLED``,
 ``DATABASE_DIRECT_HEALTH_ENABLED``, ``LIVE_REFRESH_ENABLED``,
-``DESK_CAPTURE_ENABLED``, ``BI_SCHEDULER_ENABLED`` and
-``BI_SUBSCRIPTIONS_ENABLED`` — is off, so no environment auto-mints heavy runs,
+``DESK_CAPTURE_ENABLED``, ``BI_SCHEDULER_ENABLED``,
+``BI_SUBSCRIPTIONS_ENABLED`` and ``AUTH_SESSION_PURGE_ENABLED`` — is off,
+so no environment auto-mints heavy runs,
 vendor pulls or scheduled email, and tests stay deterministic.
 
 Actor eligibility and queue attribution are owned by
@@ -18,6 +19,7 @@ Actor eligibility and queue attribution are owned by
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -25,10 +27,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.bi.service.enqueue import banks_due_for_rebuild, enqueue_mart_refresh
+from app.bi.service.versions import BUILDER_VERSION
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import Settings, get_settings
 from app.core.observability import authorization_denied
 from app.db.base import utc_now
+from app.identity.service import scoped_authorization
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -38,13 +43,12 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.services import job_queue, module_scope, scoped_authorization
-from app.services.bi.enqueue import banks_due_for_rebuild, enqueue_mart_refresh
-from app.services.bi.versions import BUILDER_VERSION
+from app.services import job_queue, module_scope
 
 SCHEDULED_TICK = "scheduled_tick"
 OFFICIAL_RUN = "official_run"
 BI_RETENTION = "bi_retention"
+SESSION_PURGE = "session_purge"
 #: The hourly BI subscription sweep. A LITERAL, like ``BI_RETENTION``: this
 #: module may import only the two thin BI seam modules (``bi.enqueue``,
 #: ``bi.versions``) — ``tests/architecture/test_bi_plane_boundary.py`` rule (a)
@@ -78,6 +82,7 @@ def any_scheduling_enabled(settings: Settings) -> bool:
         # exist. An alert recovery sweep, if one is ever added, belongs here in
         # the same change that adds it.
         or settings.bi.subscriptions_enabled
+        or settings.auth.session_purge_enabled
     )
 
 
@@ -101,6 +106,11 @@ def run_tick(session: Session, job: Job) -> None:
     now = utc_now()
 
     enqueued: list[str] = []
+    session_purge_enqueued = (
+        _enqueue_session_purge(session, org_id, now) is not None
+        if settings.auth.session_purge_enabled
+        else None
+    )
     if official_enabled:
         enqueued = _enqueue_due_official_runs(session, org_id, settings, now)
 
@@ -177,6 +187,11 @@ def run_tick(session: Session, job: Job) -> None:
     )
     session.commit()
     job.progress = {
+        **(
+            {"session_purge_enqueued": session_purge_enqueued}
+            if session_purge_enqueued is not None
+            else {}
+        ),
         "official_runs_enqueued": enqueued,
         "market_data_pulls_enqueued": market_data_pulls,
         "temenos_pulls_enqueued": temenos_pulls,
@@ -199,6 +214,28 @@ def run_tick(session: Session, job: Job) -> None:
             else {}
         ),
     }
+
+
+def _enqueue_session_purge(session: Session, org_id: str, now: datetime) -> Job | None:
+    """One bounded purge per tenant per hour, including completed jobs."""
+    if session.get_bind().dialect.name == "postgresql":
+        lock_key = int.from_bytes(
+            hashlib.sha256(f"session-purge:{org_id}".encode()).digest()[:8], signed=True
+        )
+        _ = session.execute(select(func.pg_advisory_xact_lock(lock_key)))
+    key = f"session-purge:{org_id}:{now.strftime('%Y-%m-%dT%H')}"
+    existing = session.scalar(
+        select(Job.id)
+        .where(
+            Job.organization_id == org_id,
+            Job.job_type == SESSION_PURGE,
+            Job.coalesce_key == key,
+        )
+        .limit(1)
+    )
+    if existing is not None:
+        return None
+    return job_queue.enqueue(session, org_id, SESSION_PURGE, coalesce_key=key)
 
 
 def _enqueue_due_official_runs(
@@ -439,17 +476,6 @@ def _enqueue_bi_subscription_scan(session: Session, org_id: str, now: datetime) 
     )
 
 
-def seed_tick(db: Session, organization_id: str) -> Job:
-    """Seed the first (or a replacement) tick for one org; coalesces to one."""
-    return job_queue.enqueue(
-        db,
-        organization_id,
-        SCHEDULED_TICK,
-        run_after=utc_now(),
-        coalesce_key=f"tick:{organization_id}",
-    )
-
-
 def seed_ticks(db: Session) -> int:
     """Seed a tick for every org that owns a bank. Returns the count seeded.
 
@@ -459,7 +485,7 @@ def seed_ticks(db: Session) -> int:
     """
     org_ids = list(db.scalars(select(Bank.organization_id).distinct()))
     for org_id in org_ids:
-        seed_tick(db, org_id)
+        job_queue.seed_tick(db, org_id)
     db.commit()
     return len(org_ids)
 

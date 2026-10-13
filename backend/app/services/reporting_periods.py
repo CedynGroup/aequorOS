@@ -11,7 +11,7 @@ What it is NOT (founder review, 2026-08-23)
 -------------------------------------------
 It is not the list of dates the institution reports on. Those are the
 regulator's, come from the return registry, and are enumerated by
-``services/regulatory_reporting/anchors.py``. The Returns workspace used to
+``app/reporting/service/anchors.py``. The Returns workspace used to
 offer these ``period_end`` values as its "Reporting date" list, which made
 BoG's calendar a function of the bank's ingestion cadence — see the anchors
 module docstring for the measurement of what that cost.
@@ -58,9 +58,7 @@ def snapshot_label(as_of: date) -> str:
     return as_of.isoformat()
 
 
-def new_snapshot_period(
-    *, organization_id: str, bank_id: str, as_of: date
-) -> BankReportingPeriod:
+def new_snapshot_period(*, organization_id: str, bank_id: str, as_of: date) -> BankReportingPeriod:
     """A fresh snapshot row for ``as_of`` — the one construction site.
 
     Both writers (``pipeline._ensure_live_period`` and

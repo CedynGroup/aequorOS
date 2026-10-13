@@ -50,7 +50,8 @@ from app.adapters.temenos_t24.domains import (
 from app.adapters.temenos_t24.mappings.default import default_t24_mapping_config
 from app.core.outbound import OutboundTargetBlocked, check_url
 from app.db.base import utc_now
-from app.models import Bank, MappingConfigRecord
+from app.identity.public import Bank
+from app.models import MappingConfigRecord
 from app.models.temenos import TemenosConnection
 from app.schemas.ingestion import MappingConfigCreate
 from app.schemas.temenos_connections import (
@@ -122,9 +123,7 @@ def _guard_endpoint_or_400(endpoint: str) -> None:
             exc.reason,
             exc.internal_detail,
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from exc
 
 
 # --- Reads -----------------------------------------------------------------
@@ -145,9 +144,7 @@ def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> TemenosCo
     )
 
 
-def list_domains(
-    db: Session, ctx: TenantContext, bank_id: str, mode: str
-) -> TemenosDomainListRead:
+def list_domains(db: Session, ctx: TenantContext, bank_id: str, mode: str) -> TemenosDomainListRead:
     """The core-banking domain catalog for a connection mode: category, canonical
     entity type, default cadence, and whether the mode catalog supports it."""
     _get_bank_or_404(db, ctx, bank_id)

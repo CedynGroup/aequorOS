@@ -19,6 +19,7 @@ import re
 import shlex
 import tomllib
 from pathlib import Path
+from typing import cast
 
 import yaml
 
@@ -187,23 +188,30 @@ def test_every_task_ci_invokes_exists() -> None:
     assert missing == [], f"Workflows invoke tasks the root mise.toml does not define: {missing}"
 
 
-def test_dashboard_journeys_are_manual_only() -> None:
-    """The long browser suite is maintainer-dispatched, never routine CI."""
-    journey_workflow = WORKFLOWS / "dashboard-journeys.yml"
-    document = yaml.load(journey_workflow.read_text(), Loader=yaml.BaseLoader)
-    assert set(document["on"]) == {"workflow_dispatch"}, (
-        "dashboard-journeys.yml must not be enqueued by pull requests or pushes."
+def test_dashboard_journeys_have_an_always_reported_sharded_gate() -> None:
+    """Validate the Actions job graph that supplies the required check."""
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.load((WORKFLOWS / "dashboard-journeys.yml").read_text(), Loader=yaml.BaseLoader),
     )
+    assert set(document["on"]) == {"pull_request", "push", "workflow_dispatch", "merge_group"}
+    assert document["on"]["push"]["branches"] == ["main"]
+    jobs = document["jobs"]
+    assert jobs["gate"]["name"] == "Dashboard journeys gate"
+    assert jobs["gate"]["if"] == "always()"
+    assert set(_needs(jobs["gate"])) == {"changes", "journeys"}
+    assert _needs(jobs["journeys"]) == ["changes"]
+    assert jobs["journeys"]["if"] == "needs.changes.outputs.journeys == 'true'"
+    strategy = cast(dict[str, object], jobs["journeys"]["strategy"])
+    assert cast(dict[str, object], strategy["matrix"])["shard"] == ["1", "2", "3", "4"]
+    assert strategy["fail-fast"] == "false"
 
-    risk_document = yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text())
-    risk_jobs = risk_document["jobs"]
-    assert "journeys" not in risk_jobs, (
-        "The dashboard journeys belong only in the manual workflow, not the "
-        "default Risk Service CI job graph."
+    risk_document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
     )
-    assert "journeys" not in _needs(risk_jobs["gate"]), (
-        "The routine Risk service gate must not require the manual journey suite."
-    )
+    assert "journeys" not in risk_document["jobs"]
+    assert "journeys" not in _needs(risk_document["jobs"]["gate"])
 
 
 def test_the_backend_gates_ci_must_run_are_all_defined() -> None:
@@ -478,3 +486,22 @@ def test_the_hermetic_run_still_proves_it_collected_every_module() -> None:
         "the ones pytest collects. A module that collects nowhere would again "
         "be invisible."
     )
+
+
+def test_duration_shards_preserve_worker_limit_and_schema_configuration() -> None:
+    command = _run_commands(_tasks(BACKEND_TASKS)["risk-service:test-postgres-suite"])[0]
+    tokens = shlex.split(command)
+    assert tokens[tokens.index("-n") + 1] == "4"
+    assert tokens[tokens.index("--dist") + 1] == "loadfile"
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
+    )
+    schema = document["jobs"]["postgres-schema"]
+    steps = cast(list[dict[str, object]], schema["steps"])
+    step = next(
+        step for step in steps if step.get("run") == "mise run risk-service:test-postgres-schema"
+    )
+    assert cast(dict[str, object], step["env"])["CI_POSTGRES_SUITE"] == "schema"
+    strategy = cast(dict[str, object], schema["strategy"])
+    assert cast(dict[str, object], strategy["matrix"])["shard"] == [1, 2]

@@ -1,7 +1,7 @@
 /**
  * The editor schema must equal the backend allowlist.
  *
- * `backend/app/domain/icaap/editor_schema.json` is the single authority for
+ * `backend/app/icaap/domain/editor_schema.json` is the single authority for
  * what a saved ICAAP document may contain: the API validates every save
  * against it and refuses anything else. This test builds the REAL ProseMirror
  * schema from `schema.ts` and compares it, so a Tiptap upgrade that adds a
@@ -53,7 +53,7 @@ function dashboardRoot(): string {
 }
 
 const ROOT = dashboardRoot();
-const SCHEMA_PATH = resolve(ROOT, "../app/domain/icaap/editor_schema.json");
+const SCHEMA_PATH = resolve(ROOT, "../app/icaap/domain/editor_schema.json");
 const SAMPLES_PATH = resolve(
   ROOT,
   "../tests/fixtures/icaap/editor_schema_samples.json",
@@ -104,7 +104,11 @@ assert.equal(ICAAP_EDITOR_SCHEMA_VERSION, fixture.schema_version);
 for (const [name, expected] of Object.entries(fixture.nodes)) {
   const type = schema.nodes[name];
   assert.ok(type, `node ${name} is missing from the editor schema`);
-  const spec = type.spec as { content?: string; group?: string; atom?: boolean };
+  const spec = type.spec as {
+    content?: string;
+    group?: string;
+    atom?: boolean;
+  };
 
   assert.equal(
     spec.content ?? null,

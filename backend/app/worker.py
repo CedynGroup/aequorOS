@@ -18,15 +18,12 @@ import threading
 import time
 from collections.abc import Callable
 from datetime import timedelta
+from uuid import uuid4
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
-from app.core.logging import configure_logging
-from app.db.base import utc_now
-from app.db.session import assert_worker_database_access, get_worker_sessionmaker
-from app.jobs import (
+from app.bi.jobs import (
     bi_alerts,
     bi_commentary,
     bi_export,
@@ -36,9 +33,19 @@ from app.jobs import (
     bi_retention,
     bi_subscriptions,
 )
+from app.core import audit_integrity
+from app.core.config import get_settings
+from app.core.logging import configure_logging, get_request_id, reset_request_id, set_request_id
+from app.core.observability import Condition, emit
+from app.core.tls import validate_service_transports
+from app.db.base import utc_now
+from app.db.session import assert_worker_database_access, get_worker_sessionmaker
+from app.icaap.service import ai_jobs as icaap_ai_jobs
+from app.identity.public import run_session_purge
 from app.models import Job, WorkerHeartbeat
 from app.services import (
     database_direct_jobs,
+    documents,
     etl_dedup_jobs,
     job_queue,
     market_data_jobs,
@@ -48,7 +55,6 @@ from app.services import (
     scheduler,
     temenos_jobs,
 )
-from app.services.icaap import ai_jobs as icaap_ai_jobs
 from app.services.market_desk import capture_job as desk_capture_job
 
 logger = logging.getLogger(__name__)
@@ -61,6 +67,8 @@ Handler = Callable[[Session, Job], None]
 # until 2026-08-09: enqueued by every tick, absent here). The parity test in
 # tests/services/test_desk_capture_job.py enforces the invariant.
 HANDLERS: dict[str, Handler] = {
+    "session_purge": run_session_purge,
+    "document_delete": documents.run_document_delete,
     "pipeline_refresh": pipeline.run_refresh,
     "official_run": pipeline.run_official,
     "scheduled_tick": scheduler.run_tick,
@@ -142,7 +150,7 @@ def resolve_job_types(raw: str | None) -> tuple[str, ...]:
     return unique
 
 
-def _new_session(organization_id=None) -> Session:
+def _new_session(organization_id: str | None = None) -> Session:
     session = get_worker_sessionmaker()()
     if organization_id is not None:
         session.info["organization_id"] = organization_id
@@ -215,21 +223,32 @@ def run_once(
         claimed = session.get(Job, job_id)
         if claimed is None:  # pragma: no cover - claimed row must exist
             return True
+        token = set_request_id(str(uuid4())) if get_request_id() == "-" else None
         try:
-            HANDLERS[claimed.job_type](session, claimed)
-            job_queue.complete(session, claimed)
-        except Exception as exc:  # noqa: BLE001 - any handler failure retries
-            logger.exception("Job %s (%s) failed", job_id, claimed.job_type)
-            session.rollback()
-            job_queue.fail_with_retry(
-                session,
-                claimed,
-                str(exc) or type(exc).__name__,
-                commit=False,
-            )
-            if isinstance(exc, pipeline.TransientLiveRefreshError):
-                pipeline.persist_transient_retry_state(session, claimed, exc)
-            session.commit()
+            try:
+                HANDLERS[claimed.job_type](session, claimed)
+                job_queue.complete(session, claimed)
+            except Exception as exc:  # noqa: BLE001 - any handler failure retries
+                emit(
+                    Condition.WORKER_JOB_FAILED,
+                    "Worker job failed",
+                    severity="error",
+                    tenant_id=organization_id,
+                    reason_code="unexpected_error",
+                )
+                session.rollback()
+                job_queue.fail_with_retry(
+                    session,
+                    claimed,
+                    str(exc) or type(exc).__name__,
+                    commit=False,
+                )
+                if isinstance(exc, pipeline.TransientLiveRefreshError):
+                    pipeline.persist_transient_retry_state(session, claimed, exc)
+                session.commit()
+        finally:
+            if token is not None:
+                reset_request_id(token)
     return True
 
 
@@ -283,7 +302,10 @@ def run_worker(
         job_types,
         stale_after.total_seconds(),
     )
+    audit_task = audit_integrity.AuditIntegrityTask()
     while stop_event is None or not stop_event.is_set():
+        if settings.worker.audit_integrity_enabled and "scheduled_tick" in job_types:
+            audit_task.run(_new_session, utc_now())
         try:
             worked = run_once(job_types, worker_id=worker_id)
         except Exception as exc:  # noqa: BLE001 - a claim failure must not kill the loop
@@ -404,6 +426,7 @@ def _warn_if_bi_disabled(settings) -> None:  # pragma: no cover - process entryp
 
 def main() -> None:  # pragma: no cover - process entrypoint
     settings = get_settings()
+    validate_service_transports(settings)
     configure_logging(settings.logging.log_level)
     job_types = resolve_job_types(settings.worker.worker_job_types)
     lanes = {job_queue.lane_of(job_type) for job_type in job_types}

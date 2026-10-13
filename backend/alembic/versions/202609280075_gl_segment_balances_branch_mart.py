@@ -28,13 +28,13 @@ Three changes, one feature.
 2. ``bi_fact_gl_branch_monthly``, the branch mart. **A SEPARATE table rather than a
    ``branch_code`` column on ``bi_fact_gl_monthly``**, and that is a security
    decision rather than a modelling preference:
-   ``services/bi/authorization.branch_attributable`` reads the branch key off the
+   ``app/bi/service/authorization.branch_attributable`` reads the branch key off the
    MAPPED TABLE, so a branch key on the institution's own ledger would have made
    the institution's whole profit-and-loss readable by a branch-scoped principal —
    the exact disclosure Phase 4's data scopes exist to prevent.
 3. ``ck_bi_reconciliation_results_check_id`` admits ``R11``, the branch identity:
    the sum of branch ``ytd_rc`` for an account equals the institution's row,
-   exactly. ``app/models/bi.RECONCILIATION_CHECK_IDS`` already names it, so the
+   exactly. ``app/bi/models/marts.RECONCILIATION_CHECK_IDS`` already names it, so the
    hermetic suite is green, but a Postgres database still on ``202609220066``
    refuses an ``R11`` row until this lands. ``reconciliation.persist`` logs the
    skip rather than failing the build, which is the documented degradation.
@@ -50,7 +50,7 @@ already-migrated database on the same constraint after the NEXT kind or check is
 added, and it lets the downgrade restore the historical shape. Parity between the
 constants and the migrated CHECKs is asserted instead, by
 ``tests/db/test_bi_migration_structural_parity.py`` and
-``tests/models/test_bi_models.py``.
+``tests/bi/models/test_bi_models.py``.
 
 Widening moves no data. NARROWING does, so ``downgrade`` deletes the rows that
 cannot satisfy the older constraints first — and those DELETEs run under

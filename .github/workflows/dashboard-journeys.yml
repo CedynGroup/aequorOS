@@ -1,14 +1,16 @@
 name: Dashboard Playwright journeys
 
-# Deliberately manual-only. These browser journeys are an authoritative,
-# maintainer-invoked diagnostic run, not part of routine pull-request or push
-# CI. Do not add pull_request or push triggers here.
-#
+# Always report the gate; filter expensive shards inside the job graph.
 # The stack Playwright boots (backend/dashboard/playwright.config.ts) includes
 # the local OIDC issuer the SSO journeys sign in at (backend/scripts/e2e_idp.py).
 # It is a plain Python process started as a Playwright web server, so unlike
-# MinIO below it needs no container and no step of its own here.
+# MinIO below it needs no step of its own here.
 on:
+  merge_group:
+    types: [checks_requested]
+  pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -16,16 +18,42 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Detect journey changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      journeys: ${{ steps.areas.outputs.journeys }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: areas
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          .github/scripts/changed_area.sh journeys
+          '^([^/]+\.md$|LICENSE$|docs/|backend/docs/|(backend|backend/dashboard|console|frontend|deploy)/README\.md$|frontend/(app/|components/|lib/|public/))'
+          --ignore
+
   journeys:
-    name: Run dashboard Playwright journeys
+    name: Dashboard journeys shard ${{ matrix.shard }}/4
+    needs: changes
+    if: needs.changes.outputs.journeys == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    # Each runner owns its disposable database, fixture bank and MinIO. Keep
+    # Playwright's single worker; shard files without sharing mutable fixtures.
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
         with:
           # Pinned to match the repository's other CI workflows.
           version: 2026.7.7
@@ -39,7 +67,7 @@ jobs:
       # libraries are apt packages outside the cache and install either way.
       - name: Cache the Playwright browsers
         id: playwright-browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('backend/dashboard/package.json') }}
@@ -49,26 +77,10 @@ jobs:
       - name: Install browser system dependencies
         if: steps.playwright-browsers.outputs.cache-hit == 'true'
         run: mise exec -- pnpm --filter @aequoros/dashboard exec playwright install-deps chromium
-      # Keep this identical to the proven Storage contract setup in
-      # risk-service.yml. A services: container cannot pass MinIO's
-      # `server /data` command, and the built-in KMS is required by the
-      # platform's encrypted write path.
+      # Shared with Storage contract CI: real SSE-KMS storage on loopback.
       - name: Start MinIO with built-in KMS
-        run: |
-          set -euo pipefail
-          docker run -d --name aequoros-e2e-minio \
-            -e MINIO_ROOT_USER=ciminio \
-            -e MINIO_ROOT_PASSWORD=ciminio123 \
-            -e "MINIO_KMS_SECRET_KEY=aequoros-key:$(head -c 32 /dev/urandom | base64 -w0)" \
-            -p 9000:9000 \
-            public.ecr.aws/chainguard/minio:latest@sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285 server /data
-          for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then
-              echo "MinIO is live"; exit 0
-            fi
-            sleep 1
-          done
-          echo "MinIO did not become live"; docker logs aequoros-e2e-minio; exit 1
+        id: minio
+        uses: ./.github/actions/setup-minio
       - name: Run dashboard journeys
         env:
           S3_ENDPOINT: http://127.0.0.1:9000
@@ -82,17 +94,24 @@ jobs:
           STORAGE_KMS_KEY_ID: aequoros-key
           PLAYWRIGHT_QUARANTINE_REPORT: ${{ runner.temp }}/journeys.json
           E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
-        run: mise exec -- pnpm --filter @aequoros/dashboard e2e
+        run: mise exec -- pnpm --filter @aequoros/dashboard e2e --shard=${{ matrix.shard }}/4
       # Reviewer-visible screenshots the authorization and SSO journeys write
       # (the issuer's form, the signed-in shell, the refusals, the step-up
       # return). Uploaded even on failure: that is when they matter most.
       - name: Upload journey evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
-          name: dashboard-journey-evidence
+          name: dashboard-journey-evidence-${{ matrix.shard }}
           path: ${{ runner.temp }}/evidence
           if-no-files-found: ignore
+      - name: Upload journey report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: dashboard-journey-report-${{ matrix.shard }}
+          path: ${{ runner.temp }}/journeys.json
+          if-no-files-found: error
       # The quarantine size (e2e/support/quarantine.ts) is pinned here on
       # purpose: parking or releasing a journey means editing this gate as well
       # as the list, so a quarantine is always a visible, reviewed decision
@@ -108,5 +127,32 @@ jobs:
             (.integrityErrors | length) == 0
           ' "$RUNNER_TEMP/journeys.json" >/dev/null
       - name: Stop MinIO
+        if: always() && steps.minio.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.minio.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true
+
+  gate:
+    name: Dashboard journeys gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs: [changes, journeys]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download shard reports
+        if: needs.changes.outputs.journeys == 'true'
+        uses: actions/download-artifact@v6
+        with:
+          pattern: dashboard-journey-report-*
+          path: ${{ runner.temp }}/journey-reports
+      - name: Verify complete journey execution and report skipped names
+        if: needs.changes.outputs.journeys == 'true'
+        run: |
+          node .github/scripts/assert_dashboard_journeys.mjs \
+            "$RUNNER_TEMP"/journey-reports/*/journeys.json
+      - name: Require the journey shards or a verified irrelevant change
         if: always()
-        run: docker rm -f aequoros-e2e-minio || true
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: .github/scripts/dashboard_journeys_gate.sh

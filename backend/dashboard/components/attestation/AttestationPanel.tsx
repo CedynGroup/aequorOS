@@ -124,7 +124,7 @@ export default function AttestationPanel({
   /**
    * Whether to OFFER the checker act — never whether to permit it. The server
    * decides that, and decides it differently per family
-   * (`attestation_api._ensure_certify_authority`).
+   * (`app.attestation.service.api._ensure_certify_authority`).
    *
    * For the prudential returns the scalar ladder is the right and unchanged
    * question: a bank's approvers approve its returns. An ICAAP report is a

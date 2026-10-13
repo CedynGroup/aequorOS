@@ -24,7 +24,7 @@ when a computation is ADDED — which is the only direction the defect travels.
   can read, the gate FAILS naming that site rather than quietly seeing fewer
   metrics. A gate that silently narrows its own scope is worse than no gate.
 * The *reporting* side is read off the live
-  ``app.services.regulatory_reporting.registry.REGISTRY`` object, so every
+  ``app.reporting.service.registry.REGISTRY`` object, so every
   return — including the 24 workbook-driven ``bog_forms`` entries built at
   import time — is covered without anyone listing them.
 
@@ -89,7 +89,7 @@ from app.domain.authority.registry import (
     MetricFamily,
     Regime,
 )
-from app.services.regulatory_reporting.registry import REGISTRY as RETURN_REGISTRY
+from app.reporting.service.registry import REGISTRY as RETURN_REGISTRY
 
 from .plane_evidence import (
     line_item_codes,
@@ -356,8 +356,7 @@ def _reporting_references() -> dict[tuple[str, str], str]:
         )
         for metric_id, methodology_id in declared:
             references[metric_id, methodology_id] = (
-                f"return {code} (declared_methodologies, "
-                "app/services/regulatory_reporting/registry.py)"
+                f"return {code} (declared_methodologies, app/reporting/service/registry.py)"
             )
     return references
 

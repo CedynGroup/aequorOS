@@ -13,18 +13,11 @@ import { E2E_USERS, mintBackendToken } from "./mint";
 
 export const SAMPLE_BANK_ID = "BK-SAMP0001";
 
-/**
- * The KPI tile (`components/ui/KpiStat`) whose label is exactly `label`. A
- * section card is a `.card` too, so only the innermost card qualifies.
- */
+/** The figure group containing the visible label and one tooltip-bearing value. */
 export function kpi(scope: Page | Locator, label: string): Locator {
-  // `has`/`hasNot` match inside each candidate card, so they must be built
-  // from the page, not from a scoping locator the card itself sits under.
-  const page = "page" in scope ? scope.page() : scope;
   return scope
-    .locator(".card")
-    .filter({ has: page.getByText(label, { exact: true }) })
-    .filter({ hasNot: page.locator(".card") });
+    .getByText(label, { exact: true })
+    .locator("xpath=ancestor::div[count(.//span[@title])=1][1]");
 }
 
 /** The section card (`components/ui/SectionCard`) titled exactly `title`. */
@@ -50,7 +43,7 @@ export async function expectKpi(
       ? kpi(page, label)
       : kpi(page, label).filter({ hasText: hint });
   await expect(tile).toHaveCount(1);
-  await expect(tile.locator("span.font-mono").first()).toHaveText(value);
+  await expect(tile.getByText(value, { exact: true })).toBeVisible();
 }
 
 /**

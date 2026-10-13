@@ -8,7 +8,7 @@ configuration rather than evidence:
 
 1. ``return_signature_placements`` / ``package_signature_placements`` — where
    each signing role's field sits, replacing the two hardcoded boxes in
-   ``services/attestation/pdf_signing.py``. A template per return code
+   ``app/attestation/service/pdf_signing.py``. A template per return code
    (optionally per bank) plus a per-package override, resolved
    override → template → the built-in default.
 
@@ -124,9 +124,7 @@ def upgrade() -> None:
             "signing_role",
             name="uq_package_signature_placements_role",
         ),
-        sa.UniqueConstraint(
-            "id", "organization_id", name="uq_package_signature_placements_id_org"
-        ),
+        sa.UniqueConstraint("id", "organization_id", name="uq_package_signature_placements_id_org"),
     )
 
     op.create_table(
@@ -155,9 +153,7 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "organization_id", "signer_id", name="uq_signature_appearances_signer"
-        ),
+        sa.UniqueConstraint("organization_id", "signer_id", name="uq_signature_appearances_signer"),
         sa.UniqueConstraint("id", "organization_id", name="uq_signature_appearances_id_org"),
     )
 
@@ -200,9 +196,7 @@ def upgrade() -> None:
             "recipient_user_id",
             name="uq_package_signature_recipients_nomination",
         ),
-        sa.UniqueConstraint(
-            "id", "organization_id", name="uq_package_signature_recipients_id_org"
-        ),
+        sa.UniqueConstraint("id", "organization_id", name="uq_package_signature_recipients_id_org"),
     )
     op.create_index(
         "ix_package_signature_recipients_inbox",
@@ -242,10 +236,6 @@ def downgrade() -> None:
     op.drop_table("package_signature_recipients")
     op.drop_table("signature_appearances")
     op.drop_table("package_signature_placements")
-    op.drop_index(
-        "uq_return_signature_placements_org", table_name="return_signature_placements"
-    )
-    op.drop_index(
-        "uq_return_signature_placements_bank", table_name="return_signature_placements"
-    )
+    op.drop_index("uq_return_signature_placements_org", table_name="return_signature_placements")
+    op.drop_index("uq_return_signature_placements_bank", table_name="return_signature_placements")
     op.drop_table("return_signature_placements")

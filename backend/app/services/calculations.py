@@ -764,7 +764,7 @@ def build_input_snapshot(  # noqa: PLR0913, PLR0915
                 "corrective_action": "Set a currency on every listed financial record.",
             },
         )
-    currencies = sorted({item.currency for _, item in financial_inputs})
+    currencies = sorted({item.currency for _, item in financial_inputs if item.currency})
     if len(currencies) > 1:
         raise CalculationInputError(
             "multiple_currencies",

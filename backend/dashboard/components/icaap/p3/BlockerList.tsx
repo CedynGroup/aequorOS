@@ -8,7 +8,7 @@
  * replaced. The freeze preflight and the submission gate both compute their
  * refusals from the same authority the act itself uses, so a sentence written
  * here instead would be a second opinion about whether a bank may file — which
- * is exactly the disagreement `services/icaap/filing.py` exists to prevent.
+ * is exactly the disagreement `icaap/service/filing.py` exists to prevent.
  *
  * `blockerTitle` adds a SHORT HEADING over that sentence where the code is one
  * we recognise, so a list of eleven refusals reads as a list of eleven tasks.

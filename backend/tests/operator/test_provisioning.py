@@ -3,21 +3,32 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
+from threading import Event
+from typing import cast
+from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
+from app import worker
 from app.core import security
-from app.core.config import get_operator_settings
+from app.core.config import get_settings
+from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.models import BankEncryptionKey
+from app.core.key_management.settings import get_key_settings
+from app.db.base import utc_now
 from app.forecasting.service import resolve_effective
+from app.identity.models.refresh_token import RefreshToken
 from app.models import (
     AuthorizationBinding,
     Bank,
     ForecastAssumptionVersion,
+    Job,
     OperatorAuditLog,
     Organization,
     OrganizationOwnerAssignment,
@@ -29,9 +40,10 @@ from app.models import (
 )
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.services.tenant_provisioning import ProvisioningClients
+from app.schemas.operator import ProvisioningResultRead
 from app.services import institution_types, parameter_register
 from tests.operator.conftest import (
-    FakeKmsClient,
+    BANK_KEY,
     FakeS3Client,
     fake_storage_settings,
     operator_headers,
@@ -41,6 +53,81 @@ from tests.operator.conftest import (
 
 def _steps_by_name(body: dict) -> dict[str, dict]:
     return {step["step"]: step for step in body["steps"]}
+
+
+def test_provisioning_after_worker_startup_reaches_session_purge(
+    operator_client: TestClient,
+    operator_db: Session,
+    _operator_bound_sessionmaker: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_SESSION_PURGE_ENABLED", "true")
+    get_settings.cache_clear()
+    monkeypatch.setattr(worker, "get_worker_sessionmaker", lambda: _operator_bound_sessionmaker)
+    monkeypatch.setattr(worker, "assert_worker_database_access", lambda: None)
+    stop = Event()
+    stop.set()
+    worker.run_worker(stop_event=stop)
+    assert operator_db.scalar(select(Job)) is None
+
+    monkeypatch.setenv("AUTH_SESSION_PURGE_ENABLED", "false")
+    get_settings.cache_clear()
+    response = operator_client.post(
+        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+    )
+    assert response.status_code == 200, response.text
+    result = ProvisioningResultRead.model_validate(response.json())
+    assert result.succeeded
+    organization_id = result.organization_id
+    assert organization_id is not None
+    tick = operator_db.scalar(
+        select(Job).where(Job.organization_id == organization_id, Job.job_type == "scheduled_tick")
+    )
+    assert tick is not None
+    assert tick.status == "queued"
+    administrator = operator_db.scalar(select(User).where(User.organization_id == organization_id))
+    assert administrator is not None
+    identifier = uuid4()
+    now = utc_now()
+    operator_db.add(
+        RefreshToken(
+            id=identifier,
+            organization_id=organization_id,
+            user_id=administrator.id,
+            family_id=identifier,
+            token_hash=identifier.hex * 2,
+            issued_at=now - timedelta(days=90),
+            expires_at=now - timedelta(days=31),
+        )
+    )
+    operator_db.commit()
+
+    monkeypatch.setenv("AUTH_SESSION_PURGE_ENABLED", "true")
+    get_settings.cache_clear()
+    assert worker.run_once(("scheduled_tick",))
+    operator_db.expire_all()
+    assert tick.status == "succeeded"
+    purge = operator_db.scalar(
+        select(Job).where(Job.organization_id == organization_id, Job.job_type == "session_purge")
+    )
+    assert purge is not None
+    assert worker.run_once(("session_purge",))
+    operator_db.expire_all()
+    assert purge.status == "succeeded"
+    assert purge.progress == {"status": "succeeded", "refresh_tokens_deleted": 1}
+    assert operator_db.get(RefreshToken, identifier) is None
+    assert not worker.run_once(("session_purge",))
+    next_ticks = list(
+        operator_db.scalars(
+            select(Job).where(
+                Job.organization_id == organization_id,
+                Job.job_type == "scheduled_tick",
+                Job.status == "queued",
+            )
+        )
+    )
+    assert len(next_ticks) == 1
+    assert next_ticks[0].coalesce_key == f"tick:{organization_id}"
 
 
 def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserted end to end
@@ -58,10 +145,7 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert steps["organization"]["status"] == "succeeded"
     assert steps["bank"]["status"] == "succeeded"
     assert steps["storage"]["status"] == "succeeded"
-    assert steps["kms"]["status"] == "skipped"
-    assert steps["kms"]["detail"] == (
-        "KMS disabled (OPERATOR_AWS_KMS_ENABLED=0) — SSE-KMS not applied"
-    )
+    assert steps["kms"]["status"] == "succeeded"
     assert steps["sso_stub"]["status"] == "succeeded"
     assert steps["first_admin"]["status"] == "succeeded"
     assert steps["first_owner"]["status"] == "succeeded"
@@ -101,7 +185,7 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert registry is not None
     assert sorted(registry.bucket_names) == expected_buckets
     assert registry.provider == "minio"
-    assert registry.kms_key_arn is None
+    assert registry.kms_key_arn == BANK_KEY.key_id
     # Probe object was cleaned up.
     assert all(objects == {} for objects in fake_s3.buckets.values())
 
@@ -343,6 +427,7 @@ def test_storage_failure_rolls_back_everything(
     assert operator_db.scalar(select(Bank)) is None
     assert operator_db.scalar(select(TenantStorage)) is None
     assert operator_db.scalar(select(User)) is None
+    assert operator_db.scalar(select(Job)) is None
 
     # External: the created (empty) buckets were deleted again.
     assert fake_s3.buckets == {}
@@ -371,47 +456,44 @@ def test_duplicate_names_warn_but_do_not_block(operator_client: TestClient) -> N
     assert len(body["warnings"]) == 2  # duplicate org name + duplicate bank name
 
 
-def test_kms_step_applies_sse_kms_when_enabled(
-    operator_client: TestClient,
-    operator_db: Session,
-    fake_s3: FakeS3Client,
-    monkeypatch,  # noqa: ANN001 - pytest fixture
+def test_missing_bank_key_refuses_onboarding(
+    operator_client: TestClient, operator_db: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("OPERATOR_AWS_KMS_ENABLED", "1")
-    get_operator_settings.cache_clear()
-    fake_kms = FakeKmsClient()
-    operator_client.app.dependency_overrides[get_provisioning_clients] = (  # type: ignore[attr-defined]
-        lambda: ProvisioningClients(
-            s3_client=fake_s3,
-            storage_settings=fake_storage_settings(),
-            kms_client=fake_kms,
-        )
-    )
-
+    monkeypatch.setenv("BANK_KEY_REQUIRED", "true")
+    get_key_settings.cache_clear()
     response = operator_client.post(
-        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+        "/operator/v1/tenants",
+        json=provision_payload(encryption_key=None),
+        headers=operator_headers(),
     )
     body = response.json()
-    assert body["succeeded"] is True, body
-    steps = _steps_by_name(body)
-    assert steps["kms"]["status"] == "succeeded"
+    assert body["succeeded"] is False
+    assert _steps_by_name(body)["kms"]["status"] == "failed"
+    assert operator_db.scalar(select(Organization)) is None
+    get_key_settings.cache_clear()
 
-    organization_id = body["organization_id"]
-    assert fake_kms.aliases == {f"alias/aequoros-{organization_id}": FakeKmsClient.KEY_ID}
-    # SSE-KMS default encryption set on all four tier buckets.
-    assert sorted(fake_s3.encryption) == sorted(fake_s3.buckets)
-    registry = operator_db.scalar(
-        select(TenantStorage).where(TenantStorage.organization_id == organization_id)
+
+def test_optional_bank_key_preserves_onboarding_without_provider_record(
+    operator_client: TestClient, operator_db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BANK_KEY_REQUIRED", "false")
+    get_key_settings.cache_clear()
+    response = operator_client.post(
+        "/operator/v1/tenants",
+        json=provision_payload(encryption_key=None),
+        headers=operator_headers(),
     )
-    assert registry is not None
-    assert registry.provider == "aws"
-    assert registry.kms_key_arn == FakeKmsClient.ARN
+    body = ProvisioningResultRead.model_validate_json(response.content)
+    assert body.succeeded is True
+    assert next(step for step in body.steps if step.step == "kms").status == "skipped"
+    assert operator_db.scalar(select(BankEncryptionKey)) is None
+    get_key_settings.cache_clear()
 
 
 def test_unconfigured_storage_fails_the_saga_honestly(
     operator_client: TestClient, operator_db: Session
 ) -> None:
-    operator_client.app.dependency_overrides[get_provisioning_clients] = (  # type: ignore[attr-defined]
+    cast(FastAPI, operator_client.app).dependency_overrides[get_provisioning_clients] = (  # type: ignore[attr-defined]
         lambda: ProvisioningClients(
             s3_client=None,
             storage_settings=fake_storage_settings(),
@@ -427,6 +509,30 @@ def test_unconfigured_storage_fails_the_saga_honestly(
     assert steps["storage"]["status"] == "failed"
     assert "not configured" in steps["storage"]["detail"]
     assert operator_db.scalar(select(Organization)) is None
+
+
+def test_unavailable_kms_refuses_provisioning_and_rolls_back(
+    operator_client: TestClient,
+    operator_db: Session,
+    fake_s3: FakeS3Client,
+) -> None:
+    keys = LocalKeyProvider()  # Bank key missing or grant revoked.
+    cast(FastAPI, operator_client.app).dependency_overrides[get_provisioning_clients] = lambda: (
+        ProvisioningClients(
+            s3_client=fake_s3,
+            storage_settings=fake_storage_settings(),
+            key_providers=lambda _name: keys,
+        )
+    )
+    response = operator_client.post(
+        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+    )
+    body = cast(dict[str, object], response.json())
+    assert body["succeeded"] is False
+    assert _steps_by_name(body)["kms"]["status"] == "failed"
+    assert operator_db.scalar(select(Organization)) is None
+    assert operator_db.scalar(select(Bank)) is None
+    assert fake_s3.buckets == {}
 
 
 @pytest.mark.parametrize("institution_type", ["universal_bank", "savings_and_loans"])

@@ -32,6 +32,7 @@ from app.adapters.database_direct.drivers.base import (
     DriverCapabilities,
     QueryResult,
     TableSchema,
+    require_verified_transport,
 )
 from app.adapters.database_direct.errors import (
     DatabaseDirectError,
@@ -74,6 +75,7 @@ class JdbcDriver(DatabaseDriver):
         )
 
     def connect(self, connection: ConnectionConfig, credentials: DbCredentials) -> _JdbcSession:
+        require_verified_transport(connection)
         jdbc_cfg = connection.jdbc
         if jdbc_cfg is None:
             raise DatabaseDirectError(

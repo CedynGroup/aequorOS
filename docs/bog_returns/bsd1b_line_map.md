@@ -12,6 +12,8 @@ Status legend — **mapped**: fed from platform data via the named resolver (bla
 
 The latest **succeeded baseline run of the FX module** (`RegulatoryRun.module='fx'`) — the same run DBK-DAILY reconstructs the daily NOP from — supplies per currency `net_ccy` (NOP in units of the currency), `net_ghs` (cedi equivalent), `side`, `spot_ghs`, `abs_pct_tier1`, and in aggregate `nop_ghs` (AFOP), `sum_long_ghs` / `sum_short_ghs`, `tier1_ghs` (Net Own Funds — the Tier 1 proxy DBK-DAILY uses), `nop_aggregate_limit_pct`. The run's own inputs (the period's `fx_position` facts) supply the on-balance decomposition `assets_ccy` / `liabilities_ccy` / `net_derivatives_ccy`, so **I) net assets + iii) net trading position = NOP** is the engine's decomposition, not a new rule. 'Other Currencies' = every run currency other than USD/GBP/EUR: its cedi cells are the signed Σ; its units-of-currency and rate cells have no single unit and stay input_required. Nature cells carry the template's own notation `( L )` / `( S )` / `-` from the sign (as `SCHEDULE B`'s IF formula does).
 
+Run eligibility follows the [NOP currency coverage contract](../../ARCHITECTURE.md#live-engine-operating-rules).
+
 **Contingents.** Neither the FX run nor the canonical `LC_GUARANTEE` positions carry a crystallisation flag or an LC / guarantee / other-commitment split (research gap G5 — DBK 102 is empty for the same reason), so FXP row ii and every `SCHEDULE B` cell are `input_required`; `SCHEDULE B`'s `SUM` totals and `IF(...,"( S )",...)` long/short flags are BoG's formulas and evaluate over what the bank enters.
 
 ## Sheet `FORM FXP` — 58 bound cells (0 captured `0`-placeholder input cells + 58 blank data cells bound explicitly) · 1 template formulas · sheet unit: millions

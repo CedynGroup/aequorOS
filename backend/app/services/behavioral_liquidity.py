@@ -19,9 +19,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
+from app.identity.public import Bank
 from app.ml.behavioral import history
 from app.ml.behavioral.config import BehavioralTrainingConfig
-from app.models import Bank, ContingencyFundingPlan
+from app.models import ContingencyFundingPlan
 
 _DIMENSIONS = ("product", "customer_segment", "concentration_group", "branch")
 _MIN_RATE_OBSERVATIONS = 6

@@ -20,20 +20,20 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.icaap.frameworks import registry
+from app.icaap.domain.frameworks import registry
 from tests.fixtures.reference_data import GHANA
 
 BACKEND = Path(__file__).parents[2]
 
 #: Everything the ICAAP work owns, except the framework data itself.
-SCANNED_ROOTS = ("app/domain/icaap", "app/services/icaap")
+SCANNED_ROOTS = ("app/icaap/domain", "app/icaap/service")
 SCANNED_FILES = (
-    "app/schemas/icaap.py",
-    "app/features/manage_icaap.py",
-    "app/features/manage_icaap_sections.py",
-    "app/features/manage_icaap_blocks.py",
-    "app/features/manage_icaap_attachments.py",
-    "app/models/icaap.py",
+    "app/icaap/schemas/workspace.py",
+    "app/icaap/api/manage_icaap.py",
+    "app/icaap/api/manage_icaap_sections.py",
+    "app/icaap/api/manage_icaap_blocks.py",
+    "app/icaap/api/manage_icaap_attachments.py",
+    "app/icaap/models/workspace.py",
 )
 
 #: P5 modules the ICAAP consumes but does not own (P5-DESIGN §5.5). The IRRBB
@@ -66,7 +66,7 @@ IDENTITY = re.compile(
 #: The seed catalogue names the jurisdiction its rows are for and cites the
 #: paragraphs they come from — exactly as ``regulatory_parameters.SEED_PARAMETERS``
 #: does. That IS the data; scanning it would be scanning the registry.
-DELIBERATE_EXCEPTIONS = frozenset({"app/services/icaap/parameters.py"})
+DELIBERATE_EXCEPTIONS = frozenset({"app/icaap/service/parameters.py"})
 
 
 def _files() -> list[Path]:

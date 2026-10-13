@@ -12,14 +12,14 @@ read that before changing anything in §3.3 or §6 step 1.
 
 - The engine is `app/domain/workflow/chain.py` (pure: stage-field parsing, the
   round rules, the D-067 scale normaliser) plus
-  `app/services/filing_workflow/engine.py` (the blocker ladder, the officer-title
+  `app/reporting/service/filing_workflow/engine.py` (the blocker ladder, the officer-title
   check, the send-back rules, signer display). **Both planes run it.**
-  `app/domain/icaap/workflow.py` and `app/services/icaap/workflow.py` were
+  `app/icaap/domain/workflow.py` and `app/icaap/service/workflow.py` were
   rewritten onto it with byte-identical refusal sentences; ICAAP keeps its own
   structural rules (a chain that starts with a preparation and ends at the Board,
   with exactly one freeze stage) and its own `Stage` shape, because
   `freeze_on_approve` is an ICAAP concept.
-- The filing chain's shape is `app/domain/filing/workflow.py`. Its structural
+- The filing chain's shape is `app/reporting/domain/workflow.py`. Its structural
   rules: exactly one preparation stage first, at least one reviewing stage after
   it, exactly one `transmit_on_approve` stage which must be LAST and must be an
   approval. `DEFAULT_STAGES` is Bernard's Preparer -> Approver -> Validator,
@@ -30,7 +30,7 @@ read that before changing anything in §3.3 or §6 step 1.
   The `validated` status survives only as a projection of "checks passed and the
   return has not been sent for approval yet", and `pending_approval`/`approved`
   are projections of the chain's position (`chain.project_status`).
-- **The transmission gate lives in `regulatory_reporting.workflow.transition`**,
+- **The transmission gate lives in `app.reporting.service.workflow.transition`**,
   the single writer of `-> submitted`, not on a route. Every channel, the manual
   record and the BG/FMD/2026/07 re-upload pass it.
 - **SoD is re-checked under the row lock.** `get_package_or_404(..., for_update=True)`
@@ -205,7 +205,7 @@ Validator signs before transmitting or merely authorises; do not assume.
 
 ## 4. What changes, by surface
 
-- **Backend:** a shared `filing_workflow` service lifted from `services/icaap/workflow.py`;
+- **Backend:** a shared `filing_workflow` service lifted from `icaap/service/workflow.py`;
   `Permission.SUBMIT`; `require_package_submit` rewritten to it; stage/decision tables for the
   package plane; `checks_passed` replacing the `validated` status; send-back routing and rounds.
 - **Lifecycle statuses:** `pending_approval`/`approved` become projections of the chain's
@@ -235,6 +235,12 @@ and asks them to infer, from greyed-out controls, that none of it is theirs.
   precondition is unmet ("two checks still failing", "waiting on the Approver"). The codebase
   already has the right primitive: `DisabledWithReason` renders `role="link"`/control with
   `aria-disabled="true"` and the reason on hover, and is already used by the navigation.
+
+Waiting applies only to a stage ahead of the return; a completed stage's control is
+absent. Once the return is `submitted`, preparation and approval are complete, so
+neither is offered again, even disabled. An officer with filing authority retains
+the channel follow-up action: re-upload when required, otherwise check for the
+regulator's decision when the channel supports polling.
 
 Getting this backwards in either direction is the current failure: everything is disabled, so
 nothing communicates.

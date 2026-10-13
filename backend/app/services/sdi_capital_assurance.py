@@ -16,8 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.stress.appendix_ii import _STATUTORY
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     CanonicalGlAccount,
     CanonicalPosition,
     CanonicalPositionSnapshot,
@@ -98,9 +98,7 @@ def _available_dates(
     return sorted(position_dates & capital_dates)[-limit:]
 
 
-def _actual_provision(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> Decimal | None:
+def _actual_provision(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> Decimal | None:
     rows = db.execute(
         select(CanonicalPositionSnapshot)
         .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)

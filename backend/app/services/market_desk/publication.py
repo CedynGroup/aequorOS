@@ -38,7 +38,8 @@ from app.adapters.market_data.aequor_desk.adapter import (
 from app.adapters.market_data.errors import MarketDataError
 from app.adapters.market_data.pull_runner import MarketDataBundle, ScopeExtraction, execute_pull
 from app.adapters.market_data.scope_taxonomy import DataScope
-from app.models import Bank, DeskDetermination, DeskPublication, Organization
+from app.identity.public import Bank
+from app.models import DeskDetermination, DeskPublication, Organization
 from app.services.ingestion import bank_slug
 from app.services.market_desk import determinations, entitlements, register
 
@@ -95,12 +96,8 @@ def _entitled_extraction(
     """build_extraction, then drop curve/index rows the bank is not entitled to."""
     extraction = build_extraction(determination, scope)
     bundle = extraction.bundle
-    curves = [
-        c for c in bundle.curves if entitlements.curve_allowed(c.curve_name, datasets)
-    ]
-    indices = [
-        i for i in bundle.indices if entitlements.index_allowed(i.index_code, datasets)
-    ]
+    curves = [c for c in bundle.curves if entitlements.curve_allowed(c.curve_name, datasets)]
+    indices = [i for i in bundle.indices if entitlements.index_allowed(i.index_code, datasets)]
     filtered = MarketDataBundle(
         curves=curves,
         fx_rates=list(bundle.fx_rates),
@@ -112,9 +109,7 @@ def _entitled_extraction(
     return ScopeExtraction(raw_payload=extraction.raw_payload, bundle=filtered)
 
 
-def backfill_latest_to_bank(
-    db: Session, bank: Bank, *, actor: str
-) -> DeskPublication | None:
+def backfill_latest_to_bank(db: Session, bank: Bank, *, actor: str) -> DeskPublication | None:
     """Deliver the latest published desk determination to one later-created bank.
 
     Normal publication can reach only the banks that exist at its fan-out time.
@@ -131,9 +126,7 @@ def backfill_latest_to_bank(
     if determination is None:
         return None
 
-    datasets = entitlements.active_datasets(
-        db, bank.organization_id, as_of=determination.cob_date
-    )
+    datasets = entitlements.active_datasets(db, bank.organization_id, as_of=determination.cob_date)
     scopes = entitlements.filter_scopes(determination_scopes(determination), datasets)
     if not scopes:
         result: dict[str, Any] = {
@@ -245,9 +238,7 @@ def publish(db: Session, determination_id: Any, *, actor: str) -> DeskPublicatio
             )
         except MarketDataError as exc:
             db.rollback()
-            logger.warning(
-                "Desk publication failed for bank %s: %s", bank.id, exc.internal_detail
-            )
+            logger.warning("Desk publication failed for bank %s: %s", bank.id, exc.internal_detail)
             results.append(
                 {"bank_id": bank.id, "status": "failed", "error": exc.bank_facing.message}
             )
@@ -301,9 +292,7 @@ def publish(db: Session, determination_id: Any, *, actor: str) -> DeskPublicatio
     return publication
 
 
-def list_publications(
-    db: Session, *, determination_id: Any | None = None
-) -> list[DeskPublication]:
+def list_publications(db: Session, *, determination_id: Any | None = None) -> list[DeskPublication]:
     query = select(DeskPublication).order_by(DeskPublication.published_at.desc())
     if determination_id is not None:
         query = query.where(DeskPublication.determination_id == determination_id)

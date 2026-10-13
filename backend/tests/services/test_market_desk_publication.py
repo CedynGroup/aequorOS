@@ -284,6 +284,7 @@ def test_desk_curves_coexist_with_vendor_curves(
     db_session.flush()
     lineage = LineageRecord(
         organization_id=bank.organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="VALIDATION",
         operation_ref="test_fixture",

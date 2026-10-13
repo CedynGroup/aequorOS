@@ -301,6 +301,10 @@ export interface ListReturnAnchorsRequest {
   lookbackMonths?: number;
 }
 
+export interface ListReturnTemplatesRequest {
+  bankId?: string | null;
+}
+
 export interface ListSubmissionEventsRequest {
   bankId: string;
   packageId: string;
@@ -2462,9 +2466,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
    * List Return Templates
    */
   async listReturnTemplatesRaw(
+    requestParameters: ListReturnTemplatesRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<runtime.ApiResponse<ReturnTemplateListRead>> {
     const queryParameters: any = {};
+
+    if (requestParameters["bankId"] != null) {
+      queryParameters["bank_id"] = requestParameters["bankId"];
+    }
 
     const headerParameters: runtime.HTTPHeaders = {};
 
@@ -2495,9 +2504,13 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
    * List Return Templates
    */
   async listReturnTemplates(
+    requestParameters: ListReturnTemplatesRequest = {},
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<ReturnTemplateListRead> {
-    const response = await this.listReturnTemplatesRaw(initOverrides);
+    const response = await this.listReturnTemplatesRaw(
+      requestParameters,
+      initOverrides,
+    );
     return await response.value();
   }
 

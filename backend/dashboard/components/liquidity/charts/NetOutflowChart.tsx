@@ -28,8 +28,8 @@ export default function NetOutflowChart({
   height = 220,
 }: {
   outflows: OutflowCategory[];
-  cappedInflows: number;
-  netOutflows: number;
+  cappedInflows: number | null;
+  netOutflows: number | null;
   height?: number;
 }) {
   const tokens = useChartTokens();
@@ -54,15 +54,18 @@ export default function NetOutflowChart({
       barMaxWidth: 34,
       itemStyle: { color: tokens.favourable },
       data: [null, cappedInflows],
-      markLine: thresholdMarkLine([
-        {
-          axis: "x",
-          value: netOutflows,
-          label: `Net ${fmtCurrency(netOutflows)}`,
-          color: tokens.muted,
-          labelPosition: "start",
-        },
-      ]),
+      markLine:
+        netOutflows === null
+          ? undefined
+          : thresholdMarkLine([
+              {
+                axis: "x",
+                value: netOutflows,
+                label: `Net ${fmtCurrency(netOutflows)}`,
+                color: tokens.muted,
+                labelPosition: "start",
+              },
+            ]),
     },
   ];
 
@@ -98,7 +101,7 @@ export default function NetOutflowChart({
     <EChart
       option={option}
       height={height}
-      ariaLabel={`Weighted outflows across ${outflows.length} categories against capped inflows, with the net outflow figure marked at ${fmtCurrency(netOutflows)}`}
+      ariaLabel={`Weighted outflows across ${outflows.length} categories against capped inflows, with the net outflow figure marked at ${netOutflows === null ? "Unavailable" : fmtCurrency(netOutflows)}`}
     />
   );
 }

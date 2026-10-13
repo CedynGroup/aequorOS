@@ -11,6 +11,20 @@
  */
 
 import { mapValues } from "../runtime";
+import type { InstrumentStatus } from "./InstrumentStatus";
+import {
+  InstrumentStatusFromJSON,
+  InstrumentStatusFromJSONTyped,
+  InstrumentStatusToJSON,
+  InstrumentStatusToJSONTyped,
+} from "./InstrumentStatus";
+import type { EffectiveFrom } from "./EffectiveFrom";
+import {
+  EffectiveFromFromJSON,
+  EffectiveFromFromJSONTyped,
+  EffectiveFromToJSON,
+  EffectiveFromToJSONTyped,
+} from "./EffectiveFrom";
 import type { PackageId } from "./PackageId";
 import {
   PackageIdFromJSON,
@@ -44,10 +58,22 @@ import {
 export interface ObligationAnnexRead {
   /**
    *
+   * @type {EffectiveFrom}
+   * @memberof ObligationAnnexRead
+   */
+  effectiveFrom?: EffectiveFrom;
+  /**
+   *
    * @type {string}
    * @memberof ObligationAnnexRead
    */
   filingRole: ObligationAnnexReadFilingRoleEnum;
+  /**
+   *
+   * @type {InstrumentStatus}
+   * @memberof ObligationAnnexRead
+   */
+  instrumentStatus?: InstrumentStatus;
   /**
    *
    * @type {PackageId}
@@ -117,7 +143,15 @@ export function ObligationAnnexReadFromJSONTyped(
   }
   return {
     ...json,
+    effectiveFrom:
+      json["effective_from"] == null
+        ? undefined
+        : EffectiveFromFromJSON(json["effective_from"]),
     filingRole: json["filing_role"],
+    instrumentStatus:
+      json["instrument_status"] == null
+        ? undefined
+        : InstrumentStatusFromJSON(json["instrument_status"]),
     packageId:
       json["package_id"] == null
         ? undefined
@@ -148,7 +182,9 @@ export function ObligationAnnexReadToJSONTyped(
   }
 
   return {
+    effective_from: EffectiveFromToJSON(value["effectiveFrom"]),
     filing_role: value["filingRole"],
+    instrument_status: InstrumentStatusToJSON(value["instrumentStatus"]),
     package_id: PackageIdToJSON(value["packageId"]),
     package_status: ObligationAnnexReadPackageStatusToJSON(
       value["packageStatus"],

@@ -21,3 +21,12 @@ class ErrorResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     error: ErrorBody
+
+
+class FigureRefusalRead(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    reason_code: str
+    rule_citation: str
+    row_ref: tuple[int, ...]
+    reason: str | None = None

@@ -1,22 +1,19 @@
-'use client';
+"use client";
 
-import PageContainer from '@/components/ui/PageContainer';
-import type { LiquidityDashboardLineRead } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import RatioGauge from '@/components/ui/RatioGauge';
-import KpiStat from '@/components/ui/KpiStat';
-import LimitBar from '@/components/ui/LimitBar';
-import SectionCard from '@/components/ui/SectionCard';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import { useBankContext } from '@/components/shell/BankContext';
-import {
-  useLiquidityDashboard,
-  useRegulatoryRun,
-} from '@/lib/api/hooks';
-import { num, statusTone } from '@/lib/api/values';
-import { centralBankName, fmtCurrency } from '@/lib/format';
+import PageContainer from "@/components/ui/PageContainer";
+import type { LiquidityDashboardLineRead } from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import RatioGauge from "@/components/ui/RatioGauge";
+import KpiStat from "@/components/ui/KpiStat";
+import LimitBar from "@/components/ui/LimitBar";
+import SectionCard from "@/components/ui/SectionCard";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useLiquidityDashboard, useRegulatoryRun } from "@/lib/api/hooks";
+import { num, statusTone, numOrNull, formatFigure } from "@/lib/api/values";
+import { centralBankName, fmtCurrency } from "@/lib/format";
 
 type WeightedRow = {
   item: string;
@@ -38,24 +35,29 @@ function toRow(line: LiquidityDashboardLineRead): WeightedRow {
 function weightedColumns(
   categoryHeader: string,
   factorHeader: string,
-  amountHeader: string
+  amountHeader: string,
 ): Column<WeightedRow>[] {
   return [
-    { key: 'item', header: categoryHeader, render: (r) => r.item, width: '50%' },
     {
-      key: 'bal',
-      header: 'Balance',
-      numeric: true,
-      render: (r) => (r.isTotal ? '—' : fmtCurrency(r.balanceGHS)),
+      key: "item",
+      header: categoryHeader,
+      render: (r) => r.item,
+      width: "50%",
     },
     {
-      key: 'fct',
+      key: "bal",
+      header: "Balance",
+      numeric: true,
+      render: (r) => (r.isTotal ? "—" : fmtCurrency(r.balanceGHS)),
+    },
+    {
+      key: "fct",
       header: factorHeader,
       numeric: true,
-      render: (r) => (r.factor === null ? '—' : `${r.factor.toFixed(0)}%`),
+      render: (r) => (r.factor === null ? "—" : `${r.factor.toFixed(0)}%`),
     },
     {
-      key: 'amt',
+      key: "amt",
       header: amountHeader,
       numeric: true,
       render: (r) => fmtCurrency(r.weightedGHS),
@@ -75,19 +77,17 @@ export default function NSFRDashboard() {
 
   const asfRows = (data?.asf ?? []).map(toRow);
   const rsfRows = (data?.rsf ?? []).map(toRow);
-  const asfTotal = num(data?.metrics.asfTotalGhs);
-  const rsfTotal = num(data?.metrics.rsfTotalGhs);
-  const surplus = num(data?.metrics.asfTotalGhs) - num(data?.metrics.rsfTotalGhs);
+  const asfTotal = numOrNull(data?.metrics.asfTotalGhs);
+  const rsfTotal = numOrNull(data?.metrics.rsfTotalGhs);
+  const surplus =
+    asfTotal === null || rsfTotal === null ? null : asfTotal - rsfTotal;
+  const ratio = numOrNull(data?.metrics.nsfrPct);
 
   const computedAt = data?.live?.computedAt;
 
-
   return (
     <>
-      <PageHeader
-        eyebrow="Liquidity"
-        title="Net Stable Funding Ratio"
-      />
+      <PageHeader eyebrow="Liquidity" title="Net Stable Funding Ratio" />
 
       <QueryBoundary
         isLoading={dashboard.isLoading}
@@ -102,7 +102,7 @@ export default function NSFRDashboard() {
               <div className="lg:col-span-2">
                 <RatioGauge
                   label="Net Stable Funding Ratio"
-                  value={num(data.metrics.nsfrPct)}
+                  value={ratio}
                   threshold={nsfrMin}
                   status={statusTone(data.metrics.nsfrStatus)}
                   decimals={2}
@@ -110,14 +110,16 @@ export default function NSFRDashboard() {
               </div>
               <KpiStat
                 label="Available stable funding"
-                value={fmtCurrency(num(data.metrics.asfTotalGhs))}
+                value={formatFigure(data.metrics.asfTotalGhs, fmtCurrency)}
                 hint="Liability-side weighting"
               />
               <KpiStat
                 label="Required stable funding"
-                value={fmtCurrency(num(data.metrics.rsfTotalGhs))}
-                hint={`Funding surplus ${fmtCurrency(surplus)}`}
-                status={surplus >= 0 ? 'ok' : 'crit'}
+                value={formatFigure(data.metrics.rsfTotalGhs, fmtCurrency)}
+                hint={`Funding surplus ${formatFigure(surplus, fmtCurrency)}`}
+                status={
+                  surplus === null ? undefined : surplus >= 0 ? "ok" : "crit"
+                }
               />
             </div>
 
@@ -128,12 +130,14 @@ export default function NSFRDashboard() {
             >
               <LimitBar
                 label="NSFR"
-                value={num(data.metrics.nsfrPct)}
+                value={ratio}
                 limit={nsfrRedFloor}
                 warnAt={nsfrMin}
                 direction="above"
                 unit="%"
-                limitLabel={nsfrRedFloor === nsfrMin ? 'Basel minimum' : 'Red floor'}
+                limitLabel={
+                  nsfrRedFloor === nsfrMin ? "Basel minimum" : "Red floor"
+                }
                 warnLabel="Basel minimum"
                 format={(v) => v.toFixed(1)}
               />
@@ -155,19 +159,23 @@ export default function NSFRDashboard() {
                   >
                     <DataTable
                       columns={weightedColumns(
-                        'Liability category',
-                        'ASF factor',
-                        'ASF amount'
+                        "Liability category",
+                        "ASF factor",
+                        "ASF amount",
                       )}
                       rows={[
                         ...asfRows,
-                        {
-                          item: 'TOTAL ASF',
-                          balanceGHS: 0,
-                          factor: null,
-                          weightedGHS: asfTotal,
-                          isTotal: true,
-                        },
+                        ...(asfTotal === null
+                          ? []
+                          : [
+                              {
+                                item: "TOTAL ASF",
+                                balanceGHS: 0,
+                                factor: null,
+                                weightedGHS: asfTotal,
+                                isTotal: true,
+                              },
+                            ]),
                       ]}
                       totalsRowMatcher={(r) => Boolean(r.isTotal)}
                     />
@@ -181,19 +189,23 @@ export default function NSFRDashboard() {
                   >
                     <DataTable
                       columns={weightedColumns(
-                        'Asset category',
-                        'RSF factor',
-                        'RSF amount'
+                        "Asset category",
+                        "RSF factor",
+                        "RSF amount",
                       )}
                       rows={[
                         ...rsfRows,
-                        {
-                          item: 'TOTAL RSF',
-                          balanceGHS: 0,
-                          factor: null,
-                          weightedGHS: rsfTotal,
-                          isTotal: true,
-                        },
+                        ...(rsfTotal === null
+                          ? []
+                          : [
+                              {
+                                item: "TOTAL RSF",
+                                balanceGHS: 0,
+                                factor: null,
+                                weightedGHS: rsfTotal,
+                                isTotal: true,
+                              },
+                            ]),
                       ]}
                       totalsRowMatcher={(r) => Boolean(r.isTotal)}
                     />
@@ -201,23 +213,26 @@ export default function NSFRDashboard() {
                 </div>
 
                 <p className="text-caption text-slate">
-                  NSFR = Total ASF{' '}
+                  NSFR = Total ASF{" "}
                   <span className="font-mono text-navy">
-                    {fmtCurrency(asfTotal)}
-                  </span>{' '}
-                  / Total RSF{' '}
+                    {formatFigure(asfTotal, fmtCurrency)}
+                  </span>{" "}
+                  / Total RSF{" "}
                   <span className="font-mono text-navy">
-                    {fmtCurrency(rsfTotal)}
-                  </span>{' '}
-                  ={' '}
-                  <span className="font-mono font-medium text-success">
-                    {num(data.metrics.nsfrPct).toFixed(2)}%
+                    {formatFigure(rsfTotal, fmtCurrency)}
+                  </span>{" "}
+                  ={" "}
+                  <span className="font-mono font-medium text-navy">
+                    {formatFigure(ratio, (value) => `${value.toFixed(2)}%`)}
                   </span>
-                  . Basel minimum {nsfrMin.toFixed(0)}%.{' '}
-                  {bank?.name ?? 'The bank'} holds{' '}
+                  . Basel minimum {nsfrMin.toFixed(0)}%.{" "}
+                  {bank?.name ?? "The bank"} holds{" "}
                   <span className="font-mono text-navy">
-                    {(num(data.metrics.nsfrPct) - nsfrMin).toFixed(2)} pts
-                  </span>{' '}
+                    {formatFigure(
+                      ratio,
+                      (value) => `${(value - nsfrMin).toFixed(2)} pts`,
+                    )}
+                  </span>{" "}
                   of headroom.
                 </p>
               </>

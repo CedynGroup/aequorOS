@@ -52,7 +52,8 @@ from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.core.outbound import OutboundTargetBlocked
 from app.db.base import utc_now
-from app.models import Bank, Job, MappingConfigRecord
+from app.identity.public import Bank
+from app.models import Job, MappingConfigRecord
 from app.models.temenos import TemenosConnection
 from app.schemas.ingestion import MappingConfigCreate
 from app.services import job_queue, temenos_connections

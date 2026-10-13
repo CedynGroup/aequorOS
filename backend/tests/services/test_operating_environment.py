@@ -114,6 +114,7 @@ def _seed_published_market_data(
     db.flush()
     node = LineageRecord(
         organization_id=bank.organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="VALIDATION",
         operation_ref="test:market_data",

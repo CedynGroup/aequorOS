@@ -9,8 +9,8 @@ backend/tests/architecture/feature_boundary_baseline.json
 # One pair per line, written by backend/scripts/feature_moves.py.
 backend/scripts/feature_module_moves.json
 
-# Deterministic JSON formatting is owned by backend/scripts/typing_ratchet.py.
-backend/scripts/typing_baseline.json
+# Deterministic JSON formatting is owned by backend/scripts/type_check_baseline.py.
+backend/scripts/type_check_baseline.json
 
 # Lockfile formatting is owned by pnpm.
 pnpm-lock.yaml

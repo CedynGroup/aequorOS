@@ -62,7 +62,7 @@ export type EngineMeasureLike = Readonly<{
 /**
  * The regime segment of an engine measure id, `engine.{metric}.{regime}.{tier}`.
  *
- * The same wire contract the compiler reads (`services/bi/compiler.py`): the
+ * The same wire contract the compiler reads (`app/bi/service/compiler.py`): the
  * catalogue exposes the metric id and the tier as fields but not the regime, and
  * the regime is the whole question when a metric is multi-authority.
  */
@@ -87,7 +87,7 @@ function engineRegimeOf(
  * catalogue is not narrowed to the tenant's regime, so a bank's catalogue lists
  * `car_pct` under CRD and under s.29 side by side — the same metric id, two
  * different laws, and only one of them ever has a row for this tenant
- * (`services/bi/insights/assemble.py::engine_measure_applies`). Opening the
+ * (`app/bi/service/insights/assemble.py::engine_measure_applies`). Opening the
  * other one would show a reviewer a declaration with no engine row under it and
  * call it the provenance of the figure on screen.
  *

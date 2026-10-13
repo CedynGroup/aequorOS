@@ -29,61 +29,43 @@ from app.domain.irr.standardised import (
 )
 from app.domain.irr.standardised import run as sf_run
 from tests.domain.irr.test_sf_fixtures import (
-    running_outstanding,
     seed_rows,
     sf_parameters,
+)
+from tests.irrbb.testing.assertions import (
+    assert_irrbb_invariants,
+    assert_irrbb_scaled,
+    assert_principal_conserved,
+)
+from tests.irrbb.testing.generators import (
+    amounts,
+    behavioural_rates,
+    currency_inputs,
+    ladder,
+    zero_rates,
 )
 
 AS_OF = date(2026, 12, 31)
 PARAMS = sf_parameters()
 ZERO = Decimal(0)
-#: Decimal exponentiation is inexact, so conservation is checked to a tolerance
-#: far tighter than the reported quantum and far looser than the arithmetic.
-EXACT = Decimal("0.0000000000000001")
-
 _SETTINGS = settings(
     max_examples=60,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow],
 )
 
-_AMOUNTS = st.lists(
-    st.integers(min_value=-200000, max_value=200000).map(
-        lambda cents: Decimal(cents) / Decimal(100)
-    ),
-    min_size=PARAMS.bucket_count,
-    max_size=PARAMS.bucket_count,
-)
-_RATES = st.integers(min_value=0, max_value=100).map(lambda pct: Decimal(pct) / Decimal(100))
-_ZERO_RATES = st.integers(min_value=-200, max_value=3000).map(
-    lambda bp: Decimal(bp) / Decimal(10000)
-)
+_AMOUNTS = amounts
+_RATES = behavioural_rates
+_ZERO_RATES = zero_rates
+_ladder = ladder
 
 
-def _ladder(currency: str, amounts: list[Decimal], kind: str = "fixed") -> Ladder:
-    principal = tuple(amounts)
-    return Ladder(
-        currency=currency,
-        portfolio=f"{currency}|{kind}",
-        kind=kind,  # type: ignore[arg-type]
-        principal=principal,
-        interest=tuple(ZERO for _ in principal),
-        outstanding_end=running_outstanding(principal),
-    )
+_currency = currency_inputs
 
 
-def _currency(currency: str, rate: Decimal, size: Decimal) -> CurrencyInputs:
-    return CurrencyInputs(
-        currency=currency,
-        zero_cc=tuple(rate for _ in range(PARAMS.bucket_count)),
-        fx_to_reporting=Decimal(1),
-        bb_assets_rep=size,
-        bb_liabilities_rep=size,
-    )
-
-
-def _run(ladders: tuple[Ladder, ...], currencies: tuple[CurrencyInputs, ...],
-         tier1: Decimal) -> SfResult:
+def _run(
+    ladders: tuple[Ladder, ...], currencies: tuple[CurrencyInputs, ...], tier1: Decimal
+) -> SfResult:
     return sf_run(
         SfInputs(
             as_of=AS_OF,
@@ -119,13 +101,7 @@ def test_the_measure_is_never_negative_and_never_below_a_single_currencys_loss(
         (_ladder("GHS", amounts),), (_currency("GHS", rate, Decimal(1000)),), Decimal(tier1)
     )
 
-    assert result.measures.all_scenarios.measure >= ZERO
-    for scenario in result.scenarios:
-        assert scenario.loss >= ZERO
-        for row in scenario.by_currency:
-            if row.delta_eve_reporting > ZERO:
-                assert scenario.loss >= row.delta_eve_reporting
-        assert result.measures.all_scenarios.measure >= scenario.loss
+    assert_irrbb_invariants(result)
 
 
 @given(amounts=_AMOUNTS, scale=st.integers(min_value=2, max_value=9))
@@ -137,11 +113,7 @@ def test_delta_eve_scales_with_the_book(amounts: list[Decimal], scale: int) -> N
         (_ladder("GHS", [amount * scale for amount in amounts]),), currencies, Decimal(10**6)
     )
 
-    tolerance = Decimal(scale) * Decimal("0.000001")
-    for index, scenario in enumerate(base.scenarios):
-        expected = scenario.by_currency[0].delta_eve_native * scale
-        actual = scaled.scenarios[index].by_currency[0].delta_eve_native
-        assert abs(actual - expected) <= tolerance, scenario.code
+    assert_irrbb_scaled(scaled, base, scale)
 
 
 @given(amounts=_AMOUNTS, other=_AMOUNTS, rate=_ZERO_RATES)
@@ -160,9 +132,7 @@ def test_a_currency_that_gains_adds_nothing_to_that_scenarios_loss(
     usd = _currency("USD", rate, Decimal(1000))
 
     base = _run((_ladder("GHS", amounts),), (ghs,), Decimal(10**6))
-    combined = _run(
-        (_ladder("GHS", amounts), _ladder("USD", other)), (ghs, usd), Decimal(10**6)
-    )
+    combined = _run((_ladder("GHS", amounts), _ladder("USD", other)), (ghs, usd), Decimal(10**6))
 
     by_code = {row.code: row for row in base.scenarios}
     for scenario in combined.scenarios:
@@ -196,8 +166,11 @@ def test_the_answer_does_not_depend_on_the_order_rows_arrived_in(
     }
 
 
-@given(amounts=_AMOUNTS, lower=st.integers(min_value=1, max_value=10**5),
-       extra=st.integers(min_value=1, max_value=10**5))
+@given(
+    amounts=_AMOUNTS,
+    lower=st.integers(min_value=1, max_value=10**5),
+    extra=st.integers(min_value=1, max_value=10**5),
+)
 @_SETTINGS
 def test_more_capital_never_turns_a_bank_into_an_outlier(
     amounts: list[Decimal], lower: int, extra: int
@@ -234,8 +207,9 @@ def test_the_engine_does_not_know_which_currency_it_is_looking_at(
     }
     relabelled = sp.parse_parameters({**seed_rows(), **calibration})
 
-    native = _run((_ladder("GHS", amounts),), (_currency("GHS", rate, Decimal(1000)),),
-                  Decimal(10**6))
+    native = _run(
+        (_ladder("GHS", amounts),), (_currency("GHS", rate, Decimal(1000)),), Decimal(10**6)
+    )
     foreign = sf_run(
         SfInputs(
             as_of=AS_OF,
@@ -267,7 +241,7 @@ def test_prepayment_moves_money_without_creating_or_destroying_it(
 
     total = sum(principal, ZERO)
     opening = ladder.opening_outstanding
-    assert abs(total - opening) <= abs(opening) * EXACT + EXACT
+    assert_principal_conserved(total, opening, operation="behavioural redistribution")
 
 
 @given(amounts=_AMOUNTS, rate=_RATES)
@@ -281,11 +255,13 @@ def test_early_redemption_splits_a_balance_without_changing_it(
 
     total = sum(principal, ZERO)
     opening = ladder.opening_outstanding
-    assert abs(total - opening) <= abs(opening) * EXACT + EXACT
+    assert_principal_conserved(total, opening, operation="behavioural redistribution")
 
 
-@given(rate=_RATES, multiplier=st.integers(min_value=0, max_value=500).map(
-    lambda pct: Decimal(pct) / Decimal(100)))
+@given(
+    rate=_RATES,
+    multiplier=st.integers(min_value=0, max_value=500).map(lambda pct: Decimal(pct) / Decimal(100)),
+)
 @_SETTINGS
 def test_a_behavioural_rate_never_exceeds_full_participation(
     rate: Decimal, multiplier: Decimal

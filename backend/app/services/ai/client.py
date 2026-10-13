@@ -311,6 +311,8 @@ class AnthropicModel:
             raise RealModelForbiddenError(message)
         import anthropic  # noqa: PLC0415 - the one lazy SDK import in the codebase
 
+        from app.core.tls import client_context  # noqa: PLC0415
+
         self._anthropic = anthropic
         self._settings = settings
         # Explicit api_key: the zero-argument constructor would fall through to
@@ -318,6 +320,10 @@ class AnthropicModel:
         # account from what was meant to be a local run.
         self._client = anthropic.Anthropic(
             api_key=credentials.anthropic_api_key.get_secret_value(),
+            base_url="https://api.anthropic.com",
+            http_client=anthropic.DefaultHttpxClient(
+                verify=client_context(), trust_env=False, follow_redirects=False
+            ),
             timeout=settings.ai.request_timeout_seconds,
             max_retries=settings.ai.max_retries,
         )

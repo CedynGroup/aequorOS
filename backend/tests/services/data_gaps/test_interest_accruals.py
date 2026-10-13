@@ -39,8 +39,8 @@ from app.domain.ingestion.reference_schemas.interest_accruals import (
     validate_accrual_row,
 )
 from app.models import CanonicalReferenceRow
-from app.services.regulatory_reporting.bog_forms.layout import load_layout
-from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
+from app.reporting.service.bog_forms.layout import load_layout
+from app.reporting.service.bog_forms.linemaps import line_maps_for
 from scripts import ingest_push
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,

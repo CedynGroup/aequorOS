@@ -229,7 +229,7 @@ def test_the_registry_dispatch_scan_never_enters_the_run_ledger(
     without anyone remembering this file exists.
     """
     from app.api.deps import TenantContext  # noqa: PLC0415
-    from app.services.regulatory_reporting.eligibility import (  # noqa: PLC0415
+    from app.reporting.service.eligibility import (  # noqa: PLC0415
         governed_effective_parameter_codes,
         resolve_eligibility,
     )
@@ -263,7 +263,7 @@ def test_the_icaap_report_plane_never_enters_the_run_ledger(db_session: Session)
     would break in a single line.
 
     So the ICAAP plane is now non-recording BY CONSTRUCTION: its governed-row
-    reads go through ``app/services/icaap/parameters.py`` and
+    reads go through ``app/icaap/service/parameters.py`` and
     ``icaap/params.resolve_p2``, both of which pass ``record=False``. It keeps
     its own record — ``_parameter_provenance`` on the frozen snapshot, inside
     ``package_digest`` — which is bound to the document rather than to whichever
@@ -274,8 +274,8 @@ def test_the_icaap_report_plane_never_enters_the_run_ledger(db_session: Session)
     exists. The import-graph half lives in
     ``tests/architecture/test_icaap_boundaries.py``.
     """
-    from app.services.icaap import parameters as icaap_parameters  # noqa: PLC0415
-    from app.services.icaap import params as icaap_p2_params  # noqa: PLC0415
+    from app.icaap.service import parameters as icaap_parameters  # noqa: PLC0415
+    from app.icaap.service import params as icaap_p2_params  # noqa: PLC0415
 
     bank = _bank(db_session)
     as_of = date(2026, 12, 31)

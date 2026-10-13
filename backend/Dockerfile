@@ -37,6 +37,11 @@ RUN groupadd --system risk \
 COPY --from=builder --chown=risk:risk /opt/venv /opt/venv
 COPY --chown=risk:risk app ./app
 COPY --chown=risk:risk alembic ./alembic
+COPY --chown=risk:risk \
+    scripts/bootstrap_database.py \
+    scripts/database_roles_202610120096.sql \
+    scripts/database_roles_local.sql \
+    ./scripts/
 COPY --chown=risk:risk alembic.ini pyproject.toml uv.lock ./
 
 USER risk
@@ -46,4 +51,4 @@ EXPOSE 8000
 # Multi-worker in production (WEB_CONCURRENCY, default 4). The background worker
 # runs as a SEPARATE process (`python -m app.worker`, see docker-compose), so keep
 # RUN_INPROCESS_WORKER unset here — N API workers must not each spawn a poller.
-CMD ["sh", "-c", "fastapi run app/main.py --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-4}"]
+CMD ["python", "-m", "app.core.serve", "api"]

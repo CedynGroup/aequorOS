@@ -406,14 +406,14 @@ test.describe("IRRBB functional workflow", () => {
     );
     expect(run.scenario_code).toBe("system_irr_parallel_up_200");
     // The engine's three-year path for the fixture book under a parallel +200bp
-    // rate path: capital erodes by 0.14pp and coverage falls from the fixture's
+    // rate path: capital erodes by 0.30pp and coverage falls from the fixture's
     // derived 147.29% (see the Liquidity journey) to 138.60%.
     expect(Number(run.summary.baseline_lcr_pct)).toBeCloseTo(147.294589, 6);
-    await expectKpi(page, "Stressed CAR", "17.28%", "Base 17.42%");
+    await expectKpi(page, "Stressed CAR", "36.66%", "Base 36.96%");
     await expectKpi(
       page,
       "CAR erosion",
-      "-0.14 pp",
+      "-0.30 pp",
       "Base → stress, final year",
     );
     await expectKpi(page, "Stressed LCR", "138.6%", "Base 147.3%");
@@ -478,7 +478,7 @@ test.describe("IRRBB functional workflow", () => {
       });
     }
 
-    await expectPersistedStressRun(page, run, "17.28%");
+    await expectPersistedStressRun(page, run, "36.66%");
 
     await page.getByRole("link", { name: "Board-pack composer" }).click();
     await expect(page).toHaveURL(/\/reports\/stress-board-pack$/);
@@ -527,7 +527,7 @@ test.describe("IRRBB functional workflow", () => {
       "analyst",
       `/banks/${SAMPLE_BANK_ID}/regulatory-runs/${run.run_id}`,
     );
-    expect(storedRun.engine_version).toBe("enterprise-stress-v2.0.0");
+    expect(storedRun.engine_version).toBe("enterprise-stress-v5.0.0");
     expect(storedRun.metrics.outcome.engine_version).toBe(
       storedRun.engine_version,
     );

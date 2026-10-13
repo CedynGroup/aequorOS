@@ -7,7 +7,7 @@
  * preparation stage, ends with one signature, carries at least one review or
  * approval between them, and names exactly one approval stage that seals the
  * report, immediately before the signature. Those rules are ONE function,
- * `app/domain/icaap/workflow.validate_stages`, and it validates the regime's
+ * `app/icaap/domain/workflow.validate_stages`, and it validates the regime's
  * default chain and a bank's proposal alike.
  *
  * This composer therefore holds no copy of them. It builds the stages, and the

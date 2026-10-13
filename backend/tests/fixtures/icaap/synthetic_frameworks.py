@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.domain.icaap.frameworks.registry import framework_digest
-from app.domain.icaap.frameworks.schema import Framework, parse_framework
+from app.icaap.domain.frameworks.registry import framework_digest
+from app.icaap.domain.frameworks.schema import Framework, parse_framework
 
 _DOC = {
     "id": "ZZ-DOC",

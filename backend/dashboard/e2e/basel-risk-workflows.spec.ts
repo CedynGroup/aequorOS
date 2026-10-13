@@ -8,8 +8,9 @@
  *
  * The expectations are the FIXTURE's, not the screen's. Capital is the
  * canonical book's components (`tests/fixtures/canonical_bank_fixture.py`
- * `_CAPITAL_COMPONENTS_M`); credit RWA is its exposures at their governed
- * standardised risk weights, with committed lines converted at a 50% CCF;
+ * `_CAPITAL_COMPONENTS_M`), with general provisions capped at 1.25% of credit
+ * RWA; credit RWA uses the bootstrap's net CRD source positions at governed
+ * standardised weights, with aggregate commitments converted at a 50% CCF;
  * market RWA is the FX net open position (45M, see the FX journey) at an 8%
  * charge × 12.5; operational RWA is the Basic Indicator Approach, 15% of the
  * three-year average gross income × 12.5. The spec sums and divides them
@@ -29,6 +30,7 @@ import {
   ghsM,
   section,
 } from "./support/figures";
+import { CREDIT, CREDIT_RWA_M } from "./support/credit";
 import {
   expectPersistedStressRun,
   runEnterpriseStress,
@@ -49,38 +51,13 @@ const CET1_DEDUCTIONS = [
   { label: "Deferred Tax Assets (Deduction)", amount: 15 },
 ];
 const AT1_M = 20;
-const TIER2_M = 45 + 15; // subordinated debt + general provisions (within the cap)
+const TIER2_M = 45 + Math.min(15, (CREDIT_RWA_M * 1.25) / 100);
 const CET1_M =
   sum(CET1_ITEMS.map((i) => i.amount)) -
   sum(CET1_DEDUCTIONS.map((d) => d.amount));
 const TIER1_M = CET1_M + AT1_M;
 const TOTAL_CAPITAL_M = TIER1_M + TIER2_M;
 
-/** Credit exposures (GHS millions) at their governed standardised risk weight. */
-const CREDIT = [
-  { label: "Corporate Unrated", exposure: 560, rw: 100 },
-  { label: "Sme Retail", exposure: 280, rw: 75 },
-  { label: "Retail Other", exposure: 250, rw: 75 },
-  { label: "Residential Mortgage", exposure: 200, rw: 35 },
-  { label: "Commercial Real Estate", exposure: 60, rw: 100 },
-  { label: "Past Due 90", exposure: 50, rw: 150 },
-  { label: "Other Assets", exposure: 90, rw: 100 },
-  // Undrawn commitments at a 50% credit conversion factor.
-  {
-    label: "Committed Corporate (EAD After 50% CCF)",
-    exposure: 240 * 0.5,
-    rw: 100,
-  },
-  { label: "Committed Retail (EAD After 50% CCF)", exposure: 80 * 0.5, rw: 75 },
-  { label: "BoG Bills (Zero Risk Weight)", exposure: 260, rw: 0 },
-  { label: "GoG Bonds (Zero Risk Weight)", exposure: 360, rw: 0 },
-  {
-    label: "Cash And Reserves (Zero Risk Weight)",
-    exposure: 45 + 175 + 70,
-    rw: 0,
-  },
-];
-const CREDIT_RWA_M = sum(CREDIT.map((c) => (c.exposure * c.rw) / 100));
 /** Net open FX position 45M × 8% charge × 12.5. */
 const MARKET_RWA_M = 45 * 0.08 * 12.5;
 /** Basic Indicator Approach: 15% × average gross income (340, 380, 400) × 12.5. */
@@ -97,15 +74,6 @@ test.describe("Basel capital functional workflow", () => {
     page,
   }) => {
     test.setTimeout(150_000);
-    // Derived anchors: 340M of capital over 2,147.5M of RWA.
-    expect([CET1_M, TIER1_M, TOTAL_CAPITAL_M]).toEqual([260, 280, 340]);
-    expect([
-      CREDIT_RWA_M,
-      MARKET_RWA_M,
-      OPERATIONAL_RWA_M,
-      TOTAL_RWA_M,
-    ]).toEqual([1402.5, 45, 700, 2147.5]);
-
     // ---- Overview: the four headline ratios.
     await page.goto("/basel");
     await expect(
@@ -209,16 +177,16 @@ test.describe("Basel capital functional workflow", () => {
       "Adverse domestic downturn (moderate)",
     );
     expect(Number(run.summary.car_erosion_pp)).toBeLessThan(0);
-    await expectKpi(page, "Stressed CAR", "16.01%", "Base 17.42%");
+    await expectKpi(page, "Stressed CAR", "34.47%", "Base 36.96%");
     await expectKpi(
       page,
       "CAR erosion",
-      "-1.41 pp",
+      "-2.49 pp",
       "Base → stress, final year",
     );
     await expectKpi(page, "Stays above minima", "Yes", "All minima held");
     await expectKpi(page, "Capital gap", "GHS'000 0", "Worst-year, pre-action");
-    await expectPersistedStressRun(page, run, "16.01%");
+    await expectPersistedStressRun(page, run, "34.47%");
 
     // ---- Planning: the what-if planner, then refresh and persist ILAAP evidence.
     await openTab(page, "Planning");

@@ -39,7 +39,7 @@ from app.domain.ingestion.reference_schemas.gl_mapping_bsd7 import (
     validate_mapping_row,
 )
 from app.models import CanonicalGlAccount, CanonicalReferenceRow
-from app.services.regulatory_reporting.bog_forms.linemaps.bsd7a import PL_ROWS
+from app.reporting.service.bog_forms.linemaps.bsd7a import PL_ROWS
 from scripts import ingest_push
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,

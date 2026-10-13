@@ -135,7 +135,7 @@ export function outstandingSummary(outstanding: OutstandingSlotRead[]): string {
  * Whether this return may reach a channel, and why not when it may not.
  *
  * Driven by `canSubmit` and by nothing looser. The service computes it from the
- * policy in force and the signatures on record (`attestation_api._status_payload`);
+ * policy in force and the signatures on record (`app.attestation.service.api._status_payload`);
  * every surface that re-derived it from the attestation state or the policy flag
  * is how "CLEARED TO SUBMIT" once rendered beside "UNSIGNED".
  *

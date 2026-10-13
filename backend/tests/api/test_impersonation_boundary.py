@@ -44,9 +44,9 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.integrations.storage.base import StoredObjectHead
 from app.models import Bank, RegulatoryPackage, User
-from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.api_factories import CaseFactory, DocumentFactory
@@ -639,7 +639,7 @@ def test_approver_ladder_still_gates_an_approval_action(db_client: TestClient) -
 
 
 # --- 4. P0-3: the document delete ---------------------------------------------
-def test_document_delete_is_analyst_gated_and_removes_the_object(
+def test_document_delete_is_analyst_gated_and_queues_object_cleanup(
     db_client: TestClient, fake_storage
 ) -> None:
     case_id = str(CaseFactory(db_client).create().id)
@@ -664,27 +664,17 @@ def test_document_delete_is_analyst_gated_and_removes_the_object(
     deleted = db_client.delete(path, headers=headers(roles=("analyst",)))
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["status"] == "deleted"
-    assert len(fake_storage.deleted) == 1
+    assert fake_storage.deleted == []
 
 
-def test_storage_delete_failure_does_not_commit_a_false_success(
-    db_client: TestClient, fake_storage
-) -> None:
-    """P0-3 consistency: the irreversible act runs BEFORE the commit.
-
-    ``documents.delete_document`` marks the rows deleted in the session, calls
-    ``storage_client.delete_object``, and only then commits. When the object
-    store refuses, the exception propagates through ``get_tenant_db_session``,
-    which rolls the session back — so the caller sees a failure and the document
-    is still readable and still marked live. Reversing that order would trade
-    this recoverable failure for silent data loss on a commit error.
-    """
+def test_document_delete_does_not_wait_for_storage(db_client: TestClient, fake_storage) -> None:
+    """An unavailable store cannot prevent the durable logical deletion."""
     case_id = str(CaseFactory(db_client).create().id)
     documents = DocumentFactory(db_client, fake_storage)
     document_id = str(documents.create_uploaded(case_id=case_id).document_id)
 
     def _boom(*, bucket: str, object_key: str) -> None:
-        raise RuntimeError(f"object store unavailable: {bucket}/{object_key}")
+        raise RuntimeError("object store unavailable")
 
     fake_storage.delete_object = _boom  # type: ignore[method-assign]
     try:
@@ -693,12 +683,10 @@ def test_storage_delete_failure_does_not_commit_a_false_success(
         )
     finally:
         del fake_storage.delete_object
-
-    assert response.status_code >= 500, response.text
-
-    survivor = db_client.get(f"/api/v1/documents/{document_id}", headers=headers())
-    assert survivor.status_code == 200, survivor.text
-    assert survivor.json()["status"] != "deleted", "the DB committed a delete that never happened"
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "deleted"
+    download = db_client.get(f"/api/v1/documents/{document_id}/download-url", headers=headers())
+    assert download.status_code == 409
 
 
 # --- 5. regression: the treasury / regulatory plane ----------------------------
@@ -776,9 +764,9 @@ def test_impersonated_examiner_reads_only_frozen_icaap_cycles(
     # Imported here rather than at module scope: this suite walks the whole
     # route table, and importing the ICAAP models at import time would register
     # them before the other cases build their app.
-    from app.domain.icaap.frameworks import registry  # noqa: PLC0415
+    from app.icaap.domain.frameworks import registry  # noqa: PLC0415
+    from app.icaap.models.workspace import IcaapCycle  # noqa: PLC0415
     from app.models import RegulatoryPackage  # noqa: PLC0415
-    from app.models.icaap import IcaapCycle  # noqa: PLC0415
     from tests.fixtures.canonical_bank_fixture import (  # noqa: PLC0415
         SAMPLE_BANK_ID,
         materialize_canonical_test_book,

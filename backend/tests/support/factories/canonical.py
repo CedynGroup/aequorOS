@@ -124,6 +124,7 @@ def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture scri
     session.flush()
     lineage = LineageRecord(
         organization_id=organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="canonical-fixture",
@@ -200,7 +201,7 @@ def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture scri
         extra_attributes: dict[str, Any] | None = None,
         validation_status: str = "accepted",
         superseded_by: UUID | None = None,
-    ) -> None:
+    ) -> UUID:
         row = CanonicalPosition(
             **common,
             source_reference=source_reference,
@@ -217,8 +218,10 @@ def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture scri
         if extra_attributes:
             attributes.update(extra_attributes)
         snapshot_fields = {**common, "validation_status": validation_status}
+        snapshot_id = uuid4()
         session.add(
             CanonicalPositionSnapshot(
+                id=snapshot_id,
                 **snapshot_fields,
                 source_reference=source_reference,
                 position_id=row.id,
@@ -234,9 +237,10 @@ def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture scri
                 attributes=attributes,
             )
         )
+        return snapshot_id
 
     # --- loans (Σ balance_ghs = 84.85M) ---------------------------------
-    position(
+    replacement_snapshot_id = position(
         "LOAN/1",
         "LOAN",
         "GHS",
@@ -352,7 +356,7 @@ def seed_canonical_fixture(  # noqa: PLR0915 - one linear, readable fixture scri
         maturity=date(2029, 1, 1),
         stage=1,
         product="LN.CORP.5Y",
-        superseded_by=uuid4(),
+        superseded_by=replacement_snapshot_id,
     )
     position(
         "LOAN/BAD",
@@ -525,6 +529,7 @@ def seed_hedge_and_swap_positions(
     session.flush()
     lineage = LineageRecord(
         organization_id=organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="hedge-swap-fixture",
@@ -654,6 +659,7 @@ def seed_directional_swap_positions(
     session.flush()
     lineage = LineageRecord(
         organization_id=organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="directional-swap-fixture",

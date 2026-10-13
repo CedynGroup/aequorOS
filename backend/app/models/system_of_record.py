@@ -55,7 +55,6 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKeyConstraint,
-    Index,
     String,
     Text,
     UniqueConstraint,
@@ -132,13 +131,6 @@ class SystemOfRecordDeclaration(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "effective_from",
             name="uq_system_of_record_declarations_generation",
         ),
-        Index(
-            "ix_system_of_record_declarations_resolution",
-            "organization_id",
-            "bank_id",
-            "position_type",
-            "effective_from",
-        ),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -161,9 +153,7 @@ class SystemOfRecordDeclaration(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     #: no cited authority is an opinion.
     source_citation: Mapped[str] = mapped_column(String(240), nullable=False)
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
-    confirmation_status: Mapped[str] = mapped_column(
-        String(12), nullable=False, default="pending"
-    )
+    confirmation_status: Mapped[str] = mapped_column(String(12), nullable=False, default="pending")
 
     # --- maker-checker ------------------------------------------------------
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="draft")

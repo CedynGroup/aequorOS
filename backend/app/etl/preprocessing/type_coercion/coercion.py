@@ -14,6 +14,9 @@ through a raw alias (``balance_ghs``, ``interest_rate_pct``) is SANCTIONED; null
 regulatory-critical value is a *change* and is therefore FLAGGED for a human — a missing
 balance or rate is surfaced, never silently zeroed (the Sample Bank data deliberately
 carries such gaps).
+
+``capital_structure.amount_ghs`` bypasses coercion so its schema can refuse the
+original malformed Decimal representation; see docs/API_INTEGRATION.md §3.5.
 """
 
 from __future__ import annotations
@@ -60,6 +63,8 @@ class TypeCoercer(Preprocessor):
         rid = _record_id(record)
         ops: list[ETLOperation] = []
         for source_field, value in record.data.items():
+            if record.dataset_kind == "capital_structure" and source_field == "amount_ghs":
+                continue
             op = self._coerce_field(rid, source_field, value)
             if op is not None:
                 ops.append(op)

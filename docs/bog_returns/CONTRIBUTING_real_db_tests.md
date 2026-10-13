@@ -37,6 +37,7 @@ print(get_settings().database.database_url)")" uv run pytest <file> -q -p no:cac
 ## Deliverable per file
 
 The converted file (same path), every test kept (rewritten, not deleted) unless it tested the
-seed route itself; a two-line header docstring naming the invariants; gates: ruff clean, the typing
-ratchet (`uv run python scripts/typing_ratchet.py check`) clean, the file green under `REAL_DATA_DATABASE_URL`, and still collectable/skipping without it.
+seed route itself; a two-line header docstring naming the invariants; gates: ruff clean, the type-check
+baseline (`uv run python scripts/type_check_baseline.py check`) clean, the file green under
+`REAL_DATA_DATABASE_URL`, and still collectable/skipping without it.
 **Do not commit.** Report: file, tests converted/kept/dropped (why), invariants asserted, runtime.

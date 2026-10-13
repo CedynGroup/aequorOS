@@ -72,6 +72,7 @@ def _meta(
     session.flush()
     lineage = LineageRecord(
         organization_id=DEMO_ORG_ID,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="sf-book-fixture",
@@ -330,9 +331,7 @@ def seed_book(  # noqa: PLR0913 - one switch per condition the loader must handl
     return period_id
 
 
-def seed_fx(
-    session: Session, *, base: str, quote: str, rate: str, as_of: date = AS_OF
-) -> None:
+def seed_fx(session: Session, *, base: str, quote: str, rate: str, as_of: date = AS_OF) -> None:
     from app.models import CanonicalFxRate  # noqa: PLC0415 - fixture-local import
 
     meta = _meta(session, as_of=as_of)

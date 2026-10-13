@@ -60,7 +60,7 @@ export function requireObjectStorage(): void {
       "Locally: backend/.env supplies S3_ENDPOINT / S3_ACCESS_KEY /",
       "S3_SECRET_KEY / S3_BUCKET. Run this journey from a checkout that HAS it",
       "or start local MinIO; a git worktree does not inherit untracked files.",
-      "In CI: run MinIO as a service container and pass the same four.",
+      "For CI service setup, see backend/README.md#run-tests.",
     ].join("\n"),
   );
 }

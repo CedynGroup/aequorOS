@@ -41,7 +41,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models.bi import MONTHLY_PARTITIONED_TABLES, YEARLY_PARTITIONED_TABLES
+from app.bi.models.marts import MONTHLY_PARTITIONED_TABLES, YEARLY_PARTITIONED_TABLES
 
 BI_FOUNDATION_REVISION = "202609220066"
 

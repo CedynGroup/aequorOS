@@ -67,7 +67,7 @@ from app.adapters.database_direct.query_builder import build_count_select, build
 from app.adapters.market_data.credential_manager import derive_status
 from app.core.outbound import OutboundTargetBlocked, check_host_port
 from app.db.base import utc_now
-from app.models import Bank
+from app.identity.public import Bank
 from app.models.database_connection import DatabaseDirectConnection
 from app.schemas.database_connection import (
     DatabaseConnectionCreate,

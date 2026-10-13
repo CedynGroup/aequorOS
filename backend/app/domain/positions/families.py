@@ -15,8 +15,9 @@ LOAN_CATEGORY_MAP: dict[str, tuple[str, str]] = {
     "CORPORATE_UNRATED": ("corporate_unrated", "RW100"),
     "CORPORATE_LOAN_UNRATED_100RW": ("corporate_unrated", "RW100"),
     "AGRICULTURE": ("corporate_unrated", "RW100"),
-    "SME_UNRATED": ("sme_retail", "RW75"),
-    "SME_RETAIL": ("sme_retail", "RW75"),
+    # BoG CRD (June 2018) ¶139: business-oriented retail remains SME at 100%.
+    "SME_UNRATED": ("sme_retail", "RW100"),
+    "SME_RETAIL": ("sme_retail", "RW100"),
     "RETAIL_UNSECURED": ("retail_other", "RW75"),
     "RETAIL_OTHER": ("retail_other", "RW75"),
     "RESIDENTIAL_MORTGAGE": ("residential_mortgage", "RW35"),
@@ -25,6 +26,11 @@ LOAN_CATEGORY_MAP: dict[str, tuple[str, str]] = {
 #: The (exposure category, risk weight code) a loan lands in once it is 90+
 #: days past due, whatever its regulatory class.
 PAST_DUE_CATEGORY: tuple[str, str] = ("past_due_90", "RW150")
+#: Every exposure category a classified loan can land in — the vocabulary an
+#: IFRS 9 ECL assumption segment must name to ever price an exposure.
+LOAN_EXPOSURE_CATEGORIES: frozenset[str] = frozenset(
+    {category for category, _ in LOAN_CATEGORY_MAP.values()} | {PAST_DUE_CATEGORY[0]}
+)
 #: The exposure categories that count as retail (LCR inflow treatment).
 RETAIL_LOAN_CATEGORIES: tuple[str, ...] = ("retail_other", "residential_mortgage")
 

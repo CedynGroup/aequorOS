@@ -56,7 +56,10 @@ CASE_PLANE_MODULES: frozenset[str] = CASE_PLANE_MEMBERS
 #: Everything that produces or seals a filed regulatory number.
 REGULATORY_PLANE: tuple[str, ...] = (
     "domain",
-    "services/regulatory_reporting",
+    "bi/domain",
+    "icaap/domain",
+    "reporting/domain",
+    "reporting/service",
     "services/regulatory_capital.py",
     "services/regulatory_liquidity.py",
     "services/regulatory_irr.py",
@@ -72,7 +75,7 @@ REGULATORY_PLANE: tuple[str, ...] = (
     "services/enterprise_stress.py",
     "services/reverse_stress.py",
     # The ICAAP workspace seals a Board-approved filing from the same runs.
-    "services/icaap",
+    "icaap/service",
 )
 
 
@@ -119,7 +122,7 @@ def test_regulatory_reporting_never_reads_a_case_calculation_run() -> None:
     that no examiner has ever seen and that carry no ``input_hash`` lineage into
     the regulatory spine.
     """
-    offenders = _scan(_python_files("services/regulatory_reporting"))
+    offenders = _scan(_python_files("reporting/service"))
 
     assert offenders == {}, f"Regulatory reporting reached into the case plane: {offenders}"
 
@@ -134,7 +137,7 @@ def test_the_official_bank_run_never_reads_case_financial_records() -> None:
     paths = [
         path
         for relative in REGULATORY_PLANE
-        if relative != "services/regulatory_reporting"
+        if relative != "reporting/service"
         for path in _python_files(relative)
     ]
 
@@ -142,10 +145,15 @@ def test_the_official_bank_run_never_reads_case_financial_records() -> None:
 
 
 def test_the_pure_domain_layer_imports_no_application_state() -> None:
-    """`app/domain/**` is pure by contract (CLAUDE.md) — it is what the golden
+    """Shared and feature domain engines are pure — they are what the golden
     suites pin and what a second product segment will reuse."""
     impure: dict[str, set[str]] = {}
-    for path in _python_files("domain"):
+    for path in (
+        _python_files("domain")
+        + _python_files("bi/domain")
+        + _python_files("icaap/domain")
+        + _python_files("reporting/domain")
+    ):
         module = _module_name(path)
         # Module-aware: `app/domain/**` carries relative imports, and a purity
         # check that cannot see them is a purity check with a hole in it.
@@ -153,12 +161,36 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
         stateful = {
             module
             for module in modules
-            if module.startswith(("app.services", "app.models", "app.api", "app.features"))
+            if module.startswith(
+                (
+                    "app.bi.service",
+                    "app.bi.models",
+                    "app.bi.api",
+                    "app.bi.jobs",
+                    "app.bi.public",
+                    "app.services",
+                    "app.models",
+                    "app.api",
+                    "app.features",
+                    "app.identity.api",
+                    "app.identity.models",
+                    "app.identity.service",
+                    "app.identity.public",
+                    "app.icaap.api",
+                    "app.icaap.models",
+                    "app.icaap.service",
+                    "app.icaap.public",
+                    "app.reporting.api",
+                    "app.reporting.models",
+                    "app.reporting.service",
+                    "app.reporting.public",
+                )
+            )
         }
         if stateful:
             impure[module] = stateful
 
-    assert impure == {}, f"app/domain must stay pure: {impure}"
+    assert impure == {}, f"Domain engines must stay pure: {impure}"
 
 
 def test_the_boundary_scanner_catches_a_deliberate_violation(tmp_path: Path) -> None:
@@ -245,6 +277,25 @@ def test_the_scanner_catches_the_evasions_the_2026_08_22_audit_demonstrated() ->
     ]
 
     assert missed == [], f"These evasions still walk through the guard: {missed}"
+
+    # Cached facts must remain isolated from callers and reflect every input.
+    source = "from .capital import CapitalProjection\n"
+    imports = imported_modules(source, module="app.models.example")
+    imports.clear()
+    assert "app.models.capital" in imported_modules(source, module="app.models.example")
+    assert "app.services.capital" in imported_modules(source, module="app.services.example")
+    assert imported_modules(source) == set()
+    names = referenced_names("CapitalProjection()")
+    names.clear()
+    assert referenced_names("CapitalProjection()") == {"CapitalProjection"}
+    assert referenced_names("CalculationRun()") == {"CalculationRun"}
+    sql = 'query = "SELECT id FROM calculation_runs"'
+    tables = frozenset({"calculation_runs"})
+    references = sql_table_references(sql, tables)
+    references.clear()
+    assert sql_table_references(sql, tables) == {"calculation_runs"}
+    assert sql_table_references(sql, frozenset({"other_table"})) == set()
+    assert sql_table_references('query = "SELECT id FROM other_table"', tables) == set()
 
 
 def test_the_two_guards_share_one_definition_of_the_case_plane() -> None:

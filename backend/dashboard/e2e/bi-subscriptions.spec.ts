@@ -4,7 +4,7 @@
  *
  * TIMING, stated because it decides what this spec can assert. Both halves of
  * this feature landed DURING this task and are uncommitted at the time of
- * writing: `app/features/manage_bi_notifications.py` (14 tenant routes behind
+ * writing: `app/bi/api/manage_bi_notifications.py` (14 tenant routes behind
  * `BANK_ROUTE_DEPENDENCIES` + `require_bi_enabled`) and the
  * `/explore/subscriptions` page with `SubscriptionComposer` / `RecipientField` /
  * `DeliveryHistory`. The generated client does not carry the operations yet, so

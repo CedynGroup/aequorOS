@@ -29,32 +29,44 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
+    STRESS_CHARGE_TAX_TREATMENT,
     EclAssumption,
+    EclComputationError,
     EclExposure,
     EclResult,
     EclScenario,
     compute_ecl,
+    stress_charge,
 )
 from app.domain.capital.engine import (
+    FACT_GROUP_CAPITAL_COMPONENT,
+    MODELLED_ECL_CHARGE_CATEGORY,
+    TIER_CET1,
     TRIGGER_EARLY_WARNING,
     CapitalComputationError,
     CapitalFact,
     CapitalLineItem,
     CapitalParams,
     CapitalRatiosResult,
+    CapitalRegisterRefused,
     CapitalStressResult,
+    CreditExposureBasisUnavailable,
     MissingParameterError,
     RwaResult,
     UnsupportedShockError,
+    assert_capital_register_usable,
     compute_capital_ratios,
     compute_rwa,
     money,
     ratio_pct,
+    require_credit_exposure_basis,
     run_capital_stress,
+    unstaged_loan_ead,
 )
 from app.domain.reporting import period_windows
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     FinancialFactRow,
@@ -68,7 +80,7 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.schemas.banks import BankRead, BankReportingPeriodRead
+from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_capital import (
     Bsd2HeaderRead,
     Bsd2PreviewRead,
@@ -94,10 +106,8 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.services import (
-    filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
-    scoped_authorization,
     sdi_capital,
     sdi_capital_checks,
 )
@@ -132,7 +142,8 @@ from app.services.regulatory_liquidity import _read_regulatory_run_execution_res
 #: engine would produce a different number from the same ``input_hash``; MINOR
 #: when it adds an output, a line item or a diagnostic without moving an
 #: existing figure; PATCH for anything a filed figure cannot see.
-ENGINE_VERSION = "regulatory-capital-v2.0.0"
+#: v5 separates CRD net credit exposures from gross accounting and HQLA facts.
+ENGINE_VERSION = "regulatory-capital-v5.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "capital-metrics-v1"
 MODULE_CAPITAL = "capital"
@@ -167,6 +178,7 @@ _CAPITAL_FACT_GROUPS = (
     "crm_collateral",
     "ecl_exposure",
     "loan_exposure",
+    "credit_exposure",
     "market_risk",
     "off_balance",
     "operational_income",
@@ -214,7 +226,7 @@ class _ActiveCapitalParams:
     thresholds: dict[str, Decimal]
     # Phase 2 items 8/9. crm_haircuts = code defaults overlaid by register
     # rows; ecl_assumptions empty until the bank configures its PD/LGD set
-    # (the engine then falls back to ingested provisions).
+    # (no modelled ECL is then reported).
     crm_haircuts: dict[str, Decimal] = dataclass_field(default_factory=dict)
     ecl_assumptions: tuple[EclAssumption, ...] = ()
     # SDI Phase E (docs/sdi.md §4.2): the institution class selects the capital
@@ -257,6 +269,12 @@ class CapitalScenarioAnalysis:
     stress: CapitalStressResult | None
     params: CapitalParams
     ecl: EclResult | None
+    #: Known reporting-currency EAD beyond staged buckets, not a source-book
+    #: completeness verdict. ``None`` when no modeled ECL ran.
+    ecl_unstaged_ead: Decimal | None = None
+    #: The CET1 deduction for the scenario's increase in modelled general ECL
+    #: over the unconditioned baseline; zero when no ECL conditioning applies.
+    ecl_stress_charge: Decimal = Decimal("0")
 
 
 def _execute_scenario_compute(
@@ -271,14 +289,22 @@ def _execute_scenario_compute(
     Empty stress shocks (net of the ECL conditioning keys) means the point-in-
     time baseline; otherwise the four-quarter stress path. Raises the module's
     domain errors; never writes a ``RegulatoryRun``.
+
+    Tier 2 always carries the bank's booked general provisions: the modelled
+    ECL is a what-if, reported beside the ratios but never substituted for the
+    figure of record. A scenario that conditions the ECL takes its increase in
+    modelled general ECL as a CET1 deduction instead, so a PD stress can only
+    lower capital. Conservative: no tax shield applied pending a governed
+    tax-rate parameter and supported deferred-tax recognition.
     """
+    assert_capital_register_usable(facts)
     if not facts:
         raise CapitalRunError(
             "financial_facts_missing",
             "The reporting period has no financial facts to analyze.",
             {"reporting_period_id": str(period.id)},
         )
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     engine_params = _engine_params(active)
     # ECL conditioning keys are the ECL engine's, never the stress engine's
     # (which rejects unknown shocks).
@@ -286,18 +312,45 @@ def _execute_scenario_compute(
         key: value for key, value in shocks.items() if key not in ECL_CONDITIONING_KEYS
     }
     ecl = _modeled_ecl(engine_facts, active, shocks)
-    gp_override = ecl.general_ecl if ecl is not None else None
+    unstaged_ead = unstaged_loan_ead(engine_facts) if ecl is not None else None
+    baseline_ecl = _modeled_ecl(engine_facts, active, {}) if ecl is not None else None
+    charge = (
+        stress_charge(baseline_ecl, ecl)
+        if ecl is not None and baseline_ecl is not None
+        else Decimal("0")
+    )
+    if charge > 0:
+        engine_facts = (
+            *engine_facts,
+            CapitalFact(
+                FACT_GROUP_CAPITAL_COMPONENT,
+                MODELLED_ECL_CHARGE_CATEGORY,
+                charge,
+                capital_tier=TIER_CET1,
+                is_deduction=True,
+            ),
+        )
     if not stress_shocks:
         rwa = compute_rwa(engine_facts, engine_params)
-        ratios = compute_capital_ratios(engine_facts, rwa, engine_params, gp_override)
+        ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
         return CapitalScenarioAnalysis(
-            rwa=rwa, ratios=ratios, stress=None, params=engine_params, ecl=ecl
+            rwa=rwa,
+            ratios=ratios,
+            stress=None,
+            params=engine_params,
+            ecl=ecl,
+            ecl_unstaged_ead=unstaged_ead,
+            ecl_stress_charge=charge,
         )
-    stress = run_capital_stress(
-        scenario_code, engine_facts, engine_params, stress_shocks, gp_override
-    )
+    stress = run_capital_stress(scenario_code, engine_facts, engine_params, stress_shocks)
     return CapitalScenarioAnalysis(
-        rwa=stress.rwa, ratios=stress.ratios, stress=stress, params=engine_params, ecl=ecl
+        rwa=stress.rwa,
+        ratios=stress.ratios,
+        stress=stress,
+        params=engine_params,
+        ecl=ecl,
+        ecl_unstaged_ead=unstaged_ead,
+        ecl_stress_charge=charge,
     )
 
 
@@ -699,6 +752,8 @@ def _create_and_execute(
             analysis.stress,
             base_currency(bank),
             analysis.ecl,
+            analysis.ecl_unstaged_ead,
+            analysis.ecl_stress_charge,
         )
     except CapitalRunError as exc:
         _persist_failure(db, ctx, run_id, exc)
@@ -729,7 +784,13 @@ def _create_and_execute(
             db,
             ctx,
             run_id,
-            CapitalRunError("calculation_error", str(exc), None),
+            CapitalRunError(
+                exc.code
+                if isinstance(exc, (CapitalRegisterRefused, CreditExposureBasisUnavailable))
+                else "calculation_error",
+                str(exc),
+                None,
+            ),
         )
     except HTTPException:
         raise
@@ -759,7 +820,11 @@ def _modeled_ecl(
 ) -> EclResult | None:
     """IFRS 9 modeled ECL (item 8) — active only when BOTH staged exposures
     and Board-configured assumptions exist; otherwise the run keeps the
-    ingested-provisions path untouched."""
+    ingested-provisions path untouched.
+
+    A staged exposure no assumption row covers fails the run: pricing it at
+    zero would understate the allowance the run reports.
+    """
     exposures = []
     for fact in facts:
         if fact.fact_group != "ecl_exposure":
@@ -783,7 +848,24 @@ def _modeled_ecl(
         )
     else:
         scenarios = (BASE_SCENARIO,)
-    return compute_ecl(exposures, active.ecl_assumptions, scenarios)
+    result = compute_ecl(exposures, active.ecl_assumptions, scenarios)
+    try:
+        result.require_coverage()
+    except EclComputationError as exc:
+        uncovered = [f"{segment}:stage{stage}" for segment, stage in result.uncovered]
+        raise CapitalRunError(
+            "ecl_segment_uncovered",
+            "Staged loan exposures have no ECL assumption for their segment and stage, "
+            "and no ALL fallback row covers them.",
+            {
+                "uncovered": uncovered,
+                "corrective_action": (
+                    "Add an ECL assumption for each listed segment and stage, or an ALL "
+                    "row for the stage, to the ECL assumptions register."
+                ),
+            },
+        ) from exc
+    return result
 
 
 def _persist_success(  # noqa: PLR0913
@@ -796,6 +878,8 @@ def _persist_success(  # noqa: PLR0913
     stress: CapitalStressResult | None,
     currency: str,
     ecl: EclResult | None = None,
+    ecl_unstaged_ead: Decimal | None = None,
+    ecl_stress_charge: Decimal = Decimal("0"),
 ) -> None:
     metrics: dict[str, Any] = {
         "car_pct": str(ratios.car_pct),
@@ -808,18 +892,39 @@ def _persist_success(  # noqa: PLR0913
         "operational_rwa_ghs": str(rwa.operational_rwa),
         "total_capital_ghs": str(ratios.total_capital),
     }
+    basis: dict[str, dict[str, str]] = {
+        key: {"basis": "prudential", "allowance_basis": "booked_general_provisions"}
+        for key in metrics
+    }
     if ecl is not None:
-        # Item 8: modeled IFRS 9 allowances. Stage 1+2 replaced the ingested
-        # general-provisions component in this run's Tier 2 (still capped).
+        # Item 8: modeled IFRS 9 allowances — a what-if beside the booked
+        # general provisions in Tier 2, never a substitute for them.
         metrics["ecl_total_ghs"] = str(ecl.total_ecl)
         metrics["ecl_general_ghs"] = str(ecl.general_ecl)
         metrics["ecl_specific_ghs"] = str(ecl.specific_ecl)
         for stage in (1, 2, 3):
             metrics[f"ecl_stage{stage}_ghs"] = str(ecl.stage_totals.get(stage, Decimal("0")))
-        if ecl.uncovered:
-            metrics["ecl_uncovered_segments"] = ",".join(
-                f"{segment}:stage{stage}" for segment, stage in ecl.uncovered
-            )
+        if ecl_unstaged_ead:
+            metrics["ecl_unstaged_ead_ghs"] = str(ecl_unstaged_ead)
+        if ecl_stress_charge:
+            metrics["ecl_stress_charge_ghs"] = str(ecl_stress_charge)
+        for key in (
+            "ecl_total_ghs",
+            "ecl_general_ghs",
+            "ecl_specific_ghs",
+            "ecl_stage1_ghs",
+            "ecl_stage2_ghs",
+            "ecl_stage3_ghs",
+        ):
+            basis[key] = {"basis": "modelled_what_if", "advisory_designation": "advisory_only"}
+        if ecl_unstaged_ead:
+            basis["ecl_unstaged_ead_ghs"] = {"basis": "ingested_exposure"}
+        if ecl_stress_charge:
+            basis["ecl_stress_charge_ghs"] = {
+                "basis": "prudential_stress",
+                "tax_treatment": STRESS_CHARGE_TAX_TREATMENT,
+            }
+    metrics["basis"] = basis
     if stress is not None:
         metrics["stress_path"] = [
             {
@@ -871,7 +976,7 @@ def _persist_success(  # noqa: PLR0913
     # A stress run persists NO end-state capital ratio here, deliberately. A
     # RegulatoryMetricResult row carries a threshold and a compliance status, and
     # the STRESS-PACK used to copy both verbatim into a filed return
-    # (regulatory_reporting/generation.py::_stress_traffic_lights). No Bank of
+    # (app/reporting/service/generation.py::_stress_traffic_lights). No Bank of
     # Ghana instrument requires a POST-STRESS capital adequacy ratio to meet the
     # minimum: the stress-testing and ICAAP directives are February 2026 exposure
     # drafts, and the minimum the Capital Requirements Directive does set binds
@@ -1322,6 +1427,8 @@ def _build_trend(
             continue
         try:
             _rwa, ratios, _params = _compute_inline_from_batch(db, ctx, bank, period, batch)
+        except CapitalRegisterRefused as exc:
+            raise ModuleDataUnavailable(exc.code, str(exc)) from exc
         except (MissingParameterError, CapitalComputationError, CapitalRunError):
             continue
         points.append(
@@ -1462,7 +1569,7 @@ def _compute_inline_from_batch(  # noqa: PLR0913 - explicit request scope plus o
         )
     active = active or _active_params_from_batch(db, ctx, bank, period.period_end, batch)
     engine_params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     rwa = compute_rwa(engine_facts, engine_params)
     ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
     return rwa, ratios, engine_params
@@ -1480,7 +1587,7 @@ def _compute_inline(
         )
     active = _load_active_params(db, ctx, bank, period.period_end)
     engine_params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     rwa = compute_rwa(engine_facts, engine_params)
     ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
     return rwa, ratios, engine_params
@@ -1507,7 +1614,12 @@ def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves
     except CapitalRunError as exc:
         raise ModuleDataUnavailable(exc.code, exc.message) from exc
     except CapitalComputationError as exc:
-        raise ModuleDataUnavailable("calculation_error", str(exc)) from exc
+        raise ModuleDataUnavailable(
+            exc.code
+            if isinstance(exc, (CapitalRegisterRefused, CreditExposureBasisUnavailable))
+            else "calculation_error",
+            str(exc),
+        ) from exc
 
 
 def current_input_hash(
@@ -1545,7 +1657,7 @@ def compute_live(
     if active.institution_class == "sdi":
         return _sdi_compute_live(db, ctx, bank, period, current, active, facts)
     params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    engine_facts = _fresh_engine_facts(facts)
     rwa = compute_rwa(engine_facts, params)
     ratios = compute_capital_ratios(engine_facts, rwa, params)
     snapshot = current_snapshot(
@@ -1839,6 +1951,11 @@ def _load_facts(
     )
 
 
+def _fresh_engine_facts(facts: Sequence[FinancialFactRow]) -> tuple[CapitalFact, ...]:
+    require_credit_exposure_basis(facts)
+    return tuple(_to_engine_fact(fact) for fact in facts)
+
+
 def _to_engine_fact(fact: FinancialFactRow) -> CapitalFact:
     return CapitalFact(
         fact_group=fact.fact_group,
@@ -1850,6 +1967,11 @@ def _to_engine_fact(fact: FinancialFactRow) -> CapitalFact:
         capital_tier=fact.capital_tier,
         is_deduction=fact.is_deduction,
         side=fact.attributes.get("side"),
+        ecl_coverage_complete=(
+            fact.attributes.get("ecl_coverage_complete") is True
+            if "ecl_coverage_complete" in fact.attributes
+            else None
+        ),
     )
 
 
@@ -2101,6 +2223,7 @@ def _build_snapshot(  # noqa: PLR0913
                     "capital_tier": fact.capital_tier,
                     "is_deduction": fact.is_deduction,
                     "side": fact.attributes.get("side"),
+                    "ecl_coverage_complete": _to_engine_fact(fact).ecl_coverage_complete,
                 }
                 for fact in facts
             ),
@@ -2267,8 +2390,12 @@ def capital_breach_multiplier(
         )
     active = _load_active_params(db, ctx, bank, period.period_end)
     engine_params = _engine_params(active)
-    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
     shocks = _load_shocks(db, ctx, bank, scenario_code, period.period_end)
+    try:
+        engine_facts = _fresh_engine_facts(facts)
+        assert_capital_register_usable(engine_facts)
+    except (CapitalRegisterRefused, CreditExposureBasisUnavailable) as exc:
+        raise CapitalRunError(exc.code, str(exc)) from exc
     if not shocks:
         raise CapitalRunError(
             "missing_parameter",

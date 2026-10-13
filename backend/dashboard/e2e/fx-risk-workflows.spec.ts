@@ -274,10 +274,10 @@ test.describe("FX functional workflow", () => {
     )) as FxStressRun;
     expect(run.scenario_code).toBe("system_severe_stagflation");
     expectSevereFxOutcome(run.outcome.fx);
-    await expectKpi(page, "Stressed CAR", "15.21%", "Base 17.42%");
+    await expectKpi(page, "Stressed CAR", "33.13%", "Base 36.96%");
     await expectKpi(page, "Stressed LCR", "116.6%", "Base 147.3%");
     await expectKpi(page, "Solvency × liquidity", "Both hold");
-    await expectPersistedStressRun(page, run, "15.21%");
+    await expectPersistedStressRun(page, run, "33.13%");
     const latest = await apiGet<FxStressRun>(
       page,
       "analyst",

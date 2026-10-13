@@ -22,11 +22,13 @@ import sys
 import time
 import uuid
 from pathlib import Path
+from typing import LiteralString, cast
 from urllib.request import urlopen
 
 import boto3
 import psycopg
 from botocore.exceptions import ClientError
+from psycopg import sql
 
 ROOT = Path(__file__).resolve().parents[2]
 STATE_DIR = ROOT / ".local-services"
@@ -400,6 +402,38 @@ class LocalServices:
                 connection.execute(
                     "CREATE ROLE risk_service_test LOGIN PASSWORD 'risk_service_test'"
                 )
+            # These versioned files are trusted repository SQL, not caller templates.
+            connection.execute(
+                sql.SQL(
+                    cast(
+                        LiteralString,
+                        (Path(__file__).parent / "database_roles_202610120096.sql").read_text(),
+                    )
+                )
+            )
+            connection.execute(
+                sql.SQL(
+                    cast(
+                        LiteralString,
+                        (Path(__file__).parent / "database_roles_local.sql").read_text(),
+                    )
+                )
+            )
+            connection.execute(
+                sql.SQL(
+                    cast(
+                        LiteralString,
+                        (Path(__file__).parent / "database_session_timeouts.sql").read_text(),
+                    )
+                )
+            )
+            connection.execute(
+                "GRANT aqs_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE"
+            )
+            connection.execute(
+                "GRANT aequoros_audit_owner TO risk_service_test "
+                "WITH ADMIN TRUE, INHERIT TRUE, SET TRUE"
+            )
             privilege = "CREATEROLE" if role_admin else "NOCREATEROLE"
             connection.execute(
                 f"ALTER ROLE risk_service_test NOSUPERUSER NOCREATEDB {privilege} "

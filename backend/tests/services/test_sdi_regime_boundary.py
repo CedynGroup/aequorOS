@@ -101,6 +101,7 @@ def _batch_lineage(db: Session, bank: Bank, ref: str) -> tuple[IngestionBatch, L
     db.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref=ref,

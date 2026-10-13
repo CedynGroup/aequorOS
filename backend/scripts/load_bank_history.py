@@ -53,7 +53,8 @@ def main() -> None:  # noqa: PLR0915
     ap.add_argument("--months", type=int, default=None)
     ap.add_argument("--reset", action="store_true")
     ap.add_argument(
-        "--additive", action="store_true",
+        "--additive",
+        action="store_true",
         help="load only months not already present; never reset/delete existing data",
     )
     ap.add_argument("--skip-derive", action="store_true")
@@ -76,7 +77,12 @@ def main() -> None:  # noqa: PLR0915
     # Platform IDs since the 2026-07-24 identity epoch, not UUIDs.
     org_id, bank_id = normalize_public_id(args.org_id), normalize_public_id(args.bank_id)
     panels_dir = Path(args.panels_dir)
-    engine = create_engine(args.database_url)
+    engine = create_engine(
+        args.database_url,
+        connect_args={"application_name": "aequoros-load-bank-history"}
+        if args.database_url.startswith("postgresql")
+        else {},
+    )
     session = Session(engine)
     session.info["organization_id"] = org_id
 
@@ -87,15 +93,21 @@ def main() -> None:  # noqa: PLR0915
     if args.additive:
         # Load only months not already present; leave existing data + periods untouched.
         present = {
-            r[0] for r in session.execute(
-                text("select distinct as_of_date from canonical_position_snapshots "
-                     "where organization_id=:o and bank_id=:b"),
-                {"o": org_id, "b": bank_id}).all()
+            r[0]
+            for r in session.execute(
+                text(
+                    "select distinct as_of_date from canonical_position_snapshots "
+                    "where organization_id=:o and bank_id=:b"
+                ),
+                {"o": org_id, "b": bank_id},
+            ).all()
         }
         skipped = [m for m in months if m in present]
         months = [m for m in months if m not in present]
-        print(f"Additive mode: {len(present)} months already present, "
-              f"skipping {len(skipped)}; loading {len(months)} new months.")
+        print(
+            f"Additive mode: {len(present)} months already present, "
+            f"skipping {len(skipped)}; loading {len(months)} new months."
+        )
         if not months:
             sys.exit("Nothing to load — every panel month already exists for this bank.")
 
@@ -104,6 +116,7 @@ def main() -> None:  # noqa: PLR0915
 
     if args.reset:
         from reset_uploaded_data import reset  # type: ignore  # noqa: PLC0415
+
         print("Resetting bank (uploaded data + all periods)...")
         counts = reset(session, org_id, bank_id, wipe_all_periods=True)
         session.commit()
@@ -111,19 +124,24 @@ def main() -> None:  # noqa: PLR0915
 
     existing = session.execute(
         text("select count(*) from canonical_positions where organization_id=:o and bank_id=:b"),
-        {"o": org_id, "b": bank_id}).scalar()
+        {"o": org_id, "b": bank_id},
+    ).scalar()
     if existing and not args.only_derive and not args.additive:
-        sys.exit(f"Refusing to load: {existing} canonical positions already exist for this bank. "
-                 f"Re-run with --reset, --additive, or clear the bank first.")
+        sys.exit(
+            f"Refusing to load: {existing} canonical positions already exist for this bank. "
+            f"Re-run with --reset, --additive, or clear the bank first."
+        )
 
     t0 = time.time()
     if not args.only_derive:
         print("Loading canonical rows...")
         summary = load_history(session, org_id, bank_id, panels_dir, months=months)
         session.commit()
-        print(f"Loaded in {time.time() - t0:.1f}s: counterparties={summary.counterparties} "
-              f"products={summary.products} gl={summary.gl_accounts} positions={summary.positions} "
-              f"snapshots={summary.snapshots:,} reference_rows={summary.reference_rows}")
+        print(
+            f"Loaded in {time.time() - t0:.1f}s: counterparties={summary.counterparties} "
+            f"products={summary.products} gl={summary.gl_accounts} positions={summary.positions} "
+            f"snapshots={summary.snapshots:,} reference_rows={summary.reference_rows}"
+        )
 
     if not args.skip_derive:
         print("Deriving facts for every month...")

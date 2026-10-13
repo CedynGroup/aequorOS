@@ -5,7 +5,9 @@ REAL captured host pages, and the wire protocols against mocked transports
 from __future__ import annotations
 
 import json
+import ssl
 from datetime import date, timedelta
+from typing import cast
 from urllib.parse import parse_qs
 
 import httpx
@@ -21,17 +23,15 @@ def _session(handler, *, pacer: fetch.Pacer | None = None) -> fetch.DeskSession:
 
 
 class TestClientPolicy:
-    def test_verify_disabled_only_for_bog_hosts(self) -> None:
-        # README §1: bog.gov.gh serves a broken TLS chain; every request
-        # also needs a browser User-Agent (bot filter).
-        for host in fetch.BOG_HOSTS:
+    def test_certificate_verification_required_for_every_source(self) -> None:
+        for host in (*fetch.BOG_HOSTS, "gfim.com.gh", "statsbank.statsghana.gov.gh"):
             kwargs = fetch.client_kwargs(host)
-            assert kwargs["verify"] is False
+            context = cast(object, kwargs["verify"])
+            assert isinstance(context, ssl.SSLContext)
+            assert context.verify_mode == ssl.CERT_REQUIRED
+            assert context.check_hostname
+            assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
             assert "Mozilla/5.0" in kwargs["headers"]["User-Agent"]
-        gfim_kwargs = fetch.client_kwargs("gfim.com.gh")
-        assert "verify" not in gfim_kwargs  # normal TLS everywhere else
-        gss_kwargs = fetch.client_kwargs("statsbank.statsghana.gov.gh")
-        assert "verify" not in gss_kwargs
 
 
 class TestNonceExtraction:
@@ -281,11 +281,15 @@ class TestWdtWatermark:
         """``date_column`` is a claim about SOUNDNESS, not a convenience: it
         is set only where column 0 — the column every request orders by —
         is the published date."""
-        for bounded in ("bog_fx_historical", "bog_fx_daily", "bog_tbill_rates",
-                        "bog_bill_rates"):
+        for bounded in ("bog_fx_historical", "bog_fx_daily", "bog_tbill_rates", "bog_bill_rates"):
             assert fetch._WDT_SOURCES[bounded].date_column == 0, bounded
-        for unbounded in ("bog_interbank_daily", "bog_interbank_weekly", "bog_mpr",
-                          "bog_fx_reference", "bog_econ_interest_monthly"):
+        for unbounded in (
+            "bog_interbank_daily",
+            "bog_interbank_weekly",
+            "bog_mpr",
+            "bog_fx_reference",
+            "bog_econ_interest_monthly",
+        ):
             assert fetch._WDT_SOURCES[unbounded].date_column is None, unbounded
 
 
@@ -346,12 +350,8 @@ class TestFileBird:
         assert first["orderBy"] == "post_date"
 
     def test_listing_and_download_flow(self) -> None:
-        page_html = read_fixture("gfim_daily_trading_reports_page.html").decode(
-            errors="replace"
-        )
-        listing = json.loads(
-            read_fixture("gfim_filebird_get_attachments_daily2026_response.json")
-        )
+        page_html = read_fixture("gfim_daily_trading_reports_page.html").decode(errors="replace")
+        listing = json.loads(read_fixture("gfim_filebird_get_attachments_daily2026_response.json"))
         requests: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -378,9 +378,7 @@ class TestFileBird:
         assert len([r for r in requests if r.method == "GET"]) == 2  # page + one file
 
     def test_unknown_year_tab_raises(self) -> None:
-        page_html = read_fixture("gfim_daily_trading_reports_page.html").decode(
-            errors="replace"
-        )
+        page_html = read_fixture("gfim_daily_trading_reports_page.html").decode(errors="replace")
 
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, text=page_html)
@@ -463,9 +461,7 @@ class TestAuctionFlow:
         slugs = fetch.extract_tender_slugs(bog_index, base_url=fetch.BOG_AUCTION_INDEX_URL)
         assert any("results-of-tender-873-held-on-5-august-2026" in s for s in slugs)
         gog_index = read_fixture("gog_auction_results_index.html").decode(errors="replace")
-        gog_slugs = fetch.extract_tender_slugs(
-            gog_index, base_url=fetch.GOG_AUCTION_INDEX_URL
-        )
+        gog_slugs = fetch.extract_tender_slugs(gog_index, base_url=fetch.GOG_AUCTION_INDEX_URL)
         assert any("results-of-gog-tender-2019" in s for s in gog_slugs)
 
 
@@ -477,9 +473,7 @@ class TestPxWeb:
             requests.append(request)
             return httpx.Response(200, json={"columns": [], "data": []})
 
-        fetch.fetch_pxweb_table(
-            _session(handler), rate_values=["Ghana reference rate"]
-        )
+        fetch.fetch_pxweb_table(_session(handler), rate_values=["Ghana reference rate"])
         body = json.loads(requests[0].content)
         assert body["response"] == {"format": "json"}
         assert body["query"] == [
@@ -493,12 +487,10 @@ class TestPxWeb:
 class TestDispatch:
     def test_publication_sources_build_month_slugged_urls(self) -> None:
         assert fetch.apr_notice_url(date(2026, 5, 1)) == (
-            "https://www.bog.gov.gh/notice/"
-            "annual-percentage-rates-apr-of-banks-as-at-may-2026/"
+            "https://www.bog.gov.gh/notice/annual-percentage-rates-apr-of-banks-as-at-may-2026/"
         )
         assert fetch.sefd_page_url(date(2026, 7, 1)) == (
-            "https://www.bog.gov.gh/econ_fin_data/"
-            "summary-of-economic-and-financial-data-july-2026/"
+            "https://www.bog.gov.gh/econ_fin_data/summary-of-economic-and-financial-data-july-2026/"
         )
 
     def test_unknown_source_key_raises(self) -> None:

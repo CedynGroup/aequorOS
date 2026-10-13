@@ -1,0 +1,44 @@
+# aequorOS origin TLS transports. Install in the proxy's file provider;
+# attach each transport to the corresponding HTTPS load-balancer service.
+# The CA bundle must be mounted in the proxy itself, separately from the apps.
+http:
+  serversTransports:
+    aequoros-api:
+      serverName: risk-api
+      rootCAs:
+        - /run/trust/ca.pem
+      insecureSkipVerify: false
+    aequoros-operator:
+      serverName: risk-operator
+      rootCAs:
+        - /run/trust/ca.pem
+      insecureSkipVerify: false
+    aequoros-dashboard:
+      serverName: dashboard
+      rootCAs:
+        - /run/trust/ca.pem
+      insecureSkipVerify: false
+    aequoros-console:
+      serverName: console
+      rootCAs:
+        - /run/trust/ca.pem
+      insecureSkipVerify: false
+    aequoros-openbao:
+      serverName: openbao
+      rootCAs:
+        - /run/trust/ca.pem
+      insecureSkipVerify: false
+  # Apply to every public HTTPS router. Redirect HTTP at the edge before
+  # forwarding; no origin service exposes an HTTP network listener.
+  middlewares:
+    aequoros-hsts:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        forceSTSHeader: true
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true

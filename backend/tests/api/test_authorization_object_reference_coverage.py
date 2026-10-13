@@ -41,8 +41,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import get_settings
 from app.db.base import Base, utc_now
 from app.features.ingest_data import get_ingestion_storage
-from app.features.manage_icaap_attachments import get_icaap_storage as get_attachment_storage
-from app.features.manage_icaap_supervisory_addons import get_icaap_storage as get_addon_storage
+from app.icaap.api.manage_icaap_attachments import get_icaap_storage as get_attachment_storage
+from app.icaap.api.manage_icaap_supervisory_addons import get_icaap_storage as get_addon_storage
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import Organization, User
@@ -275,7 +275,11 @@ def coverage(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Coverage]:
     originals = (session_mod.get_sessionmaker, deps_mod.get_sessionmaker, session_mod.get_engine)
     session_mod.get_sessionmaker = lambda: bound_sessionmaker
     deps_mod.get_sessionmaker = lambda: bound_sessionmaker
-    session_mod.get_engine = lambda _url=None: engine
+
+    def replacement_engine(_url: str | None = None, _application_name: str | None = None) -> Engine:
+        return engine
+
+    session_mod.get_engine = replacement_engine
 
     app = create_app()
     fake_storage = _FakeStorage()

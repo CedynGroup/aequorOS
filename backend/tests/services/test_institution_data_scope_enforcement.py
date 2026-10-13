@@ -20,9 +20,9 @@ from app.core.authorization import (
     Sensitivity,
     SensitivityScope,
 )
+from app.identity.service import authorization, scoped_authorization
 from app.models import AuthorizationBinding, Bank, User
-from app.services import authorization, scoped_authorization
-from app.services.regulatory_reporting import family_access
+from app.reporting.service import family_access
 from tests.support.helpers import ORG_1, USER_1
 
 BANK_ID = "BK-SCOPE001"

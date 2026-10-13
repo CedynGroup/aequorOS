@@ -27,8 +27,8 @@ from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
 from app.domain.ingestion.constants import STUCK_DEDUP_STATUSES
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     BankReportingPeriod,
     IngestionBatch,
     MappingConfigRecord,
@@ -93,9 +93,7 @@ def _resolve_bank(db: Session, organization_id: str, bank_id: str | None) -> Ban
         return bank
     banks = list(
         db.scalars(
-            select(Bank)
-            .where(Bank.organization_id == organization_id)
-            .order_by(Bank.created_at)
+            select(Bank).where(Bank.organization_id == organization_id).order_by(Bank.created_at)
         )
     )
     if not banks:
@@ -124,9 +122,7 @@ def _latest_period(db: Session, organization_id: str, bank: Bank) -> BankReporti
 
 
 # -- recompute / official run ----------------------------------------------------
-def recompute(
-    db: Session, organization_id: str, payload: FixRecomputeRequest
-) -> JobFixResult:
+def recompute(db: Session, organization_id: str, payload: FixRecomputeRequest) -> JobFixResult:
     """Enqueue an immediate live recompute (mirrors ``live_view.refresh_bank_data``)."""
     bank = _resolve_bank(db, organization_id, payload.bank_id)
     period = _latest_period(db, organization_id, bank)
@@ -152,9 +148,7 @@ def recompute(
     )
 
 
-def official_run(
-    db: Session, organization_id: str, payload: FixOfficialRunRequest
-) -> JobFixResult:
+def official_run(db: Session, organization_id: str, payload: FixOfficialRunRequest) -> JobFixResult:
     """Enqueue an immutable official filing run (mirrors ``live_view.mint_official_run``)."""
     bank = _resolve_bank(db, organization_id, payload.bank_id)
     if payload.as_of_date is not None:
@@ -164,9 +158,7 @@ def official_run(
         if period is None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Bank has no reporting period; provide as_of_date or ingest data first."
-                ),
+                detail=("Bank has no reporting period; provide as_of_date or ingest data first."),
             )
         as_of_date = period.period_end
     as_of = as_of_date.isoformat()

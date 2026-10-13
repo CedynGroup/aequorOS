@@ -13,6 +13,7 @@ from app.core.errors import (
 )
 from app.core.logging import REQUEST_ID_HEADER, configure_logging, logger
 from app.core.request_id import RequestIdMiddleware
+from app.core.tls import RequireTLSMiddleware, validate_service_transports
 from app.worker import start_inprocess_worker
 
 
@@ -108,6 +109,7 @@ EXPOSED_RESPONSE_HEADERS: tuple[str, ...] = (
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    validate_service_transports(settings)
     configure_logging(settings.logging.log_level)
     _warn_if_signing_unconfigured(settings)
     _warn_if_trust_is_unanchored(settings)
@@ -121,6 +123,8 @@ def create_app() -> FastAPI:
     # reads inside-out: unhandled exceptions are converted to a 500 below the
     # request-id and CORS layers, which is what lets a browser actually see the
     # error instead of a CORS violation (see UnhandledExceptionMiddleware).
+    if settings.app.app_env in {"production", "staging"}:
+        app.add_middleware(RequireTLSMiddleware)
     app.add_middleware(UnhandledExceptionMiddleware)
     app.add_middleware(RequestIdMiddleware)
 

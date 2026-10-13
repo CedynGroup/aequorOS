@@ -24,19 +24,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import BankReportingPeriod, RegulatoryPackage
-from app.schemas.institution_profile import (
+from app.identity.schemas.institution_profile import (
     BankProductCreate,
     InstitutionProfilePut,
     RelatedPartyCreate,
     RelatedPartyRoleInput,
 )
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
+from app.identity.service import institution_profile
+from app.models import BankReportingPeriod, RegulatoryPackage
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import generation
+from app.reporting.service.exports import export_package
+from app.reporting.service.registry import REGISTRY
 from app.schemas.reverse_stress import ReverseStressRunCreate
-from app.services import data_activation, institution_profile, reverse_stress
-from app.services.regulatory_reporting import generation
-from app.services.regulatory_reporting.exports import export_package
-from app.services.regulatory_reporting.registry import REGISTRY
+from app.services import data_activation, reverse_stress
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -64,7 +65,7 @@ TEMPLATE_GATED = {"LAS-QUARTERLY"}  # BSD-MONTHLY retired: official BSD forms ge
 # BOARD-ATTESTED enterprise-stress run. The Phase-2 official-run sweep mints no
 # enterprise-stress run and no sign-off, so this return REFUSES here by design —
 # that governance gate is its specified behaviour, proven end to end in
-# tests/services/test_icaap_stress_appendix2_report.py.
+# tests/icaap/service/test_icaap_stress_appendix2_report.py.
 STRESS_RUN_GATED = {"ICAAP-STRESS-APPENDIX2"}
 
 # Returns scoped to an institution class this fixture is not. The sample tenant is
@@ -91,9 +92,7 @@ FREEZE_GATED = {
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: client)
     return client
 
 

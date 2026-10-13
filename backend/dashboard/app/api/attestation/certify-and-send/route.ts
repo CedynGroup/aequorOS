@@ -16,9 +16,10 @@
  * the cookie is consumed on first use.
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
-import { auth } from '@/auth';
-import { apiBase, takeAuthorizationCookie } from '@/lib/attestation/stepUp';
+import { NextResponse, type NextRequest } from "next/server";
+import { auth } from "@/auth";
+import { backendRequest } from "@/lib/backendRequest";
+import { apiBase, takeAuthorizationCookie } from "@/lib/attestation/stepUp";
 
 interface Recipient {
   signingRole?: string;
@@ -47,21 +48,33 @@ interface CertifyAndSendBody {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await auth();
   if (!session?.accessToken) {
-    return NextResponse.json({ error: 'not_authenticated' }, { status: 401 });
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
   let body: CertifyAndSendBody;
   try {
     body = (await request.json()) as CertifyAndSendBody;
   } catch {
-    return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
-  const { bankId, packageId, signingRole, expectedCertificationDigest, reason } = body;
-  if (!bankId || !packageId || !signingRole || !expectedCertificationDigest || !reason) {
+  const {
+    bankId,
+    packageId,
+    signingRole,
+    expectedCertificationDigest,
+    reason,
+  } = body;
+  if (
+    !bankId ||
+    !packageId ||
+    !signingRole ||
+    !expectedCertificationDigest ||
+    !reason
+  ) {
     return NextResponse.json(
       {
         error:
-          'bankId, packageId, signingRole, expectedCertificationDigest and reason are required',
+          "bankId, packageId, signingRole, expectedCertificationDigest and reason are required",
       },
       { status: 400 },
     );
@@ -73,21 +86,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!authorization) {
     return NextResponse.json(
       {
-        error: 'step_up_required',
+        error: "step_up_required",
         message:
-          'No signing authorisation is held. Re-authenticate with your institution to sign.',
+          "No signing authorisation is held. Re-authenticate with your institution to sign.",
       },
       { status: 401 },
     );
   }
 
-  const response = await fetch(
+  const response = await backendRequest(
     `${apiBase()}/banks/${bankId}/regulatory-packages/${packageId}/attestation/certify-and-send`,
     {
-      method: 'POST',
+      method: "POST",
       headers: {
         Authorization: `Bearer ${session.accessToken}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         signing_role: signingRole,
@@ -107,7 +120,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           y2: placement.y2,
         })),
       }),
-      cache: 'no-store',
+      cache: "no-store",
     },
   );
 
@@ -115,7 +128,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // branches on its error codes (maker_checker, recipient_role_insufficient,
   // placement_too_small, figures_changed_since_certification, …).
   const payload: unknown = await response.json().catch(() => null);
-  return NextResponse.json(payload ?? { error: 'certify_failed' }, {
+  return NextResponse.json(payload ?? { error: "certify_failed" }, {
     status: response.status,
   });
 }

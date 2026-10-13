@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
+import numpy as np
+import pytest
+
+from app.domain.ingestion.contracts import RawRecord
 from app.etl.contracts import Disposition, ETLOperationType
 from app.etl.deduplication.fingerprint_detector import (
     FINGERPRINT_FEATURES,
@@ -9,6 +15,36 @@ from app.etl.deduplication.fingerprint_detector import (
     fingerprint,
 )
 from tests.etl._factories import position
+
+
+@pytest.mark.parametrize(
+    "amount",
+    ["Infinity", "-Infinity", "+NaN", float("inf"), float("-inf"), float("nan"), "1.7e308"],
+)
+@pytest.mark.parametrize("record_count", [2, 12])
+def test_nonfinite_inputs_produce_finite_fingerprints_and_confidence(
+    amount: str | float, record_count: int
+) -> None:
+    """Fingerprint vectors and anomaly confidence are finite JSON persistence contracts."""
+    records = [
+        RawRecord(
+            entity_type="reference",
+            source_locator=f"capital_structure#{i}",
+            source_table="capital_structure",
+            dataset_kind="capital_structure",
+            data={"capital_component": f"component_{i}", "amount_ghs": amount, "other": amount},
+        )
+        for i in range(record_count)
+    ]
+    for record in records:
+        assert np.isfinite(fingerprint(record)).all()
+    operations = FingerprintAnomalyDetector(score_threshold=0.0).score(records)
+    assert len(operations) == record_count
+    json.dumps([op.provenance.confidence for op in operations], allow_nan=False)
+    for operation in operations:
+        confidence = operation.provenance.confidence
+        assert confidence is not None and 0.0 <= confidence <= 1.0
+    assert all(record.data["amount_ghs"] is amount for record in records)
 
 
 def _normal(i: int) -> object:

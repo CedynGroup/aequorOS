@@ -13,7 +13,7 @@ what the schema REFUSES. Three rules carry the weight:
   resolved on read — by exactly one function.
 
 The last test pins the dependency direction: ``app/domain/ingestion`` may not
-import ``app/domain/bi``, which is why the measure id is validated for shape
+import ``app/bi/domain``, which is why the measure id is validated for shape
 rather than against the catalogue.
 """
 
@@ -325,13 +325,13 @@ def test_region_is_optional_because_it_is_declared_not_inferred() -> None:
 
 
 def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
-    """``app/domain/ingestion`` is upstream of ``app/domain/bi``.
+    """``app/domain/ingestion`` is upstream of ``app/bi/domain``.
 
     The catalogue CONSUMES these datasets, so a schema that imported it would
     make the input depend on its own consumer — which is why ``measure_id``,
     ``scope_dimension`` and ``time_behaviour`` are validated for shape and
     vocabulary here and for membership there. Checked by AST, so the module
-    docstrings may name ``app.domain.bi`` in order to explain the rule.
+    docstrings may name ``app.bi.domain`` in order to explain the rule.
     """
     package = Path(__file__).parents[3] / "app" / "domain" / "ingestion"
     offenders: list[str] = []
@@ -344,7 +344,7 @@ def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
                 names = [node.module or ""]
             else:
                 continue
-            if any(name == "app.domain.bi" or name.startswith("app.domain.bi.") for name in names):
+            if any(name == "app.bi.domain" or name.startswith("app.bi.domain.") for name in names):
                 offenders.append(str(path.relative_to(package.parents[2])))
     assert not offenders, f"ingestion must not import the BI catalogue: {sorted(set(offenders))}"
 
@@ -361,7 +361,7 @@ def test_the_target_scope_bound_equals_what_the_comparison_mart_can_store() -> N
     # Deferred ON PURPOSE (see the docstring): importing `app.models` at module
     # scope would defeat what this test exists to prove — that the
     # reference-schema module stays free of it.
-    from app.models.bi import TARGET_SCOPE_VALUE_WIDTH  # noqa: PLC0415
+    from app.bi.models.marts import TARGET_SCOPE_VALUE_WIDTH  # noqa: PLC0415
 
     assert SCOPE_VALUE_MAX_LENGTH == TARGET_SCOPE_VALUE_WIDTH, (
         "the performance_targets register and bi_fact_target disagree about how long "
@@ -409,7 +409,7 @@ def test_the_unit_register_bounds_are_the_branch_dimensions_own_widths() -> None
     that cannot be written — and a TRUNCATED one is a different branch. The two
     constants are asserted equal rather than imported because the schema module
     deliberately stays free of ``app.models``."""
-    from app.models.bi import BiDimBranch  # noqa: PLC0415
+    from app.bi.models.marts import BiDimBranch  # noqa: PLC0415
 
     assert UNITS.max_lengths == UNIT_FIELD_MAX_LENGTHS
     assert {
@@ -443,7 +443,7 @@ def test_the_segment_register_bounds_are_the_branch_ledgers_own_widths() -> None
     """``gl_segment_balances.branch_id`` → ``bi_fact_gl_branch_monthly.branch_code``
     (a PRIMARY KEY column) and ``bi_dim_branch.branch_code``; ``gl_account_code``
     → the ledger's account key."""
-    from app.models.bi import BiDimBranch, BiFactGlBranchMonthly  # noqa: PLC0415
+    from app.bi.models.marts import BiDimBranch, BiFactGlBranchMonthly  # noqa: PLC0415
 
     assert gl_segment_balances.SCHEMA.max_lengths == gl_segment_balances.SEGMENT_FIELD_MAX_LENGTHS
     assert {

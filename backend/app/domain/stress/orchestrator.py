@@ -43,7 +43,9 @@ from decimal import ROUND_HALF_UP, Decimal
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
+    STRESS_CHARGE_TAX_TREATMENT,
     EclAssumption,
+    EclComputationError,
     EclExposure,
     EclScenario,
     compute_ecl,
@@ -56,6 +58,7 @@ from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
     CapitalStressResult,
+    has_complete_ecl_coverage,
     run_capital_stress,
 )
 from app.domain.fx.engine import (
@@ -64,16 +67,6 @@ from app.domain.fx.engine import (
     compute_nop,
     run_fx_scenarios,
 )
-
-# D-038: the Pillar 2 FX add-on has ONE definition, and it lives in the ICAAP
-# Pillar 2 domain. The stress overlay's Table 5 ``country_and_fx`` and the ICAAP
-# register therefore appear in the same filed document computed by the same
-# function. Both modules are pure ``app/domain`` code, so this import crosses no
-# boundary. Before 2026-09-20 the overlay restated ``Tier 1 × max(ΔNOP%, 0)``,
-# the change in a RATIO, which ``icaap/pillar2/fx.py`` itself records as "not a
-# loss (audit M8)" — see that module's docstring for why.
-from app.domain.icaap.pillar2 import fx as icaap_fx
-from app.domain.icaap.units import pillar1_capital
 from app.domain.irr.engine import (
     SHOCK_PARALLEL_BP,
     GapResult,
@@ -125,6 +118,16 @@ from app.domain.stress.translation import (
     translate,
 )
 
+# D-038: the Pillar 2 FX add-on has ONE definition, and it lives in the ICAAP
+# Pillar 2 domain. The stress overlay's Table 5 ``country_and_fx`` and the ICAAP
+# register therefore appear in the same filed document computed by the same
+# function. Both modules are pure domain code; this dependency reads no
+# application state. Before 2026-09-20 the overlay restated ``Tier 1 × max(ΔNOP%, 0)``,
+# the change in a RATIO, which ``app/icaap/domain/pillar2/fx.py`` itself records
+# as "not a loss (audit M8)" — see that module's docstring for why.
+from app.icaap.domain.pillar2 import fx as icaap_fx
+from app.icaap.domain.units import pillar1_capital
+
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
 MILLION = Decimal("1000000")
@@ -132,7 +135,7 @@ _HUNDRED = Decimal("100")
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
 
-ENGINE_VERSION = "enterprise-stress-v2.0.0"
+ENGINE_VERSION = "enterprise-stress-v5.0.0"
 
 # --- Capital-path composition coefficients -----------------------------------
 # Documented, defensible linear elasticities that turn the macro scenario into
@@ -223,12 +226,13 @@ def _stress_ecl(
     pd_mult: Decimal,
     lgd_mult: Decimal,
 ) -> tuple[Decimal, Decimal]:
-    """(baseline_ecl, stressed_ecl) in Perfect-Foresight / Single-Scenario form.
+    """Stage 1+2 ECL in Perfect-Foresight / Single-Scenario form.
 
     Baseline is the through-the-cycle ECL (100% weight, no conditioning);
     stressed ascribes 100% weight to the single macro scenario, its PD/LGD
     scaled by the macro multipliers (¶48–49). Deterministic — no probability
-    blend across scenarios.
+    blend across scenarios. Stage 3 specific provisions never enter the
+    incremental CET1 charge.
     """
     base = compute_ecl(exposures, assumptions, (BASE_SCENARIO,))
     stressed = compute_ecl(
@@ -243,7 +247,9 @@ def _stress_ecl(
             ),
         ),
     )
-    return base.total_ecl, stressed.total_ecl
+    base.require_coverage()
+    stressed.require_coverage()
+    return base.general_ecl, stressed.general_ecl
 
 
 def _after_tax_income(
@@ -302,7 +308,7 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
     the macro scenario plus the projected book:
 
     - ``quarterly_credit_loss_m`` — from the ECL-under-stress path: the annual
-      incremental impairment (stressed minus baseline ECL) spread over four
+      incremental general impairment (stressed minus baseline stage 1+2 ECL) over four
       quarters, on top of the through-the-cycle baseline loss. When no staged
       ``ecl_exposure`` data is supplied it falls back to
       ``allowance × (pd·lgd − 1)`` on the existing credit allowance.
@@ -313,6 +319,9 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
     - ``fx_rwa_multiplier`` — from the macro FX driver (open-position revaluation).
 
     All four are neutral under a base scenario, so ``baseline`` == ``stressed``.
+    Conservative: no tax shield applied to incremental credit loss pending a
+    governed tax-rate parameter and supported deferred-tax recognition.
+    ``tax_rate_pct`` only taxes positive operating income.
     """
     pd_mult, lgd_mult = _capital_multipliers(scenario_paths, overrides)
     # The three drivers this composition reads outside the elasticity register
@@ -434,7 +443,7 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
             ),
             "quarterly_credit_loss_m": (
                 f"baseline {money(baseline_annual_credit_loss)} + incremental "
-                f"{annual_incremental_loss} ({ecl_source})"
+                f"{annual_incremental_loss} ({ecl_source}); {STRESS_CHARGE_TAX_TREATMENT}"
             ),
         },
     )
@@ -598,6 +607,15 @@ class EnterpriseStressOutcome:
 
 def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOutcome:
     """Drive every engine from one macro scenario into a single enterprise outcome."""
+    if (
+        inputs.ecl_exposures
+        and inputs.ecl_assumptions
+        and not has_complete_ecl_coverage(
+            inputs.capital_facts,
+            staged_ead=sum((exposure.ead for exposure in inputs.ecl_exposures), _ZERO),
+        )
+    ):
+        raise EclComputationError("The modelled ECL does not cover unstaged loan exposure.")
     composition = compose_capital_shocks(
         scenario_paths=inputs.scenario_paths,
         baseline_annual_preprovision_income=inputs.baseline_annual_preprovision_income,
@@ -608,21 +626,20 @@ def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOut
         ecl_assumptions=inputs.ecl_assumptions,
         overrides=inputs.overrides,
     )
-    ecl_base_override = composition.ecl_base if composition.ecl_source == "ecl_engine" else None
-    ecl_stress_override = composition.ecl_stress if composition.ecl_source == "ecl_engine" else None
+    # Tier 2 keeps the booked general provisions on both legs: the stress's
+    # incremental stage 1+2 credit loss already reaches CET1 through the quarterly
+    # credit-loss key, and a modelled ECL never stands in for the booked figure.
     baseline_capital = run_capital_stress(
         f"{inputs.scenario_code}:baseline",
         inputs.capital_facts,
         inputs.capital_params,
         composition.baseline,
-        general_provisions_override=ecl_base_override,
     )
     stressed_capital = run_capital_stress(
         inputs.scenario_code,
         inputs.capital_facts,
         inputs.capital_params,
         composition.stressed,
-        general_provisions_override=ecl_stress_override,
     )
     capital = CapitalOutcome(
         composition=composition,
@@ -900,7 +917,16 @@ def _serialize_capital(capital: CapitalOutcome) -> dict[str, object]:
         "lgd_multiplier": str(comp.lgd_multiplier),
         "ecl_base": str(comp.ecl_base),
         "ecl_stress": str(comp.ecl_stress),
+        "ecl_basis": (
+            "modelled_what_if_stages_1_2"
+            if comp.ecl_source == "ecl_engine"
+            else "booked_general_provisions_proxy"
+        ),
         "annual_incremental_credit_loss": str(comp.annual_incremental_credit_loss),
+        "incremental_credit_loss_basis": {
+            "basis": "prudential_stress",
+            "tax_treatment": STRESS_CHARGE_TAX_TREATMENT,
+        },
         "income_stress_factor": str(comp.income_stress_factor),
         "ecl_source": comp.ecl_source,
         "rationale": comp.rationale,

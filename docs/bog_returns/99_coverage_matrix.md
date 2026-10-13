@@ -26,4 +26,4 @@
 | BSD16 | 3 | 252 | 252 | 0 | 0 | 0 | ✓ | 100% platform-fed | ✓ | ✓ test_bsd10_11_16_17.py | ✓ |
 | BSD17 | 2 | 21 | 21 | 0 | 0 | 0 | ✓ | 100% platform-fed | ✓ | ✓ test_bsd10_11_16_17.py | ✓ |
 
-Legend: map ✓ = every official leaf input cell is bound (source or explicit input_required); ◐ = some official cells still unmapped. calc = % of bound cells fed from platform data today; the remainder is data the bank must supply (see each form's line-map doc, 'Residual unmapped lines'). The framework gate (tests/services/test_bog_forms_framework.py) generates + exports EVERY form template-faithfully and evaluates 100% of the templates' formulas regardless of map status.
+Legend: map ✓ = every official leaf input cell is bound (source or explicit input_required); ◐ = some official cells still unmapped. calc = % of bound cells fed from platform data today; the remainder is data the bank must supply (see each form's line-map doc, 'Residual unmapped lines'). The framework gate (tests/reporting/service/test_bog_forms_framework.py) generates + exports EVERY form template-faithfully and evaluates 100% of the templates' formulas regardless of map status.

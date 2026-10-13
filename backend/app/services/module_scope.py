@@ -51,7 +51,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.domain.authority.registry import MetricFamily
-from app.models import Bank
+from app.identity.public import Bank
 from app.services import institution_types, sdi_regime
 
 #: Calculation-module key → the ``institution_types.default_modules`` slug that

@@ -352,6 +352,7 @@ def _add_gl_generation(
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="gl-chart-test",

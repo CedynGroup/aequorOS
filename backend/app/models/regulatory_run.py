@@ -137,7 +137,6 @@ class RegulatoryMetricResult(UuidV4PrimaryKeyMixin, Base):
             ondelete="CASCADE",
         ),
         UniqueConstraint("run_id", "metric_code", name="uq_regulatory_metric_results_run_metric"),
-        Index("ix_regulatory_metric_results_run_id", "run_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -176,7 +175,6 @@ class RegulatoryLineItem(UuidV4PrimaryKeyMixin, Base):
         UniqueConstraint(
             "run_id", "section", "line_code", name="uq_regulatory_line_items_run_section_line"
         ),
-        Index("ix_regulatory_line_items_run_id", "run_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -210,7 +208,6 @@ class RegulatoryValidation(UuidV4PrimaryKeyMixin, Base):
             ondelete="CASCADE",
         ),
         UniqueConstraint("run_id", "rule_code", name="uq_regulatory_validations_run_rule"),
-        Index("ix_regulatory_validations_run_id", "run_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)

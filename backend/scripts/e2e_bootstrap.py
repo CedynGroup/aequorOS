@@ -20,15 +20,12 @@ the institution profile, every package — flows through the API in the
 Playwright global setup and the journeys themselves: the same paths the product
 uses.
 
-The book is carried forward because the Returns workspace opens on the
-regulator's anchor (the last month end on or before today for a monthly return —
-``services/regulatory_reporting/anchors.py``), and a return can only be
-generated from an EXACT snapshot as of that date. The canonical book ends at
-a fixed month; without the carry-forward every anchor after it reads "no
-position has been computed", correctly, and the generate journeys have
-nothing to drive. ``extend_canonical_test_book`` appends one snapshot per
-month end through the last month end on or before today, each repeating the
-canonical latest fact set unchanged.
+Carry-forward is necessary because the Returns workspace requires an EXACT
+snapshot at the regulator's anchor (``app/reporting/service/anchors.py``).
+Without it, an anchor beyond the fixture's fixed span correctly reads "no
+position has been computed" and leaves the generate journeys nothing to drive.
+The fixture's carry-forward and latest-period credit-basis replacement are
+documented in ``dashboard/README.md`` under "End-to-end (Playwright)".
 
 It also enrols a **software signing key** per human role so the attestation
 ceremony can be driven end to end in a browser. Self-signed and disposable:
@@ -64,10 +61,12 @@ import os
 from datetime import date, timedelta
 from uuid import UUID
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service.identity import ensure_signer_identity
+from app.attestation.service.keys import SignerKeyService
 from app.core.authorization import (
     DataScope,
     GrantorType,
@@ -79,7 +78,12 @@ from app.core.authorization import (
 )
 from app.core.security import hash_password
 from app.db.base import Base
+from app.identity.service import authorization, membership, sso_config
+from app.identity.service.organization_ownership import assign_initial_owner
 from app.models import (
+    Bank,
+    BankFinancialFact,
+    BankReportingPeriod,
     CanonicalPositionSnapshot,
     CanonicalProduct,
     IntegrationKey,
@@ -87,11 +91,12 @@ from app.models import (
     RegulatoryParameter,
     User,
 )
-from app.services import authorization, membership, sso_config
-from app.services.attestation.identity import ensure_signer_identity
-from app.services.attestation.keys import SignerKeyService
-from app.services.organization_ownership import assign_initial_owner
-from tests.fixtures.bi_plane import materialize_bi_plane
+from app.services.fact_derivation import (
+    _derive_specs,  # pyright: ignore[reportPrivateUsage]
+    _fact,  # pyright: ignore[reportPrivateUsage]
+    _load_canonical,  # pyright: ignore[reportPrivateUsage]
+)
+from tests.bi.fixtures import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     extend_canonical_test_book,
@@ -116,6 +121,8 @@ E2E_USERS = {
     "access_request_member": UUID("eeeeeeee-1010-4eee-8eee-eeeeeeee1010"),
     "access_extra_member": UUID("eeeeeeee-1011-4eee-8eee-eeeeeeee1011"),
     "grant_member": UUID("eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5"),
+    "sod_member": UUID("eeeeeeee-1012-4eee-8eee-eeeeeeee1012"),
+    "sod_approver": UUID("eeeeeeee-1013-4eee-8eee-eeeeeeee1013"),
     "account_admin": UUID("eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6"),
     "legacy_account_admin": UUID("eeeeeeee-7777-4eee-8eee-eeeeeeeeeee7"),
     "integration_admin": UUID("eeeeeeee-8888-4eee-8eee-eeeeeeeeeee8"),
@@ -200,6 +207,32 @@ _assert_one_identity_per_role()
 E2E_ICAAP_FIRST_AS_OF = date(2025, 12, 31)
 
 
+def _create_sod_owner(session: Session, password_hash: str) -> None:
+    session.add(Organization(id="OR-SOD00001", name="E2E SoD Tenant"))
+    session.flush()
+    sod_owner = User(
+        id=UUID("eeeeeeee-1014-4eee-8eee-eeeeeeee1014"),
+        organization_id="OR-SOD00001",
+        email="e2e.sod_owner@aequoros.example",
+        display_name="E2E Sod Owner",
+        role="admin",
+        auth_provider="password",
+        password_hash=password_hash,
+    )
+    session.add(sod_owner)
+    session.flush()
+    membership.ensure_baseline_membership(
+        session, user=sod_owner, granted_by_id="e2e-bootstrap", commit=False
+    )
+    assign_initial_owner(
+        session,
+        organization_id="OR-SOD00001",
+        candidate=sod_owner,
+        granted_by_id="e2e-bootstrap",
+        commit=False,
+    )
+
+
 def main() -> None:
     database_url = os.environ["DATABASE_URL"]
     if "sqlite" not in database_url:
@@ -238,6 +271,8 @@ def main() -> None:
                         if role
                         in {
                             "grant_member",
+                            "sod_member",
+                            "sod_approver",
                             "fx_member",
                             "forecast_member",
                             "access_request_member",
@@ -285,6 +320,7 @@ def main() -> None:
             granted_by_id="e2e-bootstrap",
             commit=False,
         )
+        _create_sod_owner(session, password_hash)
         # A review stage can name the officer titles that may take it, and the
         # check compares the SIGNED-IN user's recorded job title — never a
         # title sent with the decision, which would let a caller state who
@@ -329,6 +365,7 @@ def main() -> None:
         for role, bundle in (
             ("admin", RoleBundle.ANALYST),
             ("approver", RoleBundle.APPROVER),
+            ("sod_approver", RoleBundle.APPROVER),
             ("analyst", RoleBundle.ANALYST),
             ("sso_analyst", RoleBundle.ANALYST),
         ):
@@ -569,6 +606,7 @@ def _seed_canonical_positions(session: Session) -> None:
     )
     session.flush()
     _assign_position_risk_weights(session)
+    _materialize_credit_basis(session, as_of)
     snapshots = session.scalar(
         select(func.count())
         .select_from(CanonicalPositionSnapshot)
@@ -578,6 +616,38 @@ def _seed_canonical_positions(session: Session) -> None:
         )
     )
     print(f"canonical positions: {snapshots} snapshots at {as_of.isoformat()}")
+
+
+def _materialize_credit_basis(session: Session, as_of: date) -> None:
+    """Derive the fixture's official credit basis from its accepted position book.
+
+    The aggregate fact spine initially has no source positions. Once bootstrap
+    adds them, enterprise stress must consume their net CRD exposures and exact
+    source provenance, as the backend exposure-level stress fixtures do.
+    Other groups retain the canonical spine's independently checked figures.
+    """
+    bank = session.get(Bank, SAMPLE_BANK_ID)
+    period = session.scalar(
+        select(BankReportingPeriod).where(
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+            BankReportingPeriod.period_end == as_of,
+        )
+    )
+    assert bank is not None and period is not None
+    canonical = _load_canonical(session, TenantContext(organization_id=DEMO_ORG_ID), bank, as_of)
+    specs, _, _ = _derive_specs(canonical, live=True)
+    credit = [spec for spec in specs if spec.fact_group == "credit_exposure"]
+    assert credit, "The canonical position fixture must derive credit exposures"
+    session.execute(
+        delete(BankFinancialFact).where(
+            BankFinancialFact.bank_id == SAMPLE_BANK_ID,
+            BankFinancialFact.reporting_period_id == period.id,
+            BankFinancialFact.fact_group == "credit_exposure",
+        )
+    )
+    session.add_all(_fact(bank, period, spec) for spec in credit)
+    period.credit_source_basis = canonical.credit_source_basis
+    session.flush()
 
 
 #: The governed default risk-weight code each credit product carries.
@@ -726,7 +796,7 @@ def _govern_icaap_commencement(session: Session) -> None:
     proof that the change takes effect without a release (D-024 / D-032). No
     date is written into an engine, a template or a service.
     """
-    from app.services.icaap.freeze import FIRST_AS_OF_PARAM  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service.freeze import FIRST_AS_OF_PARAM  # noqa: PLC0415 - avoid a cycle
 
     rows = (
         session.query(RegulatoryParameter)

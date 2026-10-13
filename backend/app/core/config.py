@@ -4,8 +4,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Final, Literal, get_args
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 AppEnv = Literal["local", "test", "staging", "production"]
 StorageBackend = Literal["s3"]
@@ -37,15 +38,29 @@ class AppSettings(BaseSettings):
     demo_mode: bool = Field(default=False, alias="DEMO_MODE")
 
 
+class TlsSettings(BaseSettings):
+    """Plaintext is an explicit convenience for local/test environments only."""
+
+    model_config = SETTINGS_CONFIG
+    allow_plaintext: bool = Field(default=False, alias="TLS_ALLOW_PLAINTEXT")
+    ca_bundle: str | None = Field(default=None, alias="TLS_CA_BUNDLE")
+
+    @field_validator("ca_bundle", mode="before")
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        return value if value and value.strip() else None
+
+
 class DatabaseSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
+    migration_database_url: str | None = Field(default=None, alias="MIGRATION_DATABASE_URL")
 
-    @field_validator("database_url", mode="before")
+    @field_validator("database_url", "migration_database_url", mode="before")
     @classmethod
     def empty_means_unconfigured(cls, value: str | None) -> str | None:
-        """DATABASE_URL="" means unconfigured.
+        """An empty runtime or migration database URL means unconfigured.
 
         Environment variables take priority over the .env file in
         pydantic-settings, so setting the variable to an empty string is the
@@ -118,7 +133,7 @@ class AttestationSettings(BaseSettings):
     pkcs11_user_pin: str | None = Field(default=None, alias="PKCS11_USER_PIN")
     #: Self-hosted OpenBao (Linux Foundation fork of HashiCorp Vault) reached over
     #: its HTTP API — the Transit engine signs, the key never leaves the server
-    #: (app/services/attestation/openbao.py).
+    #: (app/attestation/service/openbao.py).
     openbao_addr: str | None = Field(default=None, alias="OPENBAO_ADDR")
     #: AppRole credentials. The secret id is a CREDENTIAL: it is never logged,
     #: never put in an exception message, and never written to an audit event.
@@ -164,7 +179,7 @@ class AttestationSettings(BaseSettings):
     #: mandatory ``ReturnSigningPolicy`` row; every return follows the
     #: signature-optional workflow (bare maker-checker approval, no ceremony).
     #: Rows go dormant, not deleted: re-enabling restores them unchanged. See
-    #: ``attestation.policy._apply_esign_kill_switch``.
+    #: ``app.attestation.service.policy._apply_esign_kill_switch``.
     esign_required: bool = Field(default=True, alias="ATTESTATION_ESIGN_REQUIRED")
     #: PEM trust anchors for verification, as a filesystem path (file or
     #: directory). WITHOUT these, verification can only anchor on the
@@ -224,7 +239,7 @@ class AttestationSettings(BaseSettings):
     def signing_ready(self) -> bool:
         """True when this deployment can actually produce a signature.
 
-        Signing is REQUIRED by default (attestation.policy.default_policy), so a
+        Signing is REQUIRED by default (app.attestation.service.policy.default_policy), so a
         deployment that cannot sign cannot file — the two settings below are the
         difference between a working filing pipeline and a locked one. They are
         reported together because separately they are not actionable: an
@@ -516,7 +531,7 @@ class IcaapSettings(BaseSettings):
     #: log and the mandatory board-resolution attachment.
     #:
     #: NO does not delete anything. It is applied AFTER policy resolution
-    #: (``attestation.policy._apply_icaap_signing_switch``), so a configured
+    #: (``app.attestation.service.policy._apply_icaap_signing_switch``), so a configured
     #: ``ReturnSigningPolicy`` row for the ICAAP family goes DORMANT — the ICAAP
     #: return takes the bare maker-checker approval path — and flipping the
     #: switch to YES restores that row unchanged. It is scoped to the ``icaap``
@@ -567,7 +582,7 @@ class IcaapSettings(BaseSettings):
             msg = (
                 "ICAAP_EXTRA_FRAMEWORKS_DIR loads ICAAP frameworks that no reviewer has "
                 f"approved and is refused in the '{app_env}' environment. Publish the "
-                "framework under app/domain/icaap/frameworks/ instead."
+                "framework under app/icaap/domain/frameworks/ instead."
             )
             raise ValueError(msg)
         return tuple(
@@ -1094,6 +1109,10 @@ class WorkerSettings(BaseSettings):
     worker_stale_job_seconds: float = Field(default=900.0, alias="WORKER_STALE_JOB_SECONDS")
     official_run_hour: int = Field(default=2, alias="OFFICIAL_RUN_HOUR")
     official_run_enabled: bool = Field(default=False, alias="OFFICIAL_RUN_ENABLED")
+    audit_integrity_enabled: bool = Field(default=False, alias="AUDIT_INTEGRITY_ENABLED")
+    audit_integrity_alert_topic_arn: str | None = Field(
+        default=None, alias="AUDIT_INTEGRITY_ALERT_TOPIC_ARN"
+    )
     #: Hourly live-refresh recovery net: enqueues only when accepted ingestion
     #: is newer than the bank's oldest live module (or no live rows exist).
     #: Unchanged and structurally unavailable rows are never refreshed by age.
@@ -1160,6 +1179,13 @@ class AuthSettings(BaseSettings):
     #: user out. Outside the window a re-presented token revokes its whole
     #: family. Set to 0 for strict single-use rotation.
     refresh_rotation_grace_seconds: int = Field(default=30, alias="AUTH_REFRESH_ROTATION_GRACE")
+    session_purge_enabled: bool = Field(default=False, alias="AUTH_SESSION_PURGE_ENABLED")
+    refresh_token_retention_days: int = Field(
+        default=30, gt=0, alias="AUTH_REFRESH_TOKEN_RETENTION_DAYS"
+    )
+    session_purge_batch_size: int = Field(
+        default=1000, gt=0, le=10000, alias="AUTH_SESSION_PURGE_BATCH_SIZE"
+    )
     max_failed_logins: int = Field(default=5, alias="AUTH_MAX_FAILED_LOGINS")
     lockout_seconds: int = Field(default=900, alias="AUTH_LOCKOUT_SECONDS")
     # SSO (own OIDC relying party — no third-party broker): connections live in
@@ -1169,6 +1195,14 @@ class AuthSettings(BaseSettings):
     # OIDC client config (the only path that ever reads the secret back). Unset =
     # that internal endpoint is disabled, so browser SSO cannot start.
     sso_internal_key: str | None = Field(default=None, alias="SSO_INTERNAL_KEY")
+
+    @model_validator(mode="after")
+    def retention_covers_rotation_grace(self) -> AuthSettings:
+        if self.refresh_token_retention_days * 86400 < self.refresh_rotation_grace_seconds:
+            raise ValueError(
+                "AUTH_REFRESH_TOKEN_RETENTION_DAYS must cover AUTH_REFRESH_ROTATION_GRACE (seconds)"
+            )
+        return self
 
     @field_validator("sso_internal_key", mode="before")
     @classmethod
@@ -1189,6 +1223,7 @@ class Settings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     app: AppSettings = Field(default_factory=AppSettings)
+    tls: TlsSettings = Field(default_factory=TlsSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     cors: CorsSettings = Field(default_factory=CorsSettings)
@@ -1272,7 +1307,7 @@ def is_undeployed_environment(app_env: str | None = None) -> bool:
     """True only on ``local``/``test`` — the environments a developer runs.
 
     The single authority for "may a never-in-production convenience apply
-    here?". ``app.core.security._is_loopback_issuer_allowed`` (plain-http OIDC
+    here?". ``app.core.security.is_loopback_issuer_allowed`` (plain-http OIDC
     discovery), the operator dev-token bearer and the operator app's boot
     refusal all read it, and ``dashboard/lib/outbound.ts`` mirrors it for the
     Next.js runtime.
@@ -1332,10 +1367,6 @@ class OperatorSettings(BaseSettings):
     #: where to hand the operator off with the impersonation token. Never a
     #: secret — just where the read-only examiner view is rendered.
     bank_app_base_url: str = Field(default=DEFAULT_BANK_APP_BASE_URL, alias="BANK_APP_BASE_URL")
-    #: Per-tenant KMS keys + SSE-KMS bucket encryption during provisioning
-    #: (developer.md §2a). Off by default: MinIO deployments have no KMS, and
-    #: the saga records the step as honestly skipped rather than pretending.
-    aws_kms_enabled: bool = Field(default=False, alias="OPERATOR_AWS_KMS_ENABLED")
 
     @field_validator(
         "operator_database_url",
@@ -1384,3 +1415,27 @@ class OperatorSettings(BaseSettings):
 @lru_cache
 def get_operator_settings() -> OperatorSettings:
     return OperatorSettings()
+
+
+def get_migration_database_url() -> str:
+    """Resolve administrative credentials independently of runtime connections."""
+    settings = get_settings()
+    migration_url = settings.database.migration_database_url
+    if settings.app.app_env in {"production", "staging"}:
+        runtime_urls = (
+            settings.database.database_url,
+            settings.worker.worker_database_url,
+            settings.bi.database_url,
+            get_operator_settings().operator_database_url,
+        )
+        if migration_url is None or any(
+            url is not None and make_url(url).username == make_url(migration_url).username
+            for url in runtime_urls
+        ):
+            raise RuntimeError(
+                "MIGRATION_DATABASE_URL must use a role distinct from all runtime roles."
+            )
+    url = migration_url or settings.database.database_url
+    if url is None:
+        raise RuntimeError("DATABASE_URL or MIGRATION_DATABASE_URL is required for migrations.")
+    return url

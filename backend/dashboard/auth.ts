@@ -61,6 +61,7 @@ async function backendTokens(path: string, body: unknown) {
   let res: Response;
   try {
     res = await fetch(`${apiOrigin}/api/v1/auth/${path}`, {
+      redirect: "error",
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -181,6 +182,7 @@ async function fetchSsoConfig(): Promise<SsoClientConfig | null> {
   if (Date.now() - ssoCache.fetchedAt < SSO_CACHE_MS) return ssoCache.config;
   try {
     const res = await fetch(`${apiOrigin}/api/v1/auth/sso/client-config`, {
+      redirect: "error",
       headers: { "X-Internal-Auth": internalKey },
       cache: "no-store",
       signal: AbortSignal.timeout(3000),
@@ -211,6 +213,7 @@ async function revokeBackendSession(refreshToken: unknown): Promise<void> {
   if (typeof refreshToken !== "string" || !refreshToken) return;
   try {
     await fetch(`${apiOrigin}/api/v1/auth/logout`, {
+      redirect: "error",
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),

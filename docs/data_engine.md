@@ -77,7 +77,7 @@ These principles govern every implementation decision. Deviations require explic
   membership, SSO, storage, and required parameter register), but no bank financial
   data; every bank financial figure arrives through ingestion.
   There is **no seeding route and no `DEMO_SEED_ENABLED` flag**:
-  `tests/api/test_banks.py::test_seed_route_is_retired` pins that `POST /banks/seed-demo`
+  `tests/identity/api/test_banks.py::test_seed_route_is_retired` pins that `POST /banks/seed-demo`
   resolves to no handler for any role or tenant. Never add seeding paths to the UI, and
   never re-add seed CLI scripts. The live-data suite's provenance check (every canonical
   row ingestion-traced) is the executable form of this order.
@@ -149,7 +149,7 @@ Below is the entity list with primary purpose. Full DDL is expanded in `/schema/
 
 - `position` — a unified abstraction for anything on or off the balance sheet at a point in time
   - `position_type`: `LOAN`, `DEPOSIT`, `SECURITY_HOLDING`, `DERIVATIVE`, `CASH`, `INTERBANK_PLACEMENT`, `INTERBANK_BORROWING`, `LC_GUARANTEE`, `COMMITMENT_UNDRAWN`, etc.
-  - Every position has: `institution_id`, `counterparty_id`, `product_id`, `currency`, `notional`, `balance`, `origination_date`, `contractual_maturity`, `next_repricing_date`, `interest_rate`, `rate_type` (`FIXED`/`FLOATING`), `rate_index`, `rate_spread`, `ifrs9_stage`, `collateral_id`, and full metadata
+  - Position state covers counterparties, products, currency, balances and notionals, maturity and repricing, interest terms, credit classification and collateral, with [mandatory metadata](#43-mandatory-metadata-columns). The implemented split between position identity and dated snapshots is owned by [`CanonicalPosition` and `CanonicalPositionSnapshot`](../backend/app/models/canonical.py).
 - `position_snapshot` — the position's state as of a specific `as_of_date` (this is the immutable record)
 - `cashflow_schedule` — projected cashflows from a position (amortization schedules)
 - `collateral` — collateral pledged against loans, with type, value, haircut
@@ -186,20 +186,14 @@ Below is the entity list with primary purpose. Full DDL is expanded in `/schema/
 
 ### 4.3 Mandatory Metadata Columns
 
-Every entity in the canonical model carries:
-
-- `id` (UUID)
-- `institution_id` (tenant scope)
-- `as_of_date` (business date this record represents)
-- `ingested_at` (system timestamp of ingestion)
-- `source_system` (adapter that produced this record: `T24`, `EXCEL`, `MANUAL`, etc.)
-- `source_reference` (the source system's own identifier for this record; e.g., T24 arrangement ID)
-- `ingestion_batch_id` (links to the specific ingestion run)
-- `validation_status` (`ACCEPTED`, `WARNING`, `ERROR`, `BLOCKED`)
-- `lineage_id` (foreign key into the lineage table; see section 8)
-- `superseded_by` (nullable; points to a newer version of this record if restated)
-- `created_by` (system or user)
-- `created_at` (row insertion timestamp)
+The implemented column names, types, nullability and validation values are owned by
+[`CanonicalMetadataMixin` and the concrete canonical models](../backend/app/models/canonical.py).
+Metadata identifies the tenant and reporting entity,
+business date, ingestion time, source, batch, validation state, lineage and restatement.
+The source reference is the source system's own identifier (for example, a T24 arrangement ID).
+The database ownership contract is the
+[composite-FK tenant pattern](../CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern);
+the lineage graph is described in section 8.
 
 Fields cannot be nullable that describe _what_ a record is (e.g., `position_type`, `currency`). Fields can be nullable that describe _behavioral overlays_ (e.g., `behavioral_maturity`) because those are enriched, not raw.
 
@@ -599,7 +593,7 @@ This is the audit trail. Without it, no BoG examiner accepts AequorOS. With it, 
 
 ### 8.2 The Lineage Table
 
-A dedicated `lineage` table stores a graph of transformations:
+A dedicated [`lineage_records` table](../backend/app/models/ingestion.py) stores a graph of transformations:
 
 ```
 lineage_id | operation      | input_lineage_ids | operation_type | operation_ref     | timestamp
@@ -637,7 +631,8 @@ Separate from the lineage graph, a linear audit log records every user action:
 - Model retraining events
 - Any change to a canonical record
 
-The audit log is append-only, tamper-evident (hash-chained records), and retained per regulatory requirement (7+ years).
+Database audit-chain enforcement and verification are governed by
+[the tamper-evident records contract](../backend/docs/tamper_evident_records.md).
 
 ---
 
@@ -708,7 +703,7 @@ The adapter supports both integration modes with the same canonical output:
 **Mode B: Batch File (Fallback).**
 
 - Daily post-COB SFTP file drop
-- Files land in an S3 bucket with KMS encryption
+- Files land in S3 through the [bank-key storage contract](../backend/docs/bank_encryption.md)
 - MD5 hash validation
 - Schema validation before parsing
 - Full-refresh mode
@@ -823,6 +818,7 @@ Database-direct is not one adapter. It is one framework with backend-specific co
 - **Microsoft SQL Server** — present at some Finacle deployments (Infosys supports SQL Server as a backing store option), at banks running proprietary Microsoft-shop core systems, and increasingly at fintech-adjacent banks. Authentication via SQL auth (with credentials in Vault per storage.md) or integrated Kerberos where the bank permits. CDC via SQL Server Change Data Capture or timestamp-based extraction.
 
 - **Snowflake** — present at banks with mature data warehousing practices, particularly at Tier 2 South African banks, data-forward Kenyan banks, and increasingly at Nigerian banks investing in analytics infrastructure. Snowflake is typically used differently than Oracle in bank environments: Oracle hosts operational core banking, Snowflake hosts the warehouse where historical position data, market data feeds, and analytical datasets are landed. AequorOS reads point-in-time positions from Oracle and historical time series or pre-aggregated feeds from Snowflake at banks that run both. Where a bank runs Snowflake as their primary bank data platform (rare but emerging), Snowflake becomes the primary source. Backend specifics:
+
   - **Authentication:** key-pair authentication. AequorOS generates an RSA key pair per institution, the bank uploads the public key to Snowflake for the AequorOS service user, and the private key lives in Vault per storage.md section 7. Username/password authentication is not sanctioned for Snowflake because key-pair is Snowflake's own recommended pattern and materially stronger.
   - **Warehouse selection:** Snowflake separates storage from compute. Every query runs against a **warehouse**, which is a sized compute cluster with per-second credit billing. The adapter's configuration specifies which warehouse to use per institution (typically X-Small or Small for ETL workloads; the bank chooses and pays). The adapter respects Snowflake's auto-suspend semantics and tolerates the 1-2 second warm-up on the first query after suspension.
   - **Change data capture:** Snowflake **Streams** are the CDC primitive. A stream on a table tracks change records (INSERT, UPDATE, DELETE) since the stream was last consumed. Consumption is transactional: reading the stream inside a committed transaction advances the stream cursor. Streams are meaningfully cleaner than LogMiner-style CDC and are the preferred incremental extraction path where the bank permits stream creation.
@@ -969,15 +965,18 @@ For banks with international operations, SWIFT message feeds provide interbank p
 
 ### 14.1 Multi-Tenancy
 
-- Every canonical record is stamped with `institution_id`.
-- Every database query is scoped to `institution_id`.
-- Row-level security enforced at the database level, not just the application.
+- Tenant identity, mandatory query filters and database row-level security follow
+  [the tenancy model](../ARCHITECTURE.md#2-tenancy-model).
+- Canonical metadata follows [§4.3](#43-mandatory-metadata-columns); database parent
+  ownership follows the [composite-FK contract](../CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern).
 - Cross-tenant queries impossible except through explicit, audited, aggregated-only administrative interfaces.
 
 ### 14.2 Encryption
 
-- At rest: AES-256 via AWS KMS or GCP KMS with customer-managed keys.
-- In transit: TLS 1.3 for all connections.
+- Bank files at rest: governed by
+  [the bank key setup guide](../backend/docs/bank_key_setup.md).
+- In transit: governed by
+  [the transport control and evidence contract](../backend/docs/transport_security.md).
 - Sensitive canonical fields (customer PII where present): field-level encryption in addition to database encryption.
 - PII masking in non-production environments; synthetic data only for development and testing.
 

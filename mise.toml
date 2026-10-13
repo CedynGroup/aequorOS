@@ -72,6 +72,11 @@ description = "Run risk service pytest"
 dir = "backend"
 run = "mise run risk-service:test"
 
+[tasks."risk-service:test-fast"]
+description = "Run local affected risk service tests with four workers"
+dir = "backend"
+run = "mise run risk-service:test-fast"
+
 [tasks."risk-service:test-postgres"]
 description = "Run risk service pytest against local Postgres"
 dir = "backend"
@@ -123,7 +128,7 @@ dir = "backend"
 run = "mise run risk-service:format"
 
 [tasks."risk-service:typecheck"]
-description = "Run the risk service BasedPyright strict typing ratchet"
+description = "Run the risk service BasedPyright strict type-check baseline"
 dir = "backend"
 run = "mise run risk-service:typecheck"
 
@@ -155,7 +160,7 @@ run = [
 ]
 
 [tasks."risk-service:migrate"]
-description = "Run risk service Alembic migrations; requires DATABASE_URL"
+description = "Run risk service Alembic migrations; credentials: backend/docs/tamper_evident_records.md#required-deployment-follow-up"
 dir = "backend"
 run = "mise run risk-service:migrate"
 

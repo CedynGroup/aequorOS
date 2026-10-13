@@ -23,6 +23,7 @@ from app.core.authorization import (
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -41,7 +42,6 @@ from app.models import (
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import (
     analysis_workbench,
-    authorization,
     data_activation,
     module_scope,
     regulatory_capital,

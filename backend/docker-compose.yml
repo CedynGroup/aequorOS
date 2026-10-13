@@ -42,10 +42,10 @@ services:
       "
 
   # One-shot: bring the schema to head before the API and worker start, so
-  # neither races an unmigrated database. Exits after `alembic upgrade head`.
+  # neither races an unmigrated database. Prepares local roles before migrating.
   risk-migrate:
     build: .
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "scripts.bootstrap_database"]
     depends_on:
       risk-postgres:
         condition: service_healthy

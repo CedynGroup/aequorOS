@@ -63,6 +63,7 @@ def make_lineage(
 ) -> LineageRecord:
     record = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type=operation_type,
         operation_ref="excel_csv_v1.0/positions",

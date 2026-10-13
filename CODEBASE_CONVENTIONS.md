@@ -19,37 +19,85 @@ Paths below describe the existing layered tree; new feature code follows
 - **basedpyright**: `typeCheckingMode = "strict"`, `pythonVersion = "3.13"`, with included paths
   defined in `backend/pyproject.toml`; `reportAny` and the `reportUnknown*` family are errors, and
   `reportExplicitAny` is off so the JSON-column type below stands. The
-  [typing ratchet](#typing-ratchet) enforces it.
+  [type-check baseline](#type-check-baseline) enforces it.
 - Every module starts with `from __future__ import annotations`.
 - Python 3.13 syntax is used freely: `type X = Literal[...]` aliases, `X | None`, `StrEnum`.
 
-### Typing ratchet
+### Type-check baseline
 
 New code is strict; legacy code may only get stricter.
 
-- `mise run risk-service:typecheck` runs `backend/scripts/typing_ratchet.py check`. It type-checks
-  the backend once and counts each module's errors and warnings per rule against
-  `backend/scripts/typing_baseline.json`.
+- `mise run risk-service:typecheck` runs `backend/scripts/type_check_baseline.py check`. It
+  type-checks the backend once and counts each module's errors and warnings per rule against
+  `backend/scripts/type_check_baseline.json`.
 - **Strict modules** may have no errors and never take a baseline entry: every new module, every
   module that passed when the baseline was recorded, and the packages and modules listed in
   `STRICT_MODULES` in the script.
 - **A legacy module may not add errors.** A rule's count above its baseline fails.
 - **Record every fix.** A count below its baseline also fails until
-  `uv run python scripts/typing_ratchet.py update`, run from `backend/`, writes the lower count.
+  `uv run python scripts/type_check_baseline.py update`, run from `backend/`, writes the lower
+  count.
   `update` refuses to run while any count is above its baseline, so it only lowers numbers and
   deletes entries; review that the diff does only that.
 - **Moves.** A module moved by a layout PR keeps its legacy allowance until its package is
-  promoted, so a move PR stays a pure rename (§5). The ratchet counts it under the name it had
+  promoted, so a move PR stays a pure rename (§5). The check counts it under the name it had
   before its moves in `backend/scripts/feature_module_moves.json`. A module whose new location is
   already in `STRICT_MODULES` gets no allowance: fix its errors in the move PR, and `update` then
   removes its old entry.
 - **Promoting a package.** A package joins `STRICT_MODULES` once it is clean: fix its modules'
   errors, run `update` so the baseline holds no entry for them (moved modules' entries sit under
   their pre-move names), then add the package to `STRICT_MODULES`.
-  `tests/architecture/test_typing_ratchet.py` then rejects any baseline entry for it.
+  `tests/architecture/test_type_check_baseline.py` then rejects any baseline entry for it.
 - Plain `uv run basedpyright <files>` shows a file's strict errors, legacy ones included, and is
   not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
   (`.tuples()`, `.scalars()`) rather than silencing it.
+
+### Data truth in calculations
+
+Shared types live in the layer-0 kernel, `backend/app/core/data_truth/types.py`.
+Pure engines import that module; ingestion, database and API seams parse through
+`boundary.py` once before calling an engine. These conventions apply to migrated
+engines; migration proceeds through liquidity, capital, IRRBB, FX and reporting.
+The current foundation guards only the shared package; engine, API, dashboard and
+export adoption are follow-up migrations. Existing per-figure calculation contracts
+are described in [ARCHITECTURE.md](ARCHITECTURE.md#per-figure-results-and-calculation-logs).
+
+- A figure is `CalculationResult[T]`: `Value[T]`, `Unavailable(reason)` or
+  `NotApplicable(reason)`. A recorded zero is a value. Missing inputs and a zero
+  denominator produce `Unavailable` with a specific reason, never a numeric fallback,
+  bare `None` or `NaN`. Applicability comes from the governing rule, not missing data.
+- `Money(amount: Decimal, currency)` requires the currency resolved from the bank or
+  instrument; addition and subtraction require matching currencies. `Rate` and `Ratio`
+  hold fractions, `Percentage` holds percentage points, and `BasisPoints` holds basis
+  points. Convert scales with their named methods before arithmetic. These kinds are
+  distinct, immutable and finite; no float coercion, implicit currency conversion or
+  automatic quantization. Keep the owning engine's existing rounding rules.
+- `parse_optional` converts a nullable source field into an explicit result with a
+  required missing-input reason. Malformed input must fail boundary
+  validation, rather than be disguised as missing. Parsers accept decimal strings,
+  integers and database Decimals; reject floats, booleans and non-finite values. Resolve
+  source units explicitly before choosing `parse_rate`, `parse_percentage`, etc.
+- API/export seams use the discriminated `ResultRead` and `result_read` representation.
+  JSON serialization of a `value` result includes a numeric `kind`, decimal strings
+  and money currency; Python-mode model dumps retain `Decimal` values.
+  `unavailable` and `not_applicable` include only status and reason. Render every state;
+  never read an absent value through a default. Adopting this schema in a route requires
+  regenerating the API client and updating its dashboard/export consumers together.
+- Status handlers use closed enums (or tagged result unions) and end matches with
+  `case _: assert_never(subject)` from `typing`. Do not catch unmatched states with a
+  default value; `parse_status` rejects unknown recorded enum values at the boundary.
+  `map_result` applies a transformation only to `Value`, preserving
+  unavailable/inapplicable reasons without invoking arithmetic.
+- `backend/scripts/data_truth_guard.py` owns the new/migrated module scope. Add each
+  engine and its boundary modules to `MIGRATED_MODULES` in its migration change; keep
+  earlier coverage and update paths through the feature-move codemod. The architecture
+  suite runs the lint consumer and negative controls. It rejects float syntax, nullable
+  figure annotations, bare missing returns from figure functions, and matches without
+  a terminal `assert_never`; strict basedpyright verifies exhaustive narrowing and unit
+  compatibility. The guard does not infer units of arbitrary runtime expressions or
+  cover legacy modules outside that scope. Never widen the strict type baseline.
+- Each engine migration includes complete-data golden comparisons and missing-input
+  regression coverage through API responses, exports and dashboard rendering.
 
 ### SQLAlchemy models (`app/models/*.py`)
 
@@ -111,13 +159,19 @@ class CalculationRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    organization_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     case_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
 ```
 
 The `UniqueConstraint("id", "organization_id", ...)` on the parent is what lets children FK to
 the composite key. Child output tables add `ondelete="CASCADE"` on the composite FK. New
 bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
+
+A composite FK from `(organization_id, bank_id)` to `banks.(organization_id, id)` binds
+a row's bank to its organization.
+The [database integrity reference](backend/docs/database_integrity.md) owns enforced
+bank, provenance and lifecycle references, nullable scopes, deliberate exclusions,
+migration catalogues and regression coverage.
 
 ### Migrations (`alembic/versions/`)
 
@@ -194,9 +248,8 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
 - Module-level constants for versions and rule ids:
   `ENGINE_VERSION = "capital-projection-v1.0.0"`, `RULE_VERSION = "liquidity-v1.0.0"`,
   `NEGATIVE_CASH_RULE_ID = "liquidity.negative_cash"`, thresholds as `Decimal` constants.
-- Domain input failures are typed exceptions carrying a payload
-  (`CalculationInputError`, `CapitalInputError` with `{code, message, details}`) that services
-  convert into persisted `failed` rows — not HTTP 500s.
+- Calculation failure and per-figure result contracts are owned by
+  [ARCHITECTURE.md §3](ARCHITECTURE.md#3-the-calculation-run-pattern-reuse-this-for-every-new-engine).
 - Pure calculation logic (no db/ctx) lives in plain functions like
   `liquidity.calculate_metrics(periods)` so it is unit-testable; its target home follows
   [the feature layout](#5-feature-layout).
@@ -205,6 +258,123 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
   `s3.py` is the sole boto3 call site. Never import boto3 in features/services.
 
 ### Tests (`backend/tests/`)
+
+#### Behavior, properties and state machines (backend and dashboard)
+
+These rules apply to new and changed tests on both surfaces. Reviewers must require
+coverage of the observable contract, including refusals, before accepting a change.
+
+- **Test public behavior.** Backend tests exercise service/API inputs and outputs,
+  persisted state and emitted events; pure domain functions are public interfaces too.
+  Dashboard component tests use Testing Library to exercise what users see and do:
+  query by role or label, interact, then assert visible results and accessible state.
+  Mock only true boundaries (network, clock, external services). Do not mock the
+  service or component under test, or assert private helpers, internal call counts,
+  hook/component structure or source text. Existing architecture/contract guards
+  enforce named repository invariants; they do not replace behavior coverage.
+- **Use properties for broad input spaces and invariants.** Use Hypothesis in the
+  backend and fast-check in dashboard tests for calculations, money and rounding,
+  parsers, serialization round-trips, permission matrices, number/date formatting,
+  chart transforms and grant gating. Generate valid and invalid boundary values,
+  including missing values, using the contract's numeric kinds. Assert an independent
+  invariant or oracle, not a copy of the implementation. Keep example tests for
+  concrete business outcomes and minimized regressions alongside properties.
+- **Share realistic domain generators.** Reuse feature-owned Hypothesis strategies
+  and fast-check arbitraries from the
+  [domain helper guide](backend/tests/support/PROPERTY_TESTING.md#find-the-domain-helpers).
+  Generate synthetic bank data with coherent financial relationships, workflow
+  histories and provenance; never read production or customer data. Mix deliberate
+  edges into realistic defaults and bias inputs toward source-defined thresholds.
+  Cite the engine, schema or regulatory source in each generator's docstring,
+  including units, precision and rounding. Distinguish internal bank policy and
+  draft calibration from in-force regulatory requirements. Every valid generator
+  needs a property proving its instances satisfy the public validator or engine
+  contract. Keep named invalid/adversarial generators and missing-value cases.
+- **Share domain assertions and tolerance policies.** Name the invariant and include
+  the relevant amounts, units, statuses or identities in failure messages. Check
+  metamorphic relationships where applicable: scaling amounts preserves ratios,
+  reordering preserves totals, zero exposure leaves capital unchanged, and currency
+  round trips stay within the domain's tolerance. Compare public observations
+  across runs without reimplementing production formulas. Each domain owns one
+  documented policy with separate bounds for unlike units, derived from actual
+  quantization and propagated rounding. Status, identity, provenance and digests
+  compare exactly; monetary tolerances must never weaken them. Find implementations
+  in the [domain assertion guide](backend/tests/support/PROPERTY_TESTING.md#assertions-and-tolerances).
+- **Model every workflow with statuses as a state machine.** Record its transition
+  table (source, command, actor/scope, guard, destination and observable effects),
+  including forbidden transitions, retries and terminal states. Exercise the real
+  public interface with Hypothesis `RuleBasedStateMachine` in backend tests or
+  fast-check model-based commands in dashboard tests; the reference model must be
+  independent of production transition helpers. Generate action sequences,
+  duplicate commands, unauthorized actors and attempts from the wrong status.
+  Check after every step: only legal transitions succeed; terminal states remain
+  terminal; makers cannot check their own work; filed/frozen content is immutable;
+  and another tenant or bank can neither read nor mutate it. Apply each invariant
+  where the workflow's contract requires it, recording why any is inapplicable.
+  Rejected commands must leave workflow content/status and success events unchanged;
+  refusal audit events may be recorded.
+  Preconditions may select legal paths, but must not exclude tests of illegal ones.
+- **Bound and reproduce property runs.** Configure explicit PR/CI Hypothesis profiles
+  with small budgets (start at `max_examples=25`, `stateful_step_count=20`), load the
+  chosen profile in test setup and keep per-test overrides within the same budget.
+  Use `derandomize=True` or `print_blob=True` and preserve the failing example/replay
+  information in CI output. Bound fast-check runs (start at `numRuns: 100`) and keep
+  its reported seed and path. Every stateful example gets isolated data and cleanup;
+  use disposable schemas for mutating Postgres tests. Larger profiles belong in a
+  scheduled nightly job only when one exists; document any justified budget change.
+  Migrating tests to shared helpers preserves their existing example budgets unless
+  profiling justifies a change; never depend on wall-clock timing for correctness.
+  Turn a discovered defect's minimized example into a regression test and describe
+  the defect and minimal fix in the PR. Distinguish a production defect from a
+  generator or assertion correction rather than silently loosening a property.
+
+Examples of observable assertions:
+
+- An API edit after filing returns a conflict; re-reading the filed artifact shows
+  the same content and digest, and no successful-edit event was persisted.
+- A Testing Library test selects an institution, enters a reason and presses
+  "Request access"; it asserts the displayed pending request. It does not inspect
+  the mutation hook or count invalidation calls.
+- An allocation property generates totals and weights and asserts that all public
+  result amounts are nonnegative and sum to the original Decimal total. See
+  [`test_allocation.py`](backend/tests/icaap/domain/test_allocation.py).
+
+A dashboard property can assert that missing measurements never imply compliance
+for any positive floor (fast-check is the required library for these tests):
+
+```ts
+import assert from "node:assert/strict";
+import fc from "fast-check";
+import { assessAgainstFloor } from "./values";
+
+fc.assert(
+  fc.property(fc.integer({ min: 1, max: 1_000_000 }), (floor) => {
+    assert.deepEqual(assessAgainstFloor(null, floor), {
+      assessed: false,
+      reason: "no_value",
+    });
+  }),
+  { numRuns: 100 },
+);
+```
+
+For a filing machine, rules should attempt submit, approve, file and edit with
+generated actors/statuses, compare each outcome with the transition table, then
+re-read the record to check invariants. Include sequences such as submit → maker
+approval refusal → checker approval → file → edit refusal, and cross-bank attempts
+within the same organization as well as cross-organization attempts. The existing
+[`authorization state machines`](backend/tests/identity/api/test_authorization_state_machine.py)
+show `@rule`, `@invariant` and `run_state_machine_as_test` through real services/APIs.
+Run each with bounded settings, for example:
+
+```python
+run_state_machine_as_test(
+    FilingMachine,
+    settings=settings(max_examples=25, stateful_step_count=20, derandomize=True),
+)
+```
+
+#### Backend fixtures and contracts
 
 - Layout and fixture ownership follow [the feature layout](#5-feature-layout).
   HTTP-level tests are the default style.
@@ -332,8 +502,8 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
   `jurisdictions.base_currency(bank)`, which deliberately has no fallback: an unset
   currency is a skipped decision at the creation site, not a Ghanaian bank. Never write a
   currency literal into bank-facing narrative — the guard suite
-  `tests/services/test_jurisdiction_neutrality.py` scans the calculation modules for
-  exactly that and is the cheapest place to catch the regression. On the dashboard,
+  `tests/services/test_jurisdiction_neutrality.py` exercises currency-labelled liquidity
+  narratives and unresolved-identity refusals, alongside registry and model checks. On the dashboard,
   `fmtCurrency(value)` uses the active jurisdiction; passing a second argument OVERRIDES
   it, so pass it only when the currency is genuinely not the bank's own.
 - Banks are created only by staff provisioning (`provision_institution`), which takes
@@ -349,7 +519,7 @@ feature. New code goes in the target layout; existing code moves one feature per
 - **Target shape.** `app/<feature>/` holds `public.py` (the cross-feature interface: re-exports
   only, no logic), `api/` (one router module per use case, today's `verb_noun` names kept),
   `service.py` or `service/`, `domain/` (pure engines under the same purity rule as
-  `app/domain`), `models.py` or `models/`, `schemas.py` or `schemas/`, and `jobs.py` where the
+  `app/domain`), `models.py` or `models/`, `schemas.py` or `schemas/`, and `jobs.py` or `jobs/` where the
   feature has worker handlers. A role is one module until it passes about 1,000 lines. The
   kernel stays in `app/core/`, `app/db/`, `app/storage/` and `app/integrations/`; the
   composition root is `app/main.py`, `app/worker.py`, `app/api/router.py`,
@@ -390,7 +560,9 @@ feature. New code goes in the target layout; existing code moves one feature per
   imports, string patch targets, slash paths and doc references in the text files selected by
   `tracked_text_files()` in `backend/scripts/feature_moves.py`. This includes Dockerfile COPY
   paths and generated Python in Python, JavaScript and TypeScript strings; generated
-  `packages/` files and the codemod's own source and tests are excluded. The boundary baseline
+  `packages/` files and the codemod's own source and tests are excluded. Schema class and
+  routed function docstrings are preserved because Pydantic and FastAPI publish them as OpenAPI
+  descriptions; a move must not churn the generated client. The boundary baseline
   retains its historical names as described above.
   It validates a batch before changing files; overlapping moves run as separate commands.
   It leaves no compatibility shim at the old path. After rebasing onto a move, in-flight
@@ -402,8 +574,8 @@ feature. New code goes in the target layout; existing code moves one feature per
   review and update those guards by hand so they retain their coverage.
   `uv run python scripts/feature_moves.py check` fails when a recorded module remains at its
   old path, a selected file needs rewriting, or a relative import cannot be resolved uniquely.
-  Move PRs must also satisfy the [typing ratchet](#typing-ratchet); logic changes go in separate
-  PRs.
+  Move PRs must also satisfy the [type-check baseline](#type-check-baseline); logic changes go in
+  separate PRs.
 - **What a move must not change.** Models share no `relationship()`, so SQLAlchemy flushes their
   rows in the order of each mapper's `module.ClassName`; `backend/app/db/flush_order.json` pins
   those keys so moving a model never reorders a flush (a new model adds its key). Metric

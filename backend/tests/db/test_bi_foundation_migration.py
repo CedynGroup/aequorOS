@@ -26,12 +26,12 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 
 from alembic import command
-from app.db.base import Base
-from app.models.bi import (
+from app.bi.models.marts import (
     BI_TABLES,
     MONTHLY_PARTITIONED_TABLES,
     YEARLY_PARTITIONED_TABLES,
 )
+from app.db.base import Base
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
@@ -66,7 +66,7 @@ PREVIOUS_REVISION = "202609200065"
 #: surface CHECK, and this test compares the MODEL against the migrated schema, so
 #: stopping short of either measures a model that has moved against a database that
 #: has not. The ``bi_content`` / ``bi_notifications`` tables have their own suite
-#: (``test_bi_phase3_migration.py``) because this one reads ``app/models/bi.py``
+#: (``test_bi_phase3_migration.py``) because this one reads ``app/bi/models/marts.py``
 #: alone.
 LAST_BI_REVISION = "202609280077"
 PARTITIONED = (*MONTHLY_PARTITIONED_TABLES, *YEARLY_PARTITIONED_TABLES)
@@ -649,9 +649,9 @@ def test_downgrade_removes_every_bi_object_and_upgrade_restores_them(
 
 # --- model ↔ migration parity -------------------------------------------------
 #
-# The hermetic width tests (``tests/models/test_bi_models.py``) measure the
+# The hermetic width tests (``tests/bi/models/test_bi_models.py``) measure the
 # MODEL, and the model is not what a deployed database has. Widening a column in
-# ``app/models/bi.py`` without editing ``202609220066`` therefore passes the
+# ``app/bi/models/marts.py`` without editing ``202609220066`` therefore passes the
 # whole hermetic suite and fails on a real Postgres INSERT — which is precisely
 # the class of defect ``202609200065``'s docstring records (a CHECK the model
 # derived from an enum while the migrated database did not), and how
@@ -712,7 +712,7 @@ def test_migrated_columns_match_the_model_type_length_and_nullability(
                 )
 
     assert not drift, (
-        "app/models/bi.py and migration 202609220066 disagree about these columns. "
+        "app/bi/models/marts.py and migration 202609220066 disagree about these columns. "
         "The model is what the hermetic suite builds and the migration is what a real "
         "database has, so a difference here is a latent Postgres-only failure — edit "
         "BOTH: " + "; ".join(drift)
@@ -754,6 +754,6 @@ def test_migrated_check_constraints_are_exactly_the_models(
         )
 
     assert not drift, (
-        "app/models/bi.py and migration 202609220066 declare different CHECK "
+        "app/bi/models/marts.py and migration 202609220066 declare different CHECK "
         "constraints: " + "; ".join(drift)
     )

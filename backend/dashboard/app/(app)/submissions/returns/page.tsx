@@ -112,6 +112,7 @@ import { hasAccountDirectoryAuthority } from "@/lib/api/accountAdministration";
 import { fmtDateUTC, fmtTimestamp, isoDate, shortId } from "@/lib/api/values";
 import {
   defaultReportingDate,
+  instrumentStatusLabel,
   reportingDateOptionLabel,
   toReportingDateOptions,
 } from "@/lib/api/returnAnchors";
@@ -213,7 +214,7 @@ function ReturnsWorkspace() {
     readOnly: inspection.impersonating,
   });
 
-  const templatesQuery = useReturnTemplates();
+  const templatesQuery = useReturnTemplates(bankId);
   const templates = useMemo(
     () =>
       (templatesQuery.data?.templates ?? []).filter((template) =>
@@ -606,6 +607,12 @@ function FidelityBanner({ template }: { template: ReturnTemplateRead }) {
           {template.code} — {template.title}
         </p>
         <FidelityPill fidelity={template.fidelity} />
+        <span className="text-caption font-medium text-slate">
+          {instrumentStatusLabel(
+            template.instrumentStatus,
+            template.effectiveFrom,
+          )}
+        </span>
       </div>
       <details className="mt-1 pl-6">
         <summary className="cursor-pointer text-caption font-medium text-action hover:text-action-hover">

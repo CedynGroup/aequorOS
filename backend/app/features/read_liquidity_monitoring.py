@@ -10,7 +10,8 @@ from sqlalchemy import func, select
 
 from app.api.deps import DbSession, LiquidityMonitoringResource, TenantContext
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.models import Bank, CanonicalPositionSnapshot
+from app.identity.public import Bank
+from app.models import CanonicalPositionSnapshot
 from app.models.canonical import is_current_generation
 from app.schemas.sdi import (
     LiquidityMonitoringRead,

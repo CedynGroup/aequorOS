@@ -61,6 +61,7 @@ def make_batch(
 def make_lineage(session: Session, batch: IngestionBatch) -> LineageRecord:
     record = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="bloomberg_v1.0/market_data",

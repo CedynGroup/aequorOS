@@ -23,9 +23,9 @@ from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.filing import workflow as domain
 from app.models import RegulatoryPackage
-from app.services.filing_workflow import chain as filing_chain
+from app.reporting.domain import workflow as domain
+from app.reporting.service.filing_workflow import chain as filing_chain
 
 #: Stable fixture officers, distinct from any package's ``generated_by`` so the
 #: maker-checker rule is satisfied rather than sidestepped.

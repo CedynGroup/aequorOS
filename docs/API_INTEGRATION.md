@@ -20,33 +20,21 @@ An **integration key**, sent as the bearer credential on every API Push request:
 Authorization: Bearer aeq_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
-Your account administrator generates the key once in the dashboard (Data
-Engine → API Push → Integration keys). It authenticates your middleware as a
-dedicated machine identity with one exact institution-scoped Integration
-Writer binding (`DATA` / `restricted` / `ingest`). The administrator must
+Your account administrator generates the key once in the dashboard (Access →
+Integration keys, also linked from Data Engine → API Push). It authenticates your
+middleware as a dedicated machine identity with one exact institution-scoped
+Integration Writer binding (`DATA` / `restricted` / `ingest`). The administrator must
 select the bank when issuing the key. It is shown exactly once at generation
 (the platform stores only a hash) and can be revoked instantly from the same
 screen. Rotate by generating a new key for the confirmed bank, switching your
 middleware, verifying a push, then revoking the old one.
 
-**A key is issued for one purpose, and the two purposes cannot substitute for
-one another.**
-
-| Purpose                | Authority                                 | Used by                      |
-| ---------------------- | ----------------------------------------- | ---------------------------- |
-| `writer` (the default) | `DATA` / `restricted` / `ingest`          | API Push, §2 below           |
-| `reader`               | every module at `aggregated`, `view` only | the analytics feed, §8 below |
-
-A `writer` key presented to the feed is refused, and a `reader` key presented to
-any push route is refused. Neither refusal depends on configuration: the two
-authorities carry disjoint permissions, so a push route asking for `ingest` and a
-feed asking for `view` each refuse the other's credential structurally. Issue one
-key per purpose; do not try to make one credential do both.
-
-Analytics feed keys cover every module and require whole-institution coverage.
-Key issuance rejects narrowed scopes. For existing narrowed keys, follow the
-[Credit-only narrowing migration contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing);
-administrators may deliberately issue a new whole-institution key after revocation.
+Only data push keys (`purpose: writer`, the default) may be issued; they cannot
+read analytics.
+`purpose: reader` is unavailable until BI ships with governed delegation; the API
+rejects it with `422` even when `BI_ENABLED` is enabled. The approval requirements
+for reintroduction are in the
+[reader issuance contract](../backend/docs/integration_key_machine_principal_rollout.md#reader-key-issuance).
 
 Keys issued before bank scoping have no institution target and cannot call the
 push routes. They remain visible to administrators as **Unscoped — rotate**.
@@ -417,7 +405,33 @@ value overrides the counterparty's for that facility.
 | `depositor_class`                             | `DEPOSIT` with a `GOVERNMENT_ENTITY` depositor (or the counterparty)                           | `public_enterprise` · `public_institution`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | BSD2 rows 231/232, 239/240, 247/248, 255/256 (§25 deposits by depositor class × account type) and Annex 13                                                                                                                           | Public-enterprise vs public-institution depositor. The account type itself is the typed `deposit_account_type` field above.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `facility_type`                               | `LOAN`                                                                                         | `scheduled` · `unscheduled` · `overdraft` · `acceptance` · `other`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | BSD2 Annex 4 rows 8–11 × B:F                                                                                                                                                                                                         | Guide Annex 4 facility categories (the annex total ties to BSD2 `D68` only when every LOAN carries one).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `obs_category` / `obs_status`                 | `LC_GUARANTEE`, `COMMITMENT_UNDRAWN`                                                           | `obs_category` extends the LMT values above with `acceptance` · `endorsement` · `other_obligation`; `obs_status` ∈ `performing` · `non_performing`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | BSD2 Annex 16 rows 6–10 × E:H (FX / cedi × performing / non-performing); Annex 16 `I11` ties to BSD2 `D282` when every LC/guarantee carries both                                                                                     | Contingent-liability class and performance status.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `balance_ghs` / `notional_ghs`                | any foreign-currency position                                                                  | number (cedi equivalent at `as_of_date`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | every `positions.sum` line of BSD2 (Foreign column "converted into cedis"), BSD1, BSD4, BSD8, BSD14 weights, module fact derivation                                                                                                  | The bank's own cedi equivalent; when absent the platform converts at its preferred period-end spot (raw balance if none). Send it for every FX position.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `balance_ghs` / `notional_ghs`                | any foreign-currency position                                                                  | number (cedi equivalent at `as_of_date`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | every `positions.sum` line of BSD2 (Foreign column "converted into cedis"), BSD1, BSD4, BSD8, BSD14 weights, module fact derivation                                                                                                  | The bank's own cedi equivalents for the applicable measure. Off-balance-sheet rows use `notional_ghs` and do not require `balance_ghs`; governed FX quotes and generation refusals follow the rules below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+For prudential returns, native foreign amounts are never treated as cedis.
+Foreign amounts follow these reporting-currency rules:
+
+- `positions.sum`, BSD1 cedi measures, BSD4, BSD6, BSD8 and BSD11 amounts, and BSD14
+  weights, use the stated amount for the measure (`balance_ghs` or `notional_ghs`),
+  else a governed preferred FX spot at the valuation date. BSD1 uses the cell's
+  business date, including each side of a weekly change; BSD8 opening balances use
+  the day before the period starts. Other measures use period end. BSD1 Annex 1
+  native-unit balances are exempt from reporting-currency conversion.
+- LE, BSD3 and LMT require `balance_ghs` for foreign on-balance-sheet rows, plus
+  `notional_ghs` when a native undrawn notional or CCF applies.
+- Foreign off-balance-sheet `LC_GUARANTEE` and `COMMITMENT_UNDRAWN` rows do not
+  require `balance_ghs`: their measure is the stated `notional_ghs`, else their native
+  notional converted using a governed preferred FX spot at the valuation date
+  (including LE, BSD3 and LMT). The return applies CCF where its measure requires it.
+
+Domestic measures retain each return's existing convention. BSD3, BSD11 and BSD8
+contingent exposures use the stated or native notional where present, with their
+existing balance fallback when absent. BSD1 and BSD6 use native domestic amounts;
+`positions.sum` uses the stated amount or native amount for its requested measure.
+
+Missing required conversions abort generation with HTTP 409 `foreign_amount_not_stated`,
+naming the positions and the amounts to ingest. A package missing these conversion inputs
+cannot reach approval or numeric roll-ups. Other existing `input_required` cells retain
+their handling.
 
 ### Loan events (`loan_event`) — the loan-book movement plane
 
@@ -461,13 +475,16 @@ every field and attribute of the position, not just the new keys.
 
 ### 3.5 Reference datasets
 
-Reference rows have **no fixed schema**: each row is preserved verbatim as a
-payload (values stringified, dates ISO) under its dataset kind, and consumed
-as-is by the calculation modules. Valid keys under `"reference"`:
+Reference rows are preserved verbatim as payloads (values stringified, dates
+ISO) under their dataset kind and consumed as-is by calculation modules.
+Registered schemas are enforced at ingestion for `capital_structure`,
+`business_units`, `performance_targets` and `gl_segment_balances`; other kinds
+retain their documented shape without schema enforcement. Valid keys under
+`"reference"`:
 
 | Key                      | Typical row fields (from the Sample Bank dataset)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `capital_structure`      | `item`, `amount_ghs`, `tier`, …                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `capital_structure`      | `capital_component`, `amount_ghs`, `tier` — see the [capital register contract](#capital_structure-contract) below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `behavioral_assumptions` | `product_code`, `assumption`, `value`, …                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `yield_curve`            | `curve_name`, `currency`, `tenor_months`, `rate`, `quote_date`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `fx_rates_current`       | `pair`, `rate`, `quote_date`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -485,6 +502,34 @@ as-is by the calculation modules. Valid keys under `"reference"`:
 | `capital_expenditure`    | `period_end` (ISO date = the batch `as_of_date`), `asset_class` (`land_buildings` \| `staff_land_premises` \| `furniture_equipment` \| `computers` \| `other_office_equipment` \| `motor_vehicles` \| `other_property_legal_rights`), `opening_nbv_ghs`, `additions_purchased_ghs`, `additions_finance_lease_ghs`, `additions_hire_purchase_ghs`, `disposal_proceeds_ghs`, `disposals_nbv_ghs`, `depreciation_ghs`, `closing_cost_ghs`, `accumulated_depreciation_ghs`, `closing_nbv_ghs` (= cost − accumulated depreciation, validated); optional `currency` (booking currency; blank = base ⇒ BSD2 Domestic), `capital_wip_ghs`, `wip_closing_ghs`, `contracted_not_provided_ghs`, `authorised_not_contracted_ghs`, `forecast_next_6m_ghs`, `forecast_0_3m_ghs`, `forecast_3_6m_ghs`, `budget_ghs`, `notes` — the fixed-asset / capex register, one row per (period, asset class); one period per push (half-year movements for BSD10 A–H, period-end stock for BSD2 item 12 rows 115–121 / 123). Spec: `docs/data_engine/datasets/capital_expenditure.md`.                                                                                                                                    |
 | `performance_targets`    | `period` (ISO date: the **last day** of the window; must agree with `grain`), `grain` (`month` \| `quarter` \| `half_year` \| `year`), `measure_id` (the BI measure targeted — `loans.balance_rc`, `engine.car_pct.crd.official`), `time_behaviour` (`stock` \| `flow`; **required, never defaulted** — a stock target is the level to be standing at `period`, a flow target the amount to accumulate over the window `grain` names; reading one as the other is silently wrong by a period), `value` (in the measure's own unit: reporting currency for an amount, percentage points for a `_pct`; the row carries no unit), `version` (`budget` \| `reforecast`); optional `scope_dimension` / `scope_value` (which dimension the target applies to and its value, e.g. `branch.code` / `BR-001`; given together or not at all — a bank-wide target names neither) and `notes` — the bank's budget / reforecast figures, one row per (period, grain, measure, scope, version); re-push whole, latest as-of wins. Schema: `app/domain/ingestion/reference_schemas/performance_targets.py`.                                                                                                     |
 | `gl_segment_balances`    | `as_of_date` (ISO date = the batch `as_of_date`), `gl_account_code` (must match an `INCOME` / `EXPENSE` `gl_account.account_code` for the same month), `branch_id` (matched against `business_units.business_unit_id`, exactly as `position.attributes.branch_id` is; `__UNALLOCATED__` is **reserved** for the remainder the platform computes and is refused), `ytd_balance` (the branch's fiscal-year-to-date balance of that account, same convention and sign as the account's own `balance`); optional `currency` (blank = the reporting currency, as on a `gl_account` record), `gl_account_name`, `branch_name`, `notes` — the bank's branch breakdown of its profit-and-loss ledger. One row per (`as_of_date`, `gl_account_code`, `branch_id`, `currency`); ONE reporting date per push, the whole breakdown in that batch, and the batch must fall in the same calendar month as the ledger balances it breaks down. The breakdown may be partial: the platform adds an explicit unallocated line so the branches sum to the institution's ledger. Spec: `docs/data_engine/datasets/gl_segment_balances.md`. Schema: `app/domain/ingestion/reference_schemas/gl_segment_balances.py`. |
+
+#### `capital_structure` contract
+
+Each row requires `capital_component`, `amount_ghs` and `tier`. Send
+`amount_ghs` as a finite Decimal value without grouping commas; values such as
+`"-20000000"` are accepted, while `"-20,000,000"`, `NaN` and `Infinity` are
+refused. Amounts are preserved for Decimal parsing rather than coerced to float.
+
+Use `CET1`, `AT1`, `T2` or their `_DEDUCTION` forms. The parser also accepts
+`Common Equity Tier 1`, `Additional Tier 1` and `Tier 2`, with case, spaces,
+underscores and hyphens ignored; each alias also accepts a deduction suffix.
+Blank, unknown or ambiguous tiers such as `Tier 1` are refused. A negative
+amount or a deduction tier marks a deduction. The BoG Credit Risk Reserve
+(`credit_risk_reserve`) is excluded from the capital base regardless of tier;
+it must not be submitted as a qualifying capital component.
+
+A capital row that fails translation rejects the whole ingestion batch; no
+partial register is published. Previously stored, unrecognised tiers refuse
+the entire capital derivation, producing `capital_register_refused` instead of
+usable capital components. Capital-dependent calculations return their named
+refusal or unavailable-input state (SDIs use `data_quality_block`), with
+corrective guidance. Correct the refused tiers, re-ingest the complete register
+and re-derive facts before retrying. Malformed stored SDI amounts make the
+credit/concentration denominator unavailable (`capital_base_unavailable`),
+with guidance to correct the amounts and re-ingest the complete register.
+Schema and tier parsing are owned by
+`backend/app/domain/ingestion/reference_schemas/capital_structure.py` and
+`backend/app/domain/ingestion/capital_tiers.py`.
 
 ---
 
@@ -616,6 +661,10 @@ POST …/commit                 → 201 batch 0199… accepted (reused=false)
 
 ## 8. Pulling analytics out: the Stage B feed
 
+**Pre-release contract:** credential availability is governed by
+[§1 Authentication](#1-authentication). The contract below is retained for BI
+release work, not as an onboarding path.
+
 The reverse direction. `GET /banks/{bank_id}/bi/feeds/{dataset}` serves one
 **curated** analytics dataset, streamed, so a report server (Power BI Report
 Server, or any HTTP-capable BI tool) can build a model on the same numbers the
@@ -690,3 +739,48 @@ never present with zeros.
 **Every pull is recorded** — the credential, the dataset, the cursor in and out,
 the reporting dates, the row count and whether it was allowed or refused. Ask
 your AequorOS administrator for that record whenever you need it.
+
+### Capital credit exposure attributes
+
+The capital derivation uses an internal `credit_exposure` basis under BoG CRD
+(June 2018) Part 2, separate from gross accounting loans and IFRS 9 EAD.
+`issuer_class` is a closed classification: `public_institution`,
+`public_enterprise`, `soe`, or `private`. Neither `private` nor an unknown value
+establishes sovereign status. The documented `tor_bond` and `cocoa_bill`
+instruments identify PSE enterprise and institution paper respectively.
+Loan public-sector classification reads `borrower_class`; securities and placements
+read `issuer_class`. These two fields may come from counterparty attributes;
+a position attribute takes precedence, including an explicit empty or invalid
+value. Domestic PSE treatment also requires counterparty domicile
+evidence: `country_code` matching the bank's jurisdiction, or `resident=true`
+when no country is supplied. The established Annex 2D instrument labels can
+establish domestic classification when no domicile is supplied. Explicit foreign
+country or non-residency overrides instrument labels and class attributes.
+Foreign PSEs without an established sovereign assessment refuse credit risk
+measurement under BoG CRD (June 2018) ¶120–122.
+
+`external_rating_grade` on an `INTERBANK_PLACEMENT`, loan to a bank, or bank-issued
+debt security is the bank's ECAI
+assessment mapped to CRD ERG `1`–`6`, or `unrated`; it is not a raw agency rating.
+An absent grade is unrated, and an unknown grade refuses capital. The 20%
+short-term unrated-bank weight requires domestic currency and an original term
+of at most three calendar months, established by `origination_date` and
+`contractual_maturity`. A short remaining maturity alone grants no preference.
+
+Bank-issued securities enter this assessment only with a `BOND` or
+`CORPORATE_BOND` product category or a documented debt instrument (`bill`,
+`certificate_of_deposit`, `bond_issued`, `finsap_bond`,
+`ssnit_educational_bond`). Equity categories override a debt instrument label.
+Other non-debt and unknown holdings retain the securities fallback.
+
+Calculation prerequisites and enterprise-stress refusals follow the
+[calculation basis and refusal contract](../ARCHITECTURE.md#ecl-assumption-and-coverage-contract).
+
+`specific_provision_ghs` explicitly states the
+specific provision on a loan, security or interbank claim. If absent, the
+bank's `ecl_provision_ghs` is specific only for an NPL classified by
+`bog_classification`, or IFRS 9 stage 3 when no BoG classification exists.
+Capital deducts this specific provision and `interest_in_suspense_ghs` per
+exposure, floored at zero (CRD ¶98). Missing amounts grant no deduction;
+malformed or negative amounts refuse derivation. General allowances on
+performing loans remain outside this deduction.

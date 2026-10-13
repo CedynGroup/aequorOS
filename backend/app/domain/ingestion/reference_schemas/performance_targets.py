@@ -22,7 +22,7 @@ extra steps.
 (``loans.balance_rc``, ``engine.car_pct.crd.official``) — and ``scope_dimension``
 likewise (``branch.region``). Whether the id names a measure that exists, and
 whether that measure is targetable at all, is the catalogue's decision at read
-time: ``app/domain/ingestion`` is UPSTREAM of ``app/domain/bi`` and must not
+time: ``app/domain/ingestion`` is UPSTREAM of ``app/bi/domain`` and must not
 import it, or the dataset that feeds the catalogue would depend on the catalogue
 that consumes it. The two ``time_behaviour`` words deliberately mirror the
 catalogue's own vocabulary; parity between them is asserted from the catalogue
@@ -69,7 +69,7 @@ VERSIONS: tuple[str, ...] = ("budget", "reforecast")
 #: ``bi_fact_target.scope_value``, whose whole build runs in one transaction, so
 #: an over-long value used to take positions, events, GL, engine metrics and
 #: dimensions down with it, every night, until the row was withdrawn (audit
-#: A8-01). It equals ``app.models.bi.TARGET_SCOPE_VALUE_WIDTH``; the two are
+#: A8-01). It equals ``app.bi.models.marts.TARGET_SCOPE_VALUE_WIDTH``; the two are
 #: asserted equal in ``tests/domain/ingestion/test_reference_schemas.py`` rather
 #: than imported, because this module stays free of ``app.models``.
 SCOPE_VALUE_MAX_LENGTH = 255

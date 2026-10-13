@@ -30,7 +30,7 @@ import {
  * A promotion decision, with the separation-of-duties verdict behind it.
  *
  * ``sod_decision`` is the platform's own assignment-time machinery
- * (``app/services/grant_administration.py``), reused rather than reimplemented:
+ * (``app/identity/service/grant_administration.py``), reused rather than reimplemented:
  * proposer ≠ approver is one policy in this codebase, and a promotion is judged
  * by it like any other authority decision.
  * @export

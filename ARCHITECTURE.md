@@ -23,11 +23,10 @@ Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `back
 (`.pre-commit-config.yaml`): ruff check/format scoped to `^backend/`, Conventional
 Commits enforcement, and a pre-push hook that runs `mise run risk-service:api-fresh`.
 
-Local DB bootstrap: `mise run risk-service:bootstrap-db` creates a migration role (may bypass RLS)
-and an app runtime role created with `NOBYPASSRLS`, runs migrations, and seeds two demo tenants.
-App connection string comes from `backend/.env` (remote:
-`postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database>`; local fallback:
-`postgresql+psycopg://risk_service_app:risk_service_app@localhost:15432/risk_service`).
+Database setup and local connection settings are owned by
+[the backend setup guide](backend/README.md#run-the-api); migration credentials and
+audit ownership are governed by
+[the tamper-evident records contract](backend/docs/tamper_evident_records.md#required-deployment-follow-up).
 
 ### Product segments and the staff control plane
 
@@ -71,13 +70,15 @@ App connection string comes from `backend/.env` (remote:
 Verified in `backend/app/api/deps.py`, `app/db/session.py`, and migration
 `alembic/versions/202605250002_enable_tenant_rls.py`.
 
-1. **Verified credential → context.** Every authenticated business request carries
+1. **Verified credential → context.** Requests that establish a `TenantContext` carry
    an HTTP bearer credential. Normal app access tokens are HS256 JWTs whose verified `org`, `sub`,
    legacy `roles`, and `authv` claims form a frozen `TenantContext`; missing,
    malformed, expired, pre-authorization-version, or wrongly typed tokens return
    `401` before service code runs. Integration keys and operator impersonation
    tokens are separate bearer credential types with their own validation and
    lifecycle rules; caller-supplied tenant/user headers never establish identity.
+   Bank download access follows the
+   [bank-key download contract](backend/docs/bank_encryption.md#downloads).
 2. **Dependency aliases** (use these, never raw `Depends(...)` in feature modules):
    - `DbSession` — tenant-validated SQLAlchemy session (`get_tenant_db_session`). It stores
      `session.info["organization_id"]` and validates that the org exists and, when present, that
@@ -96,12 +97,8 @@ Verified in `backend/app/api/deps.py`, `app/db/session.py`, and migration
 4. **Explicit filters are still mandatory.** Service queries always filter by
    `organization_id` (and `case_id` where applicable) even though RLS exists — for readability,
    index usage, and SQLite test compatibility.
-5. **Composite FK pattern.** Child tables carry denormalized `organization_id` (and `case_id`)
-   columns and declare composite `ForeignKeyConstraint`s to the parent's
-   `UniqueConstraint("id", "organization_id", ...)`, so a child row can never reference a parent
-   in another tenant. Exact example in
-   [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern), taken from
-   `app/models/calculation.py`.
+5. **Composite FK pattern.** Tenant-safe parent references and bank ownership constraints
+   follow the [composite-FK tenant pattern](CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern).
 
 ### 2.1 Authorization transition
 
@@ -201,7 +198,7 @@ Invariants every new engine must copy (verified in `app/services/calculations.py
   `OUTPUT_SCHEMA_VERSION = "balance-sheet-output-v1"` (calculations);
   `ENGINE_VERSION = "capital-projection-v1.0.0"` (capital);
   `RULE_VERSION = "liquidity-v1.0.0"` (liquidity). Internal version bumps do NOT bump `/api/v1`.
-- **Failures are data.** Domain input problems raise a typed exception
+- **Failures are data.** Legacy case-engine input problems raise a typed exception
   (`CalculationInputError`, `CapitalInputError`) carrying `{code, message, details}`; the service
   persists a `failed` row and still returns `201` with actionable diagnostics. Unexpected
   exceptions persist a sanitized diagnostic.
@@ -213,6 +210,60 @@ Invariants every new engine must copy (verified in `app/services/calculations.py
   (`_lock_active_case_and_scenario`), and Postgres advisory locks to serialize finding
   publication per `(org, case, scenario)` (`liquidity.lock_finding_publication` /
   `serialize_finding_publication`; both no-op on SQLite).
+
+### Per-figure results and calculation logs
+
+The incremental aequorOS calculation boundary uses
+`app/domain/authority/results.py::FigureResult[T]`: a plain Python union of
+`Computed[T]` and `Refused(reason_code, rule_citation, row_ref)`, consumed with
+`match`. Refused rows are one-based positions in the input sequence. Official
+liquidity runs calculate in the canonical `run.inputs.facts` order, so their
+refusal positions identify the saved snapshot without changing its value-based
+hash. Validated positions may appear in operator logs; the optional `OutcomeDetail`
+remains bank-facing data and never enters operator logs.
+Unexpected bugs and infrastructure failures still raise.
+
+`app/domain/liquidity/engine.py::compute_liquidity` is the first migrated boundary:
+LCR and NSFR are evaluated independently, including missing threshold parameters.
+Existing single-ratio entry points keep their exception contracts. The service
+adapter preserves both outcomes for inline dashboard reads, trends, live metrics
+and scenario analysis. Refused ratios and dependent totals are null in dashboard
+payloads, with `na` ratio status and a `refusals` map carrying reason
+code, rule citation, reason and one-based input row references. Computed siblings
+retain their values, lines and validations. Live metrics persist refusals and omit
+unavailable numeric keys; a refused figure makes module health red. The scenario
+workbench carries the same refusal map, and window analytics retains computed
+sibling points while omitting refused readings from series and statistics. Only
+official run persistence requires both ratios, so filing remains fail-closed.
+Successful arithmetic, rounding and value-based input hashes are unchanged; API schemas and the generated client
+carry nullable figures and refusal metadata. LCR-only reverse-stress probes use
+the LCR outcome boundary without evaluating NSFR. Dashboard display behavior is
+owned by [Unavailable liquidity figures](backend/dashboard/README.md#unavailable-liquidity-figures).
+The remaining engines are follow-ups for issue #409.
+
+`app/core/observability.py::emit` writes calculation/refusal and regulatory-run
+failure events as JSON to stderr for CloudWatch, with a closed allowlist of codes,
+rule citations, figure identifiers and engine versions. Add each migrated engine's
+static vocabulary to that allowlist. The platform tenant id, correlation id and
+validated one-based input row positions travel with these events. Row locators
+must be tuples of integers within the calculation's input row count; booleans,
+strings, out-of-range positions and other shapes are dropped as a whole. The
+input row count is validation context and is not logged. No raw row ids, bank ids,
+financial data, exception text, tracebacks or bound logging extras do. The shared
+logging boundary hashes all caller-supplied request ids for
+calculation, HTTP error, access and intercepted logs alike; the Loguru sink also
+writes to stderr. Background boundaries mint an id when no request exists.
+The HTTP error boundary does not re-log propagated exception text or tracebacks.
+Worker job failures use the same closed stderr schema (`worker.job_failed`),
+without job identifiers or exception content; authoritative retry diagnostics
+remain in the tenant-scoped job row. A job keeps one correlation id through the
+calculation boundary and worker retry handler, then restores its caller's context.
+The shared Loguru patcher also replaces unexpected exception messages and removes
+serialized exception values, tracebacks and bound customer context before sinks
+receive a record. Such fallback records retain only a validated tenant id, safe
+correlation id and the `unexpected_error` code.
+Behavioral/redaction tests live in `backend/tests/liquidity/` and
+`backend/tests/core/test_calculation_logging.py` and `test_worker_error_logging.py`.
 
 ---
 
@@ -237,11 +288,9 @@ semantics follow the plane, never the other way round:
    immutable `regulatory_runs`. Period-over-period trends, filings, and
    freshness-vs-last-official-run live here exclusively.
 
-   **The reporting date is BoG's, never ours (corrected 2026-08-23).** A return's
-   reporting dates come from its `ReturnDefinition` — cadence plus the BoG
-   anchor conventions — through the one authority
-   `services/regulatory_reporting/anchors.py`, which touches no tenant data. The
-   dependency runs one way:
+   The [reporting-date contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)
+   owns date resolution, publication status, commencement and preparation-only
+   anchors. The dependency runs one way:
 
    ```
    ReturnDefinition ──▶ reporting date ──▶ snapshot lookup (exact, may miss)
@@ -315,6 +364,27 @@ on one canonical store — the live tier for intraday awareness, the official ti
   `compute_stressed_var` clamps the cedi-crisis window to the available return history when a bank
   has fewer observations than the configured window, so a short upload still yields a best-effort
   stress instead of killing the whole FX module. On full history the window is used unchanged.
+- **NOP currency coverage.** Notice BG/FMD/2026/07 ¶1(a)–(b): derivation retains every
+  foreign currency in the on-balance and FX-hedge NOP book independently of return history.
+  Valuing an exposure without history needs an ingested current FX quote; the implied
+  position-book fallback remains available only with history. Full FX analysis requires
+  history for every measured currency. Flat currencies needing no rate are disclosed
+  separately in `rate_not_required_currencies` and count toward stored-run coverage.
+  `app/live/fx_book.py` checks facts and filing runs against accepted positions at the exact
+  source date, and checks filing runs against official FX facts. Incomplete DBK and FX-NOP
+  evidence returns HTTP 409 naming the missing currency; BSD13 and BSD1B cells using an
+  incomplete run stay blank with a data-quality refusal. BSD13 also applies the shared
+  valuation refusals to NOP totals, including values already carried in cedis. Dashboard
+  coverage uses one scoped, database-deduplicated currency projection for the whole window,
+  including both FX-hedge legs without hydrating positions, balances, products or counterparties.
+  Stored trend points are checked against each date's accepted currency universe and official
+  FX facts; incomplete historical points are omitted while direct selection still names the
+  missing currency in its refusal. A complete newer or current headline remains available.
+  The NOP-only workbench can compute from complete valued positions without a VaR history.
+  NOF, long-position and contingent rules are separate from this coverage check.
+  Capital FX aggregation has its own writer and retains its existing basis;
+  capital-side FX valuation refusal is tracked in
+  [the capital follow-up](https://github.com/CedynGroup/aequorOS/issues/424).
 
 The dashboard polls only cheap live-summary, freshness, alert, and notification signals, with
 stable tenant/authority/bank jitter. Signal polls are read-only; a live generation or
@@ -407,7 +477,7 @@ official reads must be explicit.
   **When you add a job type, the same change must add its enqueue site, and a test must
   assert the caller calls it** — `tests/architecture/test_job_enqueue_reachability.py`
   requires a reachable enqueue site for every registered type, and
-  `tests/services/test_bi_jobs.py` asserts both directions for the BI triggers (a succeeded
+  `tests/bi/jobs/test_bi_jobs.py` asserts both directions for the BI triggers (a succeeded
   build asks, a skipped build does not). Enqueue counts ride on the job's progress record so
   "queued nothing" is distinguishable from "was never asked".
   The same class hides elsewhere in a green suite: a guard whose rules were never proven
@@ -547,7 +617,7 @@ when it was assumed away:
    `app/worker.py::resolve_job_types` refuses a process that mixes lanes. The
    reason is the model credential: the process holding `ANTHROPIC_API_KEY` runs
    nothing else, and it deploys from its own compose file.
-4. **Jurisdiction identity is data under `app/domain/icaap/frameworks/<code>/`**
+4. **Jurisdiction identity is data under `app/icaap/domain/frameworks/<code>/`**
    with no `if jurisdiction ==` anywhere — the same rule §2 and the jurisdictions
    registry state, applied to a whole regulatory regime. Read the sourcing
    caveats in the linked document before relying on the Nigeria or Kenya
@@ -565,8 +635,8 @@ it, adding one registry entry moved an unrelated family's content digest.
 
 One governed foundation: worker-built marts and conformed dimensions, a metric
 catalogue, a safe query compiler, and an authorization gate every BI surface
-reads through. Built behind default-off flags (`Settings.bi`); no BI route is
-mounted until `BI_ENABLED`.
+reads through. Built behind default-off flags (`Settings.bi`); mounted BI routes
+return 404 until `BI_ENABLED`.
 
 **The plane boundary is the whole design.** BI is a DISPATCH plane: it reads
 canonical rows (through `is_current_generation` only), `live_metrics`,
@@ -574,19 +644,15 @@ canonical rows (through `is_current_generation` only), `live_metrics`,
 guard derives the writable set from the model registry by prefix, so a new mart
 is covered on the day it is written) **plus `ai_commentary_drafts`** — the one
 non-`bi_` table a BI-owned module writes, by decision D-191, from
-`app/jobs/bi_commentary.py`. Stated precisely because audit A360-1 M1 found the
-older "nothing else" wording false: the write scan then covered `app/services/bi`
-and `app/domain/bi` only, while `app/jobs/bi_*.py` and `app/features/*bi*.py`
-were exempt from the import rule and unscanned. The 2026-09-29 remediation makes
-the exemption set and the scan set the SAME set and names `ai_commentary_drafts`
-as the one permitted non-`bi_` write
-(`test_every_bi_owned_module_is_in_the_write_scan`; in the working tree at the
-time of writing). The regulatory plane never imports BI, with exactly two
-exceptions —
-`app/services/bi/enqueue.py` and `app/services/bi/versions.py`, the enqueue
-seam the hook sites call, which themselves import no BI model, builder,
-catalogue or compiler. `tests/architecture/test_bi_plane_boundary.py` pins all
-of it, including that BI never calls `derive_facts`.
+`app/bi/jobs/bi_commentary.py`. Platform audit, queue, notification and operator
+audit writes go only through the helpers named in `PERMITTED_MEDIATED_WRITES` in
+`tests/architecture/test_bi_plane_boundary.py`. Its ownership and write scans
+cover the BI package and BI operator modules; `app/bi/schemas/query.py` also
+remains subject to the import ban on BI internals. The regulatory/live plane
+may import only `app/bi/service/enqueue.py` and `app/bi/service/versions.py`,
+from the hook sites named in `SEAM_IMPORTERS`. These seams may read BI models
+but import no builder, catalogue, compiler, executor or handler. The guard pins
+these boundaries and prevents BI from calling `derive_facts`.
 
 - **Engine metrics are COPIED, never recomputed.** `bi_fact_engine_metric`
   carries a `live` tier from `live_metrics` and an `official` tier from the
@@ -609,7 +675,7 @@ of it, including that BI never calls `derive_facts`.
 - **BI carries NO reconciliation to the regulatory returns — founder decision
   2026-09-29.** Until that date this bullet read "Reconciliation R1–R12 drives a
   trust badge (`green | amber | red | grey`)": twelve checks in
-  `app/services/bi/reconciliation.py` compared the marts with "the figures the
+  the retired BI reconciliation module compared the marts with "the figures the
   platform already files" (R4 against BSD7A, a BoG return, line by line), and
   the verdict was rendered as a "Does not reconcile" chip on every dashboard
   card, treasury ones included. The founder rejected the premise — _"we are
@@ -642,8 +708,8 @@ and zero with no GUC set.
 **The compiler never assembles SQL.** `BiQuery` is a closed pydantic schema;
 every member resolves to a mapped column; filters become bound parameters under
 a whitelisted operator set; grouping, pivot and subtotals are computed
-server-side. There is no `text()` anywhere in `app/services/bi` or
-`app/domain/bi`. The executor alone may call `exec_driver_sql` with two named
+server-side. There is no `text()` anywhere in `app/bi/service` or
+`app/bi/domain`. The executor alone may call `exec_driver_sql` with two named
 constant statements that set the statement timeout and read-only flag; the
 timeout is a bound parameter. This boundary is pinned by
 `tests/architecture/test_bi_compiler_injection.py`, which proves its AST guard
@@ -670,7 +736,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   book but not its NPL ratio would read `0.00` — a bank exactly on plan).
   `attainment_pct` is not emitted where lower is better: 120 % on an NPL ratio is
   a miss and reads as over-achievement away from its badge.
-- **Content packs are data, validated at import.** `app/domain/bi/packs/<id>.json`
+- **Content packs are data, validated at import.** `app/bi/domain/packs/<id>.json`
   under a pydantic `PackSpec`; a malformed pack fails module import, so a bad pack
   is a start-up failure rather than a 500 in front of a board. **A pack carries no
   date** — `BiPackQuery.for_period(as_of)` resolves it, because a pinned reporting
@@ -755,12 +821,10 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   [BI scope reduction and compiler injection](backend/docs/bi_enforcement_rollout.md#branch-and-region-scope-is-enforced-desk-and-currency-are-not)
   and [Credit row filtering](backend/docs/credit_enforcement_rollout.md)
   describe the row-filtered surfaces; `/auth/me` projects scope per capability.
-- **`bi_reader` is the second machine bundle** (`{view}`, disjoint from
-  `integration_writer`'s `{ingest}`, machine-only by CHECK; `202609270074`),
-  minted with an integration key (`purpose=reader`) for the **Power BI Stage B
-  feed** — `GET …/bi/feeds/{dataset}`, curated aggregated datasets only, NDJSON
-  or CSV, a cursor anchored on the MART BUILD rather than the business date so
-  a restated month re-arrives, every pull logged (`backend/docs/powerbi_stage_b.md`).
+- **Power BI Stage B** has a
+  [pre-release feed contract](backend/docs/powerbi_stage_b.md); credential
+  availability and reintroduction are governed by the
+  [reader issuance contract](backend/docs/integration_key_machine_principal_rollout.md#reader-key-issuance).
   Stage A (governed file exports into Power BI Desktop) is
   `backend/docs/powerbi_stage_a.md`.
 - **Credit routes moved onto scoped bindings** (`app/api/deps.py::require_credit_*`,
@@ -805,19 +869,9 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
 
 ### BI working rules
 
-- **BI plane** (spec `docs/bi.md`, which is not published; working ledger in the gitignored
-  `.ai/BI_*.md`). Governed analytics over the bank's own treasury data, so a bank can drop
-  its separate Power BI project. It is a **DISPATCH plane**: it reads canonical rows
-  (current generation only), `live_metrics`, `regulatory_runs` and the registers, and writes
-  **the `bi_*` tables plus `ai_commentary_drafts`** (from `app/jobs/bi_commentary.py`; the
-  write guard scans every BI-owned module and names that one permitted write); the
-  regulatory plane never imports BI except the two enqueue-seam modules
-  (`services/bi/enqueue.py`, `services/bi/versions.py`), which import no BI model, builder,
-  catalogue or compiler. `tests/architecture/test_bi_plane_boundary.py` pins it,
-  `derive_facts` included. **Engine metrics are COPIED, never recomputed**, and portfolio
-  measures reuse the engines' own pure functions out of `app/domain/` — one definition, not
-  a BI copy.
-- **Nothing is mounted by default:** all six `BiSettings` booleans (`BI_ENABLED`,
+- **BI plane boundaries and metric provenance** are owned by
+  [§3e](#3e-bi-plane-governed-analytics-over-the-banks-own-treasury-and-alm-data).
+- **BI routes refuse by default:** all six `BiSettings` booleans (`BI_ENABLED`,
   `BI_MART_ENQUEUE_ENABLED`, `BI_SCHEDULER_ENABLED`, `BI_ALERTS_ENABLED`,
   `BI_SUBSCRIPTIONS_ENABLED`, `BI_NLQ_ENABLED`) default off, so every BI route 404s until
   `BI_ENABLED` is set; `GET /feature-flags` projects all six. Turning it on is the ORDERED
@@ -834,9 +888,10 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   green Postgres run is not evidence of this** — an RLS test self-skips at exit 0 when the
   `TEST_DATABASE_URL` role bypasses RLS or when `TEST_DATABASE_URL` is not exported, and
   privilege proofs need `CREATEROLE`. Check that the intended RLS and privilege proofs
-  actually ran. `risk-service:test-postgres-schema` provisions a local `NOBYPASSRLS`
-  test role with `CREATEROLE` and requires the privilege proofs to run; a supplied URL
-  must provide equivalent privileges. See [test database setup](backend/README.md#run-tests).
+  actually ran. `risk-service:test-postgres-schema` requires the privilege proofs to run;
+  local and supplied-service role preparation is owned by the
+  [database role handoff](docs/ops/database-roles.md#migration-and-local-development-order).
+  See [test database setup](backend/README.md#run-tests).
 - **Missing data is never zero, structurally.** A measure with no target has no
   `bi_fact_target` row; a widget with no data says `needs_data: <dataset>` (or
   `pending_capability` when the gap is platform work, not the bank's book); an insight may
@@ -847,20 +902,22 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   sensitivity) across measures, dimensions AND filters, deny-by-default, and export
   authority is derived from the member set the query touches — never a client flag, and
   re-checked after compilation where the second check can only refuse.
-- **No `text()` in `app/services/bi` or `app/domain/bi`** (an AST guard that proves
-  itself), no currency/regulator literal in BI code or pack JSON — though `eve_base_ghs` and
+- **Compiler SQL safety** is owned by
+  [§3e](#3e-bi-plane-governed-analytics-over-the-banks-own-treasury-and-alm-data).
+  No currency/regulator literal in BI code or pack JSON — though `eve_base_ghs` and
   `ghs_millions` are load-bearing wire keys, not leaks, exactly like the `bog_` fact
   categories and the `refinitiv` vendor id.
 - **The packs name `.crd.official` measures and are correct for a BANK only** — an SDI has a
   different capital regime and is refused the packs surface until its own pack set ships
   (the gate resolves through the authority registry and opens by itself).
-- **BI tables span three model modules** (`app/models/bi.py`, `bi_content.py`,
-  `bi_notifications.py`), and three registries each convict you by name if you miss a new
-  table: the plane guard's `BI_OWNED` globs, its writable-table derivation, and the table
-  census that requires every `bi_*` table to be named by exactly one module's tuple. **Check
-  which Postgres suite iterates your table** — `tests/db/test_bi_foundation_migration.py`
-  reads `app/models/bi.py` ALONE, and `tests/db/test_bi_phase3_migration.py` gives the other
-  modules' tables column, CHECK and FORCE-RLS parity. Without that parity a column too narrow
+- **BI model registration and migration parity** are pinned by
+  `tests/db/test_bi_owned_tables_parity.py`: its subject is the union of tables declared
+  under `app.bi.models` and `bi_*` tables in `Base.metadata`, including
+  `ai_commentary_drafts`. Each must appear in exactly one model module's table tuple.
+  Its Postgres checks cover RLS, column types/lengths/nullability and CHECK names/values;
+  `test_bi_migration_structural_parity.py` covers primary keys, foreign keys and indexes.
+  The foundation and Phase 3 migration suites iterate narrower subsets; use the derived
+  census for complete coverage. Without that parity a column too narrow
   for the values copied into it passes on SQLite (which ignores VARCHAR lengths) and fails a
   tenant's WHOLE nightly build on Postgres, because the model and the migration agree on the
   wrong number.
@@ -876,16 +933,11 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   not in `refresh_bank_as_of`**: the backfill calls the builder once per date, so a hook
   inside it would mail a bank a thousand board packs, and the builder's `skipped` outcome is
   what makes both triggers idempotent.
-- **A binding is a five-dimension sentence.** Data scope is REAL:
-  `authorization_bindings.data_scope_kind/values`, reduced PER CAPABILITY by
-  `authorization.reduce_data_scope` — never union ids matched against different resources
-  (`services/bi/authorization.py` and `services/bi/feeds/authorization.py` both go through
-  the shared `combine_pair_scopes`) — resolved by `services/bi/data_scope.py` and injected
-  BESIDE the `BiQuery` so no client can remove it; `scripts/authorization_access_impact.py`
-  reports it (`data scope` column, `scoped_reader` flag) and is the gate for any change that
-  touches it. `bi_reader` is the second machine bundle (`{view}`, disjoint from
-  `integration_writer`'s `{ingest}`) for the Stage B feed (`backend/docs/powerbi_stage_b.md`);
-  Stage A is `powerbi_stage_a.md`.
+- **BI data-scope reduction, resolution and injection** are owned by the
+  [enforcement contract](backend/docs/bi_enforcement_rollout.md#branch-and-region-scope-is-enforced-desk-and-currency-are-not).
+  Its access-impact gate applies to changes to those rules. Power BI integration contracts:
+  [Stage B](backend/docs/powerbi_stage_b.md) and
+  [Stage A](backend/docs/powerbi_stage_a.md).
 - **BI carries NO reconciliation to the regulatory returns:** treasury/ALM and the
   regulatory spine are different planes, and BI is intelligence over the bank's own treasury
   data. There are no regulatory reconciliation checks, no trust badge on BI payloads or
@@ -1081,7 +1133,7 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 
 | Target                   | Commands                                                                                                                                                                                                                                                                                                        |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/typing_ratchet.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                            |
+| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/type_check_baseline.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                       |
 | risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                                                |
 | risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                |
 | dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
@@ -1096,12 +1148,12 @@ All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 appeared in no workflow at all, and the dashboard workflow ran neither `lint` nor `test`, so
 the regulatory fail-open guard and the browser-runtime SSRF guard were unenforced):
 
-| Workflow                                   | Jobs                                                                                                                           |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `.github/workflows/risk-service.yml`       | `static` · `architecture` · `postgres` · `postgres-suite` (with OpenBao) · `storage` · `api-fresh` · `real-data` (conditional) |
-| `.github/workflows/dashboard.yml`          | `dashboard` — client typecheck, dashboard typecheck, lint, test, production build + Command Center entry-graph guard           |
-| `.github/workflows/web.yml`                | `frontend` — lint, build · `console` — typecheck, test, build                                                                  |
-| `.github/workflows/dashboard-journeys.yml` | `journeys` — manual dispatch; see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)                  |
+| Workflow                                   | Jobs                                                                                                                                                                                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.github/workflows/risk-service.yml`       | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests)   |
+| `.github/workflows/dashboard.yml`          | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection) |
+| `.github/workflows/web.yml`                | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                            |
+| `.github/workflows/dashboard-journeys.yml` | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                               |
 
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.
@@ -1113,13 +1165,20 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
 
 ### CI enforcement
 
-- **CI enforces every surface.** `risk-service.yml` gates the backend, `dashboard.yml`
-  gates typecheck + **lint** + **test** + build, `web.yml` gates `frontend` lint+build
-  and `console` typecheck+test+build, and the manual-dispatch `dashboard-journeys.yml`
-  runs the dashboard Playwright journeys against disposable MinIO. See
-  [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for the
-  reasoned, size-pinned quarantine and the canonical fixture carried forward through the
-  last month end on or before today. These gates are what enforce the dashboard's
+- **Merge-queue checks run on the queued merge result.** The backend, dashboard,
+  web, dashboard-journey and secret-scan workflows trigger on pull requests,
+  pushes to `main`, and `merge_group` events of type `checks_requested`.
+  Merge groups select every CI area rather than applying PR path filters;
+  [Postgres suite selection](backend/README.md#run-tests) governs shard coverage.
+  [The merge-queue guard](backend/tests/architecture/test_merge_queue.py) pins
+  the triggers and required-check names. Enabling the queue and configuring
+  required checks on `main` remain repository-settings work.
+- **CI enforces every surface.** `risk-service.yml` gates the backend; `dashboard.yml`
+  enforces the dashboard gates listed above; `web.yml` gates `frontend` lint+build
+  and `console` typecheck+test+build, and `dashboard-journeys.yml` gates browser
+  journeys. [Dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)
+  owns journey selection, runner isolation, the required check, quarantine and
+  fixture setup. These gates are what enforce the dashboard's
   fail-open guard, SSRF egress guard, and browser journeys, and they cover `frontend/`
   and `console/`. Each workflow's header comment is its gate inventory — keep it
   accurate. Which Postgres job owns which test suites is defined by the
@@ -1189,16 +1248,119 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
   `usd_funding_stress` (snapshot `bank-facts-v3`); server-side EWI/CFP with the ¶74
   notification (`/banks/{id}/liquidity/ewis|cfp`); reverse stress (module
   `reverse_stress`); STRESS-PACK return (family `stress`, event-driven); IFRS 9 ECL
-  (`app/domain/capital/ecl.py`; active only when `ecl_exposure` facts AND the
-  `ecl-assumptions` register exist — otherwise the ingested-provisions path is
-  byte-identical) + CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +
+  ([assumption and coverage contract](#ecl-assumption-and-coverage-contract)) +
+  CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +
   `crm-haircuts` register); ICAAP capital plan + quarterly ILAAP snapshots; examiner role
   (ladder position analyst > examiner > viewer — reads everything, no mutation gate admits
-  it). LAS-QUARTERLY is registry+calendar REAL but generates `template_pending` until the
-  official form lands (never infer a BoG layout); the monthly balance-sheet + P&L pack is
+  it). LAS-QUARTERLY is registered for preparation under the
+  [instrument-status contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)
+  and generates `template_pending` until the official form lands (never infer a BoG layout);
+  the monthly balance-sheet + P&L pack is
   filed as the official BSD2 and BSD7A forms. The executable completion proof is
   `tests/services/test_phase2_full_report_proof.py` — every registered return generates +
   exports (or refuses by design) over the full official-run sweep; keep it green.
+
+#### ECL assumption and coverage contract
+
+Capital's on-balance credit basis is the internal `credit_exposure` fact group,
+derived by `fact_derivation._derive_credit_exposure` under BoG CRD (June 2018)
+Part 2. It nets specific provisions and interest in suspense per exposure (¶98),
+classifies securities separately from HQLA, and uses original maturity for the
+short interbank weight (¶123–124). Accounting loan balances and staged IFRS 9
+EAD stay gross. Capital excludes covered loan, securities and interbank GL contra
+accounts from residual RWA to avoid deducting the same provision twice; general allowances do not reduce
+credit RWA. Official, live, forecast and enterprise-stress readers must include
+this group; a missing basis refuses fresh calculations until facts are re-derived.
+Older immutable snapshots retain their original measurement basis.
+Regression coverage: `backend/tests/services/test_crd_credit_exposures.py`.
+
+Enterprise stress compares the current accepted loan and placement source identities,
+lineage and values with the source basis recorded on `bank_reporting_periods` by
+successful official derivation. A changed or withdrawn book, including withdrawal
+of its final snapshot, or a missing recorded source basis requires official
+re-derivation before stress; the refusal is HTTP 409 and creates no run. An empty
+book with a matching recorded basis remains valid. This source
+provenance stays outside financial facts, calculation input snapshots and hashes.
+Regression coverage: `backend/tests/services/test_crd_stress_basis_reconciliation.py`.
+
+The bottom-up migration and FX overlay covers loans and interbank placements.
+It applies exposure-level RWA deltas to each year's grown net credit buckets after
+governed CRM allocation, leaving other credit buckets outside the overlay.
+Supplied exposures with zero base RWA still produce losses and RWA deltas;
+`credit_rwa_uplift_factor` is `null` because its denominator is zero. Calling the
+bottom-up engine without exposures refuses as missing input; enterprise stress
+omits that overlay for a matching empty book.
+
+The IFRS 9 model (`backend/app/domain/capital/ecl.py`) runs only when staged
+`ecl_exposure` facts and an effective `ecl-assumptions` register both exist. It
+is a what-if and stress estimate: Tier 2 always carries the bank's booked
+general provisions, the figure of record, in capital runs, forecasts and
+enterprise stress. A capital scenario that conditions the ECL (`ecl_*` shock
+keys) takes the increase in modelled stage 1+2 ECL over the unconditioned
+baseline as a CET1 deduction (`modelled_ecl_stress_charge`,
+`ecl_stress_charge_ghs`); a fall is never credited. Capital and enterprise
+stress apply the conservative treatment: no tax shield applied pending a
+governed tax-rate parameter and supported deferred-tax recognition. Plan tax
+defaults and overrides only tax positive operating income; they do not
+authorize an ECL tax shield. Enterprise stress puts only the increase in
+stage 1+2 ECL through CET1 via the quarterly credit-loss key, excluding stage 3
+specific provisions; its fallback scales booked general provisions. The annual
+projection preserves baseline plan losses on the whole loan book and conditions
+only stage 1+2 EAD for the incremental macro charge after checking source
+coverage, staged EAD against the loan book, and an effective assumptions
+register. The absolute EAD difference may be at most the number of staged
+buckets times the derivation rounding unit (0.0001), accommodating independently
+rounded loan totals and stage buckets in either direction. An incomplete source
+verdict still refuses the run. Partial staging or a missing register returns
+`ecl_coverage_incomplete` before either projection leg runs. Staged EAD rolls
+forward with loan growth; without staging the annual plan cost-of-risk proxy
+covers the loan book. Annual tax is computed before the incremental charge, which reaches
+net income and retained earnings gross, including when profit crosses zero.
+The same annual outputs feed management actions and Appendix II.
+
+Enterprise stress v4.2 changes annual impairment losses, tax, pre-tax and net
+profit, dividends, retained earnings, CET1/total capital, funding balances,
+RWA and capital/liquidity ratios and minima wherever these corrections affect
+the projection. Baseline plan arithmetic is preserved; historical runs retain
+their recorded figures.
+
+The ECL registry entries are `advisory_only`, so reporting provenance identifies
+them as what-if estimates. Capital run metrics carry per-figure `basis` metadata
+for prudential figures using booked allowances, modelled totals and stages,
+ingested unstaged EAD and conservative prudential stress charges. Enterprise
+outcomes label their ECL basis and incremental credit-loss tax treatment.
+
+Register updates at `/api/v1/banks/{bank_id}/ecl-assumptions` accept `ALL` or a
+loan exposure category from `LOAN_EXPOSURE_CATEGORIES` in
+`backend/app/domain/positions/families.py`. Save and lookup trim segments and
+normalize them to upper case; a segment-specific row takes precedence over
+`ALL` for the same stage. Unknown segments return HTTP 422. The category
+vocabulary is owned by the loan-family map, not a separate documentation list.
+
+Every non-zero staged EAD bucket needs a matching assumption or a stage-specific
+`ALL` fallback. Missing coverage fails capital with `ecl_segment_uncovered`;
+enterprise stress refuses the request with HTTP 409 and `ecl_coverage_incomplete`.
+Forecasts do not consume the register. Add the missing segment/stage
+rows or an `ALL` row for each affected stage; zero-EAD buckets need no assumption.
+
+Derivation warnings count all unstaged loans, including loans without a
+reporting-currency balance and books that emit no staged buckets. Known EAD is
+reported separately from the count of unconverted unstaged loans. Each emitted
+bucket carries `ecl_coverage_complete`, determined from the source loans before
+unconverted balances are omitted. Annual enterprise stress preserves this
+verdict through forecast facts and refuses stage-restricted losses with partial
+coverage, independently of register availability. For facts without coverage
+metadata, the shared capital helper uses aggregate EAD coverage with the same
+bucket quantization bound.
+`ecl_unstaged_ead_ghs`, when present in capital metrics, measures only the known
+reporting-currency EAD gap; it is not a completeness verdict.
+
+Current calculation versions are owned by the
+[authority registry](backend/app/domain/authority/registry.py) and the engines'
+`ENGINE_VERSION` constants. New versions append runs; stored inputs, hashes and
+results of historical runs remain unchanged. Regression evidence lives in
+`backend/tests/services/test_ecl_and_crm.py` and
+`backend/tests/domain/test_stress_orchestrator.py`.
 
 ### Governed forecast assumptions
 
@@ -1225,6 +1387,6 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
 
 ### Known pre-existing typing debt
 
-Legacy type-error counts are recorded in `backend/scripts/typing_baseline.json`; the
-[typing ratchet](CODEBASE_CONVENTIONS.md#typing-ratchet) owns their maintenance rules.
+Legacy type-error counts are recorded in `backend/scripts/type_check_baseline.json`; the
+[type-check baseline](CODEBASE_CONVENTIONS.md#type-check-baseline) owns their maintenance rules.
 Current lint and typecheck results come from the [validation commands](#8-validation-commands).

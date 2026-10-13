@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Permission, Sensitivity
-from app.models import Bank, BankReportingPeriod, StressScenario
+from app.identity.public import Bank
+from app.models import BankReportingPeriod, StressScenario
 from app.schemas.scenario_workbench import (
     ScenarioCatalogueEntryRead,
     ScenarioCatalogueRead,

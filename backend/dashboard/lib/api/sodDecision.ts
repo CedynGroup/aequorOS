@@ -1,25 +1,19 @@
 /**
- * The separation-of-duties findings the server sends with a refused grant.
- *
- * `POST /authorization/bindings` returns 409 with
- * `details.sod_decision.findings`, each one a code and a sentence saying which
- * rule fired. The Members dialog rendered only the exception's own text —
- * "The scoped grant conflicts with separation-of-duties policy." — which names
- * no rule, no bundle and no remedy.
- *
- * An Org Owner who tries to grant themselves Validator is blocked by C9:
- * account administration and operational maker/checker authority must stay on
- * different identities. That is a correct, deliberate refusal. Shown as the
- * generic line it reads as a malfunction, and the Owner's next move is to try
- * the same thing again with different scopes — which cannot work, because the
- * conflict is about WHO they are, not how narrow the grant is.
+ * Read server findings from a refused grant without deriving policy locally.
  *
  * Untrusted shape on purpose: `details` is `unknown` on ApiError, and a
  * malformed payload must produce no findings rather than a crash or a blank
- * bullet. Pure — no app imports, so the node harness can reach it.
+ * bullet. Pure — only sibling pure modules, so the node harness can reach it.
  */
 
-export type SodFinding = Readonly<{ code: string; message: string }>;
+import { canRevokeFromMembers } from "./grants";
+
+export type SodFinding = Readonly<{
+  code: string;
+  message: string;
+  /** The member's existing grants this finding fired on. */
+  conflictingBindingIds?: readonly string[];
+}>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -39,7 +33,11 @@ export function sodFindings(details: unknown): SodFinding[] {
     const message = candidate.message;
     if (typeof message !== "string" || message.length === 0) continue;
     const code = typeof candidate.code === "string" ? candidate.code : "";
-    findings.push({ code, message });
+    const rawIds = candidate.conflicting_binding_ids;
+    const conflictingBindingIds = Array.isArray(rawIds)
+      ? rawIds.filter((id): id is string => typeof id === "string")
+      : [];
+    findings.push({ code, message, conflictingBindingIds });
   }
   return findings;
 }
@@ -61,4 +59,46 @@ export function sodRemedy(findings: readonly SodFinding[]): string | null {
     );
   }
   return null;
+}
+
+type ConflictGrant = Readonly<{
+  id: string;
+  roleBundle: string;
+  effective: boolean;
+}>;
+
+/**
+ * What a notice offers for the grants its findings fired on.
+ *
+ * `reviewable` are the conflicting grants this viewer may open and revoke
+ * through the normal Members flow, in finding order and without repeats.
+ * `askAdministrator` is true when a revocable conflict exists that this viewer
+ * cannot revoke, or a finding names a binding missing from the loaded member.
+ * A loaded grant Members never revokes (ownership, baseline membership) gets
+ * neither: nobody can change it from here.
+ */
+export function conflictGrantActions<G extends ConflictGrant>(
+  findings: readonly SodFinding[],
+  grants: readonly G[],
+  canAdministerGrants: boolean,
+): Readonly<{ reviewable: readonly G[]; askAdministrator: boolean }> {
+  const byId = new Map(grants.map((grant) => [grant.id, grant]));
+  const seen = new Set<string>();
+  const conflicting: G[] = [];
+  let missing = false;
+  for (const finding of findings) {
+    for (const id of finding.conflictingBindingIds ?? []) {
+      const grant = byId.get(id);
+      if (!grant) {
+        missing = true;
+        continue;
+      }
+      if (seen.has(id) || !canRevokeFromMembers(grant)) continue;
+      seen.add(id);
+      conflicting.push(grant);
+    }
+  }
+  return canAdministerGrants
+    ? { reviewable: conflicting, askAdministrator: missing }
+    : { reviewable: [], askAdministrator: missing || conflicting.length > 0 };
 }

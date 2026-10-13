@@ -27,7 +27,7 @@ import pytest
 from sqlalchemy import text
 
 from alembic import command
-from app.services.icaap.parameters import ICAAP_PARAM_CODES
+from app.icaap.service.parameters import ICAAP_PARAM_CODES
 from app.services.regulatory_parameters import (
     ICAAP_P2_SEED_PARAMETERS,
     P2_PARAMETER_CODES,

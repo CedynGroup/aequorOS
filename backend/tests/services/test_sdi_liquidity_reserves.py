@@ -17,7 +17,7 @@ from typing import Any, cast
 from sqlalchemy.orm import Session
 
 from app.models import Bank
-from app.services.regulatory_reporting.le_generation import (
+from app.reporting.service.le_generation import (
     _append_liquidity_reserve_check,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.support.helpers import ORG_1

@@ -1,6 +1,40 @@
 """Live's interface for other features: re-exports only, no logic."""
 
-from app.models.regulatory import BankReportingPeriod
+from app.live.fx_book import (
+    require_fx_fact_coverage,
+    require_fx_run_coverage,
+    require_run_currency_coverage,
+    required_fx_currencies_by_date,
+)
+from app.live.position_book import (
+    CREDIT_POSITION_TYPES,
+    INCLUDED_VALIDATION_STATUSES,
+    SourceRecord,
+    credit_source_basis,
+    load_position_records,
+)
+from app.models.live import LiveMetric
+from app.models.regulatory import BankFinancialFact, BankReportingPeriod
+from app.models.regulatory_run import RegulatoryLineItem, RegulatoryMetricResult, RegulatoryRun
+from app.services import fact_derivation
 from app.services.live_refresh_triggers import enqueue_bank_change
 
-__all__ = ["BankReportingPeriod", "enqueue_bank_change"]
+__all__ = [
+    "BankFinancialFact",
+    "BankReportingPeriod",
+    "CREDIT_POSITION_TYPES",
+    "INCLUDED_VALIDATION_STATUSES",
+    "LiveMetric",
+    "RegulatoryLineItem",
+    "RegulatoryMetricResult",
+    "RegulatoryRun",
+    "SourceRecord",
+    "credit_source_basis",
+    "enqueue_bank_change",
+    "fact_derivation",
+    "load_position_records",
+    "require_fx_fact_coverage",
+    "require_fx_run_coverage",
+    "require_run_currency_coverage",
+    "required_fx_currencies_by_date",
+]

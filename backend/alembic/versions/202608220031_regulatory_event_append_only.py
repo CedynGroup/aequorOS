@@ -5,10 +5,10 @@ Revises: 202608220030
 
 Approvals and submission events are evidential records. Their models already
 describe them as append-only, but before this migration Postgres accepted
-updates and deletes. The test fixture resets its hermetic sample bank between
-cases, so a transaction-local, explicitly named test-reset GUC permits only
-those fixture deletes; it never permits updates and application code never sets
-it.
+updates and deletes. At this revision a transaction-local test-reset GUC permits
+fixture deletes but never updates. The later sweep removes that deletion escape;
+the current retention contract is owned by
+``backend/docs/tamper_evident_records.md`` ("Append-only inventory and sweep").
 """
 
 from alembic import op

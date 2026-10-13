@@ -140,6 +140,49 @@ test.describe("operational Analyst", () => {
 test.describe("Organization Owner", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
+  test("signing policies use the registry when Capital reads are unavailable", async ({
+    page,
+  }) => {
+    await page.route("**/auth/me", async (route) => {
+      const response = await route.fetch();
+      const profile = await response.json();
+      for (const institution of profile.effective_authority
+        .institution_capabilities) {
+        institution.capabilities = institution.capabilities.filter(
+          (capability: { module: string }) => capability.module !== "cap",
+        );
+      }
+      await route.fulfill({ response, json: profile });
+    });
+    await page.route("**/regulatory-reporting/templates*", async (route) => {
+      const response = await route.fetch();
+      const catalogue = await response.json();
+      if (new URL(route.request().url()).searchParams.has("bank_id")) {
+        catalogue.templates = catalogue.templates.filter(
+          (template: { family: string }) => template.family !== "icaap",
+        );
+      }
+      await route.fulfill({ response, json: catalogue });
+    });
+    await page.goto("/submissions/settings");
+    const selector = page.getByLabel("Return code", { exact: true });
+    await expect(selector).toBeVisible();
+    await expect(selector.locator('option[value="ICAAP-REPORT"]')).toHaveCount(
+      1,
+    );
+    await selector.selectOption("ICAAP-REPORT");
+    await expect(selector).toHaveValue("ICAAP-REPORT");
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(
+          evidenceDir,
+          "owner-signing-policy-without-capital-read.png",
+        ),
+        fullPage: true,
+      });
+    }
+  });
+
   test("can administer integration keys from Access", async ({ page }) => {
     await page.goto("/access/integration-keys");
     await expect(

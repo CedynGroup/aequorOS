@@ -1,6 +1,7 @@
 .DS_Store
 node_modules/
 pnpm-debug.log*
+.pnpm-store/
 *.tsbuildinfo
 
 # Never commit credentials or local environment files.
@@ -66,6 +67,7 @@ coverage/
 !/docs/API_INTEGRATION.md
 !/docs/BOG_ONBOARDING.md
 !/docs/DASHBOARD_DESIGN_SYSTEM.md
+!/docs/ops/database-roles.md
 !/docs/sso-onboarding.md
 !/docs/sdi_onboarding_runbook.md
 

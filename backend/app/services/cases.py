@@ -20,7 +20,8 @@ from app.domain.risk_constants import (
     CaseStatus,
     RiskLevel,
 )
-from app.models import RiskCase, RiskCaseDecision, RiskFinding, RiskScore, User
+from app.identity.public import User
+from app.models import RiskCase, RiskCaseDecision, RiskFinding, RiskScore
 from app.services.audit import record_event
 from app.services.case_types import (
     BulkArchiveCaseActionCommand,

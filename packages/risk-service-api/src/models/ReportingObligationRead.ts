@@ -18,27 +18,6 @@ import {
   DueTimeToJSON,
   DueTimeToJSONTyped,
 } from "./DueTime";
-import type { FidelityGrade } from "./FidelityGrade";
-import {
-  FidelityGradeFromJSON,
-  FidelityGradeFromJSONTyped,
-  FidelityGradeToJSON,
-  FidelityGradeToJSONTyped,
-} from "./FidelityGrade";
-import type { ReturnFamily } from "./ReturnFamily";
-import {
-  ReturnFamilyFromJSON,
-  ReturnFamilyFromJSONTyped,
-  ReturnFamilyToJSON,
-  ReturnFamilyToJSONTyped,
-} from "./ReturnFamily";
-import type { ObligationAnnexRead } from "./ObligationAnnexRead";
-import {
-  ObligationAnnexReadFromJSON,
-  ObligationAnnexReadFromJSONTyped,
-  ObligationAnnexReadToJSON,
-  ObligationAnnexReadToJSONTyped,
-} from "./ObligationAnnexRead";
 import type { AnchorDataStatus } from "./AnchorDataStatus";
 import {
   AnchorDataStatusFromJSON,
@@ -60,6 +39,55 @@ import {
   ChannelCodeToJSON,
   ChannelCodeToJSONTyped,
 } from "./ChannelCode";
+import type { PackageVersion } from "./PackageVersion";
+import {
+  PackageVersionFromJSON,
+  PackageVersionFromJSONTyped,
+  PackageVersionToJSON,
+  PackageVersionToJSONTyped,
+} from "./PackageVersion";
+import type { ReturnFrequency } from "./ReturnFrequency";
+import {
+  ReturnFrequencyFromJSON,
+  ReturnFrequencyFromJSONTyped,
+  ReturnFrequencyToJSON,
+  ReturnFrequencyToJSONTyped,
+} from "./ReturnFrequency";
+import type { FidelityGrade } from "./FidelityGrade";
+import {
+  FidelityGradeFromJSON,
+  FidelityGradeFromJSONTyped,
+  FidelityGradeToJSON,
+  FidelityGradeToJSONTyped,
+} from "./FidelityGrade";
+import type { InstrumentStatus } from "./InstrumentStatus";
+import {
+  InstrumentStatusFromJSON,
+  InstrumentStatusFromJSONTyped,
+  InstrumentStatusToJSON,
+  InstrumentStatusToJSONTyped,
+} from "./InstrumentStatus";
+import type { ReturnFamily } from "./ReturnFamily";
+import {
+  ReturnFamilyFromJSON,
+  ReturnFamilyFromJSONTyped,
+  ReturnFamilyToJSON,
+  ReturnFamilyToJSONTyped,
+} from "./ReturnFamily";
+import type { ObligationAnnexRead } from "./ObligationAnnexRead";
+import {
+  ObligationAnnexReadFromJSON,
+  ObligationAnnexReadFromJSONTyped,
+  ObligationAnnexReadToJSON,
+  ObligationAnnexReadToJSONTyped,
+} from "./ObligationAnnexRead";
+import type { EffectiveFrom } from "./EffectiveFrom";
+import {
+  EffectiveFromFromJSON,
+  EffectiveFromFromJSONTyped,
+  EffectiveFromToJSON,
+  EffectiveFromToJSONTyped,
+} from "./EffectiveFrom";
 import type { PackageId } from "./PackageId";
 import {
   PackageIdFromJSON,
@@ -81,20 +109,6 @@ import {
   ReturnBasisToJSON,
   ReturnBasisToJSONTyped,
 } from "./ReturnBasis";
-import type { PackageVersion } from "./PackageVersion";
-import {
-  PackageVersionFromJSON,
-  PackageVersionFromJSONTyped,
-  PackageVersionToJSON,
-  PackageVersionToJSONTyped,
-} from "./PackageVersion";
-import type { ReturnFrequency } from "./ReturnFrequency";
-import {
-  ReturnFrequencyFromJSON,
-  ReturnFrequencyFromJSONTyped,
-  ReturnFrequencyToJSON,
-  ReturnFrequencyToJSONTyped,
-} from "./ReturnFrequency";
 
 /**
  *
@@ -140,6 +154,12 @@ export interface ReportingObligationRead {
   dueTime?: DueTime;
   /**
    *
+   * @type {EffectiveFrom}
+   * @memberof ReportingObligationRead
+   */
+  effectiveFrom?: EffectiveFrom;
+  /**
+   *
    * @type {FidelityGrade}
    * @memberof ReportingObligationRead
    */
@@ -150,6 +170,12 @@ export interface ReportingObligationRead {
    * @memberof ReportingObligationRead
    */
   frequency: ReturnFrequency;
+  /**
+   *
+   * @type {InstrumentStatus}
+   * @memberof ReportingObligationRead
+   */
+  instrumentStatus?: InstrumentStatus;
   /**
    *
    * @type {PackageId}
@@ -256,8 +282,16 @@ export function ReportingObligationReadFromJSONTyped(
     dueDate: new Date(json["due_date"]),
     dueTime:
       json["due_time"] == null ? undefined : DueTimeFromJSON(json["due_time"]),
+    effectiveFrom:
+      json["effective_from"] == null
+        ? undefined
+        : EffectiveFromFromJSON(json["effective_from"]),
     fidelity: FidelityGradeFromJSON(json["fidelity"]),
     frequency: ReturnFrequencyFromJSON(json["frequency"]),
+    instrumentStatus:
+      json["instrument_status"] == null
+        ? undefined
+        : InstrumentStatusFromJSON(json["instrument_status"]),
     packageId: PackageIdFromJSON(json["package_id"]),
     packageStatus: ObligationAnnexReadPackageStatusFromJSON(
       json["package_status"],
@@ -295,8 +329,10 @@ export function ReportingObligationReadToJSONTyped(
     default_channel: ChannelCodeToJSON(value["defaultChannel"]),
     due_date: value["dueDate"].toISOString().substring(0, 10),
     due_time: DueTimeToJSON(value["dueTime"]),
+    effective_from: EffectiveFromToJSON(value["effectiveFrom"]),
     fidelity: FidelityGradeToJSON(value["fidelity"]),
     frequency: ReturnFrequencyToJSON(value["frequency"]),
+    instrument_status: InstrumentStatusToJSON(value["instrumentStatus"]),
     package_id: PackageIdToJSON(value["packageId"]),
     package_status: ObligationAnnexReadPackageStatusToJSON(
       value["packageStatus"],

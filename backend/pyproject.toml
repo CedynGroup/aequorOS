@@ -38,7 +38,7 @@ dependencies = [
   "pyhanko[opentype]",
   "pyhanko-certvalidator",
   "pyjwt[crypto]",
-  # The ICAAP working copy (app/services/icaap/render/docx.py) is an editable
+  # The ICAAP working copy (app/icaap/service/render/docx.py) is an editable
   # Word document, not a rendering of one: the bank's own reviewers redline it
   # outside the platform. python-docx (MIT) writes the OOXML package directly;
   # its own dependencies (lxml, typing-extensions) were already locked.
@@ -54,6 +54,8 @@ dependencies = [
   "scipy",
   "sqlalchemy",
   "torch",
+  "requests>=2.34.2",
+  "aws-encryption-sdk[mpl]>=4.0.5,<5",
 ]
 
 # Driver-heavy database-direct backends. Lazily imported by
@@ -62,7 +64,7 @@ dependencies = [
 #   uv sync --extra db-direct
 [project.optional-dependencies]
 # Hardware signing custody (docs/attestation_esignature.md §3.4). The PKCS#11
-# driver is lazily imported inside app/services/attestation/signers.py, so the
+# driver is lazily imported inside app/attestation/service/signers.py, so the
 # default environment stays installable and the software/dev backend and its
 # tests run without an HSM. Install when wiring a real token/HSM:
 #   uv sync --extra hsm
@@ -87,12 +89,15 @@ dev = [
   "pytest",
   "ruff",
   "pytest-xdist",
+  "types-requests>=2.33.0.20261006",
+  "moto[kms,s3]>=5,<6",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
+  "requirement(citation): behavioral regression against a cited external requirement",
   "committing_db: use real commits and independent connections in a shared schema reset before each test",
 ]
 

@@ -23,13 +23,7 @@ import {
 } from "@/lib/api/hooks";
 import { fmtRelative } from "@/lib/api/values";
 import { hasAccountAdministrationAuthority } from "@/lib/api/accountAdministration";
-import {
-  DATA_PUSH_PURPOSE,
-  INTEGRATION_KEY_PURPOSES,
-  keyAuthorizesNothing,
-  purposeLabel,
-  type IntegrationKeyPurpose,
-} from "@/lib/api/integrationKeys";
+import { keyAuthorizesNothing, purposeLabel } from "@/lib/api/integrationKeys";
 import { downloadTextFile } from "@/lib/download";
 import {
   ENTITY_SPECS,
@@ -99,10 +93,8 @@ export function ConnectionCard() {
           </p>
           <p className="mt-1 text-body text-navy/80 leading-relaxed">
             A key identifies and authorizes your institution as a service
-            account with one exact bank-scoped grant for one purpose: a data
-            push key can only push records, and an analytics feed key can only
-            read the analytics feed. Neither can stand in for the other, and
-            neither works for a sibling bank. Each key is shown once at
+            account with one exact bank-scoped grant to push records. It cannot
+            read analytics or access a sibling bank. Each key is shown once at
             generation and stored only as a hash. If a key is exposed, revoke it
             immediately under{" "}
             <Link href="/access/integration-keys" className="underline">
@@ -124,11 +116,6 @@ export function IntegrationKeysPanel() {
   const issue = useIssueIntegrationKey();
   const revoke = useRevokeIntegrationKey();
   const [label, setLabel] = useState("");
-  // What the key is FOR. The server defaults an unstated purpose to a data
-  // push key, and the analytics feed refuses that key — so the choice is made
-  // here, explicitly, and posted with every request (audit A360-2 H4).
-  const [purpose, setPurpose] =
-    useState<IntegrationKeyPurpose>(DATA_PUSH_PURPOSE);
   // The one moment the raw key is visible — held in memory only, never listed.
   const [freshKey, setFreshKey] = useState<{
     value: string;
@@ -144,9 +131,6 @@ export function IntegrationKeysPanel() {
     );
   }
   const keys = keysQuery.data?.keys ?? [];
-  const chosen =
-    INTEGRATION_KEY_PURPOSES.find((option) => option.value === purpose) ??
-    INTEGRATION_KEY_PURPOSES[0];
 
   return (
     <div className="mt-5 border-t border-border-light pt-4">
@@ -191,7 +175,7 @@ export function IntegrationKeysPanel() {
           event.preventDefault();
           if (!bank || !label.trim() || issue.isPending) return;
           issue.mutate(
-            { bankId: bank.id, label: label.trim(), purpose },
+            { bankId: bank.id, label: label.trim() },
             {
               onSuccess: (result) => {
                 setFreshKey({
@@ -207,41 +191,10 @@ export function IntegrationKeysPanel() {
           );
         }}
       >
-        <fieldset className="grid gap-2 md:grid-cols-2">
-          <legend className="mb-1 text-micro uppercase tracking-wider text-slate">
-            What this key is for
-          </legend>
-          {INTEGRATION_KEY_PURPOSES.map((option) => {
-            const selected = option.value === purpose;
-            return (
-              <label
-                key={option.value}
-                className={`flex cursor-pointer items-start gap-2.5 rounded border px-3 py-2.5 ${
-                  selected
-                    ? "border-action bg-action/5"
-                    : "border-border bg-surface hover:border-slate"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="integration-key-purpose"
-                  value={option.value}
-                  checked={selected}
-                  onChange={() => setPurpose(option.value)}
-                  className="mt-1 shrink-0 accent-action"
-                />
-                <span className="min-w-0">
-                  <span className="block text-caption font-medium text-navy">
-                    {option.label}
-                  </span>
-                  <span className="block text-caption text-slate leading-relaxed">
-                    {option.description}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-        </fieldset>
+        <p className="text-caption text-slate">
+          Data push keys let your middleware open batches, stage records and
+          commit them to the Data Engine.
+        </p>
         <div className="flex items-center gap-2">
           <div className="rounded-sm border border-border bg-surface px-3 py-2">
             <p className="text-micro uppercase tracking-wider text-slate">
@@ -257,7 +210,7 @@ export function IntegrationKeysPanel() {
           <input
             value={label}
             onChange={(event) => setLabel(event.target.value)}
-            placeholder={chosen.labelPlaceholder}
+            placeholder="Key label — e.g. Core banking nightly push"
             maxLength={80}
             className="flex-1 rounded-sm border border-border bg-surface-raised px-2.5 py-1.5 text-body text-navy placeholder:text-slate-light"
             aria-label="Key label"
@@ -267,14 +220,12 @@ export function IntegrationKeysPanel() {
             disabled={!bank || !label.trim() || issue.isPending}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 shrink-0"
           >
-            {issue.isPending
-              ? "Generating…"
-              : `Generate ${chosen.label.toLowerCase()}`}
+            {issue.isPending ? "Generating…" : "Generate data push key"}
           </button>
         </div>
         <p className="text-caption text-slate">
-          The key covers the whole institution. Where a narrower slice is
-          needed, issue a key limited to branches or regions through the API.
+          The key can push data only for this institution. It cannot read
+          analytics or access another institution.
         </p>
       </form>
       {issue.isError && (
@@ -309,7 +260,7 @@ export function IntegrationKeysPanel() {
                 {!key.revokedAt && keyAuthorizesNothing(key) && (
                   <p className="mt-1 text-caption font-medium text-critical">
                     {key.bankId
-                      ? "No purpose recorded — rotate. This legacy key authorizes nothing: it can neither push data nor read the feed."
+                      ? "No purpose recorded — rotate. This key has no supported authority."
                       : "Unscoped — rotate. This legacy key cannot push data."}
                   </p>
                 )}

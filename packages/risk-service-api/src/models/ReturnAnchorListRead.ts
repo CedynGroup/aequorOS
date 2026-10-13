@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { InstrumentStatus } from "./InstrumentStatus";
+import {
+  InstrumentStatusFromJSON,
+  InstrumentStatusFromJSONTyped,
+  InstrumentStatusToJSON,
+  InstrumentStatusToJSONTyped,
+} from "./InstrumentStatus";
 import type { ReportingDateSource } from "./ReportingDateSource";
 import {
   ReportingDateSourceFromJSON,
@@ -110,6 +117,12 @@ export interface ReturnAnchorListRead {
   ineligibleReason?: IneligibleReason;
   /**
    *
+   * @type {InstrumentStatus}
+   * @memberof ReturnAnchorListRead
+   */
+  instrumentStatus?: InstrumentStatus;
+  /**
+   *
    * @type {number}
    * @memberof ReturnAnchorListRead
    */
@@ -182,6 +195,10 @@ export function ReturnAnchorListReadFromJSONTyped(
       json["ineligible_reason"] == null
         ? undefined
         : IneligibleReasonFromJSON(json["ineligible_reason"]),
+    instrumentStatus:
+      json["instrument_status"] == null
+        ? undefined
+        : InstrumentStatusFromJSON(json["instrument_status"]),
     lookbackMonths: json["lookback_months"],
     reportingDateSource: ReportingDateSourceFromJSON(
       json["reporting_date_source"],
@@ -211,6 +228,7 @@ export function ReturnAnchorListReadToJSONTyped(
     frequency: ReturnFrequencyToJSON(value["frequency"]),
     horizon_months: value["horizonMonths"],
     ineligible_reason: IneligibleReasonToJSON(value["ineligibleReason"]),
+    instrument_status: InstrumentStatusToJSON(value["instrumentStatus"]),
     lookback_months: value["lookbackMonths"],
     reporting_date_source: ReportingDateSourceToJSON(
       value["reportingDateSource"],

@@ -25,7 +25,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.capital.engine import compute_capital_ratios, compute_rwa
 from app.domain.forecasting.engine import (
-    _general_provisions_override,
     _parse_facts,
     _state_facts,
     _to_capital_facts,
@@ -172,17 +171,13 @@ def test_year_zero_capital_ratios_match_without_needing_the_liquidity_engine(
         "would prove the parity on a book that never had the divergence"
     )
     engine_facts = tuple(regulatory_forecasting._to_engine_fact(fact) for fact in facts)
-    active = regulatory_forecasting._load_active_params(
-        real_session, ctx, bank, period.period_end
-    )
+    active = regulatory_forecasting._load_active_params(real_session, ctx, bank, period.period_end)
     params = regulatory_forecasting._forecast_engine_params(active)
 
     state, meta = _parse_facts(engine_facts)
     capital_facts = _to_capital_facts(_state_facts(state, meta))
     rwa = compute_rwa(capital_facts, params.capital)
-    ratios = compute_capital_ratios(
-        capital_facts, rwa, params.capital, _general_provisions_override(capital_facts, params)
-    )
+    ratios = compute_capital_ratios(capital_facts, rwa, params.capital)
 
     metrics = capital["metrics"]
     assert ratios.car_pct == _dec(metrics["car_pct"])

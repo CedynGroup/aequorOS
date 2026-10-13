@@ -29,6 +29,8 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
+from app.bi.models.content import BiDashboard, BiDashboardVersion, BiMeasure
+from app.bi.models.notifications import BiAlert, BiSubscription
 from app.core.authorization import InstitutionScope, ModuleScope, RoleBundle, SensitivityScope
 from app.models import (
     AuthorizationAccessRequest,
@@ -102,8 +104,6 @@ from app.models import (
     TemenosConnection,
     User,
 )
-from app.models.bi_content import BiDashboard, BiDashboardVersion, BiMeasure
-from app.models.bi_notifications import BiAlert, BiSubscription
 from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
 
 AS_OF: Final = date(2026, 9, 18)
@@ -293,6 +293,7 @@ def _lineage(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
         session,
         LineageRecord(
             organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
             ingestion_batch_id=UUID(objects["ingestion_batch"]),
             operation_type="ADAPTER_EXTRACT",
             operation_ref=tenant.marker,
@@ -1853,7 +1854,7 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
     # which these suites leave unset, so the refusal they currently observe is the
     # deployment flag's 404 rather than the tenancy check's. The ownership and
     # cross-tenant refusals are proven directly, with the flag ON, in
-    # tests/api/test_bi_content_routes.py; the catalogue entries are here so the
+    # tests/bi/api/test_bi_content_routes.py; the catalogue entries are here so the
     # sweep covers them the moment the flag is part of its fixture.
     ObjectKind("bi_dashboard", _bi_dashboard, (f"{_BANK_PREFIX}/bi/dashboards/{{dashboard_id}}",)),
     ObjectKind("bi_measure", _bi_measure, (f"{_BANK_PREFIX}/bi/measures/{{measure_id}}",)),

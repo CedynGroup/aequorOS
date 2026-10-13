@@ -6,9 +6,8 @@
  * declaration, and only while a linked repair is in flight. The custom
  * reporter checks this list against discovery and the test.fail declarations,
  * Playwright fails the run if an expected failure unexpectedly passes, and
- * dashboard-journeys.yml pins the list's size, so a quarantine cannot drift
- * quietly in either direction and parking a journey is always a visible,
- * reviewed decision.
+ * CI enforces quarantine admission separately; see README.md §End-to-end
+ * (Playwright) for the required gate changes.
  *
  * Names take the reporter's form: `<file> › <describe> › <title>`.
  */

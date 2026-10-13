@@ -42,9 +42,10 @@ from app.models import (
     RegulatoryParameter,
     RegulatoryRun,
 )
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import calendar, generation
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import (
     job_queue,
     live_view,
@@ -60,7 +61,6 @@ from app.services.fact_derivation import (
     derive_facts,
     diagnose_source_overlap,
 )
-from app.services.regulatory_reporting import calendar, generation
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.factories.reconciliation import (
@@ -127,6 +127,7 @@ def _seed_duplicate_second_source(db_session: Session) -> None:
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="second-source-fixture",
@@ -918,7 +919,10 @@ def test_calendar_explains_missing_return_coverage(db_session: Session, jurisdic
 
     if jurisdiction == "GH":
         assert result.obligations
-        assert result.coverage_note is None
+        assert all(row.instrument_status == "in_force" for row in result.obligations)
+        assert result.coverage_note is not None
+        assert "SDI-IRRBB-QUARTERLY (exposure draft)" in result.coverage_note
+        assert "SDI-STRESS-ANNUAL (exposure draft)" in result.coverage_note
     else:
         assert result.obligations == []
         assert result.coverage_note == (

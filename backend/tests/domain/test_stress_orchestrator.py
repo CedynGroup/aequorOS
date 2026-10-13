@@ -8,13 +8,15 @@ engine-self-referential.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
+from dataclasses import replace
 from decimal import Decimal
+from typing import cast
 
 import pytest
 
-from app.domain.capital.ecl import EclAssumption, EclExposure
+from app.domain.capital.ecl import EclAssumption, EclComputationError, EclExposure
 from app.domain.fx.engine import FxPosition
-from app.domain.icaap.pillar2 import fx as icaap_fx
 from app.domain.irr.engine import IrrPosition
 from app.domain.stress import orchestrator
 from app.domain.stress.concentration import ConcentrationExposure, ConcentrationInputs
@@ -33,6 +35,7 @@ from app.domain.stress.orchestrator import (
     run_enterprise_stress,
 )
 from app.domain.stress.translation import MacroPathPoint
+from app.icaap.domain.pillar2 import fx as icaap_fx
 from tests.domain.stress_fixtures import base_paths as base_macro_paths
 from tests.domain.stress_fixtures import (
     bog_capital_params,
@@ -149,6 +152,98 @@ def test_compose_uses_the_ecl_engine_when_staged_exposures_are_supplied() -> Non
     # stress ECL = 100M × (2%×1.21) × (45%×1.195) = 100M × 0.0242 × 0.53775.
     assert composition.ecl_stress == Decimal("1301355.0000")
     assert composition.annual_incremental_credit_loss == Decimal("401355.0000")
+
+
+def test_stage3_only_book_has_no_incremental_cet1_charge() -> None:
+    """Basis: Prudential stress; stage 3 specific allowances are excluded from general ECL."""
+    facts = capital_facts()
+    loan = next(fact for fact in facts if fact.fact_group == "loan_exposure")
+    paths = tuple(
+        replace(point, stress_value=Decimal("0"))
+        if point.variable == "gdp_growth" and point.year_index > 0
+        else point
+        for point in base_macro_paths()
+    )
+    result = run_enterprise_stress(
+        _inputs(
+            paths,
+            capital_facts=(
+                *(fact for fact in facts if fact.fact_group != "loan_exposure"),
+                replace(loan, amount=Decimal("10000000")),
+            ),
+            baseline_annual_preprovision_income=Decimal("0"),
+            baseline_annual_credit_loss=Decimal("0"),
+            ecl_exposures=(EclExposure(loan.category, 3, Decimal("10000000")),),
+            ecl_assumptions=(EclAssumption("ALL", 3, Decimal("0"), Decimal("40")),),
+        )
+    )
+    composition = result.capital.composition
+    assert composition.lgd_multiplier == Decimal("1.075")
+    assert composition.ecl_base == Decimal("0.0000")
+    assert composition.ecl_stress == Decimal("0.0000")
+    assert composition.annual_incremental_credit_loss == Decimal("0.0000")
+    assert composition.stressed["quarterly_credit_loss_m"] == Decimal("0.0000")
+    assert [row.cet1_capital for row in result.capital.stressed.path] == [
+        row.cet1_capital for row in result.capital.baseline.path
+    ]
+    serialized = cast(dict[str, object], result.serialize()["capital"])
+    assert serialized["ecl_basis"] == "modelled_what_if_stages_1_2"
+
+
+def test_mixed_stage_charge_keeps_general_ecl_gross_without_a_governed_tax_shield() -> None:
+    """Basis: Prudential stress; only stages 1+2 are charged, conservatively without tax relief."""
+    exposures = (
+        EclExposure("corporate", 1, Decimal("100000000")),
+        EclExposure("corporate", 2, Decimal("20000000")),
+        EclExposure("corporate", 3, Decimal("10000000")),
+    )
+    assumptions = (
+        EclAssumption("ALL", 1, Decimal("1.5"), Decimal("45")),
+        EclAssumption("ALL", 2, Decimal("15"), Decimal("45")),
+        EclAssumption("ALL", 3, Decimal("0"), Decimal("40")),
+    )
+    for tax_rate in (Decimal("0"), Decimal("25"), Decimal("100")):
+        composition = compose_capital_shocks(
+            scenario_paths=severe_paths(),
+            baseline_annual_preprovision_income=Decimal("0"),
+            ecl_exposures=exposures,
+            ecl_assumptions=assumptions,
+            tax_rate_pct=tax_rate,
+        )
+        assert composition.ecl_base == Decimal("2025000.0000")
+        assert composition.ecl_stress == Decimal("2928048.7500")
+        assert composition.annual_incremental_credit_loss == Decimal("903048.7500")
+        assert composition.stressed["quarterly_credit_loss_m"] == Decimal("0.2258")
+
+
+@pytest.mark.parametrize("modelled", (False, True))
+def test_credit_loss_output_labels_basis_and_conservative_tax(modelled: bool) -> None:
+    """Basis: Prudential stress; gross general-allowance increments lack governed tax relief."""
+    exposures = tuple(
+        EclExposure(fact.category, 1, fact.amount)
+        for fact in capital_facts()
+        if fact.fact_group == "loan_exposure"
+    )
+    result = run_enterprise_stress(
+        _inputs(
+            severe_paths(),
+            ecl_exposures=exposures if modelled else (),
+            ecl_assumptions=(
+                (EclAssumption("ALL", 1, Decimal("2"), Decimal("45")),) if modelled else ()
+            ),
+        )
+    )
+    assert result.capital.composition.annual_incremental_credit_loss > Decimal("0")
+    serialized = cast(dict[str, object], result.serialize()["capital"])
+    assert serialized["ecl_basis"] == (
+        "modelled_what_if_stages_1_2" if modelled else "booked_general_provisions_proxy"
+    )
+    assert serialized["incremental_credit_loss_basis"] == {
+        "basis": "prudential_stress",
+        "tax_treatment": (
+            "conservative: no tax shield applied pending a governed tax-rate parameter"
+        ),
+    }
 
 
 def test_base_scenario_produces_zero_enterprise_delta() -> None:
@@ -324,6 +419,7 @@ def test_phase4_sections_populate_under_a_severe_scenario() -> None:
     outcome = run_enterprise_stress(_inputs(severe_paths(), **_phase4_overrides()))
     assert outcome.bottom_up_credit is not None
     assert outcome.bottom_up_credit.stressed_credit_rwa > outcome.bottom_up_credit.base_credit_rwa
+    assert outcome.bottom_up_credit.credit_rwa_uplift_factor is not None
     assert outcome.bottom_up_credit.credit_rwa_uplift_factor > Decimal("1")
     assert outcome.concentration is not None
     assert outcome.concentration.total_incremental_loss > Decimal("0")
@@ -418,7 +514,7 @@ def _fx_positions() -> tuple[FxPosition, ...]:
 #
 # The overlay that feeds Appendix II Table 5 used to restate
 # ``Tier 1 × max(stressed NOP% − base NOP%, 0)`` — the change in a RATIO, which
-# ``app/domain/icaap/pillar2/fx.py`` records as "not a loss (audit M8)". A
+# ``app/icaap/domain/pillar2/fx.py`` records as "not a loss (audit M8)". A
 # single filed ICAAP therefore carried two different definitions of the FX
 # add-on and the source-consistency control compared them against each other
 # (audit W3). These tests pin the extraction three ways: the value, the SIGN
@@ -465,9 +561,11 @@ def test_a_long_book_that_gains_as_the_cedi_falls_carries_no_fx_addon() -> None:
     """
     outcome = _fx_run(_fx_positions())
     assert outcome.fx is not None
-    retired_formula = _FX_TIER1 * (
-        outcome.fx.stressed_nop_pct_tier1 - outcome.fx.base_nop_pct_tier1
-    ) / Decimal("100")
+    retired_formula = (
+        _FX_TIER1
+        * (outcome.fx.stressed_nop_pct_tier1 - outcome.fx.base_nop_pct_tier1)
+        / Decimal("100")
+    )
     assert retired_formula == Decimal("8000001.000000")
     assert outcome.fx.revaluation_loss == Decimal("0.0000")
     assert outcome.fx.pillar2_addon == Decimal("0.0000")
@@ -530,3 +628,101 @@ def test_a_cedi_appreciation_override_is_shocked_the_other_way() -> None:
     assert appreciation.loss.worst_loss == Decimal("4000000.0000")
     assert appreciation.pillar1_fx_capital == Decimal("4500000.0000")
     assert appreciation.addon == Decimal("0.0000")
+
+
+@pytest.mark.parametrize("paths", [base_macro_paths(), severe_paths()])
+def test_stress_composition_refuses_uncovered_ecl(paths: Sequence[MacroPathPoint]) -> None:
+    """IFRS 9 ¶5.5.17: baseline and conditioned stress refuse unpriced staged EAD."""
+    with pytest.raises(EclComputationError, match="retail_other:stage2"):
+        compose_capital_shocks(
+            scenario_paths=paths,
+            baseline_annual_preprovision_income=_BASELINE_PREPROVISION_INCOME,
+            baseline_credit_allowance=_BASELINE_ALLOWANCE,
+            ecl_exposures=(
+                EclExposure("corporate_unrated", 1, Decimal("100000000")),
+                EclExposure("retail_other", 2, Decimal("20000000")),
+            ),
+            ecl_assumptions=(EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),),
+        )
+
+
+def test_enterprise_stress_refuses_partial_staging() -> None:
+    """IFRS 9 ¶5.5.17: a partial model cannot replace the whole-book allowance in stress."""
+    with pytest.raises(EclComputationError, match="unstaged loan exposure"):
+        run_enterprise_stress(
+            _inputs(
+                severe_paths(),
+                ecl_exposures=(EclExposure("corporate_unrated", 1, Decimal("100000000")),),
+                ecl_assumptions=(
+                    EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),
+                ),
+            )
+        )
+
+
+def test_enterprise_stress_prices_a_fully_staged_book() -> None:
+    """IFRS 9 ¶B5.5.5: complete segment coverage prices both baseline and stress."""
+    exposures = tuple(
+        EclExposure(fact.category, 1, fact.amount)
+        for fact in capital_facts()
+        if fact.fact_group == "loan_exposure"
+    )
+    result = run_enterprise_stress(
+        _inputs(
+            severe_paths(),
+            ecl_exposures=exposures,
+            ecl_assumptions=(EclAssumption("ALL", 1, Decimal("2"), Decimal("45")),),
+        )
+    )
+    assert result.capital.composition.ecl_source == "ecl_engine"
+    assert result.capital.composition.ecl_base == Decimal("12600000.0000")
+    assert result.capital.composition.ecl_stress > result.capital.composition.ecl_base
+    assert result.engine_version == "enterprise-stress-v5.0.0"
+
+
+def test_enterprise_stress_refuses_uncovered_fully_staged_ead() -> None:
+    """IFRS 9 ¶5.5.17: a full staged book still requires assumptions for every funded bucket."""
+    exposures = tuple(
+        EclExposure(fact.category, 1, fact.amount)
+        for fact in capital_facts()
+        if fact.fact_group == "loan_exposure"
+    )
+    with pytest.raises(EclComputationError, match="retail_other:stage1"):
+        run_enterprise_stress(
+            _inputs(
+                severe_paths(),
+                ecl_exposures=exposures,
+                ecl_assumptions=(
+                    EclAssumption("CORPORATE_UNRATED", 1, Decimal("2"), Decimal("45")),
+                ),
+            )
+        )
+
+
+def test_enterprise_stress_refuses_omitted_loans_despite_matching_converted_ead() -> None:
+    """IFRS 9 ¶5.5.17: an unconverted omitted loan is uncovered even when converted EAD ties."""
+    facts = capital_facts()
+    exposures = tuple(
+        EclExposure(fact.category, 1, fact.amount)
+        for fact in facts
+        if fact.fact_group == "loan_exposure"
+    )
+    facts += tuple(
+        replace(
+            fact,
+            fact_group="ecl_exposure",
+            category=f"{fact.category}:stage1",
+            ecl_coverage_complete=False,
+        )
+        for fact in facts
+        if fact.fact_group == "loan_exposure"
+    )
+    with pytest.raises(EclComputationError, match="unstaged loan exposure"):
+        run_enterprise_stress(
+            _inputs(
+                severe_paths(),
+                capital_facts=facts,
+                ecl_exposures=exposures,
+                ecl_assumptions=(EclAssumption("ALL", 1, Decimal("2"), Decimal("45")),),
+            )
+        )

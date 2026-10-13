@@ -9,7 +9,7 @@
  * `FILL_FORMS`, so a signature field added after it would itself be tampering.
  * Every box therefore exists by the time the first signature lands or it never
  * exists at all — which is why "place, then sign" is one act
- * (`attestation_api.certify_and_send`) rather than two calls this component
+ * (`app.attestation.service.api.certify_and_send`) rather than two calls this component
  * could get half-way through, and why the preparer places the APPROVER's fields
  * too.
  *
@@ -40,7 +40,7 @@
  * return's artifact keeps the dialog.
  *
  * For a CHECKER this is the whole of their act, and it has two exits. Approving
- * and signing are one press (`attestation_api.certify_and_send` writes the
+ * and signing are one press (`app.attestation.service.api.certify_and_send` writes the
  * signature and the approval decision in one transaction), and sending the
  * return back for corrections is the other press, with the note required. There
  * is deliberately no third surface offering a bare approve: reviewing the figures

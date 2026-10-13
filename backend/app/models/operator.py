@@ -112,7 +112,7 @@ class OperatorUser(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Brute-force throttling — the SAME two columns tenant ``users`` carry, read
-    # and written by the SAME primitive (``app/services/auth_throttle.py``).
+    # and written by the SAME primitive (``app/identity/service/auth_throttle.py``).
     # Until migration 202608230041 the staff plane had none: its only control
     # was a per-process ``(email, ip)`` dict, so rotating source addresses gave
     # an unbounded budget against the account that yields a cross-tenant
@@ -129,9 +129,9 @@ class TenantStorage(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     """Per-organization storage provisioning registry (developer.md §2a).
 
     One row per tenant, written by the provisioning saga: the four tier
-    bucket names, the per-tenant KMS key ARN when AWS provisioning applied
-    SSE-KMS (the ARN is config, not a secret — access is IAM-governed), and
-    which provider the buckets live on.
+    bucket names, the onboarding bank's KMS key ARN (a non-secret custody
+    reference, synchronized on rotation), and which provider the buckets live
+    on. BankEncryptionKey owns the per-bank encryption configuration.
     """
 
     __tablename__ = "tenant_storage"

@@ -1,10 +1,10 @@
-import localFont from 'next/font/local';
-import type { CSSProperties } from 'react';
-import type { AdoptSignatureRequestTypedFont } from '@aequoros/risk-service-api';
+import localFont from "next/font/local";
+import type { CSSProperties } from "react";
+import type { AdoptSignatureRequestTypedFont } from "@aequoros/risk-service-api";
 
 /**
  * The four bundled script faces, loaded from the *same* `.ttf` files the backend
- * embeds into the signed PDF (`app/services/attestation/fonts/`, SIL Open Font
+ * embeds into the signed PDF (`app/attestation/service/fonts/`, SIL Open Font
  * License — see that directory's README).
  *
  * One copy, two consumers, on purpose. A second copy under `public/` would drift,
@@ -15,32 +15,32 @@ import type { AdoptSignatureRequestTypedFont } from '@aequoros/risk-service-api'
  * bank whose network blocks it.
  */
 const caveat = localFont({
-  src: '../../../../app/services/attestation/fonts/Caveat-Regular.ttf',
-  display: 'swap',
+  src: "../../../../app/attestation/service/fonts/Caveat-Regular.ttf",
+  display: "swap",
 });
 const dancingScript = localFont({
-  src: '../../../../app/services/attestation/fonts/DancingScript-Regular.ttf',
-  display: 'swap',
+  src: "../../../../app/attestation/service/fonts/DancingScript-Regular.ttf",
+  display: "swap",
 });
 const greatVibes = localFont({
-  src: '../../../../app/services/attestation/fonts/GreatVibes-Regular.ttf',
-  display: 'swap',
+  src: "../../../../app/attestation/service/fonts/GreatVibes-Regular.ttf",
+  display: "swap",
 });
 const allura = localFont({
-  src: '../../../../app/services/attestation/fonts/Allura-Regular.ttf',
-  display: 'swap',
+  src: "../../../../app/attestation/service/fonts/Allura-Regular.ttf",
+  display: "swap",
 });
 
 /** Every adoptable mark, named as what it is. */
 export const TYPED_FONT_LABELS: Record<string, string> = {
-  caveat: 'Caveat',
-  dancing_script: 'Dancing Script',
-  great_vibes: 'Great Vibes',
-  allura: 'Allura',
-  times_italic: 'Times Italic (typeset)',
-  times_bold_italic: 'Times Bold Italic (typeset)',
-  helvetica_oblique: 'Helvetica Oblique (typeset)',
-  courier_oblique: 'Courier Oblique (typeset)',
+  caveat: "Caveat",
+  dancing_script: "Dancing Script",
+  great_vibes: "Great Vibes",
+  allura: "Allura",
+  times_italic: "Times Italic (typeset)",
+  times_bold_italic: "Times Bold Italic (typeset)",
+  helvetica_oblique: "Helvetica Oblique (typeset)",
+  courier_oblique: "Courier Oblique (typeset)",
 };
 
 /**
@@ -54,15 +54,25 @@ export const TYPED_FONT_STYLES: Record<string, CSSProperties> = {
   dancing_script: { fontFamily: dancingScript.style.fontFamily },
   great_vibes: { fontFamily: greatVibes.style.fontFamily },
   allura: { fontFamily: allura.style.fontFamily },
-  times_italic: { fontFamily: '"Times New Roman", Times, serif', fontStyle: 'italic' },
+  times_italic: {
+    fontFamily: '"Times New Roman", Times, serif',
+    fontStyle: "italic",
+  },
   times_bold_italic: {
     fontFamily: '"Times New Roman", Times, serif',
-    fontStyle: 'italic',
+    fontStyle: "italic",
     fontWeight: 700,
   },
-  helvetica_oblique: { fontFamily: 'Helvetica, Arial, sans-serif', fontStyle: 'italic' },
-  courier_oblique: { fontFamily: '"Courier New", Courier, monospace', fontStyle: 'italic' },
+  helvetica_oblique: {
+    fontFamily: "Helvetica, Arial, sans-serif",
+    fontStyle: "italic",
+  },
+  courier_oblique: {
+    fontFamily: '"Courier New", Courier, monospace',
+    fontStyle: "italic",
+  },
 };
 
 /** Matches `typed_fonts.PREFERRED_SCRIPT_KEY` — the panel's first offer. */
-export const DEFAULT_TYPED_FONT: NonNullable<AdoptSignatureRequestTypedFont> = 'caveat';
+export const DEFAULT_TYPED_FONT: NonNullable<AdoptSignatureRequestTypedFont> =
+  "caveat";

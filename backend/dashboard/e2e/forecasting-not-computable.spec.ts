@@ -36,7 +36,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from app.core.authorization import DataScope, GrantorType, InstitutionScope, ModuleScope, PrincipalType, RoleBundle, SensitivityScope
 from app.models import Bank, Organization, User
-from app.services import authorization, membership
+from app.identity.service import authorization
+from app.identity.service import membership
 
 db_path, action, org, bank, period, user_id = sys.argv[1:7]
 if action == "create":

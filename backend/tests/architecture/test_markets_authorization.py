@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 from fastapi.routing import APIRoute
 
-from app.main import create_app
+from app.main import app
 
-_ROUTES = tuple(route for route in create_app().routes if isinstance(route, APIRoute))
+_ROUTES = tuple(route for route in app.routes if isinstance(route, APIRoute))
 
 _LEGACY_GATES = frozenset(
     {

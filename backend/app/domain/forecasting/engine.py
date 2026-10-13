@@ -22,10 +22,11 @@ amount of their own — ``ecl_exposure`` (IFRS 9 staged EADs) and
 ``crm_collateral`` (credit-risk-mitigation collateral) — so the forecast fed
 the authoritative capital engine a NARROWER input set than the capital run
 did, and the same bank/period reported two different CARs. The forecast now
-carries both groups end to end and applies the identical IFRS 9 general-ECL
-Tier 2 override, so year-0 CAR/Tier 1/CET1 reconcile with the capital run by
-construction. ``tests/equivalence/`` is the executable proof. If you ever
-need to narrow this fact scope again, you are re-opening that finding.
+carries both groups end to end, so year-0 CAR/Tier 1/CET1 reconcile with the
+capital run by construction. Like the capital run, Tier 2 carries the bank's
+booked general provisions: a modelled ECL never substitutes for them.
+``tests/equivalence/`` is the executable proof. If you ever need to narrow this
+fact scope again, you are re-opening that finding.
 
 Year ``t`` mechanics (t = 1..years, year 0 = as-of facts):
 
@@ -99,17 +100,10 @@ from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.domain.capital.ecl import (
-    BASE_SCENARIO as ECL_BASE_SCENARIO,
-)
-from app.domain.capital.ecl import (
-    EclAssumption,
-    EclExposure,
-    compute_ecl,
-)
 from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
+    assert_capital_register_usable,
     compute_capital_ratios,
     compute_rwa,
 )
@@ -130,6 +124,7 @@ _TWO = Decimal("2")
 
 FACT_GROUP_BALANCE_SHEET = "balance_sheet"
 FACT_GROUP_LOAN_EXPOSURE = "loan_exposure"
+FACT_GROUP_CREDIT_EXPOSURE = "credit_exposure"
 FACT_GROUP_SECURITIES = "securities"
 FACT_GROUP_OFF_BALANCE = "off_balance"
 FACT_GROUP_LCR_INFLOW = "lcr_inflow"
@@ -142,10 +137,6 @@ FACT_GROUP_CAPITAL_COMPONENT = "capital_component"
 # docstring and tests/equivalence/.
 FACT_GROUP_ECL_EXPOSURE = "ecl_exposure"
 FACT_GROUP_CRM_COLLATERAL = "crm_collateral"
-#: ``ecl_exposure`` categories are ``"<segment>:stage<N>"``. This split MUST
-#: stay identical to ``regulatory_capital._modeled_ecl``; the equivalence suite
-#: is what holds the two in lockstep.
-ECL_STAGE_TOKEN = ":stage"
 
 CASH_CATEGORIES = ("cash_vault", "bog_required_reserves", "bog_excess_reserves")
 SECURITIES_BS_CATEGORIES = ("securities_bog_bills", "securities_gog_bonds")
@@ -251,6 +242,7 @@ class ForecastFact:
     is_deduction: bool = False
     side: str | None = None
     cash_derived: bool = False
+    ecl_coverage_complete: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -275,12 +267,6 @@ class ForecastParams:
 
     liquidity: LiquidityParams
     capital: CapitalParams
-    #: Board-approved IFRS 9 PD/LGD register. Supplied, it drives the SAME
-    #: general-provisions Tier 2 override the capital run applies (Phase 2
-    #: item 8). Empty — the default, and the state of every book with no
-    #: configured register — leaves the ingested-provisions path untouched and
-    #: every projected figure byte-identical.
-    ecl_assumptions: tuple[EclAssumption, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -440,6 +426,7 @@ class _State:
     # the loan factor and never enter assets_total()/the funding plug.
     ecl_exposures: dict[str, Decimal] = dataclass_field(default_factory=dict)
     crm_collateral: dict[str, Decimal] = dataclass_field(default_factory=dict)
+    credit_exposures: dict[str, Decimal] = dataclass_field(default_factory=dict)
 
     def loans_total(self) -> Decimal:
         return sum(self.loans.values(), _ZERO)
@@ -490,6 +477,9 @@ class _Meta:
     #: year appends exactly one gross-income year, so the count of
     #: gross-income years carried never decreases.
     gi_window: int = 1
+    credit_risk_weights: Mapping[str, str | None] = dataclass_field(
+        default_factory=dict[str, str | None]
+    )
 
 
 def project(  # noqa: PLR0913, PLR0915
@@ -509,6 +499,7 @@ def project(  # noqa: PLR0913, PLR0915
     t=1. Missing engine parameters propagate as the downstream engines'
     ``MissingParameterError``.
     """
+    assert_capital_register_usable(facts)
     if years < 1:
         raise ProjectionError("invalid_horizon", "The projection horizon must be at least 1 year.")
     labels = _resolve_labels(period_labels, years)
@@ -528,6 +519,12 @@ def project(  # noqa: PLR0913, PLR0915
     equity_prev = state.equity
 
     for year in range(1, years + 1):
+        scale_credit_exposures(
+            state,
+            loan_factor,
+            deposit_factor,
+            securities_factor * (haircut_factor if year == 1 else _ONE),
+        )
         _scale_in_place(state.loans, loan_factor)
         _scale_in_place(state.off_balance, loan_factor)
         _scale_in_place(state.inflows, loan_factor)
@@ -859,6 +856,30 @@ def _apply_funding_plug(state: _State) -> None:
         )
 
 
+def scale_credit_exposures(
+    state: _State,
+    loan_factor: Decimal,
+    cash_factor: Decimal,
+    securities_factor: Decimal,
+) -> None:
+    """Roll capital's net exposure basis with the matching accounting asset.
+
+    Corporate securities and interbank claims remain in constant residual
+    assets, matching the balance-sheet projection. Public-debt paper follows
+    its securities growth and mark-to-market shock.
+    """
+    for category in state.credit_exposures:
+        base_category = category.rsplit(":", 1)[0]
+        factor = _ONE
+        if base_category in state.loans or base_category.startswith("loans:"):
+            factor = loan_factor
+        elif base_category in state.cash:
+            factor = cash_factor
+        elif base_category.startswith(("securities:domestic_sovereign", "securities:pse_")):
+            factor = securities_factor
+        state.credit_exposures[category] = money(state.credit_exposures[category] * factor)
+
+
 def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa: PLR0912, PLR0915
     cash: dict[str, Decimal] = {}
     securities: dict[str, Decimal] = {}
@@ -876,6 +897,8 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
     components: dict[str, Decimal] = {}
     ecl_exposures: dict[str, Decimal] = {}
     crm_collateral: dict[str, Decimal] = {}
+    credit_exposures: dict[str, Decimal] = {}
+    credit_risk_weights: dict[str, str | None] = {}
     income_facts: list[tuple[int, str, Decimal]] = []
 
     loan_risk_weights: dict[str, str | None] = {}
@@ -910,6 +933,9 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
                     equity = amount
                 else:
                     constant_equity[fact.category] = amount
+        elif fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE:
+            credit_exposures[fact.category] = amount
+            credit_risk_weights[fact.category] = fact.risk_weight_code
         elif fact.fact_group == FACT_GROUP_LOAN_EXPOSURE:
             loans[fact.category] = amount
             loan_risk_weights[fact.category] = fact.risk_weight_code
@@ -960,6 +986,7 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
         gi_history=sorted(income_facts),
         ecl_exposures=ecl_exposures,
         crm_collateral=crm_collateral,
+        credit_exposures=credit_exposures,
     )
     if not state.gi_history:
         # The capital engine requires at least one positive gross-income year;
@@ -968,6 +995,7 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
     meta = _Meta(
         gi_window=max(len(state.gi_history), 1),
         loan_risk_weights=loan_risk_weights,
+        credit_risk_weights=credit_risk_weights,
         off_balance_ccf=off_balance_ccf,
         off_balance_risk_weights=off_balance_risk_weights,
         securities_group_hqla=securities_group_hqla,
@@ -996,6 +1024,15 @@ def _state_facts(state: _State, meta: _Meta) -> list[ForecastFact]:  # noqa: PLR
     for category, amount in sorted(state.constant_equity.items()):
         rows.append(_bs_fact(category, amount, "equity"))
     rows.append(_bs_fact(CAPITAL_TOTAL_CATEGORY, state.equity, "equity"))
+    for category, amount in sorted(state.credit_exposures.items()):
+        rows.append(
+            ForecastFact(
+                fact_group=FACT_GROUP_CREDIT_EXPOSURE,
+                category=category,
+                amount=amount,
+                risk_weight_code=meta.credit_risk_weights.get(category),
+            )
+        )
     for category, amount in sorted(state.loans.items()):
         rows.append(
             ForecastFact(
@@ -1101,6 +1138,7 @@ def _to_capital_facts(rows: Sequence[ForecastFact]) -> tuple[CapitalFact, ...]:
         FACT_GROUP_CRM_COLLATERAL,
         FACT_GROUP_ECL_EXPOSURE,
         FACT_GROUP_LOAN_EXPOSURE,
+        FACT_GROUP_CREDIT_EXPOSURE,
         FACT_GROUP_MARKET_RISK,
         FACT_GROUP_OFF_BALANCE,
         FACT_GROUP_OPERATIONAL_INCOME,
@@ -1116,47 +1154,11 @@ def _to_capital_facts(rows: Sequence[ForecastFact]) -> tuple[CapitalFact, ...]:
             capital_tier=row.capital_tier,
             is_deduction=row.is_deduction,
             side=row.side,
+            ecl_coverage_complete=row.ecl_coverage_complete,
         )
         for row in rows
         if row.fact_group in relevant
     )
-
-
-def _ecl_exposures(facts: Sequence[CapitalFact]) -> tuple[EclExposure, ...]:
-    """Parse ``ecl_exposure`` facts into staged exposures.
-
-    Byte-for-byte the split ``regulatory_capital._modeled_ecl`` performs: a
-    category is ``"<segment>:stage<N>"``, and anything that does not parse is
-    skipped rather than guessed at.
-    """
-    exposures: list[EclExposure] = []
-    for fact in facts:
-        if fact.fact_group != FACT_GROUP_ECL_EXPOSURE:
-            continue
-        segment, _, stage_token = fact.category.rpartition(ECL_STAGE_TOKEN)
-        if not segment or not stage_token.isdigit():
-            continue
-        exposures.append(EclExposure(segment=segment, stage=int(stage_token), ead=fact.amount))
-    return tuple(exposures)
-
-
-def _general_provisions_override(
-    capital_facts: Sequence[CapitalFact], params: ForecastParams
-) -> Decimal | None:
-    """The IFRS 9 modeled general ECL that replaces ingested general provisions.
-
-    The gate is the capital run's gate (Phase 2 item 8): active only when BOTH
-    staged exposures and a Board-approved assumption register exist, otherwise
-    ``None`` and the ingested-provisions path stands untouched. The baseline
-    projection is unshocked, so it uses the unconditioned base scenario — the
-    same one ``_modeled_ecl`` uses when no ECL conditioning shock is supplied.
-    """
-    if not params.ecl_assumptions:
-        return None
-    exposures = _ecl_exposures(capital_facts)
-    if not exposures:
-        return None
-    return compute_ecl(exposures, params.ecl_assumptions, (ECL_BASE_SCENARIO,)).general_ecl
 
 
 def _regulatory_ratios(
@@ -1169,9 +1171,7 @@ def _regulatory_ratios(
     lcr = compute_lcr(liquidity_facts, params.liquidity)
     nsfr = compute_nsfr(liquidity_facts, params.liquidity)
     rwa = compute_rwa(capital_facts, params.capital)
-    ratios = compute_capital_ratios(
-        capital_facts, rwa, params.capital, _general_provisions_override(capital_facts, params)
-    )
+    ratios = compute_capital_ratios(capital_facts, rwa, params.capital)
     return (
         ratios.car_pct,
         ratios.tier1_ratio_pct,

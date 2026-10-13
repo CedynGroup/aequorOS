@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
 from app.api.deps import TenantContext
+from app.bi.service.enqueue import enqueue_mart_refresh
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
@@ -61,9 +62,9 @@ from app.domain.ingestion.validation import (
     run_validation,
 )
 from app.etl import EtlConfig, etl_summary, model_loading, run_etl
+from app.identity.public import Bank
 from app.models import (
     AuditEvent,
-    Bank,
     CanonicalCounterparty,
     CanonicalGlAccount,
     CanonicalLoanEvent,
@@ -102,7 +103,6 @@ from app.schemas.ingestion import (
 )
 from app.services import job_queue
 from app.services.audit import record_event
-from app.services.bi.enqueue import enqueue_mart_refresh
 from app.services.data_activation import ACTIVATION_EVENT
 from app.storage.client import (
     ObjectMetadata,
@@ -476,7 +476,10 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
         records,
         default_validation_config(),
         context,
-        extra_findings=_table_resolution_findings(extraction, mapping),
+        extra_findings=[
+            *_table_resolution_findings(extraction, mapping),
+            *_capital_register_translation_findings(extraction, records),
+        ],
     )
     if identity_savepoint is not None:
         if outcome.overall_status == "rejected":
@@ -1292,6 +1295,29 @@ def _resolve_mapping_config(
     return record
 
 
+def _capital_register_translation_findings(
+    extraction: ExtractionResult, records: CanonicalRecords
+) -> list[Finding]:
+    """Refuse publication of a capital register with untranslatable rows."""
+    capital_locators = {
+        record.source_locator
+        for record in extraction.records
+        if record.entity_type == "reference" and record.dataset_kind == "capital_structure"
+    }
+    return [
+        Finding(
+            rule="capital_register_translation_failure",
+            category="STRUCTURAL",
+            severity="BLOCKER",
+            entity_type="reference",
+            source_locator=failure.source_locator,
+            detail=f"capital_structure row refused: {failure.error_message}",
+        )
+        for failure in records.failures
+        if failure.entity_type == "reference" and failure.source_locator in capital_locators
+    ]
+
+
 def _table_resolution_findings(
     extraction: ExtractionResult, mapping: MappingConfig
 ) -> list[Finding]:
@@ -1573,6 +1599,7 @@ def _lineage(  # noqa: PLR0913 - mirrors record_event's shape
 ) -> LineageRecord:
     node = LineageRecord(
         organization_id=ctx.organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type=operation_type,
         operation_ref=operation_ref,

@@ -12,9 +12,9 @@ Five rules, each from **D-041** (and **D-043**, which moved the scheduler's
 "is this bank due" read behind the seam so this allow-list needed no
 amendment):
 
-a. **The regulatory/live plane never imports BI.** The whole of ``app/`` is
-   scanned except the BI-owned paths. One allow-list: ``app.services.bi.enqueue``
-   and ``app.services.bi.versions`` — the enqueue seam the spec's hook table
+a. **The regulatory/live plane never imports BI.**
+   One allow-list: ``app.bi.service.enqueue``
+   and ``app.bi.service.versions`` — the enqueue seam the spec's hook table
    requires — may be imported by the five hook sites and nowhere else.
 b. **BI never calls the official derivation.** ``derive_facts`` REFUSES a book
    that does not reconcile (see ``test_derivation_plane_boundary.py``); a mart
@@ -34,13 +34,11 @@ c. **BI writes ``bi_*`` tables, plus exactly the platform seams named in
    (``audit.record_event`` writing ``audit_events``, ``job_queue.enqueue``
    writing ``jobs``) is resolved through the helper's own body and convicted the
    same way unless the ``(helper, table)`` pair is allow-listed with its reason.
-   Until audit A360-1 the scan covered ``app/services/bi`` and ``app/domain/bi``
-   only — 68 of the 90 exempt modules — and the one direct non-``bi_*`` write in
-   the tree (``ai_commentary_drafts``, from the AI job) had been placed in the
-   unscanned part precisely because the guard would have convicted it under
-   ``app/services/bi``; a ``db.add(CanonicalPosition(...))`` in any feature
-   route would have passed every guard.
-d. **``app/domain/bi/**`` imports no application state.** The BI-specific
+   The ownership globs cover the feature's routes, schemas, jobs and models as
+   well as its service/domain trees and operator surface. Every owned module
+   participates in the write scan, including the query wire schema, which
+   remains subject to rule (a)'s import ban on BI internals.
+d. **``app/bi/domain/**`` imports no application state.** The BI-specific
    restatement of the pure-domain rule (``test_dependency_boundaries.py``), so
    the catalogue and the row extractors stay reusable and golden-testable.
 e. **The seam is thin.** ``enqueue.py`` and ``versions.py`` import no builder,
@@ -48,7 +46,7 @@ e. **The seam is thin.** ``enqueue.py`` and ``versions.py`` import no builder,
    the entire justification for rule (a)'s allow-list: the hook sites run in
    the request path and the core worker, and must not pull the mart machinery
    into it. Reading the two BI MODELS is permitted and deliberate (D-043) —
-   every consumer of ``app.models`` already loads ``app.models.bi`` through that
+   every consumer of ``app.models`` already loads ``app.bi.models.marts`` through that
    package's ``__init__``.
 
 Scanning limits, stated rather than implied. Imports are resolved the way
@@ -95,50 +93,33 @@ BACKEND = APP.parent
 # What the BI plane IS, and what may reach into it
 # ---------------------------------------------------------------------------
 
-#: Where BI lives on disk, relative to ``app/``. Every path matching one of
-#: these globs is BI and is exempt from rule (a) — it is allowed to import BI
-#: because it IS BI. This is D-041's list verbatim.
+#: Where BI lives on disk, relative to ``app/``.
 BI_OWNED_GLOBS: tuple[str, ...] = (
-    "services/bi/**/*.py",
-    "services/bi/*.py",
-    "domain/bi/**/*.py",
-    "domain/bi/*.py",
-    # A6-09: a SUBSTRING glob ("*bi*") would silently exempt any future
-    # feature whose name merely contains "bi" — ``manage_bindings.py`` is the
-    # obvious one. Named prefixes/suffixes only, and the resolved set is
-    # asserted below rather than observed.
-    "features/read_bi.py",
-    # Phase 4's machine feed is `read_bi_feeds.py`, which matches none of the
-    # three patterns below: it neither starts with the token, ends with it, nor
-    # equals `read_bi.py`. Named as its own prefix rather than loosened to
-    # `features/*bi*.py`, for the A6-09 reason recorded above.
-    "features/read_bi_*.py",
-    "features/bi_*.py",
-    "features/*_bi.py",
-    # Phase 3 added `manage_bi_content.py`, which matches none of the three above:
-    # it neither starts nor ends with the token. Named as its own prefix rather
-    # than loosened to `features/*bi*.py`, for the A6-09 reason recorded above.
-    "features/manage_bi_*.py",
-    "jobs/bi_*.py",
+    "bi/service/**/*.py",
+    "bi/domain/**/*.py",
+    "bi/api/*.py",
+    "bi/jobs/*.py",
+    "bi/models/*.py",
+    "bi/schemas/*.py",
+    "bi/public.py",
     "operator/**/bi_*.py",
-    # The BI plane is modelled across several modules now: the marts in `bi.py`,
-    # saved content in `bi_content.py`, alerts and subscriptions in
-    # `bi_notifications.py`. `models/bi.py` alone would leave the newer ones
-    # outside the exemption and convict every BI module that reads them.
-    "models/bi.py",
-    "models/bi_*.py",
 )
 
 #: The two BI roots rules (b)–(d) scan.
-BI_SERVICE_ROOT = APP / "services" / "bi"
-BI_DOMAIN_ROOT = APP / "domain" / "bi"
+BI_SERVICE_ROOT = APP / "bi" / "service"
+BI_DOMAIN_ROOT = APP / "bi" / "domain"
 
 #: Import prefixes that mean "this is the BI plane".
-BI_MODULE_PREFIXES: tuple[str, ...] = ("app.services.bi", "app.domain.bi", "app.models.bi")
+BI_MODULE_PREFIXES: tuple[str, ...] = (
+    "app.bi.service",
+    "app.bi.domain",
+    "app.bi.models",
+    "app.bi.public",
+)
 
 #: The ONLY BI modules the regulatory/live plane may import (D-041). Both are
 #: deliberately thin: see rule (e).
-SEAM_MODULES: frozenset[str] = frozenset({"app.services.bi.enqueue", "app.services.bi.versions"})
+SEAM_MODULES: frozenset[str] = frozenset({"app.bi.service.enqueue", "app.bi.service.versions"})
 
 #: The ONLY modules outside BI that may import the seam — the spec's hook table:
 #: an accepted ingestion batch, an approved or reversed withdrawal, a completed
@@ -163,13 +144,8 @@ SEAM_IMPORTERS: frozenset[str] = frozenset(
 #: and ``create_all``, the migration RLS census and the tenant-RLS census all go
 #: quietly blind. Exempted by name, and pinned narrow by
 #: ``test_the_model_registry_exemption_stays_a_registry_exemption``: it may name
-#: ``app.models.bi`` and must never name a BI service or domain module.
+#: ``app.bi.models`` and must never name a BI service or domain module.
 MODEL_REGISTRY = "app/models/__init__.py"
-
-# ``app/schemas/bi.py`` is deliberately NOT exempt. It is the BI wire contract
-# and needs no BI import today (it is pure pydantic), so leaving it in the scan
-# means a future need to reach for the catalogue is a recorded decision rather
-# than a silent widening of the boundary.
 
 
 def _app_modules() -> list[Path]:
@@ -191,19 +167,17 @@ def _bi_owned() -> frozenset[str]:
 BI_OWNED: frozenset[str] = _bi_owned()
 
 #: The feature-plane files the globs above are allowed to resolve to, named
-#: rather than observed (audit A6-09). Rule (a) exempts everything in
-#: :data:`BI_OWNED` from the "no module outside BI imports BI" check, so a
-#: non-BI module drifting into this set is a silent boundary hole. Adding a BI
-#: feature file means adding it here in the same change.
+#: rather than observed (audit A6-09). Adding a BI feature file means adding
+#: it here in the same change.
 EXPECTED_BI_FEATURE_FILES: frozenset[str] = frozenset(
     {
-        "app/features/read_bi.py",
-        "app/features/read_bi_feeds.py",
-        "app/features/ask_bi.py",
-        "app/features/export_bi.py",
-        "app/features/manage_bi_commentary.py",
-        "app/features/manage_bi_content.py",
-        "app/features/manage_bi_notifications.py",
+        "app/bi/api/read_bi.py",
+        "app/bi/api/read_bi_feeds.py",
+        "app/bi/api/ask_bi.py",
+        "app/bi/api/export_bi.py",
+        "app/bi/api/manage_bi_commentary.py",
+        "app/bi/api/manage_bi_content.py",
+        "app/bi/api/manage_bi_notifications.py",
     }
 )
 
@@ -211,30 +185,32 @@ EXPECTED_BI_FEATURE_FILES: frozenset[str] = frozenset(
 def test_the_bi_owned_globs_resolve_to_no_non_bi_module() -> None:
     """The exemption list is asserted, not whatever the globs happened to match.
 
-    ``BI_OWNED`` is what rule (a) exempts. A substring glob once stood here, so
-    any feature file containing "bi" would have been exempted without a test
+    A substring glob once stood here, so any feature file containing "bi"
+    would have been exempted without a test
     failing. Both directions are asserted so a renamed or deleted BI feature is
     just as loud as an unexpected new member.
     """
 
-    features = frozenset(path for path in BI_OWNED if path.startswith("app/features/"))
+    features = frozenset(
+        path
+        for path in BI_OWNED
+        if path.startswith("app/bi/api/") and not path.endswith("/__init__.py")
+    )
     assert features == EXPECTED_BI_FEATURE_FILES, (
         "the BI-owned globs resolve to a feature file that is not named in "
         "EXPECTED_BI_FEATURE_FILES (or no longer resolve to one that is); "
         f"difference: {sorted(features ^ EXPECTED_BI_FEATURE_FILES)}"
     )
-    # Nothing outside the four BI roots may be exempt at all.
+    # Only the BI package and the named operator modules may be exempt.
     allowed_roots = (
-        "app/services/bi/",
-        "app/domain/bi/",
-        "app/features/",
-        "app/jobs/bi_",
+        "app/bi/service/",
+        "app/bi/domain/",
+        "app/bi/api/",
+        "app/bi/jobs/",
+        "app/bi/models/",
+        "app/bi/schemas/",
+        "app/bi/public.py",
         "app/operator/",
-        "app/models/bi.py",
-        # `app/models/bi_` and NOT `app/models/bi`: the shorter prefix would also
-        # admit `app/models/bindings.py`, which is the exact substring hazard this
-        # file records being bitten by (A6-09). The underscore is load-bearing.
-        "app/models/bi_",
     )
     strays = sorted(p for p in BI_OWNED if not p.startswith(allowed_roots))
     assert not strays, f"BI_OWNED exempts a path outside the BI roots: {strays}"
@@ -389,7 +365,9 @@ def test_the_regulatory_and_live_plane_never_imports_bi() -> None:
     offenders: list[str] = []
     for path in _app_modules():
         relative = _relative(path)
-        if relative in BI_OWNED or relative == MODEL_REGISTRY:
+        if relative == MODEL_REGISTRY or (
+            relative in BI_OWNED and relative != "app/bi/schemas/query.py"
+        ):
             continue
         offenders.extend(
             f"{relative}:{lineno} imports {name}" for lineno, name in forbidden_bi_imports(path)
@@ -401,6 +379,64 @@ def test_the_regulatory_and_live_plane_never_imports_bi() -> None:
         f"permitted BI imports are {sorted(SEAM_MODULES)} from "
         f"{sorted(SEAM_IMPORTERS)}:\n  " + "\n  ".join(offenders)
     )
+
+
+@pytest.fixture
+def bi_schema_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    app = tmp_path / "app"
+    schemas = app / "bi" / "schemas"
+    schemas.mkdir(parents=True)
+    for name in ("__init__", "query", "content", "commentary", "nlq", "notifications"):
+        (schemas / f"{name}.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(f"{__name__}.APP", app)
+    monkeypatch.setattr(f"{__name__}.BACKEND", tmp_path)
+    monkeypatch.setattr("tests.architecture._planes.APP", app)
+    monkeypatch.setattr(f"{__name__}.BI_OWNED", _bi_owned())
+    return schemas
+
+
+@pytest.mark.parametrize(
+    "target",
+    (
+        "service.compiler",
+        "domain.catalogue",
+        "domain.extract",
+        "models.marts",
+        "public",
+        "service.enqueue",
+        "service.versions",
+    ),
+)
+@pytest.mark.parametrize("shape", ("absolute", "relative", "dynamic", "dynamic-relative"))
+def test_query_wire_contract_cannot_import_bi_internals(
+    bi_schema_tree: Path, target: str, shape: str
+) -> None:
+    bodies = {
+        "absolute": f"import app.bi.{target}\n",
+        "relative": f"from ..{target} import value\n",
+        "dynamic": f'import importlib\nimportlib.import_module("app.bi.{target}")\n',
+        "dynamic-relative": (
+            f'import importlib\nimportlib.import_module("..{target}", package="app.bi.schemas")\n'
+        ),
+    }
+    (bi_schema_tree / "query.py").write_text(bodies[shape], encoding="utf-8")
+    with pytest.raises(AssertionError, match=r"app/bi/schemas/query\.py:\d+ imports app\.bi\."):
+        test_the_regulatory_and_live_plane_never_imports_bi()
+
+
+@pytest.mark.parametrize("schema", ("__init__", "content", "commentary", "nlq", "notifications"))
+def test_sibling_bi_schemas_keep_their_internal_imports(bi_schema_tree: Path, schema: str) -> None:
+    (bi_schema_tree / f"{schema}.py").write_text(
+        "from app.bi.models.content import BiSavedView\n", encoding="utf-8"
+    )
+    test_the_regulatory_and_live_plane_never_imports_bi()
+
+
+def test_query_wire_contract_accepts_pure_imports(bi_schema_tree: Path) -> None:
+    (bi_schema_tree / "query.py").write_text(
+        "from datetime import date\nfrom pydantic import BaseModel\n", encoding="utf-8"
+    )
+    test_the_regulatory_and_live_plane_never_imports_bi()
 
 
 def test_every_hook_site_still_uses_the_seam() -> None:
@@ -426,8 +462,8 @@ def test_the_model_registry_exemption_stays_a_registry_exemption() -> None:
     """``app/models/__init__.py`` may aggregate the BI MODELS and nothing more."""
     registry = APP.parent / MODEL_REGISTRY
     reached = {name for _, name in bi_import_sites(registry)}
-    assert reached, f"{MODEL_REGISTRY} no longer aggregates app.models.bi"
-    beyond = {name for name in reached if not _names_a_module(name, "app.models.bi")}
+    assert reached, f"{MODEL_REGISTRY} no longer aggregates app.bi.models.marts"
+    beyond = {name for name in reached if not _names_a_module(name, "app.bi.models")}
     assert beyond == set(), (
         f"{MODEL_REGISTRY} is exempt only as the SQLAlchemy metadata aggregator; it "
         f"must never import a BI service or domain module: {sorted(beyond)}"
@@ -437,18 +473,18 @@ def test_the_model_registry_exemption_stays_a_registry_exemption() -> None:
 def test_the_import_guard_catches_a_deliberate_violation(tmp_path: Path) -> None:
     """Each shape, individually, so a regression says which door re-opened."""
     samples = {
-        "service": "from app.services.bi.mart_builder import refresh_bank_as_of\n",
-        "domain": "from app.domain.bi.catalogue import catalogue\n",
-        "model": "from app.models.bi import BiFactPositionDaily\n",
-        "module import": "import app.services.bi.compiler\n",
+        "service": "from app.bi.service.mart_builder import refresh_bank_as_of\n",
+        "domain": "from app.bi.domain.catalogue import catalogue\n",
+        "model": "from app.bi.models.marts import BiFactPositionDaily\n",
+        "module import": "import app.bi.service.compiler\n",
         "importlib literal": (
-            'import importlib\n\nm = importlib.import_module("app.services.bi.execution")\n'
+            'import importlib\n\nm = importlib.import_module("app.bi.service.execution")\n'
         ),
         "assembled from literal parts": (
-            'import importlib\n\nm = importlib.import_module("app.domain" + ".bi.extract")\n'
+            'import importlib\n\nm = importlib.import_module("app.bi" + ".domain.extract")\n'
         ),
         # The seam itself, imported by a module that is not a hook site.
-        "seam from the wrong module": "from app.services.bi.enqueue import enqueue_mart_refresh\n",
+        "seam from the wrong module": "from app.bi.service.enqueue import enqueue_mart_refresh\n",
     }
     missed = []
     for label, body in samples.items():
@@ -493,7 +529,7 @@ def test_the_site_collector_sees_what_the_shared_scanner_sees() -> None:
 def derivation_references(path: Path) -> list[int]:
     """Lines where ``path`` NAMES ``derive_facts`` in code (never in a string).
 
-    Prose is not a dependency: both ``app/services/bi/__init__.py`` and
+    Prose is not a dependency: both ``app/bi/service/__init__.py`` and
     ``mart_builder.py`` say in their docstrings that they never call it, and a
     grep-based guard would convict exactly the modules that documented the rule.
     """
@@ -612,7 +648,7 @@ UNRESOLVED = "?"
 #: ``test_every_permitted_write_is_live`` fails the day an entry stops being
 #: exercised, so the list cannot rot into a blanket permission.
 PERMITTED_DIRECT_WRITES: dict[tuple[str, str], str] = {
-    ("app/jobs/bi_commentary.py", "ai_commentary_drafts"): (
+    ("app/bi/jobs/bi_commentary.py", "ai_commentary_drafts"): (
         "The AI tier's own ledger (D-191). A commentary draft is model output "
         "awaiting human review, not a mart figure, and it is keyed by the consent "
         "and approval references the AI gates require; it lives outside the bi_* "
@@ -961,6 +997,17 @@ def _import_aliases(tree: ast.Module) -> dict[str, str]:
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             for alias in node.names:
                 aliases[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+    # Public interfaces re-export the same writer; follow the export so its
+    # original helper/table permission and executable body remain authoritative.
+    for local, target in aliases.items():
+        prefix, separator, suffix = target.partition(".public.")
+        public_path = _module_file(f"{prefix}.public") if separator else None
+        if public_path is None:
+            continue
+        exports = _import_aliases(ast.parse(public_path.read_text(encoding="utf-8")))
+        name, _, rest = suffix.partition(".")
+        if name in exports:
+            aliases[local] = exports[name] + (f".{rest}" if rest else "")
     return aliases
 
 
@@ -1104,13 +1151,13 @@ def test_every_permitted_write_is_live() -> None:
 
 
 def test_every_bi_owned_module_is_in_the_write_scan() -> None:
-    """The A360-1 gap, pinned structurally: rule (a)'s exemption set and rule (c)'s
-    scan set are the SAME set. Exempting a module from the import ban without
+    """The A360-1 gap, pinned structurally. Exempting a module from the import ban without
     scanning its writes is how a non-bi_* write hides."""
     scanned = {_relative(path) for path in _bi_owned_tree()}
     assert scanned == BI_OWNED
-    assert "app/features/read_bi.py" in scanned
-    assert "app/jobs/bi_commentary.py" in scanned
+    assert "app/bi/api/read_bi.py" in scanned
+    assert "app/bi/jobs/bi_commentary.py" in scanned
+    assert "app/bi/schemas/query.py" in scanned
     assert "app/operator/features/bi_backfill.py" in scanned
 
 
@@ -1118,7 +1165,7 @@ def test_a_planted_canonical_write_in_a_feature_module_is_convicted(tmp_path: Pa
     """The defect the audit named, planted: a canonical write appended to a copy
     of a real feature-plane BI module must be convicted by the same scanner the
     parametrised rule runs, and that module must be in the scanned set."""
-    source = (BACKEND / "app/features/read_bi.py").read_text(encoding="utf-8")
+    source = (BACKEND / "app/bi/api/read_bi.py").read_text(encoding="utf-8")
     probe = tmp_path / "read_bi.py"
     probe.write_text(
         source + "\n\ndef _write_back(db: Session) -> None:\n"
@@ -1127,7 +1174,7 @@ def test_a_planted_canonical_write_in_a_feature_module_is_convicted(tmp_path: Pa
     )
     found = write_violations(probe, callsites=BI_CALLSITES)
     assert any("CanonicalPosition" in message for message in found), found
-    assert BACKEND / "app/features/read_bi.py" in _bi_owned_tree()
+    assert BACKEND / "app/bi/api/read_bi.py" in _bi_owned_tree()
 
 
 def test_the_mediated_write_guard_catches_a_deliberate_violation(tmp_path: Path) -> None:
@@ -1187,11 +1234,12 @@ def test_the_writable_table_set_is_derived_from_the_bi_models() -> None:
     table must never be in it, or the rule admits the thing it forbids).
     """
     # The BI plane is modelled across SEVERAL modules since Phase 3. Reading only
-    # `app.models.bi` would leave saved content, alerts and subscriptions outside
+    # `app.bi.models.marts` would leave saved content, alerts and subscriptions outside
     # the writable set while `BI_TABLES` (derived from the metadata) contains
     # them, so every write to one would be convicted as a plane violation.
-    from app.models import bi as bi_models  # noqa: PLC0415 - read each module's own list
-    from app.models import bi_content, bi_notifications  # noqa: PLC0415
+    from app.bi.models import content as bi_content  # noqa: PLC0415
+    from app.bi.models import marts as bi_models  # noqa: PLC0415 - read each module's own list
+    from app.bi.models import notifications as bi_notifications  # noqa: PLC0415
 
     modules = (bi_models, bi_content, bi_notifications)
     declared = {
@@ -1200,7 +1248,7 @@ def test_the_writable_table_set_is_derived_from_the_bi_models() -> None:
         for value in vars(module).values()
         if isinstance(value, type) and issubclass(value, Base) and hasattr(value, "__tablename__")
     }
-    assert declared, "no app.models.bi* module declares a table"
+    assert declared, "no app.bi.models.marts* module declares a table"
     assert declared == BI_TABLES, (
         "every table the BI model modules declare must be writable, and nothing "
         f"else: {sorted(declared ^ BI_TABLES)}"
@@ -1253,7 +1301,7 @@ def test_the_direct_allow_list_admits_only_its_own_module(tmp_path: Path) -> Non
     elsewhere = tmp_path / "probe.py"
     elsewhere.write_text(body, encoding="utf-8")
     assert write_violations(elsewhere), "the AI ledger is writable from an unlisted module"
-    real = _WriteScanner(BACKEND / "app/jobs/bi_commentary.py", BI_CALLSITES)
+    real = _WriteScanner(BACKEND / "app/bi/jobs/bi_commentary.py", BI_CALLSITES)
     assert real.violations() == []
     assert any("ai_commentary_drafts" in tables for _, _, tables in real.write_sites())
 
@@ -1309,13 +1357,22 @@ def test_the_write_guard_admits_the_shapes_the_builder_uses(tmp_path: Path) -> N
 
 
 # ---------------------------------------------------------------------------
-# (d) app/domain/bi is pure
+# (d) app/bi/domain is pure
 # ---------------------------------------------------------------------------
 
 #: Prefixes that ARE application state. ``app.core.config`` is included
 #: deliberately: a pure module that reads a setting is configurable behaviour,
 #: which the golden suites cannot pin.
 STATEFUL_PREFIXES: tuple[str, ...] = (
+    "app.bi.service",
+    "app.bi.models",
+    "app.bi.api",
+    "app.bi.jobs",
+    "app.bi.public",
+    "app.identity.api",
+    "app.identity.models",
+    "app.identity.service",
+    "app.identity.public",
     "app.services",
     "app.models",
     "app.db",
@@ -1341,7 +1398,7 @@ def impurities(path: Path, *, module: str | None = None) -> list[str]:
 def test_the_bi_domain_layer_imports_no_application_state() -> None:
     offenders = [message for path in _bi_files(BI_DOMAIN_ROOT) for message in impurities(path)]
     assert offenders == [], (
-        "app/domain/bi must stay pure (the BI restatement of the app/domain rule). "
+        "app/bi/domain must stay pure (the BI restatement of the app/domain rule). "
         "The catalogue and the row extractors are what the golden suites pin and "
         "what a second product segment reuses; a Session or a settings read makes "
         "them untestable in isolation:\n  " + "\n  ".join(offenders)
@@ -1350,17 +1407,17 @@ def test_the_bi_domain_layer_imports_no_application_state() -> None:
 
 def test_the_purity_guard_catches_a_deliberate_violation(tmp_path: Path) -> None:
     samples = (
-        "from app.models.bi import BiFactPositionDaily\n",
+        "from app.bi.models.marts import BiFactPositionDaily\n",
         "from sqlalchemy.orm import Session\n",
         "from app.core.config import get_settings\n",
-        "from app.services.bi import mart_builder\n",
+        "from app.bi.service import mart_builder\n",
         "import app.db.session\n",
     )
     missed = []
     for body in samples:
         probe = tmp_path / "probe.py"
         probe.write_text(body, encoding="utf-8")
-        if not impurities(probe, module="app.domain.bi.extract"):
+        if not impurities(probe, module="app.bi.domain.extract"):
             missed.append(body.strip())
     assert missed == [], f"These reach application state unnoticed: {missed}"
 
@@ -1371,18 +1428,19 @@ def test_the_purity_guard_catches_a_deliberate_violation(tmp_path: Path) -> None
 
 #: What the seam may never pull into the request path and the core worker.
 #:
-#: ``app.models.bi`` is NOT here, and that is D-043: the recovery sweep's "is
+#: ``app.bi.models.marts`` is NOT here, and that is D-043: the recovery sweep's "is
 #: this bank due" read moved INTO the seam precisely so ``scheduler.py`` imports
 #: no BI model, and importing the two models costs the hot path nothing because
 #: ``app/models/__init__.py`` already loads them for every consumer of
 #: ``app.models``. The cost the seam must avoid is the BUILDER — the catalogue,
 #: the compiler and the handler tree.
 SEAM_FORBIDDEN_PREFIXES: tuple[str, ...] = (
-    "app.services.bi.mart_builder",
-    "app.services.bi.compiler",
-    "app.services.bi.execution",
-    "app.services.bi.partitions",
-    "app.domain.bi",
+    "app.bi.jobs",
+    "app.bi.service.mart_builder",
+    "app.bi.service.compiler",
+    "app.bi.service.execution",
+    "app.bi.service.partitions",
+    "app.bi.domain",
     "app.jobs",
 )
 
@@ -1405,6 +1463,6 @@ def test_the_seam_pulls_in_no_builder(seam: str) -> None:
 
 def test_the_version_constant_module_imports_nothing() -> None:
     """``versions.py`` is imported by both planes, so it must be a leaf."""
-    path = APP / "services" / "bi" / "versions.py"
+    path = APP / "bi" / "service" / "versions.py"
     imported = {name for _, name in import_sites(path)}
     assert imported <= {"__future__", "__future__.annotations"}, imported

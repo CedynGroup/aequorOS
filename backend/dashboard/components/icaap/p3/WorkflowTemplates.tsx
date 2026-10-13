@@ -10,7 +10,7 @@
  * stage between them reviews or approves, and exactly one approval stage
  * seals the report — immediately before the signature stage.
  *
- * Those rules are the SERVER's (`app/domain/icaap/workflow.py` validates the
+ * Those rules are the SERVER's (`app/icaap/domain/workflow.py` validates the
  * framework's default and the bank's proposal with the same function), so a
  * chain this screen would accept and the server would refuse cannot exist.
  * The composer (`ChainBuilder`) therefore mirrors none of them: it builds

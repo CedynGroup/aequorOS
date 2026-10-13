@@ -1568,24 +1568,8 @@ assert.match(
     ),
     "a shut flag must read as the deployment's, not the bank's",
   );
-  // "Sending" likewise.
-  assert.ok(
-    subscriptions.includes(
-      'if (deliveryEnabled === true) return { label: "Sending"',
-    ),
-    "'Sending' must be gated on the deployment saying it delivers reports",
-  );
-  assert.ok(
-    subscriptions.includes(
-      'if (deliveryEnabled === false) return { label: "Not sending here"',
-    ),
-    "a shut flag must read as the deployment's, not the bank's",
-  );
-  assert.doesNotMatch(
-    subscriptions,
-    /subscription\.isActive \? "Sending" : "Stopped"/,
-    "the pill no longer claims 'Sending' from the row alone",
-  );
+  // Delivery status is exercised through the rendered subscriptions page in
+  // unit/biGovernance.spec.tsx for every flag and report-activity combination.
 
   // A refusal is never an absence: the server's own sentence is consulted FIRST,
   // the grant paraphrase second, and a failed read is named as a failed read.

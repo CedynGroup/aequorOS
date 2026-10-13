@@ -46,7 +46,8 @@ def _to_float(value: object) -> float | None:
         text = str(value).replace(",", "").strip()
         if text == "" or text.lower() in {"nan", "none", "null", "n/a"}:
             return None
-        return float(text)
+        number = float(text)
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -77,7 +78,12 @@ def fingerprint(record: RawRecord) -> np.ndarray:
     n_numeric = len(numerics)
     abs_numerics = [abs(x) for x in numerics]
     log_max = math.log10(max(abs_numerics) + 1.0) if abs_numerics else 0.0
-    log_mean = math.log10(sum(abs_numerics) / len(abs_numerics) + 1.0) if abs_numerics else 0.0
+    # Divide before summing so large finite inputs cannot overflow the mean.
+    log_mean = (
+        math.log10(sum(value / len(abs_numerics) for value in abs_numerics) + 1.0)
+        if abs_numerics
+        else 0.0
+    )
     numeric_span = (log_max - (math.log10(min(abs_numerics) + 1.0))) if abs_numerics else 0.0
 
     text = " ".join(str(v) for v in populated_values)

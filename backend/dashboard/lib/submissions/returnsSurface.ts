@@ -1,16 +1,8 @@
 /**
  * What the Returns workspace shows THIS officer, and the one act it offers them.
  *
- * The rule (docs/filing_workflow_redesign.md §4b.1) has two halves and the old
- * screen got both wrong by rendering everything disabled:
- *
- *  - **Absent** when the surface is not this role's at all. A preparer never
- *    sees the regulator's channel, the downtime bundle, the submission trail or
- *    the resubmission workflow. Not greyed — gone.
- *  - **Disabled, with the reason** when the control IS this role's and it is
- *    simply not their turn yet, or a precondition is unmet.
- *
- * Both halves are decided here, purely, so they can be tested without a browser
+ * The absence/disabled contract lives in backend/docs/filing_workflow_redesign.md
+ * §4b.1. It is projected here, purely, so it can be tested without a browser
  * and so a new surface cannot quietly acquire a control by being added to the
  * page.
  */
@@ -320,7 +312,7 @@ export function primaryFilingAction(input: SurfaceInput): PrimaryAction | null {
   // theirs and is offered disabled, with the reason; a stage behind it is done
   // and nothing is offered.
   const position =
-    at === "closed"
+    at === "closed" || at === "regulator"
       ? STAGE_ORDER.length
       : STAGE_ORDER.indexOf(at as FilingStageKey);
   const ahead = held.find((stage) => STAGE_ORDER.indexOf(stage) > position);

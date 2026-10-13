@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from app.core import security
 from app.core.config import get_operator_settings, get_settings
-from app.core.security import _is_loopback_issuer_allowed
+from app.core.security import is_loopback_issuer_allowed
 from app.operator.main import create_operator_app
 from tests.operator.conftest import operator_headers
 
@@ -88,7 +88,7 @@ def test_dev_auth_refuses_boot_on_every_deployed_environment(
 
 
 def test_an_unrecognised_app_env_never_reaches_the_guard_at_all(
-    monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The other half of "anything unrecognised is treated as deployed".
 
@@ -144,12 +144,12 @@ class TestLoopbackIssuerCarveOut:
 
     def test_loopback_http_allowed_on_an_undeployed_environment(self) -> None:
         # The suite runs with APP_ENV=test (see tests/conftest.py).
-        assert _is_loopback_issuer_allowed("http://127.0.0.1:8110")
-        assert _is_loopback_issuer_allowed("http://localhost:8110")
+        assert is_loopback_issuer_allowed("http://127.0.0.1:8110")
+        assert is_loopback_issuer_allowed("http://localhost:8110")
 
     def test_non_loopback_http_always_rejected(self) -> None:
-        assert not _is_loopback_issuer_allowed("http://idp.example.com")
-        assert not _is_loopback_issuer_allowed("http://192.168.1.10:8110")
+        assert not is_loopback_issuer_allowed("http://idp.example.com")
+        assert not is_loopback_issuer_allowed("http://192.168.1.10:8110")
 
     @pytest.mark.parametrize("app_env", ["staging", "production"])
     def test_loopback_http_rejected_on_every_deployed_environment(
@@ -163,9 +163,9 @@ class TestLoopbackIssuerCarveOut:
         monkeypatch.setenv("APP_ENV", app_env)
         get_settings.cache_clear()
         try:
-            assert not _is_loopback_issuer_allowed("http://127.0.0.1:8110")
-            assert not _is_loopback_issuer_allowed("http://localhost:8100")
-            assert not _is_loopback_issuer_allowed("http://[::1]:8200")
+            assert not is_loopback_issuer_allowed("http://127.0.0.1:8110")
+            assert not is_loopback_issuer_allowed("http://localhost:8100")
+            assert not is_loopback_issuer_allowed("http://[::1]:8200")
         finally:
             get_settings.cache_clear()
 

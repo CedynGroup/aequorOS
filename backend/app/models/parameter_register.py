@@ -270,7 +270,8 @@ class ParamLiquidityHaircut(RegulatoryParameterMixin, Base):
 class ParamEclAssumption(RegulatoryParameterMixin, Base):
     """IFRS 9 PD/LGD assumptions per segment + stage (Phase 2 item 8).
 
-    ``segment`` matches the loan family's fact category, with ``ALL`` as the
+    ``segment`` names a loan exposure category in the upper-case spelling of
+    ``app.domain.capital.ecl.normalize_segment``, with ``ALL`` as the
     fallback; stage 1 rows carry the 12-month PD, stage 2 the lifetime PD,
     and stage 3 rows contribute only their LGD (PD is 100% by definition for
     credit-impaired exposures). The mixin's approval evidence is the model

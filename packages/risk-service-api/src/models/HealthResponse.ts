@@ -19,6 +19,12 @@ import { mapValues } from "../runtime";
 export interface HealthResponse {
   /**
    *
+   * @type {boolean}
+   * @memberof HealthResponse
+   */
+  bankKeyRequired?: boolean;
+  /**
+   *
    * @type {string}
    * @memberof HealthResponse
    */
@@ -83,6 +89,8 @@ export function HealthResponseFromJSONTyped(
     return json;
   }
   return {
+    bankKeyRequired:
+      json["bank_key_required"] == null ? undefined : json["bank_key_required"],
     environment: json["environment"],
     service: json["service"],
     status: json["status"],
@@ -102,6 +110,7 @@ export function HealthResponseToJSONTyped(
   }
 
   return {
+    bank_key_required: value["bankKeyRequired"],
     environment: value["environment"],
     service: value["service"],
     status: value["status"],

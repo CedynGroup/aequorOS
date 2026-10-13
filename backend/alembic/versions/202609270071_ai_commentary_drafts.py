@@ -16,10 +16,10 @@ and one date. It is named for the FEATURE and tabled in the AI plane, beside
 Its sibling is the consent row that gates it, not a mart. The split is also
 ENFORCED rather than stylistic: ``tests/architecture/test_bi_plane_boundary.py``
 derives the tables BI may write from the ``bi_``-prefixed tables of
-``Base.metadata`` and separately asserts that set equals what ``app/models/bi.py``
+``Base.metadata`` and separately asserts that set equals what ``app/bi/models/marts.py``
 declares, so a ``bi_``-named table declared elsewhere breaks the derivation. The
-consequence is deliberate: nothing under ``app/services/bi`` writes this row —
-``app/jobs/bi_commentary.py`` does, exactly as ``app/jobs/bi_export.py`` owns the
+consequence is deliberate: nothing under ``app/bi/service`` writes this row —
+``app/bi/jobs/bi_commentary.py`` does, exactly as ``app/bi/jobs/bi_export.py`` owns the
 ``audit_events`` write for the same reason.
 
 Why the columns are shaped this way

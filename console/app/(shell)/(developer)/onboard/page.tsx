@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Eye, Loader2 } from "lucide-react";
 import {
@@ -11,6 +11,7 @@ import {
   type ProvisionTenantRequest,
   type ProvisionTenantResponse,
 } from "@/lib/api";
+import { onboardingKeyState, watchBankKeyRequirement } from "@/lib/onboarding";
 import {
   Button,
   CopyButton,
@@ -31,11 +32,7 @@ import {
 
 /**
  * /onboard — tenant provisioning.
- * Source: POST /operator/v1/tenants (the saga endpoint). The saga logic is
- * unchanged from the original page — this refit only re-skins it onto the
- * Stepper / SectionCard / Form primitives. The step list is rendered exactly as
- * the API returns it (succeeded / failed / skipped / rolled_back) and the
- * handoff panel only appears when the API returned real identifiers.
+ * The handoff panel only appears when the API returned real identifiers.
  */
 
 // Hardcoded: the four codes seeded in the global `jurisdictions` registry
@@ -98,7 +95,11 @@ const INSTITUTION_TYPES = [
 
 type Phase = "form" | "review" | "submitting" | "done";
 
-const EMPTY_FORM: ProvisionTenantRequest = {
+type OnboardingForm = Omit<ProvisionTenantRequest, "encryption_key"> & {
+  encryption_key: NonNullable<ProvisionTenantRequest["encryption_key"]>;
+};
+
+const EMPTY_FORM: OnboardingForm = {
   organization_name: "",
   bank_name: "",
   license_type: "",
@@ -109,6 +110,12 @@ const EMPTY_FORM: ProvisionTenantRequest = {
   currency: "GHS",
   admin_email: "",
   admin_full_name: "",
+  encryption_key: {
+    provider: "aws_kms",
+    key_id: "",
+    region: "",
+    owner_account: "",
+  },
 };
 
 const PHASE_INDEX: Record<Phase, number> = {
@@ -127,15 +134,18 @@ const STEP_TONE: Record<ProvisionStepStatus, StatusTone> = {
 
 export default function OnboardPage() {
   const [phase, setPhase] = useState<Phase>("form");
-  const [form, setForm] = useState<ProvisionTenantRequest>(EMPTY_FORM);
+  const [form, setForm] = useState<OnboardingForm>(EMPTY_FORM);
+  const [bankKeyRequired, setBankKeyRequired] = useState(false);
+
+  useEffect(() => watchBankKeyRequirement(setBankKeyRequired, window), []);
   const [currencyTouched, setCurrencyTouched] = useState(false);
   const [result, setResult] = useState<ProvisionTenantResponse | null>(null);
   const [submitError, setSubmitError] = useState<ApiError | null>(null);
   const [otpRevealed, setOtpRevealed] = useState(false);
 
-  function set<K extends keyof ProvisionTenantRequest>(
+  function set<K extends keyof OnboardingForm>(
     key: K,
-    value: ProvisionTenantRequest[K],
+    value: OnboardingForm[K],
   ) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -155,6 +165,8 @@ export default function OnboardPage() {
   }
 
   const currencyValid = /^[A-Z]{3}$/.test(form.currency);
+  const keyState = onboardingKeyState(bankKeyRequired, form.encryption_key);
+  const keyFieldsRequired = keyState.required;
   const formComplete =
     form.organization_name.trim() !== "" &&
     form.bank_name.trim() !== "" &&
@@ -163,9 +175,11 @@ export default function OnboardPage() {
     form.jurisdiction_code !== "" &&
     currencyValid &&
     /.+@.+\..+/.test(form.admin_email) &&
-    form.admin_full_name.trim() !== "";
+    form.admin_full_name.trim() !== "" &&
+    keyState.complete;
 
   async function provision() {
+    if (!formComplete) return;
     setPhase("submitting");
     setSubmitError(null);
     setResult(null);
@@ -178,6 +192,7 @@ export default function OnboardPage() {
         license_type: form.license_type.trim(),
         admin_email: form.admin_email.trim(),
         admin_full_name: form.admin_full_name.trim(),
+        encryption_key: keyState.encryptionKey,
       });
       setResult(res);
     } catch (err) {
@@ -358,6 +373,72 @@ export default function OnboardPage() {
               </Field>
             </div>
 
+            <div className="mt-5 border-t border-border-light pt-4">
+              <h2 className="text-body font-medium text-navy">
+                Bank-owned encryption key
+              </h2>
+              <p className="mt-1 text-caption text-slate">
+                {bankKeyRequired
+                  ? "A bank-owned key is required."
+                  : "A bank-owned key is optional during rollout."}{" "}
+                To connect one, the bank authorizes the platform&apos;s workload
+                role to use its enabled AWS KMS key. Setup verifies access;
+                revoking a connected key prevents access to bank files.
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="AWS KMS key ARN"
+                  required={keyFieldsRequired}
+                  className="sm:col-span-2"
+                  hint="Use the exact key ARN. Aliases and bare key IDs are not accepted."
+                >
+                  <Input
+                    value={form.encryption_key.key_id}
+                    className="font-mono"
+                    onChange={(e) =>
+                      set("encryption_key", {
+                        ...form.encryption_key,
+                        key_id: e.target.value,
+                      })
+                    }
+                    placeholder="arn:aws:kms:region:123456789012:key/key-id"
+                    pattern="arn:[^:]+:kms:[^:]+:[0-9]{12}:key/.+"
+                    required={keyFieldsRequired}
+                  />
+                </Field>
+                <Field label="Bank AWS account ID" required={keyFieldsRequired}>
+                  <Input
+                    value={form.encryption_key.owner_account}
+                    className="font-mono"
+                    onChange={(e) =>
+                      set("encryption_key", {
+                        ...form.encryption_key,
+                        owner_account: e.target.value,
+                      })
+                    }
+                    placeholder="123456789012"
+                    inputMode="numeric"
+                    pattern="[0-9]{12}"
+                    maxLength={12}
+                    required={keyFieldsRequired}
+                  />
+                </Field>
+                <Field label="AWS region" required={keyFieldsRequired}>
+                  <Input
+                    value={form.encryption_key.region}
+                    onChange={(e) =>
+                      set("encryption_key", {
+                        ...form.encryption_key,
+                        region: e.target.value,
+                      })
+                    }
+                    placeholder="Region from the key ARN"
+                    required={keyFieldsRequired}
+                  />
+                </Field>
+              </div>
+            </div>
+
             <div className="mt-4 flex justify-end border-t border-border-light pt-4">
               <Button type="submit" disabled={!formComplete}>
                 Review
@@ -389,6 +470,28 @@ export default function OnboardPage() {
             <FieldRow label="Reporting currency">
               <span className="font-mono">{form.currency}</span>
             </FieldRow>
+            <FieldRow
+              label={
+                keyFieldsRequired ? "Bank-owned KMS key" : "Storage encryption"
+              }
+            >
+              <span className="break-all font-mono">
+                {form.encryption_key.key_id ||
+                  "Platform storage — no bank key connected"}
+              </span>
+            </FieldRow>
+            {keyFieldsRequired && (
+              <>
+                <FieldRow label="Bank AWS account">
+                  <span className="font-mono">
+                    {form.encryption_key.owner_account}
+                  </span>
+                </FieldRow>
+                <FieldRow label="AWS region">
+                  {form.encryption_key.region}
+                </FieldRow>
+              </>
+            )}
             <FieldRow label="First admin">
               {form.admin_full_name} ·{" "}
               <span className="font-mono">{form.admin_email}</span>
@@ -398,7 +501,9 @@ export default function OnboardPage() {
             <Button variant="secondary" onClick={() => setPhase("form")}>
               Back
             </Button>
-            <Button onClick={() => void provision()}>Provision tenant</Button>
+            <Button disabled={!formComplete} onClick={() => void provision()}>
+              Provision tenant
+            </Button>
           </div>
         </SectionCard>
       )}

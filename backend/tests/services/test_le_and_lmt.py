@@ -20,7 +20,7 @@ from __future__ import annotations
 import io
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
@@ -48,14 +48,14 @@ from app.models import (
     RegulatoryRun,
     RelatedParty,
 )
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import calendar, generation, validation
+from app.reporting.service.common import UNVALIDATED_BOOK_RULE
+from app.reporting.service.exports import export_package
+from app.reporting.service.registry import REGISTRY
 from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import regulatory_capital, regulatory_irr, regulatory_liquidity
-from app.services.regulatory_reporting import calendar, generation, validation
-from app.services.regulatory_reporting.common import UNVALIDATED_BOOK_RULE
-from app.services.regulatory_reporting.exports import export_package
-from app.services.regulatory_reporting.registry import REGISTRY
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -79,9 +79,7 @@ PCT = Decimal("0.0001")
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
     client = InMemoryStorageClient()
-    monkeypatch.setattr(
-        "app.services.regulatory_reporting.exports.get_storage_client", lambda: client
-    )
+    monkeypatch.setattr("app.reporting.service.exports.get_storage_client", lambda: client)
     return client
 
 
@@ -148,6 +146,7 @@ class _CanonicalSeeder:
         db.flush()
         lineage = LineageRecord(
             organization_id=DEMO_ORG_ID,
+            bank_id=batch.bank_id,
             ingestion_batch_id=batch.id,
             operation_type="ADAPTER_TRANSLATE",
             operation_ref="w6-fixture",
@@ -369,16 +368,23 @@ def test_le_registry_entry_is_periodic_monthly_confirmed() -> None:
     assert "Part VI" in definition.directive_citation
 
 
-def test_le_calendar_expands_monthly_obligation(db_session: Session) -> None:
+@pytest.mark.parametrize("year", [2026, 2027])
+def test_le_calendar_expands_only_in_force_monthly_obligations(
+    db_session: Session, year: int
+) -> None:
     materialize_canonical_test_book(db_session)
     obligations = calendar.list_obligations(
-        db_session, MAKER, SAMPLE_BANK_ID, 1, as_of=date(2026, 4, 5)
+        db_session, MAKER, SAMPLE_BANK_ID, 1, as_of=date(year, 4, 5)
     ).obligations
     le_items = [item for item in obligations if item.return_code == "LE-MONTHLY"]
-    assert le_items, "the calendar must expand LE-MONTHLY like any periodic return"
-    march = [item for item in le_items if item.reporting_date == REPORTING_DATE]
-    assert march and march[0].due_date == date(2026, 4, 9)
-    assert march[0].return_family == "large_exposures"
+    if year == 2026:
+        assert le_items == []
+    else:
+        march = [item for item in le_items if item.reporting_date == date(year, 3, 31)]
+        assert len(march) == 1
+        assert march[0].due_date == date(year, 4, 9)
+        assert march[0].return_family == "large_exposures"
+        assert all(item.instrument_status == "in_force" for item in le_items)
 
 
 def test_le_generation_derives_templates_from_canonical_exposures(db_session: Session) -> None:
@@ -499,6 +505,181 @@ def test_le_top_100_cap_truncates_with_info_finding(db_session: Session) -> None
     assert truncation and truncation[0].severity == "INFO"
 
 
+def test_le_foreign_position_without_cedi_amount_refuses_the_return(db_session: Session) -> None:
+    """IAS 21 ¶23(a) as an input: a foreign-currency exposure the bank has not stated in
+    the reporting currency cannot be measured against Net Own Funds, so the return is
+    refused rather than generated with that exposure at zero."""
+    materialize_canonical_test_book(db_session)
+    _run_capital_baseline(db_session)
+    seeder = _CanonicalSeeder(db_session)
+    counterparty = seeder.counterparty("CP/USD", "Dollar Borrower", "CORPORATE")
+    seeder.position("LOAN/GHS", "LOAN", Decimal("1000000"), counterparty=counterparty)
+    seeder.position("LOAN/USD", "LOAN", Decimal("80000"), counterparty=counterparty, currency="USD")
+    snapshot = db_session.scalar(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.source_reference == "LOAN/USD"
+        )
+    )
+    assert snapshot is not None
+    snapshot.attributes = {}
+    db_session.flush()
+
+    with pytest.raises(HTTPException) as refused:
+        _generate(db_session, "LE-MONTHLY")
+
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert "1 foreign-currency position(s) in USD" in detail["message"]
+    assert "LOAN/USD (balance_ghs)" in detail["message"]
+
+
+@pytest.mark.parametrize(
+    ("native_notional", "ccf"),
+    [(Decimal("200000"), "0.5"), (None, "0.5"), (Decimal("200000"), None)],
+)
+def test_le_refuses_unstated_foreign_notional_then_preserves_stated_exposure(
+    db_session: Session, native_notional: Decimal | None, ccf: str | None
+) -> None:
+    materialize_canonical_test_book(db_session)
+    _run_capital_baseline(db_session)
+    seeder = _CanonicalSeeder(db_session)
+    counterparty = seeder.counterparty("CP/USD", "Dollar Borrower", "CORPORATE")
+    seeder.position(
+        "LOAN/USD",
+        "LOAN",
+        Decimal("1000000"),
+        counterparty=counterparty,
+        currency="USD",
+        extra_attributes={"credit_conversion_factor": ccf},
+    )
+    snapshot = db_session.scalar(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.source_reference == "LOAN/USD"
+        )
+    )
+    assert snapshot is not None
+    snapshot.balance = Decimal("80000")
+    snapshot.notional = native_notional
+    db_session.flush()
+
+    with pytest.raises(HTTPException) as refused:
+        _generate(db_session, "LE-MONTHLY")
+
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert "LOAN/USD (notional_ghs)" in detail["message"]
+
+    snapshot.attributes = {
+        "balance_ghs": "1000000",
+        "notional_ghs": "2400000",
+        "credit_conversion_factor": ccf,
+    }
+    db_session.flush()
+    package = _generate(db_session, "LE-MONTHLY")
+    sections = cast(dict[str, dict[str, list[dict[str, str]]]], _sections(package))
+    exposure = sections["template_2"]["rows"][0]
+    undrawn = Decimal("1200000") if ccf is not None else Decimal("0")
+    assert Decimal(exposure["drawn_ghs"]) == Decimal("1000000")
+    assert Decimal(exposure["undrawn_ccf_ghs"]) == undrawn
+    assert Decimal(exposure["value"]) == Decimal("1000000") + undrawn
+
+
+@pytest.mark.parametrize("previous_month", [False, True])
+@pytest.mark.parametrize(
+    "position_spec",
+    [
+        ("DEPOSIT", None, None, "balance_ghs"),
+        ("LOAN", "1000000", "0.5", "notional_ghs"),
+        ("COMMITMENT_UNDRAWN", "0", None, "notional_ghs"),
+        ("LC_GUARANTEE", "0", None, "notional_ghs"),
+    ],
+)
+def test_lmt_refuses_unstated_foreign_amounts_in_either_period(
+    db_session: Session,
+    previous_month: bool,
+    position_spec: tuple[str, str | None, str | None, str],
+) -> None:
+    position_type, balance_ghs, ccf, missing = position_spec
+    materialize_canonical_test_book(db_session)
+    _run_liquidity_baseline(db_session)
+    _CanonicalSeeder(db_session).position("DEP/GHS", "DEPOSIT", Decimal("1000000"))
+    as_of = date(2026, 2, 28) if previous_month else REPORTING_DATE
+    _CanonicalSeeder(db_session, as_of).position(
+        "POSITION/USD",
+        position_type,
+        Decimal("80000"),
+        currency="USD",
+        extra_attributes={"balance_ghs": balance_ghs, "credit_conversion_factor": ccf},
+    )
+
+    with pytest.raises(HTTPException) as refused:
+        _generate(db_session, "LMT")
+
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert f"POSITION/USD ({missing})" in detail["message"]
+    assert as_of.isoformat() in detail["message"]
+
+
+@pytest.mark.parametrize("position_type", ["LC_GUARANTEE", "COMMITMENT_UNDRAWN"])
+def test_off_balance_returns_measure_notional_without_a_drawn_balance(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, position_type: str
+) -> None:
+    """IAS 21 ¶23(a) as an input: an off-balance-sheet row is measured by its stated notional.
+
+    A USD guarantee or commitment with notional_ghs and no balance_ghs is included at its
+    notional; one with neither is excluded and reported. Large Exposures does not load
+    standalone off-balance-sheet rows yet (follow-up #408), so LMT carries the case.
+    """
+    return_code = "LMT"
+    materialize_canonical_test_book(db_session)
+    _run_capital_baseline(db_session)
+    _run_liquidity_baseline(db_session)
+    seeder = _CanonicalSeeder(db_session)
+    cp = seeder.counterparty("CP/OBS", "Off Balance Borrower", "CORPORATE")
+    seeder.position(
+        "OBS/USD",
+        position_type,
+        Decimal("100000"),
+        currency="USD",
+        counterparty=cp,
+        extra_attributes={
+            "balance_ghs": None,
+            "notional_ghs": "2000000",
+            "credit_conversion_factor": "0.2",
+        },
+    )
+    snapshot = db_session.scalar(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.source_reference == "OBS/USD"
+        )
+    )
+    assert snapshot is not None
+    snapshot.notional = Decimal("100000")
+    db_session.flush()
+    package = _generate(db_session, return_code)
+    sections = cast(dict[str, dict[str, list[dict[str, str]]]], _sections(package))
+    row_code = "17" if position_type == "LC_GUARANTEE" else "15"
+    row = next(row for row in sections["maturity_ladder"]["rows"] if row["code"] == row_code)
+    assert Decimal(row["value"]) == Decimal("2000000")
+    snapshot.attributes = {"credit_conversion_factor": "0.2"}
+    db_session.flush()
+
+    def missing_spot(*_args: object) -> None:
+        return None
+
+    monkeypatch.setattr("app.market_data.public.preferred_fx_spot", missing_spot)
+    with pytest.raises(HTTPException) as refused:
+        _generate(db_session, return_code)
+    assert refused.value.status_code == 409
+    detail = cast(dict[str, str], refused.value.detail)
+    assert detail["error_code"] == "foreign_amount_not_stated"
+    assert "OBS/USD (notional_ghs)" in detail["message"]
+
+
 def test_le_validates_and_exports_round_trip(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
@@ -565,7 +746,7 @@ def _seed_lmt_book(db: Session) -> None:
     45 days out (row 6, 1-2 mths), an unclassified deposit (stable by
     complement, non-contractual), an undrawn commitment (row 15 default),
     an LC classified via obs_category (row 16) and a bare guarantee
-    (row 17 default, balance fallback, non-contractual).
+    (row 17 default, stated notional, non-contractual).
     """
     seeder = _CanonicalSeeder(db)
     depositor_a = seeder.counterparty("CP/DEP-A", "Kanda Pensions Trust", "NBFI")
@@ -608,7 +789,9 @@ def _seed_lmt_book(db: Session) -> None:
         maturity=date(2026, 4, 5),
         extra_attributes={"notional_ghs": "900000", "obs_category": "letter_of_credit"},
     )  # row 16, 2-7 days
-    seeder.position("LCG/G2", "LC_GUARANTEE", Decimal("600000"))  # default → row 17, NC
+    seeder.position(
+        "LCG/G2", "LC_GUARANTEE", Decimal("0"), extra_attributes={"notional_ghs": "600000"}
+    )  # default → row 17, NC
 
 
 def test_lmt_carries_ladder_concentration_and_unencumbered_sections(  # noqa: PLR0915 - one linear pass over the printed grid
@@ -1336,6 +1519,7 @@ def test_sdi_irrbb_uses_net_own_funds_and_omits_bank_outlier_fields(
     db_session.flush()
     lineage = LineageRecord(
         organization_id=DEMO_ORG_ID,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="sdi-irrbb-nof",
@@ -1406,7 +1590,7 @@ def test_sdi_irrbb_uses_net_own_funds_and_omits_bank_outlier_fields(
 # balance sheet, because the omission has no subtotal to be short — a
 # concentration limit loses an entire counterparty row, and a maturity ladder
 # loses a bucket. ``bog_form`` returns already disclose
-# (``tests/services/bog_forms/test_unvalidated_book_disclosure.py``); these are
+# (``tests/reporting/service/bog_forms/test_unvalidated_book_disclosure.py``); these are
 # the other two families that read the canonical book directly.
 
 

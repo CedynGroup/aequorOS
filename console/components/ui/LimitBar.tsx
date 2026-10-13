@@ -152,7 +152,7 @@ export function LimitBar({
         )}
 
         <div
-          className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-r-sm transition-[width] duration-300"
+          className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-r-xs transition-[width] duration-300"
           style={{ width: `${pctValue}%`, background: barColor[status] }}
           aria-hidden
         />

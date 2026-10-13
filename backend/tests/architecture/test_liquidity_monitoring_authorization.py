@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from fastapi.routing import APIRoute
 
-from app.main import create_app
+from app.main import app
 
 _PATH = "/api/v1/banks/{bank_id}/liquidity-monitoring"
-_ROUTES = [route for route in create_app().routes if isinstance(route, APIRoute)]
+_ROUTES = [route for route in app.routes if isinstance(route, APIRoute)]
 
 
 def _dependency_names(route: APIRoute) -> set[str]:

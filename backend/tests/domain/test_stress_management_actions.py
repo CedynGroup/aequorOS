@@ -143,6 +143,10 @@ def test_on_severity_trigger_respects_the_threshold() -> None:
 
 
 def test_fixed_capital_raise_lifts_capital_paid_up_and_car() -> None:
+    """Basis: Prudential capital; an equity raise follows gross annual incremental losses.
+
+    Year 1: (358,647,502.3000 + 100M) / 2,189,361,250 = 20.948918%.
+    """
     projection = _projection(severe_paths())
     raise_amount = Decimal("100000000")
     action = ManagementAction(
@@ -169,12 +173,14 @@ def test_fixed_capital_raise_lifts_capital_paid_up_and_car() -> None:
             (stress.ratios.total_capital + raise_amount) / stress.rwa.total_rwa * Decimal("100")
         )
         assert post.car_pct == expected_car
-    # Year-1 golden (independently computed): total 359,882,114.8750 + 100M over
-    # RWA 2,189,361,250 ⇒ 21.005310%.
-    assert result.post_action[0].car_pct == Decimal("21.005310")
+    assert result.post_action[0].car_pct == Decimal("20.948918")
 
 
 def test_rwa_reduction_raises_car_and_shrinks_leverage_exposure() -> None:
+    """Basis: Prudential capital; gross annual losses precede the risk-reduction overlay.
+
+    Year 1: 358,647,502.3000 / (2,189,361,250 - 200M) = 18.028274%.
+    """
     projection = _projection(severe_paths())
     reduction = Decimal("200000000")
     action = ManagementAction(
@@ -193,12 +199,16 @@ def test_rwa_reduction_raises_car_and_shrinks_leverage_exposure() -> None:
         assert post.leverage_exposure == money(stress.ratios.leverage_exposure - reduction)
         assert post.car_pct > stress.ratios.car_pct
         assert post.aggregate.rwa_reduction_risk_reduction == reduction
-    # Year-1 golden: RWA 2,189,361,250 − 200M = 1,989,361,250 ⇒ CAR 18.090335%.
     assert result.post_action[0].total_rwa == Decimal("1989361250.0000")
-    assert result.post_action[0].car_pct == Decimal("18.090335")
+    assert result.post_action[0].car_pct == Decimal("18.028274")
 
 
 def test_dividend_reduction_accumulates_into_cet1() -> None:
+    """Basis: Prudential capital; preserve distributions after gross incremental credit losses.
+
+    Dividends: 7,991,786.7000 + 8,590,992.0120 + 9,648,876.0521.
+    Year-1 CET1 after preserving its dividend: 260M + 26,639,289 net income.
+    """
     projection = _projection(severe_paths())
     action = ManagementAction(
         action_id="div_cut",
@@ -214,8 +224,8 @@ def test_dividend_reduction_accumulates_into_cet1() -> None:
         cumulative = money(cumulative + stress.pnl.dividends)
         assert post.cet1 == money(stress.ratios.cet1_capital + cumulative)
     # 100% of each stress year's distribution preserved and carried forward.
-    assert result.actions[0].dividend_preserved_total == Decimal("28034312.5849")
-    assert result.post_action[0].cet1 == Decimal("288403021.2500")
+    assert result.actions[0].dividend_preserved_total == Decimal("26231654.7641")
+    assert result.post_action[0].cet1 == Decimal("286639289.0000")
 
 
 def test_severity_differentiation_scales_the_action() -> None:

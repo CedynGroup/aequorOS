@@ -40,7 +40,7 @@ LIVE_PLANE: tuple[Path, ...] = (
     APP / "services" / "pipeline.py",
     APP / "services" / "freshness.py",
     APP / "services" / "implied_rating.py",
-    APP / "services" / "regulatory_reporting" / "generation.py",
+    APP / "reporting" / "service" / "generation.py",
 )
 
 SF_SERVICE_MODULE = "app.services.regulatory_irr_sf"

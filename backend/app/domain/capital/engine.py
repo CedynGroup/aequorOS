@@ -9,11 +9,13 @@ happens AFTER quantization so stored and displayed values agree.
 
 Methodology notes:
 
-- Credit RWA (standardized approach) covers the full balance sheet: granular
+- Credit RWA uses ``credit_exposure`` facts net of specific provisions and
+  interest in suspense (BoG CRD (June 2018) ¶98), independently of HQLA.
+  For older immutable snapshots without this group, the legacy path covers granular
   ``loan_exposure`` facts at their coded risk weights, the ``other_assets``
   balance-sheet row at RW100, and ``off_balance`` facts converted to an EAD via
   their CCF before weighting. Cash, BoG reserves, and sovereign securities are
-  RW0; one summary line each (``bog_bills``, ``gog_bonds``,
+  RW0 in legacy snapshots; one summary line each (``bog_bills``, ``gog_bonds``,
   ``cash_and_reserves`` — the latter aggregating the vault-cash and BoG reserve
   balance-sheet rows) is emitted with a zero weighted amount for transparency.
 - Market RWA charges ``fx_charge_pct`` of the larger open FX position and
@@ -50,16 +52,22 @@ Methodology notes:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Literal
+from typing import Literal, Protocol
 
 from app.domain.authority.outcomes import (
     NotComputable,
     OutcomeDetail,
     OutcomeState,
     outcome,
+)
+from app.domain.ingestion.capital_tiers import (
+    CAPITAL_REGISTER_REFUSED_CATEGORY,
+    TIER_AT1,
+    TIER_CET1,
+    TIER_T2,
 )
 
 MONEY = Decimal("0.0001")
@@ -81,6 +89,7 @@ type CapitalTriggerCode = Literal["early_warning", "breach", "critical"]
 
 FACT_GROUP_BALANCE_SHEET = "balance_sheet"
 FACT_GROUP_LOAN_EXPOSURE = "loan_exposure"
+FACT_GROUP_CREDIT_EXPOSURE = "credit_exposure"
 FACT_GROUP_OFF_BALANCE = "off_balance"
 FACT_GROUP_MARKET_RISK = "market_risk"
 FACT_GROUP_OPERATIONAL_INCOME = "operational_income"
@@ -119,9 +128,9 @@ ZERO_RISK_WEIGHT_CODE = "RW0"
 NET_LONG_FX_CATEGORY = "net_long_fx"
 NET_SHORT_FX_CATEGORY = "net_short_fx"
 GENERAL_PROVISIONS_CATEGORY = "general_provisions"
-TIER_CET1 = "CET1"
-TIER_AT1 = "AT1"
-TIER_T2 = "T2"
+#: The CET1 deduction a stress scenario takes for the increase in modelled
+#: stage 1+2 ECL over its unconditioned baseline.
+MODELLED_ECL_CHARGE_CATEGORY = "modelled_ecl_stress_charge"
 _TIER_ORDER = {TIER_CET1: 0, TIER_AT1: 1, TIER_T2: 2}
 
 # Zero-weight balance-sheet transparency rows: (line_code, description,
@@ -187,6 +196,75 @@ class CapitalComputationError(Exception):
     """The supplied facts produce a degenerate ratio (zero denominator)."""
 
 
+class CapitalRegisterRefused(CapitalComputationError, NotComputable):
+    """The authoritative capital register failed derivation."""
+
+    def __init__(self) -> None:
+        NotComputable.__init__(
+            self,
+            outcome(
+                OutcomeState.DATA_QUALITY_BLOCK,
+                metric_id=CAPITAL_REGISTER_REFUSED_CATEGORY,
+                reason="The capital_structure register was refused. Correct the refused "
+                "rows' tiers, re-ingest the complete register and re-derive facts before "
+                "computing capital or any calculation that depends on it.",
+                items=("register:capital_structure",),
+            ),
+        )
+
+    @property
+    def code(self) -> str:
+        return CAPITAL_REGISTER_REFUSED_CATEGORY
+
+
+class CreditExposureBasisUnavailable(CapitalComputationError, NotComputable):
+    """BoG CRD (June 2018) ¶98, ¶107, ¶139: stale facts cannot supply fresh capital."""
+
+    def __init__(self) -> None:
+        NotComputable.__init__(
+            self,
+            outcome(
+                OutcomeState.MISSING_REQUIRED_INPUT,
+                metric_id="credit_rwa",
+                reason=(
+                    "The net CRD credit exposure basis is missing. Re-derive financial "
+                    "facts before calculating capital, forecasts or stress."
+                ),
+                items=("fact_group:credit_exposure",),
+            ),
+        )
+
+    @property
+    def code(self) -> str:
+        return "credit_exposure_basis_missing"
+
+
+class _CapitalRegisterFact(Protocol):
+    """Equality-only attributes, compatible with ORM descriptors and pure facts."""
+
+    @property
+    def fact_group(self) -> object: ...
+
+    @property
+    def category(self) -> object: ...
+
+
+def assert_capital_register_usable(facts: Iterable[_CapitalRegisterFact]) -> None:
+    """Refuse an explicit register failure while preserving absent-register behavior."""
+    if any(
+        fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT
+        and fact.category == CAPITAL_REGISTER_REFUSED_CATEGORY
+        for fact in facts
+    ):
+        raise CapitalRegisterRefused()
+
+
+def require_credit_exposure_basis(facts: Iterable[_CapitalRegisterFact]) -> None:
+    """BoG CRD (June 2018) ¶98: fresh consumers require the net exposure plane."""
+    if not any(fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE for fact in facts):
+        raise CreditExposureBasisUnavailable()
+
+
 class BiaGrossIncomeUnavailable(CapitalComputationError, NotComputable):
     """No ¶649 gross-income base exists, so the BIA charge is not a number.
 
@@ -237,6 +315,47 @@ class CapitalFact:
     capital_tier: str | None = None
     is_deduction: bool = False
     side: str | None = None
+    ecl_coverage_complete: bool | None = None
+
+
+def unstaged_loan_ead(facts: Sequence[CapitalFact]) -> Decimal:
+    """Known reporting-currency loan EAD beyond the staged EAD buckets."""
+    loans = sum(
+        (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE),
+        Decimal("0"),
+    )
+    staged = sum(
+        (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE),
+        Decimal("0"),
+    )
+    return max(loans - staged, Decimal("0"))
+
+
+def has_complete_ecl_coverage(
+    facts: Sequence[CapitalFact], *, staged_ead: Decimal | None = None
+) -> bool:
+    """Prefer the source-book verdict to sums that may omit unconverted loans.
+
+    Explicit completeness also survives independent forecast rounding of loan
+    totals and staged buckets. Aggregate EAD is a fallback for older facts that
+    carry no verdict, within one money unit per staged bucket, not a reason to
+    override an explicit incomplete source.
+    """
+    coverage = [
+        fact.ecl_coverage_complete for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE
+    ]
+    if any(value is False for value in coverage):
+        return False
+    if coverage and all(value is True for value in coverage):
+        return True
+    if staged_ead is None:
+        staged_ead = sum(
+            (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_ECL_EXPOSURE), _ZERO
+        )
+    loans = sum(
+        (fact.amount for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE), _ZERO
+    )
+    return abs(loans - staged_ead) <= len(coverage) * MONEY
 
 
 @dataclass(frozen=True)
@@ -384,11 +503,13 @@ def tier1_capital(facts: Sequence[CapitalFact]) -> Decimal:
     Reused by non-capital engines (e.g. IRRBB) that need Tier 1 as the
     denominator for a supervisory limit without re-running the full RWA build.
     """
+    assert_capital_register_usable(facts)
     components = [fact for fact in facts if fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT]
     return money(_tier_total(components, TIER_CET1) + _tier_total(components, TIER_AT1))
 
 
 def compute_rwa(facts: Sequence[CapitalFact], params: CapitalParams) -> RwaResult:
+    assert_capital_register_usable(facts)
     credit_items = _credit_line_items(facts, params)
     credit_rwa = money(sum((item.weighted_amount for item in credit_items), _ZERO))
 
@@ -560,14 +681,17 @@ def compute_rwa(facts: Sequence[CapitalFact], params: CapitalParams) -> RwaResul
 
 
 def compute_capital_ratios(
-    facts: Sequence[CapitalFact],
-    rwa: RwaResult,
-    params: CapitalParams,
-    general_provisions_override: Decimal | None = None,
+    facts: Sequence[CapitalFact], rwa: RwaResult, params: CapitalParams
 ) -> CapitalRatiosResult:
-    """``general_provisions_override`` replaces the ingested general-provisions
-    component with the IFRS 9 engine's modeled stage-1/2 ECL (Phase 2 item 8:
-    "replaces ingested-provisions-only") — the Tier 2 cap still applies."""
+    """Capital tiers, ratios and their line items for one fact set.
+
+    Basis: Prudential (BoG CRD 2018); input: the bank's booked IFRS 9 allowance as
+    the Tier 2 general provisions (capped at ``tier2_gp_cap_pct_credit_rwa`` of
+    credit RWA). A modelled ECL never stands in for it: the booked allowance is the
+    figure of record, and a modelled increase reaches capital only as a CET1
+    charge (:data:`MODELLED_ECL_CHARGE_CATEGORY`).
+    """
+    assert_capital_register_usable(facts)
     components = sorted(
         (fact for fact in facts if fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT),
         key=lambda fact: (
@@ -588,8 +712,6 @@ def compute_capital_ratios(
             _ZERO,
         )
     )
-    if general_provisions_override is not None:
-        gp_amount = money(general_provisions_override)
     gp_cap = money(rwa.credit_rwa * params.tier2_gp_cap_pct_credit_rwa / _HUNDRED)
     gp_included = min(gp_amount, gp_cap)
     gp_cap_applied = gp_amount > gp_cap
@@ -666,7 +788,6 @@ def run_capital_stress(
     facts: Sequence[CapitalFact],
     params: CapitalParams,
     shocks: Mapping[str, Decimal],
-    general_provisions_override: Decimal | None = None,
 ) -> CapitalStressResult:
     """Project the four-quarter capital path for one stress scenario.
 
@@ -686,7 +807,7 @@ def run_capital_stress(
             raise MissingParameterError(f"stress_shock:{scenario_code}:{shock_key}")
 
     rwa = compute_rwa(facts, params)
-    ratios = compute_capital_ratios(facts, rwa, params, general_provisions_override)
+    ratios = compute_capital_ratios(facts, rwa, params)
     growth_factor = _ONE + shocks[SHOCK_QUARTERLY_RWA_GROWTH_PCT] / _HUNDRED
     quarterly_retention = (
         shocks[SHOCK_QUARTERLY_INCOME_M] - shocks[SHOCK_QUARTERLY_CREDIT_LOSS_M]
@@ -795,20 +916,44 @@ def _crm_recognized_by_category(
     return recognized
 
 
+def credit_collateral_by_category(
+    facts: Sequence[CapitalFact], params: CapitalParams
+) -> dict[str, Decimal]:
+    """BoG CRD (June 2018) ¶98, Part 2: allocate governed CRM once per net bucket."""
+    recognized = _crm_recognized_by_category(facts, params)
+    credit = [fact for fact in facts if fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE]
+    exposures = credit or [fact for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE]
+    allocated: dict[str, Decimal] = {}
+    for fact in sorted(exposures, key=lambda fact: fact.category):
+        family = fact.category.rsplit(":", 1)[0] if credit else fact.category
+        available = recognized.get(family, _ZERO)
+        collateral = min(available, max(money(fact.amount), _ZERO))
+        recognized[family] = available - collateral
+        allocated[fact.category] = collateral
+    return allocated
+
+
 def _credit_line_items(
     facts: Sequence[CapitalFact], params: CapitalParams
 ) -> tuple[CapitalLineItem, ...]:
+    """Basis: BoG CRD (June 2018), in force.
+
+    Implements: ¶98: capital uses net credit exposures, separate from gross EAD.
+    Older immutable snapshots retain their original summary-based measurement.
+    """
     items: list[CapitalLineItem] = []
-    crm_recognized = _crm_recognized_by_category(facts, params)
+    crm_allocated = credit_collateral_by_category(facts, params)
+    credit = [fact for fact in facts if fact.fact_group == FACT_GROUP_CREDIT_EXPOSURE]
     loans = sorted(
-        (fact for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE),
+        (credit or [fact for fact in facts if fact.fact_group == FACT_GROUP_LOAN_EXPOSURE]),
         key=lambda fact: fact.category,
     )
     for fact in loans:
         weight = _risk_weight(params, fact.risk_weight_code, fact.category)
-        crm = min(crm_recognized.get(fact.category, _ZERO), money(fact.amount))
+        category = fact.category.rsplit(":", 1)[0] if credit else fact.category
+        crm = crm_allocated[fact.category]
         net_exposure = money(fact.amount - crm)
-        description = _describe(fact.category)
+        description = _describe(category)
         if crm > _ZERO:
             description = f"{description} (After CRM Collateral, Post-Haircut)"
         items.append(
@@ -824,7 +969,9 @@ def _credit_line_items(
     other_assets = [
         fact
         for fact in facts
-        if fact.fact_group == FACT_GROUP_BALANCE_SHEET and fact.category == OTHER_ASSETS_CATEGORY
+        if not credit
+        and fact.fact_group == FACT_GROUP_BALANCE_SHEET
+        and fact.category == OTHER_ASSETS_CATEGORY
     ]
     for fact in other_assets:
         weight = _risk_weight(params, OTHER_ASSETS_RISK_WEIGHT_CODE, fact.category)
@@ -862,7 +1009,7 @@ def _credit_line_items(
         if fact.fact_group == FACT_GROUP_BALANCE_SHEET:
             balance_amounts[fact.category] = balance_amounts.get(fact.category, _ZERO) + fact.amount
     zero_weight = _risk_weight(params, ZERO_RISK_WEIGHT_CODE, ZERO_RISK_WEIGHT_CODE)
-    for line_code, description, categories in _ZERO_WEIGHT_SUMMARY_LINES:
+    for line_code, description, categories in () if credit else _ZERO_WEIGHT_SUMMARY_LINES:
         exposure = money(
             sum((balance_amounts.get(category, _ZERO) for category in categories), _ZERO)
         )
@@ -1006,6 +1153,13 @@ def resolve_risk_weight(params: CapitalParams, code: str | None, subject: str) -
     code at all is ``MISSING_REQUIRED_INPUT``, a code with no governed row for the
     institution's jurisdiction and effective date is ``POLICY_UNRESOLVED``.
     """
+    # BoG CRD (June 2018) ¶119 / ¶139: resolve both governed constituent
+    # weights; it grants no fallback if either register row is missing.
+    if code in ("RW50+RW20", "RW100+RW20"):
+        base, addon = code.split("+")
+        return resolve_risk_weight(params, base, subject) + resolve_risk_weight(
+            params, addon, subject
+        )
     if code is None:
         raise RiskWeightUnavailable(
             f"risk_weight_code:{subject}",

@@ -34,7 +34,7 @@ What moves to the package row, where the danger actually is:
 
 What a CHECK CANNOT express, stated here rather than left implicit — both are
 cross-table or cross-row, and both are pinned by tests in
-``tests/services/test_package_plane.py``:
+``tests/reporting/service/test_package_plane.py``:
 
 1. **A real package must not supersede a rehearsal.** ``supersedes_id`` points
    at another row, and a row-level CHECK cannot read it. Enforced in
@@ -66,12 +66,8 @@ depends_on = None
 
 def upgrade() -> None:
     # 1. The two CHECKs that forbade the safe act.
-    op.drop_constraint(
-        "ck_icaap_cycles_rehearsal_no_package", "icaap_cycles", type_="check"
-    )
-    op.drop_constraint(
-        "ck_icaap_cycles_rehearsal_never_sealed", "icaap_cycles", type_="check"
-    )
+    op.drop_constraint("ck_icaap_cycles_rehearsal_no_package", "icaap_cycles", type_="check")
+    op.drop_constraint("ck_icaap_cycles_rehearsal_never_sealed", "icaap_cycles", type_="check")
 
     # 2. The package says what it is.
     op.add_column(

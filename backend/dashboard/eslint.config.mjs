@@ -26,6 +26,7 @@ export default defineConfig([
     ".next/**",
     ".next-*/**",
     ".test-out/**",
+    "coverage/**",
     "e2e/.tmp/**",
     "test-results/**",
     "playwright-report/**",

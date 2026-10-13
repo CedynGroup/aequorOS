@@ -164,7 +164,7 @@ class OutcomeDetail:
 
     @property
     def message(self) -> str:
-        """Single-line human summary, safe for logs and bank-facing surfaces."""
+        """Bank-facing summary; its prose and item references must not enter operator logs."""
         base = f"{self.title} for {self.metric_id}: {self.reason}"
         if self.items:
             return f"{base} ({', '.join(self.items)})"

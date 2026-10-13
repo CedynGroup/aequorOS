@@ -24,7 +24,7 @@ set it" always has an answer. It is never invisible.
 
 **A material failure blocks.** ``derive_facts`` — the official fact plane that
 feeds every immutable ``RegulatoryRun`` — refuses. Everything downstream reaches
-:func:`assert_filing_reconciled` through ``app/services/filing_reconciliation.py``,
+:func:`assert_filing_reconciled` through ``app/reporting/service/filing_reconciliation.py``,
 which is the module that knows how to turn "a bank, a period, a filing act" into
 the two totals this gate needs. That wiring is NOT optional decoration: the
 independent forensic re-audit of 2026-08-22 (D-2) found this function with zero
@@ -86,7 +86,8 @@ from app.domain.authority.outcomes import (
     OutcomeState,
 )
 from app.domain.authority.outcomes import outcome as build_outcome
-from app.models import Bank, ReconciliationException
+from app.identity.public import Bank
+from app.models import ReconciliationException
 from app.services import live_refresh_triggers, regulatory_parameters
 from app.services.audit import record_event
 
@@ -1145,7 +1146,7 @@ def assert_filing_reconciled(  # noqa: PLR0913 - filing gate requires explicit c
     """The filing gate: raise :class:`FilingBlockedError` on a material failure.
 
     Called for every filing-plane act through
-    ``app/services/filing_reconciliation.py`` — package generation, approval,
+    ``app/reporting/service/filing_reconciliation.py`` — package generation, approval,
     certification, transmission, and the per-module official-run mints — because
     those surfaces hold a bank and a period but not this control's inputs.
     ``derive_facts`` enforces the same verdict at the fact plane.

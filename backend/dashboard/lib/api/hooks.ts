@@ -3103,11 +3103,11 @@ export function useReturnAnchors(
   });
 }
 
-export function useReturnTemplates() {
+export function useReturnTemplates(bankId?: string) {
   return useQuery({
-    queryKey: ["rr-templates"],
+    queryKey: ["rr-templates", bankId],
     queryFn: () =>
-      apiCall(() => regulatoryReportingApi.listReturnTemplates({})),
+      apiCall(() => regulatoryReportingApi.listReturnTemplates({ bankId })),
     staleTime: 10 * 60_000,
   });
 }
@@ -3531,11 +3531,8 @@ export function useIntegrationKeys(enabled: boolean) {
 }
 
 /**
- * Issue one key for one purpose. The request is built by
- * `integrationKeyIssueRequest`, never inline: it states every field the
- * generated contract carries, including the purpose — the field this hook once
- * omitted, which let the server default every key to a data push credential
- * that the analytics feed then refused (audit A360-2 H4).
+ * Keep request construction in `integrationKeyIssueRequest` so all callers use
+ * the same explicit scope and purpose rather than relying on server defaults.
  */
 export function useIssueIntegrationKey() {
   const queryClient = useQueryClient();

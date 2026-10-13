@@ -48,7 +48,8 @@ from app.adapters.market_data.scope_taxonomy import (
 from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.db.base import utc_now
-from app.models import Bank, Job
+from app.identity.public import Bank
+from app.models import Job
 from app.models.market_data import MarketDataConnection
 from app.services import job_queue
 from app.services.audit import record_event

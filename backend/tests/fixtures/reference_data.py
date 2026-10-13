@@ -28,11 +28,11 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.models import InstitutionType, Jurisdiction, RegulatoryParameter
-from app.services.icaap.parameters import (
+from app.icaap.service.parameters import (
     jurisdiction_seed_rows as icaap_jurisdiction_parameter_seed_rows,
 )
-from app.services.icaap.parameters import seed_rows as icaap_parameter_seed_rows
+from app.icaap.service.parameters import seed_rows as icaap_parameter_seed_rows
+from app.models import InstitutionType, Jurisdiction, RegulatoryParameter
 from app.services.institution_types import seed_rows as institution_type_seed_rows
 from app.services.regulatory_parameters import filing_seed_rows as icaap_filing_parameter_seed_rows
 from app.services.regulatory_parameters import p2_seed_rows as icaap_p2_parameter_seed_rows

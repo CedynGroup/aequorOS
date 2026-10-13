@@ -24,7 +24,8 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.domain.policy import PolicyUnresolvedError, policy_unresolved
-from app.models import Bank, Jurisdiction
+from app.identity.public import Bank
+from app.models import Jurisdiction
 
 FALLBACK_REGULATOR_NAME = "the banking regulator"
 FALLBACK_REGULATOR_SHORT = "Regulator"

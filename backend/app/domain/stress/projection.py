@@ -28,7 +28,13 @@ everywhere) leaves the two legs identical — a zero stress impact, which is
 correct.
 
 **IFRS 9 ECL under stress (¶48–49, AppI¶5–6).** The per-year impairment is the
-plan cost of risk scaled by that year's macro PD/LGD multipliers. This wires the
+plan cost of risk plus that year's incremental macro PD/LGD charge. On staged
+books with complete coverage and an effective ECL assumptions register, only
+stage 1+2 EAD contributes to the increment; stage 3 keeps the plan loss rate.
+Partial staging or a missing register refuses the projection. Without staging,
+the plan cost-of-risk proxy covers the loan book.
+The incremental charge is gross: no tax shield applied pending a governed
+tax-rate parameter and supported deferred-tax recognition. This wires the
 two directive modes into the projection: **Perfect Foresight** — each of the ≥3
 projected years knows its own macro from day one (the multipliers are computed
 per year off the full authored path); **Single Scenario** — the stress path
@@ -49,16 +55,20 @@ from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
+from app.domain.capital.ecl import EclAssumption
 from app.domain.capital.engine import (
     GENERAL_PROVISIONS_CATEGORY,
     TIER_AT1,
     TIER_CET1,
     TIER_T2,
+    CapitalFact,
+    CapitalLineItem,
     CapitalParams,
     CapitalRatiosResult,
     RwaResult,
     compute_capital_ratios,
     compute_rwa,
+    has_complete_ecl_coverage,
 )
 from app.domain.forecasting.engine import (
     RETAINED_EARNINGS_CATEGORY,
@@ -73,8 +83,14 @@ from app.domain.forecasting.engine import (
     _state_facts,
     _to_capital_facts,
     _to_liquidity_facts,
+    scale_credit_exposures,
 )
 from app.domain.liquidity.engine import compute_lcr, compute_nsfr
+from app.domain.stress.credit_bottom_up import (
+    CreditExposure,
+    apply_credit_collateral,
+    result_for_year,
+)
 from app.domain.stress.translation import (
     MacroPathPoint,
     ShockMapping,
@@ -143,19 +159,14 @@ class EnterpriseProjectionInputs:
     horizon_years: int = HORIZON_DEFAULT
     paid_up_min: Decimal = _ZERO
     overrides: Mapping[str, Sequence[ShockMapping]] | None = None
-    # Phase 4: per-stress-year credit-RWA uplift factor (≥ 1.0) from the
-    # exposure-level bottom-up credit stress — rating migration + FX-loan
-    # revaluation. Applied ONLY to the stress leg's credit RWA, so the stressed
-    # capital ratios erode from RWA growth, not just from P&L losses (closing
-    # the Phase-2 limitation). ``None`` (or a factor of 1.0) leaves the stress
-    # leg byte-identical to Phase 2 — the base leg is never touched.
-    credit_rwa_uplift: Mapping[int, Decimal] | None = None
+    credit_exposures: Sequence[CreditExposure] = ()
     # Whether Basel LCR/NSFR apply to the liquidity leg. True for a bank; False
     # under the SDI regime (docs/sdi.md §4.6), where LCR/NSFR are excluded — the
     # SDI liquidity stress is assessed via the standalone LMTD Table-1 + behavioural
     # stressed ladder on the position book, not the aggregate solvency projection.
     # Default True keeps the bank projection byte-identical.
     basel_liquidity: bool = True
+    ecl_assumptions: Sequence[EclAssumption] = ()
 
 
 PAID_UP_CATEGORIES: frozenset[str] = frozenset(
@@ -175,6 +186,7 @@ class Pnl:
     net_income: Decimal
     dividends: Decimal
     retained: Decimal
+    incremental_credit_losses: Decimal = _ZERO
 
 
 @dataclass(frozen=True)
@@ -271,9 +283,7 @@ class EnterpriseProjection:
     binding_minima: tuple[str, ...]
 
 
-def _paths_at_year(
-    paths: Sequence[MacroPathPoint], year_index: int
-) -> list[MacroPathPoint]:
+def _paths_at_year(paths: Sequence[MacroPathPoint], year_index: int) -> list[MacroPathPoint]:
     return [point for point in paths if point.year_index == year_index]
 
 
@@ -392,15 +402,12 @@ def _stress_assumptions_for_year(
     )
     nim = plan.nim_pct + NIM_PER_RATE * rate_delta
     cost_to_income = plan.cost_to_income_pct + CTI_PER_INFLATION * infl_delta
-    # ECL under stress drives the cost of risk multiplicatively (¶48).
-    credit_loss_rate = plan.credit_loss_rate_pct * pd_mult * lgd_mult
     assumptions = replace(
         plan,
         loan_growth_pct=loan_growth,
         deposit_growth_pct=deposit_growth,
         nim_pct=nim,
         cost_to_income_pct=cost_to_income,
-        credit_loss_rate_pct=credit_loss_rate,
     )
     return assumptions, pd_mult, lgd_mult
 
@@ -416,14 +423,23 @@ def project_enterprise(inputs: EnterpriseProjectionInputs) -> EnterpriseProjecti
 
     # Year 0 (as-of) is identical for both legs — compute it once.
     zero_state, zero_meta = _parse_facts(inputs.facts)
+    if zero_state.ecl_exposures and (
+        not inputs.ecl_assumptions
+        or not has_complete_ecl_coverage(_to_capital_facts(inputs.facts))
+        or abs(sum(zero_state.ecl_exposures.values(), _ZERO) - zero_state.loans_total())
+        > len(zero_state.ecl_exposures) * MONEY
+    ):
+        raise ProjectionInputError(
+            "ecl_coverage_incomplete",
+            "Stage-restricted stress losses require complete loan coverage "
+            "and an effective ECL assumptions register.",
+        )
     current = _snapshot_year(inputs, zero_state, zero_meta, 0, "current", _ONE, _ONE)
 
     base_years = _run_leg(inputs, "base")
     stress_years = _run_leg(inputs, "stress")
 
-    first_breach = next(
-        (year.year for year in stress_years if not year.minima.all_ok), None
-    )
+    first_breach = next((year.year for year in stress_years if not year.minima.all_ok), None)
     binding: set[str] = set()
     for year in stress_years:
         binding.update(year.minima.binding)
@@ -451,12 +467,10 @@ def _run_leg(inputs: EnterpriseProjectionInputs, leg: str) -> list[ProjectedYear
             pd_mult = lgd_mult = _ONE
             fx_pct = inputs.plan.fx_depreciation_pct if year == 1 else _ZERO
             mtm_pct = _ZERO
-            credit_rwa_factor = _ONE
         else:
             assumptions, pd_mult, lgd_mult = _stress_assumptions_for_year(inputs, year)
             fx_pct = _stress_fx_year1(inputs) if year == 1 else _ZERO
             mtm_pct = _stress_mtm_year1(inputs) if year == 1 else _ZERO
-            credit_rwa_factor = _credit_rwa_factor(inputs, year)
         earning_prev, assets_prev, equity_prev, row = _project_one_year(
             inputs,
             state,
@@ -471,7 +485,6 @@ def _run_leg(inputs: EnterpriseProjectionInputs, leg: str) -> list[ProjectedYear
             earning_prev,
             assets_prev,
             equity_prev,
-            credit_rwa_factor,
         )
         rows.append(row)
     return rows
@@ -495,58 +508,63 @@ def _stress_fx_year1(inputs: EnterpriseProjectionInputs) -> Decimal:
     return inputs.plan.fx_depreciation_pct + peak * _HUNDRED
 
 
-def _credit_rwa_factor(inputs: EnterpriseProjectionInputs, year: int) -> Decimal:
-    """The stress leg's credit-RWA uplift for one year (1.0 when unmodelled).
-
-    ``None`` means the bottom-up overlay was not run at all — a documented
-    Phase-2 position, not a substitution. A SUPPLIED map that does not cover a
-    projected year is different: the year silently fell back to 1.0, so the
-    rating-migration and FX-revaluation uplift applied to years 1–2 and not to
-    year 3, mixing two methodologies inside one projection (audit 2026-08-22
-    D-8).
-    """
-    if inputs.credit_rwa_uplift is None:
-        return _ONE
-    factor = inputs.credit_rwa_uplift.get(year)
-    if factor is None:
-        raise NotComputable(
-            outcome(
-                OutcomeState.MISSING_REQUIRED_INPUT,
-                metric_id="stressed_credit_rwa",
-                reason=(
-                    "The bottom-up credit-RWA uplift was supplied but does not cover "
-                    f"projected year {year}, so that year's stressed credit RWA would "
-                    "carry no rating-migration or FX-revaluation uplift while the other "
-                    "years do. Compute the uplift for every projected year."
-                ),
-                items=(f"input:credit_rwa_uplift@y{year}",),
-                context={"year": year, "covered": sorted(inputs.credit_rwa_uplift)},
+def _apply_credit_stress(
+    inputs: EnterpriseProjectionInputs, rwa: RwaResult, facts: Sequence[CapitalFact], year: int
+) -> RwaResult:
+    """BoG CRD (June 2018) ¶98, ¶139: stress only each year's affected net claims."""
+    if not inputs.credit_exposures:
+        return rwa
+    original: dict[str, Decimal] = {}
+    for exposure in inputs.credit_exposures:
+        category = exposure.credit_category
+        if category is None:
+            raise ProjectionInputError(
+                "credit_category_missing", "Stress exposures need a capital bucket."
+            )
+        amount = exposure.ead if exposure.credit_amount is None else exposure.credit_amount
+        original[category] = original.get(category, _ZERO) + amount
+    projected = {
+        fact.category: fact.amount for fact in facts if fact.fact_group == "credit_exposure"
+    }
+    grown: list[CreditExposure] = []
+    for exposure in inputs.credit_exposures:
+        category = exposure.credit_category
+        if category is None or category not in projected:
+            raise NotComputable(
+                outcome(
+                    OutcomeState.MISSING_REQUIRED_INPUT,
+                    metric_id="stressed_credit_rwa",
+                    reason="A stress exposure has no corresponding projected capital bucket.",
+                    items=(f"fact:credit_exposure:{category}",),
+                )
+            )
+        amount = exposure.ead if exposure.credit_amount is None else exposure.credit_amount
+        factor = projected[category] / original[category] if original[category] > _ZERO else _ONE
+        grown.append(
+            replace(
+                exposure, ead=money(exposure.ead * factor), credit_amount=money(amount * factor)
             )
         )
-    return factor
-
-
-def _apply_credit_rwa_uplift(rwa: RwaResult, factor: Decimal) -> RwaResult:
-    """Scale a year's credit RWA (and total, and the credit line items) by ``factor``.
-
-    The uplift is the bottom-up rating-migration + FX-loan revaluation overlay.
-    Market and operational RWA are untouched (their stresses live elsewhere), so
-    the higher total RWA erodes the capital ratios computed downstream.
-    """
-    if factor == _ONE:
-        return rwa
-    scaled_credit = money(rwa.credit_rwa * factor)
-    line_items = tuple(
-        replace(item, weighted_amount=money(item.weighted_amount * factor))
-        if item.section == "credit_rwa"
-        else item
-        for item in rwa.line_items
-    )
+    grown = list(apply_credit_collateral(grown, facts, inputs.params.capital))
+    result = result_for_year(grown, inputs.scenario_paths, year, overrides=inputs.overrides)
+    deltas = result.rwa_delta_by_category
+    items: list[CapitalLineItem] = []
+    for item in rwa.line_items:
+        if item.section != "credit_rwa" or item.line_code not in deltas:
+            items.append(item)
+            continue
+        weighted = money(item.weighted_amount + deltas[item.line_code])
+        amount = result.stressed_amount_by_category[item.line_code]
+        weight = ratio_pct(weighted / amount * _HUNDRED) if amount > _ZERO else item.rate_pct
+        items.append(
+            replace(item, exposure_amount=amount, rate_pct=weight, weighted_amount=weighted)
+        )
+    credit = money(rwa.credit_rwa + sum(deltas.values(), _ZERO))
     return replace(
         rwa,
-        credit_rwa=scaled_credit,
-        total_rwa=money(scaled_credit + rwa.market_rwa + rwa.operational_rwa),
-        line_items=line_items,
+        credit_rwa=credit,
+        total_rwa=money(credit + rwa.market_rwa + rwa.operational_rwa),
+        line_items=tuple(items),
     )
 
 
@@ -574,14 +592,25 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     earning_prev: Decimal,
     assets_prev: Decimal,
     equity_prev: Decimal,
-    credit_rwa_factor: Decimal = _ONE,
 ) -> tuple[Decimal, Decimal, Decimal, ProjectedYear]:
+    """Roll forward the book, charging only general EAD for incremental macro losses.
+
+    Conservative: tax applies to income after baseline plan losses, before the
+    incremental charge; a request or platform tax rate cannot shield that charge.
+    """
     loan_factor = _ONE + assumptions.loan_growth_pct / _HUNDRED
     deposit_factor = _ONE + assumptions.deposit_growth_pct / _HUNDRED
     securities_factor = (
         _ONE + (assumptions.deposit_growth_pct + assumptions.securities_shift_pp) / _HUNDRED
     )
+    scale_credit_exposures(
+        state,
+        loan_factor,
+        deposit_factor,
+        securities_factor * ((_HUNDRED - mtm_pct) / _HUNDRED if year == 1 else _ONE),
+    )
     _scale_in_place(state.loans, loan_factor)
+    _scale_in_place(state.ecl_exposures, loan_factor)
     _scale_in_place(state.off_balance, loan_factor)
     _scale_in_place(state.inflows, loan_factor)
     _scale_in_place(state.deposits, deposit_factor)
@@ -616,9 +645,32 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     )
     total_income = nii + fees
     opex = money(assumptions.cost_to_income_pct / _HUNDRED * total_income)
-    credit_losses = money(assumptions.credit_loss_rate_pct / _HUNDRED * state.loans_total())
+    baseline_credit_losses = money(
+        assumptions.credit_loss_rate_pct / _HUNDRED * state.loans_total()
+    )
+    general_ead = (
+        sum(
+            (
+                amount
+                for category, amount in state.ecl_exposures.items()
+                if category.endswith((":stage1", ":stage2"))
+            ),
+            _ZERO,
+        )
+        if state.ecl_exposures
+        else state.loans_total()
+    )
+    incremental_credit_losses = money(
+        assumptions.credit_loss_rate_pct
+        / _HUNDRED
+        * general_ead
+        * max(pd_mult * lgd_mult - _ONE, _ZERO)
+    )
+    credit_losses = baseline_credit_losses + incremental_credit_losses
     pre_tax = total_income - opex - credit_losses
-    tax = money(assumptions.tax_rate_pct / _HUNDRED * max(pre_tax, _ZERO))
+    tax = money(
+        assumptions.tax_rate_pct / _HUNDRED * max(pre_tax + incremental_credit_losses, _ZERO)
+    )
     net_income = pre_tax - tax
     dividends = money(assumptions.dividend_payout_pct / _HUNDRED * max(net_income, _ZERO))
     retained = net_income - dividends
@@ -632,9 +684,7 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
     # shared forecasting ``_State`` carries so the operational-income facts it
     # emits are indistinguishable from the as-of ones.
     next_income_year = state.gi_history[-1][0] + 1
-    state.gi_history.append(
-        (next_income_year, f"gross_income_{next_income_year}", total_income)
-    )
+    state.gi_history.append((next_income_year, f"gross_income_{next_income_year}", total_income))
 
     pnl = Pnl(
         nii=nii,
@@ -647,10 +697,17 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
         net_income=net_income,
         dividends=dividends,
         retained=retained,
+        incremental_credit_losses=incremental_credit_losses,
     )
     row = _snapshot_year(
-        inputs, state, meta, year, leg, pd_mult, lgd_mult, pnl=pnl,
-        credit_rwa_factor=credit_rwa_factor,
+        inputs,
+        state,
+        meta,
+        year,
+        leg,
+        pd_mult,
+        lgd_mult,
+        pnl=pnl,
     )
     return earning_assets, state.assets_total(), state.equity, row
 
@@ -665,14 +722,13 @@ def _snapshot_year(  # noqa: PLR0913 - the snapshot names its full scope
     lgd_mult: Decimal,
     *,
     pnl: Pnl | None = None,
-    credit_rwa_factor: Decimal = _ONE,
 ) -> ProjectedYear:
     rows = _state_facts(state, meta)
     capital_facts = _to_capital_facts(rows)
     liquidity_facts = _to_liquidity_facts(rows)
-    rwa = _apply_credit_rwa_uplift(
-        compute_rwa(capital_facts, inputs.params.capital), credit_rwa_factor
-    )
+    rwa = compute_rwa(capital_facts, inputs.params.capital)
+    if leg == "stress":
+        rwa = _apply_credit_stress(inputs, rwa, capital_facts, year)
     ratios = compute_capital_ratios(capital_facts, rwa, inputs.params.capital)
     # Basel LCR/NSFR apply to banks only; under the SDI regime they are excluded
     # (docs/sdi.md §4.6) — the SDI liquidity stress is the LMTD Table-1 + stressed

@@ -54,6 +54,7 @@ from pydantic_settings import BaseSettings
 
 from app.core.config import SETTINGS_CONFIG, AiVendor, Settings, get_settings
 from app.core.outbound import OutboundTargetBlocked, check_url, redirect_guard
+from app.core.tls import client_context
 from app.services.ai.client import ModelRequest, ModelResult, UsageRecord
 from app.services.ai.features import AiFeature
 from app.services.ai.vendors import (
@@ -269,6 +270,7 @@ class GoogleModel:
 
         ai = self._settings.ai
         return httpx.Client(
+            trust_env=False,
             headers={
                 # Header, not a query parameter: a key in a URL lands in every
                 # proxy log between here and the vendor.
@@ -276,7 +278,8 @@ class GoogleModel:
                 "Content-Type": _JSON_MIME,
             },
             timeout=ai.request_timeout_seconds,
-            transport=self._transport or httpx.HTTPTransport(retries=ai.max_retries),
+            transport=self._transport
+            or httpx.HTTPTransport(verify=client_context(), retries=ai.max_retries),
             follow_redirects=False,
             event_hooks={"response": [redirect_guard(field=_URL_FIELD)]},
         )

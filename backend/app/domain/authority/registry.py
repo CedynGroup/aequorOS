@@ -54,11 +54,9 @@ The divergences you must not "fix" by asserting equality
 
 ``lcr_pct`` and ``car_pct`` each exist more than once, deliberately:
 
-* ``lcr_pct`` / ``basel_bog_liquidity_run`` — the LCR-NSFR return's LCR. It DOES
-  cap inflows: ``lcr_inflow_cap_pct`` is a required threshold
-  (``regulatory_liquidity._REQUIRED_THRESHOLDS``) applied unconditionally at
-  ``app/domain/liquidity/engine.py:264``, and the preview row is labelled
-  "After Cap".
+* ``lcr_pct`` / ``basel_bog_liquidity_run`` — the LCR-NSFR return's LCR.
+  ``app.domain.liquidity.engine.compute_lcr`` owns its aggregate inflow cap;
+  ``ARCHITECTURE.md`` §3 owns its per-figure refusal contract.
 * ``lcr_pct`` / ``lmtd_table11_capped`` — the LMT Table 11 by-currency LCR.
   It caps too. The two divergences are (a) the cap SOURCE — a governed,
   effective-dated ``lcr_inflow_cap_pct`` parameter versus the hard-coded
@@ -71,7 +69,7 @@ The divergences you must not "fix" by asserting equality
   engine.
 * ``car_pct`` / ``bog_bsd5a_form_ratio`` — BoG's own printed BSD5A ratio
   ``E70 = E25/E69``. Different add-on rules by design; the repository already
-  pins the inequality (``tests/services/bog_forms/test_bsd5.py``: *"by
+  pins the inequality (``tests/reporting/service/bog_forms/test_bsd5.py``: *"by
   construction, not by accident"*).
 * ``car_pct`` / ``act930_s29_nof_rwa`` — the SDI regime's NOF / simplified RWA.
 
@@ -203,6 +201,9 @@ class AdvisoryDesignation(StrEnum):
 
     SUPERVISORY_MONITORING = "supervisory_monitoring"
     """Reviewed by the supervisor / board but not a filed return line today."""
+
+    BASEL_REFERENCE = "basel_reference"
+    """Basel analysis without an adopted BoG filing requirement."""
 
     ADVISORY_ONLY = "advisory_only"
     """Internal analysis. Must never reach a filing."""
@@ -1088,11 +1089,11 @@ _PARAMS_CONTROL = "app.services.regulatory_parameters:resolve"
 # The declaring constants carry the reasoning and the versioning rule
 # (``app.services.regulatory_capital.ENGINE_VERSION`` and its liquidity peer);
 # these must track them, and a registry test asserts they do.
-_CAPITAL_VERSION = "regulatory-capital-v2.0.0"
+_CAPITAL_VERSION = "regulatory-capital-v5.0.0"
 _LIQ_VERSION = "regulatory-liquidity-v2.0.0"
 _IRR_VERSION = "regulatory-irr-v1.0.0"
 _IRR_SF_VERSION = "regulatory-irr-sf-v1.0.0"
-_FX_VERSION = "regulatory-fx-v1.0.0"
+_FX_VERSION = "regulatory-fx-v1.1.0"
 
 #: Not the pending-verification sentinel: a stated negative. The Capital
 #: Requirements Directive was searched in full and contains no value-at-risk
@@ -1104,8 +1105,8 @@ _NO_VAR_AUTHORITY = (
     "(verified negative, full-text search). Internal market-risk management measure."
 )
 _FTP_VERSION = "regulatory-ftp-v1.0.0"
-_FORECAST_VERSION = "regulatory-forecasting-v1.0.0"
-_STRESS_VERSION = "enterprise-stress-v2.0.0"
+_FORECAST_VERSION = "regulatory-forecasting-v4.0.0"
+_STRESS_VERSION = "enterprise-stress-v5.0.0"
 _REVERSE_VERSION = "reverse-stress-v1.0.0"
 
 #: The case-scoped ("legacy/advisory") plane. The forensic audit found its
@@ -1204,9 +1205,13 @@ def _liquidity_run(  # noqa: PLR0913 - keyword-only entry builder, not a call si
         expected_tolerance=Decimal("0"),
         approved_alternate_methodologies=tuple(alternates),
         forbidden_alternative_sources=_FORBID_CASE_PLANE + _FORBID_CLIENT,
-        advisory_designation=AdvisoryDesignation.FILED,
-        authority_reference="Basel III LCR/NSFR as adopted by BoG (LCR-NSFR return)",
-        notes=notes,
+        advisory_designation=AdvisoryDesignation.BASEL_REFERENCE,
+        instrument_in_force=False,
+        authority_reference=EXTERNAL_REGULATORY_VERIFICATION_REQUIRED,
+        notes=(
+            "Basel reference. BoG LCR Directive, 2026 (referenced, LMTD ¶4; "
+            "unpublished) [confirm]; NSFR has no published BoG instrument. " + notes
+        ),
     )
 
 
@@ -1598,7 +1603,7 @@ REGISTRY.register(
             "cell:BSD5A!E25",
             "cell:BSD5A!E69",
         ),
-        policy_resolver="app.services.regulatory_reporting.bog_forms.formulas",
+        policy_resolver="app.reporting.service.bog_forms.formulas",
         calculation_engine="app.services.regulatory_reporting.bog_forms.engine:compute_form",
         calculation_version="bog_form/template-formula-evaluator",
         parameter_set=("bog_bsd5a_layout", "bog_bsd5a_linemap"),
@@ -1626,7 +1631,7 @@ REGISTRY.register(
             ),
             resolution_status=ACCEPTED_BY_AUTHORITY,
             evidence=(
-                "backend/tests/services/bog_forms/test_bsd5.py - "
+                "backend/tests/reporting/service/bog_forms/test_bsd5.py - "
                 '\'assert not _close(e["E70"] * 100, car_pct, "0.5")  '
                 "# by construction, not by accident'",
             ),
@@ -1986,9 +1991,8 @@ REGISTRY.register(
                 "(le_generation._LCR_INFLOW_CAP = Decimal('0.75')) SEPARATELY FOR EACH "
                 "CURRENCY COLUMN at LMT generation time. The LCR-NSFR return applies one "
                 "AGGREGATE cap across the whole book, at the governed, effective-dated "
-                "lcr_inflow_cap_pct threshold (required by "
-                "regulatory_liquidity._REQUIRED_THRESHOLDS, applied unconditionally in "
-                "domain/liquidity/engine.compute_lcr). An earlier version of this entry "
+                "lcr_inflow_cap_pct threshold (required and applied locally by "
+                "app.domain.liquidity.engine:compute_lcr). An earlier version of this entry "
                 "said the LCR-NSFR return applies no cap. That was FALSE - do not act on it."
             ),
             direction="lower",
@@ -1999,11 +2003,10 @@ REGISTRY.register(
             ),
             resolution_status=ACCEPTED_BY_AUTHORITY,
             evidence=(
-                "backend/app/services/regulatory_reporting/le_generation.py - "
-                "_LCR_INFLOW_CAP at L1323, applied per currency column at L1469 "
-                "(the audits cite L1318/L1464; those line numbers are stale)",
-                "backend/app/domain/liquidity/engine.py - the aggregate inflow cap at "
-                "L264, from the governed params.inflow_cap_pct",
+                "app.services.regulatory_reporting.le_generation:_table11_section - "
+                "_LCR_INFLOW_CAP applied per currency column",
+                "app.domain.liquidity.engine:compute_lcr - local threshold enforcement "
+                "and aggregate inflow cap from the governed params.inflow_cap_pct",
                 "backend/tests/services/test_le_and_lmt.py",
                 "forensic_calculation_audit_2026-08-21.md - CRITICAL AUDIT FINDINGS 1: "
                 "'BSD3 LCR != LMT Table 11 LCR (Documented Divergence)'",
@@ -2633,16 +2636,18 @@ REGISTRY.register_all(
             calculation_version=_CAPITAL_VERSION,
             parameter_set=("ParamEclAssumption",),
             authoritative_run_type="capital",
-            reporting_mappings=("CAR-RWA",),
+            reporting_mappings=(),
             expected_tolerance=Decimal("0"),
             forbidden_alternative_sources=_FORBID_CASE_PLANE,
-            advisory_designation=AdvisoryDesignation.FILED,
+            advisory_designation=AdvisoryDesignation.ADVISORY_ONLY,
             authority_reference="IFRS 9 paragraph 5.5.17 (unbiased probability-weighted amount)",
             notes=(
                 "Active ONLY when ecl_exposure facts AND the ecl-assumptions register both "
-                "exist; otherwise the ingested-provisions path is byte-identical. An exposure "
+                "exist. A what-if beside the booked general provisions, never a substitute "
+                "for them in Tier 2; a scenario that conditions it takes the stage 1+2 "
+                "increase as a CET1 charge. An exposure "
                 "whose (segment, stage) has no assumption is reported UNCOVERED, never priced "
-                "at zero - the caller decides whether that blocks the run."
+                "at zero, and the capital run fails on it."
             ),
         )
         for metric_id in ("ecl_total_ghs", "ecl_general_ghs", "ecl_specific_ghs")
@@ -2713,7 +2718,7 @@ _RATING_NO_AUTHORITY = (
 _RATING_NOTES = (
     "Published to the live plane only (app/services/implied_rating.py::compute_live) and "
     "sealed into ImpliedRatingRun, never into a RegulatoryRun. The module feeds no return: "
-    "nothing under app/services/regulatory_reporting/ reads it. ADVISORY_ONLY is therefore "
+    "nothing under app/reporting/service/ reads it. ADVISORY_ONLY is therefore "
     "the operative constraint as well as the honest label - these figures must not reach a "
     "filing, and today none of them can."
 )

@@ -4,7 +4,7 @@
  * Write a formula, and let the server say whether it is one.
  *
  * THERE IS NO PARSER IN THIS FILE AND THERE MUST NEVER BE ONE. The language is
- * `app/domain/bi/expr.py` — a Pratt parser with a type system, three declared
+ * `app/bi/domain/expr.py` — a Pratt parser with a type system, three declared
  * comparison periods, a bound on `LAG` derived from how long the marts keep
  * history, and a dozen refusals each with its own wording and character offset. A
  * TypeScript copy of that would give faster feedback right up to the first
