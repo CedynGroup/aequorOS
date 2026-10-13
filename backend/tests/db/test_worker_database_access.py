@@ -786,6 +786,47 @@ def test_partition_wrappers_allow_builder_parents_and_refuse_other_drops(
             session.execute(text("CREATE TABLE forbidden_worker_ddl (id integer)"))
 
 
+def test_worker_query_log_partition_after_owner_handoff_without_audit_inheritance(
+    administrator: Engine,
+) -> None:
+    with administrator.connect() as admin, admin.begin():
+        if (admin.dialect.server_version_info or (0,))[0] >= 16:
+            admin.execute(text("GRANT aequoros_audit_owner TO aqs_owner WITH INHERIT FALSE"))
+        assert admin.scalar(
+            text("SELECT pg_has_role('aqs_owner', 'aequoros_audit_owner', 'USAGE')")
+        ) is False
+        admin.execute(text("ALTER TABLE bi_query_log OWNER TO aqs_owner"))
+        admin.execute(
+            text("ALTER FUNCTION bi_ensure_month_partition(regclass,date) OWNER TO aqs_owner")
+        )
+        assert admin.scalar(
+            text(
+                "SELECT pg_get_userbyid(proowner) FROM pg_proc "
+                "WHERE oid='aequoros_append_only_guard()'::regprocedure"
+            )
+        ) == "aequoros_audit_owner"
+        admin.execute(text("SET LOCAL ROLE aqs_worker"))
+        with Session(admin, join_transaction_mode="create_savepoint") as session:
+            session.info.update(organization_id=ORG_1, worker_access=True)
+            created = partitions.ensure_month_partition(session, "bi_query_log", date(2025, 3, 1))
+            assert created is not None
+            session.commit()
+            assert session.scalar(
+                text(
+                    "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class "
+                    "WHERE oid=CAST(:oid AS regclass)"
+                ),
+                {"oid": created},
+            ) is True
+            assert session.scalar(
+                text(
+                    "SELECT has_function_privilege(current_user, "
+                    "'aequoros_append_only_guard()', 'EXECUTE')"
+                )
+            ) is False
+        admin.rollback()
+
+
 def test_backlog_counts_are_metadata_only_and_split_lanes(
     administrator: Engine,
     role_engines: dict[str, Engine],

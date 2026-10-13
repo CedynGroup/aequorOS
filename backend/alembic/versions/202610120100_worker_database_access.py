@@ -206,6 +206,7 @@ def downgrade() -> None:
         op.execute(f"DROP FUNCTION {schema}.{signature}")
     migration_role = quote(cast(str, connection.exec_driver_sql("SELECT current_user").scalar_one()))
     op.execute("SET LOCAL ROLE aequoros_audit_owner")
+    op.execute(f"REVOKE EXECUTE ON FUNCTION {schema}.aequoros_append_only_guard() FROM aqs_owner")
     for table in (
         "audit_events",
         "operator_audit_log",
@@ -415,6 +416,9 @@ def _audit_access(schema: str) -> None:
     quote = connection.dialect.identifier_preparer.quote_identifier
     migration_role = quote(cast(str, connection.exec_driver_sql("SELECT current_user").scalar_one()))
     op.execute("SET LOCAL ROLE aequoros_audit_owner")
+    # Partition creation clones the query-log trigger. NOINHERIT owners on
+    # PostgreSQL 15 need this explicit right while audit custody stays separate.
+    op.execute(f"GRANT EXECUTE ON FUNCTION {schema}.aequoros_append_only_guard() TO aqs_owner")
     for table in (
         "audit_events",
         "operator_audit_log",
