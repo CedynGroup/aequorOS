@@ -17,7 +17,13 @@ def clear_operator_settings() -> Iterator[None]:
 @pytest.mark.parametrize("environment", ["production", "staging"])
 @pytest.mark.parametrize(
     "runtime_setting",
-    ["DATABASE_URL", "WORKER_DATABASE_URL", "OPERATOR_DATABASE_URL", "BI_DATABASE_URL"],
+    [
+        "DATABASE_URL",
+        "PREAUTH_DATABASE_URL",
+        "WORKER_DATABASE_URL",
+        "OPERATOR_DATABASE_URL",
+        "BI_DATABASE_URL",
+    ],
 )
 def test_migrations_refuse_runtime_role(
     environment: str, runtime_setting: str, monkeypatch: pytest.MonkeyPatch

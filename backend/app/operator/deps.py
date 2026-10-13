@@ -46,7 +46,7 @@ from app.core.config import (
     get_settings,
     is_undeployed_environment,
 )
-from app.db.session import get_engine
+from app.db.session import RlsBlindError, get_cross_tenant_engine
 from app.models import OperatorAuditLog, OperatorUser
 from app.models.operator import OPERATOR_ROLE_RANK
 from app.operator.services import operator_auth
@@ -209,25 +209,35 @@ def require_operator_admin(
 
 # -- database ------------------------------------------------------------------
 def resolve_operator_database_url() -> str | None:
-    """OPERATOR_DATABASE_URL → DATABASE_URL.
+    """OPERATOR_DATABASE_URL → legacy WORKER_DATABASE_URL → DATABASE_URL.
 
     Real deployments set OPERATOR_DATABASE_URL to the operator's own
-    BYPASSRLS role; the fallbacks keep local/hermetic runs zero-config (the
-    tenant-scoped app role would simply see zero rows on RLS-forced tables).
+    BYPASSRLS role; the fallbacks preserve pre-cutover and local/hermetic runs.
+    Restricted PostgreSQL credentials are refused at the session boundary.
     """
     settings = get_settings()
-    return get_operator_settings().operator_database_url or settings.database.database_url
+    return (
+        get_operator_settings().operator_database_url
+        or settings.worker.worker_database_url
+        or settings.database.database_url
+    )
 
 
-def get_operator_sessionmaker() -> sessionmaker:
+def get_operator_sessionmaker() -> sessionmaker[Session]:
     url = resolve_operator_database_url()
     if url is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Operator database is not configured (OPERATOR_DATABASE_URL / DATABASE_URL).",
+            detail="Operator database is not configured (OPERATOR_DATABASE_URL).",
         )
+    try:
+        engine = get_cross_tenant_engine(url, "aequoros-operator", "OPERATOR_DATABASE_URL")
+    except RlsBlindError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
     return sessionmaker(
-        bind=get_engine(url, "aequoros-operator"), autoflush=False, expire_on_commit=False
+        bind=engine, autoflush=False, expire_on_commit=False
     )
 
 

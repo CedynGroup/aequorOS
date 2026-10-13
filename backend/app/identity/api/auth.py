@@ -2,7 +2,7 @@
 
 ``users``/``organizations`` are RLS-forced, so a login (which has only an email, no
 tenant context yet) resolves the user through the cross-tenant *system* session
-using the API credential. Its least-privilege cutover is separate from the worker
+using PREAUTH_DATABASE_URL. Its least-privilege cutover is separate from the worker
 cutover (``docs/ops/database-roles.md``). Every authenticated request thereafter
 carries a verified token whose ``org`` claim scopes an ordinary tenant session.
 """
@@ -28,7 +28,7 @@ from app.api.deps import (
 )
 from app.core.authorization import RoleBundle
 from app.core.config import get_settings
-from app.db.session import get_sessionmaker
+from app.db.session import RlsBlindError, get_preauth_sessionmaker
 from app.identity.api.manage_authorization import binding_response, binding_scope, grant_conflict
 from app.identity.models.bank import Bank
 from app.identity.models.user import User
@@ -53,8 +53,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _system_session() -> Iterator[Session]:
-    """Authentication uses the API credential; its least-privilege cutover is separate."""
-    session = get_sessionmaker()()
+    try:
+        session = get_preauth_sessionmaker()()
+    except RlsBlindError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
     try:
         yield session
     finally:

@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
+import jwt
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
@@ -27,7 +28,7 @@ from app import worker
 from app.bi.service import partitions, query_log
 from app.bi.service.versions import BUILDER_VERSION
 from app.core import audit_integrity, security
-from app.core.config import get_settings
+from app.core.config import get_operator_settings, get_settings
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.registry import DatabaseEnvelopeStore
@@ -36,6 +37,7 @@ from app.core.key_management.types import KeyReference, KeyUnavailableError
 from app.db import session as database
 from app.db.session import get_storage_session, worker_tenant_context
 from app.identity.api import auth as auth_api
+from app.identity.service import sso_config
 from app.identity.public import Bank
 from app.models import (
     AuditEvent,
@@ -45,9 +47,10 @@ from app.models import (
     DeskSourceCapture,
     Job,
     OperatorAuditLog,
+    Organization,
     User,
 )
-from app.operator.deps import resolve_operator_database_url
+from app.operator.deps import get_operator_sessionmaker, resolve_operator_database_url
 from app.services import job_queue, scheduler
 from app.services.market_desk import capture_job
 from app.services.market_desk.sources import ParseResult, ingest_capture
@@ -78,6 +81,43 @@ def scoped(engine: Engine, org: str, bank: str | None = None) -> Session:
     session = Session(engine, expire_on_commit=False)
     session.info.update(organization_id=org, bank_id=bank)
     return session
+
+
+@pytest.fixture
+def legacy_engines(
+    administrator: Engine, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[dict[str, Engine]]:
+    engines: dict[str, Engine] = {}
+    names: list[str] = []
+    monkeypatch.setenv("OPERATOR_DATABASE_URL", "")
+    get_operator_settings.cache_clear()
+    try:
+        for purpose in ("preauth", "operator"):
+            name, password = f"legacy_{purpose}_{uuid4().hex}", uuid4().hex
+            with administrator.begin() as connection:
+                connection.execute(
+                    text(
+                        f"CREATE ROLE {name} LOGIN PASSWORD '{password}' INHERIT "
+                        "BYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION"
+                    )
+                )
+                names.append(name)
+                connection.execute(text(f"GRANT aqs_api TO {name}"))
+            engines[purpose] = create_engine(
+                make_url(administrator.url).set(username=name, password=password)
+            )
+        yield engines
+    finally:
+        get_operator_settings.cache_clear()
+        for engine in engines.values():
+            for application in ("aequoros-preauth", "aequoros-operator"):
+                database.get_engine(
+                    engine.url.render_as_string(hide_password=False), application
+                ).dispose()
+            engine.dispose()
+        with administrator.begin() as connection:
+            for name in names:
+                connection.execute(text(f"DROP ROLE {name}"))
 
 
 def test_claim_reclaim_and_seed_without_unscoped_tenant_reads(
@@ -780,7 +820,8 @@ def test_worker_visibility_accepts_claim_capability_and_refuses_api_role(
 
 def test_worker_audit_check_without_inherited_audit_ownership(administrator: Engine) -> None:
     with administrator.connect() as admin, admin.begin():
-        admin.execute(text("GRANT aequoros_audit_owner TO aqs_owner WITH INHERIT FALSE"))
+        if (admin.dialect.server_version_info or (0,))[0] >= 16:
+            admin.execute(text("GRANT aequoros_audit_owner TO aqs_owner WITH INHERIT FALSE"))
         assert admin.scalar(text("SELECT rolinherit FROM pg_roles WHERE rolname='aqs_owner'")) is False
         assert (
             admin.scalar(text("SELECT pg_has_role('aqs_owner', 'aequoros_audit_owner', 'USAGE')"))
@@ -1199,33 +1240,50 @@ def test_scoped_desk_caller_only_persists_due_captures(
     get_settings.cache_clear()
 
 
-def test_worker_secret_switch_does_not_change_authentication_or_operator_fallback(
+@pytest.mark.parametrize("explicit", [False, True])
+def test_split_credentials_preserve_authentication_and_operator_visibility(
     administrator: Engine,
     role_engines: dict[str, Engine],
+    legacy_engines: dict[str, Engine],
     monkeypatch: pytest.MonkeyPatch,
+    explicit: bool,
 ) -> None:
-    # DATABASE_URL retains the current pre-authentication credential until the
-    # separately reviewed API lookup-function cutover. All rows are disposable.
-    monkeypatch.setenv("DATABASE_URL", administrator.url.render_as_string(hide_password=False))
-    monkeypatch.setenv(
-        "WORKER_DATABASE_URL", role_engines["aqs_worker"].url.render_as_string(hide_password=False)
-    )
-    monkeypatch.setenv("OPERATOR_DATABASE_URL", "")
+    api_url = role_engines["aqs_api"].url.render_as_string(hide_password=False)
+    legacy_url = legacy_engines["preauth"].url.render_as_string(hide_password=False)
+    operator_url = legacy_engines["operator"].url.render_as_string(hide_password=False)
+    worker_url = role_engines["aqs_worker"].url.render_as_string(hide_password=False)
+    monkeypatch.setenv("DATABASE_URL", api_url)
+    monkeypatch.setenv("WORKER_DATABASE_URL", worker_url if explicit else legacy_url)
+    monkeypatch.setenv("PREAUTH_DATABASE_URL", legacy_url if explicit else "")
+    monkeypatch.setenv("OPERATOR_DATABASE_URL", operator_url if explicit else "")
     monkeypatch.setenv("AUTH_JWT_SECRET", "worker-cutover-test-signing-secret-0000000000")
+    monkeypatch.setenv("SSO_INTERNAL_KEY", "worker-cutover-test-internal-key")
+    monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", "worker-cutover-test-vault-key")
     get_settings.cache_clear()
+    get_operator_settings.cache_clear()
     password = "worker-cutover-test-password-00000000"  # noqa: S105 - fixture only
     email = f"worker-cutover-{uuid4().hex}@example.test"
     with Session(administrator) as session:
-        session.add(
-            User(
-                organization_id=ORG_1,
-                email=email,
-                role="account_admin",
-                is_active=True,
-                password_hash=security.hash_password(password),
-            )
+        user = User(
+            organization_id=ORG_1,
+            email=email,
+            role="account_admin",
+            is_active=True,
+            password_hash=security.hash_password(password),
+        )
+        session.add(user)
+        sso_config.upsert_connection(
+            session,
+            organization_id=ORG_1,
+            issuer="https://fixture.example.test",
+            client_id="worker-cutover-client",
+            client_secret="fixture-client-secret",
+            allowed_email_domains=["example.test"],
+            enabled=True,
+            actor_user_id=None,
         )
         session.commit()
+        user_id = str(user.id)
     app = FastAPI()
     app.include_router(auth_api.router, prefix="/api/v1")
     with TestClient(app) as client:
@@ -1245,10 +1303,116 @@ def test_worker_secret_switch_does_not_change_authentication_or_operator_fallbac
             "/api/v1/auth/refresh", json={"refresh_token": rotated["refresh_token"]}
         )
         assert refused.status_code == 401, refused.text
-    assert resolve_operator_database_url() == administrator.url.render_as_string(
-        hide_password=False
+        assert_sso_lookup(client, email, user_id, monkeypatch)
+    with database.get_preauth_sessionmaker()() as session:
+        assert session.scalar(text("SELECT current_user")) == legacy_engines["preauth"].url.username
+        assert session.scalar(text("SHOW application_name")) == "aequoros-preauth"
+        assert session.scalar(
+            text("SELECT rolsuper FROM pg_roles WHERE rolname=current_user")
+        ) is False
+    assert resolve_operator_database_url() == (operator_url if explicit else legacy_url)
+    with get_operator_sessionmaker()() as session:
+        assert set(session.scalars(select(Organization.id))) == {ORG_1, ORG_2}
+        assert session.scalar(text("SHOW application_name")) == "aequoros-operator"
+        assert session.scalar(text("SELECT current_user")) == (
+            legacy_engines["operator" if explicit else "preauth"].url.username
+        )
+    with database.get_sessionmaker()() as session:
+        assert session.scalars(select(User)).all() == []
+        assert session.scalar(text("SHOW application_name")) == "aequoros-api"
+    with Session(role_engines["aqs_worker"]) as session:
+        assert tuple(
+            session.execute(
+                text(
+                    "SELECT rolsuper, rolcreatedb, rolcreaterole, rolbypassrls "
+                    "FROM pg_roles WHERE rolname=current_user"
+                )
+            ).one()
+        ) == (False, False, False, False)
+        assert session.scalars(select(User)).all() == []
+        with pytest.raises(DBAPIError):
+            session.execute(text("SELECT * FROM operator_users"))
+    database.get_engine(api_url).dispose()
+    get_settings.cache_clear()
+
+
+def assert_sso_lookup(
+    client: TestClient, email: str, user_id: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    status = client.get("/api/v1/auth/sso/status")
+    assert status.status_code == 200, status.text
+    assert cast(dict[str, object], status.json()) == {"enabled": True}
+    config = client.get(
+        "/api/v1/auth/sso/client-config",
+        headers={"X-Internal-Auth": "worker-cutover-test-internal-key"},
     )
-    database.get_engine(administrator.url.render_as_string(hide_password=False)).dispose()
+    assert config.status_code == 200, config.text
+    assert cast(dict[str, object], config.json()) == {
+        "enabled": True,
+        "issuer": "https://fixture.example.test",
+        "client_id": "worker-cutover-client",
+        "client_secret": "fixture-client-secret",
+    }
+    claims: dict[str, object] = {
+        "iss": "https://fixture.example.test",
+        "aud": "worker-cutover-client",
+        "sub": f"fixture-subject-{uuid4().hex}",
+        "email": email,
+        "email_verified": True,
+    }
+
+    def verify_id_token(id_token: str, *, issuer: str, audience: str) -> dict[str, object]:
+        assert id_token == token
+        assert issuer == claims["iss"]
+        assert audience == claims["aud"]
+        return claims
+
+    token = jwt.encode(claims, "fixture-idp-signing-key-padded-to-32-bytes", algorithm="HS256")
+    monkeypatch.setattr(security, "verify_oidc_id_token", verify_id_token)
+    sso = client.post("/api/v1/auth/sso", json={"id_token": token})
+    assert sso.status_code == 200, sso.text
+    access = cast(str, cast(dict[str, object], sso.json())["access_token"])
+    issued = cast(
+        dict[str, object],
+        jwt.decode(
+            access,
+            "worker-cutover-test-signing-secret-0000000000",
+            algorithms=["HS256"],
+            audience="aequoros-api",
+        ),
+    )
+    assert issued["sub"] == user_id
+    assert issued["org"] == ORG_1
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_restricted_credentials_cannot_replace_legacy_cross_tenant_connections(
+    role_engines: dict[str, Engine],
+    legacy_engines: dict[str, Engine],
+    monkeypatch: pytest.MonkeyPatch,
+    explicit: bool,
+) -> None:
+    restricted = role_engines["aqs_worker"].url.render_as_string(hide_password=False)
+    legacy = legacy_engines["preauth"].url.render_as_string(hide_password=False)
+    monkeypatch.setenv(
+        "DATABASE_URL", role_engines["aqs_api"].url.render_as_string(hide_password=False)
+    )
+    monkeypatch.setenv("WORKER_DATABASE_URL", legacy if explicit else restricted)
+    monkeypatch.setenv("PREAUTH_DATABASE_URL", restricted if explicit else "")
+    monkeypatch.setenv("OPERATOR_DATABASE_URL", restricted if explicit else "")
+    get_settings.cache_clear()
+    get_operator_settings.cache_clear()
+    app = FastAPI()
+    app.include_router(auth_api.router, prefix="/api/v1")
+    with TestClient(app) as client:
+        response = client.get("/api/v1/auth/sso/status")
+        assert response.status_code == 503
+        assert "PREAUTH_DATABASE_URL" in str(cast(dict[str, object], response.json())["detail"])
+    with pytest.raises(HTTPException, match="OPERATOR_DATABASE_URL") as error:
+        get_operator_sessionmaker()
+    assert error.value.status_code == 503
+    for application in ("aequoros-preauth", "aequoros-operator"):
+        database.get_engine(restricted, application).dispose()
     get_settings.cache_clear()
 
 

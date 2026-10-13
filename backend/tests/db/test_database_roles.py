@@ -185,7 +185,12 @@ def role_engines(administrator: Engine) -> Iterator[dict[str, Engine]]:
                     )
                 )
                 names.append(name)
-                connection.execute(text(f"GRANT {role} TO {name} WITH INHERIT TRUE, SET TRUE"))
+                options = (
+                    " WITH INHERIT TRUE, SET TRUE"
+                    if (connection.dialect.server_version_info or (0,))[0] >= 16
+                    else ""
+                )
+                connection.execute(text(f"GRANT {role} TO {name}{options}"))
             url = make_url(administrator.url).set(username=name, password=password)
             engines[role] = create_engine(url)
         yield engines
