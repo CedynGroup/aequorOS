@@ -28,7 +28,7 @@ from app.api.deps import (
 )
 from app.core.authorization import RoleBundle
 from app.core.config import get_settings
-from app.db.session import get_api_sessionmaker
+from app.db.session import get_sessionmaker
 from app.identity.api.manage_authorization import binding_response, binding_scope, grant_conflict
 from app.identity.models.bank import Bank
 from app.identity.models.user import User
@@ -54,7 +54,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 def _system_session() -> Iterator[Session]:
     """Authentication uses the API credential; its least-privilege cutover is separate."""
-    session = get_api_sessionmaker()()
+    session = get_sessionmaker()()
     try:
         yield session
     finally:

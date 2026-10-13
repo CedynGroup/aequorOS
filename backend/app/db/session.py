@@ -32,11 +32,7 @@ def worker_tenant_context(organization_id: str, bank_id: str | None) -> Generato
 
 def get_storage_session() -> Session:
     tenant = _worker_tenant.get()
-    factory = (
-        get_worker_sessionmaker()
-        if tenant is not None
-        else cast("sessionmaker[Session]", get_sessionmaker())
-    )
+    factory = get_worker_sessionmaker() if tenant is not None else get_sessionmaker()
     session = factory()
     if tenant is not None:
         session.info["organization_id"], session.info["bank_id"] = tenant
@@ -156,7 +152,7 @@ def get_engine(database_url: str, application_name: str = "aequoros-api") -> Eng
     return create_engine(database_url, pool_pre_ping=True)
 
 
-def get_api_sessionmaker() -> sessionmaker[Session]:
+def get_sessionmaker() -> sessionmaker[Session]:
     settings = get_settings()
     if settings.database.database_url is None:
         msg = "DATABASE_URL is required to create database sessions."
@@ -166,11 +162,6 @@ def get_api_sessionmaker() -> sessionmaker[Session]:
         autoflush=False,
         expire_on_commit=False,
     )
-
-
-def get_sessionmaker() -> sessionmaker:
-    """Legacy factory interface; new authentication code uses the typed API factory."""
-    return get_api_sessionmaker()
 
 
 @lru_cache
