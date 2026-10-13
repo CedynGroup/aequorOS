@@ -31,22 +31,23 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.bi.service.enqueue import enqueue_mart_refresh
 from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.domain.authority.registry import MetricFamily
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank, User
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     Job,
     LiveFinding,
     LiveMetric,
     LiveMetricSnapshot,
-    User,
 )
+from app.reporting.service import filing_reconciliation
 from app.services import (
     data_activation,
-    filing_reconciliation,
     implied_rating,
     module_scope,
     regulatory_capital,
@@ -56,10 +57,8 @@ from app.services import (
     regulatory_fx,
     regulatory_irr,
     regulatory_liquidity,
-    scoped_authorization,
 )
 from app.services.audit import record_event
-from app.services.bi.enqueue import enqueue_mart_refresh
 from app.services.fact_derivation import DerivationError, derive_current_facts, derive_facts
 from app.services.live_types import LiveFindingSpec, LiveModuleResult
 from app.services.reporting_periods import new_snapshot_period

@@ -29,9 +29,9 @@ aequorOS/
 └── ARCHITECTURE.md           # system map + conventions (start here)
 ```
 
-Specs, runbooks and the internal audit register live in `docs/`, which is **not**
-part of this repository (`.gitignore:42`). Anything cited below that you cannot
-find here is held privately — ask for it.
+Specs, runbooks and the internal audit register live in `docs/`, which is private
+by default; `.gitignore` publishes only explicitly allow-listed files. Anything
+cited below that you cannot find here is held privately — ask for it.
 
 ### Deployables
 
@@ -40,9 +40,14 @@ find here is held privately — ask for it.
 | `frontend`          | Self-hosted Coolify deployment documented in `frontend/README.md`; confirm the active provider and country before procurement                | `aequoros.com`                        |
 | `backend/dashboard` | `docker-compose.dashboard.yml` — Docker Compose build pack, **repo root** as build context                                                   | `bank.aequoros.com`                   |
 | `backend`           | `backend/docker-compose.prod.yml` — `risk-migrate` (one-shot `alembic upgrade head`), `risk-api` :8000, `risk-worker`, `risk-operator` :8100 | `api.aequoros.com` on `risk-api` only |
-| `console`           | none committed yet — no Dockerfile or compose file in this repo                                                                              | intended `console.aequoros.com`       |
+| `console`           | `docker-compose.console.yml` — Docker Compose build pack, **repo root** as build context                                                     | intended `console.aequoros.com`       |
 
 `backend/.dockerignore` excludes `dashboard/`, so the API image never carries the UI.
+
+The compose files require the coordinated certificate and proxy preparation in
+[the transport deployment contract](backend/docs/transport_security.md#deployment-preparation-review-before-applying).
+The audit-chain migration also requires
+[migration credential and audit ownership preparation](backend/docs/tamper_evident_records.md#required-deployment-follow-up).
 
 ## Prerequisites
 
@@ -56,6 +61,8 @@ find here is held privately — ask for it.
   `postgres:17`.
 - **Environment**: `cp backend/.env.example backend/.env` and fill in the database
   and object-storage values. Secrets live only in the untracked `.env`.
+  For the staff console, copy [`console/.env.example`](console/.env.example) to
+  `console/.env.local` before starting local development.
 
 ## Quick start
 
@@ -99,13 +106,12 @@ cd backend && docker compose up -d      # Postgres :15432, MinIO :9000 (console 
 
 then point `DATABASE_URL` at `localhost:15432`.
 
-**There is no seed step, and no seed route.** Data enters only through the Data
-Engine — Excel/CSV upload, API push, or a read-only database extract — and a bank
-is created by its first ingestion. The old `POST /banks/seed-demo` endpoint was
-retired in 2026-08; `backend/tests/api/test_banks.py::test_seed_route_is_retired`
-pins that the path resolves to no handler, for any role and any tenant. The
-hermetic pytest suite builds its own tenants in `tests/conftest.py`; nothing
-seeds a real database.
+**There is no seed step.** Provision a bank through the staff operator console,
+then load its financial data through the Data Engine — Excel/CSV upload, API push,
+or a read-only database extract. See the
+[Data Engine's no-seeding contract](docs/data_engine.md#standing-order-no-seeded-bank-data).
+The hermetic pytest suite builds its own tenants in `backend/tests/conftest.py`;
+nothing seeds a real database.
 
 **Database-direct drivers.** The shipped image installs only the Oracle thin
 driver, which is a core dependency. SQL Server/ODBC, generic JDBC and Snowflake

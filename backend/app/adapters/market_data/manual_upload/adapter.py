@@ -71,7 +71,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.orm import Session
 
-    from app.models import Bank
+    from app.identity.public import Bank
 
 VENDOR = "manual_upload"
 ADAPTER_VERSION = "1.0"

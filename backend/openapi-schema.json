@@ -6297,7 +6297,7 @@
       },
       "BiMeasureDecisionRead": {
         "additionalProperties": false,
-        "description": "A promotion decision, with the separation-of-duties verdict behind it.\n\n``sod_decision`` is the platform's own assignment-time machinery\n(``app/services/grant_administration.py``), reused rather than reimplemented:\nproposer \u2260 approver is one policy in this codebase, and a promotion is judged\nby it like any other authority decision.",
+        "description": "A promotion decision, with the separation-of-duties verdict behind it.\n\n``sod_decision`` is the platform's own assignment-time machinery\n(``app/identity/service/grant_administration.py``), reused rather than reimplemented:\nproposer \u2260 approver is one policy in this codebase, and a promotion is judged\nby it like any other authority decision.",
         "properties": {
           "measure": {
             "$ref": "#/components/schemas/BiMeasureRead"
@@ -8394,14 +8394,19 @@
       },
       "BindingPreviewRead": {
         "additionalProperties": false,
+        "description": "The sentence and the separation-of-duties decision a create would reach.\n\nThe decision is the same assignment-time policy the create call applies,\nread without writing, so the composer can refuse a blocked combination at\nDefine instead of on submit.",
         "properties": {
           "authority_sentence": {
             "title": "Authority Sentence",
             "type": "string"
+          },
+          "sod_decision": {
+            "$ref": "#/components/schemas/SodDecisionRead"
           }
         },
         "required": [
-          "authority_sentence"
+          "authority_sentence",
+          "sod_decision"
         ],
         "title": "BindingPreviewRead",
         "type": "object"
@@ -20308,6 +20313,44 @@
         ],
         "type": "string"
       },
+      "FigureRefusalRead": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "row_ref": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Row Ref",
+            "type": "array"
+          },
+          "rule_citation": {
+            "title": "Rule Citation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason_code",
+          "rule_citation",
+          "row_ref"
+        ],
+        "title": "FigureRefusalRead",
+        "type": "object"
+      },
       "FilingDecisionRequest": {
         "enum": [
           "approved",
@@ -26817,6 +26860,11 @@
       },
       "HealthResponse": {
         "properties": {
+          "bank_key_required": {
+            "default": false,
+            "title": "Bank Key Required",
+            "type": "boolean"
+          },
           "environment": {
             "enum": [
               "local",
@@ -39526,6 +39574,15 @@
         "title": "InstitutionTypeRead",
         "type": "object"
       },
+      "InstrumentStatus": {
+        "enum": [
+          "in_force",
+          "final_not_in_force",
+          "exposure_draft",
+          "unpublished"
+        ],
+        "type": "string"
+      },
       "IntegrationKeyIssueRequest": {
         "additionalProperties": false,
         "properties": {
@@ -39552,11 +39609,8 @@
             "type": "string"
           },
           "purpose": {
+            "const": "writer",
             "default": "writer",
-            "enum": [
-              "writer",
-              "reader"
-            ],
             "title": "Purpose",
             "type": "string"
           }
@@ -39679,10 +39733,7 @@
           "purpose": {
             "anyOf": [
               {
-                "enum": [
-                  "writer",
-                  "reader"
-                ],
+                "const": "writer",
                 "type": "string"
               },
               {
@@ -42116,9 +42167,16 @@
         "additionalProperties": false,
         "properties": {
           "asf_total_ghs": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Asf Total Ghs",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asf Total Ghs"
           },
           "fx_funding_gap_ghs": {
             "anyOf": [
@@ -42145,35 +42203,77 @@
             "title": "Fx Share Of Liabilities Pct"
           },
           "hqla_total_ghs": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Hqla Total Ghs",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hqla Total Ghs"
           },
           "lcr_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Lcr Pct",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lcr Pct"
           },
           "lcr_status": {
             "$ref": "#/components/schemas/LiquidityRatioStatus"
           },
           "net_outflows_30d_ghs": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Net Outflows 30D Ghs",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Outflows 30D Ghs"
           },
           "nsfr_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Nsfr Pct",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nsfr Pct"
           },
           "nsfr_status": {
             "$ref": "#/components/schemas/LiquidityRatioStatus"
           },
+          "refusals": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FigureRefusalRead"
+            },
+            "title": "Refusals",
+            "type": "object"
+          },
           "rsf_total_ghs": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Rsf Total Ghs",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsf Total Ghs"
           },
           "stressed_fx_funding_gap_ghs": {
             "anyOf": [
@@ -42256,7 +42356,8 @@
         "enum": [
           "green",
           "amber",
-          "red"
+          "red",
+          "na"
         ],
         "type": "string"
       },
@@ -42702,19 +42803,40 @@
             "type": "string"
           },
           "lcr_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Lcr Pct",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lcr Pct"
           },
           "nsfr_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Nsfr Pct",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nsfr Pct"
           },
           "period_end": {
             "format": "date",
             "title": "Period End",
             "type": "string"
+          },
+          "refusals": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FigureRefusalRead"
+            },
+            "title": "Refusals",
+            "type": "object"
           },
           "reporting_period_id": {
             "format": "uuid",
@@ -45970,6 +46092,18 @@
         "additionalProperties": false,
         "description": "A return that is filed INSIDE another one's submission (D-011).\n\nShown under its parent obligation rather than as a row of its own, because\nit is not a separate thing the bank owes the regulator.",
         "properties": {
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
           "filing_role": {
             "enum": [
               "annex",
@@ -45977,6 +46111,10 @@
             ],
             "title": "Filing Role",
             "type": "string"
+          },
+          "instrument_status": {
+            "$ref": "#/components/schemas/InstrumentStatus",
+            "default": "in_force"
           },
           "package_id": {
             "anyOf": [
@@ -52566,11 +52704,27 @@
             ],
             "title": "Due Time"
           },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
           "fidelity": {
             "$ref": "#/components/schemas/FidelityGrade"
           },
           "frequency": {
             "$ref": "#/components/schemas/ReturnFrequency"
+          },
+          "instrument_status": {
+            "$ref": "#/components/schemas/InstrumentStatus",
+            "default": "in_force"
           },
           "package_id": {
             "anyOf": [
@@ -52998,6 +53152,10 @@
             ],
             "title": "Ineligible Reason"
           },
+          "instrument_status": {
+            "$ref": "#/components/schemas/InstrumentStatus",
+            "default": "in_force"
+          },
           "lookback_months": {
             "title": "Lookback Months",
             "type": "integer"
@@ -53194,6 +53352,18 @@
             "title": "Directive Citation",
             "type": "string"
           },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
           "family": {
             "$ref": "#/components/schemas/ReturnFamily"
           },
@@ -53206,6 +53376,10 @@
           "generator": {
             "title": "Generator",
             "type": "string"
+          },
+          "instrument_status": {
+            "$ref": "#/components/schemas/InstrumentStatus",
+            "default": "in_force"
           },
           "regulator": {
             "title": "Regulator",
@@ -54524,6 +54698,13 @@
               "type": "string"
             },
             "title": "Metrics",
+            "type": "object"
+          },
+          "refusals": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FigureRefusalRead"
+            },
+            "title": "Refusals",
             "type": "object"
           },
           "scenario_id": {
@@ -56904,6 +57085,14 @@
             "title": "Code",
             "type": "string"
           },
+          "conflicting_binding_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Conflicting Binding Ids",
+            "type": "array"
+          },
           "message": {
             "title": "Message",
             "type": "string"
@@ -56911,7 +57100,8 @@
         },
         "required": [
           "code",
-          "message"
+          "message",
+          "conflicting_binding_ids"
         ],
         "title": "SodPolicyFindingRead",
         "type": "object"
@@ -67835,7 +68025,7 @@
     },
     "/api/v1/banks/{bank_id}/bi/exports/{job_id}": {
       "get": {
-        "description": "One queued export, and a short-lived download link once it is ready.\n\n404 for anyone but the principal who asked for it: a presigned GET is a\nbearer credential, so the owner check IS the access control on the finished\nfile, and the existence of another person's export is not this caller's\nbusiness either.",
+        "description": "One queued export, and a short-lived download link once it is ready.\n\n404 for anyone but the principal who asked for it: the download link is a\nbearer credential, so the owner check IS the access control on the finished\nfile, and the existence of another person's export is not this caller's\nbusiness either.",
         "operationId": "getBiExport",
         "parameters": [
           {
@@ -119249,7 +119439,7 @@
         ]
       },
       "post": {
-        "description": "Issue one credential for one exact institution, for one purpose.\n\nThe authority required is unchanged by the second purpose: one\norganization-wide ACCOUNT/restricted ``administer`` binding\n(``require_account_administration``) plus an exact ``BK-*`` target, which the\nservice resolves inside the caller's tenant.",
+        "description": "Issue a data push key for an exact bank under Account administration.",
         "operationId": "issueIntegrationKey",
         "requestBody": {
           "content": {
@@ -122450,6 +122640,24 @@
     "/api/v1/regulatory-reporting/templates": {
       "get": {
         "operationId": "listReturnTemplates",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bank_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bank Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -122611,6 +122819,93 @@
         "summary": "Risk Types",
         "tags": [
           "taxonomy"
+        ]
+      }
+    },
+    "/api/v1/storage/download": {
+      "get": {
+        "operationId": "downloadBankObject",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "maxLength": 16384,
+              "minLength": 1,
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Download Bank Object",
+        "tags": [
+          "storage"
         ]
       }
     },

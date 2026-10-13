@@ -20,6 +20,19 @@ and rotation evidence with the deployment record, never in this repository.
   Legacy null-bank rows remain inspectable/revocable but never authorize a push.
   Public contract: `docs/API_INTEGRATION.md` §1.
 
+## Reader key issuance
+
+The [public issuance contract](../../docs/API_INTEGRATION.md#1-authentication)
+defines the supported purpose. Unsupported purpose requests are rejected before
+creating an identity, key or binding. Module-route isolation is governed by the
+[human institution permission boundary](authorization_foundation.md#authority-model).
+
+Before reintroducing readers, require Org Owner approval or the issuer's own
+complete matching view authority for the proposed institution, modules,
+sensitivity and data scope, **plus the normal assignment-time separation-of-duties
+decision**. Account administration alone is insufficient. Reuse the human grant
+administration policy and audit/invalidation contracts.
+
 ## Affected routes
 
 All four routes require one independently complete active binding for the

@@ -2,7 +2,7 @@
 """Provision the OpenBao PKI that certifies officers' signing keys.
 
 ``SIGNING_BACKEND=openbao`` issues every officer certificate from a PKI mount
-(``app/services/attestation/openbao.py``, docs/attestation_esignature.md §3.4).
+(``app/attestation/service/openbao.py``, docs/attestation_esignature.md §3.4).
 None of that exists on a fresh server, and none of it can be created by the
 application's AppRole — mounting an engine and generating a root are
 administrator acts. So this script is the operational half of the feature, run
@@ -59,7 +59,7 @@ from cryptography import x509
 # disagree about which certificate is "the root".
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.services.attestation.openbao import (  # noqa: E402
+from app.attestation.service.openbao import (  # noqa: E402
     KEY_NAME_PREFIX,
     SignerBackendError,
     certificates_to_pem,
@@ -101,9 +101,7 @@ class Admin:
         self._token = token
         self._timeout = timeout
 
-    def call(
-        self, method: str, path: str, body: dict[str, Any] | None = None
-    ) -> httpx.Response:
+    def call(self, method: str, path: str, body: dict[str, Any] | None = None) -> httpx.Response:
         try:
             return httpx.request(
                 method,

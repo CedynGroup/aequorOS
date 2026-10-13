@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import smtplib
+import ssl
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -19,8 +20,8 @@ from app.services.notification_email_mirror import (
     enqueue_due_notification_mirror,
     run_notification_email_mirror,
 )
-from tests.api.test_package_authorization import _add_bank, _package
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.reporting.api.test_package_authorization import _add_bank, _package
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, USER_1
 
@@ -45,8 +46,11 @@ class _FakeSmtp:
     def __exit__(self, *args) -> None:
         return None
 
-    def starttls(self) -> None:
-        return None
+    def starttls(self, *, context: ssl.SSLContext | None = None) -> None:
+        assert context is not None
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.check_hostname
+        assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
 
     def login(self, username: str, password: str) -> None:
         return None

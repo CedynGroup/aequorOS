@@ -57,7 +57,7 @@ test.describe("Insights", () => {
   }) => {
     await page.goto("/insights");
 
-    const analyse = page.locator("section.card").filter({
+    const analyse = page.locator("section").filter({
       has: page.getByRole("heading", {
         name: "What you can analyse",
         level: 3,
@@ -96,9 +96,7 @@ test.describe("Insights", () => {
 
     // This reader is refused nothing, so the withheld-fields sentence must be
     // absent. `bi-authorization.spec.ts` asserts it PRESENT for a reader who is.
-    await expect(
-      page.getByText(/further field(s)? exist/),
-    ).toHaveCount(0);
+    await expect(page.getByText(/further field(s)? exist/)).toHaveCount(0);
 
     await analyse.getByRole("link", { name: /Open Explore/ }).click();
     await expect(page).toHaveURL(/\/explore$/);
@@ -135,25 +133,20 @@ test.describe("Insights", () => {
       (insight) => insight.rule_id === "data_gap",
     );
     expect(gap).toBeDefined();
-    expect(gap!.detail).toContain("It is not zero, and it has not stayed flat.");
+    expect(gap!.detail).toContain(
+      "It is not zero, and it has not stayed flat.",
+    );
 
-    // THE DISCLOSURE PROPERTY OF THE STRIP. A reader whose only sentence is
-    // Liquidity/aggregated is told about liquidity figures and about nothing
-    // else — not even that the credit figures exist.
+    // Liquidity-only access covers advisory metrics, not certified headline
+    // candidates. The refusal discloses neither unavailable figures nor labels.
     const narrow = await biApi(request, "liquidity_viewer", route);
-    expect(narrow.status).toBe(200);
-    // Withheld measures are a COUNT, never ids: ten were kept back, and the
-    // response says how many without saying which.
-    expect(
-      (narrow.body as { measures_read: number; measures_withheld: number })
-        .measures_read,
-    ).toBe(2);
-    expect(
-      (narrow.body as { measures_withheld: number }).measures_withheld,
-    ).toBeGreaterThan(0);
+    expect(narrow.status).toBe(403);
+    expect(narrow.body).toMatchObject({
+      error: { details: { error_code: "bi_insights_authorization_denied" } },
+    });
     const narrowText = JSON.stringify(narrow.body);
-    expect(narrowText).toContain("Liquidity coverage ratio (LCR)");
     for (const withheld of [
+      "Liquidity coverage ratio (LCR)",
       "loans.npl_ratio_pct",
       "engine.car_pct",
       "Gross loans",

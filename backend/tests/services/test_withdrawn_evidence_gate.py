@@ -103,6 +103,7 @@ def _seed_duplicate_second_source(db_session: Session, *, rows: int = 3) -> None
     db_session.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="d12-duplicate-book",
@@ -562,7 +563,7 @@ def test_a_withdrawal_at_another_date_leaves_the_run_alone(db_session: Session) 
 # every annex package's ``source_runs`` — so a cycle could be SEALED, its
 # package minted and its stage decision written on evidence that had been
 # withdrawn under two-officer approval. The ICAAP-side substitute is partial by
-# construction: ``domain/icaap/readiness.py`` makes a withdrawn source blocking
+# construction: ``icaap/domain/readiness.py`` makes a withdrawn source blocking
 # only for a block the PROSE references, and never looks at annexes at all.
 #
 # The gate therefore lives at the mint, not in ``freeze_cycle``: the next
@@ -572,7 +573,7 @@ def test_a_withdrawal_at_another_date_leaves_the_run_alone(db_session: Session) 
 
 
 def _frozen_build(run: RegulatoryRun | None):  # noqa: ANN202 - a test-local closure
-    from app.services.regulatory_reporting import generation  # noqa: PLC0415
+    from app.reporting.service import generation  # noqa: PLC0415
 
     def _build() -> generation.FrozenSnapshot:
         return generation.FrozenSnapshot(
@@ -593,7 +594,7 @@ def _frozen_build(run: RegulatoryRun | None):  # noqa: ANN202 - a test-local clo
 
 
 def _mint_frozen(db_session: Session, run: RegulatoryRun | None):  # noqa: ANN202
-    from app.services.regulatory_reporting import generation  # noqa: PLC0415
+    from app.reporting.service import generation  # noqa: PLC0415
 
     return generation.generate_frozen_package(
         db_session,

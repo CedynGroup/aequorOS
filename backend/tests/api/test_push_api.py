@@ -25,8 +25,8 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import Bank, CanonicalGlAccount, CanonicalLoanEvent, CanonicalReferenceRow, User
-from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from app.services.push_ingestion import IDENTITY_MAPPING_NAME
 from tests.api.test_ingestion import seed_bank

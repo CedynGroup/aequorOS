@@ -208,8 +208,14 @@ def _bypasses_rls(connection: Connection) -> bool:
     )
 
 
-def _insert_package(
-    connection: Connection, package_id: UUID, *, reporting_date: date = _AS_OF
+def _insert_package(  # noqa: PLR0913 - a package row is its named columns
+    connection: Connection,
+    package_id: UUID,
+    *,
+    reporting_date: date = _AS_OF,
+    return_family: str = "icaap_stress",
+    is_rehearsal: bool = False,
+    supersedes_id: UUID | None = None,
 ) -> None:
     connection.execute(
         text(
@@ -217,10 +223,11 @@ def _insert_package(
             INSERT INTO regulatory_packages
               (id, organization_id, bank_id, return_family, return_code, reporting_date,
                frequency, basis, status, version, snapshot, source_runs, generated_by,
-               generated_at, attestation_state, created_at, updated_at)
+               generated_at, attestation_state, is_rehearsal, supersedes_id, created_at, updated_at)
             VALUES
-              (:id, :org, :bank, 'icaap_stress', 'ICAAP-STRESS', :as_of, 'annual', 'solo',
-               'generated', 1, '{}'::json, '[]'::json, :actor, :now, 'unsigned', :now, :now)
+              (:id, :org, :bank, :family, 'ICAAP-STRESS', :as_of, 'annual', 'solo',
+               'generated', 1, '{}'::json, '[]'::json, :actor, :now, 'unsigned',
+               :rehearsal, :prior, :now, :now)
             """
         ),
         {
@@ -228,6 +235,9 @@ def _insert_package(
             "org": ORG_1,
             "bank": _BANK,
             "as_of": reporting_date,
+            "family": return_family,
+            "rehearsal": is_rehearsal,
+            "prior": None if supersedes_id is None else str(supersedes_id),
             "actor": str(uuid4()),
             "now": _NOW,
         },
@@ -592,7 +602,7 @@ def test_a_send_back_is_two_statements(connection: Connection) -> None:
 def test_a_rehearsal_can_now_freeze_and_carry_its_package(connection: Connection) -> None:
     """The act D-029 exists for, which the old CHECKs made impossible."""
     package_id = uuid4()
-    _insert_package(connection, package_id)
+    _insert_package(connection, package_id, return_family="icaap", is_rehearsal=True)
     _insert_cycle(
         connection,
         uuid4(),
@@ -606,13 +616,7 @@ def test_a_rehearsal_can_now_freeze_and_carry_its_package(connection: Connection
 def test_a_rehearsal_package_can_never_be_acknowledged(connection: Connection) -> None:
     """The regulator's own word about a document the regulator never received."""
     package_id = uuid4()
-    _insert_package(connection, package_id)
-    connection.execute(
-        text(
-            "UPDATE regulatory_packages SET return_family='icaap', is_rehearsal=true WHERE id=:id"
-        ),
-        {"id": str(package_id)},
-    )
+    _insert_package(connection, package_id, return_family="icaap", is_rehearsal=True)
     savepoint = connection.begin_nested()
     with pytest.raises(DatabaseError, match="rehearsal_never_acknowledged"):
         connection.execute(
@@ -630,20 +634,14 @@ def test_a_rehearsal_package_can_never_supersede_a_real_one(
     real_id = uuid4()
     rehearsal_id = uuid4()
     _insert_package(connection, real_id)
-    # A different reporting date, because the one-current-version index now
-    # keys on ``is_rehearsal`` too and both rows start out non-rehearsal.
-    _insert_package(connection, rehearsal_id, reporting_date=date(2024, 12, 31))
-    connection.execute(
-        text(
-            "UPDATE regulatory_packages SET return_family='icaap', is_rehearsal=true WHERE id=:id"
-        ),
-        {"id": str(rehearsal_id)},
-    )
     savepoint = connection.begin_nested()
     with pytest.raises(DatabaseError, match="rehearsal_supersedes_nothing"):
-        connection.execute(
-            text("UPDATE regulatory_packages SET supersedes_id=:prior WHERE id=:id"),
-            {"prior": str(real_id), "id": str(rehearsal_id)},
+        _insert_package(
+            connection,
+            rehearsal_id,
+            return_family="icaap",
+            is_rehearsal=True,
+            supersedes_id=real_id,
         )
     savepoint.rollback()
 
@@ -651,13 +649,9 @@ def test_a_rehearsal_package_can_never_supersede_a_real_one(
 def test_only_an_icaap_return_can_be_a_rehearsal(connection: Connection) -> None:
     """A BSD return marked as a rehearsal would be a filing nobody filed."""
     package_id = uuid4()
-    _insert_package(connection, package_id)  # family 'icaap_stress'
     savepoint = connection.begin_nested()
     with pytest.raises(DatabaseError, match="rehearsal_is_icaap"):
-        connection.execute(
-            text("UPDATE regulatory_packages SET is_rehearsal=true WHERE id=:id"),
-            {"id": str(package_id)},
-        )
+        _insert_package(connection, package_id, is_rehearsal=True)  # family 'icaap_stress'
     savepoint.rollback()
 
 
@@ -695,7 +689,7 @@ def test_only_one_open_cycle_per_year_kind_and_basis(connection: Connection) -> 
 def test_the_revision_seeds_the_parameters_the_workspace_reads(
     connection: Connection,
 ) -> None:
-    from app.services.icaap.parameters import ICAAP_PARAM_CODES  # noqa: PLC0415
+    from app.icaap.service.parameters import ICAAP_PARAM_CODES  # noqa: PLC0415
 
     rows = connection.execute(
         text(

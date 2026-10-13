@@ -81,15 +81,12 @@ services:
           node_id = "openbao-1"
         }
 
-        # TLS terminates at the reverse proxy on this host, so the listener is
-        # plaintext on the container network only. Two conditions come with that:
-        # the proxy MUST be on this host, and 8200/8201 MUST NOT be published.
-        # The application then reaches OpenBao over HTTPS at its public hostname
-        # with a public certificate, so there is no OPENBAO_CA_CERT to configure
-        # — and that path has never been exercised against a real private CA.
+        # The proxy must verify this listener's certificate and hostname.
         listener "tcp" {
-          address     = "0.0.0.0:8200"
-          tls_disable = true
+          address         = "0.0.0.0:8200"
+          tls_cert_file   = "/run/tls/openbao.crt"
+          tls_key_file    = "/run/tls/openbao.key"
+          tls_min_version = "tls12"
         }
 
         # Both must be the address OTHER parties use, not the container's own.
@@ -108,32 +105,36 @@ services:
         exec bao server -config=/openbao/config/openbao.hcl
     volumes:
       - openbao-data:/openbao/file
+      - service-trust:/run/trust:ro
+      - openbao-tls:/run/tls:ro
     expose:
       - "8200"
-    # Liveness, deliberately NOT readiness. `sealedcode=200&uninitcode=200` makes
-    # a sealed or uninitialised server report healthy, because both are states a
-    # human resolves rather than container failures — and an unhealthy container
+    # Liveness, deliberately NOT readiness. A sealed or uninitialised server
+    # reports healthy, because both are states a human resolves rather than
+    # container failures — and an unhealthy container
     # gets restarted, which would make it impossible to ever unseal. Every fresh
     # deploy starts sealed, so the naive check (`bao status`, which exits
     # non-zero while sealed) deadlocks the first deploy.
     healthcheck:
+      # bao status exits 2 while sealed/uninitialised, 1 on transport failure.
       test:
-        - CMD
-        - wget
-        - -q
-        - -O
-        - /dev/null
-        - http://127.0.0.1:8200/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200
+        [
+          "CMD-SHELL",
+          'bao status >/dev/null; result=$?; test "$$result" = 0 || test "$$result" = 2',
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
     environment:
-      # Literal, not a variable reference. The `bao` CLI defaults to HTTPS, which
-      # the healthcheck and every `docker exec … bao` would fail against a
-      # plaintext listener. This is the only value the service needs from the
-      # environment, so it takes NO .env file.
-      BAO_ADDR: "http://127.0.0.1:8200"
+      BAO_ADDR: "https://openbao:8200"
+      BAO_CACERT: "/run/trust/ca.pem"
 
 volumes:
   openbao-data:
+  service-trust:
+    external: true
+    name: aequoros-service-trust
+  openbao-tls:
+    external: true
+    name: aequoros-openbao-tls

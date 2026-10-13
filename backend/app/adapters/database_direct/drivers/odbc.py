@@ -29,6 +29,7 @@ from app.adapters.database_direct.drivers.base import (
     DriverCapabilities,
     QueryResult,
     TableSchema,
+    require_verified_transport,
 )
 from app.adapters.database_direct.errors import (
     DatabaseDirectError,
@@ -69,6 +70,7 @@ class OdbcDriver(DatabaseDriver):
         )
 
     def connect(self, connection: ConnectionConfig, credentials: DbCredentials) -> _OdbcSession:
+        require_verified_transport(connection)
         odbc_cfg = connection.odbc
         if odbc_cfg is None:
             raise DatabaseDirectError(

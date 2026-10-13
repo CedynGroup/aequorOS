@@ -83,6 +83,7 @@ def governance_schema() -> Iterator[MigratedPostgresSchema]:
     """One migrated schema for the whole module, plus the org + bank to hang rows on."""
     test_database_url = os.environ["TEST_DATABASE_URL"]
     schema_name = f"risk_service_sealed_{uuid4().hex}"
+    runtime_role = f"{schema_name}_runtime"
     database_url = postgres_schema_url(test_database_url, schema_name)
     admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
     app_engine = create_engine(database_url)
@@ -92,8 +93,26 @@ def governance_schema() -> Iterator[MigratedPostgresSchema]:
 
     with admin_engine.connect() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
+        connection.execute(text(f'CREATE ROLE "{runtime_role}" NOLOGIN'))
+        connection.execute(
+            text(f'GRANT "{runtime_role}" TO CURRENT_USER WITH INHERIT FALSE, SET TRUE')
+        )
+        connection.execute(text(f'GRANT USAGE ON SCHEMA "{schema_name}" TO "{runtime_role}"'))
+        connection.execute(
+            text(
+                f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema_name}" '
+                f'GRANT ALL ON TABLES TO "{runtime_role}"'
+            )
+        )
     try:
-        command.upgrade(alembic_config_for_app(), "head")
+        # Several modules reuse this fixture under xdist. Serialize their full
+        # migration chains to stay within a stock PostgreSQL server's lock budget.
+        with admin_engine.connect() as migration_lock:
+            migration_lock.execute(text("SELECT pg_advisory_lock(413090)"))
+            try:
+                command.upgrade(alembic_config_for_app(), "head")
+            finally:
+                migration_lock.execute(text("SELECT pg_advisory_unlock(413090)"))
         with app_engine.connect() as connection:
             connection.execute(
                 text("SELECT set_config('app.organization_id', :org, false)"),
@@ -120,13 +139,16 @@ def governance_schema() -> Iterator[MigratedPostgresSchema]:
                 {"bank": _BANK_ID, "org": str(ORG_1)},
             )
             connection.commit()
-        yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
+        yield MigratedPostgresSchema(
+            app_engine=app_engine, schema_name=schema_name, runtime_role=runtime_role
+        )
     finally:
         monkeypatch.undo()
         clear_database_caches()
         app_engine.dispose()
         with admin_engine.connect() as connection:
             connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
+            connection.execute(text(f'DROP ROLE "{runtime_role}"'))
         admin_engine.dispose()
 
 
@@ -275,9 +297,9 @@ def test_every_sealed_table_carries_its_trigger_and_cannot_be_truncated(
         )
         assert installed == expected
 
-        # A table's OWNER keeps TRUNCATE by ownership, which REVOKE cannot remove
-        # (the same limitation 202607250027 lives with); the revoke protects every
-        # role that holds it by GRANT. Assert the grant is gone for non-owners.
+        # Owners can restore TRUNCATE by GRANT; the sweep's statement triggers
+        # protect that path. Revocation separately removes this privilege from
+        # application roles. Assert the grant is gone for non-owners.
         leaked = [
             rule.table
             for rule in GOVERNANCE_MIGRATION.SEALED_TABLES
@@ -525,3 +547,33 @@ def test_an_approved_declaration_is_sealed_but_still_revocable(
         {"id": str(row_id)},
         "write-once",
     )
+
+
+@postgres_only
+@pytest.mark.parametrize(
+    "table",
+    [
+        "regulatory_parameter",
+        "system_of_record_declarations",
+        "reconciliation_exceptions",
+        "canonical_withdrawals",
+    ],
+)
+def test_authoritative_register_evidence_cannot_be_deleted(
+    connection: Connection, table: str
+) -> None:
+    row_id = uuid4()
+    if table == "regulatory_parameter":
+        row_id = _approved_parameter_id(connection)
+    elif table == "system_of_record_declarations":
+        _insert_declaration(connection, row_id, declaration_status="approved")
+    elif table == "reconciliation_exceptions":
+        _insert_exception(connection, row_id)
+    else:
+        _insert_withdrawal(connection, row_id, withdrawal_status="applied")
+    # Exercise the trigger even when the fixture is the migration owner.
+    connection.execute(text(f"GRANT DELETE, TRUNCATE ON {table} TO CURRENT_USER"))
+    _refused(
+        connection, f"DELETE FROM {table} WHERE id = :id", {"id": str(row_id)}, "retained evidence"
+    )
+    _refused(connection, f"TRUNCATE {table} CASCADE", {}, "append-only")

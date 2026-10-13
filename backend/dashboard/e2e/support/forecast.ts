@@ -2,7 +2,7 @@
  * The canonical fixture book's balance-sheet forecast, derived independently
  * for the Forecasting journeys.
  *
- * Every balance is the latest canonical period of
+ * Balance-sheet balances come from the latest canonical period of
  * `tests/fixtures/canonical_bank_fixture.py` (`_FIXED_ASSETS_M`, `_DEPOSITS_M`,
  * `_LOAN_EXPOSURES_M`, `_SECURITIES_M`, `_OFF_BALANCE_M`, `_MARKET_RISK_M`,
  * `_OPERATIONAL_INCOME_M`, `_CAPITAL_COMPONENTS_M`), carried forward unchanged
@@ -11,14 +11,18 @@
  * recurrence of `app/domain/forecasting/engine.py` (growth, the NII/fee/opex/
  * credit-loss/tax/dividend chain, the funding plug, retained earnings into
  * CET1), and CAR is the Basel build-up the Basel journey derives: credit RWA at
- * standardised weights with commitments at a 50% CCF, the FX open position at
- * an 8% charge × 12.5, and the Basic Indicator Approach over the three most
- * recent gross-income years. Amounts are GHS, rounded to 4 dp at the points
+ * standardised weights on the bootstrap's net CRD source book, with aggregate
+ * commitments at a 50% CCF and general provisions capped at 1.25% of credit RWA.
+ * Market RWA uses the FX open position at an 8% charge × 12.5, and operational
+ * RWA uses the Basic Indicator Approach over the three most recent gross-income
+ * years. Amounts are GHS, rounded to 4 dp at the points
  * the engine rounds, so the figures match its output to the cent.
  *
  * LCR and NSFR paths are NOT derived here: a journey pins them as engine
  * output and proves they are the same engine output on every surface.
  */
+
+import { CREDIT_LOANS, CREDIT_RESIDUALS } from "./credit";
 
 const M = 1_000_000;
 
@@ -67,15 +71,8 @@ export const ADVERSE: Assumptions = {
   ...ENGINE_DEFAULTS,
 };
 
-/** Loan exposures: GHS millions at their standardised risk weight. */
-const LOANS = [
-  { amount: 560, rwPct: 100 },
-  { amount: 280, rwPct: 75 },
-  { amount: 250, rwPct: 75 },
-  { amount: 200, rwPct: 35 },
-  { amount: 60, rwPct: 100 },
-  { amount: 50, rwPct: 150 },
-];
+/** Gross balance-sheet loans: GHS millions, distinct from net CRD exposures. */
+const LOANS = [560, 280, 250, 200, 60, 50];
 /** Undrawn commitments: they grow with the loan book; EAD at a 50% CCF. */
 const COMMITMENTS = [
   { amount: 80, rwPct: 75 },
@@ -96,10 +93,10 @@ const FX_POSITIONS = [45, 12];
 const GROSS_INCOME = [340, 380, 400];
 const CET1 = 150 + 95 + 45 + 10 - 25 - 15;
 const AT1 = 20;
-/** Subordinated debt plus general provisions, inside the 1.25% credit-RWA cap. */
-const TIER2 = 45 + 15;
+/** Booked subordinated debt and provisions; regulatory eligibility is capped below. */
+const BOOKED_TIER2 = 45 + 15;
 /** `capital_total`: the balance-sheet equity the projection grows. */
-const EQUITY = CET1 + AT1 + TIER2;
+const EQUITY = CET1 + AT1 + BOOKED_TIER2;
 
 /** The governed CAR minimum every surface judges the projection against. */
 export const CAR_MIN_PCT = 13;
@@ -138,7 +135,8 @@ export function project(a: Assumptions): Projection {
   const depositFactor = 1 + a.depositGrowthPct / 100;
   const securitiesFactor = 1 + (a.depositGrowthPct + a.securitiesShiftPp) / 100;
 
-  let loans = LOANS.map((l) => l.amount * M);
+  let loans = LOANS.map((amount) => amount * M);
+  let netCreditLoans = CREDIT_LOANS.map((l) => l.exposure * M);
   let commitments = COMMITMENTS.map((c) => c.amount * M);
   let securities = SECURITIES.map((s) => s * M);
   let cash = [CASH.vault, CASH.required, CASH.excess].map((c) => c * M);
@@ -152,8 +150,8 @@ export function project(a: Assumptions): Projection {
     sum(cash) + sum(securities) + sum(loans) + OTHER_ASSETS * M;
   const car = () => {
     const credit = money(
-      sum(loans.map((l, i) => (l * LOANS[i].rwPct) / 100)) +
-        OTHER_ASSETS * M +
+      sum(netCreditLoans.map((l, i) => (l * CREDIT_LOANS[i].rw) / 100)) +
+        sum(CREDIT_RESIDUALS.map((r) => (r.exposure * M * r.rw) / 100)) +
         sum(
           commitments.map(
             (c, i) => (((c * CCF_PCT) / 100) * COMMITMENTS[i].rwPct) / 100,
@@ -165,7 +163,8 @@ export function project(a: Assumptions): Projection {
     const operational = money(
       money((sum(window) * 15) / (100 * window.length)) * 12.5,
     );
-    const capital = (CET1 + AT1 + TIER2) * M + retained;
+    const eligibleProvisions = Math.min(15 * M, money((credit * 1.25) / 100));
+    const capital = (CET1 + AT1 + 45) * M + eligibleProvisions + retained;
     return ratioPct((capital / (credit + market + operational)) * 100);
   };
 
@@ -195,6 +194,7 @@ export function project(a: Assumptions): Projection {
 
   for (let year = 1; year <= 5; year += 1) {
     loans = scale(loans, loanFactor);
+    netCreditLoans = scale(netCreditLoans, loanFactor);
     commitments = scale(commitments, loanFactor);
     deposits = scale(deposits, depositFactor);
     securities = scale(securities, securitiesFactor);

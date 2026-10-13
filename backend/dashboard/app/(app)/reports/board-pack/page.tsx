@@ -49,6 +49,7 @@ import {
   labelize,
   num,
   statusTone,
+  formatFigure,
 } from "@/lib/api/values";
 import {
   fmtCurrency,
@@ -330,24 +331,34 @@ export default function BoardPackPage() {
                   {
                     label: "Liquidity Coverage Ratio",
                     hint: `${regShort()} minimum 100%`,
-                    value: fmtPct(num(liq.data.metrics.lcrPct), 2),
+                    value: formatFigure(liq.data.metrics.lcrPct, (value) =>
+                      fmtPct(value, 2),
+                    ),
                     tone: statusTone(liq.data.metrics.lcrStatus),
                     toneLabel: labelize(liq.data.metrics.lcrStatus),
                   },
                   {
                     label: "Net Stable Funding Ratio",
                     hint: `${regShort()} minimum 100%`,
-                    value: fmtPct(num(liq.data.metrics.nsfrPct), 2),
+                    value: formatFigure(liq.data.metrics.nsfrPct, (value) =>
+                      fmtPct(value, 2),
+                    ),
                     tone: statusTone(liq.data.metrics.nsfrStatus),
                     toneLabel: labelize(liq.data.metrics.nsfrStatus),
                   },
                   {
                     label: "High-quality liquid assets",
-                    value: fmtCurrency(num(liq.data.metrics.hqlaTotalGhs)),
+                    value: formatFigure(
+                      liq.data.metrics.hqlaTotalGhs,
+                      fmtCurrency,
+                    ),
                   },
                   {
                     label: "Net outflows (30 days)",
-                    value: fmtCurrency(num(liq.data.metrics.netOutflows30dGhs)),
+                    value: formatFigure(
+                      liq.data.metrics.netOutflows30dGhs,
+                      fmtCurrency,
+                    ),
                   },
                 ]}
               />

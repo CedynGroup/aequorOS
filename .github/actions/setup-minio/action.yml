@@ -1,0 +1,52 @@
+name: Set up CI MinIO
+description: Start the pinned official MinIO binary with disposable SSE-KMS storage.
+outputs:
+  pid:
+    description: Process to stop at the end of the job.
+    value: ${{ steps.start.outputs.pid }}
+runs:
+  using: composite
+  steps:
+    - name: Download and verify MinIO
+      shell: bash
+      run: |
+        set -euo pipefail
+        directory="$RUNNER_TEMP/aequoros-ci-minio"
+        mkdir -p "$directory"
+        curl --fail --silent --show-error --location --retry 3 \
+          https://github.com/minio/minio/releases/download/RELEASE.2025-09-07T16-13-09Z/minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z \
+          --output "$directory/minio"
+        # SHA256 from the official release's .sha256sum asset.
+        echo "7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f  $directory/minio" | sha256sum --check --strict
+        chmod +x "$directory/minio"
+    - name: Start MinIO with built-in KMS
+      id: start
+      shell: bash
+      env:
+        MINIO_ROOT_USER: ciminio
+        MINIO_ROOT_PASSWORD: ciminio123
+      run: |
+        set -euo pipefail
+        directory="$RUNNER_TEMP/aequoros-ci-minio"
+        mkdir -p "$directory/data" "$directory/certs"
+        # The at-rest contract pins this key name; its material dies with the job.
+        MINIO_KMS_SECRET_KEY="aequoros-key:$(head -c 32 /dev/urandom | base64 | tr -d '\n')"
+        export MINIO_KMS_SECRET_KEY
+        "$directory/minio" --version
+        nohup "$directory/minio" server "$directory/data" \
+          --address 127.0.0.1:9000 --console-address 127.0.0.1:9001 \
+          --certs-dir "$directory/certs" \
+          >"$directory/minio.log" 2>&1 </dev/null &
+        pid=$!
+        echo "pid=$pid" >> "$GITHUB_OUTPUT"
+        for _ in $(seq 1 30); do
+          if curl --fail --silent --max-time 2 http://127.0.0.1:9000/minio/health/live >/dev/null; then
+            echo "MinIO is live"
+            exit 0
+          fi
+          if ! kill -0 "$pid" 2>/dev/null; then break; fi
+          sleep 1
+        done
+        cat "$directory/minio.log"
+        kill "$pid" 2>/dev/null || true
+        exit 1

@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -14,7 +14,9 @@ from app.core.config import Settings
 from app.db.base import utc_now
 from app.domain.risk_constants import ALLOWED_UPLOAD_CONTENT_TYPES
 from app.integrations.storage.base import ObjectStorage
+from app.integrations.storage.s3 import get_object_storage
 from app.models import Document, DocumentChunk, Job, StoredObject
+from app.services import job_queue
 from app.services.audit import record_event
 from app.services.cases import get_case_or_404
 
@@ -41,27 +43,31 @@ class ParseResult:
     status: str
 
 
-def get_document_or_404(db: Session, organization_id: str, document_id: UUID) -> Document:
-    document = db.scalar(
-        select(Document).where(
-            Document.id == document_id,
-            Document.organization_id == organization_id,
-        )
+def get_document_or_404(
+    db: Session, organization_id: str, document_id: UUID, *, for_update: bool = False
+) -> Document:
+    query = select(Document).where(
+        Document.id == document_id,
+        Document.organization_id == organization_id,
     )
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    document = db.scalar(query)
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
     return document
 
 
 def get_stored_object_or_404(
-    db: Session, organization_id: str, stored_object_id: UUID
+    db: Session, organization_id: str, stored_object_id: UUID, *, for_update: bool = False
 ) -> StoredObject:
-    stored_object = db.scalar(
-        select(StoredObject).where(
-            StoredObject.id == stored_object_id,
-            StoredObject.organization_id == organization_id,
-        )
+    query = select(StoredObject).where(
+        StoredObject.id == stored_object_id,
+        StoredObject.organization_id == organization_id,
     )
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    stored_object = db.scalar(query)
     if stored_object is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Stored object not found."
@@ -140,6 +146,23 @@ def request_upload(
     )
 
 
+def _require_pending_upload(document: Document, stored_object: StoredObject) -> None:
+    if (
+        document.deleted_at is not None
+        or document.status == "deleted"
+        or stored_object.deleted_at is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Deleted documents cannot complete upload.",
+        )
+    if document.status != "upload_requested" or stored_object.status != "pending_upload":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document upload is not pending.",
+        )
+
+
 def complete_upload(
     db: Session,
     ctx: TenantContext,
@@ -150,19 +173,15 @@ def complete_upload(
 ) -> Document:
     document = get_document_or_404(db, ctx.organization_id, document_id)
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
-    if document.deleted_at is not None or document.status == "deleted":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Deleted documents cannot complete upload.",
-        )
-    if document.status != "upload_requested" or stored_object.status != "pending_upload":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Document upload is not pending.",
-        )
-    head = storage_client.head_object(
-        bucket=stored_object.bucket, object_key=stored_object.object_key
+    _require_pending_upload(document, stored_object)
+    bucket, object_key = stored_object.bucket, stored_object.object_key
+    db.commit()
+    head = storage_client.head_object(bucket=bucket, object_key=object_key)
+    document = get_document_or_404(db, ctx.organization_id, document_id, for_update=True)
+    stored_object = get_stored_object_or_404(
+        db, ctx.organization_id, document.stored_object_id, for_update=True
     )
+    _require_pending_upload(document, stored_object)
     if head is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
@@ -213,7 +232,12 @@ def create_download_url(
 ) -> DownloadUrlResult:
     document = get_document_or_404(db, ctx.organization_id, document_id)
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
-    if document.status != "uploaded" or stored_object.status != "available":
+    if (
+        document.deleted_at is not None
+        or stored_object.deleted_at is not None
+        or document.status != "uploaded"
+        or stored_object.status != "available"
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Document is not available."
         )
@@ -309,32 +333,72 @@ def delete_document(
     db: Session,
     ctx: TenantContext,
     document_id: UUID,
-    *,
-    storage_client: ObjectStorage,
 ) -> Document:
-    """Soft-delete the document rows and remove the stored object. Irreversible.
+    """Commit logical deletion and its cleanup job together, before any storage wait.
 
-    Authorization is the route's (``MutationTenant`` — analyst or higher; audit
-    P0-3 found this reachable by a ``viewer`` and by an act-as-examiner token).
-
-    ORDERING IS LOAD-BEARING — do not reorder. The object-store delete is the
-    irreversible half, so it runs BEFORE ``db.commit()``: if it raises, the
-    exception unwinds through ``get_tenant_db_session``, which rolls the session
-    back, and the caller sees a failure over a document that is still intact.
-    Committing first would trade that recoverable failure for the unrecoverable
-    one — an object destroyed while the database still serves the row.
-    ``tests/api/test_impersonation_boundary.py`` pins the behaviour.
+    The job is the outbox: storage failures cannot restore a live document, and
+    a failed database commit cannot destroy its object. Physical cleanup retries
+    through the worker; the API's existing deleted response means logical deletion.
     """
-    document = get_document_or_404(db, ctx.organization_id, document_id)
+    document = get_document_or_404(db, ctx.organization_id, document_id, for_update=True)
+    if document.deleted_at is not None:
+        db.commit()
+        return document
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
     document.status = "deleted"
     document.deleted_at = utc_now()
-    stored_object.status = "deleted"
-    stored_object.deleted_at = utc_now()
-    storage_client.delete_object(bucket=stored_object.bucket, object_key=stored_object.object_key)
+    stored_object.status = "pending_deletion"
+    stored_object.deleted_at = document.deleted_at
+    job_queue.enqueue(
+        db,
+        ctx.organization_id,
+        "document_delete",
+        entity_type="document",
+        entity_id=document.id,
+    )
     record_event(
         db, ctx, event_type="document.deleted", entity_type="document", entity_id=document.id
     )
     db.commit()
-    db.refresh(document)
     return document
+
+
+def run_document_delete(session: Session, job: Job) -> None:
+    """Delete only a committed pending object belonging to this job's tenant."""
+    if job.entity_id is None:
+        raise ValueError("Document deletion job requires a document id.")
+    organization_id = job.organization_id
+    target = (
+        session.execute(
+            select(StoredObject.id, StoredObject.bucket, StoredObject.object_key)
+            .join(Document, Document.stored_object_id == StoredObject.id)
+            .where(
+                Document.id == UUID(job.entity_id),
+                Document.organization_id == organization_id,
+                Document.status == "deleted",
+                Document.deleted_at.is_not(None),
+                StoredObject.organization_id == organization_id,
+                StoredObject.status == "pending_deletion",
+                StoredObject.deleted_at.is_not(None),
+            )
+        )
+        .tuples()
+        .one_or_none()
+    )
+    # Capture only immutable locator values; commit must not leave an ORM lazy
+    # read reopening a transaction during storage construction or deletion.
+    session.commit()
+    if target is None:
+        return
+    object_id, bucket, object_key = target
+    get_object_storage().delete_object(bucket=bucket, object_key=object_key)
+    session.execute(
+        update(StoredObject)
+        .where(
+            StoredObject.id == object_id,
+            StoredObject.organization_id == organization_id,
+            StoredObject.status == "pending_deletion",
+        )
+        .values(status="deleted")
+    )
+    # The worker commits this acknowledgement with the job's succeeded state.

@@ -34,6 +34,7 @@ from app.core.authorization import (
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -48,7 +49,7 @@ from app.models import (
     MarketDataSourcePreference,
     User,
 )
-from app.services import authorization, implied_rating, market_data_overlays
+from app.services import implied_rating, market_data_overlays
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.adapters.market_data.manual_upload.fixtures import (
     FIXTURE_AS_OF,
@@ -288,6 +289,7 @@ def _seed_curve(bank_id: str = SAMPLE_BANK_ID) -> None:
         session.flush()
         lineage = LineageRecord(
             organization_id=ORG_1,
+            bank_id=batch.bank_id,
             ingestion_batch_id=batch.id,
             operation_type="ADAPTER_TRANSLATE",
             operation_ref="markets-authorization-fixture",

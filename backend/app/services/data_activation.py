@@ -28,7 +28,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
-from app.models import AuditEvent, Bank
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
+from app.models import AuditEvent
 from app.schemas.data_activation import (
     ActivationGroupRead,
     ActivationRunRead,
@@ -54,7 +56,6 @@ from app.services import (
     regulatory_fx,
     regulatory_irr,
     regulatory_liquidity,
-    scoped_authorization,
 )
 from app.services.audit import record_event
 from app.services.fact_derivation import DerivationError, DerivationResult, derive_facts

@@ -30,7 +30,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 
 from app.db.base import utc_now
-from app.models import Bank, MarketDataOverlay, User
+from app.identity.public import Bank, User
+from app.models import MarketDataOverlay
 from app.schemas.market_data_overlays import (
     MarketDataOverlayCreate,
     MarketDataOverlayEnd,

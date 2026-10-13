@@ -27,12 +27,13 @@ LEDGER = BACKEND / "scripts" / "feature_module_moves.json"
 #: starts with the feature packages and kernel seams the feature-layout work created; a
 #: package joins once it is clean (CODEBASE_CONVENTIONS.md §1, "Promoting a package").
 STRICT_MODULES: tuple[str, ...] = (
+    "app.core.data_truth",
     "app.core.tenancy",
     "app.db.base",
     "app.forecasting",
     "app.identity",
     "app.live",
-    "app.models.bank",
+    "app.identity.models.bank",
     "app.models.job",
     "app.models.parameter_register",
 )

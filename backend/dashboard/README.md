@@ -45,6 +45,22 @@ Capital navigation, planning, and ILAAP access requirements are documented in
 FX navigation, dashboard queries, run actions, and report projections are
 documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-access).
 
+### Unavailable liquidity figures
+
+When LCR or NSFR cannot be computed, its figure and dependent totals show an
+unavailable state (**Unavailable** or **—**), and charts leave gaps for missing
+readings. The computed sibling remains visible; measured zero and genuinely empty
+holdings retain their meaning.
+HQLA holdings counts, quality assessments and empty-holdings messages also become
+unavailable when the HQLA total is unavailable. The overview liquidity card cannot
+claim compliance from a computed sibling or an earlier live result while a current
+ratio is unavailable; liquidity is excluded from its assessed-module count.
+Risk limits and board-pack figures preserve unavailable values as well.
+
+Detailed refusal reasons and affected-row rendering remain a follow-up for
+issue #409. The backend result, filing and operator logging contracts are owned by
+[Per-figure results and calculation logs](../../ARCHITECTURE.md#per-figure-results-and-calculation-logs).
+
 ### Forecasting tools
 
 On **Forecasting → Assumptions**, choose **Propose new version**, enter an
@@ -119,11 +135,15 @@ These are correctness rules, not style preferences. The evidence is
   bank is measured against, so a `10` written into display code understates it
   while looking authoritative. It is tenant data, never a literal: see rule 1
   under "Client-side arithmetic".
-- **LCR and NSFR** are **Basel** standards. The Bank of Ghana has published no
-  LCR requirement and nothing at all on NSFR, so any 100% threshold, run-off
-  rate, inflow rate or inflow cap in use is a BCBS 238 default. Label these
-  "Basel minimum" — never `${regShort()} minimum`, and never "CRD" (the CRD is
-  the _Capital_ Requirements Directive and contains none of them).
+- **LCR and NSFR:** label the ratios "Basel reference" and the bank's resolved
+  thresholds "governed monitoring thresholds"; a governed value can differ from
+  the Basel reference. Use those labels for headroom, trend counts and validation
+  titles/messages, never `${regShort()} minimum` or "regulatory minimum".
+  Historical dashboard, preview and run reads correct the disclosure without
+  changing stored validations, calculations or input hashes; see
+  `backend/tests/services/test_liquidity_validation_disclosures.py`.
+  The [research dossier](../../docs/research/bog_returns_and_templates.md#12-gap-list--what-must-be-simulatedapproximated-clearly-labelled)
+  owns the instruments' publication status and calibration gaps.
 - **CET1, Tier 1 and the leverage ratio** are Bank of Ghana CRD requirements —
   6.5% (¶73(a)), 8.0% (¶73(b)) and 6% (¶90), all VERIFIED with locators. The
   Tier 1 8% coincides numerically with Basel's _total capital_ minimum; that is
@@ -139,11 +159,12 @@ These are correctness rules, not style preferences. The evidence is
   jurisdiction-calibrated parallel ±450bp shocks appear with readable labels
   and informational descriptions when the active parameter set supplies them.
   These additional shocks do not enter the worst-case or breach calculation.
-  Ghana's IRRBB guideline is a February 2026 exposure draft stated effective
-  1 January 2027.
-- **LMTD, LRMD, the stress-testing directive and the ICAAP guideline** are all
-  February 2026 **exposure drafts**. Copy must say "draft" / "not yet in force";
-  it must not call their minimums binding.
+  Instrument status and preparation labels follow the
+  [reporting-date contract](../../docs/regulatory_reporting.md#5b-reporting-date-standing-rules).
+- **Draft instruments:** copy must say "draft" / "not yet in force" and must
+  not call their minimums binding. The
+  [research dossier](../../docs/research/bog_returns_and_templates.md) owns publication
+  status and conditional commencement; the reporting-date contract governs preparation.
 - Jurisdiction is data: use `lib/format.ts` (`fmtCurrency`, `regShort()`,
   `centralBankName()`), never a `'GHS'` / `'BoG'` literal in display code.
 
@@ -201,8 +222,8 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
    they cannot disagree. The authority is the **governed parameter set on the
    module payload** (`buffers.*MinPct`, the SDI s.29 summary, the run's §59(f)
    coupling), which the backend resolves from the institution's register,
-   clamped tighten-only against the control plane, and refuses with 409
-   `missing_parameter` rather than guessing.
+   clamped tighten-only against the control plane. For calculation refusal
+   contracts, see [Per-figure results and calculation logs](../../ARCHITECTURE.md#per-figure-results-and-calculation-logs).
 
    **A stored run's `threshold_min` is NOT that authority.** It records what
    was applied when that run executed — evidence about a filing, not the
@@ -359,13 +380,138 @@ other authentication errors show a generic sign-in failure.
 ```bash
 pnpm --filter @aequoros/dashboard typecheck   # tsc --noEmit
 pnpm --filter @aequoros/dashboard lint        # ESLint CLI
-pnpm --filter @aequoros/dashboard test        # unit and query-cache policy suites
+pnpm --filter @aequoros/dashboard test        # legacy + Vitest behavior suites
+pnpm --filter @aequoros/dashboard test:coverage # CI coverage and shrink-only ratchet
 pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
 pnpm --filter @aequoros/dashboard e2e         # Playwright; package journeys need S3/MinIO
 ```
 
 Regenerate the API client after any backend contract change:
 `mise run risk-service:openapi-client`.
+
+### Unit-test collection
+
+Legacy Node assertion suites and native Vitest behavior suites both run through
+`test`. `tsconfig.test.json`
+compiles every `*.test.ts` and `*.test.tsx` file; its explicit production roots
+support existing tests that load modules dynamically. `scripts/run-unit-tests.mjs`
+discovers all source test files, fails below the 55-file floor or when any source
+test lacks compiled output, and executes each file in its own Node process.
+There is no hand-maintained execution list. New nested TS and TSX tests are
+included automatically. Once the collection runner starts, CI uploads the
+discovered, executed and failed file names in `dashboard-unit-collection`,
+including partial evidence if execution fails.
+The script contract tests also run through the standard `test` command.
+
+New Vitest behavior tests live in `unit/**/*.spec.ts(x)`; `vitest.config.mjs`
+collects that entire directory without a file list and excludes Playwright specs.
+Follow the [shared testing standard](../../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard):
+Testing Library queries by role, label and text, API-boundary mocks only, and
+fast-check for broad formatting and numeric input spaces. Legacy suites retain
+isolated processes because several replace Node's module loader.
+
+Interactive specs opt into jsdom with `@vitest-environment jsdom`, use
+`user-event` and the real React Query/authority providers, and intercept HTTP
+with MSW's Node server. Treat the generated client and feature hooks as part of
+the behavior under test. Reject unhandled requests, reset handlers and clear
+query/token state after each test. No browser service-worker build is needed.
+The liquidity specs cover stored decimal ladders, sensitivity/class grants and
+cash-flow date submission, currency totals, refusals and bank/authority cache
+isolation; their properties use 100 runs with fast-check's failure seed/path.
+Capital/Basel specs exercise stored scenario selection, missing versus zero ratios,
+percentage-point headroom, governed-floor disclosures and regime-specific columns.
+FX specs cover persisted position/parameter snapshots and scenario figures/verdicts.
+Their 100-run properties preserve decimal values and enforce exact sensitivity,
+whole-institution capital scope and entitlement boundaries.
+Credit specs check saved PD estimates and disclosures, migration entry/departure
+amounts, roll-rate absence versus zero, and scoped row versus whole-book grants.
+FTP specs check saved pricing assumptions, conservation of business-line view
+balances/contributions/flags, uncomputable margins and confidential scenario grants.
+These read-only analytical tables do not implement status transitions.
+
+The formatting and chart properties cover compact money rounding/error bounds,
+amount ordering, UTC reporting-date round-trips, missing versus measured chart
+points, waterfall balance conservation and tenant labels rendered as tooltip text.
+Stored ladder properties also check that changing one horizon preserves the other
+currencies and stored net/cumulative figures. Filing capability properties generate
+module, sensitivity and permission combinations independently for sibling banks.
+These pure properties use 100 runs and preserve fast-check's failure seed/path.
+
+`unit/filing-state-machine.spec.tsx` models server status responses and officer,
+institution, authority resolution, clearance and in-flight changes through the
+public filing projection and visible `PrimaryActionButton`. Every status/officer
+checkpoint runs explicitly; generated sequences use 20 examples of at most 25
+commands. The UI transition model is:
+
+| Source                             | Server response                    | UI effect                                                                                                |
+| ---------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Draft                              | Generated                          | Certification waits for clean validation                                                                 |
+| Generated                          | Validated or superseded            | Certification becomes available, or the version closes                                                   |
+| Validated                          | Pending approval or superseded     | Preparation disappears; the approver may review, or the version closes                                   |
+| Pending approval                   | Approved or rejected               | Approval disappears; the validator may file with clearance, or a preparer may create a corrected version |
+| Approved                           | Submitted or superseded            | Only the validator may check the regulator's decision, or the version closes                             |
+| Submitted                          | Acknowledged, rejected or declined | The version closes, or correction starts on a new version                                                |
+| Rejected                           | Superseded                         | The old version closes                                                                                   |
+| Acknowledged, declined, superseded | None                               | No filing action is offered                                                                              |
+
+Attempts to act run at every status, including frozen and terminal checkpoints;
+unresolved, examiner and sibling-bank authority must offer no act. Pending requests
+disable the offered act. The frontend consumes server statuses; it does not enforce
+server transitions, freeze financial content or make the final contextual
+maker-checker decision. Those invariants are exercised by the
+[backend state machines](../docs/state_machine_testing.md), not inferred from a UI button.
+
+`unit/transmit-confirm-state-machine.spec.tsx` exercises the dialog's own
+acknowledgment state with Testing Library: unacknowledged → acknowledged →
+pending → refused/retry, plus cancel/reopen. Confirmation requires acknowledgment
+and no in-flight submission; network rerenders retain acknowledgment, while a new
+dialog requires it afresh. A fixed refusal/retry path complements 20 generated
+examples of at most 15 commands. Each example unmounts its components and resets
+shared jurisdiction state, and failures retain fast-check's replay seed/path.
+
+BI contract suites use `unit/backend.ts` to execute the backend's actual schema
+validators and serializers through `uv run --frozen --no-python-downloads`.
+Running `test`, `test:legacy` or `test:coverage` therefore also requires uv and
+Python 3.13; prepare the [backend environment](../README.md#local-setup) before
+running them. The helper clears database URLs and disables the in-process worker;
+these contract checks need no running backend or database.
+
+`test:coverage` runs both engines with V8 coverage. Vitest's AST-based report
+includes **every production TS/TSX file in `app/`, `components/` and `lib/`**,
+including untouched modules. Only tests and declaration files are excluded.
+The guard independently inventories those roots and fails if any file is absent.
+c8 collects the legacy child processes and remaps their emitted JavaScript to
+original TypeScript through compiler source maps. The combined **line** report
+uses Vitest's executable source lines as its denominator and counts a line as
+covered when either engine exercised it. Extra c8 lines cannot inflate coverage.
+Branch, function and statement reports remain separate by engine; their mapping
+schemes differ, so they are not added together. Source-text invariant guards do
+not count as execution of the modules they inspect.
+
+Raw c8 V8 data, including embedded source maps, lives in `.test-out/coverage-v8`,
+which the existing source guards exclude and the coverage runner cleans on exit.
+Final c8 reports stay in `coverage/legacy`; native and combined reports stay under
+`coverage/`. These final reports remain available for ordinary test runs and CI
+artifacts; raw V8 data is not uploaded.
+
+CI uploads `dashboard-unit-coverage`: native Vitest HTML/LCOV/JSON, legacy JSON,
+combined line LCOV and `coverage/combined/summary.json`, plus both collection
+reports. Partial reports are retained on failure. The generated combined summary
+owns measured line coverage, production-file counts and collection totals;
+`unit-coverage-baseline.json` owns the committed uncovered-line ceilings.
+The report exposes untested production code rather than reporting only loaded
+modules. The guard also rejects incomplete legacy collection, fewer than eight
+native tests, or skipped native tests.
+
+`unit-coverage-baseline.json` pins the maximum number of uncovered lines both
+in total and per file. These ceilings may only shrink; improvement elsewhere
+cannot conceal a file's regression. A new production file has a zero-uncovered
+ceiling. After improving tests, run `pnpm --filter @aequoros/dashboard coverage:ratchet`
+to rerun both engines and tighten the baseline, then review and commit it.
+That command refuses increases rather than accepting a new lower standard.
+Deleting unused production code can also shrink the baseline; intentional
+changes to the coverage policy require explicit review. Include measured
+coverage before and after in each behavior-test PR.
 
 ## End-to-end (Playwright)
 
@@ -380,6 +526,32 @@ normal development cache. Because every journey shares the disposable database
 and session files, a worktree-local lock rejects a second concurrent E2E run.
 The stack never touches the primary database.
 
+The disposable Next.js server uses `NEXT_FONT_GOOGLE_MOCKED_RESPONSES` with
+fixed CSS for all layout and login font families. Journeys and the visual tour
+render with Next's generated fallback fonts and never fetch Google CSS or font files.
+This avoids the extensionless font URL compiler bug
+([Next.js #99114](https://github.com/vercel/next.js/issues/99114)); production
+builds retain the real Google fonts.
+
+The attestation workspace journey checks every offered typed face in both the
+adoption panel and the placed signature preview. It verifies the fonts Chromium
+actually renders and hashes the downloaded script fonts against the backend's
+bundled files (`e2e/support/typed-fonts.ts`).
+
+The backend server environment pins `APP_ENV=test` and
+`TLS_ALLOW_PLAINTEXT=1` because this disposable stack uses SQLite and loopback
+HTTP (including MinIO). Test mode alone does not relax the transport policy;
+without the explicit opt-in, startup refuses SQLite with "Database transport
+requires PostgreSQL with a hostname." Exception limits are governed by
+[the transport contract](../docs/transport_security.md#local-development-and-narrowly-bounded-exceptions).
+
+`session-cookie-hygiene.spec.ts` deliberately sends a cookie encrypted with a
+foreign secret and malformed cookie chunks. Auth.js reports `JWTSessionError`
+and "no matching decryption secret" during those refusal journeys; their
+assertions prove the cookie is cleared and a subsequent real login succeeds.
+The server configuration imports the minting helper's test secret constants, and
+`session-lifecycle.spec.ts` decrypts a real login cookie and verifies rotation.
+
 Three prerequisites are not obvious, and each one has already cost a long
 diagnosis:
 
@@ -393,7 +565,7 @@ diagnosis:
    specs, plus the SSO attestation journey, refuse immediately without it rather
    than letting storage-dependent assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The
-   manually dispatched GitHub Actions workflow starts a disposable MinIO with
+   GitHub Actions journey workflow starts a disposable MinIO with
    its built-in KMS and runs the standard suite against that real object store.
 2. **Global reference registries.** `scripts/e2e_bootstrap.py` builds the schema
    with `Base.metadata.create_all`, so **no migration runs** — jurisdictions,
@@ -415,14 +587,26 @@ diagnosis:
    Without it `/basel`, `/liquidity`, `/ftp/*`, `/irr/*` and `/fx/*` all open on
    the "no computed data yet" envelope.
 
+The canonical fixture ends at a fixed month. Bootstrap first carries it forward
+(`extend_canonical_test_book`) one month-end snapshot at a time through the last
+month end on or before today, each repeating the canonical latest fact set.
+After loading the canonical position book, it replaces the latest period's
+`credit_exposure` facts and `credit_source_basis` with values derived from those
+accepted sources. Enterprise stress checks that exact provenance before calculating:
+the aggregate spine's initial empty source basis cannot authorize stress of a
+subsequently added position book. Other fact groups and historical periods
+retain the canonical spine's figures. Capital and stress expectations for the
+latest period therefore use the position book's net CRD credit basis.
+
 ```bash
 pnpm --filter @aequoros/dashboard e2e            # the journeys
-VISUAL_TOUR=1 npx playwright test visual-tour    # full-page screenshot of every
-                                                 # route -> e2e/.tmp/visual-tour/
+AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual
 ```
 
 The visual tour is not part of the gate: it exists so a design change can be
-reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
+reviewed as pixels rather than as a diff. Run the commands from the repository
+root; the tour writes full-page screenshots of every route to
+`backend/dashboard/e2e/.tmp/visual-tour/`.
 
 The Data Engine journeys (`e2e/data-engine-ingestion.spec.ts`) use the fixtures in
 `e2e/fixtures/data-engine/` to cover Excel/CSV upload, legacy `.xls` refusal,
@@ -496,7 +680,8 @@ starts `backend/scripts/e2e_idp.py` — a small, spec-shaped OpenID Provider
 (discovery, a real credential form, PKCE, `client_secret_basic` and
 `client_secret_post`, RS256 JWKS, `auth_time`) bound on loopback — and the
 bootstrap registers it as the e2e tenant's `sso_connections` row through the
-same `app.services.sso_config` path the Settings page uses, with
+same `app.identity.service.sso_config` path the dashboard's
+[Access authentication panel](../../docs/rbac.md#102-access-control-access-visible-to-every-active-member) uses, with
 `SSO_INTERNAL_KEY` set on both servers so the dashboard's server-to-server
 client-config read is live. A plain-http issuer is accepted only because the
 backend and the dashboard egress guards both carve out loopback on an
@@ -526,41 +711,70 @@ step-up return. To drive the issuer by hand:
 cd backend && E2E_IDP_PORT=8120 uv run python scripts/e2e_idp.py
 ```
 
-The `Dashboard Playwright journeys` workflow in
-`.github/workflows/dashboard-journeys.yml` is manual-dispatch only: ordinary
-pull requests and pushes do not enqueue it. A maintainer launches it from the
-Actions UI or with
-`gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`. It restores or
-installs Chromium, installs its system dependencies on every run, starts MinIO
-with its built-in KMS, and runs this same command against
-real CI-local object storage; the local OIDC issuer needs no container because
-Playwright starts it as a process beside the API. Evidence screenshots are
-uploaded as the `dashboard-journey-evidence` artifact. The run requires at least
-20 journeys to execute and the quarantine in `e2e/support/quarantine.ts` to
-match the size the workflow pins. A journey may only be parked there by name,
-declared with `test.fail` and a reason beside it, and with the workflow's gate
-edited to admit it; the custom reporter fails the run for any non-quarantined
-failure, unexpected quarantine pass, skipped or undiscovered quarantine entry,
+The `Dashboard Playwright journeys` workflow's automatic triggers are governed by
+[CI enforcement](../../ARCHITECTURE.md#ci-enforcement). It also remains available through the Actions UI or
+`gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`.
+Journeys run for every change except PRs whose entire diff is on this ignore list:
+
+- Root Markdown files and `LICENSE`.
+- `docs/` and `backend/docs/` documentation and their images.
+- `README.md` directly under `backend/`, `backend/dashboard/`, `console/`,
+  `frontend/` or `deploy/`.
+- Marketing source and images under `frontend/app/`, `frontend/components/`,
+  `frontend/lib/` and `frontend/public/`.
+
+These paths are not consumed by the journey stack. Other files, including every
+workspace manifest, lockfile, interpreter file, workflow, action and script,
+select the suite. Dashboard images and runtime Markdown also select it.
+The shared detector's ignore mode is used only by this workflow; other workflows
+keep their inclusion predicates. Renames consider both the old and new path.
+All events other than pull requests run every shard; unknown or empty change
+decisions fail closed. The **`Dashboard journeys gate`** is the stable check to
+require before merge: it always reports and accepts a skipped suite only after
+successful detection of an ignored-only PR.
+
+Four runners use Playwright `--shard=1/4` through `--shard=4/4`, each with one
+worker and its own disposable SQLite database, fixture bank, loopback MinIO
+with built-in KMS and local OIDC issuer. Tests in one spec stay together; no
+mutable bank or storage is shared between shards. Each runner restores or
+installs Chromium and installs its system dependencies. Evidence screenshots
+are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
+reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
+counts. The aggregate requires all four reports, unique journey identities,
+and at least **243 executed journeys**, with zero skips. It verifies the
+reported counters against the named results and prints every skipped journey
+in the log and job summary before failing. Retries replace the same journey's
+result and cannot inflate the count. Missing/unfinished tests or a lost shard
+fail the gate even when the remaining reports pass. Raise the floor when adding
+coverage; reducing it requires a reviewed suite change.
+
+Screenshot diagnostics are separate from the required suite; see the visual-tour
+capture command and output under [End-to-end (Playwright)](#end-to-end-playwright).
+
+Each shard also requires at least 20 executed journeys and the quarantine in
+`e2e/support/quarantine.ts` to match the size the workflow pins. A journey may only be parked there by name,
+declared with `test.fail` and a reason beside it, and with both the workflow's
+shard gate and `.github/scripts/assert_dashboard_journeys.mjs` edited to admit
+it. The aggregate currently refuses any quarantine. The custom reporter fails
+the run for any non-quarantined failure, unexpected quarantine pass, skipped or
+undiscovered quarantine entry,
 or `test.fail` declaration missing from that list.
 
 Reporting-date selection and exact snapshot matching are governed by
 [the reporting-date contract](../../docs/regulatory_reporting.md#5a-reporting-date-vs-data-arrival-corrected-2026-08-23).
-The canonical fixture ends at a fixed month, so `scripts/e2e_bootstrap.py` carries it forward
-(`extend_canonical_test_book`) one month-end snapshot at a time through the last
-month end on or before today, each repeating the canonical latest fact set. That is
-what gives the package-generation journeys a real position to generate from
-without changing how the product selects a reporting date.
+The fixture bootstrap described under [End-to-end (Playwright)](#end-to-end-playwright)
+supplies the snapshots those package-generation journeys require.
 
 ## Deploy to bank.aequoros.com
 
-Separate Vercel/Coolify project from the marketing site.
+Use [the repository-root compose wrapper](../../docker-compose.dashboard.yml)
+as a separate Coolify app from the marketing site. Its header owns the build
+pack, base-directory, domain, and port settings. Complete
+[the transport deployment preparation](../docs/transport_security.md#deployment-preparation-review-before-applying)
+before applying the template.
 
-1. Import the monorepo, root directory `backend/dashboard`.
-2. Framework: Next.js. Build: `pnpm build` (Next production build plus the home
-   entry-graph guard described above).
-3. Bind `bank.aequoros.com`.
-4. `NEXT_PUBLIC_LOGIN_URL` is a **build arg** inlined at compile time — changing
-   it needs a rebuild, not a restart.
+`NEXT_PUBLIC_LOGIN_URL` is a **build arg** inlined at compile time — changing
+it needs a rebuild, not a restart.
 
 When changing the public host, update the dashboard's `AUTH_URL`, backend
 `CORS_ORIGINS`, and marketing app's `NEXT_PUBLIC_LOGIN_URL` destination, and
@@ -585,6 +799,6 @@ focusable scroll region and a caption naming the gesture; tables that fit are
 unchanged. The affordance is the floor, not the goal: when a table overflows
 because it was put in a half-width grid cell, move it to a full row — signpost
 the overflow you cannot remove, remove the one you can. **Design changes are
-reviewed as pixels**: run `VISUAL_TOUR=1 npx playwright test visual-tour` and
-compare `e2e/.tmp/visual-tour/` before and after. Type-checking cannot see a
-clipped column.
+reviewed as pixels**: follow the visual-tour capture instructions under
+[End-to-end (Playwright)](#end-to-end-playwright) and compare the screenshots
+before and after. Type-checking cannot see a clipped column.

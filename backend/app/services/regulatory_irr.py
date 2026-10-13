@@ -74,8 +74,8 @@ from app.domain.irr.engine import (
     scenario_shifts,
 )
 from app.domain.reporting import period_windows
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     FinancialFactRow,
@@ -86,7 +86,7 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.schemas.banks import BankRead, BankReportingPeriodRead
+from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_irr import (
     IrrDashboardRead,
     IrrEarAnalysisRead,
@@ -103,7 +103,6 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.services import (
-    filing_reconciliation,
     institution_types,
     jurisdictions,
     market_data_sources,

@@ -45,7 +45,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState, outcome
-from app.models import Bank, InstitutionType
+from app.identity.public import Bank
+from app.models import InstitutionType
 
 #: The licence class the resolver USED to substitute when a bank's own type did
 #: not resolve. Retained only as the seed/registry sentinel other modules import;

@@ -31,7 +31,9 @@ from app.core.authorization import (
     Sensitivity,
 )
 from app.db.base import utc_now
-from app.models import Bank, CfpActivationEvent, ContingencyFundingPlan
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
+from app.models import CfpActivationEvent, ContingencyFundingPlan
 from app.schemas.liquidity_cfp import (
     CfpActivationCreate,
     CfpApprove,
@@ -44,7 +46,7 @@ from app.schemas.liquidity_cfp import (
     EwiDashboardRead,
     EwiEvaluationRead,
 )
-from app.services import notifications, scoped_authorization
+from app.services import notifications
 from app.services.audit import record_event
 from app.services.jurisdictions import regulator_short
 from app.services.liquidity_ewi import (

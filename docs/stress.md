@@ -494,7 +494,8 @@ and the macro-scenario dataset).
 
 - **BoG Guideline on Stress Testing, 2026 (Exposure Draft, Feb 2026)** —
   `docs/EXPOSURE-Draft-Directive-on-Stress-Testing_FEBRUARY-2026.pdf` (read in full; ¶ and
-  Appendix references throughout). Effective 1 Jan 2027; align by 31 Dec 2026.
+  Appendix references throughout). Publication status and conditional timing:
+  [research dossier §8.1](research/bog_returns_and_templates.md#81-status-cadence).
 - Backend & UI inventories (2026-08-19), cited `file:line` in §2.
 - Companions: BoG CRD 2018 (capital definitions, exposure classes — AppII), Risk Management
   Directive 2021, IRRBB Guideline (AppI¶23). `sdi.md`, `product.md`, `ai_engine.md`.

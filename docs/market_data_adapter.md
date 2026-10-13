@@ -18,7 +18,6 @@
 > stability; every user-facing label reads "LSEG (formerly Refinitiv)". Mentions of
 > "Refinitiv" below are historical naming from when this spec was written.
 
-
 ---
 
 ## 1. Context and Scope
@@ -38,6 +37,7 @@ The Market Data Adapter framework lets a bank connect its existing Bloomberg or 
 The bank holds the vendor subscription. AequorOS does not hold a Bloomberg or Refinitiv redistribution license. The bank provides AequorOS with scoped credentials that authorize AequorOS to pull data on the bank's behalf, using the bank's subscription quota. This is the per-bank-subscription model (Option A from prior design discussions), and it is the only sanctioned licensing pattern in this specification.
 
 Implications:
+
 - Credentials are per-institution, stored per the credential management pattern in `storage.md` section 7.
 - Data pulled under the bank's subscription is used only for that bank's canonical model. It is not shared, aggregated, or resold to other institutions.
 - The bank pays their vendor costs directly to Bloomberg or LSEG. AequorOS does not intermediate billing.
@@ -413,6 +413,7 @@ Every implementation of `MarketDataAdapter`:
 A single contract test suite runs against every `MarketDataAdapter` implementation. Any test that passes for one adapter but fails for another indicates the interface is leaking implementation details; fix the interface, not the test.
 
 Contract test categories:
+
 - **Authentication behavior:** invalid credentials produce `AuthResult(success=False)` with bank-facing error, not exceptions.
 - **Scope coverage:** every scope returned by `list_available_scopes` is pullable by `test_pull` and `pull`.
 - **Quota accounting:** post-pull quota consumption matches or exceeds `estimate_quota_cost`.
@@ -460,16 +461,16 @@ New scopes should be driven by real customer need. Do not preemptively add cover
 
 Not every scope is supported by every vendor. The framework tracks coverage:
 
-| Scope | Bloomberg | Refinitiv | Manual Upload |
-|---|---|---|---|
-| YIELD_CURVE_GHS | Yes (via BVAL) | Yes | Yes |
-| YIELD_CURVE_USD | Yes | Yes | Yes |
-| YIELD_CURVE_NGN | Yes | Yes | Yes |
-| FX_SPOT_USD_GHS | Yes | Yes | Yes |
-| FX_FORWARD_USD_GHS_* | Yes | Yes | Yes |
-| SECURITY_MASTER_GOG_BONDS | Yes | Yes | Yes |
-| CREDIT_RATING_GHANA_SOVEREIGN | Yes | Yes | Yes |
-| MACRO_GHANA_GDP_FORECAST | Yes | Partial | Yes |
+| Scope                         | Bloomberg      | Refinitiv | Manual Upload |
+| ----------------------------- | -------------- | --------- | ------------- |
+| YIELD_CURVE_GHS               | Yes (via BVAL) | Yes       | Yes           |
+| YIELD_CURVE_USD               | Yes            | Yes       | Yes           |
+| YIELD_CURVE_NGN               | Yes            | Yes       | Yes           |
+| FX_SPOT_USD_GHS               | Yes            | Yes       | Yes           |
+| FX_FORWARD_USD_GHS_*          | Yes            | Yes       | Yes           |
+| SECURITY_MASTER_GOG_BONDS     | Yes            | Yes       | Yes           |
+| CREDIT_RATING_GHANA_SOVEREIGN | Yes            | Yes       | Yes           |
+| MACRO_GHANA_GDP_FORECAST      | Yes            | Partial   | Yes           |
 
 Coverage is defined authoritatively by each adapter's `list_available_scopes` at runtime, not by this table. The UI queries adapters live to know what to offer.
 
@@ -482,6 +483,7 @@ Coverage is defined authoritatively by each adapter's `list_available_scopes` at
 Bloomberg subscriptions relevant to AequorOS integration are B-PIPE (enterprise data feed) and Bloomberg Data License with API access. Both use application-identifier-based auth: the bank provisions permissions on their subscription for a specific application identifier, and credentials scoped to that identifier are provided to AequorOS.
 
 The credential structure stored in Vault (per `storage.md` section 7) contains:
+
 - `application_identifier`: the Bloomberg-assigned identifier for the AequorOS application accessing this bank's subscription
 - `serial_number`: subscription serial number
 - `authentication_endpoint`: Bloomberg auth endpoint for this subscription
@@ -546,6 +548,7 @@ Catalog is versioned. When Bloomberg deprecates a security or introduces a bette
 ### 6.3 Extractors
 
 Each extractor in `bloomberg/extractors/` handles one scope category. Extractors:
+
 - Take an authenticated Bloomberg session
 - Look up the scope in the catalog to find the request specification
 - Make the vendor call
@@ -556,6 +559,7 @@ Each extractor in `bloomberg/extractors/` handles one scope category. Extractors
 ### 6.4 Translators
 
 Translators convert Bloomberg-shaped intermediate structures into canonical entities per `data_engine.md` section 4.2. Every canonical record produced has:
+
 - `source_system = 'BLOOMBERG'`
 - `source_reference` populated with the specific Bloomberg security or field reference
 - `ingested_at` timestamp
@@ -576,6 +580,7 @@ Every extractor and translator ships with fixture-based tests. Fixtures are reco
 Refinitiv Data Platform (RDP) uses OAuth 2.0 client credentials flow. The bank creates an application in their Refinitiv account, generates a client ID and client secret scoped to specific data permissions, and provides them to AequorOS.
 
 The credential structure stored in Vault contains:
+
 - `client_id`: Refinitiv OAuth application identifier
 - `client_secret`: OAuth client secret (encrypted per `storage.md` section 7)
 - `scope`: OAuth scope defining which datasets are accessible
@@ -656,12 +661,14 @@ The Manual Upload adapter provides the same canonical output as Bloomberg and Re
 ### 8.2 Templates
 
 Downloadable templates are shipped in `manual_upload/templates/`, one per scope category:
+
 - `yield_curve_template.xlsx`
 - `fx_rates_template.xlsx`
 - `credit_ratings_template.xlsx`
 - `macro_forecasts_template.xlsx`
 
 Each template has:
+
 - A header row with the exact column names the adapter expects
 - A single example row showing format
 - A comment or legend explaining each column
@@ -693,6 +700,7 @@ The bank Treasury operator experiences the same flow regardless of vendor. The f
 
 UI heading: "Connect a market data source."
 Options presented as cards:
+
 - **Bloomberg** — "Connect your existing Bloomberg B-PIPE or Data License subscription."
 - **Refinitiv (LSEG)** — "Connect your Refinitiv Data Platform subscription."
 - **Manual upload** — "Upload market data files directly. Use if you don't have Bloomberg or Refinitiv, or as a backup source."
@@ -710,11 +718,13 @@ For Manual Upload, skip this step.
 Vendor-specific. Documented in step-by-step form:
 
 For Refinitiv:
+
 - "Create an OAuth application in your Refinitiv Data Platform account. [Detailed guide with screenshots linked.]"
 - Two input fields: Client ID, Client Secret
 - Field hint: "These are provided when you create your OAuth application. If you don't have them, contact your Refinitiv account administrator."
 
 For Bloomberg:
+
 - "Contact your Bloomberg administrator to authorize AequorOS access to your subscription. Your Bloomberg admin will need to provision an application identifier. [Detailed guide.]"
 - Multiple input fields per the Bloomberg credential structure (section 6.1)
 - Upload for SSL client certificate
@@ -730,6 +740,7 @@ UI heading: "Which market data do you want AequorOS to pull?"
 Presented as grouped checkboxes:
 
 **Yield curves:**
+
 - [x] Ghana (GHS)
 - [ ] United States (USD)
 - [ ] Euro (EUR)
@@ -737,16 +748,19 @@ Presented as grouped checkboxes:
 - (based on adapter's `list_available_scopes` and institution's active currencies from position data)
 
 **FX rates:**
+
 - [x] USD/GHS (spot + forwards)
 - [x] EUR/GHS (spot + forwards)
 - [ ] GBP/GHS
 - (defaults auto-checked based on currencies present in institution's position book)
 
 **Credit ratings:**
+
 - [x] Ghana sovereign
 - [ ] Nigeria sovereign
 
 **Macro forecasts:**
+
 - [ ] Ghana GDP forecast
 - [ ] Ghana inflation forecast
 
@@ -757,6 +771,7 @@ For each selection, the UI shows the quota impact: "Selected scopes will consume
 AequorOS runs `test_pull` for the selected scopes and displays sample values:
 
 "Test successful. Here's a sample of what we pulled:
+
 - GHS 3-month rate: 15.80%
 - USD/GHS spot: 12.85
 - Ghana sovereign rating (S&P): CCC+
@@ -770,6 +785,7 @@ Buttons: "Yes, activate this connection" / "Something looks wrong, let me adjust
 UI heading: "When should AequorOS refresh this data?"
 
 Defaults per scope category, editable:
+
 - Yield curves: End of day (17:00 UTC, corresponding to end of GHS trading)
 - FX spot: Hourly during market hours
 - Credit ratings: Weekly
@@ -784,6 +800,7 @@ Connection is stored in the institution's config with credentials in Vault. Firs
 ### 9.3 Post-Onboarding Management
 
 After onboarding, the bank operator has a "Market Data Sources" page in the AequorOS UI where they can:
+
 - View active connections
 - See last successful pull time per connection
 - See quota consumption per connection
@@ -800,6 +817,7 @@ After onboarding, the bank operator has a "Market Data Sources" page in the Aequ
 ### 10.1 Credential Storage
 
 Per `storage.md` section 7, credentials live in Vault at:
+
 ```
 vault://institutions/{institution_id}/vendor_credentials/{vendor}/{credential_type}
 ```
@@ -809,6 +827,7 @@ Retrieved only by the institution's service account. Encrypted with the institut
 ### 10.2 Credential States
 
 A credential is in one of these states at any time:
+
 - `ACTIVE`: valid, in use
 - `EXPIRING_SOON`: will expire within warning threshold (default 30 days)
 - `EXPIRED`: no longer valid
@@ -821,11 +840,13 @@ State transitions are tracked. Every transition produces an audit log entry.
 ### 10.3 Health Checks
 
 Every credential is health-checked daily:
+
 - `validate_credentials` on the appropriate adapter
 - Result classified into a state
 - If state changes, alerts fire per notification config
 
 For OAuth-based credentials (Refinitiv), refresh token expiration is tracked explicitly and warnings escalate as expiration approaches:
+
 - 30 days out: informational notification to bank
 - 7 days out: warning notification with call to action
 - 1 day out: urgent notification, offer to guide through rotation
@@ -834,6 +855,7 @@ For OAuth-based credentials (Refinitiv), refresh token expiration is tracked exp
 ### 10.4 Rotation Flow
 
 The bank operator can initiate credential rotation from the Market Data Sources page. Rotation flow:
+
 1. Bank generates new credentials at the vendor
 2. Bank enters new credentials in AequorOS UI (same fields as initial setup)
 3. AequorOS validates new credentials via `validate_credentials`
@@ -846,6 +868,7 @@ Old credentials in the grace period are marked as `REPLACED_PENDING_DELETION`; a
 ### 10.5 Revocation
 
 The bank can revoke a credential at any time:
+
 - From AequorOS UI: marks credential as `REVOKED`, disables scheduled pulls using that credential, retains credential record for audit
 - From vendor side directly: next `validate_credentials` fails, credential auto-marked `INVALID`, alerts fire
 
@@ -854,6 +877,7 @@ Revocation does not delete historical canonical data pulled with that credential
 ### 10.6 Break-Glass
 
 If AequorOS needs to execute a critical calculation (e.g., regulatory submission with a hard deadline) and credentials are unavailable, the framework falls back through this hierarchy:
+
 1. Fresh data from any other active vendor connection covering the required scopes
 2. Cached data from most recent successful pull, tagged as `STALE` with age
 3. Manual upload prompt to the bank operator
@@ -868,6 +892,7 @@ The framework never silently substitutes stale data; every use of stale data is 
 ### 11.1 Quota Tracking
 
 Every institution has a quota model in the `quota_tracker`:
+
 - Vendor-side subscription quota (as reported by the vendor or as configured by the bank based on their subscription tier)
 - Monthly cap (configurable by bank, defaults to full subscription quota)
 - Current month consumption (updated after every pull)
@@ -890,6 +915,7 @@ Bank can override cap enforcement per pull with explicit approval, logged in aud
 ### 11.3 Caching
 
 Every canonical market data record is cached with:
+
 - Value
 - As-of date
 - Fresh-until timestamp (per freshness rules below)
@@ -899,20 +925,21 @@ Cache lives in the institution's `canonical` tier per `storage.md`. Access is vi
 
 ### 11.4 Freshness Rules
 
-| Scope Category | Default Freshness | Rationale |
-|---|---|---|
-| Yield curves | Until end of next business day | Curves move daily |
-| FX spot | 1 hour during market hours, until next open otherwise | Intraday movement matters for larger banks |
-| FX forwards | Until end of next business day | Less volatile than spot |
-| Security master | 7 days | Reference data rarely changes |
-| Credit ratings | Daily | Watch/downgrade events are episodic but consequential |
-| Macro forecasts | Monthly | Updated on quarterly or monthly cycles |
+| Scope Category  | Default Freshness                                     | Rationale                                             |
+| --------------- | ----------------------------------------------------- | ----------------------------------------------------- |
+| Yield curves    | Until end of next business day                        | Curves move daily                                     |
+| FX spot         | 1 hour during market hours, until next open otherwise | Intraday movement matters for larger banks            |
+| FX forwards     | Until end of next business day                        | Less volatile than spot                               |
+| Security master | 7 days                                                | Reference data rarely changes                         |
+| Credit ratings  | Daily                                                 | Watch/downgrade events are episodic but consequential |
+| Macro forecasts | Monthly                                               | Updated on quarterly or monthly cycles                |
 
 Freshness thresholds are configurable per institution.
 
 ### 11.5 Cache Behavior in Calculations
 
 When a calculation module requests market data:
+
 1. Look up canonical record for scope at required as-of date
 2. Check freshness
 3. If fresh, use it
@@ -929,6 +956,7 @@ Calculation output metadata always records the freshness state of every market d
 ### 12.1 Error Classification
 
 Vendor errors are classified into `BankFacingErrorCode` values. Each has:
+
 - A code
 - A bank-facing message template
 - Recommended actions
@@ -978,6 +1006,7 @@ Raw vendor error messages, HTTP status codes, stack traces, internal identifiers
 ### 12.4 Escalation
 
 Errors escalate through configured notification channels:
+
 - In-app notification (always)
 - Email to designated Treasury contact (per severity threshold)
 - Slack/Teams webhook (if configured)
@@ -992,6 +1021,7 @@ Notification frequency is throttled: the same error does not fire repeatedly. St
 ### 13.1 Canonical Entities Produced
 
 Market Data adapters produce canonical records in the following entities from `data_engine.md` section 4.2:
+
 - `yield_curve` and `yield_curve_point`
 - `fx_rate`
 - `market_index`
@@ -1001,33 +1031,32 @@ Extension entities specific to market data may be added over time; they must int
 
 ### 13.2 Mandatory Metadata on Every Record
 
-Every canonical market data record carries the mandatory metadata columns per `data_engine.md` section 4.3:
-- `institution_id`
-- `as_of_date`
-- `ingested_at`
-- `source_system` (e.g., 'BLOOMBERG', 'REFINITIV', 'MANUAL_UPLOAD')
-- `source_reference` (vendor-specific identifier: Bloomberg security, RIC, or filename)
-- `ingestion_batch_id`
-- `validation_status`
-- `lineage_id`
+Every canonical market data record follows the
+[mandatory metadata contract](data_engine.md#43-mandatory-metadata-columns).
+Its source reference is the vendor-specific identifier: Bloomberg security, RIC, or filename.
 
-Records failing any of these are rejected at the adapter boundary; the framework does not silently accept malformed metadata.
+Records that fail this contract are rejected at the adapter boundary; the framework does not silently accept malformed metadata.
 
 ### 13.3 Storage Layout
 
 Per `storage.md` section 3.4:
 
 **Raw tier** (`aequoros-{env}-{institution_id}-raw`):
+
 ```
 market_data/{vendor}/{as_of_date}/{batch_id}/{scope}.json
 ```
+
 Full raw vendor response preserved. Enables re-translation if translator logic is updated, and provides examination-grade audit evidence.
 
 **Canonical tier** (`aequoros-{env}-{institution_id}-canonical`):
+
 ```
 market_data/{entity_type}/{as_of_date}/{batch_id}/{records}.parquet
 ```
+
 For example:
+
 ```
 market_data/yield_curves/2026-04-30/b-2026-04-30-eod-001/GHS.parquet
 market_data/fx_rates/2026-04-30/b-2026-04-30-eod-001/spot.parquet
@@ -1038,6 +1067,7 @@ market_data/fx_rates/2026-04-30/b-2026-04-30-eod-001/spot.parquet
 ### 13.4 Lineage
 
 Every canonical market data record's `lineage_id` points to a lineage node capturing:
+
 - The extraction operation (which adapter, which credentials, which pull)
 - The vendor response (link to raw tier storage location)
 - The translation operation (which translator version)
@@ -1048,6 +1078,7 @@ When an examiner asks "reproduce the yield curve used in the December 2027 LCR c
 ### 13.5 Validation Integration
 
 Market data records pass through the standard validation framework per `data_engine.md` section 6:
+
 - **Structural:** required fields present, types correct
 - **Business rules:** rates within plausible bounds (e.g., 0 <= yield <= 1.0 for interest rates)
 - **Cross-source reconciliation:** if two adapters cover the same scope, values within tolerance (or explicit disagreement flagged)
@@ -1064,6 +1095,7 @@ Validation failures on market data follow the same severity levels (INFO / WARNI
 **Goal:** framework and interface established; Manual Upload adapter production-ready; Bloomberg and Refinitiv adapters implemented as complete code with fixture-based testing but not yet connected to live vendor endpoints in production.
 
 Deliverables:
+
 - `MarketDataAdapter` interface and `DataScope` taxonomy
 - `Manual Upload` adapter fully implemented and integrated with UI onboarding flow
 - `Bloomberg` adapter implemented with catalog covering priority scopes (GHS curve, USD spot, GHS credit rating); tested against fixtures
@@ -1076,6 +1108,7 @@ Deliverables:
 - Error classification and bank-facing messages implemented
 
 Deferred:
+
 - Live production pulls against Bloomberg and Refinitiv (waits on the bank-side subscription authorization for the first pilot bank that provides credentials)
 - Advanced quota policies (cap enforcement, override workflow)
 - Full macro forecast coverage
@@ -1084,6 +1117,7 @@ Deferred:
 ### 14.2 Phase 2 (Months 9-15 of `data_engine.md` phasing)
 
 Aligned with first paying bank customer:
+
 - First live Bloomberg or Refinitiv connection activated for a real bank
 - Advanced quota policies implemented
 - Credential rotation UI hardened based on first-customer feedback
@@ -1101,12 +1135,14 @@ Aligned with first paying bank customer:
 ## 15. Non-Goals and Explicit Deferrals
 
 Things this document deliberately does not specify:
+
 - **Vendor-specific analytical models** (e.g., Bloomberg BVAL surface analytics beyond the surfaced values). Adapters extract values; analysis lives in the Data Engine enrichment layer.
 - **Trading applications.** AequorOS is ALM; execution feeds are out of scope.
 - **Multi-vendor arbitration** for divergent values on the same scope. Basic behavior in Phase 1 is that the most-recently-refreshed source wins; sophisticated consensus is Phase 3.
 - **Vendor billing integration.** AequorOS does not process vendor invoices or reconcile vendor charges.
 
-Things this document is explicit about *not* wanting:
+Things this document is explicit about _not_ wanting:
+
 - **Vendor-specific concepts leaking into UI, calculations, or canonical model.** If a scope requires vendor-specific handling, that handling stays in the adapter.
 - **Long-lived vendor credentials in application memory.** Credentials retrieved per pull cycle, discarded after use.
 - **Silent fallback to stale data without attribution.** Every stale-data usage is tagged in calculation output.

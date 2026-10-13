@@ -8,11 +8,19 @@ items are operator facts to be answered by aequorOS before submission, and legal
 wording is left to counsel.
 
 “Built” means an implementation is present in the cited source. “Planned” means
-the control is not established today. Code defaults and deployment comments do
+the control was not established at the reviewed baseline. Code defaults and deployment comments do
 not establish the active production settings. No production system was queried
 for this pack. Sources use repository-relative `file:line` references; attach
 the reviewed commit and dated deployment evidence to the bank's final copy.
 Implementation baseline reviewed: `7c3fecf2a61a45adff04bc9f823d974ee11e00c6`.
+
+This is a dated baseline, not a current implementation inventory. Subsequent
+repository controls are documented in the [transport security contract](../../backend/docs/transport_security.md),
+[bank encryption contract](../../backend/docs/bank_encryption.md) and
+[tamper-evident records contract](../../backend/docs/tamper_evident_records.md).
+Those contracts do not supply pilot deployment evidence or close any owner
+question below. Before submission, reconcile this draft against the reviewed
+release and attach the dated confirmations; retain the baseline for traceability.
 
 ## 1. Application documents and responsibility
 

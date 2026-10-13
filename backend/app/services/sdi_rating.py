@@ -51,7 +51,8 @@ from app.domain.rating.sdi_scorecard import (
     candidate_parameters,
     grade_cutpoints,
 )
-from app.models import Bank, DeskMethodology
+from app.identity.public import Bank
+from app.models import DeskMethodology
 
 #: An advisory INTERNAL grade is now derived from the composite (founder
 #: decision, 2026-08-23). It is not an agency rating, not a filing input, and it

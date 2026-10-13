@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import Bank, RelatedParty
-from app.services.regulatory_reporting.le_generation import (
+from app.reporting.service.le_generation import (
     _append_aggregate_exposure_finding,  # pyright: ignore[reportPrivateUsage]
     _append_exposure_limit_findings,  # pyright: ignore[reportPrivateUsage]
     _append_related_party_finding,  # pyright: ignore[reportPrivateUsage]

@@ -33,7 +33,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.core.security import ACCOUNT_ADMIN_ROLE, ADMIN_ROLE
-from app.models import Job, Notification, User
+from app.identity.public import User
+from app.models import Job, Notification
 from app.services import job_queue, mailer, notifications
 
 JOB_TYPE = "notification_email_mirror"

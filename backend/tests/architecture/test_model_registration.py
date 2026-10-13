@@ -2,7 +2,7 @@
 
 Why this exists
 ---------------
-``app/models/bi_commentary.py`` defined ``AiCommentaryDraft`` and
+``app/bi/models/commentary.py`` defined ``AiCommentaryDraft`` and
 ``app/models/__init__.py`` did not import it. Every test passed, because the
 hermetic pytest suite imports the whole application and that registers the model
 long before ``Base.metadata.create_all`` runs. The Playwright stack does not: it

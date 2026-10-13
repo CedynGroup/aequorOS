@@ -15,13 +15,13 @@
  * @export
  * @interface Purpose
  */
-export type Purpose = "writer" | "reader" | null;
+export type Purpose = "writer" | null;
 
 /**
  * Check if a given object implements the Purpose interface.
  */
 export function instanceOfPurpose(value: unknown): value is Purpose {
-  return ["writer", "reader"].indexOf(value as never) !== -1 || value === null;
+  return value === "writer" || value === null;
 }
 
 export function PurposeFromJSON(json: any): Purpose {

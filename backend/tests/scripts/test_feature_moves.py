@@ -152,6 +152,40 @@ def test_a_move_relocates_files_without_shims(repository: Path) -> None:
     assert not (backend / "app/domain/fx").exists()
 
 
+@pytest.mark.parametrize("destination", ["app.fx.api", "app.fx.api.rates"])
+@pytest.mark.parametrize("definition", ["def", "async def"])
+def test_route_descriptions_stay_frozen_while_the_endpoint_moves(
+    repository: Path, destination: str, definition: str
+) -> None:
+    features = repository / "backend/app/features"
+    features.mkdir()
+    (features / "__init__.py").write_text("")
+    (features / "rates.py").write_text(
+        "from fastapi import APIRouter\n"
+        "from app.services.regulatory_fx import run\n\n"
+        "router = APIRouter()\n\n"
+        '@router.get("/rate")\n'
+        f"{definition} read_rate() -> int:\n"
+        '    """Uses app.services.regulatory_fx (app/services/regulatory_fx.py)."""\n'
+        "    return run()\n"
+    )
+    _git(repository, "add", ".")
+    probe = (
+        "import json\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n"
+        "from app.features.rates import router\n"
+        "app = FastAPI()\napp.include_router(router)\n"
+        "assert TestClient(app).get('/rate').json() == 1\n"
+        "print(json.dumps(app.openapi(), sort_keys=True))"
+    )
+    before = _python(repository, probe)
+    _run(repository, "move", [MOVES[0], ("app.features.rates", destination)])
+    moved_probe = probe.replace("app.features.rates", destination)
+    assert _python(repository, moved_probe) == before
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+    assert _python(repository, moved_probe) == before
+
+
 @pytest.mark.parametrize("command", ["move", "rewrite"])
 @pytest.mark.parametrize(
     "dockerfile",
@@ -474,6 +508,34 @@ def test_the_repository_uses_no_old_module_name() -> None:
     assert feature_moves.check(feature_moves.BACKEND, echo=lambda _line: None) == 0
 
 
+@pytest.mark.parametrize("destination", ["app.fx.schemas", "app.fx.schemas.rates"])
+def test_schema_descriptions_stay_frozen_while_imports_follow_the_move(
+    repository: Path, destination: str
+) -> None:
+    schemas = repository / "backend/app/schemas"
+    schemas.mkdir()
+    (schemas / "__init__.py").write_text("")
+    (schemas / "rates.py").write_text(
+        "from pydantic import BaseModel\n"
+        "from app.services.regulatory_fx import run\n\n"
+        "class Rate(BaseModel):\n"
+        '    """Uses app.services.regulatory_fx (app/services/regulatory_fx.py)."""\n'
+        "    value: int\n"
+    )
+    _git(repository, "add", ".")
+    probe = (
+        "import json\nfrom app.schemas.rates import Rate, run\n"
+        "assert run() == 1\nprint(json.dumps(Rate.model_json_schema()))"
+    )
+    before = _python(repository, probe)
+    _run(repository, "move", [MOVES[0], ("app.schemas.rates", destination)])
+    assert _python(repository, probe.replace("app.schemas.rates", destination)) == before
+    moved = _read(repository, "backend/" + destination.replace(".", "/") + ".py")
+    assert "from app.fx.service import run" in moved
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+
+
 @pytest.mark.parametrize("command", ["move", "rewrite"])
 @pytest.mark.parametrize("kind", ["quoted", "adjacent", "triple", "raw", "fstring", "format"])
 def test_python_hosted_program_imports_remain_executable(
@@ -750,3 +812,37 @@ def test_unresolved_relative_imports_refuse_all_commands(repository: Path, kind:
     assert before == after
     assert _python(repository, "from app.fx.service import run\nprint(run())") == "1"
     assert not (repository / "backend/app/currency").exists()
+
+
+@pytest.mark.parametrize(
+    ("imports", "operation"),
+    [
+        ("from app.services import regulatory_reporting", "regulatory_reporting.generate_package"),
+        (
+            "import app.services.regulatory_reporting as reporting",
+            "reporting.generate_package",
+        ),
+        ("from app.services.regulatory_reporting import generate_package", "generate_package"),
+    ],
+)
+def test_rewritten_facade_imports_remain_executable(imports: str, operation: str) -> None:
+    rename = feature_moves.Renamer(tuple(feature_moves.load_ledger(feature_moves.BACKEND)))
+    program = feature_moves.rewrite_imports(imports, None, False, rename, feature_moves.BACKEND)
+    program = feature_moves.rewrite_dotted(program, rename)
+    _python(
+        feature_moves.BACKEND.parent,
+        program
+        + "\nfrom app.reporting.service.generation import generate_package as expected\n"
+        + f"assert {operation} is expected\n",
+    )
+
+
+def test_reporting_descendant_moves_keep_their_destinations() -> None:
+    ledger = feature_moves.load_ledger(feature_moves.BACKEND)
+    rename = feature_moves.Renamer(tuple(ledger))
+    descendants = [
+        (old, new) for old, new in ledger if old.startswith("app.services.regulatory_reporting.")
+    ]
+    assert descendants
+    for old, new in descendants:
+        assert rename(old) == new

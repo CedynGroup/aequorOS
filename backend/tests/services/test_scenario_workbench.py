@@ -28,6 +28,7 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.identity.service import authorization
 from app.models import BankReportingPeriod, RegulatoryRun
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.scenario_workbench import (
@@ -40,7 +41,6 @@ from app.schemas.scenario_workbench import (
 )
 from app.services import (
     analysis_workbench,
-    authorization,
     regulatory_capital,
     regulatory_liquidity,
     stress_scenarios,

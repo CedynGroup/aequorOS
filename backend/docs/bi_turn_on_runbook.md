@@ -16,23 +16,26 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
 
 ## The ten steps
 
-1. **Deploy the release; `risk-migrate` applies `202609220066` … `202609290079`**
-   (fourteen BI revisions; single head, `alembic heads` — HEAD's count: a fifteenth,
-   `202609290080_reconciliation_leaves_bi.py`, which drops `bi_reconciliation_results`
-   under the founder's 2026-09-29 decision, is in the working tree at the time of
-   writing; re-derive the head before the release). The last two close audit
+1. **Deploy the release; `risk-migrate` applies the chain through `202610120099`**
+   (verify the single head with `alembic heads` before the release). The BI
+   foundation starts at `202609220066`; `202609290080` drops
+   `bi_reconciliation_results` under the founder's 2026-09-29 decision.
+   Revisions `0078` and `0079` close audit
    A360: `0078` makes the aggregate sums nullable (an absent figure stops being a
    zero) and `0079` makes a partition child be VERIFIED before it is adopted —
    without it, a child created by hand carries no RLS and leaks across tenants
    when named directly. Before it runs, confirm
    nobody pre-created a `bi_*` table on the primary by hand — an existing table
    makes `risk-migrate` exit 1 and takes prod down (the surgical-DDL incident).
-   The `bi_ensure_*` / `bi_drop_*` `SECURITY DEFINER` functions are granted
+   The original `bi_ensure_*` / `bi_drop_*` `SECURITY DEFINER` grants give
    `EXECUTE` to the migrating role and to every `BYPASSRLS` login role that
    exists at `0066` time ONLY (migration `202609220066`, the
    `rolbypassrls AND rolcanlogin` loop); a worker role created later needs
    `GRANT EXECUTE` by hand or every mart build fails with
    `permission denied for function bi_ensure_month_partition`.
+   Migration `202610120099` adds the API capability documented in the
+   [database role handoff](../../docs/ops/database-roles.md#target-matrix);
+   it does not supply a later worker's maintenance grants.
 2. **Deploy `risk-worker-bi`** (`WORKER_JOB_TYPES=lane:bi`, `docker-compose.prod.yml`),
    flags still off. The `bi` lane is seven job types (`job_queue.JOB_LANES`):
    `bi_mart_refresh`, `bi_mart_backfill`, `bi_retention`, `bi_export`,
@@ -56,15 +59,16 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
    tick. **Kill every local `lane:bi` worker first**
    (`ps -eo pid,lstart,command | grep -E "app\.worker"`): they poll the same shared
    `jobs` table and would run old builder code against production marts.
-7. **`BI_ENABLED=1`** mounts the tenant routers; the dashboard shows Insights /
+7. **`BI_ENABLED=1`** allows access through the mounted tenant routers; the dashboard shows Insights /
    Dashboards / Explore. **Was UNSAFE** — this is the step that exposed
    `bi_enforcement_rollout.md`'s scope section, which stated the opposite of the
-   code until 2026-09-29 (A360-7 S1; corrected). Two of the three caveats this step
-   carried are now CLOSED: the module-level insight strip and KPI explain drawer ARE
-   mounted on the Command Center and every module landing page (A360-7 S3), and the
-   integration-key screen now offers the analytics-feed purpose, so the Stage B feed
-   is reachable from the product (A360 H4). The chart trust badge that was mounted
-   beside them is **REMOVED BY FOUNDER DECISION 2026-09-29**: BI carries no
+   code until 2026-09-29 (A360-7 S1; corrected). The module-level insight strip and
+   KPI explain drawer ARE mounted on the Command Center and every module landing
+   page (A360-7 S3).
+   Stage B credential availability follows the
+   [public integration contract](../../docs/API_INTEGRATION.md#1-authentication);
+   enabling BI does not provide a feed-key onboarding path. The chart trust badge
+   that was mounted beside them is **REMOVED BY FOUNDER DECISION 2026-09-29**: BI carries no
    reconciliation verdict against the regulatory returns (treasury/ALM and the
    regulatory spine are different planes — `docs/bi.md` §Founder decision
    2026-09-29). Nothing in this sequence changes: `bi_mart_builds` and the build

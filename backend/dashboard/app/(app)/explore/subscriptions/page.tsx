@@ -81,7 +81,8 @@ function sendingState(
 ): { label: string; tone: StatusTone } {
   if (!subscription.isActive) return { label: "Stopped", tone: "slate" };
   if (deliveryEnabled === true) return { label: "Sending", tone: "compliant" };
-  if (deliveryEnabled === false) return { label: "Not sending here", tone: "pending" };
+  if (deliveryEnabled === false)
+    return { label: "Not sending here", tone: "pending" };
   return { label: "Scheduled", tone: "pending" };
 }
 
@@ -119,7 +120,7 @@ export default function BiSubscriptionsPage() {
   //
   // The final `"UTC"` is not a country literal standing in for a jurisdiction:
   // it is the server's OWN stated fallback for a registry row with no zone
-  // recorded (`services/bi/subscriptions._zone_for`, mirrored by
+  // recorded (`app/bi/service/subscriptions._zone_for`, mirrored by
   // `manage_bi_notifications._time_zone_name` and pinned equal by a test). So
   // when it is shown it is what the delivery scan will actually use — which is
   // the only thing this label is allowed to claim.
@@ -184,7 +185,11 @@ export default function BiSubscriptionsPage() {
             role="status"
             className="flex items-start gap-2.5 rounded-md border border-border bg-surface px-4 py-3 text-caption text-navy"
           >
-            <CalendarOff size={15} className="mt-0.5 shrink-0 text-slate" aria-hidden />
+            <CalendarOff
+              size={15}
+              className="mt-0.5 shrink-0 text-slate"
+              aria-hidden
+            />
             <p>
               <span className="font-medium">Not sending reports here.</span>{" "}
               {DELIVERY_OFF}
@@ -375,7 +380,9 @@ export default function BiSubscriptionsPage() {
                                   ? "The send history for this report could not be read just now."
                                   : null);
                             return withheld ? (
-                              <p className="text-caption text-slate">{withheld}</p>
+                              <p className="text-caption text-slate">
+                                {withheld}
+                              </p>
                             ) : (
                               <DeliveryHistory
                                 deliveries={deliveries.data ?? []}

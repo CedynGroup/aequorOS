@@ -68,10 +68,9 @@ if (projection.error !== null || comparison.diagnostic !== null) {
 }
 ```
 
-All calls use the bearer access token configured through `accessToken`; the
-verified token establishes the tenant and actor. App tokens issued by the
-service carry `authv`, and pre-authorization-version or stale sessions fail
-closed.
+See [API authentication](../../backend/README.md#run-the-api) for bearer-token
+configuration and [bank downloads](../../backend/docs/bank_key_setup.md) for
+capability-token access.
 
 Liquidity analysis is exposed through the generated `LiquidityApi`:
 

@@ -10,7 +10,7 @@ and sensitivity is a value the authorization enums accept, and no threshold is
 a number. The domain package itself stays pure: no service, no model, no
 session, no SQL.
 
-The ``(table, column)`` check imports ``app.models.bi``. Until that module
+The ``(table, column)`` check imports ``app.bi.models.marts``. Until that module
 lands (Agent C1, same wave) the test is RED, deliberately — a skipped guard
 would let a mistyped column reach the compiler.
 """
@@ -25,26 +25,36 @@ from pathlib import Path
 
 import pytest
 
-from app.core.authorization import Module, ModuleScope, Sensitivity
-from app.db.base import Base
-from app.domain.authority.registry import REGISTRY, Regime, UnknownMetricError
-from app.domain.bi import extract
-from app.domain.bi.authority import (
+from app.bi.domain import extract
+from app.bi.domain.authority import (
     AUTHORIZATION_MODULE,
     ENGINE_MODULES,
     ENTITLEMENT_SLUG,
     designation_of,
     engine_module_for,
 )
-from app.domain.bi.catalogue import Catalogue, MeasureDef, catalogue
-from app.domain.bi.catalogue.members import SENSITIVITIES
+from app.bi.domain.catalogue import Catalogue, MeasureDef, catalogue
+from app.bi.domain.catalogue.members import SENSITIVITIES
+from app.core.authorization import Module, ModuleScope, Sensitivity
+from app.db.base import Base
+from app.domain.authority.registry import REGISTRY, Regime, UnknownMetricError
 from app.services import module_scope
 
 BACKEND = Path(__file__).parents[2]
-BI_DOMAIN = BACKEND / "app" / "domain" / "bi"
+BI_DOMAIN = BACKEND / "app" / "bi" / "domain"
 
 #: What the pure BI domain may never import: the service plane, the ORM, SQL.
-FORBIDDEN_IMPORT_PREFIXES = ("app.services", "app.models", "app.api", "app.features", "sqlalchemy")
+FORBIDDEN_IMPORT_PREFIXES = (
+    "app.services",
+    "app.models",
+    "app.api",
+    "app.features",
+    "sqlalchemy",
+    "app.identity.api",
+    "app.identity.models",
+    "app.identity.service",
+    "app.identity.public",
+)
 
 
 @pytest.fixture(scope="module")
@@ -166,12 +176,12 @@ def test_catalogue_source_contains_no_currency_or_regulator_literal() -> None:
 
 
 def test_every_member_binds_to_a_mapped_bi_column(cat: Catalogue) -> None:
-    """RED until ``app.models.bi`` lands (Agent C1) — never skipped."""
+    """RED until ``app.bi.models.marts`` lands (Agent C1) — never skipped."""
     try:
-        bi_models = importlib.import_module("app.models.bi")
+        bi_models = importlib.import_module("app.bi.models.marts")
     except ModuleNotFoundError as exc:
         raise AssertionError(
-            "app.models.bi is not present yet; every catalogue (table, column) is unverified"
+            "app.bi.models.marts is not present yet; every catalogue (table, column) is unverified"
         ) from exc
     tables = Base.metadata.tables
     assert bi_models is not None
@@ -198,11 +208,11 @@ BUILDER_STAMP = {"builder_version", "built_at"}
     ],
 )
 def test_extract_rows_produce_every_mart_column(row_type: str, table: str, extra: set[str]) -> None:
-    """RED until ``app.models.bi`` lands (Agent C1) — never skipped."""
+    """RED until ``app.bi.models.marts`` lands (Agent C1) — never skipped."""
     try:
-        importlib.import_module("app.models.bi")
+        importlib.import_module("app.bi.models.marts")
     except ModuleNotFoundError as exc:
-        raise AssertionError("app.models.bi is not present yet") from exc
+        raise AssertionError("app.bi.models.marts is not present yet") from exc
     row_fields = {f.name for f in fields(getattr(extract, row_type))}
     columns = set(Base.metadata.tables[table].columns.keys())
     assert row_fields == columns - BUILDER_STAMP - extra, (

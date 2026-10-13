@@ -2,7 +2,7 @@
 
 Every function here is deterministic, Decimal-only, and free of database or
 tenant concerns: callers supply the bank facts and the active parameter set and
-receive fully materialized results with per-category line items. Monetary
+receive calculation results or refusals. Computed ratios carry per-category line items. Monetary
 amounts quantize to ``MONEY`` (4 dp) and ratio percentages quantize to
 ``RATIO_PCT`` (6 dp) with ``ROUND_HALF_UP``; status classification always
 happens AFTER quantization so stored and displayed values agree.
@@ -10,10 +10,13 @@ happens AFTER quantization so stored and displayed values agree.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
+
+from app.domain.authority.outcomes import OutcomeState, outcome
+from app.domain.authority.results import Computed, FigureResult, Refused
 
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
@@ -59,7 +62,7 @@ SHOCK_NMD_RUNOFF_PREFIX = "nmd_runoff:"
 # kind of thing as a capital tier code, and lives here. The *rates and caps*
 # attached to each tier are regulatory numbers and are NEVER written here: they
 # arrive on ``LiquidityParams`` from the regulatory-parameter layer, and a tier
-# present in the book with no resolved rate fails the calculation closed.
+# present in the book with no resolved rate refuses the LCR.
 HQLA_LEVEL_1 = "L1"
 HQLA_LEVEL_2A = "L2A"
 HQLA_LEVEL_2B = "L2B"
@@ -93,6 +96,7 @@ def hqla_haircut_param_code(level: str) -> str:
     """The control-plane parameter code carrying one Basel level's haircut."""
     return PARAM_HQLA_HAIRCUT_TEMPLATE.format(level=level.strip().lower())
 
+
 #: Synthetic HQLA line codes carrying the cap deductions, so the stock of HQLA
 #: is always the sum of its own line items and the deduction is auditable.
 LINE_CODE_LEVEL2_CAP = "hqla_level2_cap_adjustment"
@@ -100,12 +104,10 @@ LINE_CODE_LEVEL2B_CAP = "hqla_level2b_cap_adjustment"
 
 
 class MissingParameterError(Exception):
-    """A category with a non-zero balance has no active rate/weight parameter."""
+    """A required threshold or a non-zero category's rate/weight is unresolved."""
 
     def __init__(self, category: str, message: str | None = None) -> None:
-        super().__init__(
-            message or f"No active liquidity parameter covers category '{category}'."
-        )
+        super().__init__(message or f"No active liquidity parameter covers category '{category}'.")
         self.category = category
 
 
@@ -156,18 +158,18 @@ class LiquidityFact:
 
 
 @dataclass(frozen=True)
-class LiquidityParams:
+class LiquidityParams[ThresholdT: Decimal | None = Decimal]:
     """Active parameter set resolved as of the reporting-period end."""
 
     outflow_rates: Mapping[str, Decimal]
     inflow_rates: Mapping[str, Decimal]
     asf_weights: Mapping[str, Decimal]
     rsf_weights: Mapping[str, Decimal]
-    inflow_cap_pct: Decimal
-    lcr_min_pct: Decimal
-    lcr_amber_floor_pct: Decimal
-    nsfr_min_pct: Decimal
-    nsfr_amber_floor_pct: Decimal
+    inflow_cap_pct: ThresholdT
+    lcr_min_pct: ThresholdT
+    lcr_amber_floor_pct: ThresholdT
+    nsfr_min_pct: ThresholdT
+    nsfr_amber_floor_pct: ThresholdT
     #: HQLA haircut percentage per Basel HQLA level (``"L1"``/``"L2A"``/``"L2B"``),
     #: resolved from the regulatory-parameter layer. REQUIRED and carrying no
     #: default: a level that appears in the book with no resolved haircut raises
@@ -241,6 +243,102 @@ class NsfrResult:
     line_items: tuple[LiquidityLineItem, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class LiquidityFigures:
+    """Independent ratio results; a refused LCR never suppresses the NSFR."""
+
+    lcr: FigureResult[LcrResult]
+    nsfr: FigureResult[NsfrResult]
+
+
+def compute_liquidity[ThresholdT: Decimal | None](
+    facts: Sequence[LiquidityFact], params: LiquidityParams[ThresholdT]
+) -> LiquidityFigures:
+    """The aequorOS liquidity boundary: expected refusals are per-figure data.
+
+    Legacy single-ratio entry points retain their exception contracts while
+    callers migrate. Arithmetic, rounding and successful values are identical.
+    Unexpected exceptions propagate to the service boundary.
+    """
+    return LiquidityFigures(
+        lcr=compute_lcr_result(facts, params),
+        nsfr=_compute_figure(facts, params, compute_nsfr, "nsfr_pct", "BCBS 295"),
+    )
+
+
+def compute_lcr_result[ThresholdT: Decimal | None](
+    facts: Sequence[LiquidityFact], params: LiquidityParams[ThresholdT]
+) -> FigureResult[LcrResult]:
+    return _compute_figure(facts, params, compute_lcr, "lcr_pct", "BCBS 238")
+
+
+def _compute_figure[ValueT, ThresholdT: Decimal | None](  # noqa: PLR0913 - explicit figure and authority
+    facts: Sequence[LiquidityFact],
+    params: LiquidityParams[ThresholdT],
+    compute: Callable[[Sequence[LiquidityFact], LiquidityParams[ThresholdT]], ValueT],
+    metric_id: str,
+    rule_citation: str,
+) -> FigureResult[ValueT]:
+    try:
+        return Computed(compute(facts, params))
+    except MissingParameterError as exc:
+        return Refused(
+            reason_code="missing_parameter",
+            rule_citation=rule_citation,
+            row_ref=_parameter_rows(facts, exc.category),
+            detail=outcome(
+                OutcomeState.POLICY_UNRESOLVED,
+                metric_id=metric_id,
+                reason=str(exc),
+                items=(f"param:{exc.category}",),
+            ),
+        )
+    except UnclassifiedHqlaError as exc:
+        return Refused(
+            reason_code="unclassified_hqla",
+            rule_citation=rule_citation,
+            row_ref=tuple(
+                index
+                for index, fact in enumerate(facts, start=1)
+                if fact.fact_group == FACT_GROUP_SECURITIES
+                and fact.category == exc.category
+                and fact.hqla_level == exc.level
+            ),
+            detail=outcome(
+                OutcomeState.DATA_QUALITY_BLOCK,
+                metric_id=metric_id,
+                reason=str(exc),
+            ),
+        )
+    except LiquidityComputationError as exc:
+        return Refused(
+            reason_code="non_positive_denominator",
+            rule_citation=rule_citation,
+            detail=outcome(OutcomeState.NOT_COMPUTABLE, metric_id=metric_id, reason=str(exc)),
+        )
+
+
+def _parameter_rows(facts: Sequence[LiquidityFact], code: str) -> tuple[int, ...]:
+    """Locate affected input rows without putting volatile IDs in a snapshot."""
+    return tuple(
+        index
+        for index, fact in enumerate(facts, start=1)
+        if fact.category == code
+        or (
+            fact.fact_group == FACT_GROUP_SECURITIES
+            and fact.hqla_level is not None
+            and (
+                hqla_haircut_param_code(fact.hqla_level) == code
+                or (
+                    code in (PARAM_HQLA_LEVEL2_CAP, PARAM_HQLA_LEVEL2B_CAP)
+                    and fact.hqla_level.strip().upper() in HQLA_LEVEL_2_LEVELS
+                )
+            )
+        )
+        or (code == OFF_BALANCE_RSF_CATEGORY and fact.fact_group == FACT_GROUP_OFF_BALANCE)
+    )
+
+
 def money(value: Decimal) -> Decimal:
     return value.quantize(MONEY, rounding=ROUND_HALF_UP)
 
@@ -260,7 +358,18 @@ def classify_ratio(
     return "red"
 
 
-def compute_lcr(facts: Sequence[LiquidityFact], params: LiquidityParams) -> LcrResult:
+def _require_threshold(value: Decimal | None, code: str) -> Decimal:
+    if value is None:
+        raise MissingParameterError(code)
+    return value
+
+
+def compute_lcr[ThresholdT: Decimal | None](
+    facts: Sequence[LiquidityFact], params: LiquidityParams[ThresholdT]
+) -> LcrResult:
+    inflow_cap = _require_threshold(params.inflow_cap_pct, "lcr_inflow_cap_pct")
+    minimum = _require_threshold(params.lcr_min_pct, "lcr_min")
+    amber_floor = _require_threshold(params.lcr_amber_floor_pct, "lcr_amber_floor")
     hqla_facts = _sorted(
         fact
         for fact in facts
@@ -282,7 +391,7 @@ def compute_lcr(facts: Sequence[LiquidityFact], params: LiquidityParams) -> LcrR
     inflow_items = _weighted_items("inflow", inflow_facts, params.inflow_rates)
     gross_inflows_total = money(sum((item.weighted_amount for item in inflow_items), _ZERO))
 
-    inflow_cap_amount = money(outflows_total * params.inflow_cap_pct / _HUNDRED)
+    inflow_cap_amount = money(outflows_total * inflow_cap / _HUNDRED)
     inflow_cap_applied = gross_inflows_total > inflow_cap_amount
     capped_inflows_total = inflow_cap_amount if inflow_cap_applied else gross_inflows_total
     net_outflows_total = money(outflows_total - capped_inflows_total)
@@ -292,7 +401,7 @@ def compute_lcr(facts: Sequence[LiquidityFact], params: LiquidityParams) -> LcrR
         )
 
     lcr_pct = ratio_pct(hqla_total / net_outflows_total * _HUNDRED)
-    status = classify_ratio(lcr_pct, params.lcr_min_pct, params.lcr_amber_floor_pct)
+    status = classify_ratio(lcr_pct, minimum, amber_floor)
     return LcrResult(
         hqla_total=hqla_total,
         hqla_composition=hqla_composition,
@@ -309,7 +418,11 @@ def compute_lcr(facts: Sequence[LiquidityFact], params: LiquidityParams) -> LcrR
     )
 
 
-def compute_nsfr(facts: Sequence[LiquidityFact], params: LiquidityParams) -> NsfrResult:
+def compute_nsfr[ThresholdT: Decimal | None](
+    facts: Sequence[LiquidityFact], params: LiquidityParams[ThresholdT]
+) -> NsfrResult:
+    minimum = _require_threshold(params.nsfr_min_pct, "nsfr_min")
+    amber_floor = _require_threshold(params.nsfr_amber_floor_pct, "lcr_amber_floor")
     asf_facts = _sorted(
         fact
         for fact in facts
@@ -357,7 +470,7 @@ def compute_nsfr(facts: Sequence[LiquidityFact], params: LiquidityParams) -> Nsf
         )
 
     nsfr_pct = ratio_pct(asf_total / rsf_total * _HUNDRED)
-    status = classify_ratio(nsfr_pct, params.nsfr_min_pct, params.nsfr_amber_floor_pct)
+    status = classify_ratio(nsfr_pct, minimum, amber_floor)
     return NsfrResult(
         asf_total=asf_total,
         rsf_total=rsf_total,
@@ -367,12 +480,12 @@ def compute_nsfr(facts: Sequence[LiquidityFact], params: LiquidityParams) -> Nsf
     )
 
 
-def apply_liquidity_stress(
+def apply_liquidity_stress[ThresholdT: Decimal | None](
     scenario_code: str,
     facts: Sequence[LiquidityFact],
-    params: LiquidityParams,
+    params: LiquidityParams[ThresholdT],
     shocks: Mapping[str, Decimal],
-) -> tuple[tuple[LiquidityFact, ...], LiquidityParams]:
+) -> tuple[tuple[LiquidityFact, ...], LiquidityParams[ThresholdT]]:
     """Return ``(stressed_facts, stressed_params)`` for one stress scenario.
 
     Supported shock keys:
@@ -406,9 +519,7 @@ def apply_liquidity_stress(
         elif shock_key == SHOCK_RSF_SECURITIES_OVERRIDE:
             for category in RSF_SECURITIES_CATEGORIES:
                 rsf_weights[category] = shock_value
-        elif shock_key == SHOCK_FX_DEPRECIATION or shock_key.startswith(
-            SHOCK_NMD_RUNOFF_PREFIX
-        ):
+        elif shock_key == SHOCK_FX_DEPRECIATION or shock_key.startswith(SHOCK_NMD_RUNOFF_PREFIX):
             continue  # applied by the currency-gap / stressed-ladder layer
         else:
             raise UnsupportedShockError(scenario_code, shock_key)
@@ -469,7 +580,9 @@ def _hqla_level(fact: LiquidityFact) -> str:
     return level
 
 
-def _hqla_haircut(params: LiquidityParams, level: str) -> Decimal:
+def _hqla_haircut[ThresholdT: Decimal | None](
+    params: LiquidityParams[ThresholdT], level: str
+) -> Decimal:
     rate = params.hqla_haircut_pct.get(level)
     if rate is None:
         code = hqla_haircut_param_code(level)
@@ -514,8 +627,8 @@ def _hqla_parameter_message(param_code: str, *, level: str | None = None) -> str
     )
 
 
-def _hqla_stock(
-    hqla_facts: Sequence[LiquidityFact], params: LiquidityParams
+def _hqla_stock[ThresholdT: Decimal | None](
+    hqla_facts: Sequence[LiquidityFact], params: LiquidityParams[ThresholdT]
 ) -> tuple[tuple[LiquidityLineItem, ...], HqlaComposition]:
     """The stock of HQLA: per-level haircuts, then the Level-2 caps (BCBS 238).
 
@@ -609,9 +722,7 @@ def _hqla_stock(
                 _ZERO,
             )
         )
-        adjustment_2 = money(
-            max((level2a + level2b - adjustment_2b) - ratio_2 * level1, _ZERO)
-        )
+        adjustment_2 = money(max((level2a + level2b - adjustment_2b) - ratio_2 * level1, _ZERO))
 
     if adjustment_2b > _ZERO:
         items.append(

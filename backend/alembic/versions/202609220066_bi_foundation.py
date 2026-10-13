@@ -3,7 +3,7 @@
 Revision ID: 202609220066
 Revises: 202609200065
 
-The BI plane gets its own storage (``bi_*``, models in ``app/models/bi.py``)
+The BI plane gets its own storage (``bi_*``, models in ``app/bi/models/marts.py``)
 so that dashboards read typed, pre-joined projections instead of running the
 engines or scanning the canonical book per request. Every number in these
 tables is a COPY of something the platform already computed or a typed

@@ -8,6 +8,8 @@
     "access_request_member": "eeeeeeee-1010-4eee-8eee-eeeeeeee1010",
     "access_extra_member": "eeeeeeee-1011-4eee-8eee-eeeeeeee1011",
     "grant_member": "eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5",
+    "sod_member": "eeeeeeee-1012-4eee-8eee-eeeeeeee1012",
+    "sod_approver": "eeeeeeee-1013-4eee-8eee-eeeeeeee1013",
     "forecast_member": "eeeeeeee-0000-4eee-8eee-eeeeeeeeeee0",
     "forecast_summary_member": "eeeeeeee-0001-4eee-8eee-eeeeeeeee001",
     "account_admin": "eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6",
@@ -22,6 +24,10 @@
     "sso_analyst": "eeeeeeee-1111-4eee-8eee-eeeeeeeeeee1"
   },
   "journey": {
+    "sod_owner": {
+      "id": "eeeeeeee-1014-4eee-8eee-eeeeeeee1014",
+      "organizationId": "OR-SOD00001"
+    },
     "fresh_forecast_analyst": {
       "id": "eeeeeeee-2900-4eee-8eee-eeeeeeee2900",
       "organizationId": "OR-FRSH0001"

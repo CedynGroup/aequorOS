@@ -4,6 +4,11 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["**/*.ts", "../playwright.config.ts"],
+  "include": [
+    "**/*.ts",
+    "../playwright.config.ts",
+    "../visual/**/*.ts",
+    "../playwright.visual.config.ts"
+  ],
   "exclude": []
 }

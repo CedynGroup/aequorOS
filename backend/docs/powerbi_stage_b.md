@@ -1,8 +1,8 @@
 # The AequorOS analytics feed — a guide for your BI team
 
 **Audience:** the bank's BI, MIS or data team, and the IT function that will hold
-the credential. **Status:** as-built for `docs/bi.md` §Phase 4 "Power BI Stage B
-feed", built 2026-09-27. **Companion documents:** `docs/API_INTEGRATION.md` §1
+the credential. **Status:** pre-release reference for `docs/bi.md` §Phase 4
+"Power BI Stage B feed", built 2026-09-27. **Companion documents:** `docs/API_INTEGRATION.md` §1
 (integration keys) and §8 (the feed's request and response contract).
 
 This document answers four questions a BI team asks before it builds anything on
@@ -162,23 +162,14 @@ when it is.
 
 ## 4. The credential
 
-The feed is authenticated by an **integration key issued for one purpose and one
-institution**. Your account administrator issues it in the application; it is
-shown exactly once and only its hash is stored, so if it is lost it is reissued,
-never recovered.
+Credential availability and supported issuance are governed by the
+[public integration contract](../../docs/API_INTEGRATION.md#1-authentication);
+this guide is retained for BI release work and is not an onboarding path.
+Authentication and refusal semantics are defined in the
+[feed wire contract](../../docs/API_INTEGRATION.md#8-pulling-analytics-out-the-stage-b-feed).
 
-- A key is issued as either a **data push** key or an **analytics feed** key, and
-  the two are strictly disjoint authorities. A push key is refused by the feed; a
-  feed key is refused by every push route. Neither is a configuration you can get
-  wrong — they carry different permissions and cannot substitute for one another.
-- A feed key names **one exact institution**. Presented against a sibling
-  institution of the same group it answers `404`, exactly as another
-  organisation's institution would: a credential cannot map your estate.
-- For supported feed-key coverage and issuance, see the
-  [public integration contract](../../docs/API_INTEGRATION.md#1-authentication).
-- **Revocation is immediate and complete**: the credential, its authority and its
-  machine identity are ended in one transaction. Revoke on any suspicion, and
-  rotate on your own schedule.
+When governed feed issuance returns:
+
 - Treat the key as you would a core-banking credential: store it in the report
   server's own secret store or gateway credential store, never in a workspace
   parameter, a shared query, a `.pbix` file, or an email.

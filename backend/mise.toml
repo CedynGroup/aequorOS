@@ -45,6 +45,10 @@ run = "WORKER_JOB_TYPES=lane:bi RUN_INPROCESS_WORKER=0 uv run python -m app.work
 description = "Run pytest"
 run = "uv run pytest"
 
+[tasks."risk-service:test-fast"]
+description = "Run conservative affected-module tests locally with four workers"
+run = "uv run python -m scripts.test_fast"
+
 [tasks."risk-service:test-postgres"]
 description = "Run pytest against local Postgres (native fallback or Docker)"
 run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest"
@@ -64,7 +68,7 @@ run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv
 # locally when one is not already exported.
 [tasks."risk-service:test-postgres-locks"]
 description = "Run the Postgres-only concurrency tests (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres -- uv run pytest tests/api/test_liquidity.py tests/api/test_scenarios.py tests/api/test_calculations.py"
+run = "uv run python scripts/local_services.py run --postgres -- uv run pytest tests/api/test_liquidity.py tests/api/test_scenarios.py tests/api/test_calculations.py tests/storage/test_key_rotation_concurrency.py"
 
 # The architecture guards: CI task wiring (P0-15), the RLS-blind data-migration
 # scanner (P0-18) and the case/regulatory dependency boundary (ARCH-5). Fast,
@@ -81,7 +85,7 @@ run = "uv run pytest tests/architecture tests/db/test_bog_return_recode_migratio
 # locally when one is not already exported.
 [tasks."risk-service:test-postgres-schema"]
 description = "Run the Postgres schema, migration and RLS suites (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/db"
+run = "uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest tests/db"
 
 # The remaining suite against the real engine (ownership below). The hermetic
 # default runs on SQLite with row-level security switched off, so a passing run
@@ -90,11 +94,11 @@ run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv
 # TEST_DATABASE_URL locally when one is not already exported.
 #
 # Ownership of the Postgres-only suites: `tests/db` belongs to
-# `risk-service:test-postgres-schema` and the three lock files to
-# `risk-service:test-postgres-locks`, both run by CI's "Postgres schema, RLS
-# and locks" job against the same image and the same restricted role as this
-# task. `tests/architecture` belongs to `risk-service:test-architecture`; it
-# never opens a database, so running it here only repeated it on Postgres. They
+# `risk-service:test-postgres-schema` and the lock modules to
+# `risk-service:test-postgres-locks`; CI execution and aggregation are documented
+# in README.md#run-tests. `tests/architecture` belongs to
+# `risk-service:test-architecture`; it never opens a database, so running it here
+# only repeated it on Postgres. They
 # are ignored here so a failure surfaces once, in the job named for it, rather
 # than repeating the same checks here.
 # The hermetic `risk-service:test` still collects everything.
@@ -104,7 +108,7 @@ run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv
 # README.md#test-databases-and-the-primary-database.
 [tasks."risk-service:test-postgres-suite"]
 description = "Run the full pytest suite against Postgres (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -n auto --dist loadfile --ignore=tests/architecture --ignore=tests/db --ignore=tests/api/test_calculations.py --ignore=tests/api/test_liquidity.py --ignore=tests/api/test_scenarios.py"
+run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -n 4 --dist loadfile --ignore=tests/architecture --ignore=tests/db --ignore=tests/api/test_calculations.py --ignore=tests/api/test_liquidity.py --ignore=tests/api/test_scenarios.py --ignore=tests/storage/test_key_rotation_concurrency.py"
 
 # The DB-backed regulatory/attestation/auth/vendor API surface. It is gated on
 # REAL_DATA_DATABASE_URL pointing at the PRIMARY database (it asserts against
@@ -123,18 +127,9 @@ run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -
 # everything while implying a tier that does not exist.
 [tasks."risk-service:test-real-data"]
 description = "Run the opt-in real-data API suite; requires REAL_DATA_DATABASE_URL"
-run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features tests/services"
+run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features tests/identity tests/icaap tests/reporting tests/attestation tests/bi tests/services"
 
-# The live S3-compatible backend contract: SSE-KMS at rest, the hash-chained
-# access log, and provisioning/deprovisioning of a per-institution bucket. The
-# suite self-skips when S3_* is unconfigured. Before the dedicated storage and
-# Playwright journey jobs were added, that described every CI job: measured with
-# the credentials blanked, `27 passed, 18 skipped`. The storage job now supplies
-# MinIO with built-in KMS and requires all 45 tests to execute.
-#
-# A MinIO container with its BUILT-IN KMS satisfies all 18 — no KES sidecar is
-# needed, which is what made this look unreachable. Measured against
-# `MINIO_KMS_SECRET_KEY=aequoros-key:<base64-32>`: `45 passed`.
+# Storage suite execution and CI service setup: README.md#run-tests.
 #
 # Two sharp edges, both found by running it:
 #   * the KMS key MUST be named `aequoros-key` — the SSE-KMS assertion pins that
@@ -142,11 +137,12 @@ run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features t
 #   * export STORAGE_RETIRE_AFTER for the configured MVP client. The pure config
 #     test deletes it before asserting that a missing date is refused.
 #
-# The task wrapper supplies S3_ENDPOINT, credentials and STORAGE_KMS_KEY_ID from
-# local MinIO when an endpoint is not already exported outside CI.
+# The task wrapper supplies a disposable Postgres database for key-rotation
+# concurrency, plus S3_ENDPOINT, credentials and STORAGE_KMS_KEY_ID from local
+# MinIO when the corresponding test services are not already supplied outside CI.
 [tasks."risk-service:test-storage"]
-description = "Run the S3-compatible storage contract suite (local or supplied S3_* credentials)"
-run = "uv run python scripts/local_services.py run --storage -- uv run pytest tests/storage"
+description = "Run the storage contract suite against Postgres and S3-compatible storage"
+run = "uv run python scripts/local_services.py run --postgres --storage -- uv run pytest tests/storage"
 
 [tasks."risk-service:lint"]
 description = "Run Ruff checks"
@@ -210,7 +206,7 @@ echo "TypeScript client generated successfully."
 '''
 
 [tasks."risk-service:migrate"]
-description = "Run Alembic migrations; requires DATABASE_URL"
+description = "Run Alembic migrations; credentials: docs/tamper_evident_records.md#required-deployment-follow-up"
 run = "uv run alembic upgrade head"
 
 [tasks."risk-service:bootstrap-db"]

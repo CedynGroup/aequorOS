@@ -4,14 +4,14 @@ This file is the starting point for agents working in `backend`.
 
 ## Important Documents
 
-| Document                                           | Purpose                                                                          |
-| -------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [README.md](README.md)                             | Local setup, run commands, environment variables, and API authentication.        |
-| [../ARCHITECTURE.md](../ARCHITECTURE.md)           | Service boundaries, tenant isolation, API versioning, and background job policy. |
-| [docker-compose.yml](docker-compose.yml)           | Local Postgres and MinIO services for demos and Postgres-backed tests.           |
-| [scripts/bootstrap_db.sh](scripts/bootstrap_db.sh) | Database role setup, migrations, grants, and demo tenant seeding.                |
-| [alembic/versions](alembic/versions)               | Schema migrations, including Phase 1 tables and RLS policies.                    |
-| [tests](tests)                                     | API, service, schema-default, tenant isolation, and health regression coverage.  |
+| Document                                                                                       | Purpose                                                                              |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [README.md](README.md)                                                                         | Local setup, run commands, environment variables, and API authentication.            |
+| [../ARCHITECTURE.md](../ARCHITECTURE.md)                                                       | Service boundaries, tenant isolation, API versioning, and background job policy.     |
+| [docker-compose.yml](docker-compose.yml)                                                       | Local Postgres and MinIO services for demos and Postgres-backed tests.               |
+| [docs/tamper_evident_records.md](docs/tamper_evident_records.md#required-deployment-follow-up) | Migration-role preparation and audit ownership; local bootstrap prepares membership. |
+| [alembic/versions](alembic/versions)                                                           | Schema migrations, including Phase 1 tables and RLS policies.                        |
+| [tests](tests)                                                                                 | API, service, schema-default, tenant isolation, and health regression coverage.      |
 
 ## Working Guidelines
 
@@ -24,6 +24,9 @@ This file is the starting point for agents working in `backend`.
 - Preserve deterministic in-process job stubs until worker infrastructure is introduced.
 - Add regression tests for tenant isolation, state transitions, and
   storage/database edge cases.
+- Follow the shared [testing standard](../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard):
+  assert public service/API behavior, mock only boundaries, use Hypothesis for
+  broad input spaces and test status workflows with stateful properties.
 - Canonical financial manual entry and correction use resource-specific
   `/api/v1/cases/{case_id}/financial-workspace/*` routes. Keep their OpenAPI and
   generated-client contracts aligned; successful mutations return the record plus
@@ -75,5 +78,4 @@ reason to do otherwise. Put the ticket reference in the commit body or footer.
 mise run risk-service:test
 mise run risk-service:test-postgres
 mise run risk-service:check
-mise run risk-service:bootstrap-db
 ```

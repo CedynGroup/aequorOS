@@ -31,11 +31,11 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from alembic import command
+from app.bi.models.marts import BiFactPositionDaily
 
 # Imported for its side effect as much as for the name: app.db.session
 # registers the ``after_begin`` listener that sets the tenant GUC.
 from app.db.session import set_tenant_rls_context
-from app.models.bi import BiFactPositionDaily
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,

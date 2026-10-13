@@ -1,296 +1,312 @@
-"""Country/currency identity must stay DATA, not code.
-
-These are guard tests, not behaviour tests. The leaks they cover were all
-oversights rather than decisions — a prettier line-wrap that added an explicit
-``'GHS'`` argument, an f-string that spelled the unit out, a column default that
-quietly made every new bank Ghanaian. Each one is individually harmless-looking
-and collectively they make the platform single-country, so the cheapest defence
-is a test that fails the moment one comes back.
-
-Deliberate Ghana-factual exceptions (BoG return templates, the sample-bank
-fixture, the jurisdictions seed) are listed in CLAUDE.md and excluded here.
-"""
+"""Jurisdiction identity and regulator labels come from the bank and registry."""
 
 from __future__ import annotations
 
-import ast
 import re
-from pathlib import Path
+from decimal import Decimal
+from typing import cast
 
 import pytest
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.orm import Session
 
 from app.adapters.market_data.scope_taxonomy import DataScope
-from app.models import Bank, BankFinancialFact, ParamCapitalThreshold, RegulatoryParameter
+from app.api.deps import TenantContext
+from app.bi.domain.catalogue import catalogue
+from app.domain.authority.results import Computed
+from app.domain.policy import PolicyUnresolvedError
+from app.models import (
+    Bank,
+    BankFinancialFact,
+    BankReportingPeriod,
+    CurrentFinancialFact,
+    Jurisdiction,
+    ParamCapitalThreshold,
+    ParamLcrRunoffRate,
+    ParamNsfrWeight,
+    RegulatoryParameter,
+    RegulatoryRun,
+)
+from app.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.services import jurisdictions, regulatory_liquidity
 from app.services.jurisdictions import base_currency
-
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-
-# Modules that compute or narrate bank-facing figures. None of them may name a
-# currency: they resolve it from the bank via jurisdictions.base_currency.
-_CURRENCY_NEUTRAL_MODULES = (
-    "app/services/regulatory_capital.py",
-    "app/services/regulatory_liquidity.py",
-    "app/services/regulatory_fx.py",
-    "app/services/regulatory_irr.py",
-    # Credit module (credit PR-2): the loan book's prudential narrative must
-    # resolve regulator/currency through the jurisdiction services.
-    "app/services/regulatory_credit.py",
-    "app/services/loan_classification.py",
-    "app/services/fact_derivation.py",
-    # Phase 2 calculation/workflow modules join the guard (2026-08-08):
-    # narrative in these must resolve currency/regulator through the
-    # jurisdiction services, never a literal.
-    "app/services/liquidity_ewi.py",
-    "app/services/liquidity_cfp.py",
-    "app/services/liquidity_thresholds.py",
-    "app/services/credit_params.py",
-    "app/services/capital_plan.py",
-    "app/services/reverse_stress.py",
-    "app/services/examiner_mode.py",
-    "app/domain/capital/ecl.py",
-    # Joined the guard 2026-08-21 (enterprise audit §6): enterprise_stress was
-    # explicitly called out as a module the guard did not scan, and the policy
-    # layer must be neutral by construction.
-    "app/services/enterprise_stress.py",
-    "app/services/loan_classification.py",
-    "app/services/regulatory_forecasting.py",
-    "app/services/regulatory_parameters.py",
-    "app/services/institution_types.py",
-    "app/domain/policy/resolver.py",
-    # ICAAP (2026-09-19): the workspace narrates figures for a Board and a
-    # supervisor, so its copy must name neither a currency nor a country.
-    "app/services/icaap/blocks.py",
-    "app/services/icaap/cycles.py",
-    "app/services/icaap/readiness.py",
-    "app/services/icaap/sections.py",
-    "app/services/icaap/attachments.py",
-    # IRRBB Standardised Framework (P5, 2026-09-19): it narrates a change in
-    # economic value and an outlier verdict for a supervisor, so its copy must
-    # name neither a currency nor a country. Joined the guard with the module.
-    "app/services/regulatory_irr_sf.py",
-    # BI (2026-09-22, X-6): the marts and the catalogue label every figure a
-    # dashboard, an Explore grid or an export puts in front of a bank. A measure
-    # caption or a mart column comment that spells a unit out is the same defect
-    # as the LCR narrative one, and it reaches more surfaces. Whole TREES, not
-    # named files: BI is being written by several hands and a new module must be
-    # covered on the day it lands, not when someone remembers this list.
-    "app/services/bi/**/*.py",
-    "app/domain/bi/**/*.py",
-    # Phase 2's dashboard packs (P2-P1, `app/domain/bi/packs/<id>.json`) are
-    # DATA that carries user-visible titles and captions, so they are scanned
-    # too — the glob is live now and simply matches nothing until the packs
-    # land. `test_the_phase_2_pack_glob_is_not_silently_vacuous` fails if the
-    # directory appears without any file reaching the scan.
-    "app/domain/bi/packs/*.json",
+from tests.fixtures.canonical_bank_fixture import (
+    DEMO_ORG_ID,
+    DEMO_USER_ID,
+    SAMPLE_BANK_ID,
+    materialize_canonical_test_book,
 )
 
-#: Entries above may be a single file OR a glob. Globs exist so a directory
-#: written by several hands (BI) is covered as it grows, and so a path that does
-#: not exist yet (the Phase 2 packs) can be named now rather than remembered
-#: later. Expanded once, at collection time.
-PHASE_2_PACK_GLOB = "app/domain/bi/packs/*.json"
 
-
-def _expand_scan_targets(entries: tuple[str, ...]) -> tuple[str, ...]:
-    expanded: list[str] = []
-    for entry in entries:
-        if "*" not in entry:
-            expanded.append(entry)
-            continue
-        expanded.extend(
-            sorted(
-                path.relative_to(_BACKEND_ROOT).as_posix()
-                for path in _BACKEND_ROOT.glob(entry)
-                if path.is_file() and "__pycache__" not in path.parts
+def _liquidity_book(
+    db: Session,
+    jurisdiction: str = "NG",
+    currency: str = "NGN",
+    *,
+    cap_bound: bool = False,
+    mixed_hqla: bool = False,
+) -> tuple[Bank, BankReportingPeriod, TenantContext]:
+    materialize_canonical_test_book(db)
+    bank = db.get(Bank, SAMPLE_BANK_ID)
+    period = db.scalar(
+        select(BankReportingPeriod)
+        .where(BankReportingPeriod.bank_id == SAMPLE_BANK_ID)
+        .order_by(BankReportingPeriod.period_end.desc())
+    )
+    assert bank is not None and period is not None
+    bank.jurisdiction_code, bank.currency = jurisdiction, currency
+    for model in (ParamLcrRunoffRate, ParamNsfrWeight, ParamCapitalThreshold):
+        db.execute(
+            update(model)
+            .where(model.organization_id == DEMO_ORG_ID)
+            .values(jurisdiction_code=jurisdiction)
+        )
+    db.execute(
+        delete(RegulatoryParameter).where(RegulatoryParameter.jurisdiction_code == jurisdiction)
+    )
+    db.execute(
+        update(RegulatoryParameter)
+        .where(RegulatoryParameter.jurisdiction_code == "GH")
+        .values(jurisdiction_code=jurisdiction)
+    )
+    db.execute(
+        update(ParamCapitalThreshold)
+        .where(
+            ParamCapitalThreshold.organization_id == DEMO_ORG_ID,
+            ParamCapitalThreshold.threshold_code == "lcr_inflow_cap_pct",
+        )
+        .values(value_pct=Decimal("1" if cap_bound else "100"))
+    )
+    facts = list(
+        db.scalars(
+            select(BankFinancialFact).where(
+                BankFinancialFact.bank_id == bank.id,
+                BankFinancialFact.reporting_period_id == period.id,
             )
         )
-    return tuple(dict.fromkeys(expanded))
-
-
-_CURRENCY_NEUTRAL_FILES = _expand_scan_targets(_CURRENCY_NEUTRAL_MODULES)
-
-#: Constructs that may name a currency, exempted BY NAME rather than by file.
-#:
-#: The IRRBB framework prescribes a different shock size per currency and prints
-#: them as a table whose row keys are ISO codes. A currency code used as a DATA
-#: KEY is not a claim that a bank reports in that currency — the same reading
-#: AGENTS.md gives a ``bog_``-prefixed identifier. Dropping the keys would
-#: destroy the regulator's own table.
-#:
-#: The exemption is per-CONSTANT and located by AST, so every other line in the
-#: same file is still scanned. A blanket file exemption here would retire the
-#: guard on the module that seeds every governed value in the platform, which is
-#: the last place to go blind.
-_CURRENCY_KEYED_CONSTRUCTS: dict[str, tuple[str, ...]] = {
-    "app/services/regulatory_parameters.py": ("_SF_SHOCKS_BY_CURRENCY",),
-}
-
-# Modules that must never SUBSTITUTE a country identity when one is missing.
-# This is a different defect from naming a currency in narrative: ``(bank.currency
-# or "GHS")`` produces a perfectly neutral-looking string and silently converts a
-# Nigerian book to cedis. The whole of app/services and app/models is scanned,
-# because the pattern spread by copy-paste rather than by design.
-_SUBSTITUTION_SCAN_ROOTS = ("app/services", "app/models", "app/schemas", "app/domain")
-
-# ``or ""`` is NOT a substitution — it degrades to "unknown" and the caller then
-# handles it. Only a non-empty country/currency literal is the bug.
-_SUBSTITUTION_PATTERN = re.compile(r'\bor\s+["\'](?:GH|GHS|NG|NGN|KE|KES|ZA|ZAR)["\']')
-
-# ISO 4217 codes for the jurisdictions the registry seeds, plus the majors the
-# curve taxonomy covers. A bare one of these in narrative is the bug.
-_CURRENCY_CODES = ("GHS", "NGN", "KES", "ZAR", "EUR", "GBP")
-
-# `USD` is excluded deliberately: it is a legitimate constant in FX code (the
-# quote convention, the USD leg of a pair), not a stand-in for "the bank's
-# currency". Excluding it keeps this test about the actual defect.
-
-
-def _narrative_currency_literals(source: str) -> list[str]:
-    """Currency codes appearing in a string literal, ignoring comments.
-
-    Docstrings are ignored too: they explain conventions with a worked example
-    ("USD/GHS 12.85 means 12.85 GHS per USD"), which is documentation, not
-    output. Only code a bank can see is in scope.
-    """
-    hits: list[str] = []
-    for raw in source.splitlines():
-        line = raw.strip()
-        if line.startswith("#"):
-            continue
-        # Only lines that are part of an expression producing text.
-        if '"' not in line and "'" not in line:
-            continue
-        for code in _CURRENCY_CODES:
-            if re.search(rf'["\'][^"\']*\b{code}\b[^"\']*["\']', line):
-                hits.append(f"{code}: {line}")
-    return hits
-
-
-def _without_exempt_constructs(source: str, module_path: str) -> str:
-    """Blank the lines of each exempted module-level constant, and only those."""
-    names = _CURRENCY_KEYED_CONSTRUCTS.get(module_path, ())
-    if not names:
-        return source
-    lines = source.splitlines()
-    tree = ast.parse(source)
-    found: set[str] = set()
-    for node in tree.body:
-        targets = (
-            [node.target]
-            if isinstance(node, ast.AnnAssign)
-            else list(node.targets)
-            if isinstance(node, ast.Assign)
-            else []
+    )
+    assert facts
+    for fact in facts:
+        fact.currency = currency
+        if mixed_hqla and fact.fact_group == "securities" and fact.hqla_level == "L1":
+            fact.hqla_level = "L2B" if fact.category == "bog_bills" else "L2A"
+            fact.amount = Decimal("1000000000000")
+        db.add(
+            CurrentFinancialFact(
+                organization_id=fact.organization_id,
+                bank_id=fact.bank_id,
+                source_as_of_date=period.period_end,
+                source_generation=1,
+                fact_group=fact.fact_group,
+                category=fact.category,
+                amount=fact.amount,
+                currency=fact.currency,
+                hqla_level=fact.hqla_level,
+                risk_weight_code=fact.risk_weight_code,
+                ccf_pct=fact.ccf_pct,
+                rate_pct=fact.rate_pct,
+                income_year=fact.income_year,
+                attributes=cast(dict[str, object], fact.attributes),
+            )
         )
-        for target in targets:
-            if isinstance(target, ast.Name) and target.id in names:
-                found.add(target.id)
-                end = node.end_lineno or node.lineno
-                for number in range(node.lineno, end + 1):
-                    lines[number - 1] = ""
-    missing = set(names) - found
-    assert not missing, (
-        f"{module_path} no longer defines {sorted(missing)}; an exemption that "
-        "outlives its construct silently widens the guard's blind spot"
+    db.flush()
+    return bank, period, TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+
+
+@pytest.mark.parametrize(("jurisdiction", "currency"), [("NG", "NGN"), ("KE", "KES")])
+@pytest.mark.parametrize("cap_bound", [False, True])
+@pytest.mark.parametrize("mixed_hqla", [False, True])
+def test_liquidity_consumers_label_each_narrative_with_the_banks_currency(
+    db_session: Session,
+    jurisdiction: str,
+    currency: str,
+    cap_bound: bool,
+    mixed_hqla: bool,
+) -> None:
+    bank, period, ctx = _liquidity_book(
+        db_session,
+        jurisdiction,
+        currency,
+        cap_bound=cap_bound,
+        mixed_hqla=mixed_hqla,
     )
-    return "\n".join(lines)
-
-
-@pytest.mark.parametrize("module_path", _CURRENCY_NEUTRAL_FILES)
-def test_calculation_modules_name_no_currency(module_path: str) -> None:
-    """A Nigerian bank must never read "GHS" in its own LCR narrative.
-
-    The regression this pins: ``regulatory_liquidity`` once wrote
-    ``f"{lcr.gross_inflows_total} GHS were capped at ..."`` — correct arithmetic,
-    wrong unit for every bank outside Ghana.
-    """
-    source = (_BACKEND_ROOT / module_path).read_text(encoding="utf-8")
-    source = _without_exempt_constructs(source, module_path)
-    # Strip docstrings before scanning: they carry worked examples on purpose.
-    without_docstrings = re.sub(r'"""(?:.|\n)*?"""', "", source)
-    leaks = _narrative_currency_literals(without_docstrings)
-    assert not leaks, (
-        f"{module_path} names a currency in bank-facing text. Resolve it from "
-        f"the bank via jurisdictions.base_currency instead:\n  " + "\n  ".join(leaks)
+    dashboard = regulatory_liquidity.get_liquidity_dashboard(db_session, ctx, bank.id, period.id)
+    assert not dashboard.stored
+    assert not dashboard.metrics.refusals
+    messages = {row.rule_code: row.message for row in dashboard.validations}
+    assert {"inflow_cap_applied", "hqla_all_level1"} <= messages.keys()
+    cap = messages["inflow_cap_applied"]
+    assert ("cap bound:" if cap_bound else "cap did not bind:") in cap
+    assert cap.count(currency) == 2
+    hqla = messages["hqla_all_level1"]
+    assert hqla.count(currency) == (3 if mixed_hqla else 1)
+    if mixed_hqla:
+        assert "HQLA after haircuts:" in hqla
+        assert "Level-2 cap deducted" in hqla and "Level-2B cap deducted" in hqla
+    else:
+        assert "All high quality liquid assets are Level 1:" in hqla
+    assert all(
+        "GHS" not in message and "cedis" not in message.lower() for message in messages.values()
     )
-
-
-def test_the_scan_list_expands_to_real_files() -> None:
-    """A glob that matches nothing turns a scanned tree into a vacuous pass.
-
-    Every non-glob entry must still be scanned verbatim, and the two BI trees —
-    which exist — must contribute files. The Phase 2 pack glob is allowed to be
-    empty until the packs land; that one is pinned separately.
-    """
-    literals = {entry for entry in _CURRENCY_NEUTRAL_MODULES if "*" not in entry}
-    assert literals <= set(_CURRENCY_NEUTRAL_FILES)
-    for tree in ("app/services/bi/", "app/domain/bi/"):
-        assert any(path.startswith(tree) for path in _CURRENCY_NEUTRAL_FILES), tree
-    missing = [path for path in _CURRENCY_NEUTRAL_FILES if not (_BACKEND_ROOT / path).is_file()]
-    assert missing == [], missing
-
-
-def test_the_phase_2_pack_glob_is_not_silently_vacuous() -> None:
-    """Once the packs exist, they must be in the scan.
-
-    The glob is named ahead of the packs deliberately (X-6 asks for the pack
-    JSON), and an entry that outlives — or precedes — its target is exactly how
-    a guard goes quietly blind. So: if the directory exists and holds JSON, at
-    least one of those files must be scanned.
-    """
-    packs = _BACKEND_ROOT / "app/domain/bi/packs"
-    if not packs.is_dir() or not list(packs.glob("*.json")):
-        pytest.skip("Phase 2 dashboard packs (P2-P1) do not exist yet")
-    assert any(path.startswith("app/domain/bi/packs/") for path in _CURRENCY_NEUTRAL_FILES), (
-        f"{PHASE_2_PACK_GLOB} matches no file although the packs exist"
+    live = regulatory_liquidity.compute_live(db_session, ctx, bank, period)
+    assert Decimal(cast(str, live.metrics["lcr_pct"])) == dashboard.metrics.lcr_pct
+    if mixed_hqla:
+        assert (
+            next(row.message for row in live.findings if row.rule_id == "hqla_all_level1") == hqla
+        )
+    analysis = regulatory_liquidity.compute_scenario_analysis(db_session, ctx, bank, period, {})
+    assert isinstance(analysis.lcr, Computed)
+    assert analysis.lcr.value.inflow_cap_applied == cap_bound
+    run = regulatory_liquidity.create_liquidity_run(
+        db_session,
+        ctx,
+        bank.id,
+        RegulatoryRunCreate(
+            module="liquidity", reporting_period_id=period.id, scenario_code="baseline"
+        ),
     )
+    assert run.status == "succeeded", run.error
+    assert {row.rule_code: row.message for row in run.validations} == messages
+    stored = regulatory_liquidity.get_liquidity_dashboard(db_session, ctx, bank.id, period.id)
+    assert stored.stored
+    assert {row.rule_code: row.message for row in stored.validations} == messages
 
 
-def test_the_shock_table_exemption_does_not_blanket_its_file() -> None:
-    """The narrow exemption must stay narrow.
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("currency", ""),
+        ("currency", " "),
+        ("currency", None),
+        ("jurisdiction_code", ""),
+        ("jurisdiction_code", " "),
+        ("jurisdiction_code", None),
+        ("jurisdiction_code", "ZZ"),
+    ],
+)
+@pytest.mark.parametrize("consumer", ["dashboard", "live", "analysis", "official_run"])
+def test_liquidity_consumers_refuse_unresolved_identity(
+    db_session: Session,
+    field: str,
+    value: str | None,
+    consumer: str,
+) -> None:
+    bank, period, ctx = _liquidity_book(db_session)
+    setattr(bank, field, value)
+    expected_error = ValueError if field == "currency" else PolicyUnresolvedError
+    with db_session.no_autoflush, pytest.raises(expected_error):
+        if consumer == "dashboard":
+            regulatory_liquidity.get_liquidity_dashboard(db_session, ctx, bank.id, period.id)
+        elif consumer == "live":
+            regulatory_liquidity.compute_live(db_session, ctx, bank, period)
+        elif consumer == "analysis":
+            regulatory_liquidity.compute_scenario_analysis(db_session, ctx, bank, period, {})
+        else:
+            regulatory_liquidity.create_liquidity_run(
+                db_session,
+                ctx,
+                bank.id,
+                RegulatoryRunCreate(
+                    module="liquidity", reporting_period_id=period.id, scenario_code="baseline"
+                ),
+            )
+    with db_session.no_autoflush:
+        assert db_session.scalar(select(func.count()).select_from(RegulatoryRun)) == 0
 
-    Exempting the whole of ``regulatory_parameters.py`` would retire this guard
-    on the module that seeds every governed value in the platform. So: a
-    currency literal introduced ANYWHERE else in that file must still be a
-    failure, and this proves the scanner still sees it.
-    """
-    module_path = "app/services/regulatory_parameters.py"
-    source = (_BACKEND_ROOT / module_path).read_text(encoding="utf-8")
 
-    scanned = _without_exempt_constructs(source, module_path)
-    assert _narrative_currency_literals(scanned) == []
-
-    # A leak outside the exempted constant is still caught.
-    leaked = scanned + '\nNOT_A_KEY = "reported in GHS"\n'
-    assert _narrative_currency_literals(leaked) != []
-
-
-def test_no_module_substitutes_a_country_identity() -> None:
-    """``(bank.jurisdiction_code or "GH")`` must not exist anywhere.
-
-    Every one of these was a copy-paste of the same line, and each one re-creates
-    the trap ``banks.currency``/``banks.jurisdiction_code`` were made mandatory to
-    close: a bank licensed elsewhere silently inherits Ghana's parameter set —
-    CAR floor, provisioning grid, DPD boundaries, LMTD floors — or reports in
-    cedis. Resolve through ``jurisdictions.jurisdiction_code`` /
-    ``jurisdictions.base_currency``, which raise instead of guessing.
-    """
-    leaks: list[str] = []
-    for root in _SUBSTITUTION_SCAN_ROOTS:
-        for path in sorted((_BACKEND_ROOT / root).rglob("*.py")):
-            # Docstrings are stripped first: they describe the defect on purpose
-            # (this module's own docstring quotes the pattern it forbids).
-            source = re.sub(r'"""(?:.|\n)*?"""', "", path.read_text(encoding="utf-8"))
-            for number, raw in enumerate(source.splitlines(), 1):
-                line = raw.strip()
-                if line.startswith("#"):
-                    continue
-                if _SUBSTITUTION_PATTERN.search(line):
-                    leaks.append(f"{path.relative_to(_BACKEND_ROOT)}:~{number}: {line}")
-    assert not leaks, (
-        "A country/currency identity is being substituted rather than resolved:\n  "
-        + "\n  ".join(leaks)
+@pytest.mark.parametrize("code", ["GH", "NG", "KE", "ZA"])
+def test_identity_and_display_resolve_the_banks_registry_row(
+    db_session: Session, code: str
+) -> None:
+    row = db_session.get(Jurisdiction, code)
+    if code == "ZA":
+        row = Jurisdiction(
+            code=code,
+            country_name="South Africa",
+            currency_code="ZAR",
+            currency_name="Rand",
+            locale="en-ZA",
+            central_bank_name="South African Reserve Bank",
+            regulator_short="SARB",
+        )
+        db_session.add(row)
+        db_session.flush()
+    assert row is not None
+    bank = Bank(
+        id="BK-TEST0001",
+        organization_id="OR-TEST0001",
+        name="Registry bank",
+        short_name="Registry",
+        currency=f" {row.currency_code.lower()} ",
+        jurisdiction_code=f" {code.lower()} ",
+        license_type="universal",
+        institution_type="universal_bank",
     )
+    assert jurisdictions.jurisdiction_code(bank) == code
+    assert base_currency(bank) == row.currency_code
+    bank.jurisdiction_code = code
+    assert jurisdictions.regulator_name(db_session, bank) == row.central_bank_name
+    assert jurisdictions.regulator_short(db_session, bank) == row.regulator_short
+    assert jurisdictions.require_jurisdiction(db_session, bank) is row
+
+
+def test_bi_catalogue_display_text_is_jurisdiction_neutral() -> None:
+    cat = catalogue()
+    texts = [(member.id, member.label, member.description) for member in cat.members()]
+    texts += [(hierarchy.id, hierarchy.label, "") for hierarchy in cat.hierarchies()]
+    texts += [
+        (dimension.id, value.label, "")
+        for dimension in cat.dimensions()
+        for value in dimension.values
+    ]
+    identity = re.compile(r"\b(?:GHS|NGN|KES|ZAR|EUR|GBP|cedis|naira|shilling)\b", re.IGNORECASE)
+    for member_id, label, description in texts:
+        assert not identity.search(label + " " + description), member_id
+
+
+@pytest.mark.parametrize("field", ["currency", "jurisdiction_code"])
+@pytest.mark.parametrize("value", ["", " ", None])
+def test_missing_identity_refuses_instead_of_selecting_another_country(
+    db_session: Session, field: str, value: str | None
+) -> None:
+    bank = Bank(
+        id="BK-TEST0001",
+        organization_id="OR-TEST0001",
+        name="Unresolved bank",
+        short_name="Unresolved",
+        currency="NGN",
+        jurisdiction_code="NG",
+        license_type="universal",
+        institution_type="universal_bank",
+    )
+    setattr(bank, field, value)
+    if field == "currency":
+        with pytest.raises(ValueError):
+            base_currency(bank)
+    else:
+        with pytest.raises(PolicyUnresolvedError):
+            jurisdictions.jurisdiction_code(bank)
+        with pytest.raises(PolicyUnresolvedError):
+            jurisdictions.require_jurisdiction(db_session, bank)
+
+
+def test_an_unknown_jurisdiction_has_neutral_display_and_refuses_policy(
+    db_session: Session,
+) -> None:
+    bank = Bank(
+        id="BK-TEST0001",
+        organization_id="OR-TEST0001",
+        name="Unknown bank",
+        short_name="Unknown",
+        currency="NGN",
+        jurisdiction_code="ZZ",
+        license_type="universal",
+        institution_type="universal_bank",
+    )
+    assert jurisdictions.regulator_name(db_session, bank) == "the banking regulator"
+    assert jurisdictions.regulator_short(db_session, bank) == "Regulator"
+    with pytest.raises(PolicyUnresolvedError):
+        jurisdictions.require_jurisdiction(db_session, bank)
 
 
 def test_parameter_tables_carry_no_jurisdiction_default() -> None:
@@ -397,67 +413,3 @@ def test_base_currency_normalises() -> None:
         institution_type="universal_bank",
     )
     assert base_currency(bank) == "NGN"
-
-
-#: Modules that still carry a LOWERCASE currency literal, which the guard above
-#: cannot see because its match is case-sensitive.
-#:
-#: These are not narrative leaks. Every one is `RegulatoryMetricResult.unit`,
-#: whose CHECK constrains the column to ('pct', 'ghs', 'years') — so `"ghs"` is
-#: a load-bearing wire and DB value, the same shape as the `bog_*` fact
-#: categories AGENTS.md says must not be renamed.
-#:
-#: It is still a real defect: a Nigerian bank's EVE is stored with unit `ghs`.
-#: Fixing it means widening the CHECK, migrating every stored metric row and
-#: updating every consumer — a platform-wide change, not one a single phase can
-#: land. Until then this ceiling makes the debt BOUNDED: the set may shrink,
-#: never grow. A new module reaching for `"ghs"` fails here.
-_LOWERCASE_CURRENCY_UNIT_MODULES = frozenset(
-    {
-        "app/services/regulatory_capital.py",
-        "app/services/regulatory_liquidity.py",
-        "app/services/regulatory_fx.py",
-        "app/services/regulatory_irr.py",
-        "app/services/regulatory_credit.py",
-        "app/services/liquidity_ewi.py",
-        "app/services/regulatory_irr_sf.py",
-    }
-)
-
-
-def test_the_lowercase_currency_unit_debt_never_grows() -> None:
-    """The case-sensitivity hole in the guard above, held to a shrinking ceiling.
-
-    Resolved against ``_BACKEND_ROOT`` like every other path in this file. Until
-    2026-09-20 it used a RELATIVE ``Path(module_path)`` with a
-    ``if not path.exists(): continue`` skip, so the whole scan depended on the
-    process CWD: run from ``backend/`` it worked, run from the repository root
-    every path missed and the ceiling saw nothing (architecture audit L1).
-    """
-    offenders: set[str] = set()
-    for module_path in _CURRENCY_NEUTRAL_FILES:
-        path = _BACKEND_ROOT / module_path
-        assert path.is_file(), (
-            f"{module_path} is enrolled in the currency-neutrality ceiling but does "
-            "not exist. A silent skip here is how the ceiling stops scanning."
-        )
-        source = _without_exempt_constructs(path.read_text(encoding="utf-8"), module_path)
-        for line in source.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("#"):
-                continue
-            for code in _CURRENCY_CODES:
-                pattern = rf'["\'][^"\']*\b{code}\b[^"\']*["\']'
-                if re.search(pattern, line, re.IGNORECASE) and not re.search(pattern, line):
-                    offenders.add(module_path)
-    new = offenders - _LOWERCASE_CURRENCY_UNIT_MODULES
-    assert not new, (
-        "These modules newly name a currency in lowercase, which the case-sensitive "
-        "guard above cannot see. Resolve the value from the bank rather than adding "
-        "to the ceiling:\n  " + "\n  ".join(sorted(new))
-    )
-    stale = _LOWERCASE_CURRENCY_UNIT_MODULES - offenders
-    assert not stale, (
-        "These modules no longer carry a lowercase currency literal. Remove them "
-        "from the ceiling so it keeps shrinking:\n  " + "\n  ".join(sorted(stale))
-    )

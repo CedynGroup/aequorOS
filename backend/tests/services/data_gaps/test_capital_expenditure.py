@@ -43,9 +43,9 @@ from app.domain.ingestion.reference_schemas.capital_expenditure import (
     validate_capex_row,
 )
 from app.models import Bank, CanonicalReferenceRow
-from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
-from app.services.regulatory_reporting.bog_forms.linemaps.bsd10 import COLUMNS, ROW_FIELDS
-from app.services.regulatory_reporting.exports import render_bog_form_xlsx
+from app.reporting.service.bog_forms.linemaps import line_maps_for
+from app.reporting.service.bog_forms.linemaps.bsd10 import COLUMNS, ROW_FIELDS
+from app.reporting.service.exports import render_bog_form_xlsx
 from scripts.ingest_push import read_rows
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,

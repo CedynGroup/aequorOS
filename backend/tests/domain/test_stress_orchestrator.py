@@ -17,7 +17,6 @@ import pytest
 
 from app.domain.capital.ecl import EclAssumption, EclComputationError, EclExposure
 from app.domain.fx.engine import FxPosition
-from app.domain.icaap.pillar2 import fx as icaap_fx
 from app.domain.irr.engine import IrrPosition
 from app.domain.stress import orchestrator
 from app.domain.stress.concentration import ConcentrationExposure, ConcentrationInputs
@@ -36,6 +35,7 @@ from app.domain.stress.orchestrator import (
     run_enterprise_stress,
 )
 from app.domain.stress.translation import MacroPathPoint
+from app.icaap.domain.pillar2 import fx as icaap_fx
 from tests.domain.stress_fixtures import base_paths as base_macro_paths
 from tests.domain.stress_fixtures import (
     bog_capital_params,
@@ -419,6 +419,7 @@ def test_phase4_sections_populate_under_a_severe_scenario() -> None:
     outcome = run_enterprise_stress(_inputs(severe_paths(), **_phase4_overrides()))
     assert outcome.bottom_up_credit is not None
     assert outcome.bottom_up_credit.stressed_credit_rwa > outcome.bottom_up_credit.base_credit_rwa
+    assert outcome.bottom_up_credit.credit_rwa_uplift_factor is not None
     assert outcome.bottom_up_credit.credit_rwa_uplift_factor > Decimal("1")
     assert outcome.concentration is not None
     assert outcome.concentration.total_incremental_loss > Decimal("0")
@@ -513,7 +514,7 @@ def _fx_positions() -> tuple[FxPosition, ...]:
 #
 # The overlay that feeds Appendix II Table 5 used to restate
 # ``Tier 1 × max(stressed NOP% − base NOP%, 0)`` — the change in a RATIO, which
-# ``app/domain/icaap/pillar2/fx.py`` records as "not a loss (audit M8)". A
+# ``app/icaap/domain/pillar2/fx.py`` records as "not a loss (audit M8)". A
 # single filed ICAAP therefore carried two different definitions of the FX
 # add-on and the source-consistency control compared them against each other
 # (audit W3). These tests pin the extraction three ways: the value, the SIGN
@@ -676,7 +677,7 @@ def test_enterprise_stress_prices_a_fully_staged_book() -> None:
     assert result.capital.composition.ecl_source == "ecl_engine"
     assert result.capital.composition.ecl_base == Decimal("12600000.0000")
     assert result.capital.composition.ecl_stress > result.capital.composition.ecl_base
-    assert result.engine_version == "enterprise-stress-v4.2.0"
+    assert result.engine_version == "enterprise-stress-v5.0.0"
 
 
 def test_enterprise_stress_refuses_uncovered_fully_staged_ead() -> None:

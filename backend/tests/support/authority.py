@@ -12,8 +12,8 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.identity.service import authorization
 from app.models import User
-from app.services import authorization
 from tests.support.helpers import ORG_1, USER_1
 
 

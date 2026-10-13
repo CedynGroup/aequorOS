@@ -67,16 +67,6 @@ from app.domain.fx.engine import (
     compute_nop,
     run_fx_scenarios,
 )
-
-# D-038: the Pillar 2 FX add-on has ONE definition, and it lives in the ICAAP
-# Pillar 2 domain. The stress overlay's Table 5 ``country_and_fx`` and the ICAAP
-# register therefore appear in the same filed document computed by the same
-# function. Both modules are pure ``app/domain`` code, so this import crosses no
-# boundary. Before 2026-09-20 the overlay restated ``Tier 1 × max(ΔNOP%, 0)``,
-# the change in a RATIO, which ``icaap/pillar2/fx.py`` itself records as "not a
-# loss (audit M8)" — see that module's docstring for why.
-from app.domain.icaap.pillar2 import fx as icaap_fx
-from app.domain.icaap.units import pillar1_capital
 from app.domain.irr.engine import (
     SHOCK_PARALLEL_BP,
     GapResult,
@@ -128,6 +118,16 @@ from app.domain.stress.translation import (
     translate,
 )
 
+# D-038: the Pillar 2 FX add-on has ONE definition, and it lives in the ICAAP
+# Pillar 2 domain. The stress overlay's Table 5 ``country_and_fx`` and the ICAAP
+# register therefore appear in the same filed document computed by the same
+# function. Both modules are pure domain code; this dependency reads no
+# application state. Before 2026-09-20 the overlay restated ``Tier 1 × max(ΔNOP%, 0)``,
+# the change in a RATIO, which ``app/icaap/domain/pillar2/fx.py`` itself records
+# as "not a loss (audit M8)" — see that module's docstring for why.
+from app.icaap.domain.pillar2 import fx as icaap_fx
+from app.icaap.domain.units import pillar1_capital
+
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
 MILLION = Decimal("1000000")
@@ -135,7 +135,7 @@ _HUNDRED = Decimal("100")
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
 
-ENGINE_VERSION = "enterprise-stress-v4.2.0"
+ENGINE_VERSION = "enterprise-stress-v5.0.0"
 
 # --- Capital-path composition coefficients -----------------------------------
 # Documented, defensible linear elasticities that turn the macro scenario into

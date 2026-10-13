@@ -17,7 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod, ImpliedRatingRun, LiveMetric, RegulatoryRun
+from app.identity.public import Bank
+from app.models import BankReportingPeriod, ImpliedRatingRun, LiveMetric, RegulatoryRun
 from app.schemas.live import BankFreshnessRead, FreshnessModuleRead
 from app.services import (
     implied_rating,

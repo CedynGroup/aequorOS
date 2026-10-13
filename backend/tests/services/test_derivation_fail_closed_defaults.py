@@ -20,6 +20,7 @@ from app.domain.capital.engine import (
     RiskWeightUnavailable,
     resolve_risk_weight,
 )
+from app.domain.positions.credit import sovereign_evidence
 from app.models import BankFinancialFact, CanonicalPosition, CanonicalPositionSnapshot
 from app.services.fact_derivation import (
     GroupResult,
@@ -34,7 +35,6 @@ from app.services.fact_derivation import (
     _derive_loan_exposure,
     _derive_operational_income,
     _FxLeg,
-    _is_sovereign_security,
     _position_row,
     _PositionRow,
     _resolve_spot,
@@ -101,6 +101,7 @@ def _canonical(*rows: _PositionRow, base_currency: str = "GHS") -> _Canonical:
         gl_accounts=[],
         refs={},
         sovereign_issuer_names=GHS_NAMES,
+        domestic_country="GH",
     )
 
 
@@ -134,8 +135,9 @@ def test_fx_spot_prefers_ingested_then_implied() -> None:
     assert any("implied rate" in warning for warning in warnings)
 
 
-def test_unconvertible_hedge_leg_excludes_the_currency_instead_of_valuing_it_at_par() -> None:
-    """A hedge delta with no resolvable spot removes the currency, not the risk."""
+@pytest.mark.requirement("Notice BG/FMD/2026/07 ¶1(a)–(b)")
+def test_unconvertible_hedge_leg_retains_the_currency_and_refuses() -> None:
+    """Notice BG/FMD/2026/07 ¶1(a)–(b): missing quotes retain the currency and block NOP."""
     canonical = _Canonical(
         as_of=AS_OF,
         base_currency="GHS",
@@ -158,26 +160,31 @@ def test_unconvertible_hedge_leg_excludes_the_currency_instead_of_valuing_it_at_
     groups: list[GroupResult] = []
     specs, included = _derive_fx_positions(canonical, groups)
 
-    assert included == set()
-    assert not [spec for spec in specs if spec.fact_group == "fx_position"]
+    assert included == {"USD"}
+    position = next(spec for spec in specs if spec.fact_group == "fx_position")
+    assert position.attributes["spot_ghs"] == ""
+    assert position.attributes["net_ccy"] == "-500.0000"
     fx_group = next(group for group in groups if group.group == "fx_position")
     assert any("missing_required_input" in warning for warning in fx_group.warnings)
 
 
-def test_currency_without_return_history_still_carries_the_capital_charge() -> None:
-    """Audit §3: it used to vanish from the book, understating the FX charge."""
+@pytest.mark.requirement("Notice BG/FMD/2026/07 ¶1(a)–(b)")
+def test_currency_without_return_history_carries_both_nop_and_capital_exposure() -> None:
+    """Notice BG/FMD/2026/07 ¶1(a)–(b): currency coverage is independent of VaR history."""
     canonical = _canonical(
         _row("A/1", "LOAN", currency="USD", balance="1000", balance_ghs="12850"),
     )
     groups: list[GroupResult] = []
     specs, included = _derive_fx_positions(canonical, groups)
 
-    assert included == set()  # no VaR row without a return history
+    assert included == {"USD"}
+    position = next(spec for spec in specs if spec.fact_group == "fx_position")
+    assert position.amount == Decimal("12850")
     market = {spec.category: spec.amount for spec in specs if spec.fact_group == "market_risk"}
     assert market["net_long_fx"] == Decimal("12850")
     assert market["net_short_fx"] == Decimal("0")
     fx_group = next(group for group in groups if group.group == "fx_position")
-    assert any("IS included in the net open position" in w for w in fx_group.warnings)
+    assert any("retained for NOP limits" in w for w in fx_group.warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -191,13 +198,12 @@ def test_currency_without_return_history_still_carries_the_capital_charge() -> N
         _row("S/1", "SECURITY_HOLDING", counterparty_type="SOVEREIGN"),
         _row("S/2", "SECURITY_HOLDING", counterparty_type="CENTRAL_BANK"),
         _row("S/3", "SECURITY_HOLDING", attributes={"instrument": "gog_bond"}),
-        _row("S/4", "SECURITY_HOLDING", attributes={"issuer_class": "public_institution"}),
         _row("S/5", "SECURITY_HOLDING", product_code="SEC.TBILL.91"),
         _row("S/6", "SECURITY_HOLDING", attributes={"issuer": "Government of Ghana"}),
     ],
 )
 def test_sovereign_evidence_is_recognised(row: _PositionRow) -> None:
-    assert _is_sovereign_security(row, GHS_NAMES) is True
+    assert sovereign_evidence(row, GHS_NAMES) is True
 
 
 @pytest.mark.parametrize(
@@ -207,10 +213,11 @@ def test_sovereign_evidence_is_recognised(row: _PositionRow) -> None:
         _row("C/2", "SECURITY_HOLDING", product_code="SEC.CORP.BOND.5Y"),
         _row("C/3", "SECURITY_HOLDING", attributes={"issuer": "Acme Manufacturing plc"}),
         _row("C/4", "SECURITY_HOLDING"),
+        _row("PSE/1", "SECURITY_HOLDING", attributes={"issuer_class": "public_institution"}),
     ],
 )
 def test_paper_without_sovereign_evidence_is_not_recognised(row: _PositionRow) -> None:
-    assert _is_sovereign_security(row, GHS_NAMES) is False
+    assert sovereign_evidence(row, GHS_NAMES) is False
 
 
 def test_non_sovereign_holdings_leave_the_hqla_and_zero_weight_lines() -> None:
@@ -393,7 +400,7 @@ def test_absent_ecl_and_crm_report_an_explicit_not_computable_state(
     loan_rows = _classify_loans(canonical, [])
     groups: list[GroupResult] = []
     assert _derive_ecl_exposure(loan_rows, groups) == []
-    assert _derive_crm_collateral(loan_rows, groups) == []
+    assert _derive_crm_collateral(canonical, loan_rows, groups) == []
 
     ecl = next(item for item in groups if item.group == "ecl_exposure")
     assert ecl.status == "skipped"

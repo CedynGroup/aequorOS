@@ -2,7 +2,7 @@
 
     uv run python scripts/extract_bog_templates.py \
         --source ../docs/reporting \
-        --out app/services/regulatory_reporting/bog_forms/layouts
+        --out app/reporting/service/bog_forms/layouts
 
 For every ``FORM BSD*.xls`` under ``--source`` this converts the legacy workbook to
 xlsx with LibreOffice (headless; formulas preserved), then records EVERY sheet and

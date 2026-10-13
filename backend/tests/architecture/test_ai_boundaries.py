@@ -51,12 +51,12 @@ _HTTP_ADAPTERS = (_AI_PACKAGE / "openai_model.py", _AI_PACKAGE / "google_model.p
 _TUNABLE_SCAN = (
     *sorted((_APP / "domain" / "ai").glob("*.py")),
     *sorted((_APP / "services" / "ai").glob("*.py")),
-    _APP / "domain" / "icaap" / "ai_facts.py",
-    _APP / "domain" / "icaap" / "ai_convert.py",
-    _APP / "services" / "icaap" / "ai_fact_sheet.py",
-    _APP / "services" / "icaap" / "ai_prompt.py",
-    _APP / "services" / "icaap" / "ai_drafting.py",
-    _APP / "services" / "icaap" / "ai_jobs.py",
+    _APP / "icaap" / "domain" / "ai_facts.py",
+    _APP / "icaap" / "domain" / "ai_convert.py",
+    _APP / "icaap" / "service" / "ai_fact_sheet.py",
+    _APP / "icaap" / "service" / "ai_prompt.py",
+    _APP / "icaap" / "service" / "ai_drafting.py",
+    _APP / "icaap" / "service" / "ai_jobs.py",
 )
 
 #: The route modules are deliberately NOT scanned: their only numbers are HTTP
@@ -216,7 +216,18 @@ def test_the_model_id_default_lives_only_in_settings() -> None:
 
 def test_the_pure_ai_domain_touches_no_infrastructure() -> None:
     """``app/domain/ai`` must stay importable without a database or a network."""
-    forbidden = ("sqlalchemy", "fastapi", "httpx", "requests", "anthropic", "app.services")
+    forbidden = (
+        "sqlalchemy",
+        "fastapi",
+        "httpx",
+        "requests",
+        "anthropic",
+        "app.services",
+        "app.identity.api",
+        "app.identity.models",
+        "app.identity.service",
+        "app.identity.public",
+    )
     for path in sorted((_APP / "domain" / "ai").glob("*.py")):
         source = path.read_text(encoding="utf-8")
         for token in forbidden:

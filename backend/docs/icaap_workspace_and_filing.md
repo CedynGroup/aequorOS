@@ -37,7 +37,7 @@ opportunities but are load-bearing.
   (`icaap_ai_draft`, `bi_commentary` and `bi_nlq_translate`; the default lane excludes them
   by construction and `app/worker.py::resolve_job_types` refuses a mixed-lane process)
   because the process holding the model key must run nothing else. **Jurisdiction is data
-  under `app/domain/icaap/frameworks/<code>/`** with no `if jurisdiction ==` — and the
+  under `app/icaap/domain/frameworks/<code>/`** with no `if jurisdiction ==` — and the
   Nigeria and Kenya manifests were built WITHOUT reading their primary texts (recorded in
   each file's `## Provenance of this manifest`); obtain and verify them before a customer
   relies on either.
@@ -46,7 +46,7 @@ opportunities but are load-bearing.
 - The DISPATCH plane must not write to the CALCULATION plane's parameter ledger, so
   `PrefetchedParameterResolver.load()` requires an explicit `record=` with no default (with
   a default, adding one registry entry moves an unrelated family's content digest). Every
-  ICAAP read of a governed row goes through `app/services/icaap/parameters.py`; no ICAAP
+  ICAAP read of a governed row goes through `app/icaap/service/parameters.py`; no ICAAP
   module may touch the live plane (`tests/architecture/test_icaap_boundaries.py`).
 
 ---
@@ -55,12 +55,12 @@ opportunities but are load-bearing.
 
 Four planes, deliberately separate.
 
-**The workspace** (`app/domain/icaap/`, `app/services/icaap/`,
-`app/features/manage_icaap*.py`) is a narrative document under review: cycles,
+**The workspace** (`app/icaap/domain/`, `app/icaap/service/`,
+`app/icaap/api/manage_icaap*.py`) is a narrative document under review: cycles,
 sections of ProseMirror text, data blocks bound to computed evidence, a
 requirement checklist, a stage/decision chain, attachments.
 
-**The Pillar 2 engines** (`app/domain/icaap/pillar2/`, plus
+**The Pillar 2 engines** (`app/icaap/domain/pillar2/`, plus
 `app/domain/credit/`, `app/domain/irr/standardised*.py`) are pure. They take
 governed parameters and a book, and return typed results or typed refusals.
 
@@ -89,13 +89,14 @@ the content and register digests, the audit event. That is what makes an ICAAP
 filing the same kind of object as every other return, read, exported, signed
 and submitted by exactly the same code.
 
-Two deliberate differences from `generate_package`, both recorded in
-`registry.py`:
+The mint-site contract:
 
 - **`effective_date` is not gated on this side.** A commencement date is not a
   generation gate: blocking on it would stop a bank preparing and dry-running a
   return before its first live filing. Every other blocking dimension — licence
-  class, jurisdiction, supervisor — still applies.
+  class, jurisdiction, supervisor — still applies. Draft and pre-commencement
+  preparation now also follows the shared
+  [instrument-status contract](../../docs/regulatory_reporting.md#5b-reporting-date-standing-rules).
 - **The reporting period is resolved by the caller**, because a cycle's as-of
   date is the fiscal year end it was opened for, not a book that happened to
   arrive.
@@ -111,7 +112,7 @@ gate; **neither may drop it**. The two resolutions went in opposite directions,
 deliberately:
 
 - the **reporting-period and reconciliation** gates sit in `freeze_cycle`
-  (`app/services/icaap/freeze.py`), because they need the cycle's as-of date and
+  (`app/icaap/service/freeze.py`), because they need the cycle's as-of date and
   produce ICAAP-named 409s (`no_computed_position`, `filing_reconciliation`);
 - the **withdrawn-evidence** gate sits at the MINT
   (`_assert_evidence_current`), because a freeze-minted filing binds engine runs
@@ -130,7 +131,7 @@ need it?" but "which of the two owns it, and is that written down?".
 
 ## 3. `family_hooks` is the ONE seam a return family may use
 
-`app/services/regulatory_reporting/family_hooks.py`. The regulatory reporting
+`app/reporting/service/family_hooks.py`. The regulatory reporting
 plane is family-agnostic by construction. ICAAP is the first family that
 genuinely needs more: a package minted by freezing a workspace cycle, a Board
 resolution as a submission precondition, a document rendered from a frozen
@@ -212,7 +213,7 @@ two registry-driven sites (`eligibility.parameter_resolver()`,
 `calendar._governed_deadlines`) pass `record=False`; the engines pass
 `record=True`. The ICAAP report plane seals no run at all and writes its own
 governed-row record onto the frozen snapshot, so every ICAAP read goes through
-`app/services/icaap/parameters.py` — the plane's one non-recording door, pinned
+`app/icaap/service/parameters.py` — the plane's one non-recording door, pinned
 by `tests/architecture/test_icaap_boundaries.py`.
 
 Nothing special-cases ICAAP or any parameter code. A future registry entry —
@@ -253,6 +254,19 @@ A freeze must satisfy, in one transaction:
 - the review digest the approval was taken on, still matching the text;
 - the framework digest, still matching the published version;
 - the framework's own attachment requirements, notably the Board resolution.
+
+**A governed post-freeze return closes the frozen round.** It may target any
+stage at or before the approval/freeze stage, including that stage itself;
+in-review returns must still target an earlier stage. The return decision names
+the sealed package and is recorded before the round increments, so fresh
+approvals in the reopened round can stand. For persisted legacy returns recorded
+in the incremented round, `workflow.load_state` uses the matching package's
+frozen decision to determine the closed round for approval validity. Stored
+decisions and their displayed rounds remain unchanged, as do sealed snapshots.
+Migration `202610110092` admits same-stage returns with a package reference;
+downgrade refuses while such history exists. The
+[freeze regressions](../tests/icaap/service/test_freeze_state_machine.py) cover
+all return targets and legacy-history refreeze without rewriting evidence.
 
 **The Board resolution is required by the FRAMEWORK, not by the signing
 policy** (D-031). `ATTESTATION_ESIGN_REQUIRED=0` suspends signatures; it must
@@ -340,7 +354,7 @@ reasoning about it.
 ## 9. Jurisdiction is data — including for ICAAP
 
 A jurisdiction's ICAAP framework is JSON under
-`app/domain/icaap/frameworks/<code>/`, with no `if jurisdiction ==` anywhere
+`app/icaap/domain/frameworks/<code>/`, with no `if jurisdiction ==` anywhere
 (D-076). Ghana's four-month window, Nigeria's absent Table 5, Kenya's absent
 disclosure, an absent return family and an absent method mandate are each data,
 each with a test. This applies the
@@ -373,7 +387,7 @@ is **not** verified provenance.
 
 Also open by design, and visible rather than hidden: NG and KE have **no
 governed parameter rows at all** (6 and 8 codes drafted). That gap is pinned as
-a shrinkable ceiling in `tests/domain/icaap/test_framework_param_refs.py`, so it
+a shrinkable ceiling in `tests/icaap/domain/test_framework_param_refs.py`, so it
 cannot grow unnoticed.
 
 ### One thing that is NOT a jurisdiction leak

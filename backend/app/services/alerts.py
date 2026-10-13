@@ -13,9 +13,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
-from app.models import Bank, LiveFinding
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
+from app.models import LiveFinding
 from app.schemas.live import AlertItemRead, BankAlertsRead
-from app.services import scoped_authorization
 
 _ALERT_SEVERITIES = ("critical", "high")
 _SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}

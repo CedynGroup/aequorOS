@@ -25,6 +25,8 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
 from app.ml.behavioral import deposit_stability, nmd_duration, prepayment
 from app.ml.behavioral.config import (
     ASSUMPTION_TYPE,
@@ -33,10 +35,8 @@ from app.ml.behavioral.config import (
     ModelResult,
 )
 from app.ml.behavioral.history import available_as_of_dates
-from app.models import Bank
 from app.models.canonical import CanonicalReferenceRow
 from app.models.ingestion import IngestionBatch, LineageRecord
-from app.services import scoped_authorization
 
 _MODULES = {
     "nmd-duration": nmd_duration,
@@ -230,6 +230,7 @@ def apply_estimates(  # noqa: PLR0913
         LineageRecord(
             id=lineage_id,
             organization_id=ctx.organization_id,
+            bank_id=bank.id,
             ingestion_batch_id=batch_id,
             operation_type="ENRICHMENT",
             operation_ref=f"behavioral_ml/{model}/{as_of_date.isoformat()}",

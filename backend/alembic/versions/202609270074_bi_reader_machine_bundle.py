@@ -39,11 +39,9 @@ integration and their leaving the bank would not revoke them.
 
 Nothing is backfilled
 ---------------------
-No existing row can become a ``bi_reader``: the bundle is minted only by
-issuing a feed key, which creates its own service identity in the same
-transaction (``app/services/integration_keys.py``). A tenant that has issued
-no feed key has no ``bi_reader`` binding and therefore no feed access, which
-is the intended starting state.
+Widening the vocabulary grants no authority to existing identities: this revision
+backfills no bindings. Credential availability and issuance are governed by
+``backend/docs/integration_key_machine_principal_rollout.md``.
 """
 
 from __future__ import annotations

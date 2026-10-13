@@ -9,7 +9,7 @@ can be proved end to end without a bank's Google Workspace / Entra / Okta.
 
 Bound on loopback only. Plain-http issuers are accepted by the backend and by
 the dashboard's egress guard ONLY on loopback and ONLY on an undeployed
-environment (``app/core/security._is_loopback_issuer_allowed`` and
+environment (``app/core/security.is_loopback_issuer_allowed`` and
 ``dashboard/lib/outbound.ts``), so this issuer cannot be pointed at from a
 deployment, by construction. Every credential below is a repository literal
 precisely because none of it may ever be real.

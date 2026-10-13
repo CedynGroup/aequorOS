@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
-from app.models import Bank
-from app.services import scoped_authorization
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
 
 
 def project_response[ResponseModel: BaseModel](

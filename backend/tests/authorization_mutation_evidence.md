@@ -10,7 +10,7 @@ This document records the executed mutation-proof evidence.
 
 ```sh
 TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
-  tests/api/test_authorization_state_machine.py \
+  tests/identity/api/test_authorization_state_machine.py \
   tests/db/test_authorization_tenant_isolation_properties.py -q
 ```
 
@@ -24,7 +24,7 @@ Focused correction verification:
 
 ```sh
 TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
-  tests/api/test_authorization_state_machine.py -k ownership -q
+  tests/identity/api/test_authorization_state_machine.py -k ownership -q
 ```
 
 Result: **2 passed, 8 deselected** (7.76s), including
@@ -105,7 +105,7 @@ Order of evidence:
 2. Fix applied, quarantine still in place — `-k known_defects` on the coverage
    layer: **1 failed** (5.17s) on the promotion assertion, naming both routes
    (`documented object-reference defects are no longer reproduced; remove them
-   from KNOWN_DEFECTS`), as the layer is designed to force.
+from KNOWN_DEFECTS`), as the layer is designed to force.
 3. Fix applied, `KNOWN_DEFECTS` emptied — coverage layer: **400 passed**
    (34.63s; the two former skips now run in the strict parametrization, with
    the nested single-foreign-child cases included); generative layer against

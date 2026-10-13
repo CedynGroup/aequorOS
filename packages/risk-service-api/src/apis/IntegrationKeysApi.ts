@@ -48,7 +48,7 @@ export interface RevokeIntegrationKeyRequest {
  */
 export class IntegrationKeysApi extends runtime.BaseAPI {
   /**
-   * Issue one credential for one exact institution, for one purpose.  The authority required is unchanged by the second purpose: one organization-wide ACCOUNT/restricted ``administer`` binding (``require_account_administration``) plus an exact ``BK-*`` target, which the service resolves inside the caller\'s tenant.
+   * Issue a data push key for an exact bank under Account administration.
    * Issue Integration Key
    */
   async issueIntegrationKeyRaw(
@@ -95,7 +95,7 @@ export class IntegrationKeysApi extends runtime.BaseAPI {
   }
 
   /**
-   * Issue one credential for one exact institution, for one purpose.  The authority required is unchanged by the second purpose: one organization-wide ACCOUNT/restricted ``administer`` binding (``require_account_administration``) plus an exact ``BK-*`` target, which the service resolves inside the caller\'s tenant.
+   * Issue a data push key for an exact bank under Account administration.
    * Issue Integration Key
    */
   async issueIntegrationKey(

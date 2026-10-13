@@ -100,7 +100,7 @@ _TERM_BORROWINGS_M = "100"
 _OTHER_ASSETS_FLOOR_M = "40"
 _LOAN_EXPOSURES_M: tuple[tuple[str, str, str], ...] = (
     ("corporate_unrated", "560", "RW100"),
-    ("sme_retail", "280", "RW75"),
+    ("sme_retail", "280", "RW100"),
     ("retail_other", "250", "RW75"),
     ("residential_mortgage", "200", "RW35"),
     ("commercial_real_estate", "60", "RW100"),
@@ -842,6 +842,7 @@ def _fact(
 
 
 def _build_period_facts(period: BankReportingPeriod, index: int) -> list[BankFinancialFact]:
+    period.credit_source_basis = "[]"
     factors = _factors(index)
     loan_rows = [
         (category, _amount(millions, factors.loans), code)
@@ -917,6 +918,40 @@ def _build_period_facts(period: BankReportingPeriod, index: int) -> list[BankFin
             is_deduction=deduction,
         )
         for category, amount, tier, deduction in capital_rows
+    )
+    facts.extend(
+        _fact(
+            period,
+            "credit_exposure",
+            f"{category}:{code}",
+            amount,
+            risk_weight_code=code,
+        )
+        for category, amount, code in loan_rows
+    )
+    facts.extend(
+        _fact(
+            period,
+            "credit_exposure",
+            f"securities:domestic_sovereign:{'bog' if category == 'bog_bills' else 'gog'}:RW0",
+            amount,
+            risk_weight_code="RW0",
+        )
+        for category, amount, from_cash in securities_rows
+        if not from_cash
+    )
+    facts.extend(
+        _fact(
+            period,
+            "credit_exposure",
+            f"{fact.category}:{'RW100' if fact.category == 'other_assets' else 'RW0'}",
+            fact.amount,
+            risk_weight_code="RW100" if fact.category == "other_assets" else "RW0",
+        )
+        for fact in tuple(facts)
+        if fact.fact_group == "balance_sheet"
+        and fact.category
+        in ("cash_vault", "bog_required_reserves", "bog_excess_reserves", "other_assets")
     )
     facts.extend(_irr_facts(period, factors))
     facts.extend(_fx_facts(period, factors))

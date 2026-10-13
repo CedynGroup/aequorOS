@@ -30,9 +30,7 @@ def _module_pattern() -> re.Pattern[str]:
     )
     query = hints["module"].__metadata__[0]
     patterns = [
-        item.pattern
-        for item in getattr(query, "metadata", [])
-        if getattr(item, "pattern", None)
+        item.pattern for item in getattr(query, "metadata", []) if getattr(item, "pattern", None)
     ]
     assert patterns, "the module parameter must stay pattern-validated"
     return re.compile(patterns[0])

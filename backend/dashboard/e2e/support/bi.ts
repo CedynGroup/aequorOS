@@ -51,9 +51,7 @@ export async function biApi(
  * The reporting date the fixture's analytics were built at: the latest reporting
  * period the platform lists, which the API returns period-end descending.
  */
-export async function fixtureAsOf(
-  request: APIRequestContext,
-): Promise<string> {
+export async function fixtureAsOf(request: APIRequestContext): Promise<string> {
   const { status, body } = await biApi(
     request,
     "admin",
@@ -89,7 +87,7 @@ export const FIXTURE_FIGURES = {
 
 /**
  * The seven certified content packs, by id and by the title a reader sees.
- * `app/domain/bi/packs/*.json`, validated by `PackSpec`.
+ * `app/bi/domain/packs/*.json`, validated by `PackSpec`.
  */
 export const CERTIFIED_PACKS = [
   { id: "alco", title: "Asset and liability committee" },

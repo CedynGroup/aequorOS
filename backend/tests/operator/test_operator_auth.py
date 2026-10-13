@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import get_operator_settings
 from app.db.base import utc_now
+from app.identity.service import auth_throttle
 from app.models import OperatorAuditLog, OperatorUser
 from app.operator.services import operator_auth
-from app.services import auth_throttle
 from tests.operator.conftest import OPERATOR_JWT_SECRET, operator_headers
 
 PASSWORD = "correct horse battery staple"

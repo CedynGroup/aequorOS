@@ -235,6 +235,7 @@ export default function RiskLimitMonitorPage() {
   const breaches = rows.filter((row) => row.status === "crit");
   const ambers = rows.filter((row) => row.status === "warn");
   const compliant = rows.filter((row) => row.status === "ok");
+  const unassessed = rows.filter((row) => row.status === "na").length;
 
   const filteredRows: LimitRow[] =
     filter === "breach" ? breaches : filter === "amber" ? ambers : rows;
@@ -256,19 +257,21 @@ export default function RiskLimitMonitorPage() {
             <KpiStat
               label="Limit breaches"
               value={breaches.length}
-              status={breaches.length > 0 ? "crit" : "ok"}
-              hint={`of ${rows.length} tracked limits`}
+              status={
+                breaches.length > 0 ? "crit" : unassessed > 0 ? "warn" : "ok"
+              }
+              hint={`${unassessed > 0 ? `${unassessed} unavailable · ` : ""}of ${rows.length} tracked limits`}
             />
             <KpiStat
               label="Amber (approaching)"
               value={ambers.length}
-              status={ambers.length > 0 ? "warn" : "ok"}
+              status={ambers.length > 0 || unassessed > 0 ? "warn" : "ok"}
               hint="within the early-warning zone"
             />
             <KpiStat
               label="Compliant"
               value={compliant.length}
-              status="ok"
+              status={unassessed > 0 ? "warn" : "ok"}
               hint="inside limit with headroom"
             />
             <KpiStat

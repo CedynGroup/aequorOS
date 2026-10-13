@@ -32,12 +32,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import CashflowSettings, get_settings
+from app.identity.public import Bank
 from app.ml.baseline import forecast_static
 from app.ml.cashflow_history import load_bank_daily_series
 from app.ml.config import MODEL_VERSION, TrainingConfig
 from app.ml.real_series import load_real_daily_series
 from app.ml.synthetic import DailyFlow, generate_daily_series
-from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
+from app.models import CanonicalPosition, CanonicalPositionSnapshot
 from app.schemas.cashflow_forecast import (
     CashflowForecastAccuracyRead,
     CashflowForecastMode,
@@ -97,9 +98,7 @@ def get_forecast(  # noqa: PLR0913 - explicit tenant forecast inputs
     )
 
 
-def get_history(
-    db: Session, ctx: TenantContext, bank_id: str, *, days: int
-) -> CashflowHistoryRead:
+def get_history(db: Session, ctx: TenantContext, bank_id: str, *, days: int) -> CashflowHistoryRead:
     _get_bank_or_404(db, ctx, bank_id)
     return _get_service(db, ctx, bank_id).history(days)
 
@@ -207,8 +206,7 @@ class ForecastService:
         contractual = _contractual_daily_flows(db, ctx, bank, dates)
         adjustments, assumptions = _scenario_adjustments(behavioral, scenario)
         central = [
-            behavioral[index] + contractual[index] + adjustments[index]
-            for index in range(horizon)
+            behavioral[index] + contractual[index] + adjustments[index] for index in range(horizon)
         ]
         quantiles = _simulated_quantiles(
             central, float(metrics["residual_std"]), mode=mode, scenario=scenario

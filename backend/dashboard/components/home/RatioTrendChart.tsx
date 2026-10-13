@@ -27,15 +27,15 @@ import RangeTabs, {
   type RangePreset,
 } from "@/components/ui/RangeTabs";
 import ChartFrame from "@/components/ui/ChartFrame";
-import { num } from "@/lib/api/values";
+import { num, numOrNull } from "@/lib/api/values";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { useEffectiveRatioDashboards } from "@/lib/api/hooks";
 
 type TrendRow = {
   t: number;
   label: string;
-  lcr?: number;
-  nsfr?: number;
+  lcr?: number | null;
+  nsfr?: number | null;
   car?: number;
 };
 
@@ -65,8 +65,8 @@ export default function RatioTrendChart({
       byPeriod.set(p.reportingPeriodId, {
         t: p.periodEnd.getTime(),
         label: p.label,
-        lcr: num(p.lcrPct),
-        nsfr: num(p.nsfrPct),
+        lcr: numOrNull(p.lcrPct),
+        nsfr: numOrNull(p.nsfrPct),
       });
     }
     for (const p of cap.data?.trend ?? []) {
@@ -92,7 +92,9 @@ export default function RatioTrendChart({
     // the arithmetic: a window with fewer than two LCR readings has no move.
     const withLcr = rows
       .map((row) => row.lcr)
-      .filter((value): value is number => value !== undefined);
+      .filter(
+        (value): value is number => value !== undefined && value !== null,
+      );
     if (withLcr.length < 2) return null;
     return withLcr[withLcr.length - 1] - withLcr[0];
   })();

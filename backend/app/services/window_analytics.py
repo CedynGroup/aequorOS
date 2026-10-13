@@ -23,11 +23,12 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
+from app.domain.authority.results import Computed
 from app.domain.capital.engine import CapitalComputationError
 from app.domain.capital.engine import MissingParameterError as CapitalMissingParameter
-from app.domain.liquidity.engine import LiquidityComputationError
-from app.domain.liquidity.engine import MissingParameterError as LiquidityMissingParameter
-from app.models import Bank, BankReportingPeriod, LiveMetricSnapshot
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
+from app.models import BankReportingPeriod, LiveMetricSnapshot
 from app.schemas.window_analytics import (
     WindowAnalyticsRead,
     WindowDailyStatRead,
@@ -36,7 +37,6 @@ from app.schemas.window_analytics import (
     WindowRatioPointRead,
     WindowRatioStatRead,
 )
-from app.services import scoped_authorization
 from app.services.regulatory_capital import (
     CapitalRunError,
 )
@@ -220,10 +220,12 @@ def _liquidity_series(
             continue
         try:
             lcr_result, nsfr_result, _params = _liquidity_compute_inline(db, ctx, bank, period)
-        except (LiquidityMissingParameter, LiquidityComputationError, LiquidityRunError):
+        except LiquidityRunError:
             continue
-        lcr.append(_point(period, lcr_result.lcr_pct, stored=False))
-        nsfr.append(_point(period, nsfr_result.nsfr_pct, stored=False))
+        if isinstance(lcr_result, Computed):
+            lcr.append(_point(period, lcr_result.value.lcr_pct, stored=False))
+        if isinstance(nsfr_result, Computed):
+            nsfr.append(_point(period, nsfr_result.value.nsfr_pct, stored=False))
     return [
         *_ratio_stat("lcr_pct", "liquidity", lcr),
         *_ratio_stat("nsfr_pct", "liquidity", nsfr),

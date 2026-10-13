@@ -9,7 +9,9 @@
 # an `if:` on each expensive job — so the workflow always reports, while a
 # docs-only change still does not pay for Postgres.
 #
-# Usage:  changed_area.sh <output-name> <extended-regex over repo-relative paths>
+# Usage: changed_area.sh <output-name> <path-regex> [--ignore]
+# By default the regex selects paths to run; --ignore selects paths to skip and
+# runs if any changed path is outside it, considering both sides of a rename.
 #
 # Fail-closed on purpose: anything this cannot determine — a non-pull_request
 # event, a diff that will not compute, an empty change set — answers "true" and
@@ -20,9 +22,19 @@ set -euo pipefail
 
 NAME="${1:?usage: changed_area.sh <output-name> <regex>}"
 PATTERN="${2:?usage: changed_area.sh <output-name> <regex>}"
+MATCH_ARGS=(-qE)
+DIFF_ARGS=(--name-only)
+case "${3:-}" in
+  '') ;;
+  --ignore)
+    MATCH_ARGS=(-qvE)
+    DIFF_ARGS+=(--no-renames)
+    ;;
+  *) exit 2 ;;
+esac
 
 emit() {
-  echo "${NAME}=$1" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
+  echo "${NAME}=$1" >>"${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
   echo "${NAME}=$1"
 }
 
@@ -47,7 +59,7 @@ if [ -z "${BASE}" ]; then
   exit 0
 fi
 
-if ! CHANGED="$(git diff --name-only "${BASE}" HEAD 2>&1)"; then
+if ! CHANGED="$(git diff "${DIFF_ARGS[@]}" "${BASE}" HEAD 2>&1)"; then
   echo "::warning::Could not diff ${BASE}..HEAD (${CHANGED}); running every gate."
   emit true
   exit 0
@@ -66,8 +78,9 @@ echo "Matching against: ${PATTERN}"
 # A here-string, not a pipe: `grep -q` exits on its first match, and under
 # `pipefail` the writer's resulting SIGPIPE turns a MATCH into a false
 # "nothing changed" once the diff is long enough (685 backend files did it).
-if grep -qE "${PATTERN}" <<<"${CHANGED}"; then
+if grep "${MATCH_ARGS[@]}" "${PATTERN}" <<<"${CHANGED}"; then
   emit true
 else
+  [ "$?" -eq 1 ] || exit 1
   emit false
 fi

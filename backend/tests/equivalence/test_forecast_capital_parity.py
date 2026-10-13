@@ -32,12 +32,20 @@ regression would slip through. This file runs everywhere.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from decimal import Decimal
 
 import pytest
 
-from app.domain.capital.engine import CapitalFact, compute_capital_ratios, compute_rwa
+from app.domain.capital.engine import (
+    CapitalFact,
+    CapitalParams,
+    RwaResult,
+    compute_capital_ratios,
+    compute_rwa,
+)
+from app.domain.forecasting import engine as forecast_engine
 from app.domain.forecasting.engine import (
     ForecastFact,
     ForecastParams,
@@ -458,3 +466,63 @@ def test_projected_years_never_admit_a_non_gross_income_series_to_the_bia() -> N
     mixed = project(_mixed_income_facts(), params, BASE_ASSUMPTIONS)
 
     assert [row.car_pct for row in mixed.years] == [row.car_pct for row in plain.years]
+
+
+def test_net_credit_basis_survives_forecast_and_rolls_with_its_assets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BoG CRD (June 2018) ¶98, ¶107: forecast retains capital's net exposure basis."""
+    facts = list(_facts(ecl=False, crm=False))
+    for fact in tuple(facts):
+        if fact.fact_group == "loan_exposure":
+            facts.append(
+                ForecastFact(
+                    "credit_exposure",
+                    f"{fact.category}:{fact.risk_weight_code}",
+                    Decimal("500") * M if fact.category == "corporate_unrated" else fact.amount,
+                    risk_weight_code=fact.risk_weight_code,
+                )
+            )
+    facts.extend(
+        (
+            ForecastFact(
+                "credit_exposure",
+                "securities:domestic_sovereign:RW20",
+                Decimal("620") * M,
+                risk_weight_code="RW20",
+            ),
+            ForecastFact(
+                "credit_exposure", "other_assets:RW100", Decimal("90") * M, risk_weight_code="RW100"
+            ),
+            ForecastFact(
+                "credit_exposure", "cash_vault:RW0", Decimal("290") * M, risk_weight_code="RW0"
+            ),
+        )
+    )
+    state, meta = _parse_facts(facts)
+    capital_facts = _to_capital_facts(_state_facts(state, meta))
+    params = bog_forecast_params()
+    direct = compute_rwa(capital_facts, params.capital)
+    observed: list[Decimal] = []
+
+    def capture_rwa(facts: Sequence[CapitalFact], params: CapitalParams) -> RwaResult:
+        result = compute_rwa(facts, params)
+        observed.append(result.credit_rwa)
+        return result
+
+    monkeypatch.setattr(forecast_engine, "compute_rwa", capture_rwa)
+    projection = project(facts, params, BASE_ASSUMPTIONS)
+    assert observed[0] == direct.credit_rwa
+    assert (
+        projection.years[0].car_pct
+        == compute_capital_ratios(capital_facts, direct, params.capital).car_pct
+    )
+    # Credit loans: (500 + 280*.75 + 250*.75 + 200*.35 + 60 + 50*1.5)M;
+    # securities: 620M*.2; other assets: 90M; off-balance: 150M.
+    assert direct.credit_rwa == Decimal("1466.5") * M
+    assert observed[1] == (
+        Decimal("1102.5") * M * Decimal("1.18")
+        + Decimal("124") * M * Decimal("1.16")
+        + Decimal("90") * M
+        + Decimal("150") * M * Decimal("1.18")
+    )

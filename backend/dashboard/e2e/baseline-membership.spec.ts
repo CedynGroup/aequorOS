@@ -149,6 +149,14 @@ test.describe("fresh active member baseline", () => {
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/settings$/);
     await expect(
+      page.getByRole("link", { name: "Manage members and access" }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("navigation", { name: "Module sections" })
+      .getByRole("link", { name: "Profile & preferences" })
+      .click();
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(
       page.getByRole("heading", { name: "Your account", exact: true }),
     ).toBeVisible();
     if (evidenceDir) {

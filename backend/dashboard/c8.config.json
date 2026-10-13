@@ -1,0 +1,12 @@
+{
+  "reports-dir": "coverage/legacy",
+  "temp-directory": ".test-out/coverage-v8",
+  "reporter": ["json", "json-summary", "text-summary"],
+  "include": [
+    "app/**/*.{ts,tsx}",
+    "components/**/*.{ts,tsx}",
+    "lib/**/*.{ts,tsx}"
+  ],
+  "exclude": ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/*.d.ts"],
+  "exclude-after-remap": true
+}

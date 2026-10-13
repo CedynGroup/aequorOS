@@ -32,6 +32,7 @@ from app.adapters.database_direct.drivers.base import (
     DriverCapabilities,
     QueryResult,
     TableSchema,
+    require_verified_transport,
 )
 from app.adapters.database_direct.errors import (
     DatabaseDirectError,
@@ -86,6 +87,7 @@ class SqlServerDriver(DatabaseDriver):
         )
 
     def connect(self, connection: ConnectionConfig, credentials: DbCredentials) -> _PyodbcSession:
+        require_verified_transport(connection)
         pyodbc = _import_pyodbc(connection.display_label)
         endpoints = connection.endpoints_in_preference_order() or ("",)
         last_error: BaseException | None = None

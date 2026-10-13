@@ -25,8 +25,10 @@ from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import Session
 
 from alembic import command
+from app.bi.service import mart_builder, partitions
 from app.db.session import set_tenant_rls_context
 from app.models import (
+    Bank,
     BankReportingPeriod,
     BiFactEngineMetric,
     BiFactPositionDaily,
@@ -35,16 +37,17 @@ from app.models import (
     CanonicalPositionSnapshot,
     IngestionBatch,
     LineageRecord,
+    Organization,
     RegulatoryRun,
+    User,
 )
-from app.services.bi import mart_builder, partitions
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,
     postgres_schema_url,
 )
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1
 
@@ -103,7 +106,30 @@ def session(builder_schema: MigratedPostgresSchema) -> Iterator[Session]:
     db = Session(builder_schema.app_engine, autoflush=False, expire_on_commit=False)
     db.info["organization_id"] = ORG_1
     try:
-        materialize_canonical_test_book(db)
+        # This disposable schema needs identity and canonical input rows only;
+        # the full-book fixture resets retained parameter and approval evidence.
+        db.add(Organization(id=ORG_1, name="Synthetic BI organization"))
+        db.flush()
+        db.add(
+            Bank(
+                id=SAMPLE_BANK_ID,
+                organization_id=ORG_1,
+                name="Synthetic BI bank",
+                short_name="Synthetic BI",
+                currency="GHS",
+                jurisdiction_code="GH",
+                license_type="universal",
+                institution_type="universal_bank",
+            )
+        )
+        db.add(
+            User(
+                id=USER_1,
+                organization_id=ORG_1,
+                email="bi-builder@example.test",
+                display_name="Synthetic BI user",
+            )
+        )
         db.flush()
         seed_canonical_fixture(db, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
         db.commit()
@@ -145,6 +171,7 @@ def _add_deposit(db: Session, reference: str, balance: str) -> None:
     db.flush()
     lineage = LineageRecord(
         organization_id=ORG_1,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type="ADAPTER_TRANSLATE",
         operation_ref="pg-builder-test",

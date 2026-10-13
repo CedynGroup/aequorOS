@@ -55,6 +55,7 @@ async function forward(req: NextRequest, path: string[]) {
   let upstream: Response;
   try {
     upstream = await fetch(target, {
+      redirect: "error",
       method: req.method,
       headers,
       body:

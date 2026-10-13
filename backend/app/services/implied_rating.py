@@ -31,8 +31,8 @@ from app.domain.rating.engine import (
     compute_rating,
     ddep_stress,
 )
+from app.identity.public import Bank, InstitutionProfile
 from app.models import (
-    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     CanonicalCounterpartyRating,
@@ -41,7 +41,6 @@ from app.models import (
     DeskMethodology,
     FinancialFactRow,
     ImpliedRatingRun,
-    InstitutionProfile,
     Jurisdiction,
     LiveMetric,
     RegulatoryRun,

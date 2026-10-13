@@ -76,7 +76,6 @@ class CalculationForecastPeriod(UuidV4PrimaryKeyMixin, Base):
     __tablename__ = "calculation_forecast_periods"
     __table_args__ = (
         CheckConstraint("period_number > 0", name="ck_calculation_forecast_periods_number"),
-        Index("ix_calculation_forecast_periods_run_id", "run_id"),
         UniqueConstraint("run_id", "period_number", name="uq_calculation_forecast_run_period"),
         ForeignKeyConstraint(
             ["run_id", "organization_id", "case_id"],

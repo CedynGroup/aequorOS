@@ -66,7 +66,7 @@ export const MATRIX_CELL_MIN_PX = 56;
 /**
  * The percent base, for turning a 0-1 layout fraction into a CSS `left: x%`.
  *
- * It is the same structural constant the backend's `domain/icaap/units.py`
+ * It is the same structural constant the backend's `icaap/domain/units.py`
  * registers as `HUNDRED` — arithmetic on the definition of "per cent", not a
  * threshold. It is never used to convert a REGULATORY figure; those arrive
  * already in the unit the API declares for them.

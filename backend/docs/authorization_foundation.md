@@ -40,7 +40,7 @@ aggregation are live. Subsequent product cutovers are tracked in the
   staff-plane work: a zero-owner tenant has no tenant authority that could authorize its
   own designation.
 - **Scoped grant administration.** Org Owners administer exactly one indivisible binding
-  per create/revoke through `app/features/manage_authorization.py`; sensitivity is
+  per create/revoke through `app/identity/api/manage_authorization.py`; sensitivity is
   mandatory, institution coverage is exact or explicitly organization-wide, and the server
   returns its authoritative assignment-time SoD allow/warn/block decision. Mutations audit
   the complete sentence/scope/reason/actors and invalidate the grantee's sessions in the
@@ -61,7 +61,7 @@ aggregation are live. Subsequent product cutovers are tracked in the
   cannot isolate their child objects. See [Executable verification](#executable-verification)
   for refusal semantics and the regression coverage.
 - Preserve baseline membership as system-managed lifecycle evidence, never evaluator
-  fallback access. Activation/deactivation must use `app/services/membership.py`;
+  fallback access. Activation/deactivation must use `app/identity/service/membership.py`;
   [Baseline membership](#baseline-membership) owns its scope, migration, and regression
   coverage.
 - **Account administration.** SSO connection read/write, SSO request list/reject, and
@@ -104,6 +104,14 @@ aggregation are live. Subsequent product cutovers are tracked in the
 (`BK-*`) is an institution/legal entity beneath it. A principal is a tenant
 `User` classified as either `human` or `machine`; a service user is not treated
 as a human preset or seat.
+
+The shared institution permission gate
+(`app/api/deps.py::_require_institution_permission`) requires a human session:
+it refuses an integration-key context or a context without an authorization
+version before evaluating bindings. An expanded authentication allow-list cannot
+give a machine principal module-route access, even with a matching view binding.
+API Push and the BI feed use their dedicated machine dependencies. Regression:
+`tests/identity/api/test_integration_keys.py::test_machine_view_binding_cannot_reach_module_route_when_allowlist_widens`.
 
 The policy vocabulary lives only in `backend/app/core/authorization.py`:
 
@@ -183,7 +191,7 @@ evaluator permission set grants no institution, directory, or product authority;
 shell and own-profile access remain authenticated self-service. The dashboard
 behavior is owned by [docs/rbac.md §8.2](../../docs/rbac.md#82-frontend-dashboard).
 
-`app/services/membership.py::ensure_baseline_membership` creates the binding and
+`app/identity/service/membership.py::ensure_baseline_membership` creates the binding and
 its grant audit atomically with activation in SSO request approval and operator
 tenant provisioning. The partial unique index enforces one active row per user
 and organization. Access → Members displays the row but cannot grant or revoke
@@ -200,7 +208,7 @@ each tenant mutation. Its `force_rls_suspended` contexts temporarily suspend FOR
 for the migration owner and restore it afterward. Downgrade invalidates sessions
 for users with membership rows before removing those rows and the added index.
 `tests/db/test_baseline_membership_migration.py` pins the multi-tenant backfill;
-`tests/api/test_baseline_membership.py` and
+`tests/identity/api/test_baseline_membership.py` and
 `tests/core/test_authorization_properties.py` pin lifecycle and non-authority.
 
 ## Decision semantics and conditions
@@ -390,20 +398,54 @@ through the evaluator; scalar account-admin or token claims are insufficient.
 Create has one scalar role bundle, one institution coverage, one module, one
 sensitivity, and a [structured reason](#structured-grant-reasons). Arrays are
 rejected by the closed request schema, so two authority combinations require two requests and two binding rows.
-Preview returns the canonical authority sentence; create requires that exact
-sentence and refuses if names or scope presentation changed before commit.
+Preview returns the canonical authority sentence and the assignment-time
+separation-of-duties decision for the current bindings without writing. The
+composer combines the server's findings in one notice at the top of Define and
+Review, styled by the strongest outcome. It includes at most one short scope
+note when the grant is not blocked. A block disables "Review grant" and labels
+the control "Cannot be granted". Create requires that exact sentence, refuses if
+names or scope presentation changed before commit, and re-evaluates the policy;
+if create is refused with policy findings, they replace the preview decision in
+that same notice and disable "Grant access". Those findings belong to the failed
+draft; a fresh preview or composer reset supersedes them.
+Each finding carries a plain-language `message` and `conflicting_binding_ids`
+for the member's existing bindings that triggered it. The composer shows the
+server's message verbatim: it names the member and existing authority, including
+module and institution coverage for conflicting grants. Blocking findings tell
+the administrator to remove every conflicting grant or choose someone else;
+the client does not invent a remedy from policy codes.
+Both blocking and warning notices let authorized grant administrators open each
+revocable conflict in member detail, showing its scope, grantor, and grant time.
+Revoke still uses the normal confirmation, reason, and audit flow. When a
+finding names a binding absent from the loaded member, the composer refetches
+Members before showing the notice. If the binding remains unavailable, the
+server's finding stays visible with "Ask an account administrator" instead of
+a link; that fallback also applies when the viewer cannot revoke the conflict.
+Ownership and other system-managed grants offer no revoke action here.
+
+Opening a conflict preserves the draft and offers "Back to your draft grant";
+after revocation, Define requests a fresh policy decision. With session storage
+available, unfinished drafts are also saved per organization, acting user, and
+target member in the current browser tab. Returning to Members after signing
+in again restores the draft, including after a self-revocation ends the session.
+Successful submission or cancellation clears the saved draft.
+
 Members may grant Viewer, Auditor, Analyst, Approver, Validator, or Account
 Admin. Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid
 only as organization-wide Account Administration at all sensitivity levels.
 
 The server runs assignment-time separation-of-duties policy and returns the
-authoritative `allow`, `warn`, or `block` decision. C9 account-administration
-versus operational maker/checker authority is blocked. An overlapping Analyst
+authoritative `allow`, `warn`, or `block` decision. C9 blocks delegated Account
+Admin authority combined with operational maker/checker authority in either
+assignment direction. An Org Owner without delegated Account Admin authority
+may receive an operational grant with a warning recording the accepted
+exception; the grant still requires a reason and is audited. An overlapping Analyst
 and Approver pair is warned because per-object maker-checker remains a runtime
 condition that no additional binding may bypass. An Approver and Validator pair
 is BLOCKED, scope-independently, because no such runtime condition exists yet
-for approve-then-file.
+for approve-then-file. Relax it to a warning only when the stage engine enforces
+that per-object condition at action time — never to make an assignment pass.
 
 Revoke changes only the targeted row and records revoker, time, and reason.
 Create and revoke both write an `audit_events` record containing actor, grantee,
@@ -433,7 +475,7 @@ approval creates authority.
 
 Grant preview/create, SSO approval, and route access requests use
 `reason_category`, `reason_detail`, `reference`, and `valid_until` from
-`app/schemas/authorization.py`. The category is required; detail and reference
+`app/identity/schemas/authorization.py`. The category is required; detail and reference
 are optional except that `other` requires non-empty detail. `temporary_cover`
 and `incident_break_glass` require an expiry. The generated OpenAPI schema and
 client own the complete enum and payload shapes. Migration `202609300082`
@@ -537,7 +579,7 @@ Generative suites add coverage beyond the fixed examples:
 - `tests/core/test_authorization_properties.py` compares the evaluator with an
   independent per-binding oracle across binding order, partial cross-row
   matches, runtime conditions, and exact lifecycle boundaries;
-- `tests/api/test_authorization_state_machine.py` exercises arbitrary sequences
+- `tests/identity/api/test_authorization_state_machine.py` exercises arbitrary sequences
   of token-family issue, refresh rotation, authorization invalidation, scoped
   grant creation, and exact single-row revocation. It checks the effective union
   against an independent finite oracle, including sensitivity, after every
@@ -725,7 +767,7 @@ remain separate work.
 
 Corrected 2026-10-04. `scoped_authorization` defaults
 `require_whole_institution=True`, including its prefetched path, and
-`regulatory_reporting/family_access` applies the same rule to visibility,
+`app/reporting/service/family_access.py` applies the same rule to visibility,
 mutations and chain decisions. A matching binding is insufficient when its
 matched data scopes do not include the whole institution. The refusal reason
 is `institution_grain_requires_whole_institution`. A whole-book binding for a
@@ -784,14 +826,14 @@ to their bundle permissions; an Org Owner must explicitly issue an appropriate
 whole-institution reporting grant for a former scalar-only reader or preparer.
 Valid Credit grants remain valid for Credit, and never grant reporting access.
 
-Executable evidence: `tests/api/test_narrowed_institution_figures.py` probes the
+Executable evidence: `tests/reporting/api/test_narrowed_institution_figures.py` probes the
 shared HTTP feeds, every engine's snapshots, Liquidity dependencies and
 regulatory figures, every registered return family's read/download paths,
 generation, legacy approval, signing inboxes and calendar links alongside a
 row-filtered Credit control;
 `tests/services/test_institution_data_scope_enforcement.py` exercises matching
 narrowed bindings through both shared gates and family visibility;
-`tests/api/test_data_scope_grants.py` refuses every unsupported module;
+`tests/identity/api/test_data_scope_grants.py` refuses every unsupported module;
 `tests/db/test_credit_only_narrowing_schema.py` verifies the migrated CHECK
 and downgrade/re-upgrade on Postgres;
 `tests/db/test_data_scope_check_constraints.py` verifies stored-scope refusal on

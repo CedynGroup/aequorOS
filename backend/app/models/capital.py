@@ -67,7 +67,6 @@ class CapitalIndicator(UuidV4PrimaryKeyMixin, Base):
             "pressure_level IN ('low', 'medium', 'high', 'critical')",
             name="ck_capital_indicators_pressure_level",
         ),
-        Index("ix_capital_indicators_projection", "projection_id", "period_number"),
         ForeignKeyConstraint(
             ["projection_id", "organization_id", "case_id"],
             [
@@ -110,7 +109,6 @@ class CapitalProjectionFinding(UuidV4PrimaryKeyMixin, Base):
             ondelete="CASCADE",
         ),
         UniqueConstraint("projection_id", "finding_id", name="uq_capital_projection_finding"),
-        Index("ix_capital_projection_findings_projection", "projection_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)

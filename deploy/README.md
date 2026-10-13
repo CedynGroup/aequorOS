@@ -4,6 +4,12 @@ Deployed stacks run as Coolify Docker Compose applications.
 [`openbao/`](openbao/docker-compose.openbao.yml) is the signing-key custody
 stack and the worked example of the rules below.
 
+Before applying the TLS compose templates, follow
+[the transport deployment and evidence contract](../backend/docs/transport_security.md#deployment-preparation-review-before-applying).
+
+Before deploying the audit-chain migration, complete
+[the migration credential and audit ownership preparation](../backend/docs/tamper_evident_records.md#required-deployment-follow-up).
+
 ## Coolify compose rules
 
 - **Never use dollar-brace variable interpolation in deploy compose files.** Coolify

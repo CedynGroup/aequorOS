@@ -15,6 +15,9 @@ const test = base.extend<{
     const api = `${E2E_API_ORIGIN}/api/v1`;
     const headers = {
       Authorization: `Bearer ${await mintBackendToken("admin")}`,
+      // The browser journey can outlast Uvicorn's idle keep-alive window.
+      // Cleanup must open a fresh connection rather than race its expiry.
+      Connection: "close",
     };
     const bindings: string[] = [];
     try {
@@ -56,7 +59,9 @@ const test = base.extend<{
         await page.addInitScript(() =>
           localStorage.setItem("aeq-tour-done", "1"),
         );
-        await page.goto("/login");
+        // FX grants do not authorize the Command Center. Its root redirect can
+        // race fixture completion, so sign in to the stable self-service page.
+        await page.goto("/login?callbackUrl=/access/my-access");
         await page
           .getByLabel("Email", { exact: true })
           .fill("e2e.fx_member@aequoros.example");
@@ -98,7 +103,10 @@ const test = base.extend<{
             }),
           );
         }
-        await expect(page).toHaveURL(/\/$/);
+        await expect(page).toHaveURL(/\/access\/my-access$/);
+        await expect(
+          page.getByRole("link", { name: "FX", exact: true }),
+        ).toBeVisible();
       });
     } finally {
       for (const id of bindings.reverse()) {

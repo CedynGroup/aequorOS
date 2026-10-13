@@ -53,7 +53,7 @@ from app.adapters.market_data.scope_taxonomy import (
     category_of,
 )
 from app.db.base import utc_now
-from app.models import Bank
+from app.identity.public import Bank
 from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
 from app.schemas.market_data_connections import (
     MarketDataConnectionCreate,
@@ -100,9 +100,7 @@ class _AdapterFactory(Protocol):
 # ---------------------------------------------------------------------------
 
 
-def list_connections(
-    db: Session, ctx: TenantContext, bank_id: str
-) -> MarketDataConnectionListRead:
+def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> MarketDataConnectionListRead:
     _get_bank_or_404(db, ctx, bank_id)
     rows = list(
         db.scalars(

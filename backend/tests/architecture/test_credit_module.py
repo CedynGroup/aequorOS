@@ -14,12 +14,14 @@ import ast
 import inspect
 
 from app.core.authorization import Module, ModuleScope, RoleBundle, SensitivityScope
-from app.services import alerts, live_view, window_analytics
-from app.services.authorization import _INSTITUTION_MODULES  # noqa: PLC2701 - projection oracle
-from app.services.grant_administration import (
+from app.identity.service.authorization import (
+    _INSTITUTION_MODULES,  # noqa: PLC2701 - projection oracle
+)
+from app.identity.service.grant_administration import (
     _MODULE_LABELS,  # noqa: PLC2701 - sentence oracle
     compose_authority_sentence,
 )
+from app.services import alerts, live_view, window_analytics
 from scripts.authorization_access_impact import INSTITUTION_MODULES
 
 _CREDIT_GATE = ("credit", Module.CREDIT)

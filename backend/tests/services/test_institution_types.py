@@ -26,8 +26,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.identity.service import banks as banks_service
 from app.models import Bank, InstitutionType
-from app.services import banks as banks_service
 from app.services import institution_types
 from tests.support.helpers import ORG_1, USER_1
 

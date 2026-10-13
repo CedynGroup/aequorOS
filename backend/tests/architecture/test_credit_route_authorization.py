@@ -24,7 +24,7 @@ from fastapi.routing import APIRoute
 
 from app.api import deps
 from app.api.deps import MUTATION_ROLE_DEPENDENCY_NAMES
-from app.main import create_app
+from app.main import app
 
 _CREDIT_PREFIX = "/api/v1/banks/{bank_id}/credit/"
 
@@ -77,7 +77,7 @@ def _module_entitlement_keys(route: APIRoute) -> set[str]:
 def _credit_routes() -> list[APIRoute]:
     return [
         route
-        for route in create_app().routes
+        for route in app.routes
         if isinstance(route, APIRoute) and _CREDIT_PREFIX in route.path
     ]
 

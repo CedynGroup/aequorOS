@@ -348,13 +348,7 @@
   "reportUnknownVariableType": 4
  },
  "app.api.health": {
-  "reportAny": 10,
-  "reportUnknownVariableType": 1
- },
- "app.api.v1.auth": {
-  "reportAny": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 2
+  "reportAny": 10
  },
  "app.core.authorization": {
   "reportUnnecessaryIsInstance": 1
@@ -363,9 +357,6 @@
   "reportAny": 1,
   "reportUnnecessaryIsInstance": 2,
   "reportUnusedFunction": 4
- },
- "app.core.logging": {
-  "reportAny": 1
  },
  "app.core.observability": {
   "reportAny": 8
@@ -379,9 +370,9 @@
  "app.db.session": {
   "reportAny": 17,
   "reportDeprecated": 1,
-  "reportMissingTypeArgument": 3,
+  "reportMissingTypeArgument": 2,
   "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 3,
+  "reportUnknownParameterType": 2,
   "reportUnknownVariableType": 1
  },
  "app.domain.ai.lexicon": {
@@ -536,11 +527,11 @@
  },
  "app.domain.ingestion.reference_schemas.business_units": {
   "reportConstantRedefinition": 1,
-  "reportMissingTypeArgument": 3,
-  "reportUnknownArgumentType": 5,
-  "reportUnknownMemberType": 7,
-  "reportUnknownParameterType": 3,
-  "reportUnknownVariableType": 5
+  "reportMissingTypeArgument": 1,
+  "reportUnknownArgumentType": 3,
+  "reportUnknownMemberType": 3,
+  "reportUnknownParameterType": 1,
+  "reportUnknownVariableType": 2
  },
  "app.domain.ingestion.reference_schemas.capital_expenditure": {
   "reportMissingTypeArgument": 2,
@@ -688,12 +679,6 @@
  "app.features.export_bi": {
   "reportUnnecessaryCast": 1
  },
- "app.features.manage_authorization": {
-  "reportAny": 9,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 4,
-  "reportUnknownVariableType": 1
- },
  "app.features.manage_bi_content": {
   "reportDeprecated": 1,
   "reportUnknownArgumentType": 1,
@@ -712,9 +697,6 @@
  "app.features.manage_package_attachments": {
   "reportAny": 1,
   "reportUnknownVariableType": 1
- },
- "app.features.manage_system_of_record": {
-  "reportPrivateUsage": 1
  },
  "app.features.read_behavioral_models": {
   "reportAny": 18,
@@ -747,9 +729,9 @@
  },
  "app.integrations.storage.s3": {
   "reportMissingTypeStubs": 3,
-  "reportUnknownArgumentType": 5,
-  "reportUnknownMemberType": 16,
-  "reportUnknownVariableType": 4
+  "reportUnknownArgumentType": 4,
+  "reportUnknownMemberType": 12,
+  "reportUnknownVariableType": 2
  },
  "app.jobs.bi_alerts": {
   "reportAny": 41
@@ -861,9 +843,6 @@
  "app.models.audit_event": {
   "reportAny": 1
  },
- "app.models.authorization": {
-  "reportAny": 3
- },
  "app.models.bi": {
   "reportAny": 33,
   "reportMissingTypeArgument": 1,
@@ -926,13 +905,7 @@
  "app.models.ingestion": {
   "reportAny": 4
  },
- "app.models.institution_profile": {
-  "reportAny": 8
- },
  "app.models.institution_type": {
-  "reportAny": 1
- },
- "app.models.integration_key": {
   "reportAny": 1
  },
  "app.models.liquidity_cfp": {
@@ -962,9 +935,6 @@
  "app.models.reconciliation": {
   "reportAny": 1
  },
- "app.models.refresh_token": {
-  "reportAny": 1
- },
  "app.models.regulatory": {
   "reportAny": 2
  },
@@ -987,9 +957,6 @@
  "app.models.scenario_workbench": {
   "reportAny": 2
  },
- "app.models.sso_connection": {
-  "reportAny": 1
- },
  "app.models.stress": {
   "reportAny": 5
  },
@@ -997,9 +964,6 @@
   "reportAny": 1
  },
  "app.models.temenos": {
-  "reportAny": 1
- },
- "app.models.user": {
   "reportAny": 1
  },
  "app.operator.deps": {
@@ -1022,9 +986,9 @@
  },
  "app.operator.features.provision": {
   "reportMissingTypeStubs": 2,
-  "reportUnknownArgumentType": 2,
-  "reportUnknownMemberType": 2,
-  "reportUnknownVariableType": 2
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 1,
+  "reportUnknownVariableType": 1
  },
  "app.operator.features.regulatory_parameters": {
   "reportUnknownArgumentType": 1,
@@ -1065,11 +1029,7 @@
   "reportUnknownMemberType": 6
  },
  "app.operator.services.tenant_provisioning": {
-  "reportAny": 20,
-  "reportUnknownVariableType": 1
- },
- "app.schemas.auth": {
-  "reportPrivateUsage": 1
+  "reportAny": 12
  },
  "app.schemas.findings": {
   "reportAny": 1
@@ -1198,21 +1158,6 @@
  "app.services.attestation_api": {
   "reportAny": 2
  },
- "app.services.auth_throttle": {
-  "reportAny": 4
- },
- "app.services.authentication": {
-  "reportAny": 6,
-  "reportMissingTypeArgument": 1,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 1
- },
- "app.services.authorization": {
-  "reportAny": 3,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 1
- },
  "app.services.behavioral_liquidity": {
   "reportAny": 10
  },
@@ -1284,9 +1229,9 @@
  },
  "app.services.bi.mart_builder": {
   "reportAny": 107,
-  "reportUnknownArgumentType": 22,
-  "reportUnknownMemberType": 19,
-  "reportUnknownVariableType": 5
+  "reportUnknownArgumentType": 20,
+  "reportUnknownMemberType": 18,
+  "reportUnknownVariableType": 4
  },
  "app.services.bi.nlq.candidates": {
   "reportAny": 8
@@ -1349,7 +1294,7 @@
   "reportUnknownVariableType": 4
  },
  "app.services.credit_exposure_book": {
-  "reportAny": 37,
+  "reportAny": 12,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 2
  },
@@ -1394,14 +1339,11 @@
   "reportAny": 18
  },
  "app.services.examiner_mode": {
-  "reportAny": 1,
-  "reportPrivateUsage": 2
+  "reportAny": 1
  },
  "app.services.fact_derivation": {
-  "reportAny": 44,
-  "reportUnknownArgumentType": 2,
-  "reportUnknownMemberType": 2,
-  "reportUnknownVariableType": 4
+  "reportAny": 35,
+  "reportUnknownVariableType": 2
  },
  "app.services.filing_reconciliation": {
   "reportAny": 6,
@@ -1716,9 +1658,6 @@
   "reportUnknownVariableType": 2,
   "reportUnusedImport": 1
  },
- "app.services.integration_keys": {
-  "reportUnnecessaryComparison": 1
- },
  "app.services.job_queue": {
   "reportAny": 1
  },
@@ -1737,8 +1676,7 @@
   "reportUnknownArgumentType": 1,
   "reportUnknownLambdaType": 4,
   "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 3,
-  "reportUnusedFunction": 1
+  "reportUnknownVariableType": 3
  },
  "app.services.live_view": {
   "reportAny": 1,
@@ -1859,11 +1797,6 @@
   "reportUnknownMemberType": 3,
   "reportUnknownVariableType": 4
  },
- "app.services.organization_ownership": {
-  "reportMissingParameterType": 1,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownParameterType": 1
- },
  "app.services.parameter_register": {
   "reportAny": 18
  },
@@ -1888,10 +1821,10 @@
   "reportAny": 59,
   "reportMissingTypeArgument": 1,
   "reportPrivateUsage": 1,
-  "reportUnknownArgumentType": 8,
-  "reportUnknownMemberType": 18,
+  "reportUnknownArgumentType": 6,
+  "reportUnknownMemberType": 15,
   "reportUnknownParameterType": 1,
-  "reportUnknownVariableType": 5
+  "reportUnknownVariableType": 4
  },
  "app.services.regulatory_forecasting": {
   "reportAny": 78,
@@ -1904,7 +1837,7 @@
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_fx": {
-  "reportAny": 46,
+  "reportAny": 44,
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_irr": {
@@ -1945,7 +1878,7 @@
   "reportUnusedImport": 1
  },
  "app.services.regulatory_reporting.bog_forms.generation": {
-  "reportAny": 16
+  "reportAny": 3
  },
  "app.services.regulatory_reporting.bog_forms.layout": {
   "reportAny": 27
@@ -1994,31 +1927,31 @@
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_reporting.bog_forms.sources": {
-  "reportAny": 61,
+  "reportAny": 59,
   "reportUnknownArgumentType": 2,
   "reportUnknownVariableType": 3,
   "reportUnusedFunction": 8
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd1": {
-  "reportAny": 33,
+  "reportAny": 30,
   "reportUnknownArgumentType": 2,
   "reportUnknownVariableType": 5,
   "reportUnusedFunction": 2
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd11": {
-  "reportAny": 25,
+  "reportAny": 14,
   "reportUnknownArgumentType": 1,
   "reportUnknownVariableType": 1,
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd13": {
-  "reportAny": 57,
+  "reportAny": 55,
   "reportUnknownArgumentType": 3,
   "reportUnknownVariableType": 8,
   "reportUnusedFunction": 3
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd14": {
-  "reportAny": 28,
+  "reportAny": 14,
   "reportUnknownArgumentType": 4,
   "reportUnknownVariableType": 5,
   "reportUnusedFunction": 2
@@ -2044,7 +1977,7 @@
   "reportUnusedFunction": 2
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd4": {
-  "reportAny": 24,
+  "reportAny": 22,
   "reportUnknownVariableType": 2,
   "reportUnnecessaryIsInstance": 2,
   "reportUnusedFunction": 3
@@ -2054,7 +1987,7 @@
   "reportUnusedFunction": 6
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd6": {
-  "reportAny": 33,
+  "reportAny": 23,
   "reportUnknownArgumentType": 1,
   "reportUnknownVariableType": 2,
   "reportUnusedFunction": 1
@@ -2067,9 +2000,8 @@
   "reportUnusedFunction": 4
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd8": {
-  "reportAny": 43,
-  "reportUnknownMemberType": 2,
-  "reportUnknownVariableType": 4,
+  "reportAny": 13,
+  "reportUnknownVariableType": 3,
   "reportUnnecessaryIsInstance": 2,
   "reportUnusedFunction": 2
  },
@@ -2078,11 +2010,7 @@
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_reporting.calendar": {
-  "reportAny": 20,
-  "reportMissingParameterType": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 1,
-  "reportUnknownVariableType": 2
+  "reportAny": 20
  },
  "app.services.regulatory_reporting.channel_config": {
   "reportUnknownVariableType": 1
@@ -2091,7 +2019,7 @@
   "reportAny": 5
  },
  "app.services.regulatory_reporting.channels.orass_api": {
-  "reportAny": 6,
+  "reportAny": 5,
   "reportUnknownVariableType": 1
  },
  "app.services.regulatory_reporting.channels.orass_sandbox": {
@@ -2153,17 +2081,15 @@
   "reportUnnecessaryIsInstance": 1
  },
  "app.services.regulatory_reporting.le_generation": {
-  "reportAny": 53,
-  "reportUnknownArgumentType": 5,
-  "reportUnknownMemberType": 8,
-  "reportUnknownVariableType": 3
+  "reportAny": 12,
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 1
  },
  "app.services.regulatory_reporting.lrt_generation": {
   "reportAny": 4
  },
  "app.services.regulatory_reporting.npl_generation": {
   "reportAny": 3,
-  "reportPrivateUsage": 5,
   "reportUnknownArgumentType": 1,
   "reportUnknownMemberType": 2
  },
@@ -2171,7 +2097,7 @@
   "reportAny": 4
  },
  "app.services.regulatory_reporting.provenance": {
-  "reportAny": 36
+  "reportAny": 16
  },
  "app.services.regulatory_reporting.registry": {
   "reportUnusedFunction": 1
@@ -2212,9 +2138,6 @@
  "app.services.scenarios": {
   "reportAny": 8
  },
- "app.services.scoped_authorization": {
-  "reportAny": 15
- },
  "app.services.scoring": {
   "reportMissingParameterType": 1,
   "reportUnknownArgumentType": 5,
@@ -2250,12 +2173,6 @@
   "reportAny": 6,
   "reportPrivateUsage": 18
  },
- "app.services.sso_config": {
-  "reportAny": 2,
-  "reportPrivateUsage": 1,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownVariableType": 2
- },
  "app.services.stress_scenarios": {
   "reportAny": 4
  },
@@ -2280,28 +2197,27 @@
   "reportAny": 4
  },
  "app.storage.provisioning": {
-  "reportMissingParameterType": 7,
+  "reportMissingParameterType": 1,
   "reportMissingTypeStubs": 1,
-  "reportUnknownArgumentType": 8,
-  "reportUnknownMemberType": 14,
-  "reportUnknownParameterType": 7,
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 7,
+  "reportUnknownParameterType": 1,
   "reportUnknownVariableType": 5
  },
  "app.storage.s3_compatible": {
-  "reportAny": 37,
+  "reportAny": 28,
   "reportMissingTypeStubs": 5,
   "reportUnknownArgumentType": 9,
-  "reportUnknownLambdaType": 8,
-  "reportUnknownMemberType": 42,
-  "reportUnknownVariableType": 15
+  "reportUnknownLambdaType": 7,
+  "reportUnknownMemberType": 36,
+  "reportUnknownVariableType": 13
  },
  "app.worker": {
   "reportAny": 3,
-  "reportMissingParameterType": 3,
+  "reportMissingParameterType": 2,
   "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 9,
-  "reportUnknownParameterType": 3,
-  "reportUnknownVariableType": 3
+  "reportUnknownMemberType": 8,
+  "reportUnknownParameterType": 2
  },
  "scripts.ai_vendor_preflight": {
   "reportAny": 47,
@@ -2325,7 +2241,7 @@
   "reportAny": 22
  },
  "scripts.backup_storage": {
-  "reportAny": 38,
+  "reportAny": 34,
   "reportMissingTypeStubs": 3,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 2
@@ -2527,10 +2443,10 @@
   "reportAny": 1,
   "reportMissingParameterType": 11,
   "reportMissingTypeArgument": 1,
-  "reportUnknownArgumentType": 7,
-  "reportUnknownMemberType": 19,
+  "reportUnknownArgumentType": 3,
+  "reportUnknownMemberType": 13,
   "reportUnknownParameterType": 11,
-  "reportUnknownVariableType": 8
+  "reportUnknownVariableType": 7
  },
  "tests.adapters.temenos_t24.iris.conftest": {
   "reportUnknownVariableType": 1
@@ -2590,14 +2506,13 @@
  "tests.api.test_authorization_object_reference_coverage": {
   "reportAny": 27,
   "reportPrivateUsage": 3,
-  "reportUnknownLambdaType": 1,
   "reportUnknownMemberType": 2,
   "reportUnknownVariableType": 1
  },
  "tests.api.test_authorization_state_machine": {
   "reportAny": 40,
   "reportDeprecated": 1,
-  "reportUnknownMemberType": 3,
+  "reportUnknownMemberType": 2,
   "reportUnknownVariableType": 3
  },
  "tests.api.test_banks": {
@@ -2628,7 +2543,7 @@
   "reportUnusedFunction": 2
  },
  "tests.api.test_bi_commentary_routes": {
-  "reportAny": 147
+  "reportAny": 146
  },
  "tests.api.test_bi_content_metering": {
   "reportAny": 9,
@@ -2651,10 +2566,8 @@
   "reportAny": 63
  },
  "tests.api.test_bi_feeds": {
-  "reportAny": 161,
-  "reportUnknownArgumentType": 8,
-  "reportUnknownMemberType": 15,
-  "reportUnknownVariableType": 13,
+  "reportAny": 157,
+  "reportUnknownVariableType": 1,
   "reportUnusedFunction": 1
  },
  "tests.api.test_bi_insights": {
@@ -2771,9 +2684,9 @@
   "reportMissingTypeArgument": 1,
   "reportPrivateUsage": 4,
   "reportUnknownArgumentType": 11,
-  "reportUnknownMemberType": 13,
+  "reportUnknownMemberType": 1,
   "reportUnknownParameterType": 1,
-  "reportUnknownVariableType": 14
+  "reportUnknownVariableType": 13
  },
  "tests.api.test_enterprise_stress_signoff": {
   "reportAny": 2,
@@ -2920,7 +2833,7 @@
  "tests.api.test_impersonation_boundary": {
   "reportAny": 26,
   "reportMissingParameterType": 3,
-  "reportUnknownArgumentType": 10,
+  "reportUnknownArgumentType": 9,
   "reportUnknownMemberType": 34,
   "reportUnknownParameterType": 3,
   "reportUnknownVariableType": 12
@@ -3204,7 +3117,7 @@
   "reportUnknownVariableType": 3
  },
  "tests.architecture.test_ci_task_wiring": {
-  "reportAny": 31,
+  "reportAny": 26,
   "reportUnknownArgumentType": 2,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 6
@@ -3218,16 +3131,8 @@
   "reportPrivateUsage": 1,
   "reportUnnecessaryIsInstance": 1
  },
- "tests.architecture.test_current_generation_predicate": {
-  "reportUnusedImport": 1
- },
  "tests.architecture.test_feature_boundaries": {
   "reportAny": 15
- },
- "tests.architecture.test_icaap_governed_literals": {
-  "reportAny": 1,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownVariableType": 1
  },
  "tests.architecture.test_icaap_no_regulatory_literals": {
   "reportAny": 10,
@@ -3656,7 +3561,7 @@
  },
  "tests.domain.ingestion.test_reference_schemas": {
   "reportUnknownMemberType": 4,
-  "reportUnknownVariableType": 4
+  "reportUnknownVariableType": 3
  },
  "tests.domain.irr.test_buckets": {
   "reportPrivateUsage": 3
@@ -3748,7 +3653,7 @@
  },
  "tests.equivalence.test_declared_divergences": {
   "reportConstantRedefinition": 1,
-  "reportPrivateUsage": 2
+  "reportPrivateUsage": 1
  },
  "tests.equivalence.test_forecast_capital_parity": {
   "reportMissingParameterType": 1,
@@ -3921,7 +3826,7 @@
  },
  "tests.operator.test_auth": {
   "reportAny": 2,
-  "reportPrivateUsage": 5
+  "reportPrivateUsage": 4
  },
  "tests.operator.test_bi_backfill": {
   "reportAny": 2
@@ -3971,14 +3876,12 @@
   "reportAny": 6
  },
  "tests.operator.test_provisioning": {
-  "reportAny": 48,
-  "reportMissingParameterType": 1,
+  "reportAny": 46,
   "reportMissingTypeArgument": 2,
   "reportUnknownArgumentType": 1,
   "reportUnknownLambdaType": 2,
-  "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 3,
-  "reportUnknownVariableType": 8
+  "reportUnknownParameterType": 2,
+  "reportUnknownVariableType": 7
  },
  "tests.operator.test_regulatory_parameter_shapes": {
   "reportAny": 10,
@@ -4004,10 +3907,7 @@
   "reportAny": 15
  },
  "tests.operator.test_worker_health_api": {
-  "reportAny": 2,
-  "reportMissingParameterType": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownParameterType": 1
+  "reportAny": 2
  },
  "tests.scripts.test_authorization_access_impact": {
   "reportMissingParameterType": 1,
@@ -4094,7 +3994,7 @@
   "reportPrivateUsage": 23
  },
  "tests.services.bi.test_catalogue_parity": {
-  "reportAny": 3,
+  "reportAny": 2,
   "reportPrivateUsage": 7
  },
  "tests.services.bi.test_commentary_job": {
@@ -4631,7 +4531,7 @@
   "reportUnknownVariableType": 9
  },
  "tests.services.test_attestation_tsa": {
-  "reportAny": 13,
+  "reportAny": 9,
   "reportMissingTypeStubs": 3,
   "reportUnknownArgumentType": 6,
   "reportUnknownMemberType": 13,
@@ -4714,7 +4614,7 @@
   "reportUnusedFunction": 1
  },
  "tests.services.test_derivation_fail_closed_defaults": {
-  "reportPrivateUsage": 17,
+  "reportPrivateUsage": 16,
   "reportUnknownMemberType": 1
  },
  "tests.services.test_desk_capture_job": {
@@ -4740,9 +4640,9 @@
   "reportUnusedFunction": 1
  },
  "tests.services.test_enterprise_stress_controls": {
-  "reportAny": 10,
+  "reportAny": 4,
   "reportMissingParameterType": 1,
-  "reportPrivateUsage": 13,
+  "reportPrivateUsage": 12,
   "reportUnknownArgumentType": 7,
   "reportUnknownParameterType": 1
  },
@@ -4943,9 +4843,6 @@
  "tests.services.test_operating_environment": {
   "reportAny": 3
  },
- "tests.services.test_organization_ownership": {
-  "reportUnknownMemberType": 2
- },
  "tests.services.test_package_plane": {
   "reportAny": 4,
   "reportMissingParameterType": 10,
@@ -5004,7 +4901,7 @@
   "reportUnknownVariableType": 3
  },
  "tests.services.test_regulatory_dashboard_query_shape": {
-  "reportAny": 149,
+  "reportAny": 144,
   "reportDeprecated": 1,
   "reportPrivateUsage": 2,
   "reportUnknownArgumentType": 6,
@@ -5162,7 +5059,7 @@
   "reportUnknownVariableType": 2
  },
  "tests.services.test_stress_pack": {
-  "reportAny": 45,
+  "reportAny": 44,
   "reportPrivateUsage": 3
  },
  "tests.services.test_system_of_record": {
@@ -5176,7 +5073,6 @@
   "reportUnusedFunction": 1
  },
  "tests.services.test_validation_status_fail_closed": {
-  "reportAny": 6,
   "reportPrivateUsage": 1
  },
  "tests.services.test_window_analytics": {
@@ -5209,15 +5105,9 @@
   "reportMissingParameterType": 3,
   "reportPrivateUsage": 3,
   "reportUnknownArgumentType": 2,
-  "reportUnknownMemberType": 14,
+  "reportUnknownMemberType": 13,
   "reportUnknownParameterType": 3,
-  "reportUnknownVariableType": 6
- },
- "tests.test_cors": {
-  "reportMissingParameterType": 2,
-  "reportUnknownMemberType": 7,
-  "reportUnknownParameterType": 2,
-  "reportUnknownVariableType": 2
+  "reportUnknownVariableType": 5
  },
  "tests.test_database_fixture_isolation": {
   "reportPrivateUsage": 5,
@@ -5238,6 +5128,6 @@
   "reportPrivateUsage": 2,
   "reportUnknownArgumentType": 2,
   "reportUnknownLambdaType": 10,
-  "reportUnknownMemberType": 2
+  "reportUnknownMemberType": 1
  }
 }

@@ -103,7 +103,7 @@ for _path in (str(_BACKEND), str(_REPO)):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-# --- pure helpers (unit-tested in tests/services/bi/test_benchmark_helpers.py) ------------
+# --- pure helpers (unit-tested in tests/bi/service/test_benchmark_helpers.py) ------------
 
 #: Query classes, and the target each is judged against. The numbers are
 #: ``docs/bi.md`` §Verification "Benchmark"; they are printed beside every
@@ -595,8 +595,8 @@ def _grant_bi_reader(session: Any) -> None:
         RoleBundle,
         SensitivityScope,
     )
+    from app.identity.service import authorization  # noqa: PLC0415
     from app.models import AuthorizationBinding  # noqa: PLC0415
-    from app.services import authorization  # noqa: PLC0415
     from tests.support.helpers import ORG_1, USER_1  # noqa: PLC0415
 
     existing = session.execute(
@@ -720,7 +720,7 @@ def _position_records(
     The typed contract fields are taken by name; everything in the panel that
     the canonical snapshot carries as free-form attributes (the simulator's own
     ``ATTRIBUTE_COLUMNS``, which is also what ``history_loader`` packs) is sent
-    under ``attributes`` — that is where ``app/domain/bi/extract.py`` reads the
+    under ``attributes`` — that is where ``app/bi/domain/extract.py`` reads the
     reporting-currency balance, the branch and the provision from.
 
     ``balance`` is the REPORTING-currency amount, not the native one, because
@@ -818,7 +818,7 @@ def _gl_records(frame: Any, *, with_balances: bool = True) -> list[dict[str, Any
 
 def _simulator_attribute_columns() -> tuple[str, ...]:
     """The simulator's own ``ATTRIBUTE_COLUMNS`` — the panel columns the canonical
-    snapshot carries as free-form attributes, and where ``app/domain/bi/extract.py``
+    snapshot carries as free-form attributes, and where ``app/bi/domain/extract.py``
     reads the reporting-currency balance, the branch and the provision from.
 
     Imported dynamically because ``data/`` sits outside the backend package root
@@ -1000,8 +1000,8 @@ def _last_month_end_on_or_before(day: date) -> date:
 
 
 def snapshot_dates_for(tenant: Tenant) -> list[date]:
+    from app.bi.service import mart_builder  # noqa: PLC0415
     from app.db.session import get_sessionmaker  # noqa: PLC0415
-    from app.services.bi import mart_builder  # noqa: PLC0415
 
     session = get_sessionmaker()()
     try:
@@ -1014,8 +1014,8 @@ def snapshot_dates_for(tenant: Tenant) -> list[date]:
 def build_marts(tenant: Tenant, as_of_dates: Sequence[date], report: Report) -> None:
     """``refresh_bank_as_of`` per date, timed; then the fingerprint skip."""
 
+    from app.bi.service import mart_builder  # noqa: PLC0415
     from app.db.session import get_sessionmaker  # noqa: PLC0415
-    from app.services.bi import mart_builder  # noqa: PLC0415
 
     for index, as_of in enumerate(as_of_dates):
         session = get_sessionmaker()()
@@ -1082,8 +1082,8 @@ def recorded_builds(tenant: Tenant) -> list[BuildMeasurement]:
 
     from sqlalchemy import select  # noqa: PLC0415
 
+    from app.bi.models.marts import BiMartBuild  # noqa: PLC0415
     from app.db.session import get_sessionmaker  # noqa: PLC0415
-    from app.models.bi import BiMartBuild  # noqa: PLC0415
 
     session = get_sessionmaker()()
     try:
@@ -1141,8 +1141,8 @@ def _scope_seconds(tenant: Tenant, as_of: date) -> dict[str, float]:
 
     from sqlalchemy import select  # noqa: PLC0415
 
+    from app.bi.models.marts import BiMartBuild  # noqa: PLC0415
     from app.db.session import get_sessionmaker  # noqa: PLC0415
-    from app.models.bi import BiMartBuild  # noqa: PLC0415
 
     session = get_sessionmaker()()
     try:
@@ -1545,10 +1545,10 @@ def explain_workload(tenant: Tenant, workload: Workload) -> str:
     would describe a different statement from the one that was timed.
     """
 
+    from app.bi.domain.catalogue import catalogue  # noqa: PLC0415
+    from app.bi.schemas.query import BiQuery  # noqa: PLC0415
+    from app.bi.service.compiler import compile_query  # noqa: PLC0415
     from app.db.session import get_sessionmaker  # noqa: PLC0415
-    from app.domain.bi.catalogue import catalogue  # noqa: PLC0415
-    from app.schemas.bi import BiQuery  # noqa: PLC0415
-    from app.services.bi.compiler import compile_query  # noqa: PLC0415
 
     body = workload.body.get("query", workload.body)
     query = BiQuery.model_validate(body)
@@ -1586,8 +1586,8 @@ def reported_currencies(tenant: Tenant, *, as_of: date, limit: int = 4) -> list[
 
     from sqlalchemy import desc, func, select  # noqa: PLC0415
 
+    from app.bi.models.marts import BiAggPositionDaily  # noqa: PLC0415
     from app.db.session import get_sessionmaker  # noqa: PLC0415
-    from app.models.bi import BiAggPositionDaily  # noqa: PLC0415
 
     session = get_sessionmaker()()
     try:
@@ -1647,8 +1647,8 @@ def _explain_subjects(report: Report) -> list[QueryMeasurement]:
 def table_row_counts(tenant: Tenant) -> dict[str, int]:
     from sqlalchemy import func, select  # noqa: PLC0415
 
+    from app.bi.models import marts as bi_models  # noqa: PLC0415
     from app.db.session import get_sessionmaker  # noqa: PLC0415
-    from app.models import bi as bi_models  # noqa: PLC0415
 
     tables = (
         bi_models.BiFactPositionDaily,

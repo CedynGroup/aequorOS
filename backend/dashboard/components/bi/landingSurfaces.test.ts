@@ -24,6 +24,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { runBackend } from "../../unit/backend";
 import {
   KPI_EXPLAIN_LABEL,
   kpiExplainQuery,
@@ -53,17 +54,6 @@ function dashboardRoot(): string {
     dir = dirname(dir);
   }
   throw new Error("could not locate the @aequoros/dashboard package root");
-}
-
-function repoRoot(): string {
-  let dir = dashboardRoot();
-  for (let index = 0; index < 8; index += 1) {
-    if (existsSync(join(dir, "backend", "app"))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  throw new Error("could not locate the repository root from " + __dirname);
 }
 
 const ROOT = dashboardRoot();
@@ -302,32 +292,32 @@ test("each module KPI that is an engine copy opens its provenance, and the page 
 });
 
 test("every metric id a page names is a registry metric the catalogue copies", () => {
-  const engine = join(
-    repoRoot(),
-    "backend",
-    "app",
-    "domain",
-    "bi",
-    "catalogue",
-    "engine.py",
-  );
-  assert.ok(existsSync(engine), `catalogue source not found: ${engine}`);
-  const source = readFileSync(engine, "utf8");
-  const start = source.indexOf("ENGINE_LABELS");
-  const end = source.indexOf("TIER_LABELS");
-  assert.ok(start >= 0 && end > start, "ENGINE_LABELS must precede TIER_LABELS in engine.py");
-  const known = new Set(
-    [...source.slice(start, end).matchAll(/^\s*"([a-z0-9_]+)":/gm)].map(
-      (match) => match[1],
-    ),
-  );
-  assert.ok(known.size > 50, `read only ${known.size} registry labels`);
+  const catalogue = runBackend<(EngineMeasureLike & { regime: string })[]>(`
+from app.bi.domain.catalogue import catalogue
+
+print(json.dumps([
+    {"id": measure.id, "measureKind": measure.measure_kind,
+     "engineMetricId": measure.engine_rule.metric_id,
+     "engineTier": measure.engine_rule.tier, "regime": measure.id.split(".")[-2]}
+    for measure in catalogue().engine_measures()
+    if measure.engine_rule is not None and measure.engine_rule.tier == "live"
+]))
+`);
+  const known = new Set(catalogue.map((measure) => measure.engineMetricId));
+  assert.ok(known.size > 50, `emitted only ${known.size} live registry metrics`);
   for (const [page, metrics] of Object.entries(EXPLAIN_PAGES)) {
     for (const metric of metrics) {
       assert.ok(
         known.has(metric),
         `${page} names ${metric}, which is not a registry metric the catalogue copies — a typo here is a KPI that silently never gets its button`,
       );
+      for (const copy of catalogue.filter((measure) => measure.engineMetricId === metric)) {
+        assert.equal(
+          liveEngineMeasureId(catalogue, metric, copy.regime),
+          copy.id,
+          `${page}: ${metric} must resolve to its live catalogue copy under ${copy.regime}`,
+        );
+      }
     }
   }
 });

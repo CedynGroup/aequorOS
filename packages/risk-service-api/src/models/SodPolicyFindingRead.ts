@@ -25,6 +25,12 @@ export interface SodPolicyFindingRead {
   code: string;
   /**
    *
+   * @type {Array<string>}
+   * @memberof SodPolicyFindingRead
+   */
+  conflictingBindingIds: Array<string>;
+  /**
+   *
    * @type {string}
    * @memberof SodPolicyFindingRead
    */
@@ -38,6 +44,11 @@ export function instanceOfSodPolicyFindingRead(
   value: object,
 ): value is SodPolicyFindingRead {
   if (!("code" in value) || value["code"] === undefined) return false;
+  if (
+    !("conflictingBindingIds" in value) ||
+    value["conflictingBindingIds"] === undefined
+  )
+    return false;
   if (!("message" in value) || value["message"] === undefined) return false;
   return true;
 }
@@ -56,6 +67,7 @@ export function SodPolicyFindingReadFromJSONTyped(
   return {
     ...json,
     code: json["code"],
+    conflictingBindingIds: json["conflicting_binding_ids"],
     message: json["message"],
   };
 }
@@ -74,6 +86,7 @@ export function SodPolicyFindingReadToJSONTyped(
 
   return {
     code: value["code"],
+    conflicting_binding_ids: value["conflictingBindingIds"],
     message: value["message"],
   };
 }

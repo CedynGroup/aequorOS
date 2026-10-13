@@ -9,7 +9,7 @@ import ModuleTabs from "@/components/shell/ModuleTabs";
  * instruction, and Explore is where a question is built — the same `BiQuery` the
  * grid submits is what a report stores. It is also where a recipient who could
  * not be sent a confidential report is already directed to sign in
- * (`services/bi/subscriptions.SIGN_IN_PATH`), so the surface they land on is the
+ * (`app/bi/service/subscriptions.SIGN_IN_PATH`), so the surface they land on is the
  * one that owns the report they were told about.
  *
  * Deliberately not `/alerts`: the Alert Center is the live modules' own

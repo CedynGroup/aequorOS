@@ -1,6 +1,4 @@
-from app.forecasting.models import ForecastAssumptionVersion
-from app.models.ai import AiCommentarySettings
-from app.models.attestation import (
+from app.attestation.models import (
     AdoptedSignatureAppearance,
     AttestationSignature,
     PackageSignaturePlacement,
@@ -12,14 +10,24 @@ from app.models.attestation import (
     SignerKey,
     SigningAuthorization,
 )
-from app.models.audit_event import AuditEvent
-from app.models.authorization import (
-    AuthorizationAccessRequest,
-    AuthorizationBinding,
-    OrganizationOwnerAssignment,
+
+# ``AiCommentaryDraft`` is imported for its SIDE EFFECT as much as for the name:
+# without it ``ai_commentary_drafts`` is absent from ``Base.metadata`` for any
+# caller that imports ``app.models`` rather than the whole app, so
+# ``Base.metadata.create_all`` silently builds a schema without it. That is the
+# AGENTS.md hazard — anything built with ``create_all`` runs no migration, so it
+# must contain what a migration would have written — and it was invisible to the
+# hermetic pytest suite, which imports the app and therefore registers the model
+# before ``create_all`` runs. It surfaced as ``POST /bi/ask`` answering 500 with
+# ``no such table: ai_commentary_drafts`` on the Playwright schema.
+from app.bi.models.commentary import AiCommentaryDraft
+from app.bi.models.content import (
+    BiDashboard,
+    BiDashboardShare,
+    BiDashboardVersion,
+    BiMeasure,
 )
-from app.models.bank import Bank
-from app.models.bi import (
+from app.bi.models.marts import (
     BiAggPositionDaily,
     BiDimBranch,
     BiDimCounterparty,
@@ -35,29 +43,64 @@ from app.models.bi import (
     BiMartBuild,
     BiQueryLog,
 )
-
-# ``AiCommentaryDraft`` is imported for its SIDE EFFECT as much as for the name:
-# without it ``ai_commentary_drafts`` is absent from ``Base.metadata`` for any
-# caller that imports ``app.models`` rather than the whole app, so
-# ``Base.metadata.create_all`` silently builds a schema without it. That is the
-# AGENTS.md hazard — anything built with ``create_all`` runs no migration, so it
-# must contain what a migration would have written — and it was invisible to the
-# hermetic pytest suite, which imports the app and therefore registers the model
-# before ``create_all`` runs. It surfaced as ``POST /bi/ask`` answering 500 with
-# ``no such table: ai_commentary_drafts`` on the Playwright schema.
-from app.models.bi_commentary import AiCommentaryDraft
-from app.models.bi_content import (
-    BiDashboard,
-    BiDashboardShare,
-    BiDashboardVersion,
-    BiMeasure,
-)
-from app.models.bi_notifications import (
+from app.bi.models.notifications import (
     BiAlert,
     BiAlertEvent,
     BiSubscription,
     BiSubscriptionDelivery,
 )
+from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
+from app.forecasting.models import ForecastAssumptionVersion
+from app.icaap.models.ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
+from app.icaap.models.risk_capital import (
+    BankSupervisoryAddon,
+    IcaapAppetiteMetric,
+    IcaapAuditReview,
+    IcaapCapitalAllocation,
+    IcaapChallenge,
+    IcaapChallengeResponse,
+    IcaapControlExplanation,
+    IcaapPillar2Item,
+    IcaapPillar2ItemRevision,
+    IcaapRequirementReconciliationLine,
+    IcaapResourcesReconciliationLine,
+    IcaapRiskAssessment,
+)
+from app.icaap.models.workspace import (
+    IcaapAttachment,
+    IcaapAttachmentWithdrawal,
+    IcaapBlockBinding,
+    IcaapCycle,
+    IcaapCycleStage,
+    IcaapDataBlock,
+    IcaapDisclosure,
+    IcaapSection,
+    IcaapSectionVersion,
+    IcaapStageDecision,
+    IcaapWorkflowTemplate,
+)
+from app.identity.models.authorization import (
+    AuthorizationAccessRequest,
+    AuthorizationBinding,
+    OrganizationOwnerAssignment,
+)
+from app.identity.models.bank import Bank
+from app.identity.models.institution_profile import (
+    BankLicense,
+    BankNameHistory,
+    BankProduct,
+    InstitutionProfile,
+    Outlet,
+    RelatedParty,
+    RelatedPartyRole,
+    Shareholding,
+)
+from app.identity.models.integration_key import IntegrationKey
+from app.identity.models.refresh_token import RefreshToken
+from app.identity.models.sso_connection import SsoConnection
+from app.identity.models.user import User
+from app.models.ai import AiCommentarySettings
+from app.models.audit_event import AuditEvent
 from app.models.calculation import (
     CalculationForecastPeriod,
     CalculationRun,
@@ -84,11 +127,6 @@ from app.models.database_connection import DatabaseDirectConnection
 from app.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
 from app.models.entitlements import MarketDataEntitlement
 from app.models.facts import FinancialFactRow
-from app.models.filing_workflow import (
-    FilingWorkflowTemplate,
-    PackageStageDecision,
-    PackageWorkflowStage,
-)
 from app.models.financial import (
     FinancialAccount,
     FinancialBalance,
@@ -102,34 +140,6 @@ from app.models.financial import (
     FinancialSourceRow,
     FinancialValidationIssue,
 )
-from app.models.icaap import (
-    IcaapAttachment,
-    IcaapAttachmentWithdrawal,
-    IcaapBlockBinding,
-    IcaapCycle,
-    IcaapCycleStage,
-    IcaapDataBlock,
-    IcaapDisclosure,
-    IcaapSection,
-    IcaapSectionVersion,
-    IcaapStageDecision,
-    IcaapWorkflowTemplate,
-)
-from app.models.icaap_ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
-from app.models.icaap_risk_capital import (
-    BankSupervisoryAddon,
-    IcaapAppetiteMetric,
-    IcaapAuditReview,
-    IcaapCapitalAllocation,
-    IcaapChallenge,
-    IcaapChallengeResponse,
-    IcaapControlExplanation,
-    IcaapPillar2Item,
-    IcaapPillar2ItemRevision,
-    IcaapRequirementReconciliationLine,
-    IcaapResourcesReconciliationLine,
-    IcaapRiskAssessment,
-)
 from app.models.implied_rating import ImpliedRatingRun
 from app.models.ingestion import (
     IngestionBatch,
@@ -137,18 +147,7 @@ from app.models.ingestion import (
     MappingConfigRecord,
     TranslationFailure,
 )
-from app.models.institution_profile import (
-    BankLicense,
-    BankNameHistory,
-    BankProduct,
-    InstitutionProfile,
-    Outlet,
-    RelatedParty,
-    RelatedPartyRole,
-    Shareholding,
-)
 from app.models.institution_type import InstitutionType
-from app.models.integration_key import IntegrationKey
 from app.models.job import Job
 from app.models.jurisdiction import Jurisdiction
 from app.models.liquidity_cfp import (
@@ -199,20 +198,8 @@ from app.models.parameter_register import (
     ParamStressShock,
 )
 from app.models.reconciliation import ReconciliationException
-from app.models.refresh_token import RefreshToken
 from app.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.models.regulatory_parameter import RegulatoryParameter
-from app.models.regulatory_reporting import (
-    RegulatoryChannelConfig,
-    RegulatoryPackage,
-    RegulatoryPackageApproval,
-    RegulatoryPackageArtifact,
-    RegulatoryPackageAttachment,
-    RegulatoryPackageAttachmentWithdrawal,
-    RegulatoryReportingSettings,
-    RegulatoryResubmissionRequest,
-    RegulatorySubmissionEvent,
-)
 from app.models.regulatory_run import (
     RegulatoryLineItem,
     RegulatoryMetricResult,
@@ -234,7 +221,6 @@ from app.models.risk import (
 )
 from app.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
 from app.models.scenario_workbench import SavedScenarioAnalysis, StressScenario
-from app.models.sso_connection import SsoConnection
 from app.models.stress import (
     EnterpriseStressSignoff,
     MacroScenario,
@@ -244,9 +230,27 @@ from app.models.stress import (
 )
 from app.models.system_of_record import SystemOfRecordDeclaration
 from app.models.temenos import TemenosConnection
-from app.models.user import User
+from app.reporting.models.filing_workflow import (
+    FilingWorkflowTemplate,
+    PackageStageDecision,
+    PackageWorkflowStage,
+)
+from app.reporting.models.packages import (
+    RegulatoryChannelConfig,
+    RegulatoryPackage,
+    RegulatoryPackageApproval,
+    RegulatoryPackageArtifact,
+    RegulatoryPackageAttachment,
+    RegulatoryPackageAttachmentWithdrawal,
+    RegulatoryReportingSettings,
+    RegulatoryResubmissionRequest,
+    RegulatorySubmissionEvent,
+)
 
 __all__ = [
+    "BankEncryptionKey",
+    "RetainedBankKey",
+    "ObjectKeyEnvelope",
     "AdoptedSignatureAppearance",
     "AiCommentarySettings",
     "AttestationSignature",

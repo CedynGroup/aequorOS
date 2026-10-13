@@ -12,7 +12,8 @@ parents, covering same-org cross-parent nesting).  That is where generation earn
 its cost: it checks isolation across a bounded sample of caller authority
 combinations.
 
-For each generated caller and layout the property replaces bank A's bindings,
+For each generated caller and layout the property revokes bank A's previous
+bindings and appends new grants,
 sweeps every applicable route, checks for foreign identifiers beyond those sent
 in the request, rejects successful mutations, and checks that every table digest
 in both organizations is unchanged.  It runs against a migrated Postgres schema
@@ -55,7 +56,7 @@ from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import AuthorizationBinding, Organization, RegulatoryPackage, User
-from app.services.regulatory_reporting import common as regulatory_common
+from app.reporting.service import common as regulatory_common
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     clear_database_caches,
@@ -161,8 +162,11 @@ def _replace_home_bindings(engine: Engine, bindings: list[AuthorizationBinding])
     with _tenant_session(engine, ORG_A) as session:
         session.execute(
             text(
-                "DELETE FROM authorization_bindings"
+                "UPDATE authorization_bindings SET status = 'revoked', revoked_at = now(),"
+                " revoked_by_type = 'system', revoked_by_id = 'object-reference-property',"
+                " revoked_reason = 'Next property example', updated_at = now()"
                 " WHERE organization_id = :organization_id AND grant_reason = :reason"
+                " AND status <> 'revoked'"
             ),
             {"organization_id": ORG_A, "reason": GRANT_REASON},
         )
@@ -379,9 +383,7 @@ def test_object_reference_property_detects_weakened_package_guard(
         )
         patched.setattr(deps, "_resolve_package_from_path", unscoped_resolve)
         patched.setattr(regulatory_common, "get_package_or_404", unscoped_lookup)
-        patched.setattr(
-            "app.services.regulatory_reporting.packages.get_package_or_404", unscoped_lookup
-        )
+        patched.setattr("app.reporting.service.packages.get_package_or_404", unscoped_lookup)
         weakened = sweep.run(auth, "sibling_bank")
         assert weakened, "the weakened package guard went unnoticed"
     with TestClient(app, raise_server_exceptions=False) as client:

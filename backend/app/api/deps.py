@@ -23,10 +23,10 @@ from app.core.config import get_settings
 from app.core.observability import authorization_denied, cross_tenant_attempt
 from app.core.tenancy import TenantContext
 from app.db.session import get_sessionmaker
+from app.identity.service.authorization import EffectiveDataScope
 from app.integrations.storage.base import ObjectStorage
 from app.integrations.storage.s3 import get_object_storage
 from app.models import Bank, Organization, RegulatoryPackage, User
-from app.services.authorization import EffectiveDataScope
 
 # Declares a `bearerAuth` (HTTP bearer) security scheme in OpenAPI; auto_error=False so
 # we raise our own 401 (with WWW-Authenticate) instead of FastAPI's default 403.
@@ -99,7 +99,7 @@ INTEGRATION_KEY_ROUTES: frozenset[tuple[str, str]] = frozenset(
         # The Power BI Stage B feed. Spelled literally because ``read_bi_feeds``
         # imports THIS module, so importing its ``FEED_INTEGRATION_KEY_ROUTE``
         # here would be a cycle. The duplication is pinned instead: a test in
-        # ``tests/api/test_bi_feeds.py`` asserts this entry equals that constant,
+        # ``tests/bi/api/test_bi_feeds.py`` asserts this entry equals that constant,
         # so the two strings cannot drift apart silently.
         ("GET", "/api/v1/banks/{bank_id}/bi/feeds/{dataset}"),
     }
@@ -195,7 +195,7 @@ def _authenticate_principal(
     # middleware authenticates as its service account. Resolved pre-tenant
     # (global hash lookup), then validated like any principal downstream.
     # Local import: the service imports TenantContext from this module.
-    from app.services.integration_keys import (  # noqa: PLC0415 - break the deps<->service cycle
+    from app.identity.service.integration_keys import (  # noqa: PLC0415 - break the deps<->service cycle
         authenticate_key,
         looks_like_integration_key,
     )
@@ -613,7 +613,7 @@ def _require_organization_permission(  # noqa: PLR0913 - the complete policy tup
         PrincipalType,
         ResourceLocator,
     )
-    from app.services import authorization as authorization_service  # noqa: PLC0415
+    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
 
     required_permission = Permission(permission)
     resource = ResourceLocator(
@@ -736,7 +736,7 @@ def require_grant_administration(
         RoleBundle,
         Sensitivity,
     )
-    from app.services import authorization as authorization_service  # noqa: PLC0415
+    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
 
     if ctx.actor_user_id is None:
         raise HTTPException(
@@ -800,7 +800,7 @@ def _require_liquidity_view(  # noqa: PLR0913 - complete authorization sentence
     prefetch: bool = False,
 ) -> LiquidityMonitoringAccess:
     from app.core.authorization import Module, Permission  # noqa: PLC0415
-    from app.services import scoped_authorization  # noqa: PLC0415
+    from app.identity.service import scoped_authorization  # noqa: PLC0415
 
     require_permission = (
         scoped_authorization.require_bank_permission_prefetched
@@ -837,8 +837,8 @@ def require_integration_push_ingest(
         ResourceLocator,
         Sensitivity,
     )
-    from app.services import authorization as authorization_service  # noqa: PLC0415
-    from app.services import integration_keys  # noqa: PLC0415
+    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
+    from app.identity.service import integration_keys  # noqa: PLC0415
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     requested_bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -934,7 +934,7 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
     require_whole_institution: bool = True,
     denial_status: int = status.HTTP_403_FORBIDDEN,
 ) -> InstitutionPermissionAccess:
-    """Require one complete active binding for an exact tenant institution.
+    """Require a human principal and one complete binding for an exact institution.
 
     ``require_whole_institution`` is the DATA-scope half of the sentence, and it
     is a refusal rather than a narrowing. A figure that is the institution's —
@@ -962,7 +962,7 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
     see behind the same 404 a cross-tenant probe receives.
     """
 
-    from app.services import authorization as authorization_service  # noqa: PLC0415
+    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
 
     if bank is None:  # pragma: no cover - institution permissions are bank-scoped
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
@@ -970,6 +970,18 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
         authorization_denied(
             reason="scoped_binding_principal_required",
             organization_id=ctx.organization_id,
+            bank_id=bank.id,
+            module=module.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=denial_status, detail=detail)
+
+    if ctx.integration_key_id is not None or ctx.authorization_version is None:
+        authorization_denied(
+            reason="human_institution_principal_required",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
             bank_id=bank.id,
             module=module.value,
             permission=permission.value,
@@ -1289,7 +1301,7 @@ def _require_icaap_access(  # noqa: PLR0913 - the complete policy tuple is expli
     does a missing binding become 403, because the caller's own institution
     existing is not a secret from them.
     """
-    from app.services.icaap import guards  # noqa: PLC0415 - avoid deps/service cycle
+    from app.icaap.service import guards  # noqa: PLC0415 - avoid deps/service cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1383,7 +1395,7 @@ def require_icaap_ai_draft(request: Request, db: DbSession, ctx: Tenant) -> Icaa
     access = _require_icaap_access(
         request, db, ctx, permission=Permission.EDIT, surface="icaap_ai_draft"
     )
-    from app.services.icaap import ai_prompt  # noqa: PLC0415 - avoid deps/service cycle
+    from app.icaap.service import ai_prompt  # noqa: PLC0415 - avoid deps/service cycle
 
     decision = ai_gates.evaluate(
         db,
@@ -1418,7 +1430,7 @@ def require_icaap_pillar2_approve(request: Request, db: DbSession, ctx: Tenant) 
     than a check buried in the service. The service re-checks it as well,
     because two requests can race between the two.
     """
-    from app.services.icaap import pillar2  # noqa: PLC0415 - avoid deps/service cycle
+    from app.icaap.service import pillar2  # noqa: PLC0415 - avoid deps/service cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1446,7 +1458,7 @@ def require_icaap_addon_approve(request: Request, db: DbSession, ctx: Tenant) ->
     The database also refuses ``confirmed_by = created_by``; this is the layer
     that answers with an authorization decision instead of a constraint error.
     """
-    from app.services.icaap import supervisory_addons  # noqa: PLC0415
+    from app.icaap.service import supervisory_addons  # noqa: PLC0415
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1480,8 +1492,8 @@ def require_icaap_audit_review(request: Request, db: DbSession, ctx: Tenant) -> 
     instead would mean the reviewer held the authority they are reviewing.
     """
     from app.core.authorization import ConditionKind  # noqa: PLC0415
-    from app.models.icaap import IcaapCycle  # noqa: PLC0415
-    from app.services.icaap import audit_reviews  # noqa: PLC0415
+    from app.icaap.models.workspace import IcaapCycle  # noqa: PLC0415
+    from app.icaap.service import audit_reviews  # noqa: PLC0415
 
     access = _require_icaap_access(
         request, db, ctx, permission=Permission.VIEW, surface="icaap_audit_review_view"
@@ -1573,7 +1585,7 @@ def require_icaap_stage_decision(request: Request, db: DbSession, ctx: Tenant) -
     the stage's maker-checker condition separates the officers. See the ICAAP
     enforcement rollout contract for the complete authority matrix.
     """
-    from app.services.icaap import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1603,7 +1615,7 @@ def require_icaap_stage_decision(request: Request, db: DbSession, ctx: Tenant) -
 
 def require_icaap_freeze(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
     """Freezing: CAP/confidential EDIT, and NOT by anyone who reviewed it (D-030)."""
-    from app.services.icaap import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1628,7 +1640,7 @@ def require_icaap_review(request: Request, db: DbSession, ctx: Tenant) -> IcaapA
     ``conditions`` at all until 2026-09-20 and was the least guarded of the
     ICAAP decision dependencies while being the most destructive (audit F1).
     """
-    from app.services.icaap import post_freeze  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service import post_freeze  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1651,7 +1663,7 @@ def require_icaap_review(request: Request, db: DbSession, ctx: Tenant) -> IcaapA
 
 def require_icaap_workflow_approve(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
     """Approving the bank's own review chain: APPROVE, and not its proposer."""
-    from app.services.icaap import workflow_templates  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service import workflow_templates  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -1676,7 +1688,7 @@ def require_icaap_workflow_approve(request: Request, db: DbSession, ctx: Tenant)
 
 def require_icaap_disclosure_approve(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
     """Approving what the bank publishes of its ICAAP: APPROVE, and four eyes."""
-    from app.services.icaap import disclosure as icaap_disclosure  # noqa: PLC0415 - avoid a cycle
+    from app.icaap.service import disclosure as icaap_disclosure  # noqa: PLC0415 - avoid a cycle
     from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
     bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
@@ -2228,7 +2240,7 @@ def _chain_authority_access(  # noqa: PLR0913 - the complete policy tuple is exp
     conditions: tuple[ConditionCheck, ...],
 ) -> PackageAccess | None:
     """Try the scoped review-chain authority; never fall back to a scalar role."""
-    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+    from app.reporting.service import family_access  # noqa: PLC0415
 
     scoped = get_scoped_mutation_tenant_context(ctx)
     verdict = family_access.chain_decision_verdict(
@@ -2274,7 +2286,7 @@ def _require_package_access(  # noqa: PLR0913 - the complete policy tuple is exp
     conditions: tuple[ConditionCheck, ...] = (),
     authority: Literal["family", "transmission", "chain"] = "family",
 ) -> PackageAccess:
-    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+    from app.reporting.service import family_access  # noqa: PLC0415
 
     bank, package = _resolve_package_from_path(request, db, ctx)
     if package is None or bank is None:
@@ -2414,7 +2426,7 @@ def require_package_stage_decision(request: Request, db: DbSession, ctx: Tenant)
 
     Both branches require stored bindings; scalar roles provide no fallback.
     """
-    from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
+    from app.reporting.service.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
 
     _bank, package = _resolve_package_from_path(request, db, ctx)
     stage = None if package is None else filing_chain.stage_for_decision(db, ctx, package)

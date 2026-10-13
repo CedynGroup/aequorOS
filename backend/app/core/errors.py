@@ -30,6 +30,7 @@ class ModuleDataUnavailable(Exception):  # noqa: N818 - not an error condition, 
         self.error_code = error_code
         self.reason = reason
 
+
 OPENAPI_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     status.HTTP_400_BAD_REQUEST: {
         "model": ErrorResponse,
@@ -140,11 +141,13 @@ def register_exception_handlers(app: FastAPI) -> None:
         return _internal_error_response(request, exc)
 
 
-def _internal_error_response(request: Request, exc: BaseException) -> JSONResponse:
-    logger.bind(
-        method=request.method,
-        path=request.url.path,
-    ).opt(exception=exc).error("Unhandled exception while processing request")
+def _internal_error_response(request: Request, _exc: BaseException) -> JSONResponse:
+    # A calculation boundary logs its safe diagnostic before propagating a bug.
+    # Do not leak the original message, traceback or customer IDs in the URL
+    # when the HTTP boundary subsequently turns that exception into a 500.
+    logger.bind(error_code="internal_server_error").error(
+        "Unhandled exception while processing request"
+    )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=build_error_payload(

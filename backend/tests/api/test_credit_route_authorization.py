@@ -36,6 +36,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import (
     AuthorizationBinding,
     Bank,
@@ -45,7 +46,7 @@ from app.models import (
     LineageRecord,
     User,
 )
-from app.services import authorization, job_queue, pipeline
+from app.services import job_queue, pipeline
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
@@ -182,6 +183,7 @@ def _seed_events(events: list[dict[str, Any]]) -> None:
         session.flush()
         lineage = LineageRecord(
             organization_id=ORG_1,
+            bank_id=batch.bank_id,
             ingestion_batch_id=batch.id,
             operation_type="ADAPTER_TRANSLATE",
             operation_ref="credit-scope-events",

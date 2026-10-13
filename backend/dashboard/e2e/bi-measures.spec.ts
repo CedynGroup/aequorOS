@@ -3,7 +3,7 @@
  * standing behind it.
  *
  * WHY THE WIRE HALF EXISTS BESIDE THE SCREEN HALF. The language is the server's
- * (`app/domain/bi/expr.py`) and the browser holds no parser, so the sharpest
+ * (`app/bi/domain/expr.py`) and the browser holds no parser, so the sharpest
  * assertions about a FORMULA are assertions about what the validation route said.
  * The screen half then proves a person can actually get from an empty textarea to
  * a certified figure in Explore's picker.
@@ -38,7 +38,7 @@ import { biApi, SAMPLE_BANK_ID } from "./support/bi";
  * Both are CREDIT, both are a position on a date, and both carry the position
  * dimensions — so they share a time behaviour and a breakdown, which is what
  * makes a formula over them answerable. Picked from
- * `app/domain/bi/catalogue/measures.py`, not invented.
+ * `app/bi/domain/catalogue/measures.py`, not invented.
  */
 const NUMERATOR = "loans.npl_exposure_rc";
 const NUMERATOR_LABEL = "Non-performing exposure";
@@ -283,9 +283,8 @@ test.describe.serial("certifying a formula takes two people", () => {
       },
     );
     expect(stale.status).toBe(409);
-    const body = (
-      stale.body as { error: { details: { error_code: string } } }
-    ).error.details;
+    const body = (stale.body as { error: { details: { error_code: string } } })
+      .error.details;
     expect(body.error_code).toBe("bi_measure_expression_moved");
   });
 
@@ -430,9 +429,7 @@ test.describe.serial("certifying a formula takes two people", () => {
 });
 
 /** The reporting date the fixture's marts were built at, read from the platform. */
-async function asOf(
-  request: Parameters<typeof biApi>[0],
-): Promise<string> {
+async function asOf(request: Parameters<typeof biApi>[0]): Promise<string> {
   const { status, body } = await biApi(
     request,
     "admin",

@@ -19,8 +19,15 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import Bank, BankReportingPeriod, RegulatoryPackage, RegulatoryParameter
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import calendar, generation
+from app.reporting.service.le_generation import (
+    _table1_thresholds,  # pyright: ignore[reportPrivateUsage]
+    generate_sdi_large_exposures,
+    generate_sdi_lmt,
+)
+from app.reporting.service.registry import REGISTRY
 from app.schemas.regulatory_irr import IrrScenarioBatchCreate
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import (
     fact_derivation,
     loan_classification,
@@ -30,13 +37,6 @@ from app.services import (
     sdi_readiness,
 )
 from app.services.live_state import load_current_facts
-from app.services.regulatory_reporting import calendar, generation
-from app.services.regulatory_reporting.le_generation import (
-    _table1_thresholds,  # pyright: ignore[reportPrivateUsage]
-    generate_sdi_large_exposures,
-    generate_sdi_lmt,
-)
-from app.services.regulatory_reporting.registry import REGISTRY
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1
@@ -164,15 +164,8 @@ def test_sdi_end_to_end_engine_slice(db_session: Session) -> None:
     obligations = calendar.list_obligations(
         db_session, _CTX, sdi.id, as_of=FIXTURE_AS_OF
     ).obligations
-    assert {obligation.return_code for obligation in obligations} == {
-        "SDI-LMT-MONTHLY",
-        "SDI-LE-MONTHLY",
-        "SDI-STRESS-ANNUAL",
-        "SDI-IRRBB-QUARTERLY",
-        # Credit PR-6: the Notice 2025/23 monthly NPL report binds SDIs too -
-        # the one return family an SDI shares with a bank by design.
-        "NPL-MONTHLY",
-    }
+    assert {obligation.return_code for obligation in obligations} == {"NPL-MONTHLY"}
+    assert all(obligation.instrument_status == "in_force" for obligation in obligations)
 
 
 def test_sdi_lmt_generator_renders_only_the_published_applicable_tables(

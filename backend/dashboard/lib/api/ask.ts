@@ -38,7 +38,7 @@
 
 /**
  * The longest question the route accepts — `QUESTION_MAX_CHARS` in
- * `app/schemas/bi_nlq.py`. Mirrored so the box can stop a reader at the bound
+ * `app/bi/schemas/nlq.py`. Mirrored so the box can stop a reader at the bound
  * rather than let the server refuse a sentence they already typed; the server
  * remains the authority and refuses independently.
  */

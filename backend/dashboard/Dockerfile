@@ -5,12 +5,9 @@
 # This is a pnpm WORKSPACE build: the app depends on @aequoros/risk-service-api
 # via `workspace:*`, so the build needs the repo root (root lockfile + packages/).
 #
-# COOLIFY SETTINGS for this app:
-#   • Build Pack:          Dockerfile
-#   • Base Directory:      /            (build context MUST be the repo root)
-#   • Dockerfile Location: /backend/dashboard/Dockerfile
-#   • Ports Exposes:       3000
-#   • Mark NEXT_PUBLIC_* env vars as Build-time (they are inlined at build).
+# Coolify uses the repository-root docker-compose.dashboard.yml wrapper;
+# its header owns build-pack, build-context and build-time variable settings.
+# Certificate and proxy preparation: backend/docs/transport_security.md.
 # ---------------------------------------------------------------------------
 
 FROM node:24-slim AS base
@@ -39,10 +36,10 @@ COPY backend/dashboard backend/dashboard
 # PDF, and a second copy could drift so that the face previewed in the browser is
 # not the one stamped on a filed return. That single-source choice means this
 # COPY is load-bearing: without it `next build` fails with "Can't resolve
-# ../../../../app/services/attestation/fonts/…", which is exactly how the
+# ../../../../app/attestation/service/fonts/…", which is exactly how the
 # 2026-07-26 deploy broke. A local build cannot catch it (the whole repo is on
 # disk); only the container's narrower context can.
-COPY backend/app/services/attestation/fonts backend/app/services/attestation/fonts
+COPY backend/app/attestation/service/fonts backend/app/attestation/service/fonts
 
 # NEXT_PUBLIC_* are inlined into the client bundle at build time — Coolify passes
 # them as --build-arg when they are marked as build-time env vars.
@@ -54,10 +51,13 @@ ENV NEXT_PUBLIC_RISK_API_BASE_URL=$NEXT_PUBLIC_RISK_API_BASE_URL \
     NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH \
     NEXT_TELEMETRY_DISABLED=1
 
+RUN node -e "if(new URL(process.env.NEXT_PUBLIC_RISK_API_BASE_URL).protocol!=='https:') throw new Error('API URL requires HTTPS')"
 RUN pnpm --filter @aequoros/dashboard build
 
 # ---------- runner: minimal standalone server ---------------------------------
 FROM node:24-slim AS runner
+ARG NEXT_PUBLIC_RISK_API_BASE_URL
+ENV NEXT_PUBLIC_RISK_API_BASE_URL=$NEXT_PUBLIC_RISK_API_BASE_URL
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
@@ -70,6 +70,8 @@ RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs nextjs
 COPY --from=build --chown=nextjs:nodejs /app/backend/dashboard/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/backend/dashboard/.next/static ./backend/dashboard/.next/static
 
+COPY --chown=nextjs:nodejs deploy/tls/serve-next.cjs ./serve-next.cjs
+
 USER nextjs
 EXPOSE 3000
-CMD ["node", "backend/dashboard/server.js"]
+CMD ["node", "serve-next.cjs", "backend/dashboard/server.js"]

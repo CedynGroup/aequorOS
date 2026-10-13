@@ -1,0 +1,38 @@
+# aequorOS staff console: verified HTTPS at the proxy-to-origin hop.
+services:
+  console:
+    build:
+      context: .
+      dockerfile: console/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "3002"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: "production"
+      TLS_ALLOW_PLAINTEXT: "0"
+      TLS_CERT_FILE: "/run/tls/console.crt"
+      TLS_KEY_FILE: "/run/tls/console.key"
+      NODE_EXTRA_CA_CERTS: "/run/trust/ca.pem"
+      NEXT_LOOPBACK_PORT: "3003"
+    volumes:
+      - service-trust:/run/trust:ro
+      - console-tls:/run/tls:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''https://console:3002/login'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 15s
+volumes:
+  service-trust:
+    external: true
+    name: aequoros-service-trust
+  console-tls:
+    external: true
+    name: aequoros-console-tls

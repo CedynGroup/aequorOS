@@ -6,6 +6,8 @@ packages:
   - "packages/*"
 
 allowBuilds:
+  # Unit tests intercept Node requests; no browser service worker is installed.
+  msw: false
   unrs-resolver: true
 
 engineStrict: true

@@ -30,7 +30,8 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 
 EXPECTED_PERIODS = 12
-EXPECTED_FACTS = 1308
+# BoG CRD (June 2018) ¶98: 109 existing facts + 12 net credit-basis facts per period.
+EXPECTED_FACTS = 1452
 # 176 = the long-standing 167 plus the two BoG GHS ±450 bp IRRBB parallel
 # shock rows (plan W6.4; IRRBB Guideline Feb 2026 Appendix II–III).
 # shocks, plus the seven usd_funding_stress liquidity shocks (Phase 2 item 2).

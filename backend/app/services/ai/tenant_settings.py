@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.config import Settings, get_settings, is_undeployed_environment
 from app.db.base import utc_now
-from app.models import User
+from app.identity.public import User
 from app.models.ai import AiCommentarySettings
 from app.schemas.ai import (
     AiAvailabilityRead,

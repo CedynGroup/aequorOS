@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.routing import APIRoute
 
-from app.main import create_app
+from app.main import app
 
 _ASSUMPTIONS = "/api/v1/banks/{bank_id}/forecast/assumption-versions"
 
@@ -45,7 +45,7 @@ def _dependency_names(route: APIRoute) -> set[str]:
 
 
 def test_forecasting_routes_cannot_revert_to_legacy_authorization() -> None:
-    routes = [route for route in create_app().routes if isinstance(route, APIRoute)]
+    routes = [route for route in app.routes if isinstance(route, APIRoute)]
 
     for (method, path), required_dependency in _ROUTE_DEPENDENCIES.items():
         matches = [
@@ -61,7 +61,7 @@ def test_forecasting_routes_cannot_revert_to_legacy_authorization() -> None:
 
 def test_every_forecasting_route_is_covered() -> None:
     """A new forecasting or reverse-stress route must name its binding here."""
-    routes = [route for route in create_app().routes if isinstance(route, APIRoute)]
+    routes = [route for route in app.routes if isinstance(route, APIRoute)]
     found = {
         (method, route.path)
         for route in routes

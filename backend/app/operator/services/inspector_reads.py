@@ -17,10 +17,9 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.identity.public import Bank, IntegrationKey, SsoConnection
 from app.models import (
-    Bank,
     IngestionBatch,
-    IntegrationKey,
     LiveFinding,
     LiveMetric,
     MappingConfigRecord,
@@ -28,7 +27,6 @@ from app.models import (
     ParamCapitalThreshold,
     ParamLiquidityThreshold,
     RegulatoryRun,
-    SsoConnection,
     TranslationFailure,
 )
 from app.schemas.operator import (

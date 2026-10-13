@@ -11,9 +11,9 @@ documented:
    documented fraction of each performing exposure **downgrades** (attracts a
    higher risk weight) as the macro PD multiplier rises, and foreign-currency
    exposures are **revalued** by the cedi-depreciation path. Both raise credit
-   RWA independently of balance-sheet growth. The aggregate uplift factor feeds
-   ``projection.py`` so the stress leg's RWA rises from migration + FX, not only
-   from deleveraging.
+   RWA independently of balance-sheet growth. Exposure-level RWA deltas feed
+   ``projection.py`` after each year's growth so the stress leg's RWA rises from
+   migration + FX.
 2. **Real exposure-class loss decomposition.** Phase-2 Table 1 allocated the
    adverse impairment across the CRD exposure classes by credit-RWA share — a
    documented proxy. Here the incremental expected loss is computed per exposure
@@ -40,17 +40,18 @@ Design (pure, deterministic, Decimal-only — no DB, no FastAPI):
 
 Every channel is neutral under a base scenario (``pd_mult == 1``, ``fx_frac ==
 0``): ``migration_fraction`` is 0, the stressed EAD equals the base EAD, the
-uplift factor is 1.0 and the incremental loss is 0 — the zero-delta invariant
-the whole stress framework relies on.
+uplift factor is 1.0 when base RWA is positive and the incremental loss is 0 —
+the zero-delta invariant the whole stress framework relies on.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
+from app.domain.capital.engine import CapitalFact, CapitalParams, credit_collateral_by_category
 from app.domain.stress.translation import (
     MacroPathPoint,
     ShockMapping,
@@ -118,6 +119,9 @@ class CreditExposure:
     ``crd_class`` is the CRD exposure class (validated to the registry).
     ``is_foreign_currency`` marks a non-base-currency exposure the FX path
     revalues. PD/LGD/risk-weight are through-the-cycle percentages.
+    ``ead`` is gross expected-loss EAD; ``credit_amount`` is the net CRD ¶98
+    amount before CRM for RWA; ``collateral_amount`` is the governed allocated
+    pool. Domain callers without deductions use EAD for both.
     """
 
     exposure_id: str
@@ -127,6 +131,9 @@ class CreditExposure:
     lgd_pct: Decimal
     risk_weight_pct: Decimal
     is_foreign_currency: bool = False
+    credit_amount: Decimal | None = None
+    credit_category: str | None = None
+    collateral_amount: Decimal = _ZERO
 
     def normalized_class(self) -> str:
         """The exposure's CRD class — refusing an unrecognised one.
@@ -179,12 +186,14 @@ class BottomUpCreditResult:
     stressed_credit_rwa: Decimal
     fx_revaluation_rwa: Decimal
     migration_rwa: Decimal
-    credit_rwa_uplift_factor: Decimal
+    credit_rwa_uplift_factor: Decimal | None
     base_expected_loss: Decimal
     stressed_expected_loss: Decimal
     incremental_expected_loss: Decimal
     exposure_count: int
     by_class: tuple[ExposureClassImpact, ...]
+    rwa_delta_by_category: Mapping[str, Decimal]
+    stressed_amount_by_category: Mapping[str, Decimal]
 
     def incremental_loss_by_class(self) -> dict[str, Decimal]:
         """``{crd_class: incremental_expected_loss}`` for every class (0 if none)."""
@@ -202,7 +211,11 @@ class BottomUpCreditResult:
             "stressed_credit_rwa": str(self.stressed_credit_rwa),
             "fx_revaluation_rwa": str(self.fx_revaluation_rwa),
             "migration_rwa": str(self.migration_rwa),
-            "credit_rwa_uplift_factor": str(self.credit_rwa_uplift_factor),
+            "credit_rwa_uplift_factor": (
+                str(self.credit_rwa_uplift_factor)
+                if self.credit_rwa_uplift_factor is not None
+                else None
+            ),
             "base_expected_loss": str(self.base_expected_loss),
             "stressed_expected_loss": str(self.stressed_expected_loss),
             "incremental_expected_loss": str(self.incremental_expected_loss),
@@ -233,6 +246,24 @@ def _capped_pct(value: Decimal) -> Decimal:
     return min(max(value, _ZERO), _HUNDRED)
 
 
+def apply_credit_collateral(
+    exposures: Sequence[CreditExposure], facts: Sequence[CapitalFact], params: CapitalParams
+) -> tuple[CreditExposure, ...]:
+    """BoG CRD (June 2018) ¶98: use capital's governed pool without netting EL EAD."""
+    available = credit_collateral_by_category(facts, params)
+    result: list[CreditExposure] = []
+    for exposure in sorted(
+        exposures, key=lambda item: (item.credit_category or "", item.exposure_id)
+    ):
+        category = exposure.credit_category
+        amount = exposure.ead if exposure.credit_amount is None else exposure.credit_amount
+        collateral = min(available.get(category or "", _ZERO), max(amount, _ZERO))
+        if category is not None:
+            available[category] = available.get(category, _ZERO) - collateral
+        result.append(replace(exposure, collateral_amount=collateral))
+    return tuple(result)
+
+
 def compute_bottom_up_credit(
     exposures: Sequence[CreditExposure],
     *,
@@ -248,11 +279,9 @@ def compute_bottom_up_credit(
     depreciation the FX path implies. All three are 1.0 / 1.0 / 0.0 under a base
     scenario, collapsing the stress onto the base.
 
-    Refuses an empty book: the result's headline is the credit-RWA **uplift
-    factor** the projection multiplies its own credit RWA by, and an empty book
-    used to yield 1.0 — "the rating migration and FX revaluation add nothing" —
-    from the absence of the exposure data rather than from the book's resilience
-    (audit 2026-08-22 D-8).
+    Refuses an empty book as missing exposure data. With supplied exposures,
+    losses and RWA remain computable even if zero base RWA makes the aggregate
+    uplift ratio undefined; that ratio is then absent.
     """
     if not exposures:
         raise NotComputable(
@@ -276,6 +305,8 @@ def compute_bottom_up_credit(
 
     accumulators: dict[str, _ClassAccumulator] = {}
     fx_reval_rwa = _ZERO
+    deltas: dict[str, Decimal] = {}
+    amounts: dict[str, Decimal] = {}
     migration_rwa = _ZERO
     for exposure in exposures:
         crd_class = exposure.normalized_class()
@@ -288,11 +319,26 @@ def compute_bottom_up_credit(
         downgraded_rw = min(max(rw + params.downgrade_rw_step_pct, rw), params.rw_cap_pct)
         effective_rw = (_ONE - migration_fraction) * rw + migration_fraction * downgraded_rw
 
-        base_rwa = money(base_ead * rw / _HUNDRED)
-        stressed_rwa = money(stressed_ead * effective_rw / _HUNDRED)
+        credit_amount = max(
+            (exposure.ead if exposure.credit_amount is None else exposure.credit_amount)
+            - exposure.collateral_amount,
+            _ZERO,
+        )
+        stressed_credit = (
+            money(credit_amount * (_ONE + fx_uplift))
+            if exposure.is_foreign_currency
+            else credit_amount
+        )
+        base_rwa = money(credit_amount * rw / _HUNDRED)
+        stressed_rwa = money(stressed_credit * effective_rw / _HUNDRED)
         # Additive attribution: base + fx-revaluation + migration == stressed.
-        fx_reval_rwa += money((stressed_ead - base_ead) * rw / _HUNDRED)
-        migration_rwa += money(stressed_ead * (effective_rw - rw) / _HUNDRED)
+        fx_reval_rwa += money((stressed_credit - credit_amount) * rw / _HUNDRED)
+        migration_rwa += money(stressed_credit * (effective_rw - rw) / _HUNDRED)
+
+        if exposure.credit_category is not None:
+            category = exposure.credit_category
+            deltas[category] = deltas.get(category, _ZERO) + stressed_rwa - base_rwa
+            amounts[category] = amounts.get(category, _ZERO) + stressed_credit
 
         base_el = money(base_ead * exposure.pd_pct / _HUNDRED * exposure.lgd_pct / _HUNDRED)
         stressed_pd = _capped_pct(exposure.pd_pct * pd_multiplier)
@@ -322,27 +368,11 @@ def compute_bottom_up_credit(
     stressed_credit_rwa = money(sum((impact.stressed_rwa for impact in by_class), _ZERO))
     base_el = money(sum((impact.base_expected_loss for impact in by_class), _ZERO))
     stressed_el = money(sum((impact.stressed_expected_loss for impact in by_class), _ZERO))
-    # The uplift factor is a ratio, and a ratio needs a denominator. A book whose
-    # every exposure carries a zero EAD or a zero risk weight has no base credit
-    # RWA, and the factor used to come back as 1.0 — applied downstream to the
-    # PROJECTION's real credit RWA, so the projection's stress leg carried no
-    # migration or revaluation uplift at all (audit 2026-08-22 D-8).
-    if base_credit_rwa <= _ZERO:
-        raise NotComputable(
-            outcome(
-                OutcomeState.NOT_COMPUTABLE,
-                metric_id="credit_rwa_uplift_factor",
-                reason=(
-                    f"The {len(exposures)} supplied credit exposures produce no base "
-                    "credit RWA, so the rating-migration and FX-revaluation uplift has "
-                    "no denominator and is not a number. Check the exposure balances "
-                    "and their governed risk weights."
-                ),
-                items=("input:base_credit_rwa",),
-                context={"exposure_count": len(exposures)},
-            )
-        )
-    uplift = (stressed_credit_rwa / base_credit_rwa).quantize(Decimal("0.000001"))
+    uplift = (
+        (stressed_credit_rwa / base_credit_rwa).quantize(Decimal("0.000001"))
+        if base_credit_rwa > _ZERO
+        else None
+    )
     return BottomUpCreditResult(
         pd_multiplier=pd_multiplier,
         lgd_multiplier=lgd_multiplier,
@@ -357,6 +387,8 @@ def compute_bottom_up_credit(
         incremental_expected_loss=max(money(stressed_el - base_el), _ZERO),
         exposure_count=len(exposures),
         by_class=by_class,
+        rwa_delta_by_category=deltas,
+        stressed_amount_by_category=amounts,
     )
 
 
@@ -437,9 +469,7 @@ def result_for_year(
     per year.
     """
     year_points = _year_points(scenario_paths, year_index)
-    _require_fx_path(
-        year_points, exposures, metric_id=f"bottom_up_credit_year:{year_index}"
-    )
+    _require_fx_path(year_points, exposures, metric_id=f"bottom_up_credit_year:{year_index}")
     pd_mult, lgd_mult, fx_frac = _macro_conditioning(year_points, overrides)
     return compute_bottom_up_credit(
         exposures,

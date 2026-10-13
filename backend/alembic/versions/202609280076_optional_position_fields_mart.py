@@ -7,7 +7,7 @@ Revises: 202609280075
 ``channel``, ``account_status``, ``arrears_amount``. Ingestion needed no migration:
 they ride the ``attributes`` bag and are normalised there. **Analysis does.** A BI
 catalogue member binds to a ``ColumnRef(table, column)`` resolved against
-``app/models/bi.py``, and the position facts carry no ``attributes`` column and
+``app/bi/models/marts.py``, and the position facts carry no ``attributes`` column and
 there is no key-value dimension table. ``attributes.branch_id`` is analysable today
 precisely because the mart has a typed ``branch_code`` column the extract copies it
 into — so the established pattern is a COLUMN, one layer past the bag.

@@ -22,6 +22,8 @@ from sqlalchemy.orm import Session, sessionmaker
 import app.operator.deps as operator_deps
 import app.operator.features.auth as operator_auth_feature
 from app.core.config import get_operator_settings
+from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.types import KeyReference
 from app.models import InstitutionType, Jurisdiction, RegulatoryParameter
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.main import create_operator_app
@@ -36,6 +38,11 @@ from tests.conftest import (
     build_test_database,
     sqlite_database_url,
 )
+
+BANK_KEY = KeyReference(
+    "aws_kms", "arn:aws:kms:us-east-1:123456789012:key/bank-test-key", "us-east-1", "123456789012"
+)
+
 
 DEV_TOKEN = "operator-dev-token-for-tests"
 # ≥32 bytes: PyJWT warns below the RFC 7518 minimum for HS256.
@@ -56,6 +63,12 @@ def provision_payload(**overrides: Any) -> dict[str, Any]:
         "currency": "GHS",
         "admin_email": "admin@testbank.example",
         "admin_full_name": "Ama Mensah",
+        "encryption_key": {
+            "provider": "aws_kms",
+            "key_id": BANK_KEY.key_id,
+            "region": BANK_KEY.region,
+            "owner_account": BANK_KEY.owner_account,
+        },
     }
     payload.update(overrides)
     return payload
@@ -169,29 +182,6 @@ class FakeS3Client:
         self.buckets.pop(Bucket, None)
 
 
-class FakeKmsClient:
-    """The three KMS calls the saga makes (create/alias/schedule-deletion)."""
-
-    KEY_ID = "11111111-2222-3333-4444-555555555555"
-    ARN = f"arn:aws:kms:us-east-1:000000000000:key/{KEY_ID}"
-
-    def __init__(self) -> None:
-        self.aliases: dict[str, str] = {}
-        self.scheduled_deletions: list[str] = []
-
-    def create_key(self, **_: Any) -> dict[str, Any]:
-        return {"KeyMetadata": {"KeyId": self.KEY_ID, "Arn": self.ARN}}
-
-    def create_alias(self, *, AliasName: str, TargetKeyId: str) -> None:  # noqa: N803
-        self.aliases[AliasName] = TargetKeyId
-
-    def schedule_key_deletion(  # noqa: N803
-        self, *, KeyId: str, PendingWindowInDays: int
-    ) -> None:
-        _ = PendingWindowInDays
-        self.scheduled_deletions.append(KeyId)
-
-
 @pytest.fixture(autouse=True)
 def operator_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Pin every OPERATOR_* setting so a developer's .env cannot leak in
@@ -205,7 +195,6 @@ def operator_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("OPERATOR_OIDC_ISSUER", "")
     monkeypatch.setenv("OPERATOR_OIDC_CLIENT_ID", "")
     monkeypatch.setenv("OPERATOR_OIDC_ALLOWED_DOMAIN", "aequoros.com")
-    monkeypatch.setenv("OPERATOR_AWS_KMS_ENABLED", "0")
     monkeypatch.setenv("OPERATOR_PORT", "8100")
     get_operator_settings.cache_clear()
     # The login throttle is process-global by design — never let one test's
@@ -419,9 +408,12 @@ def operator_client(
     """Operator app over the rollback-isolated database with the fake S3 injected."""
     _ = _operator_bound_sessionmaker
     app = _shared_operator_app.get()
+    keys = LocalKeyProvider()
+    keys.add_key(BANK_KEY)
     app.dependency_overrides[get_provisioning_clients] = lambda: ProvisioningClients(
         s3_client=fake_s3,
         storage_settings=fake_storage_settings(),
+        key_providers=lambda _name: keys,
     )
     try:
         with TestClient(app, raise_server_exceptions=False) as client:

@@ -29,16 +29,14 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service.identity import SignerIdentityError, ensure_signer_identity
 from app.models import Organization, SignerIdentity, User
-from app.services.attestation.identity import SignerIdentityError, ensure_signer_identity
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--org", help="Organization platform id (OR-XXXXXXXX). Default: all.")
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Report only; make no changes."
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Report only; make no changes.")
     return parser.parse_args(argv)
 
 
@@ -70,9 +68,7 @@ def _provision_for_org(session: Session, organization_id: str, *, dry_run: bool)
     )
     existing = set(
         session.scalars(
-            select(SignerIdentity.user_id).where(
-                SignerIdentity.organization_id == organization_id
-            )
+            select(SignerIdentity.user_id).where(SignerIdentity.organization_id == organization_id)
         )
     )
 
@@ -112,7 +108,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("DATABASE_URL is not set.", file=sys.stderr)
         return 2
 
-    engine = create_engine(database_url)
+    engine = create_engine(
+        database_url,
+        connect_args={"application_name": "aequoros-provision-signer-identities"}
+        if database_url.startswith("postgresql")
+        else {},
+    )
     total_minted = 0
     total_skipped = 0
     with Session(engine) as session:
@@ -122,9 +123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         for organization_id in organizations:
             print(f"{organization_id}:")
-            minted, skipped = _provision_for_org(
-                session, organization_id, dry_run=args.dry_run
-            )
+            minted, skipped = _provision_for_org(session, organization_id, dry_run=args.dry_run)
             total_minted += minted
             total_skipped += skipped
 

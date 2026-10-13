@@ -16,8 +16,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     BankReportingPeriod,
     CurrentFinancialFact,
     IngestionBatch,
@@ -34,7 +35,7 @@ from app.schemas.live import (
     OfficialRunRequest,
     RefreshRequest,
 )
-from app.services import fact_derivation, job_queue, module_scope, scoped_authorization
+from app.services import fact_derivation, job_queue, module_scope
 from app.services.audit import record_event
 
 _MODULE_ORDER = {

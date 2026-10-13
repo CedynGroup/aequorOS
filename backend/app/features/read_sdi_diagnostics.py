@@ -23,7 +23,9 @@ from app.api.deps import (
     TenantContext,
 )
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.models import Bank, CanonicalPositionSnapshot
+from app.identity import public as banks_service
+from app.identity.public import Bank
+from app.models import CanonicalPositionSnapshot
 from app.models.canonical import is_current_generation
 from app.schemas.sdi import (
     CapitalCheckRead,
@@ -50,7 +52,6 @@ from app.schemas.sdi import (
     SdiReadinessRead,
     SdiRwaRiskClassRead,
 )
-from app.services import banks as banks_service
 from app.services import (
     loan_classification,
     sdi_capital,

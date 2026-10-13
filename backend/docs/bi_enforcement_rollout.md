@@ -1,7 +1,7 @@
 # BI scoped-binding enforcement rollout
 
 **ENFORCED IN CODE, OFF IN EVERY DEPLOYMENT.** As of this commit the six read
-routes exist and are mounted (`app/features/read_bi.py`,
+routes exist and are mounted (`app/bi/api/read_bi.py`,
 `app/api/router.py`), the `require_bi_read` dependency is registered in
 `deps.MUTATION_ROLE_DEPENDENCY_NAMES`, and every one of them is gated by
 `BI_ENABLED`, which defaults to `False` and is set in no deployment — with the
@@ -9,10 +9,10 @@ flag off each route answers 404, as if it did not exist. So nothing in this
 document changes what any principal can reach TODAY; it becomes live the moment
 a deployment sets `BI_ENABLED=1`.
 
-`app/services/bi/authorization.py::authorize_query` is the decision every BI
-surface consults (`tests/api/test_bi_authorization_matrix.py`,
-`tests/services/bi/test_bi_authorization.py`), and every data route calls it
-before it reads anything (`tests/api/test_bi_routes.py`).
+`app/bi/service/authorization.py::authorize_query` is the decision every BI
+surface consults (`tests/bi/api/test_bi_authorization_matrix.py`,
+`tests/bi/service/test_bi_authorization.py`), and every data route calls it
+before it reads anything (`tests/bi/api/test_bi_routes.py`).
 
 Run the inventory against each target deployment immediately before the release
 that TURNS THE FLAG ON — not before the commit that mounts the routes, which
@@ -121,8 +121,8 @@ other regime-selecting surface does.
 ### What the route layer does (all four landed in this commit)
 
 The authorization decision is complete on its own; these four are the handler's,
-and each is now implemented and pinned by `tests/api/test_bi_routes.py` /
-`tests/api/test_bi_query_log.py`:
+and each is now implemented and pinned by `tests/bi/api/test_bi_routes.py` /
+`tests/bi/api/test_bi_query_log.py`:
 
 1. **404 before 403.** Resolve the institution through `resolve_tenant_bank` /
    `scoped_authorization.resolve_bank` so another tenant's `BK-*` is "not found"
@@ -325,13 +325,11 @@ authorization module values whose entitlement slug differs from the module name.
 human and machine principal that will be denied on each pair. Machine principals
 are included so the release record proves no integration was assumed to have BI
 read authority on the INTERACTIVE routes, which refuse every machine credential.
-The Power BI Stage B feed (`GET …/bi/feeds/{dataset}`, `app/features/read_bi_feeds.py`,
-built 2026-09-27) is the one machine-facing BI route: it requires a `bi_reader`
-binding (migration `202609270074`; `{view}` only, disjoint from
-`integration_writer`'s `{ingest}`, machine-only by CHECK) issued through the
-integration-key flow with `purpose=reader`, and it is inventoried by its own
-contract, `backend/docs/powerbi_stage_b.md`. The SQL above still reports every
-machine principal as denied, which is correct for the surfaces it inventories.
+The [Power BI Stage B feed](powerbi_stage_b.md) has a separate pre-release
+contract; credential availability and deployment are governed by the
+[reader issuance contract](integration_key_machine_principal_rollout.md#reader-key-issuance).
+The SQL above still reports every machine principal as denied, which is correct
+for the interactive surfaces it inventories.
 
 ## Exact binding rows
 
@@ -342,14 +340,13 @@ under that row. Anything further is an institution decision made through
 `grant_administration.create_scoped_grant`, so `authv` advances and refresh-token
 families are revoked in the same transaction.
 
-| Need                                                                                  | `principal_type` | `role_bundle`                                                   | `institution_scope`                      | `institution_id`                             | `module_scope`      | `sensitivity_scope`      | `data_scope_kind` / `data_scope_values`                                                               |
-| ------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------- | ------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
-| Aggregate BI for one engine (dashboards, trends, Explore aggregates)                  | `human`          | `viewer`, `auditor`, `analyst`, `approver`, or `validator`      | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | the engine's module | `aggregated`             | `all` / NULL — institution-grain figures (ratios, bank-wide totals) are refused to any narrower scope |
-| The same, for one branch network or region only (portfolio slices; a branch manager)  | `human`          | same                                                            | `institution`                            | exact `BK-*`                                 | `credit`            | `aggregated`             | `branch` / `["B001", …]` or `region` / `["Northern", …]` — a non-empty list, or the row is refused    |
-| Record-level grids without obligor names (`position.id`, `position.source_reference`) | `human`          | same                                                            | same                                     | same                                         | `risk`              | `confidential`           | `all` / NULL                                                                                          |
-| Named obligors: counterparty name / group / reference, largest-single-name share      | `human`          | same                                                            | same                                     | same                                         | `credit`            | `restricted`             | `all`, or the same slice as the aggregate row                                                         |
-| Record-level BI export                                                                | `human`          | `analyst` (the only bundle carrying `export`)                   | same                                     | same                                         | the member's module | the member's sensitivity | same as the read row it accompanies                                                                   |
-| Power BI Stage B feed pull                                                            | `machine`        | `bi_reader` (issued with the integration key, `purpose=reader`) | `institution`                            | exact `BK-*`                                 | `all`               | `aggregated`             | See [feed-key issuance](../../docs/API_INTEGRATION.md#1-authentication)                               |
+| Need                                                                                  | `principal_type` | `role_bundle`                                              | `institution_scope`                      | `institution_id`                             | `module_scope`      | `sensitivity_scope`      | `data_scope_kind` / `data_scope_values`                                                               |
+| ------------------------------------------------------------------------------------- | ---------------- | ---------------------------------------------------------- | ---------------------------------------- | -------------------------------------------- | ------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Aggregate BI for one engine (dashboards, trends, Explore aggregates)                  | `human`          | `viewer`, `auditor`, `analyst`, `approver`, or `validator` | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | the engine's module | `aggregated`             | `all` / NULL — institution-grain figures (ratios, bank-wide totals) are refused to any narrower scope |
+| The same, for one branch network or region only (portfolio slices; a branch manager)  | `human`          | same                                                       | `institution`                            | exact `BK-*`                                 | `credit`            | `aggregated`             | `branch` / `["B001", …]` or `region` / `["Northern", …]` — a non-empty list, or the row is refused    |
+| Record-level grids without obligor names (`position.id`, `position.source_reference`) | `human`          | same                                                       | same                                     | same                                         | `risk`              | `confidential`           | `all` / NULL                                                                                          |
+| Named obligors: counterparty name / group / reference, largest-single-name share      | `human`          | same                                                       | same                                     | same                                         | `credit`            | `restricted`             | `all`, or the same slice as the aggregate row                                                         |
+| Record-level BI export                                                                | `human`          | `analyst` (the only bundle carrying `export`)              | same                                     | same                                         | the member's module | the member's sensitivity | same as the read row it accompanies                                                                   |
 
 The common least-privilege credit analyst therefore needs two independently
 complete rows — the aggregate portfolio and the named obligors are separate
@@ -406,7 +403,7 @@ NON-EMPTY list — so "no branches" is storable only as a scope that returns no
 rows, never as an absent filter. Three places make that sentence enforcement
 rather than annotation:
 
-1. **Reduction.** `authorize_query` (`app/services/bi/authorization.py`) loads
+1. **Reduction.** `authorize_query` (`app/bi/service/authorization.py`) loads
    the effective grants that matched EACH (module, sensitivity) pair through
    `authorization.load_effective_grants` and reduces each pair with
    `reduce_data_scope` — no grants → nothing; any `all` → the whole
@@ -414,13 +411,13 @@ rather than annotation:
    combines the pairs narrowest-wins. Reducing the ids of DIFFERENT pairs in
    one pass was audit blocker A10-01 (an `all` on liquidity would have erased a
    branch restriction on credit). The machine feed's authorizer
-   (`services/bi/feeds/authorization.py`) carried the same union until audit
+   (`app/bi/service/feeds/authorization.py`) carried the same union until audit
    A360 H8 (latent — no tenant route mints a second `view` binding on a machine
    principal); the 2026-09-29 remediation moves it onto the shared
    `authorization.combine_pair_scopes`, the helper `authorize_query` uses, so
    both surfaces reduce per pair through one function (in the working tree,
    uncommitted at the time of writing).
-2. **Resolution.** `app/services/bi/data_scope.py::resolve` turns the declared
+2. **Resolution.** `app/bi/service/data_scope.py::resolve` turns the declared
    scope into the ONE filter for this institution: the declared branch codes
    plus every `bi_dim_branch` row in a declared region, scoped to the exact
    `(organization, bank)`. A region no ingested branch belongs to, or a code the
@@ -430,9 +427,9 @@ rather than annotation:
    (`read_bi.injected_filters`), so the compiler ANDs it with the client's own
    predicates and no request can reach, remove or widen it; a request filtering
    `branch.code = 'B2'` under a `B1` grant is served the intersection. Seven
-   modules call `resolve`: `features/read_bi.py` (the read routes and packs),
-   `services/bi/insights/assemble.py`, `exports/runner.py` and `exports/jobs.py`,
-   `alerts.py`, `subscriptions.py` and `feeds/authorization.py`. An
+   modules call `resolve`: `app/bi/api/read_bi.py` (the read routes and packs),
+   and, under `app/bi/service/`, `insights/assemble.py`, `exports/runner.py`,
+   `exports/jobs.py`, `alerts.py`, `subscriptions.py` and `feeds/authorization.py`. An
    institution-grain measure (a capital ratio, a bank-wide figure) is refused to
    a scoped principal outright (`REASON_INSTITUTION_GRAIN`,
    `REASON_BANK_WIDE_FIGURE`) rather than served as a wrong number with a
@@ -460,9 +457,9 @@ disclosure) or narrowed (a lost figure). Run it before and after any release
 that touches bindings, the evaluator or the resolver. Its hermetic test does
 not yet assert the new column (owed).
 
-Pinned by: `tests/services/bi/test_data_scope.py`, `tests/api/test_bi_data_scope.py`,
-`tests/api/test_data_scope_grants.py`, the A10-01 cases in
-`tests/services/bi/test_bi_authorization.py`, `tests/api/test_bi_feeds.py` and,
+Pinned by: `tests/bi/service/test_data_scope.py`, `tests/bi/api/test_bi_data_scope.py`,
+`tests/identity/api/test_data_scope_grants.py`, the A10-01 cases in
+`tests/bi/service/test_bi_authorization.py`, `tests/bi/api/test_bi_feeds.py` and,
 for the credit blotter, `tests/api/test_credit_route_authorization.py`.
 
 Turning BI on in production is an ordered sequence with its own hazards; it is
@@ -470,7 +467,7 @@ recorded in [`bi_turn_on_runbook.md`](bi_turn_on_runbook.md).
 
 ## Release record
 
-Before the deployment that mounts the BI routes, attach:
+Before the deployment that enables the BI routes, attach:
 
 1. The dated `authorization_access_impact.py` output BEFORE and AFTER, for every
    organization, with confirmation that the two are identical.
@@ -491,13 +488,13 @@ Before the deployment that mounts the BI routes, attach:
 
 ## Pinned by
 
-| Guarantee                                                                                                            | Test                                                                                                  |
-| -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| The matrix: principal kind × bundle × module × sensitivity × institution × query shape                               | `tests/api/test_bi_authorization_matrix.py`                                                           |
-| Pair collection (filters, hierarchies, ratio components, `over`, Top-N, pivot, sort), call budget, fail-closed edges | `tests/services/bi/test_bi_authorization.py`                                                          |
-| Every catalogue member's module and sensitivity resolves to a platform enum value                                    | `tests/architecture/test_bi_catalogue_authority.py`                                                   |
-| Nothing a client sends becomes SQL                                                                                   | `tests/architecture/test_bi_compiler_injection.py`                                                    |
-| Cross-tenant 404 on every `/bi/*` route, and the route dependency inventory                                          | wave-3 `tests/api/test_bi_routes.py`, `tests/architecture/test_bi_authorization.py` (not yet written) |
+| Guarantee                                                                                                            | Test                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| The matrix: principal kind × bundle × module × sensitivity × institution × query shape                               | `tests/bi/api/test_bi_authorization_matrix.py`                                                           |
+| Pair collection (filters, hierarchies, ratio components, `over`, Top-N, pivot, sort), call budget, fail-closed edges | `tests/bi/service/test_bi_authorization.py`                                                              |
+| Every catalogue member's module and sensitivity resolves to a platform enum value                                    | `tests/architecture/test_bi_catalogue_authority.py`                                                      |
+| Nothing a client sends becomes SQL                                                                                   | `tests/architecture/test_bi_compiler_injection.py`                                                       |
+| Cross-tenant 404 on every `/bi/*` route, and the route dependency inventory                                          | wave-3 `tests/bi/api/test_bi_routes.py`, `tests/architecture/test_bi_authorization.py` (not yet written) |
 
 ## Rehearsal record
 

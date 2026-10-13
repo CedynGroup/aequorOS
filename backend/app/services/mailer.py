@@ -9,7 +9,7 @@ second sender resolution or a second set of failure semantics.
 **What this module is, exactly.** A relay connection and a message builder. It
 decides nothing about WHO may receive WHAT: the caller has already made that
 decision, and for BI subscriptions it makes it once per recipient
-(``app/services/bi/subscriptions.py``). Nothing here reads a tenant table.
+(``app/bi/service/subscriptions.py``). Nothing here reads a tenant table.
 
 **Configuration, never code.** The relay is ``SMTP_*``
 (``app.core.config.SmtpSettings``), which a deployment points at the bank's own
@@ -33,7 +33,7 @@ times and would make a partial failure harder to reason about, not easier.
 
 **Attachments are the caller's decision and the caller's evidence.** This module
 will attach whatever bytes it is handed. What may be attached at all is decided
-by ``app/services/bi/exports/policy.py`` — only an aggregated artifact — and the
+by ``app/bi/service/exports/policy.py`` — only an aggregated artifact — and the
 delivery row records the digest of what went. Keeping the policy out of here is
 deliberate: a transport that classified content would be a second classifier.
 """
@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 
 from app.core.config import get_settings
+from app.core.tls import TransportSecurityError, client_context, plaintext_allowed
 
 #: Every subject line the platform sends carries it, so a bank's mail rules can
 #: match on one string. The product name is not a jurisdiction value.
@@ -178,10 +179,12 @@ def open_relay() -> Iterator[Relay]:
         raise MailerNotConfigured(
             "No outbound mail relay is configured. Set SMTP_HOST and SMTP_FROM."
         )
+    if not settings.smtp_starttls and not plaintext_allowed():
+        raise TransportSecurityError("SMTP_STARTTLS must be enabled.")
     client = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=CONNECT_TIMEOUT_SECONDS)
     with client:
         if settings.smtp_starttls:
-            client.starttls()
+            client.starttls(context=client_context())
         if settings.smtp_username and settings.smtp_password:
             client.login(settings.smtp_username, settings.smtp_password)
         yield Relay(client)

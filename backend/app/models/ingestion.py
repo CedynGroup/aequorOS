@@ -78,6 +78,9 @@ class IngestionBatch(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             ["banks.id", "banks.organization_id"],
         ),
         UniqueConstraint("id", "organization_id", name="uq_ingestion_batches_id_org"),
+        UniqueConstraint(
+            "id", "organization_id", "bank_id", name="uq_ingestion_batches_id_org_bank"
+        ),
         Index(
             "ix_ingestion_batches_org_bank_as_of",
             "organization_id",
@@ -155,14 +158,28 @@ class LineageRecord(UuidV7PrimaryKeyMixin, Base):
             name="ck_lineage_records_operation_type",
         ),
         ForeignKeyConstraint(
-            ["ingestion_batch_id", "organization_id"],
-            ["ingestion_batches.id", "ingestion_batches.organization_id"],
+            ["ingestion_batch_id", "organization_id", "bank_id"],
+            [
+                "ingestion_batches.id",
+                "ingestion_batches.organization_id",
+                "ingestion_batches.bank_id",
+            ],
+            name="fk_lineage_records_ingestion_batch_id_bank",
         ),
         UniqueConstraint("id", "organization_id", name="uq_lineage_records_id_org"),
+        UniqueConstraint("id", "organization_id", "bank_id", name="uq_lineage_records_id_org_bank"),
+        CheckConstraint(
+            "ingestion_batch_id IS NULL OR bank_id IS NOT NULL",
+            name="ck_lineage_records_batch_bank",
+        ),
+        ForeignKeyConstraint(["bank_id", "organization_id"], ["banks.id", "banks.organization_id"]),
         Index("ix_lineage_records_org_batch", "organization_id", "ingestion_batch_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Batchless graph nodes may be organization-wide; canonical financial
+    # lineage must carry the bank of its ingestion batch.
+    bank_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     ingestion_batch_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     operation_type: Mapped[str] = mapped_column(String(24), nullable=False)
     # Human-readable operation identity, e.g. "excel_csv_v1.0/positions".

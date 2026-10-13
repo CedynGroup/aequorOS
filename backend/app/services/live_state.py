@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
-from app.models import Bank, BankReportingPeriod, CurrentFinancialFact
+from app.identity.public import Bank
+from app.models import BankReportingPeriod, CurrentFinancialFact
 
 
 @dataclass(frozen=True)

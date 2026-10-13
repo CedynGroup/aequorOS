@@ -45,8 +45,8 @@ from app.adapters.market_data.scope_taxonomy import DataScope
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
+from app.identity.public import Bank
 from app.models import (
-    Bank,
     CanonicalCounterpartyRating,
     CanonicalFxRate,
     CanonicalMarketIndex,
@@ -671,6 +671,7 @@ def _lineage(  # noqa: PLR0913 - mirrors ingestion's lineage writer
 ) -> LineageRecord:
     node = LineageRecord(
         organization_id=organization_id,
+        bank_id=batch.bank_id,
         ingestion_batch_id=batch.id,
         operation_type=operation_type,
         operation_ref=operation_ref,

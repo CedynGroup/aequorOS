@@ -86,19 +86,37 @@ test.describe("submission pipeline", () => {
     // redirect to the Returns workspace; the obligation table lives here.
     await page.goto("/submissions/calendar");
     await expect(page).toHaveURL(/\/submissions\/calendar/);
-    // The obligation table is populated from listReportingObligations for the
-    // seeded bank. Follow the due-date pager because the calendar deliberately
-    // renders only 25 obligations at a time.
-    const lcrNsfr = page.getByText("LCR-NSFR", { exact: true }).first();
+    await expect(page.getByRole("table")).toBeVisible();
+    await expect(
+      page.getByText(
+        /preparation only; no filing obligation or statutory penalty estimate/i,
+      ),
+    ).toBeVisible();
+    // These instruments are drafts or unpublished. None may become an
+    // obligation or acquire an indicative statutory penalty on any page.
+    const preparationCodes = [
+      "LMT",
+      "LCR-NSFR",
+      "IRRBB-PILOT",
+      "ICAAP-REPORT",
+      "ICAAP-UPDATE",
+      "ICAAP-DISCLOSURE",
+      "ICAAP-STRESS",
+      "ICAAP-STRESS-APPENDIX2",
+      "LAS-QUARTERLY",
+      "STRESS-PACK",
+    ];
     const pager = page.getByRole("navigation", {
       name: "Reporting obligations pages",
     });
     const nextPage = pager.getByRole("button", { name: "Next" });
-    const firstObligation = page.getByRole("table").getByRole("row").nth(1);
-    while (!(await lcrNsfr.isVisible())) {
-      // Reaching a disabled Next button without the return is a real failure:
-      // LCR-NSFR (the recoded monthly liquidity return) must be in the registry.
-      await expect(nextPage).toBeEnabled();
+    const table = page.getByRole("table");
+    const firstObligation = table.getByRole("row").nth(1);
+    while (true) {
+      for (const code of preparationCodes) {
+        await expect(table.getByText(code, { exact: true })).toHaveCount(0);
+      }
+      if (await nextPage.isDisabled()) break;
       const previousFirstObligation = await firstObligation.textContent();
       const nextPageResponse = page.waitForResponse((response) => {
         const url = new URL(response.url());
@@ -114,7 +132,12 @@ test.describe("submission pipeline", () => {
         previousFirstObligation ?? "",
       );
     }
-    await expect(lcrNsfr).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "calendar-deadlines.png"),
+        fullPage: true,
+      });
+    }
   });
 
   test("journey 3: history renders the package/version ledger", async ({

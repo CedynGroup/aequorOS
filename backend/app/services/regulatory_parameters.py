@@ -58,7 +58,8 @@ from app.domain.policy import (
     tighten,
 )
 from app.domain.policy import clamp_overrides as _clamp_values
-from app.models import Bank, RegulatoryParameter
+from app.identity.public import Bank
+from app.models import RegulatoryParameter
 from app.services import institution_types, jurisdictions
 
 #: Re-exported from ``app/domain/policy`` so the historic
@@ -307,7 +308,7 @@ CRD_CAPITAL_FLOOR_SEEDS: tuple[tuple[str, str, str, str], ...] = (
 # and pinned identically by ``202609190056``. Eight further ICAAP codes (the
 # filing deadline, the amber window, the materiality thresholds and the two
 # horizons) belong to the workspace and are seeded by ``202609190055`` through
-# ``app/services/icaap/parameters.py`` — each ICAAP code is seeded exactly once,
+# ``app/icaap/service/parameters.py`` — each ICAAP code is seeded exactly once,
 # and ``tests/services/test_regulatory_parameters_icaap_p2.py`` pins that.
 #
 # Most of these are REPRESENTATIVE calibrations (D-039): the Bank of Ghana has
@@ -612,7 +613,7 @@ ICAAP_P2_SEED_PARAMETERS: tuple[ParamSpec, ...] = (
 )
 
 #: The codes above, for the consumers, the migration test and the duplicate-seed
-#: guard. ``app/services/icaap/parameters.ICAAP_PARAM_CODES`` holds P1's eight;
+#: guard. ``app/icaap/service/parameters.ICAAP_PARAM_CODES`` holds P1's eight;
 #: the two sets are disjoint by construction and a test proves it.
 P2_PARAMETER_CODES: frozenset[str] = frozenset(spec.param_code for spec in ICAAP_P2_SEED_PARAMETERS)
 
@@ -629,7 +630,7 @@ _ICAAP_REPORT_FIRST_AS_OF: dict[str, Any] = {
 
 #: The governed codes the ICAAP FILING plane reads (P3). Deliberately small:
 #: the deadline and disclosure months are already seeded by ``202609190055``
-#: (P1's workspace catalogue, ``app/services/icaap/parameters.py``), and the
+#: (P1's workspace catalogue, ``app/icaap/service/parameters.py``), and the
 #: stress horizon with them — this adds only what the filing plane introduced.
 #: Pinned identically in
 #: ``alembic/versions/202609190059_icaap_filing_parameters.py``.
@@ -2282,7 +2283,7 @@ def try_resolve(
     caller and this is their door. A plane that seals no run — the ICAAP report
     plane, which writes its own governed-row record into the snapshot — passes
     ``record=False`` and through ONE module of its own
-    (``app/services/icaap/parameters.py``), so the decision is taken once rather
+    (``app/icaap/service/parameters.py``), so the decision is taken once rather
     than at each of its call sites.
     """
     scope = policy_scope(db, bank, as_of=as_of)
@@ -2543,7 +2544,7 @@ def p2_seed_rows(actor: str = SEED_ACTOR) -> list[dict[str, object]]:
     for a database built before these codes existed but wrong for one built
     after: the hermetic fixture would then skip them silently and every Pillar 2
     route would answer ``missing_parameter``. This is the row-by-row arm, the
-    same shape ``app/services/icaap/parameters.seed_rows`` uses for P1's eight.
+    same shape ``app/icaap/service/parameters.seed_rows`` uses for P1's eight.
     """
     return [_seed_row(spec, actor) for spec in ICAAP_P2_SEED_PARAMETERS]
 

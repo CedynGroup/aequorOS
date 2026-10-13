@@ -1,9 +1,9 @@
 """What an uploaded document actually IS, decided from its bytes.
 
 Shared by every surface that accepts a regulator-facing document: the ICAAP
-cycle's evidence locker (``services/icaap/attachments.py``, which re-exports
+cycle's evidence locker (``icaap/service/attachments.py``, which re-exports
 these names so its own callers are unchanged) and the package attachment plane
-(``services/regulatory_reporting/attachments.py``).
+(``app/reporting/service/attachments.py``).
 
 The client's ``Content-Type`` header is not evidence of anything. A file called
 ``board-resolution.pdf`` that is actually a macro-enabled workbook is the attack
