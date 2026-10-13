@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -55,6 +55,7 @@ from app.storage.client import StorageLocation
 from app.storage.encryption import ObjectEncryption
 from tests.db import test_database_roles as foundation
 from tests.db import test_postgres_migrations as migrations
+from tests.live_data import conftest as live_data
 from tests.support.helpers import ORG_1, ORG_2
 from tests.support.stateful import run_database_machine
 
@@ -134,6 +135,31 @@ def test_context_survives_transactions_and_clears_on_pool_reuse(
             ).one()
         ) == ("", "")
         assert session.scalars(select(Job)).all() == []
+
+
+def test_live_data_session_preserves_readonly_tenant_across_transactions(
+    role_engines: dict[str, Engine],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        live_data, "_URL", role_engines["aqs_api"].url.render_as_string(hide_password=False)
+    )
+    monkeypatch.setenv("LIVE_DATA_ORG_ID", ORG_1)
+    fixture = cast(Callable[[], Iterator[Session]], getattr(live_data.live_db, "__wrapped__"))
+    sessions = fixture()
+    try:
+        session = next(sessions)
+        for end_transaction in (session.commit, session.rollback, session.rollback):
+            assert session.scalars(text("SELECT id FROM organizations")).all() == [ORG_1]
+            assert session.scalar(text("SHOW transaction_read_only")) == "on"
+            assert session.scalar(text("SELECT current_setting('app.organization_id')")) == ORG_1
+            end_transaction()
+        with pytest.raises(DBAPIError):
+            session.execute(text("UPDATE organizations SET name = 'forbidden'"))
+        session.rollback()
+        assert session.scalars(text("SELECT id FROM organizations")).all() == [ORG_1]
+    finally:
+        sessions.close()
 
 
 @pytest.mark.parametrize("role", ["aqs_api", "aqs_bi", "aqs_operator", "aqs_audit_verifier"])
@@ -750,6 +776,65 @@ def test_worker_visibility_accepts_claim_capability_and_refuses_api_role(
     factory = sessionmaker(role_engines[role])
     monkeypatch.setattr(database, "get_worker_sessionmaker", lambda: factory)
     assert database.worker_visibility().can_claim == (role == "aqs_worker")
+
+
+def test_worker_audit_check_without_inherited_audit_ownership(administrator: Engine) -> None:
+    with administrator.connect() as admin, admin.begin():
+        admin.execute(text("GRANT aequoros_audit_owner TO aqs_owner WITH INHERIT FALSE"))
+        assert admin.scalar(text("SELECT rolinherit FROM pg_roles WHERE rolname='aqs_owner'")) is False
+        assert (
+            admin.scalar(text("SELECT pg_has_role('aqs_owner', 'aequoros_audit_owner', 'USAGE')"))
+            is False
+        )
+        admin.execute(
+            text(
+                "INSERT INTO audit_events (id,organization_id,event_type,details,created_at) "
+                "VALUES (gen_random_uuid(), :org, 'worker_probe', '{}', now())"
+            ),
+            [{"org": ORG_1}, {"org": ORG_2}],
+        )
+        admin.execute(
+            text(
+                "INSERT INTO operator_audit_log "
+                "(id,operator_email,auth_mode,action,detail,created_at) "
+                "VALUES (gen_random_uuid(), 'fixture@example.test', "
+                "'oidc', 'worker_probe', '{}', now())"
+            )
+        )
+        expected: list[dict[str, object]] = [
+            {
+                "stream": stream,
+                "entries": cast(int, admin.scalar(text(f"SELECT count(*) FROM {stream}"))),
+                "valid": True,
+            }
+            for stream in ("audit_events", "operator_audit_log")
+        ]
+        before = cast(
+            int,
+            admin.execute(
+                text("UPDATE audit_integrity_schedule SET run_after = :now RETURNING recovery_epoch"),
+                {"now": NOW},
+            ).scalar_one(),
+        )
+        admin.execute(text("SET LOCAL ROLE aqs_worker"))
+        epoch, results = cast(
+            tuple[int, list[dict[str, object]]],
+            tuple(
+                admin.execute(
+                    text("SELECT * FROM aqs_worker_audit_check(:now)"), {"now": NOW}
+                ).one()
+            ),
+        )
+        assert results == expected
+        assert epoch == before + 1
+        assert admin.execute(
+            text("SELECT * FROM aqs_worker_audit_check(:now)"), {"now": NOW}
+        ).one() == (epoch, None)
+        admin.execute(text("RESET ROLE"))
+        assert admin.scalar(text("SELECT run_after FROM audit_integrity_schedule")) == (
+            NOW + timedelta(hours=1)
+        )
+        admin.rollback()
 
 
 def test_worker_audit_metadata_detects_tampering_without_disclosing_payloads(

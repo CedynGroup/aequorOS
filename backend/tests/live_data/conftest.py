@@ -36,16 +36,11 @@ def live_db() -> Iterator[Session]:
     if not _URL:  # pragma: no cover - guarded by the module skip
         pytest.skip("LIVE_DATA_DATABASE_URL not set")
     engine = create_engine(_URL, pool_pre_ping=True)
-    session = Session(engine)
-    session.execute(text("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"))
     org_id = os.environ.get("LIVE_DATA_ORG_ID", "").strip()
-    if org_id:
-        session.execute(
-            text("SELECT set_config('app.organization_id', :org, false)"), {"org": org_id}
-        )
+    session = Session(engine, info={"organization_id": org_id} if org_id else None)
+    session.execute(text("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"))
     # COMMIT the settings transaction: session characteristics take effect from
-    # the NEXT transaction, and a session-level set_config would be undone by a
-    # rollback. Everything after this point runs read-only.
+    # the NEXT transaction. Everything after this point runs read-only.
     session.commit()
     visible = session.execute(text("SELECT count(*) FROM organizations")).scalar()
     if not visible:
