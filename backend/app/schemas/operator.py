@@ -378,7 +378,7 @@ class TenantStorageRead(ClosedModel):
     note: str | None = None
 
 
-# -- tenant inspector (READ-ONLY session tracking) -------------------------------
+# -- tenant inspector (session tracking) -----------------------------------------
 type InspectorMode = Literal["consent", "break_glass"]
 
 
@@ -386,8 +386,8 @@ class InspectorSessionCreate(ClosedModel):
     organization_id: str = Field(min_length=1, max_length=16)
     reason: str = Field(min_length=1, max_length=2000)
     mode: InspectorMode
-    #: Session lifetime in minutes (15–60). The session is a viewing window;
-    #: it grants no access on its own — the read endpoints are what render data.
+    #: Session lifetime in minutes (15–60); enforcement lives in
+    #: ``app.operator.inspection``.
     ttl_minutes: int = Field(default=30, ge=15, le=60)
 
 
@@ -395,7 +395,7 @@ class InspectorSessionRead(ClosedModel):
     session_id: str
     organization_id: str
     mode: InspectorMode
-    #: Always true this wave — no act-as-user token is ever minted.
+    #: Descriptive flag; see ``OperatorInspectorSession`` for the access contract.
     read_only: bool
     started_by: str
     started_at: datetime
