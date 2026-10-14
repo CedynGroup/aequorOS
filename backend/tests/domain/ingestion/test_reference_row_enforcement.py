@@ -1,23 +1,12 @@
-"""The registered schema is ENFORCED on the way in, for the kinds that enforce it.
-
-Audit A7-07 / H-027: the reference-schema modules stated rules —
-``time_behaviour`` is "required, never defaulted", a period must be the last day
-of the grain it names, a ``business_units`` row spelling a field both ways with
-different values is refused — and none of them ran on a real push, because
-nothing in ``app/`` ever asked. ``ReferenceRowData`` now asks, so every producer
-(API push, Excel/CSV, every core-banking adapter) goes through one seam.
-
-Scope is deliberate and is the subject of these tests as much as the rules are:
-the two registers new in this release enforce; the nine older ones do not,
-because tenants have rows stored under them today.
-"""
+"""Every admitted reference kind validates at the shared ingestion boundary."""
 
 from __future__ import annotations
 
 import pytest
 
-from app.domain.ingestion.contracts import ENFORCED_REFERENCE_KINDS, ReferenceRowData
-from app.domain.ingestion.reference_schemas import SCHEMAS, schema_for
+from app.domain.ingestion.constants import REFERENCE_DATASET_KINDS
+from app.domain.ingestion.contracts import ReferenceRowData
+from app.domain.ingestion.reference_schemas import SCHEMAS
 
 
 def _row(kind: str, payload: dict[str, str | None]) -> ReferenceRowData:
@@ -29,7 +18,7 @@ def _row(kind: str, payload: dict[str, str | None]) -> ReferenceRowData:
     )
 
 
-_VALID_TARGET = {
+_VALID_TARGET: dict[str, str | None] = {
     "period": "2026-03-31",
     "grain": "quarter",
     "measure_id": "loans.balance_rc",
@@ -37,7 +26,10 @@ _VALID_TARGET = {
     "value": "1000",
     "version": "budget",
 }
-_VALID_UNIT = {"business_unit_id": "BR-001", "business_unit_name": "Head Office"}
+_VALID_UNIT: dict[str, str | None] = {
+    "business_unit_id": "BR-001",
+    "business_unit_name": "Head Office",
+}
 
 
 def test_a_well_formed_target_is_accepted() -> None:
@@ -84,29 +76,6 @@ def test_a_unit_may_not_be_its_own_parent() -> None:
         _row("business_units", {**_VALID_UNIT, "parent_unit_id": "BR-001"})
 
 
-@pytest.mark.parametrize("kind", sorted(set(SCHEMAS) - ENFORCED_REFERENCE_KINDS))
-def test_an_unenforced_kind_still_accepts_whatever_the_bank_sends(kind: str) -> None:
-    """The nine older registers are NOT enforced, and that is load-bearing, not
-    an oversight: tenants have rows stored under them that predate the schema
-    modules, so refusing here would reject data that lands today. H-027 is the
-    decision to widen this; until then, this test is what makes the scope
-    explicit rather than accidental.
-    """
-    assert _row(kind, {"nothing": "the schema would accept"})
-
-
-def test_every_enforced_kind_is_registered_and_carries_its_own_rules() -> None:
-    """An enforced kind with no schema, or with only the declarative half, would
-    enforce less than this module claims."""
-    for kind in ENFORCED_REFERENCE_KINDS:
-        schema = schema_for(kind)
-        assert schema is not None, f"{kind} is enforced but not registered"
-        assert schema.row_validator is not None, (
-            f"{kind} is enforced but carries no row_validator, so problems_for "
-            "would run the declarative checks only"
-        )
-
-
 # --- audit A360 H3: the width the mart can store is enforced at the door ------------------
 
 
@@ -134,3 +103,240 @@ def test_an_over_long_segment_branch_is_refused_at_the_door() -> None:
     with pytest.raises(ValueError, match="branch_id"):
         _row("gl_segment_balances", row)
     assert _row("gl_segment_balances", {**row, "branch_id": "b" * 120})
+
+
+VALID_ROWS: dict[str, dict[str, str | None]] = {
+    "capital_structure": {
+        "capital_component": "paid_up_capital",
+        "amount_ghs": "100",
+        "tier": "CET1",
+    },
+    "behavioral_assumptions": {
+        "product_code": "DEP-SAV",
+        "assumption": "DEPOSIT_STABILITY",
+        "value": "0.82",
+    },
+    "yield_curve": {
+        "curve_name": "sovereign",
+        "currency": "USD",
+        "tenor_months": "12",
+        "rate": "0.03",
+        "quote_date": "2026-06-30",
+    },
+    "fx_rates_current": {"currency": "USD", "spot_rate": "15", "quote_date": "2026-06-30"},
+    "fx_rates_historical": {"currency": "USD", "spot_rate": "15", "date": "2026-06-30"},
+    "historical_cashflows": {
+        "date": "2026-06-30",
+        "deposit_inflow_ghs": "100",
+        "deposit_outflow_ghs": "80",
+    },
+    "historical_financials": {"period_end": "2026-06-30", "net_interest_income_ghs": "100"},
+    "business_units": _VALID_UNIT,
+    "institution": {"institution_id": "source-bank-1", "name": "Source Bank"},
+    "gl_mapping_bsd7": {"gl_account_code": "4001", "bsd7_item": "1a"},
+    "subsidiaries": {
+        "reporting_date": "2026-06-30",
+        "subsidiary_id": "sub-1",
+        "name": "Subsidiary",
+        "country_code": "US",
+        "entity_type": "bank",
+        "functional_currency": "USD",
+        "ownership_pct": "100",
+        "consolidation_method": "full",
+        "control_via_board": "true",
+        "total_assets_ghs": "100",
+        "total_liabilities_ghs": "80",
+        "equity_ghs": "20",
+        "net_profit_ytd_ghs": "1",
+        "intercompany_receivable_ghs": "0",
+        "intercompany_payable_ghs": "0",
+    },
+    "tariff_schedule": {
+        "form": "BSD15A",
+        "sheet": "DOMESTIC",
+        "row_key": "bank_charge",
+        "charge_value": "free",
+    },
+    "capital_expenditure": {
+        "period_end": "2026-06-30",
+        "asset_class": "computers",
+        "opening_nbv_ghs": "80",
+        "additions_purchased_ghs": "20",
+        "additions_finance_lease_ghs": "0",
+        "additions_hire_purchase_ghs": "0",
+        "disposal_proceeds_ghs": "0",
+        "disposals_nbv_ghs": "0",
+        "depreciation_ghs": "10",
+        "closing_cost_ghs": "100",
+        "accumulated_depreciation_ghs": "10",
+        "closing_nbv_ghs": "90",
+    },
+    "atm_operations": {
+        "month": "2026-06-30",
+        "atm_id": "atm-1",
+        "station": "HQ",
+        "cards_issued": "20",
+        "min_withdrawal_ghs": "10",
+        "max_withdrawal_ghs": "100",
+    },
+    "remittance_flows": {
+        "month": "2026-06-30",
+        "direction": "inbound",
+        "corridor_country": "US",
+        "region": "usa_canada",
+        "recipient_class": "individual",
+        "channel": "bank",
+        "currency": "USD",
+        "amount_fx": "10",
+        "amount_usd": "10",
+        "amount_ghs": "150",
+    },
+    "teller_withdrawals": {
+        "txn_date": "2026-06-30",
+        "branch": "HQ",
+        "customer_reference": "cif-1",
+        "customer_name": "Customer",
+        "account_type": "current",
+        "currency": "USD",
+        "amount": "10",
+        "amount_ghs": "150",
+        "channel": "teller",
+    },
+    "interest_accruals": {
+        "as_of_date": "2026-06-30",
+        "bsd2_row": "20",
+        "side": "asset",
+        "currency": "USD",
+        "accrued_interest_ghs": "10",
+    },
+    "performance_targets": _VALID_TARGET,
+    "gl_segment_balances": {
+        "as_of_date": "2026-06-30",
+        "gl_account_code": "4001",
+        "branch_id": "BR-001",
+        "ytd_balance": "1000",
+    },
+}
+
+
+def test_every_admitted_kind_has_a_registered_schema_and_valid_example() -> None:
+    assert set(VALID_ROWS) == set(REFERENCE_DATASET_KINDS) == set(SCHEMAS)
+
+
+@pytest.mark.parametrize("kind", REFERENCE_DATASET_KINDS)
+def test_each_kind_accepts_a_valid_row_and_preserves_extra_source_fields(kind: str) -> None:
+    payload = {**VALID_ROWS[kind], "source_note": "retained verbatim", "source_null": None}
+    assert _row(kind, payload).payload == payload
+
+
+@pytest.mark.parametrize("kind", REFERENCE_DATASET_KINDS)
+def test_each_kind_refuses_a_malformed_row_with_kind_and_row_number(kind: str) -> None:
+    with pytest.raises(ValueError, match=f"{kind} row 1: .*missing required field"):
+        _row(kind, {"unrelated": "field"})
+
+
+@pytest.mark.parametrize("kind", REFERENCE_DATASET_KINDS)
+def test_each_required_field_is_checked_at_construction(kind: str) -> None:
+    schema = SCHEMAS[kind]
+    for field in schema.required:
+        payload = dict(VALID_ROWS[kind])
+        payload.pop(field)
+        with pytest.raises(ValueError, match=field):
+            _row(kind, payload)
+
+
+@pytest.mark.parametrize("bad", ["not a number", "NaN", "Infinity", "-Infinity"])
+def test_every_declared_numeric_field_refuses_invalid_values(bad: str) -> None:
+    for kind, schema in SCHEMAS.items():
+        for field in schema.numeric:
+            with pytest.raises(ValueError, match=field):
+                _row(kind, {**VALID_ROWS[kind], field: bad})
+
+
+def test_every_declared_date_and_enum_is_checked_at_construction() -> None:
+    for kind, schema in SCHEMAS.items():
+        for field in schema.dates:
+            for bad in ("not a date", "2026-02-30", "20260630"):
+                with pytest.raises(ValueError, match=field):
+                    _row(kind, {**VALID_ROWS[kind], field: bad})
+        for field in schema.enums:
+            with pytest.raises(ValueError, match=field):
+                _row(kind, {**VALID_ROWS[kind], field: "not-registered"})
+
+
+@pytest.mark.parametrize(
+    ("kind", "changes", "message"),
+    [
+        ("subsidiaries", {"ownership_pct": "80"}, "minority_interest_ghs"),
+        ("subsidiaries", {"ownership_pct": "101"}, "between 0 and 100"),
+        ("interest_accruals", {"side": "liability"}, "asset-side"),
+        ("gl_mapping_bsd7", {"gl_prefix": "4"}, "not both"),
+        ("gl_mapping_bsd7", {"gl_account_code": ""}, "is required"),
+        ("capital_expenditure", {"closing_nbv_ghs": "80"}, "must equal"),
+        (
+            "capital_expenditure",
+            {"forecast_next_6m_ghs": "10", "forecast_0_3m_ghs": "8", "forecast_3_6m_ghs": "8"},
+            "must equal",
+        ),
+    ],
+)
+def test_previously_unbound_cross_field_rules_run_at_the_boundary(
+    kind: str,
+    changes: dict[str, str],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        _row(kind, {**VALID_ROWS[kind], **changes})
+
+
+@pytest.mark.parametrize(
+    ("kind", "payload"),
+    [
+        ("fx_rates_current", {"pair": "USD/EUR", "rate": "0.9", "quote_date": "2026-06-30"}),
+        ("fx_rates_historical", {"pair": "USD/EUR", "rate": "0.9", "quote_date": "2026-06-30"}),
+        ("historical_cashflows", {"date": "2026-06-30", "inflow": "100", "outflow": "80"}),
+        (
+            "historical_financials",
+            {"month": "2026-06-30", "total_assets": "100", "net_income": "10"},
+        ),
+    ],
+)
+def test_documented_alternative_shapes_are_validated_without_rewriting(
+    kind: str,
+    payload: dict[str, str | None],
+) -> None:
+    assert _row(kind, payload).payload == payload
+    with pytest.raises(ValueError):
+        _row(
+            kind,
+            {
+                key: value
+                for key, value in payload.items()
+                if key not in ("rate", "inflow", "net_income")
+            },
+        )
+
+
+def test_required_fields_reject_null_empty_and_whitespace_values() -> None:
+    for kind, schema in SCHEMAS.items():
+        for field in schema.required:
+            for value in (None, "", "   "):
+                with pytest.raises(ValueError, match=field):
+                    _row(kind, {**VALID_ROWS[kind], field: value})
+
+
+def test_a_missing_registration_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delitem(SCHEMAS, "institution")
+    with pytest.raises(ValueError, match="no registered reference schema"):
+        _row("institution", VALID_ROWS["institution"])
+
+
+def test_a_malformed_optional_value_is_not_treated_as_absent() -> None:
+    with pytest.raises(ValueError, match="accrued_interest_native"):
+        _row(
+            "interest_accruals",
+            {**VALID_ROWS["interest_accruals"], "accrued_interest_native": "n/a"},
+        )
+    assert _row(
+        "interest_accruals", {**VALID_ROWS["interest_accruals"], "accrued_interest_native": None}
+    )

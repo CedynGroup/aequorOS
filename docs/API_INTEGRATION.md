@@ -477,9 +477,13 @@ every field and attribute of the position, not just the new keys.
 
 Reference rows are preserved verbatim as payloads (values stringified, dates
 ISO) under their dataset kind and consumed as-is by calculation modules.
-Registered schemas are enforced at ingestion for `capital_structure`,
-`business_units`, `performance_targets` and `gl_segment_balances`; other kinds
-retain their documented shape without schema enforcement. Valid keys under
+Registered schemas are enforced for all 19 reference kinds at the shared
+`ReferenceRowData` boundary used by API push, file uploads and core adapters.
+Missing required fields, malformed numeric values (including non-finite values),
+invalid ISO dates and unknown declared enum values become `invalid_reference_row`
+translation failures with the source locator and row number. Unknown extra fields
+and null optional values are retained verbatim. Existing stored rows are not
+rewritten or retroactively validated. Valid keys under
 `"reference"`:
 
 | Key                      | Typical row fields (from the Sample Bank dataset)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -502,6 +506,21 @@ retain their documented shape without schema enforcement. Valid keys under
 | `capital_expenditure`    | `period_end` (ISO date = the batch `as_of_date`), `asset_class` (`land_buildings` \| `staff_land_premises` \| `furniture_equipment` \| `computers` \| `other_office_equipment` \| `motor_vehicles` \| `other_property_legal_rights`), `opening_nbv_ghs`, `additions_purchased_ghs`, `additions_finance_lease_ghs`, `additions_hire_purchase_ghs`, `disposal_proceeds_ghs`, `disposals_nbv_ghs`, `depreciation_ghs`, `closing_cost_ghs`, `accumulated_depreciation_ghs`, `closing_nbv_ghs` (= cost − accumulated depreciation, validated); optional `currency` (booking currency; blank = base ⇒ BSD2 Domestic), `capital_wip_ghs`, `wip_closing_ghs`, `contracted_not_provided_ghs`, `authorised_not_contracted_ghs`, `forecast_next_6m_ghs`, `forecast_0_3m_ghs`, `forecast_3_6m_ghs`, `budget_ghs`, `notes` — the fixed-asset / capex register, one row per (period, asset class); one period per push (half-year movements for BSD10 A–H, period-end stock for BSD2 item 12 rows 115–121 / 123). Spec: `docs/data_engine/datasets/capital_expenditure.md`.                                                                                                                                    |
 | `performance_targets`    | `period` (ISO date: the **last day** of the window; must agree with `grain`), `grain` (`month` \| `quarter` \| `half_year` \| `year`), `measure_id` (the BI measure targeted — `loans.balance_rc`, `engine.car_pct.crd.official`), `time_behaviour` (`stock` \| `flow`; **required, never defaulted** — a stock target is the level to be standing at `period`, a flow target the amount to accumulate over the window `grain` names; reading one as the other is silently wrong by a period), `value` (in the measure's own unit: reporting currency for an amount, percentage points for a `_pct`; the row carries no unit), `version` (`budget` \| `reforecast`); optional `scope_dimension` / `scope_value` (which dimension the target applies to and its value, e.g. `branch.code` / `BR-001`; given together or not at all — a bank-wide target names neither) and `notes` — the bank's budget / reforecast figures, one row per (period, grain, measure, scope, version); re-push whole, latest as-of wins. Schema: `app/domain/ingestion/reference_schemas/performance_targets.py`.                                                                                                     |
 | `gl_segment_balances`    | `as_of_date` (ISO date = the batch `as_of_date`), `gl_account_code` (must match an `INCOME` / `EXPENSE` `gl_account.account_code` for the same month), `branch_id` (matched against `business_units.business_unit_id`, exactly as `position.attributes.branch_id` is; `__UNALLOCATED__` is **reserved** for the remainder the platform computes and is refused), `ytd_balance` (the branch's fiscal-year-to-date balance of that account, same convention and sign as the account's own `balance`); optional `currency` (blank = the reporting currency, as on a `gl_account` record), `gl_account_name`, `branch_name`, `notes` — the bank's branch breakdown of its profit-and-loss ledger. One row per (`as_of_date`, `gl_account_code`, `branch_id`, `currency`); ONE reporting date per push, the whole breakdown in that batch, and the batch must fall in the same calendar month as the ledger balances it breaks down. The breakdown may be partial: the platform adds an explicit unallocated line so the branches sum to the institution's ledger. Spec: `docs/data_engine/datasets/gl_segment_balances.md`. Schema: `app/domain/ingestion/reference_schemas/gl_segment_balances.py`. |
+
+For engine consumption, send `currency`, `spot_rate`, `quote_date` for current
+FX; `currency`, `spot_rate`, `date` for FX history; `date`,
+`deposit_inflow_ghs`, `deposit_outflow_ghs` (optional `net_cashflow_ghs`) for cash
+flows; and `period_end`, `net_interest_income_ghs` (optional
+`non_interest_income_ghs`, `operating_expenses_ghs`, `provisions_ghs`,
+`net_income_ghs`) for financial history. The illustrative `pair`/`rate`/`quote_date`,
+`date`/`inflow`/`outflow`, and `month`/`total_assets`/`net_income` shapes in the table
+remain accepted and validated, but validation does not make current engines read
+those alternative names. Supply one complete shape; partially populated engine
+fields must also be complete. All date fields are ISO `YYYY-MM-DD`. Database-direct
+reference views must expose the registered names; selecting columns does not
+rename raw source columns. T24 institution catalogs map company identifiers and
+names to `institution_id` and `name`; that source identifier is retained reference
+data and does not replace the platform's bank identity.
 
 #### `capital_structure` contract
 

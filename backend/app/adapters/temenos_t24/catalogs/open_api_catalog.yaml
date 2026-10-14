@@ -221,7 +221,9 @@ INSTITUTION:
   selection:
     companyCode: '{company}'
   page_size: 100
-  field_map: {}
+  field_map:
+    companyCode: institution_id
+    companyName: name
   dataset_key: institution
 POSITIONS_MM_PLACEMENTS:
   supported: true

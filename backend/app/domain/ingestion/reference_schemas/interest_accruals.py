@@ -29,6 +29,9 @@ date; an omitted line reads 0, not blank).
 
 from __future__ import annotations
 
+import dataclasses
+from collections.abc import Mapping
+
 from . import ReferenceSchema, register
 
 #: Official ``BSD2`` sheet rows whose label is "Accrued interest" (asset side).
@@ -82,35 +85,33 @@ BSD2_ROW_LABELS: dict[str, str] = {
     "258": f"{_PUBLIC}, (d) certificates of deposit — (vii) Accrued interest",
 }
 
-SCHEMA = register(
-    ReferenceSchema(
-        kind="interest_accruals",
-        description=(
-            "Accrued-interest sub-ledger: accrual balances at the reporting date tagged to the "
-            "official BSD2 'Accrued interest' row (bsd2_row), side and currency, in cedis"
-        ),
-        grain=(
-            "one row per (as_of_date, bsd2_row, side, currency, gl_account_code | "
-            "position_reference); one reporting date per push (as_of_date = period end)"
-        ),
-        required=("as_of_date", "bsd2_row", "side", "currency", "accrued_interest_ghs"),
-        optional=(
-            "gl_account_code",
-            "position_reference",
-            "counterparty_reference",
-            "accrued_interest_native",
-            "notes",
-        ),
-        numeric=("accrued_interest_ghs", "accrued_interest_native"),
-        dates=("as_of_date",),
-        enums={"bsd2_row": BSD2_ROWS, "side": SIDES},
-    )
+_DECLARED = ReferenceSchema(
+    kind="interest_accruals",
+    description=(
+        "Accrued-interest sub-ledger: accrual balances at the reporting date tagged to the "
+        "official BSD2 'Accrued interest' row (bsd2_row), side and currency, in cedis"
+    ),
+    grain=(
+        "one row per (as_of_date, bsd2_row, side, currency, gl_account_code | "
+        "position_reference); one reporting date per push (as_of_date = period end)"
+    ),
+    required=("as_of_date", "bsd2_row", "side", "currency", "accrued_interest_ghs"),
+    optional=(
+        "gl_account_code",
+        "position_reference",
+        "counterparty_reference",
+        "accrued_interest_native",
+        "notes",
+    ),
+    numeric=("accrued_interest_ghs", "accrued_interest_native"),
+    dates=("as_of_date",),
+    enums={"bsd2_row": BSD2_ROWS, "side": SIDES},
 )
 
 
-def validate_accrual_row(row: dict) -> list[str]:
+def validate_accrual_row(row: Mapping[str, object]) -> list[str]:
     """Schema problems plus the cross-field rule: ``side`` must agree with ``bsd2_row``."""
-    problems = SCHEMA.validate_row(row)
+    problems = _DECLARED.validate_row(row)
     bsd2_row = str(row.get("bsd2_row") or "").strip()
     side = str(row.get("side") or "").strip().lower()
     if bsd2_row in ASSET_ROWS and side == "liability":
@@ -118,3 +119,6 @@ def validate_accrual_row(row: dict) -> list[str]:
     elif bsd2_row in LIABILITY_ROWS and side == "asset":
         problems.append(f"bsd2_row {bsd2_row} is a liability-side line; side must be 'liability'")
     return problems
+
+
+SCHEMA = register(dataclasses.replace(_DECLARED, row_validator=validate_accrual_row))

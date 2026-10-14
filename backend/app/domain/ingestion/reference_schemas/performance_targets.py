@@ -46,6 +46,7 @@ from __future__ import annotations
 import calendar
 import dataclasses
 import re
+from collections.abc import Mapping
 from datetime import date
 
 from . import ReferenceSchema, register
@@ -83,23 +84,21 @@ _GRAIN_END_MONTHS: dict[str, tuple[int, ...]] = {
     "year": (12,),
 }
 
-SCHEMA = register(
-    ReferenceSchema(
-        kind="performance_targets",
-        description=(
-            "Budget / reforecast targets for BI measures: one row per period, grain, measure "
-            "and scope, with the stock-or-flow basis the comparison must use"
-        ),
-        grain=(
-            "one row per (period, grain, measure_id, scope_dimension, scope_value, version); "
-            "period = the last day of the window"
-        ),
-        required=("period", "grain", "measure_id", "time_behaviour", "value", "version"),
-        optional=("scope_dimension", "scope_value", "notes"),
-        numeric=("value",),
-        dates=("period",),
-        enums={"grain": GRAINS, "time_behaviour": TIME_BEHAVIOURS, "version": VERSIONS},
-    )
+_DECLARED = ReferenceSchema(
+    kind="performance_targets",
+    description=(
+        "Budget / reforecast targets for BI measures: one row per period, grain, measure "
+        "and scope, with the stock-or-flow basis the comparison must use"
+    ),
+    grain=(
+        "one row per (period, grain, measure_id, scope_dimension, scope_value, version); "
+        "period = the last day of the window"
+    ),
+    required=("period", "grain", "measure_id", "time_behaviour", "value", "version"),
+    optional=("scope_dimension", "scope_value", "notes"),
+    numeric=("value",),
+    dates=("period",),
+    enums={"grain": GRAINS, "time_behaviour": TIME_BEHAVIOURS, "version": VERSIONS},
 )
 
 
@@ -119,7 +118,7 @@ def period_end_for(period: date, grain: str) -> date | None:
     return date(period.year, month, calendar.monthrange(period.year, month)[1])
 
 
-def target_key(row: dict) -> tuple[str, str, str, str, str, str]:
+def target_key(row: Mapping[str, object]) -> tuple[str, str, str, str, str, str]:
     """The identity of one target — what a second row with the same key replaces.
 
     Scope is part of the key, so a bank-wide target and a per-branch target for
@@ -136,18 +135,14 @@ def target_key(row: dict) -> tuple[str, str, str, str, str, str]:
     )
 
 
-def validate_target_row(row: dict) -> list[str]:
+def validate_target_row(row: Mapping[str, object]) -> list[str]:
     """Schema problems plus the rules a target must satisfy to be comparable at
     all: the period parses and is the last day of the grain it names; the
     measure id and any scope dimension are well-formed catalogue ids; scope
     dimension and value are given together or not at all."""
-    problems = SCHEMA.validate_row(row)
+    problems = _DECLARED.validate_row(row)
     period = _parse_period(row.get("period"))
-    if row.get("period") not in (None, "") and period is None:
-        problems.append(
-            f"field 'period' must be an ISO date, YYYY-MM-DD (got {row.get('period')!r})"
-        )
-    elif period is not None:
+    if period is not None:
         grain = str(row.get("grain") or "").strip()
         expected = period_end_for(period, grain)
         if expected is not None and period != expected:
@@ -187,4 +182,4 @@ def validate_target_row(row: dict) -> list[str]:
 # to. Re-registered so ``schema_for('performance_targets')`` returns the schema WITH its
 # rules — the ingestion path asks ``problems_for``, and without this binding it
 # would silently get the declarative half only (audit A7-07 / H-027).
-SCHEMA = register(dataclasses.replace(SCHEMA, row_validator=validate_target_row))
+SCHEMA = register(dataclasses.replace(_DECLARED, row_validator=validate_target_row))
