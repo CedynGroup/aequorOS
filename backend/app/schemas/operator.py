@@ -399,7 +399,7 @@ class InspectorSessionRead(ClosedModel):
     session_id: str
     organization_id: str
     mode: InspectorMode
-    #: Always true this wave — no act-as-user token is ever minted.
+    #: The viewing window is read-only; separately minted examiner tokens also grant only reads.
     read_only: bool
     started_by: str
     started_at: datetime

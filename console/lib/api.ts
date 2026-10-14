@@ -2022,7 +2022,10 @@ export function getAudit(opts: {
       action: opts.action,
       from: opts.from,
       to: new Date(
-        Math.min(Date.parse(opts.asOf), opts.to ? Date.parse(opts.to) : Infinity),
+        Math.min(
+          Date.parse(opts.asOf),
+          opts.to ? Date.parse(opts.to) : Infinity,
+        ),
       ).toISOString(),
       limit: opts.limit,
       offset: opts.offset,

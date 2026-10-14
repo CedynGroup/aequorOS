@@ -146,9 +146,10 @@ not themselves authorize this feed. The officer bundles are grantable through
 the existing owner API and confined to whole-institution Audit coverage by
 service validation and a database CHECK. No officer binding is backfilled.
 Every successful page read appends `audit_log.viewed` in the same transaction;
-a failure to retain that event refuses the read. CSV/JSON export, the bank Audit
-log screen and the Members composer officer options remain later delivery stages
-of issue #494.
+a failure to retain that event refuses the read. Issue #494 is delivered as three
+stacked PRs: this read API, CSV/JSON export with an integrity summary, then the bank
+Audit log screen under Access control. The Members composer officer options also
+remain later delivery work.
 
 Attribution uses an explicit `details.bank_id`, bank entity target,
 binding `details.scope.institution_id`, or the retained subject's bank ownership.
@@ -174,7 +175,10 @@ shared staff writer snapshots that ownership, and historical reads and integrity
 verification resolve it through the same catalogue. Recorded `note` explanations
 become the public `reason`; batch actions name the batch as their target, and bank
 actions without a more specific target name their bank. New inspector sessions
-require a support reference, captured by both console entry forms. The shared
+require a support reference, captured by both console entry forms. Both forms
+display session duration in hours; the API continues to accept whole
+`ttl_minutes` within the bounds in `InspectorSessionCreate`. The Inspector's
+five-minute input steps are rounded to whole minutes before submission. The shared
 staff writer snapshots the caller-owned session's explanation and reference,
 while preserving an action's own note. Historical staff and impersonated events
 resolve those fields through `bank_audit_inspection_context`, which checks the
@@ -229,6 +233,14 @@ commit; ownership is retained even when a resource is later removed.
 | Curve definitions/create/propose/approve/construct/stage/submit/approve; FX-forward construct; operating-environment preview/stage/list/get/submit/approve | Platform research/calculation work before publication; existing mutation audit retained.                               |
 | Staff authentication and operator list/create/password-reset/deactivate/reactivate                                                                         | Platform staff identity; existing authentication/management evidence retained.                                         |
 | `overview`, `worker_health`                                                                                                                                | Aggregate fleet counts and runtime heartbeats, no identifiable bank resources.                                         |
+
+The Console staff audit table fixes an upper timestamp when browsing starts,
+retaining it across pages, page-size changes and retries so newly appended
+`audit.read` events cannot shift the results. Applying or resetting filters starts
+a new browsing window. The requested end date is capped at that timestamp;
+direct `/operator/v1/audit` callers using offsets must likewise retain a fixed
+`to` bound across pages. Regression coverage is in
+`tests/operator/test_audit_api.py` and `console/lib/audit-pagination.test.ts`.
 
 Password sign-in, SSO and signing re-authentication retain success and refusal
 events before returning. Known users are attributed only to banks reachable

@@ -711,7 +711,6 @@ Already partly built (`Header.tsx`). Target:
   My security                  (my password, my MFA devices, my active sessions / "sign out everywhere", personal API tokens)
   ─────────────
   Organization settings        ← only if users:read / org:settings
-  Audit log                     ← only if audit:read
   ─────────────
   Switch organization ▸        ← if the user belongs to >1 org (rare for banks; keep for staff)
   Documentation / Support
@@ -895,7 +894,8 @@ For the platform console's "view as" (Pigment's reference model):
 ### 12.1 Role-aware account menu
 
 See [§10.1](#101-personal--the-avatar-dropdown-every-user). Show the signed-in identity + role; reveal
-"Organization settings" / "Audit log" **only** with the matching permission.
+"Organization settings" **only** with the matching permission. Audit navigation
+follows [§12.5](#125-audit-log-view).
 
 ### 12.2 Members (users list) table
 
