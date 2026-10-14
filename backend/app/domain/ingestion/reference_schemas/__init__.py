@@ -1,13 +1,14 @@
 """Per-kind schemas for reference datasets (validation + CSV template hints).
 
-Reference rows are preserved verbatim by the platform (no fixed schema at the
+ReferenceRowData payloads are preserved verbatim (no fixed schema at the
 storage layer); a :class:`ReferenceSchema` declares what a WELL-FORMED row of a
-kind looks like — required fields, finite numeric values, ISO dates, enumerations —
-and every admitted kind enforces it at ReferenceRowData construction, so the batch
+kind looks like — required fields, finite numeric values, canonical calendar dates,
+enumerations — and every admitted kind enforces it at ReferenceRowData construction, so the batch
 validator can surface missing/invalid fields as findings, the app can offer a
 CSV template, and downstream readers (bog_forms ``refs.*`` resolvers) can rely
 on documented field names. One module per kind; register it in ``SCHEMAS``.
-Docs: docs/data_engine/datasets/<kind>.md.
+Ingestion contract: docs/API_INTEGRATION.md §3.5; dataset-specific details:
+docs/data_engine/datasets/<kind>.md where present.
 """
 
 from __future__ import annotations
@@ -40,9 +41,10 @@ class ReferenceSchema:
     max_lengths: dict[str, int] = field(default_factory=dict)
     #: one row per … (documentation)
     grain: str = ""
-    #: The kind's own extra rules, when the declarative fields above cannot
+    #: The kind's complete rules, when the declarative fields above cannot
     #: express them — "the period must be the last day of the grain it names",
-    #: "a field spelt both ways must agree with itself". Set through
+    #: "a field spelt both ways must agree with itself", or retained alternative
+    #: shapes. The callback runs the appropriate declarative checks itself. Set through
     #: ``dataclasses.replace`` after the function is defined, because the rules
     #: need the schema they belong to. :meth:`problems_for`, not
     #: :meth:`validate_row`, is what a caller should ask.

@@ -59,7 +59,8 @@ measured index contracts below create no seeding path and change no financial fi
 
 ## Migration and validation evidence
 
-Each revision locks the affected tables and verifies across tenants through
+The ownership and live-link revisions above lock the affected tables and verify
+across tenants through
 `force_rls_suspended`: table ownership with FORCE RLS temporarily lifted, or
 existing BYPASSRLS visibility. It reports the table/reference plus invalid count
 before installing its keys. A failure rolls the transaction back; it never deletes
@@ -90,26 +91,10 @@ from `backend/`; the service wrapper and fixtures isolate the test schemas.
 
 ## Reference JSON shapes and column representations
 
-All 19 admitted `ReferenceDatasetKind` values have registered schemas. Every
-producer builds `ReferenceRowData`, which calls `problems_for` and refuses a
-missing registration. Required fields, finite numerics, canonical `YYYY-MM-DD`
-calendar dates, declared enums, width bounds and registered cross-field rules
-apply before persistence. Adapters
-retain invalid raw evidence as `invalid_reference_row` translation failures.
-Optional nulls and extra source fields remain valid; payloads are not renamed.
-Existing stored reference rows are not rewritten. Behavioral readers consume
-`product_code`, `assumption_type`, and `value`; the documented `assumption`
-spelling remains validated and retained without being interpreted by those readers.
-The documented alternative FX and historical shapes likewise remain admitted;
-accepting them does not make engines read those alternative keys. A supplied
-`assumption_type` must be complete even when `assumption` is also present.
-Date validation rejects week dates, compact dates and padded strings rather than
-retaining spellings that can sort out of calendar order.
-See `docs/API_INTEGRATION.md` §3.5 for consumed names.
-
-T24's institution catalogs now map source company id/name into the required
-reference fields. Database-direct reference views must already expose registered
-names: a `ReferenceMapping.fields` selection does not rename source columns.
+The [API integration guide §3.5](../../docs/API_INTEGRATION.md#35-reference-datasets)
+owns reference ingestion validation, consumed field names, retained alternatives
+and adapter mapping requirements. Registered schemas live in
+`app/domain/ingestion/reference_schemas/` and are enforced by `ReferenceRowData`.
 
 At head before this change (`202610120099`), 25 bounded model string declarations
 in `jobs` and the original case/document/assessment/finding vertical were actually
@@ -117,10 +102,10 @@ unbounded TEXT in PostgreSQL. Models now declare TEXT too. The deployed schema i
 already the data-preserving representation, so no type-changing migration is
 needed. No value is truncated or cast to a narrower type.
 
-The 51 generic-model-JSON / migrated-JSONB differences are intentional, as stated
-in `CODEBASE_CONVENTIONS.md` §1: generic JSON supports the hermetic SQLite suite,
-while PostgreSQL stores these documents as JSONB. UUID, timestamp and binary
-representations compile to their PostgreSQL dialect types. The whole-root-table
+The intentional JSON/JSONB representation contract is owned by
+[CODEBASE_CONVENTIONS.md §1](../../CODEBASE_CONVENTIONS.md#sqlalchemy-models-appmodelspy).
+UUID, timestamp and binary representations compile to their PostgreSQL dialect
+types. The whole-root-table
 column type parity test normalizes only the documented JSON/JSONB difference;
 other type/width differences fail. Canonical FK/key/index parity remains intact.
 
@@ -159,16 +144,16 @@ ORDER BY created_at ASC, id ASC;
 
 `EXPLAIN (ANALYZE, BUFFERS)` results from the initial before/after run:
 
-| Query | Before plan / ms | After plan / ms | Before / after buffer blocks (hit + read) |
-| --- | --- | --- | --- |
-| Positions: typical lineage | Limit → LockRows → Seq Scan / 13.451 | Limit → LockRows → Index Scan / 0.021 | 3,840 / 5 |
-| Positions: 10% fan-out | Limit → LockRows → Seq Scan / 11.362 | Same sequential path / 0.016 | 3,154 / 2 |
-| Positions: no children | Limit → LockRows → Seq Scan / 24.887 | Limit → LockRows → Index Scan / 0.008 | 6,977 / 3 |
-| Snapshots: typical lineage | Limit → LockRows → Seq Scan / 42.573 | Limit → LockRows → Index Scan / 0.014 | 12,777 / 5 |
-| Snapshots: 10% fan-out | Limit → LockRows → Seq Scan / 36.267 | Same sequential path / 0.007 | 10,576 / 3 |
-| Snapshots: no children | Limit → LockRows → Seq Scan / 81.986 | Limit → LockRows → Index Scan / 0.009 | 23,342 / 3 |
-| History: 100 edits | Sort → Bitmap Heap Scan → Bitmap Index Scan (existing case index) / 0.090 | Same existing path / 0.042 | 8 / 8 |
-| History: 20,000 edits | Gather Merge → Sort → parallel Bitmap Heap Scan → Bitmap Index Scan / 27.590 | Same existing path / 16.176 | 1,100 / 1,100 |
+| Query                      | Before plan / ms                                                             | After plan / ms                       | Before / after buffer blocks (hit + read) |
+| -------------------------- | ---------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------- |
+| Positions: typical lineage | Limit → LockRows → Seq Scan / 13.451                                         | Limit → LockRows → Index Scan / 0.021 | 3,840 / 5                                 |
+| Positions: 10% fan-out     | Limit → LockRows → Seq Scan / 11.362                                         | Same sequential path / 0.016          | 3,154 / 2                                 |
+| Positions: no children     | Limit → LockRows → Seq Scan / 24.887                                         | Limit → LockRows → Index Scan / 0.008 | 6,977 / 3                                 |
+| Snapshots: typical lineage | Limit → LockRows → Seq Scan / 42.573                                         | Limit → LockRows → Index Scan / 0.014 | 12,777 / 5                                |
+| Snapshots: 10% fan-out     | Limit → LockRows → Seq Scan / 36.267                                         | Same sequential path / 0.007          | 10,576 / 3                                |
+| Snapshots: no children     | Limit → LockRows → Seq Scan / 81.986                                         | Limit → LockRows → Index Scan / 0.009 | 23,342 / 3                                |
+| History: 100 edits         | Sort → Bitmap Heap Scan → Bitmap Index Scan (existing case index) / 0.090    | Same existing path / 0.042            | 8 / 8                                     |
+| History: 20,000 edits      | Gather Merge → Sort → parallel Bitmap Heap Scan → Bitmap Index Scan / 27.590 | Same existing path / 16.176           | 1,100 / 1,100                             |
 
 High fan-out existence checks retain a sequential plan: finding the first of many
 children can already be cheap. Their faster second-run times reflect warming and
