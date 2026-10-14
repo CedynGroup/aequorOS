@@ -69,11 +69,10 @@ class ReferenceSchema:
             value = row.get(name)
             if value in (None, ""):
                 continue
-            text = str(value).strip()
+            text = str(value)
             try:
-                if len(text) != 10:
+                if date.fromisoformat(text).isoformat() != text:
                     raise ValueError
-                date.fromisoformat(text)
             except ValueError:
                 problems.append(f"field '{name}' must be an ISO date, YYYY-MM-DD (got {value!r})")
         for name, allowed in self.enums.items():

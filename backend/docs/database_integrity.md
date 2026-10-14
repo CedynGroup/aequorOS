@@ -92,13 +92,20 @@ from `backend/`; the service wrapper and fixtures isolate the test schemas.
 
 All 19 admitted `ReferenceDatasetKind` values have registered schemas. Every
 producer builds `ReferenceRowData`, which calls `problems_for` and refuses a
-missing registration. Required fields, finite numerics, ISO dates, declared enums,
-width bounds and registered cross-field rules apply before persistence. Adapters
+missing registration. Required fields, finite numerics, canonical `YYYY-MM-DD`
+calendar dates, declared enums, width bounds and registered cross-field rules
+apply before persistence. Adapters
 retain invalid raw evidence as `invalid_reference_row` translation failures.
 Optional nulls and extra source fields remain valid; payloads are not renamed.
-Existing stored reference rows are not rewritten. The documented alternative FX
-and historical shapes remain admitted; accepting them does not make engines read
-those alternative keys. See `docs/API_INTEGRATION.md` §3.5 for consumed names.
+Existing stored reference rows are not rewritten. Behavioral readers consume
+`product_code`, `assumption_type`, and `value`; the documented `assumption`
+spelling remains validated and retained without being interpreted by those readers.
+The documented alternative FX and historical shapes likewise remain admitted;
+accepting them does not make engines read those alternative keys. A supplied
+`assumption_type` must be complete even when `assumption` is also present.
+Date validation rejects week dates, compact dates and padded strings rather than
+retaining spellings that can sort out of calendar order.
+See `docs/API_INTEGRATION.md` §3.5 for consumed names.
 
 T24's institution catalogs now map source company id/name into the required
 reference fields. Database-direct reference views must already expose registered

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from app.domain.ingestion.constants import REFERENCE_DATASET_KINDS
 from app.domain.ingestion.contracts import ReferenceRowData
@@ -113,7 +117,7 @@ VALID_ROWS: dict[str, dict[str, str | None]] = {
     },
     "behavioral_assumptions": {
         "product_code": "DEP-SAV",
-        "assumption": "DEPOSIT_STABILITY",
+        "assumption_type": "DEPOSIT_STABILITY",
         "value": "0.82",
     },
     "yield_curve": {
@@ -256,7 +260,16 @@ def test_every_declared_numeric_field_refuses_invalid_values(bad: str) -> None:
 def test_every_declared_date_and_enum_is_checked_at_construction() -> None:
     for kind, schema in SCHEMAS.items():
         for field in schema.dates:
-            for bad in ("not a date", "2026-02-30", "20260630"):
+            for bad in (
+                "not a date",
+                "2026-02-30",
+                "20260630",
+                "2026-W23-2",
+                "2026-6-30",
+                " 2026-06-30",
+                "2026-06-30 ",
+                "2026-06-30T00:00:00",
+            ):
                 with pytest.raises(ValueError, match=field):
                     _row(kind, {**VALID_ROWS[kind], field: bad})
         for field in schema.enums:
@@ -292,6 +305,10 @@ def test_previously_unbound_cross_field_rules_run_at_the_boundary(
 @pytest.mark.parametrize(
     ("kind", "payload"),
     [
+        (
+            "behavioral_assumptions",
+            {"product_code": "DEP-SAV", "assumption": "DEPOSIT_STABILITY", "value": "0.82"},
+        ),
         ("fx_rates_current", {"pair": "USD/EUR", "rate": "0.9", "quote_date": "2026-06-30"}),
         ("fx_rates_historical", {"pair": "USD/EUR", "rate": "0.9", "quote_date": "2026-06-30"}),
         ("historical_cashflows", {"date": "2026-06-30", "inflow": "100", "outflow": "80"}),
@@ -312,7 +329,7 @@ def test_documented_alternative_shapes_are_validated_without_rewriting(
             {
                 key: value
                 for key, value in payload.items()
-                if key not in ("rate", "inflow", "net_income")
+                if key not in ("value", "rate", "inflow", "net_income")
             },
         )
 
@@ -340,3 +357,47 @@ def test_a_malformed_optional_value_is_not_treated_as_absent() -> None:
     assert _row(
         "interest_accruals", {**VALID_ROWS["interest_accruals"], "accrued_interest_native": None}
     )
+
+
+@pytest.mark.parametrize("field", ["assumption_type", "assumption"])
+@pytest.mark.parametrize("bad", [None, "", "   "])
+def test_a_behavioral_assumption_requires_a_nonblank_type_in_its_supplied_shape(
+    field: str, bad: str | None
+) -> None:
+    payload = {"product_code": "DEP-SAV", field: bad, "value": "0.82"}
+    if field == "assumption_type":
+        payload["assumption"] = "DEPOSIT_STABILITY"
+    with pytest.raises(ValueError, match=field):
+        _row("behavioral_assumptions", payload)
+
+
+@pytest.mark.parametrize("assumption_type", ["DEPOSIT_STABILITY", "NMD_DURATION", "PREPAYMENT_RATE"])
+def test_consumed_behavioral_types_are_preserved_with_documented_extra_fields(
+    assumption_type: str,
+) -> None:
+    payload = {
+        **VALID_ROWS["behavioral_assumptions"],
+        "assumption_type": assumption_type,
+        "assumption": "source description",
+    }
+    assert _row("behavioral_assumptions", payload).payload == payload
+
+
+def test_every_declared_date_field_retains_a_canonical_calendar_date() -> None:
+    for kind, schema in SCHEMAS.items():
+        for field in schema.dates:
+            payload = {**VALID_ROWS[kind], field: "2026-06-30"}
+            assert _row(kind, payload).payload == payload
+
+
+@given(days=st.lists(st.dates(), min_size=3, max_size=12, unique=True))
+def test_accepted_fx_history_dates_sort_in_calendar_order(days: list[date]) -> None:
+    retained: list[str] = []
+    for day in days:
+        value = _row(
+            "fx_rates_historical", {**VALID_ROWS["fx_rates_historical"], "date": day.isoformat()}
+        ).payload["date"]
+        assert isinstance(value, str)
+        retained.append(value)
+    assert retained == [day.isoformat() for day in days]
+    assert sorted(retained) == [day.isoformat() for day in sorted(days)]
