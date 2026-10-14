@@ -109,7 +109,6 @@ export function InspectTenantButton({
           <Field
             label="Reason"
             required
-            hint="Recorded verbatim in the audit log and shown in the active-session banner."
           >
             <Textarea
               value={reason}
@@ -135,9 +134,9 @@ export function InspectTenantButton({
                 value={mode}
                 onChange={(e) => setMode(e.target.value as InspectMode)}
               >
-                <option value="consent">Consent — read-only</option>
+                <option value="consent">Consent (read-only)</option>
                 <option value="break_glass">
-                  Break glass — emergency, no consent
+                  Break glass (emergency, no consent)
                 </option>
               </Select>
             </Field>

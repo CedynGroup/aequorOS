@@ -254,8 +254,9 @@ def upgrade() -> None:
     op.create_index(
         "ix_audit_events_subject",
         "audit_events",
-        ["organization_id", "entity_type", "entity_id", "event_type"],
+        ["organization_id", "entity_id"],
     )
+    op.drop_index("ix_audit_events_organization_id", table_name="audit_events")
     op.drop_constraint(
         "ck_authorization_bindings_role_bundle", "authorization_bindings", type_="check"
     )
@@ -418,6 +419,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Restore the older organization lookup before removing its replacement.
+    op.create_index("ix_audit_events_organization_id", "audit_events", ["organization_id"])
     # Preserve the historical removal order before restoring the older role CHECK.
     op.drop_index("ix_audit_events_subject", table_name="audit_events")
     op.drop_constraint(

@@ -391,7 +391,6 @@ export default function InspectorView() {
         open={startOpen}
         onClose={() => setStartOpen(false)}
         title="Start inspection session"
-        description="Open a time-boxed, audited read-only session against one tenant."
         size="md"
         footer={
           <>
@@ -444,7 +443,6 @@ export default function InspectorView() {
             label="Reason"
             required
             error={formErr.reason}
-            hint="Written verbatim to the audit log and shown on the active-session banner."
             htmlFor="insp-reason"
           >
             <Textarea
@@ -498,9 +496,9 @@ export default function InspectorView() {
                   }))
                 }
               >
-                <option value="consent">Consent — with tenant knowledge</option>
+                <option value="consent">Consent (with tenant knowledge)</option>
                 <option value="break_glass">
-                  Break-glass — emergency, admin
+                  Break-glass (emergency, admin)
                 </option>
               </Select>
             </Field>
