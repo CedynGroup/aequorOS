@@ -371,7 +371,9 @@ def test_a_behavioral_assumption_requires_a_nonblank_type_in_its_supplied_shape(
         _row("behavioral_assumptions", payload)
 
 
-@pytest.mark.parametrize("assumption_type", ["DEPOSIT_STABILITY", "NMD_DURATION", "PREPAYMENT_RATE"])
+@pytest.mark.parametrize(
+    "assumption_type", ["DEPOSIT_STABILITY", "NMD_DURATION", "PREPAYMENT_RATE"]
+)
 def test_consumed_behavioral_types_are_preserved_with_documented_extra_fields(
     assumption_type: str,
 ) -> None:

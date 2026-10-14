@@ -47,7 +47,9 @@ def test_push_translation_keeps_valid_rows_and_reports_invalid_reference_rows(ki
 
 
 @pytest.mark.parametrize("field", ["assumption_type", "assumption"])
-@pytest.mark.parametrize("assumption_type", ["DEPOSIT_STABILITY", "NMD_DURATION", "PREPAYMENT_RATE"])
+@pytest.mark.parametrize(
+    "assumption_type", ["DEPOSIT_STABILITY", "NMD_DURATION", "PREPAYMENT_RATE"]
+)
 def test_push_validates_behavioral_shapes_without_renaming_payloads(
     field: str, assumption_type: str
 ) -> None:
