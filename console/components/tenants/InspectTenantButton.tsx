@@ -140,7 +140,7 @@ export function InspectTenantButton({
                 </option>
               </Select>
             </Field>
-            <Field label="Duration">
+            <Field label="Session duration">
               <Select
                 value={String(ttl)}
                 onChange={(e) => setTtl(Number(e.target.value))}
@@ -154,28 +154,16 @@ export function InspectTenantButton({
             </Field>
           </div>
 
-          <div
-            className={`rounded-md border p-3 text-caption ${
-              breakGlass
-                ? "border-critical/40 bg-critical-light text-critical"
-                : "border-warning/40 bg-warning-light text-warning"
-            }`}
-          >
-            {breakGlass ? (
+          {breakGlass && (
+            <div className="rounded-md border border-critical/40 bg-critical-light p-3 text-caption text-critical">
               <p>
                 <span className="font-medium">Break glass</span> opens a read /
                 write session — you will be able to modify this tenant&apos;s
                 data. Use only for an emergency the tenant cannot resolve
                 themselves.
               </p>
-            ) : (
-              <p>
-                A <span className="font-medium">read-only</span> session lets
-                you view this tenant&apos;s data without any ability to change
-                it.
-              </p>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </Modal>
     </>

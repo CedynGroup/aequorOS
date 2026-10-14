@@ -130,7 +130,7 @@ export default function InspectorView() {
       form.ttl_minutes < 15 ||
       form.ttl_minutes > 60
     ) {
-      errs.ttl_minutes = "TTL must be between 15 and 60 minutes.";
+      errs.ttl_minutes = "Session duration must be between 15 and 60 minutes.";
     }
     setFormErr(errs);
     if (Object.keys(errs).length > 0) return;
@@ -329,8 +329,8 @@ export default function InspectorView() {
               All inspection is read-only. Consent sessions view tenant data
               with the tenant&apos;s knowledge; break-glass is emergency access
               without consent and requires the operator_admin role — the API
-              returns 403 otherwise, surfaced here. Sessions self-expire at
-              their TTL; state is derived from the expiry (the log is
+              returns 403 otherwise, surfaced here. Sessions expire automatically when
+              their duration ends; state is derived from the expiry (the log is
               append-only).
             </InfoTip>
           </span>
@@ -482,7 +482,7 @@ export default function InspectorView() {
               hint={
                 form.mode === "break_glass"
                   ? "Break-glass — requires operator_admin."
-                  : "Consent — read-only."
+                  : undefined
               }
               htmlFor="insp-mode"
             >
@@ -504,7 +504,7 @@ export default function InspectorView() {
             </Field>
 
             <Field
-              label="TTL (minutes)"
+              label="Session duration (minutes)"
               required
               error={formErr.ttl_minutes}
               htmlFor="insp-ttl"
