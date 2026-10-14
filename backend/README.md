@@ -193,6 +193,8 @@ owns that budget and its review criteria.
   cancelling the shared check; later callers can still await it. At most one
   dependency check runs per API process, and the next request after completion
   starts a fresh check. Liveness stays independent while readiness is waiting.
+  This assumes one API event loop per process: selecting and replacing the
+  shared future is synchronous, without an intervening await.
 
 Both URLs are unauthenticated, return `Cache-Control: no-store` on health
 responses, and require HTTPS on deployed services. The existing container

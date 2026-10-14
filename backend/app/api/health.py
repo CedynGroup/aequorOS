@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import Future, ThreadPoolExecutor
-from threading import Lock
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -27,7 +26,6 @@ router = APIRouter(prefix="/health", tags=["health"], dependencies=[Depends(_dis
 
 _OK = ComponentHealth(status="ok")
 _READINESS_TIMEOUT_SECONDS = 5.0
-_readiness_lock = Lock()
 _readiness_executor = ThreadPoolExecutor(max_workers=1)
 _readiness_future: Future[ReadinessResponse] | None = None
 
@@ -280,11 +278,11 @@ async def ready(settings: Annotated[Settings, Depends(get_settings)]) -> Readine
 
 
 def _probe_readiness(settings: Settings) -> Future[ReadinessResponse]:
-    global _readiness_future  # noqa: PLW0603 - process-wide future is shared under the lock
-    with _readiness_lock:
-        if _readiness_future is None or _readiness_future.done():
-            _readiness_future = _readiness_executor.submit(_check_readiness, settings)
-        return _readiness_future
+    global _readiness_future  # noqa: PLW0603 - API event loop owns this shared future
+    # Assumes one API event loop per process; future selection never awaits.
+    if _readiness_future is None or _readiness_future.done():
+        _readiness_future = _readiness_executor.submit(_check_readiness, settings)
+    return _readiness_future
 
 
 def _check_readiness(settings: Settings) -> ReadinessResponse:
