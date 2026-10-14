@@ -8,8 +8,11 @@ and the operator_admin gate.
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.db.base import utc_now
+from app.models import OperatorAuditLog
 from tests.operator.conftest import operator_headers, provision_payload
 from tests.operator.test_operator_auth import PASSWORD, bearer, login, make_operator
 
@@ -90,17 +93,36 @@ def test_target_org_filter(operator_client: TestClient) -> None:
     assert scoped["total"] == 3
 
 
-def test_limit_and_offset_page_without_changing_total(operator_client: TestClient) -> None:
+def test_limit_and_offset_page_without_changing_total(
+    operator_client: TestClient, operator_db: Session
+) -> None:
     _seed_actions(operator_client)
+    operator_client.get(AUDIT, headers=operator_headers())
+    params: dict[str, str | int] = {"to": utc_now().isoformat(), "limit": 2, "offset": 0}
     page1 = operator_client.get(
-        f"{AUDIT}?action=tenants.&limit=2&offset=0", headers=operator_headers()
+        AUDIT, params=params, headers=operator_headers()
     ).json()
     assert len(page1["items"]) == 2
-    assert page1["total"] == 3
+    assert page1["total"] == 4
     page2 = operator_client.get(
-        f"{AUDIT}?action=tenants.&limit=2&offset=2", headers=operator_headers()
+        AUDIT, params={**params, "offset": 2}, headers=operator_headers()
     ).json()
-    assert len(page2["items"]) == 1
-    assert page2["total"] == 3
-    # Distinct rows across pages (no overlap).
+    assert len(page2["items"]) == 2
+    assert page2["total"] == 4
     assert {i["id"] for i in page1["items"]}.isdisjoint({i["id"] for i in page2["items"]})
+    assert "audit.read" in {i["action"] for i in page1["items"] + page2["items"]}
+    previous = operator_client.get(AUDIT, params=params, headers=operator_headers()).json()
+    assert previous == page1
+    resized = operator_client.get(
+        AUDIT, params={**params, "limit": 3}, headers=operator_headers()
+    ).json()
+    assert resized["total"] == 4
+    assert resized["items"] == (page1["items"] + page2["items"])[:3]
+    assert (
+        operator_db.scalar(
+            select(func.count())
+            .select_from(OperatorAuditLog)
+            .where(OperatorAuditLog.action == "audit.read")
+        )
+        == 5
+    )

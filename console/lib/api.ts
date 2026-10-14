@@ -2005,7 +2005,8 @@ export interface AuditLogResponse {
 }
 
 /** GET /operator/v1/audit — the append-only operator_audit_log, filterable. */
-export function getAudit(opts?: {
+export function getAudit(opts: {
+  asOf: string;
   operatorEmail?: string;
   targetOrg?: string;
   action?: string;
@@ -2016,13 +2017,15 @@ export function getAudit(opts?: {
 }): Promise<AuditLogResponse> {
   return request<AuditLogResponse>(
     `/operator/v1/audit${query({
-      operator_email: opts?.operatorEmail,
-      target_org: opts?.targetOrg,
-      action: opts?.action,
-      from: opts?.from,
-      to: opts?.to,
-      limit: opts?.limit,
-      offset: opts?.offset,
+      operator_email: opts.operatorEmail,
+      target_org: opts.targetOrg,
+      action: opts.action,
+      from: opts.from,
+      to: new Date(
+        Math.min(Date.parse(opts.asOf), opts.to ? Date.parse(opts.to) : Infinity),
+      ).toISOString(),
+      limit: opts.limit,
+      offset: opts.offset,
     })}`,
   );
 }

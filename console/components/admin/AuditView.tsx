@@ -45,6 +45,7 @@ const LIMIT_OPTIONS = [25, 50, 100, 200];
 export default function AuditView() {
   const [draft, setDraft] = useState<Filters>(BLANK_FILTERS);
   const [applied, setApplied] = useState<Filters>(BLANK_FILTERS);
+  const [asOf, setAsOf] = useState(() => new Date().toISOString());
   const [limit, setLimit] = useState(50);
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<AuditLogItem | null>(null);
@@ -52,6 +53,7 @@ export default function AuditView() {
   const { data, error, loading, reload } = useApi(
     () =>
       getAudit({
+        asOf,
         operatorEmail: applied.operatorEmail || undefined,
         targetOrg: applied.targetOrg || undefined,
         action: applied.action || undefined,
@@ -61,6 +63,7 @@ export default function AuditView() {
         offset,
       }),
     [
+      asOf,
       applied.operatorEmail,
       applied.targetOrg,
       applied.action,
@@ -72,11 +75,13 @@ export default function AuditView() {
   );
 
   function apply() {
+    setAsOf(new Date().toISOString());
     setApplied({ ...draft });
     setOffset(0);
   }
 
   function resetFilters() {
+    setAsOf(new Date().toISOString());
     setDraft(BLANK_FILTERS);
     setApplied(BLANK_FILTERS);
     setOffset(0);

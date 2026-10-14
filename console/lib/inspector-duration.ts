@@ -4,5 +4,5 @@ export function inspectorHours(minutes: number): number {
 }
 
 export function inspectorMinutes(hours: number): number {
-  return hours * 60;
+  return Math.round(hours * 60);
 }
