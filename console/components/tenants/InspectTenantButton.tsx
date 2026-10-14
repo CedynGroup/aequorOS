@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Eye, ShieldAlert } from "lucide-react";
 import { startInspectorSession } from "@/lib/api";
 import { useInspector } from "@/lib/inspector";
+import { inspectorHours } from "@/lib/inspector-duration";
 import { useMutation } from "@/lib/use-api";
 import { Button, Field, Input, Modal, Select, Textarea } from "@/components/ui";
 
@@ -106,10 +107,7 @@ export function InspectTenantButton({
         }
       >
         <div className="space-y-4">
-          <Field
-            label="Reason"
-            required
-          >
+          <Field label="Reason" required>
             <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -140,14 +138,14 @@ export function InspectTenantButton({
                 </option>
               </Select>
             </Field>
-            <Field label="Session duration">
+            <Field label="Session duration (hours)">
               <Select
                 value={String(ttl)}
                 onChange={(e) => setTtl(Number(e.target.value))}
               >
                 {TTL_PRESETS.map((m) => (
                   <option key={m} value={m}>
-                    {m} minutes
+                    {inspectorHours(m)} h
                   </option>
                 ))}
               </Select>

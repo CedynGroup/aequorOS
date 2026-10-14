@@ -35,6 +35,7 @@ import {
 } from "@/components/ui";
 import { AdminBoundary } from "./AdminBoundary";
 import { isSessionLive } from "./util";
+import { inspectorHours, inspectorMinutes } from "@/lib/inspector-duration";
 
 interface StartForm {
   organization_id: string;
@@ -130,7 +131,7 @@ export default function InspectorView() {
       form.ttl_minutes < 15 ||
       form.ttl_minutes > 60
     ) {
-      errs.ttl_minutes = "Session duration must be between 15 and 60 minutes.";
+      errs.ttl_minutes = "Session duration must be between 0.25 and 1 hour.";
     }
     setFormErr(errs);
     if (Object.keys(errs).length > 0) return;
@@ -329,9 +330,9 @@ export default function InspectorView() {
               All inspection is read-only. Consent sessions view tenant data
               with the tenant&apos;s knowledge; break-glass is emergency access
               without consent and requires the operator_admin role — the API
-              returns 403 otherwise, surfaced here. Sessions expire automatically when
-              their duration ends; state is derived from the expiry (the log is
-              append-only).
+              returns 403 otherwise, surfaced here. Sessions expire
+              automatically when their duration ends; state is derived from the
+              expiry (the log is append-only).
             </InfoTip>
           </span>
         }
@@ -504,7 +505,7 @@ export default function InspectorView() {
             </Field>
 
             <Field
-              label="Session duration (minutes)"
+              label="Session duration (hours)"
               required
               error={formErr.ttl_minutes}
               htmlFor="insp-ttl"
@@ -512,15 +513,15 @@ export default function InspectorView() {
               <Input
                 id="insp-ttl"
                 type="number"
-                min={15}
-                max={60}
-                step={5}
-                value={String(form.ttl_minutes)}
+                min={0.25}
+                max={1}
+                step={5 / 60}
+                value={String(inspectorHours(form.ttl_minutes))}
                 invalid={Boolean(formErr.ttl_minutes)}
                 onChange={(e) =>
                   setForm((f) => ({
                     ...f,
-                    ttl_minutes: Number(e.target.value),
+                    ttl_minutes: inspectorMinutes(Number(e.target.value)),
                   }))
                 }
               />
