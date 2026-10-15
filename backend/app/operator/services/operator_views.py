@@ -11,12 +11,16 @@ lifecycle/status/expiry metadata only.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Annotated, cast
+from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import JSON, Boolean, String, bindparam, func, select, text
+from pydantic import AwareDatetime, BaseModel
+from sqlalchemy import JSON, Boolean, String, bindparam, func, select, text, tuple_
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session
 
@@ -262,6 +266,12 @@ def _audit_log_read(row: OperatorAuditLog) -> OperatorAuditLogRead:
     )
 
 
+class _AuditCursor(BaseModel):
+    created_at: Annotated[datetime, AwareDatetime]
+    event_id: UUID
+    as_of: Annotated[datetime, AwareDatetime]
+
+
 def read_operator_audit_log(  # noqa: PLR0913 - one filter per query parameter
     db: Session,
     *,
@@ -272,10 +282,19 @@ def read_operator_audit_log(  # noqa: PLR0913 - one filter per query parameter
     to_ts: datetime | None = None,
     as_of: datetime | None = None,
     limit: int = 100,
-    offset: int = 0,
+    cursor: str | None = None,
 ) -> OperatorAuditLogListRead:
+    after = None
+    if cursor is not None:
+        try:
+            after = _AuditCursor.model_validate_json(
+                base64.b64decode(cursor, altchars=b"-_", validate=True)
+            )
+        except (ValueError, binascii.Error) as exc:
+            raise HTTPException(422, "Invalid audit cursor.") from exc
     now = utc_now()
-    bound = min(as_of, now) if as_of is not None else now
+    requested = after.as_of if after is not None else as_of
+    bound = min(requested, now) if requested is not None else now
     filters = [OperatorAuditLog.created_at < bound]
     if operator_email is not None:
         filters.append(OperatorAuditLog.operator_email == operator_email)
@@ -289,17 +308,38 @@ def read_operator_audit_log(  # noqa: PLR0913 - one filter per query parameter
     if to_ts is not None:
         filters.append(OperatorAuditLog.created_at <= to_ts)
     total = db.scalar(select(func.count()).select_from(OperatorAuditLog).where(*filters)) or 0
+    if after is not None:
+        filters.append(
+            tuple_(OperatorAuditLog.created_at, OperatorAuditLog.id)
+            < tuple_(after.created_at, after.event_id)
+        )
     rows = list(
         db.scalars(
             select(OperatorAuditLog)
             .where(*filters)
             .order_by(OperatorAuditLog.created_at.desc(), OperatorAuditLog.id.desc())
-            .limit(limit)
-            .offset(offset)
+            .limit(limit + 1)
         )
     )
+    next_cursor = None
+    if len(rows) > limit:
+        last = rows[limit - 1]
+        next_cursor = base64.urlsafe_b64encode(
+            _AuditCursor(
+                created_at=last.created_at.replace(tzinfo=UTC)
+                if last.created_at.tzinfo is None
+                else last.created_at,
+                event_id=last.id,
+                as_of=bound,
+            )
+            .model_dump_json()
+            .encode()
+        ).decode()
     return OperatorAuditLogListRead(
-        items=[_audit_log_read(row) for row in rows], total=total, as_of=bound
+        items=[_audit_log_read(row) for row in rows[:limit]],
+        total=total,
+        as_of=bound,
+        next_cursor=next_cursor,
     )
 
 

@@ -169,10 +169,11 @@ require the same institution class. Each affected bank sees the original event,
 time, initiating bank and changed values. Only the initiating bank sees the actor,
 approver, reason and inspection references; sibling projections omit those fields
 and cannot be found through actor filters. New mutations retain the previous stored
-values in `before` and the replacement values in `after`, including for sibling
+values in `before` and flushed, refreshed persisted values in `after`, including for sibling
 banks. Partial register updates capture the replaced keys; concentration-register
 replacement captures all removed rows. Empty collections record the absence of a
-previous stored value. Historical events use the retained initiating bank and threshold class.
+previous stored value. Numeric evidence reflects storage precision, so an event’s
+`after` matches the next mutation’s `before` for the same keys. Historical events use the retained initiating bank and threshold class.
 The original sealed payload and previous link are verified before returning the
 redacted projection; no sealed records are rewritten. Chain visibility, predecessor
 verification and operator activity use the same applicability rule. Inspection
@@ -249,15 +250,16 @@ commit; ownership is retained even when a resource is later removed.
 | `overview`, `worker_health`                                                                                                                                | Aggregate fleet counts and runtime heartbeats, no identifiable bank resources.                                         |
 
 The operator audit API returns a server-established `as_of` timestamp before
-recording the read, and excludes events at or after that timestamp. The Console
-staff audit table retains the first successful response's `as_of`,
-retaining it across pages, page-size changes and retries so newly appended
-`audit.read` events cannot shift the results. Applying or resetting filters starts
-a new browsing window. The requested end date also applies within that timestamp;
-direct `/operator/v1/audit` callers using offsets must likewise send the returned
-`as_of` bound across pages. Future bounds are capped by the server's current time.
-Regression coverage is in
-`tests/operator/test_audit_api.py` and `console/lib/audit-pagination.test.ts`.
+recording the read, and excludes events at or after that timestamp. Pages use an
+opaque `next_cursor` containing that bound and the last displayed timestamp/ID,
+ordered newest first. Late commits ahead of the cursor cannot shift the next page.
+The Console retains page cursors for Prev, retains the server bound on retries and
+page-size changes, and starts a new browsing window when filters are applied or reset.
+The requested end date also applies within the server bound. Direct
+`/operator/v1/audit` callers follow `next_cursor`; OFFSET pagination is retired.
+Future bounds are capped by the server's current time. Regression coverage is in
+`tests/operator/test_audit_api.py`, `tests/db/test_operator_audit_pagination.py`
+and `console/lib/audit-pagination.test.ts`.
 
 Password sign-in, SSO and signing re-authentication retain success and refusal
 events before returning. Known users are attributed only to banks reachable

@@ -1763,7 +1763,6 @@ def test_staff_feed_reads_resolve_retained_bank_subjects(
                 from_=None,
                 to=None,
                 limit=100,
-                offset=0,
             )
             action = "audit.read"
         recorded = list(
@@ -2050,6 +2049,33 @@ def test_repeated_resource_banks_are_verified_in_one_batch(db_client: TestClient
         assert len(recorded) == 3 and all(row.detail["outcome"] == "success" for row in recorded)
 
 
+def _update_shared_register(
+    db: Session, ctx: TenantContext, subject: str, payload: dict[str, JsonValue]
+) -> None:
+    if subject == "param_ecl_assumption":
+        credit_params.update_ecl_register(
+            db, ctx, BANK, EclAssumptionUpdate.model_validate(payload)
+        )
+    elif subject == "param_crm_haircut":
+        credit_params.update_crm_register(db, ctx, BANK, CrmHaircutUpdate.model_validate(payload))
+    elif subject == "param_concentration_limit":
+        credit_params.update_concentration_limit_register(
+            db, ctx, BANK, ConcentrationLimitUpdate.model_validate(payload)
+        )
+    elif subject == "param_credit_threshold":
+        credit_params.update_credit_threshold_register(
+            db, ctx, BANK, CreditThresholdUpdate.model_validate(payload)
+        )
+    elif subject == "param_liquidity_threshold":
+        liquidity_thresholds.update_register(
+            db, ctx, BANK, LiquidityThresholdUpdate.model_validate(payload)
+        )
+    else:
+        liquidity_thresholds.update_haircut_schedule(
+            db, ctx, BANK, LiquidityHaircutUpdate.model_validate(payload)
+        )
+
+
 @pytest.mark.parametrize("staff", [False, True])
 @pytest.mark.parametrize(
     ("subject", "action", "change"),
@@ -2140,30 +2166,7 @@ def test_shared_register_visibility_redaction_and_integrity(
                 {"segment": "ALL", "stage": 1, "pd_pct": "1", "lgd_pct": "40"}
             ]
         for current_payload in (previous_payload, payload):
-            if subject == "param_ecl_assumption":
-                credit_params.update_ecl_register(
-                    db, ctx, BANK, EclAssumptionUpdate.model_validate(current_payload)
-                )
-            elif subject == "param_crm_haircut":
-                credit_params.update_crm_register(
-                    db, ctx, BANK, CrmHaircutUpdate.model_validate(current_payload)
-                )
-            elif subject == "param_concentration_limit":
-                credit_params.update_concentration_limit_register(
-                    db, ctx, BANK, ConcentrationLimitUpdate.model_validate(current_payload)
-                )
-            elif subject == "param_credit_threshold":
-                credit_params.update_credit_threshold_register(
-                    db, ctx, BANK, CreditThresholdUpdate.model_validate(current_payload)
-                )
-            elif subject == "param_liquidity_threshold":
-                liquidity_thresholds.update_register(
-                    db, ctx, BANK, LiquidityThresholdUpdate.model_validate(current_payload)
-                )
-            else:
-                liquidity_thresholds.update_haircut_schedule(
-                    db, ctx, BANK, LiquidityHaircutUpdate.model_validate(current_payload)
-                )
+            _update_shared_register(db, ctx, subject, current_payload)
         original = db.scalar(
             select(AuditEvent)
             .where(AuditEvent.event_type == action)
@@ -2172,7 +2175,8 @@ def test_shared_register_visibility_redaction_and_integrity(
         )
         assert original is not None
         original_details = TypeAdapter(dict[str, JsonValue]).validate_python(original.details)
-        assert original_details["bank_id"] == BANK and original_details["after"] == change
+        assert original_details["bank_id"] == BANK
+        after = TypeAdapter(dict[str, JsonValue]).validate_python(original_details["after"])
         model: type[BaseModel] = {
             "param_ecl_assumption": EclAssumptionUpdate,
             "param_crm_haircut": CrmHaircutUpdate,
@@ -2181,6 +2185,7 @@ def test_shared_register_visibility_redaction_and_integrity(
             "param_liquidity_threshold": LiquidityThresholdUpdate,
             "param_liquidity_haircut": LiquidityHaircutUpdate,
         }[subject]
+        assert model.model_validate({**payload, **after}) == model.model_validate(payload)
         before = TypeAdapter(dict[str, JsonValue]).validate_python(original_details["before"])
         assert model.model_validate({**payload, **before}) == model.model_validate(
             {**previous_payload, "effective_from": payload["effective_from"]}
@@ -2250,7 +2255,7 @@ def test_shared_register_visibility_redaction_and_integrity(
         assert {row.id for row in rows} == expected_ids
         for row in rows:
             assert row.integrity == "verified" and row.sequence
-            assert row.before == before and row.after == change and row.target_id == BANK
+            assert row.before == before and row.after == after and row.target_id == BANK
             if bank_id == BANK:
                 sequences[row.id] = row.sequence
                 assert row.actor == ("private-staff@example.test" if staff else str(USER_1))
@@ -2268,7 +2273,7 @@ def test_shared_register_visibility_redaction_and_integrity(
                     ),
                     "effective_from": "2026-10-01",
                     "before": before,
-                    "after": change,
+                    "after": after,
                     **{
                         key: original_details[key]
                         for key in (
@@ -2294,3 +2299,116 @@ def test_shared_register_visibility_redaction_and_integrity(
         assert {row.id for row in AuditLogRead.model_validate_json(filtered.text).events} == (
             expected_ids if bank_id == BANK else set()
         )
+
+
+@pytest.mark.parametrize(
+    ("subject", "action", "change"),
+    [
+        (
+            "param_ecl_assumption",
+            "ecl_assumptions.updated",
+            {
+                "assumptions": [
+                    {
+                        "segment": "ALL",
+                        "stage": 1,
+                        "pd_pct": "1.23456789",
+                        "lgd_pct": "40.12345678",
+                    },
+                    {
+                        "segment": "ALL",
+                        "stage": 2,
+                        "pd_pct": "2.34567891",
+                        "lgd_pct": "50.23456789",
+                    },
+                ]
+            },
+        ),
+        ("param_crm_haircut", "crm_haircuts.updated", {"haircuts": {"CASH": "5.12345678"}}),
+        (
+            "param_concentration_limit",
+            "concentration_limits.updated",
+            {
+                "limits": [
+                    {
+                        "dimension": "sector",
+                        "limit_kind": "share_of_book_pct",
+                        "bucket_key": None,
+                        "value": "25.12345678",
+                    },
+                    {
+                        "dimension": "product",
+                        "limit_kind": "share_of_book_pct",
+                        "bucket_key": "loans",
+                        "value": "35.12345678",
+                    },
+                ]
+            },
+        ),
+        (
+            "param_credit_threshold",
+            "credit_thresholds.updated",
+            {"thresholds": {"npl_board_trigger_pct": "7.12345678"}},
+        ),
+        (
+            "param_liquidity_threshold",
+            "liquidity_thresholds.updated",
+            {"thresholds": {"narrow_to_volatile": "110.12345678"}},
+        ),
+        (
+            "param_liquidity_haircut",
+            "liquidity_haircuts.updated",
+            {"haircuts": {"BONDS": "10.12345678"}},
+        ),
+    ],
+)
+def test_register_audit_after_matches_next_before_at_storage_precision(
+    db_client: TestClient, subject: str, action: str, change: dict[str, JsonValue]
+) -> None:
+    grant(RoleBundle.SECURITY_OFFICER)
+    grant(RoleBundle.SECURITY_OFFICER, bank=SIBLING)
+    with _session() as db:
+        for index, effective_from in enumerate(("2026-10-01", "2026-11-01")):
+            request_change: dict[str, JsonValue] = change
+            if index and subject in {"param_ecl_assumption", "param_concentration_limit"}:
+                key = "assumptions" if subject == "param_ecl_assumption" else "limits"
+                request_entries = TypeAdapter(list[dict[str, JsonValue]]).validate_python(
+                    change[key]
+                )
+                request_change = {**change, key: list(reversed(request_entries))}
+            _update_shared_register(
+                db,
+                TenantContext(ORG_1, actor_user_id=USER_1),
+                subject,
+                {
+                    **request_change,
+                    "effective_from": effective_from,
+                    "approved_by": "Private approver",
+                    "reason": "Private reason",
+                },
+            )
+    for bank in (BANK, SIBLING):
+        response = db_client.get(
+            f"/api/v1/banks/{bank}/audit-log",
+            headers=headers(ORG_1),
+            params={"event_type": action},
+        )
+        assert response.status_code == 200, response.text
+        entries = AuditLogRead.model_validate_json(response.text).events
+        assert len(entries) == 2
+        newest, previous = entries
+        assert previous.after == newest.before == newest.after
+        assert previous.after != change
+        assert all(entry.integrity == "verified" for entry in entries)
+        if subject == "param_ecl_assumption":
+            evidence = TypeAdapter(dict[str, list[dict[str, str | int]]]).validate_python(
+                previous.after
+            )
+            assert Decimal(str(evidence["assumptions"][0]["pd_pct"])) == Decimal("1.234568")
+            assert Decimal(str(evidence["assumptions"][0]["lgd_pct"])) == Decimal("40.123457")
+        if bank == SIBLING:
+            assert all(entry.actor is None and entry.reason is None for entry in entries)
+        else:
+            assert all(
+                entry.actor == str(USER_1) and entry.reason == "Private reason" for entry in entries
+            )

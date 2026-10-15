@@ -32,11 +32,11 @@ def read_audit_log(  # noqa: PLR0913 - one argument per query parameter
     to: datetime | None = None,
     as_of: Annotated[datetime, AwareDatetime] | None = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    cursor: Annotated[str | None, Query(max_length=2048)] = None,
 ) -> OperatorAuditLogListRead:
     """Filtered, paginated, newest-first. ``action`` is a prefix match (``desk.``
     matches every desk action); ``total`` counts all rows matching the filters
-    before ``limit``/``offset``."""
+    before the cursor and ``limit``."""
     result = operator_views.read_operator_audit_log(
         db,
         operator_email=operator_email,
@@ -46,7 +46,7 @@ def read_audit_log(  # noqa: PLR0913 - one argument per query parameter
         to_ts=to,
         as_of=as_of,
         limit=limit,
-        offset=offset,
+        cursor=cursor,
     )
     record_operator_action(db, operator, action="audit.read", resources=result)
     db.commit()

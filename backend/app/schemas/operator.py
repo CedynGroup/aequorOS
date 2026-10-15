@@ -286,9 +286,10 @@ class OperatorAuditLogListRead(ClosedModel):
     activity feed). Filtered, paginated, newest-first."""
 
     items: list[OperatorAuditLogRead]
-    #: Total rows matching the filters (before ``limit``/``offset``).
+    #: Total rows matching the filters (before the cursor and ``limit``).
     total: int
     as_of: datetime
+    next_cursor: str | None = None
 
 
 # -- fleet overview --------------------------------------------------------------

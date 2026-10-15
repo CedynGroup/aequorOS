@@ -2003,6 +2003,7 @@ export interface AuditLogResponse {
   items: AuditLogItem[];
   total: number;
   as_of: string;
+  next_cursor: string | null;
 }
 
 interface AuditLogOptions {
@@ -2013,7 +2014,7 @@ interface AuditLogOptions {
   from?: string;
   to?: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }
 
 /** GET /operator/v1/audit — the append-only operator_audit_log, filterable. */
@@ -2027,17 +2028,17 @@ export function getAudit(opts: AuditLogOptions): Promise<AuditLogResponse> {
       to: opts.to ? new Date(opts.to).toISOString() : undefined,
       as_of: opts.asOf,
       limit: opts.limit,
-      offset: opts.offset,
+      cursor: opts.cursor,
     })}`,
   );
 }
 
 export function createAuditBrowser(
-  filters: Omit<AuditLogOptions, "asOf" | "limit" | "offset"> = {},
+  filters: Omit<AuditLogOptions, "asOf" | "limit" | "cursor"> = {},
 ) {
   let firstPage: Promise<AuditLogResponse> | undefined;
   return async (
-    opts: Pick<AuditLogOptions, "limit" | "offset">,
+    opts: Pick<AuditLogOptions, "limit" | "cursor">,
   ): Promise<AuditLogResponse> => {
     if (firstPage) {
       const { as_of } = await firstPage;

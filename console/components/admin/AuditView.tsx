@@ -63,27 +63,28 @@ export default function AuditView() {
     [applied],
   );
   const [limit, setLimit] = useState(50);
-  const [offset, setOffset] = useState(0);
+  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  const cursor = cursors[cursors.length - 1];
   const [selected, setSelected] = useState<AuditLogItem | null>(null);
 
   const { data, error, loading, reload } = useApi(
     () =>
       browseAudit({
         limit,
-        offset,
+        cursor,
       }),
-    [browseAudit, limit, offset],
+    [browseAudit, limit, cursor],
   );
 
   function apply() {
     setApplied({ ...draft });
-    setOffset(0);
+    setCursors([undefined]);
   }
 
   function resetFilters() {
     setDraft(BLANK_FILTERS);
     setApplied({ ...BLANK_FILTERS });
-    setOffset(0);
+    setCursors([undefined]);
   }
 
   function exportCsv() {
@@ -115,14 +116,15 @@ export default function AuditView() {
 
   const total = data?.total ?? 0;
   const shown = data?.items.length ?? 0;
+  const offset = (cursors.length - 1) * limit;
   const rangeLabel =
     total > 0
       ? `${offset + 1}–${offset + shown} of ${total}`
       : loading
         ? "Loading…"
         : "No entries";
-  const canPrev = offset > 0;
-  const canNext = offset + limit < total;
+  const canPrev = cursors.length > 1;
+  const canNext = Boolean(data?.next_cursor);
   const hasFilters = Object.values(applied).some(Boolean);
 
   const columns: Column<AuditLogItem>[] = [
@@ -271,7 +273,7 @@ export default function AuditView() {
                   value={String(limit)}
                   onChange={(e) => {
                     setLimit(Number(e.target.value));
-                    setOffset(0);
+                    setCursors([undefined]);
                   }}
                 >
                   {LIMIT_OPTIONS.map((n) => (
@@ -299,7 +301,11 @@ export default function AuditView() {
                 size="sm"
                 variant="secondary"
                 icon={<ChevronLeft size={13} aria-hidden />}
-                onClick={() => setOffset((o) => Math.max(0, o - limit))}
+                onClick={() =>
+                  setCursors((pages) =>
+                    pages.length > 1 ? pages.slice(0, -1) : pages,
+                  )
+                }
                 disabled={!canPrev || loading}
               >
                 Prev
@@ -308,7 +314,10 @@ export default function AuditView() {
                 size="sm"
                 variant="secondary"
                 icon={<ChevronRight size={13} aria-hidden />}
-                onClick={() => setOffset((o) => o + limit)}
+                onClick={() => {
+                  const next = data?.next_cursor;
+                  if (next) setCursors((pages) => [...pages, next]);
+                }}
                 disabled={!canNext || loading}
               >
                 Next

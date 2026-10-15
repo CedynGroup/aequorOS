@@ -98,7 +98,7 @@ def test_target_org_filter(operator_client: TestClient) -> None:
     assert scoped["total"] == 3
 
 
-def test_limit_and_offset_page_without_changing_total(
+def test_cursor_pages_preserve_the_server_bound(
     operator_client: TestClient, operator_db: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _seed_actions(operator_client)
@@ -113,13 +113,15 @@ def test_limit_and_offset_page_without_changing_total(
     page1 = OperatorAuditLogListRead.model_validate_json(response.text)
     assert page1.as_of == server_now and page1.as_of < browser_now
     assert len(page1.items) == 2 and page1.total == 4
-    params: dict[str, str | int] = {"as_of": page1.as_of.isoformat(), "limit": 2, "offset": 0}
+    assert page1.next_cursor is not None
+    params: dict[str, str | int] = {"as_of": page1.as_of.isoformat(), "limit": 2}
     response = operator_client.get(
-        AUDIT, params={**params, "offset": 2}, headers=operator_headers()
+        AUDIT, params={**params, "cursor": page1.next_cursor}, headers=operator_headers()
     )
     assert response.status_code == 200, response.text
     page2 = OperatorAuditLogListRead.model_validate_json(response.text)
     assert len(page2.items) == 2 and page2.total == 4 and page2.as_of == page1.as_of
+    assert page2.next_cursor is None
     assert {item.id for item in page1.items}.isdisjoint({item.id for item in page2.items})
     assert "audit.read" in {item.action for item in page1.items + page2.items}
     response = operator_client.get(AUDIT, params=params, headers=operator_headers())
@@ -139,3 +141,8 @@ def test_limit_and_offset_page_without_changing_total(
         )
         == 5
     )
+
+
+def test_invalid_audit_cursor_is_rejected(operator_client: TestClient) -> None:
+    response = operator_client.get(AUDIT, params={"cursor": "invalid"}, headers=operator_headers())
+    assert response.status_code == 422
