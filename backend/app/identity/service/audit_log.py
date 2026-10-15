@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, JsonValue, TypeAdapter
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     String,
     Uuid,
@@ -32,7 +33,13 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.core.audit_attribution import organization_binding_sql, staff_bank_sql, subject_bank_sql
+from app.core.audit_attribution import (
+    SHARED_REGISTER_SUBJECTS,
+    organization_binding_sql,
+    shared_register_sql,
+    staff_bank_sql,
+    subject_bank_sql,
+)
 from app.core.audit_projection import EVENT_OUTCOMES, normalize_event_details
 from app.core.authorization import (
     DataScope,
@@ -194,6 +201,18 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
             _json_text(event.c.details, "institution_id"),
         )
     )
+    shared_register = sql_cast(
+        text(
+            shared_register_sql(
+                "audit_events.organization_id",
+                "audit_events.entity_type",
+                "audit_events.entity_id",
+                "audit_events.details",
+                ":audit_bank",
+            )
+        ),
+        Boolean,
+    ).params(audit_bank=bank.id)
     tenant_events = select(
         event.c.id,
         literal("audit_events").label("stream"),
@@ -206,35 +225,40 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
     ).where(
         event.c.organization_id == ctx.organization_id,
         or_(
-            _json_text(event.c.details, "bank_id") == bank.id,
-            institution == bank.id,
-            and_(event.c.entity_type == "bank", event.c.entity_id == bank.id),
-            _json_text(event.c.details, "scope", "institution_id") == bank.id,
-            owned_bank == bank.id,
-            literal_column(
-                organization_binding_sql(
-                    "audit_events.organization_id",
-                    "audit_events.entity_type",
-                    "audit_events.entity_id",
-                    postgresql=db.get_bind().dialect.name == "postgresql",
-                )
+            shared_register,
+            and_(
+                or_(
+                    _json_text(event.c.details, "bank_id") == bank.id,
+                    institution == bank.id,
+                    and_(event.c.entity_type == "bank", event.c.entity_id == bank.id),
+                    _json_text(event.c.details, "scope", "institution_id") == bank.id,
+                    owned_bank == bank.id,
+                    literal_column(
+                        organization_binding_sql(
+                            "audit_events.organization_id",
+                            "audit_events.entity_type",
+                            "audit_events.entity_id",
+                            postgresql=db.get_bind().dialect.name == "postgresql",
+                        )
+                    ),
+                ),
+                or_(
+                    _json_text(event.c.details, "bank_id").is_(None),
+                    _json_text(event.c.details, "bank_id") == bank.id,
+                ),
+                or_(
+                    _json_text(event.c.details, "scope", "institution_id").is_(None),
+                    _json_text(event.c.details, "scope", "institution_id") == bank.id,
+                ),
+                or_(
+                    event.c.entity_type != "bank",
+                    event.c.entity_type.is_(None),
+                    event.c.entity_id == bank.id,
+                ),
+                or_(owned_bank.is_(None), owned_bank == bank.id),
+                or_(institution.is_(None), institution == bank.id),
             ),
         ),
-        or_(
-            _json_text(event.c.details, "bank_id").is_(None),
-            _json_text(event.c.details, "bank_id") == bank.id,
-        ),
-        or_(
-            _json_text(event.c.details, "scope", "institution_id").is_(None),
-            _json_text(event.c.details, "scope", "institution_id") == bank.id,
-        ),
-        or_(
-            event.c.entity_type != "bank",
-            event.c.entity_type.is_(None),
-            event.c.entity_id == bank.id,
-        ),
-        or_(owned_bank.is_(None), owned_bank == bank.id),
-        or_(institution.is_(None), institution == bank.id),
     )
     staff_details = (
         sql_cast(_STAFF.c.detail, JSONB)
@@ -296,9 +320,14 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
                 actor = UUID(actor).hex
         query = query.where(
             or_(
+                feed.c.target_type.not_in(SHARED_REGISTER_SUBJECTS),
+                feed.c.target_type.is_(None),
+                feed.c.target_id == bank.id,
+            ),
+            or_(
                 feed.c.actor == actor,
                 _json_text(feed.c.details, "act_operator") == filters.actor,
-            )
+            ),
         )
     if filters.event_type is not None:
         query = query.where(feed.c.action == filters.event_type)
@@ -332,7 +361,10 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
         .mappings()
         .all()
     )
-    events = [_present(row) for row in TypeAdapter(list[StoredEvent]).validate_python(rows[:limit])]
+    events = [
+        _present(row, bank.id)
+        for row in TypeAdapter(list[StoredEvent]).validate_python(rows[:limit])
+    ]
     _inspection_evidence(db, events)
     _verify_events(db, events)
     next_cursor = None
@@ -366,7 +398,7 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
     return AuditLogRead(events=events, next_cursor=next_cursor)
 
 
-def _present(row: StoredEvent) -> AuditEventRead:
+def _present(row: StoredEvent, bank_id: str) -> AuditEventRead:
     details = normalize_event_details(row.action, row.details)
     staff = row.stream == "operator_audit_log"
     if staff:
@@ -402,6 +434,30 @@ def _present(row: StoredEvent) -> AuditEventRead:
     )
     if item.occurred_at.tzinfo is None:
         item.occurred_at = item.occurred_at.replace(tzinfo=UTC)
+    if row.target_type in SHARED_REGISTER_SUBJECTS and row.target_id != bank_id:
+        item.actor = None
+        item.reason = None
+        item.support_reference = None
+        item.details = {
+            key: value
+            for key, value in details.items()
+            if key
+            in {
+                "bank_id",
+                "institution_class",
+                "effective_from",
+                "entries",
+                "collateral_classes",
+                "rows",
+                "codes",
+                "asset_classes",
+                "after",
+                "outcome",
+            }
+        }
+        item.before = None
+        item.after = item.details.get("after")
+        item.source = None
     return item
 
 

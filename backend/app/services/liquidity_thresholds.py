@@ -332,6 +332,9 @@ def update_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "codes": sorted(payload.thresholds),
+            "after": {
+                "thresholds": {code: str(value) for code, value in payload.thresholds.items()}
+            },
             "reason": payload.reason,
         },
     )
@@ -455,6 +458,11 @@ def update_haircut_schedule(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "asset_classes": sorted(cls.strip().upper() for cls in payload.haircuts),
+            "after": {
+                "haircuts": {
+                    cls.strip().upper(): str(value) for cls, value in payload.haircuts.items()
+                }
+            },
             "reason": payload.reason,
         },
     )

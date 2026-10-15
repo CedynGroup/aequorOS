@@ -16,12 +16,18 @@ from datetime import UTC, datetime, timedelta
 from typing import cast
 
 from fastapi import HTTPException, status
-from sqlalchemy import JSON, String, bindparam, func, select, text
+from sqlalchemy import JSON, Boolean, String, bindparam, func, select, text
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.audit_attribution import SUBJECT_TABLES, organization_binding_sql, subject_bank_sql
+from app.core.audit_attribution import (
+    SHARED_REGISTER_SUBJECTS,
+    SUBJECT_TABLES,
+    organization_binding_sql,
+    shared_register_sql,
+    subject_bank_sql,
+)
 from app.db.base import utc_now
 from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, STUCK_DEDUP_STATUSES
 from app.identity.public import Bank, SsoConnection, User
@@ -842,6 +848,32 @@ def list_data_engine_connections(db: Session) -> DataEnginesRead:
 
 def _activity_event_banks(db: Session, event: AuditEvent) -> list[str | None]:
     details = event.details or {}
+    if event.entity_type in SHARED_REGISTER_SUBJECTS:
+        predicate = text(
+            shared_register_sql(
+                ":org",
+                ":kind",
+                ":id",
+                "CAST(:details AS jsonb)"
+                if db.get_bind().dialect.name == "postgresql"
+                else ":details",
+                "banks.id",
+            )
+        ).bindparams(bindparam("details", type_=JSON))
+        return list(
+            db.scalars(
+                select(Bank.id).where(
+                    Bank.organization_id == event.organization_id,
+                    sql_cast(predicate, Boolean),
+                ),
+                {
+                    "org": event.organization_id,
+                    "kind": event.entity_type,
+                    "id": event.entity_id,
+                    "details": details,
+                },
+            )
+        )
     marker: object = details.get("bank_id")
     if isinstance(marker, str):
         return [marker]

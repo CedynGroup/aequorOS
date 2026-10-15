@@ -92,10 +92,20 @@ from app.reporting.schemas.filing_workflow import (
 )
 from app.reporting.service import workflow
 from app.reporting.service.filing_workflow import templates
+from app.schemas.credit_params import CrmHaircutUpdate, EclAssumptionUpdate
 from app.schemas.database_connection import DatabaseConnectionCreate
 from app.schemas.ingestion import PositionSnapshotOverrideCreate
+from app.schemas.liquidity_thresholds import LiquidityHaircutUpdate, LiquidityThresholdUpdate
 from app.schemas.push import PushBatchOpen, PushRecordsPage
-from app.services import database_connections, ingestion, push_ingestion, regulatory_capital
+from app.schemas.regulatory_credit import ConcentrationLimitUpdate, CreditThresholdUpdate
+from app.services import (
+    credit_params,
+    database_connections,
+    ingestion,
+    liquidity_thresholds,
+    push_ingestion,
+    regulatory_capital,
+)
 from app.services.audit import record_event
 from tests.conftest import (
     ApiTestDatabase,
@@ -1493,7 +1503,7 @@ def test_governed_subjects_share_write_read_and_verification_ownership(
             )
             assert parameter.details["bank_id"] == bank_id
             db.flush()
-            if bank_id == BANK:
+            if org == ORG_1:
                 expected.add(str(parameter.id))
         db.commit()
     response = db_client.get(PATH, headers=headers(ORG_1))
@@ -2038,3 +2048,220 @@ def test_repeated_resource_banks_are_verified_in_one_batch(db_client: TestClient
             (ORG_2, FOREIGN),
         }
         assert len(recorded) == 3 and all(row.detail["outcome"] == "success" for row in recorded)
+
+
+@pytest.mark.parametrize("staff", [False, True])
+@pytest.mark.parametrize(
+    ("subject", "action", "change"),
+    [
+        (
+            "param_ecl_assumption",
+            "ecl_assumptions.updated",
+            {"assumptions": [{"segment": "ALL", "stage": 1, "pd_pct": "2", "lgd_pct": "40"}]},
+        ),
+        ("param_crm_haircut", "crm_haircuts.updated", {"haircuts": {"CASH": "5"}}),
+        (
+            "param_concentration_limit",
+            "concentration_limits.updated",
+            {
+                "limits": [
+                    {
+                        "dimension": "sector",
+                        "limit_kind": "share_of_book_pct",
+                        "bucket_key": None,
+                        "value": "25",
+                    }
+                ]
+            },
+        ),
+        (
+            "param_credit_threshold",
+            "credit_thresholds.updated",
+            {"thresholds": {"npl_board_trigger_pct": "7"}},
+        ),
+        (
+            "param_liquidity_threshold",
+            "liquidity_thresholds.updated",
+            {"thresholds": {"narrow_to_volatile": "110"}},
+        ),
+        ("param_liquidity_haircut", "liquidity_haircuts.updated", {"haircuts": {"BONDS": "10"}}),
+    ],
+)
+def test_shared_register_visibility_redaction_and_integrity(
+    db_client: TestClient, subject: str, action: str, change: dict[str, JsonValue], staff: bool
+) -> None:
+    other_jurisdiction = "BK-AUDIT004"
+    other_class = "BK-AUDIT005"
+    with _session() as db:
+        for bank_id, jurisdiction, currency, kind in (
+            (other_jurisdiction, "NG", "NGN", "universal_bank"),
+            (other_class, "GH", "GHS", "savings_and_loans"),
+        ):
+            db.add(
+                Bank(
+                    id=bank_id,
+                    organization_id=ORG_1,
+                    name="Unaffected audit fixture",
+                    short_name="Audit fixture",
+                    currency=currency,
+                    jurisdiction_code=jurisdiction,
+                    license_type=kind,
+                    institution_type=kind,
+                )
+            )
+        db.commit()
+    for bank_id in (BANK, SIBLING, other_jurisdiction, other_class):
+        grant(RoleBundle.SECURITY_OFFICER, bank=bank_id)
+    payload: dict[str, JsonValue] = {
+        **change,
+        "effective_from": "2026-10-01",
+        "approved_by": "Private approving officer",
+        "reason": "Private board deliberation",
+    }
+    with _session() as db:
+        session = inspector.start_session(
+            db,
+            organization_id=ORG_1,
+            started_by="private-staff@example.test",
+            reason="Private investigation",
+            support_reference="PRIVATE-TICKET",
+            mode="consent",
+            ttl_minutes=30,
+        )
+        ctx = TenantContext(
+            ORG_1,
+            actor_user_id=None if staff else USER_1,
+            impersonation_context=str(session.id) if staff else None,
+            actor_operator="private-staff@example.test" if staff else None,
+        )
+        if subject == "param_ecl_assumption":
+            credit_params.update_ecl_register(
+                db, ctx, BANK, EclAssumptionUpdate.model_validate(payload)
+            )
+        elif subject == "param_crm_haircut":
+            credit_params.update_crm_register(
+                db, ctx, BANK, CrmHaircutUpdate.model_validate(payload)
+            )
+        elif subject == "param_concentration_limit":
+            credit_params.update_concentration_limit_register(
+                db, ctx, BANK, ConcentrationLimitUpdate.model_validate(payload)
+            )
+        elif subject == "param_credit_threshold":
+            credit_params.update_credit_threshold_register(
+                db, ctx, BANK, CreditThresholdUpdate.model_validate(payload)
+            )
+        elif subject == "param_liquidity_threshold":
+            liquidity_thresholds.update_register(
+                db, ctx, BANK, LiquidityThresholdUpdate.model_validate(payload)
+            )
+        else:
+            liquidity_thresholds.update_haircut_schedule(
+                db, ctx, BANK, LiquidityHaircutUpdate.model_validate(payload)
+            )
+        original = db.scalar(select(AuditEvent).where(AuditEvent.event_type == action))
+        assert original is not None
+        original_details = TypeAdapter(dict[str, JsonValue]).validate_python(original.details)
+        assert original_details["bank_id"] == BANK and original_details["after"] == change
+        historical = AuditEvent(
+            organization_id=ORG_1,
+            actor_user_id=original.actor_user_id,
+            event_type=action,
+            entity_type=subject,
+            entity_id=BANK,
+            details={key: value for key, value in original_details.items() if key != "bank_id"},
+        )
+        db.add(historical)
+        record_event(
+            db, TenantContext(ORG_2), event_type=action, entity_type=subject, entity_id=FOREIGN
+        )
+        db.add(
+            AuditEvent(
+                organization_id=ORG_1,
+                event_type=action,
+                entity_type=subject,
+                entity_id=BANK,
+                details={"bank_id": other_jurisdiction},
+            )
+        )
+        db.commit()
+        expected_ids = {original.id, historical.id}
+        activity = operator_views.get_tenant_activity(db, ORG_1, 100)
+        expected_banks = {BANK, SIBLING}
+        if subject != "param_liquidity_threshold":
+            expected_banks.add(other_class)
+        assert {
+            item.bank_id for item in activity.items if item.summary.startswith(action)
+        } == expected_banks
+        for bank_id in expected_banks:
+            db.execute(
+                text(
+                    "SELECT set_config('app.organization_id', :org, true), "
+                    "set_config('app.audit_bank_id', :bank, true)"
+                ),
+                {"org": ORG_1, "bank": bank_id},
+            )
+            context = cast(
+                object,
+                db.scalar(
+                    text("SELECT bank_audit_inspection_context('audit_events', :event)"),
+                    {"event": original.id},
+                ),
+            )
+            if staff and bank_id == BANK:
+                assert context is not None
+            else:
+                assert context is None
+    sequences: dict[UUID, int | None] = {}
+    for bank_id in (BANK, SIBLING, other_jurisdiction, other_class):
+        url = f"/api/v1/banks/{bank_id}/audit-log"
+        response = db_client.get(url, headers=headers(ORG_1), params={"event_type": action})
+        assert response.status_code == 200, response.text
+        rows = AuditLogRead.model_validate_json(response.text).events
+        if bank_id not in expected_banks:
+            assert rows == []
+            continue
+        assert {row.id for row in rows} == expected_ids
+        for row in rows:
+            assert row.integrity == "verified" and row.sequence
+            assert row.after == change and row.target_id == BANK
+            if bank_id == BANK:
+                sequences[row.id] = row.sequence
+                assert row.actor == ("private-staff@example.test" if staff else str(USER_1))
+                assert row.reason == "Private board deliberation"
+                assert row.details["approved_by"] == "Private approving officer"
+            else:
+                assert row.sequence == sequences[row.id]
+                assert row.actor is None and row.reason is None and row.support_reference is None
+                assert row.details == {
+                    **({"bank_id": BANK} if row.id == original.id else {}),
+                    **(
+                        {"institution_class": "bank"}
+                        if subject == "param_liquidity_threshold"
+                        else {}
+                    ),
+                    "effective_from": "2026-10-01",
+                    "after": change,
+                    **{
+                        key: original_details[key]
+                        for key in (
+                            "entries",
+                            "collateral_classes",
+                            "rows",
+                            "codes",
+                            "asset_classes",
+                        )
+                        if key in original_details
+                    },
+                }
+        filtered = db_client.get(
+            url,
+            headers=headers(ORG_1),
+            params={
+                "event_type": action,
+                "actor": "private-staff@example.test" if staff else str(USER_1),
+            },
+        )
+        assert filtered.status_code == 200, filtered.text
+        assert {row.id for row in AuditLogRead.model_validate_json(filtered.text).events} == (
+            expected_ids if bank_id == BANK else set()
+        )

@@ -83,6 +83,35 @@ _SUBJECT_TABLES = {
 
 _PACKAGE_SUBJECTS = {"regulatory_package_artifact", "regulatory_artifact_version"}
 
+_SHARED_REGISTER_SUBJECTS = frozenset(
+    kind for kind, table in _SUBJECT_TABLES.items() if table == "banks"
+)
+
+
+def _shared_register_sql(
+    organization: str, entity_type: str, entity_id: str, details: str, bank: str
+) -> str:
+    kinds = ", ".join(f"'{kind}'" for kind in sorted(_SHARED_REGISTER_SUBJECTS))
+    return (
+        f"({entity_type} IN ({kinds}) AND EXISTS ("
+        "SELECT 1 FROM banks origin JOIN banks affected"
+        " ON affected.organization_id = origin.organization_id"
+        " AND affected.jurisdiction_code = origin.jurisdiction_code"
+        f" WHERE origin.organization_id = {organization} AND origin.id = {entity_id}"
+        f" AND affected.id = {bank}"
+        f" AND ({details}->>'bank_id' IS NULL OR {details}->>'bank_id' = origin.id)"
+        f" AND ({details}->'scope'->>'institution_id' IS NULL"
+        f" OR {details}->'scope'->>'institution_id' = origin.id)"
+        f" AND ({entity_type} <> 'param_liquidity_threshold' OR EXISTS ("
+        "SELECT 1 FROM institution_types origin_type JOIN institution_types affected_type"
+        " ON affected_type.institution_class = origin_type.institution_class"
+        " WHERE origin_type.type_code = origin.institution_type"
+        " AND affected_type.type_code = affected.institution_type"
+        f" AND ({details}->>'institution_class' IS NULL"
+        f" OR {details}->>'institution_class' = origin_type.institution_class)))"
+        "))"
+    )
+
 
 def _uuid_sql(value: str, *, postgresql: bool) -> str:
     return (
@@ -198,9 +227,14 @@ _ORGANIZATION_WIDE_BINDING = _organization_binding_sql(
 # Admit explicit or retained bank ownership, including organization-wide bindings.
 # The following AND guards reject conflicting bank references, rather than letting
 # one matching reference override another bank's ownership.
+_SHARED_REGISTER_EVENT = _shared_register_sql(
+    "e.organization_id", "e.entity_type", "e.entity_id", "e.details", _SESSION_BANK_ID
+)
 _ATTRIBUTABLE_TENANT_EVENT = f"""
     e.organization_id = {_SESSION_ORGANIZATION_ID}
-    AND (
+    AND ({_SHARED_REGISTER_EVENT} OR (
+
+    (
         e.details ->> 'bank_id' = {_SESSION_BANK_ID}
         OR (e.entity_type = 'bank' AND e.entity_id = {_SESSION_BANK_ID})
         OR e.details -> 'scope' ->> 'institution_id' = {_SESSION_BANK_ID}
@@ -223,7 +257,10 @@ _ATTRIBUTABLE_TENANT_EVENT = f"""
         OR e.details ->> 'institution_id' IS NULL
         OR e.details ->> 'institution_id' = {_SESSION_BANK_ID}
     )
+
+    ))
 """
+
 _STAFF_SUBJECT_BANK_ID = _staff_bank_sql("e.target_org", "e.detail", postgresql=True)
 # Staff records require this tenant and bank, with no conflicting bank references.
 _ATTRIBUTABLE_STAFF_EVENT = f"""
@@ -243,7 +280,9 @@ _ATTRIBUTABLE_STAFF_EVENT = f"""
 
 _ATTRIBUTABLE_STAFF_POLICY = _ATTRIBUTABLE_STAFF_EVENT.replace("e.", "operator_audit_log.")
 
-_OWNERSHIP_TABLES = sorted(set(_SUBJECT_TABLES.values()) - {"audit_events"})
+_OWNERSHIP_TABLES = sorted(
+    (set(_SUBJECT_TABLES.values()) - {"audit_events"}) | {"institution_types"}
+)
 
 
 def upgrade() -> None:
@@ -358,6 +397,11 @@ def upgrade() -> None:
                 WHERE
                     wanted_stream = 'audit_events'
                     AND e.id = wanted_event AND {_ATTRIBUTABLE_TENANT_EVENT}
+                    AND (
+                        e.entity_type IS NULL OR e.entity_type NOT IN (
+                            {", ".join(f"'{kind}'" for kind in sorted(_SHARED_REGISTER_SUBJECTS))}
+                        ) OR e.entity_id = {_SESSION_BANK_ID}
+                    )
                 UNION ALL
                 SELECT
                     e.target_org,

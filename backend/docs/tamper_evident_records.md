@@ -162,7 +162,18 @@ configs, position snapshots, regulatory runs, packages and their artifact record
 core-database connections, filing templates, capital/ILAAP and contingency funding
 plans, scenario analyses, bank-local scenarios and management plans, stress sign-offs,
 and ICAAP cycles and child records; their lifecycle events use this boundary. Bank
-parameter-register targets resolve through their bank platform IDs. Access requests
+parameter-register targets retain the initiating bank platform ID. ECL assumptions,
+CRM haircuts, concentration limits, credit thresholds and liquidity haircuts cover
+all banks of that organization and jurisdiction; liquidity thresholds additionally
+require the same institution class. Each affected bank sees the original event,
+time, initiating bank and changed values. Only the initiating bank sees the actor,
+approver, reason and inspection references; sibling projections omit those fields
+and cannot be found through actor filters. New mutations retain the changed values
+in `after`. Historical events use the retained initiating bank and threshold class.
+The original sealed payload and previous link are verified before returning the
+redacted projection; no sealed records are rewritten. Chain visibility, predecessor
+verification and operator activity use the same applicability rule. Inspection
+context is available only to the initiating bank for these events. Access requests
 retain their `institution_id` through the same writer. Push staging snapshots the
 caller's resolved bank; historical committed pushes resolve through their retained
 ingestion batch. Deleted ICAAP children resolve through the recorded cycle.

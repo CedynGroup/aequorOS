@@ -195,6 +195,17 @@ def update_ecl_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "entries": sorted(f"{segment}:stage{stage}" for segment, stage in seen),
+            "after": {
+                "assumptions": [
+                    {
+                        "segment": normalize_segment(entry.segment),
+                        "stage": entry.stage,
+                        "pd_pct": str(entry.pd_pct),
+                        "lgd_pct": str(entry.lgd_pct),
+                    }
+                    for entry in payload.assumptions
+                ]
+            },
             "reason": payload.reason,
         },
     )
@@ -318,6 +329,11 @@ def update_crm_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "collateral_classes": sorted(cls.strip().upper() for cls in payload.haircuts),
+            "after": {
+                "haircuts": {
+                    cls.strip().upper(): str(value) for cls, value in payload.haircuts.items()
+                }
+            },
             "reason": payload.reason,
         },
     )
@@ -454,6 +470,17 @@ def update_concentration_limit_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "rows": len(payload.limits),
+            "after": {
+                "limits": [
+                    {
+                        "dimension": entry.dimension,
+                        "limit_kind": entry.limit_kind,
+                        "bucket_key": entry.bucket_key,
+                        "value": str(entry.value),
+                    }
+                    for entry in payload.limits
+                ]
+            },
             "reason": payload.reason,
         },
     )
@@ -547,6 +574,9 @@ def update_credit_threshold_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "codes": sorted(payload.thresholds),
+            "after": {
+                "thresholds": {code: str(value) for code, value in payload.thresholds.items()}
+            },
             "reason": payload.reason,
         },
     )

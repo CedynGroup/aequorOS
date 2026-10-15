@@ -63,6 +63,34 @@ SUBJECT_TABLES = {
 }
 
 PACKAGE_SUBJECTS = {"regulatory_package_artifact", "regulatory_artifact_version"}
+SHARED_REGISTER_SUBJECTS = frozenset(
+    kind for kind, table in SUBJECT_TABLES.items() if table == "banks"
+)
+
+
+def shared_register_sql(
+    organization: str, entity_type: str, entity_id: str, details: str, bank: str
+) -> str:
+    kinds = ", ".join(f"'{kind}'" for kind in sorted(SHARED_REGISTER_SUBJECTS))
+    return (
+        f"({entity_type} IN ({kinds}) AND EXISTS ("
+        "SELECT 1 FROM banks origin JOIN banks affected"
+        " ON affected.organization_id = origin.organization_id"
+        " AND affected.jurisdiction_code = origin.jurisdiction_code"
+        f" WHERE origin.organization_id = {organization} AND origin.id = {entity_id}"
+        f" AND affected.id = {bank}"
+        f" AND ({details}->>'bank_id' IS NULL OR {details}->>'bank_id' = origin.id)"
+        f" AND ({details}->'scope'->>'institution_id' IS NULL"
+        f" OR {details}->'scope'->>'institution_id' = origin.id)"
+        f" AND ({entity_type} <> 'param_liquidity_threshold' OR EXISTS ("
+        "SELECT 1 FROM institution_types origin_type JOIN institution_types affected_type"
+        " ON affected_type.institution_class = origin_type.institution_class"
+        " WHERE origin_type.type_code = origin.institution_type"
+        " AND affected_type.type_code = affected.institution_type"
+        f" AND ({details}->>'institution_class' IS NULL"
+        f" OR {details}->>'institution_class' = origin_type.institution_class)))"
+        "))"
+    )
 
 
 def uuid_sql(value: str, *, postgresql: bool) -> str:
