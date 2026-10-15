@@ -168,8 +168,11 @@ all banks of that organization and jurisdiction; liquidity thresholds additional
 require the same institution class. Each affected bank sees the original event,
 time, initiating bank and changed values. Only the initiating bank sees the actor,
 approver, reason and inspection references; sibling projections omit those fields
-and cannot be found through actor filters. New mutations retain the changed values
-in `after`. Historical events use the retained initiating bank and threshold class.
+and cannot be found through actor filters. New mutations retain the previous stored
+values in `before` and the replacement values in `after`, including for sibling
+banks. Partial register updates capture the replaced keys; concentration-register
+replacement captures all removed rows. Empty collections record the absence of a
+previous stored value. Historical events use the retained initiating bank and threshold class.
 The original sealed payload and previous link are verified before returning the
 redacted projection; no sealed records are rewritten. Chain visibility, predecessor
 verification and operator activity use the same applicability rule. Inspection
@@ -245,12 +248,15 @@ commit; ownership is retained even when a resource is later removed.
 | Staff authentication and operator list/create/password-reset/deactivate/reactivate                                                                         | Platform staff identity; existing authentication/management evidence retained.                                         |
 | `overview`, `worker_health`                                                                                                                                | Aggregate fleet counts and runtime heartbeats, no identifiable bank resources.                                         |
 
-The Console staff audit table fixes an upper timestamp when browsing starts,
+The operator audit API returns a server-established `as_of` timestamp before
+recording the read, and excludes events at or after that timestamp. The Console
+staff audit table retains the first successful response's `as_of`,
 retaining it across pages, page-size changes and retries so newly appended
 `audit.read` events cannot shift the results. Applying or resetting filters starts
-a new browsing window. The requested end date is capped at that timestamp;
-direct `/operator/v1/audit` callers using offsets must likewise retain a fixed
-`to` bound across pages. Regression coverage is in
+a new browsing window. The requested end date also applies within that timestamp;
+direct `/operator/v1/audit` callers using offsets must likewise send the returned
+`as_of` bound across pages. Future bounds are capped by the server's current time.
+Regression coverage is in
 `tests/operator/test_audit_api.py` and `console/lib/audit-pagination.test.ts`.
 
 Password sign-in, SSO and signing re-authentication retain success and refusal

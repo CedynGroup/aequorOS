@@ -2134,34 +2134,57 @@ def test_shared_register_visibility_redaction_and_integrity(
             impersonation_context=str(session.id) if staff else None,
             actor_operator="private-staff@example.test" if staff else None,
         )
+        previous_payload: dict[str, JsonValue] = {**payload, "effective_from": "2026-09-01"}
         if subject == "param_ecl_assumption":
-            credit_params.update_ecl_register(
-                db, ctx, BANK, EclAssumptionUpdate.model_validate(payload)
-            )
-        elif subject == "param_crm_haircut":
-            credit_params.update_crm_register(
-                db, ctx, BANK, CrmHaircutUpdate.model_validate(payload)
-            )
-        elif subject == "param_concentration_limit":
-            credit_params.update_concentration_limit_register(
-                db, ctx, BANK, ConcentrationLimitUpdate.model_validate(payload)
-            )
-        elif subject == "param_credit_threshold":
-            credit_params.update_credit_threshold_register(
-                db, ctx, BANK, CreditThresholdUpdate.model_validate(payload)
-            )
-        elif subject == "param_liquidity_threshold":
-            liquidity_thresholds.update_register(
-                db, ctx, BANK, LiquidityThresholdUpdate.model_validate(payload)
-            )
-        else:
-            liquidity_thresholds.update_haircut_schedule(
-                db, ctx, BANK, LiquidityHaircutUpdate.model_validate(payload)
-            )
-        original = db.scalar(select(AuditEvent).where(AuditEvent.event_type == action))
+            previous_payload["assumptions"] = [
+                {"segment": "ALL", "stage": 1, "pd_pct": "1", "lgd_pct": "40"}
+            ]
+        for current_payload in (previous_payload, payload):
+            if subject == "param_ecl_assumption":
+                credit_params.update_ecl_register(
+                    db, ctx, BANK, EclAssumptionUpdate.model_validate(current_payload)
+                )
+            elif subject == "param_crm_haircut":
+                credit_params.update_crm_register(
+                    db, ctx, BANK, CrmHaircutUpdate.model_validate(current_payload)
+                )
+            elif subject == "param_concentration_limit":
+                credit_params.update_concentration_limit_register(
+                    db, ctx, BANK, ConcentrationLimitUpdate.model_validate(current_payload)
+                )
+            elif subject == "param_credit_threshold":
+                credit_params.update_credit_threshold_register(
+                    db, ctx, BANK, CreditThresholdUpdate.model_validate(current_payload)
+                )
+            elif subject == "param_liquidity_threshold":
+                liquidity_thresholds.update_register(
+                    db, ctx, BANK, LiquidityThresholdUpdate.model_validate(current_payload)
+                )
+            else:
+                liquidity_thresholds.update_haircut_schedule(
+                    db, ctx, BANK, LiquidityHaircutUpdate.model_validate(current_payload)
+                )
+        original = db.scalar(
+            select(AuditEvent)
+            .where(AuditEvent.event_type == action)
+            .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+            .limit(1)
+        )
         assert original is not None
         original_details = TypeAdapter(dict[str, JsonValue]).validate_python(original.details)
         assert original_details["bank_id"] == BANK and original_details["after"] == change
+        model: type[BaseModel] = {
+            "param_ecl_assumption": EclAssumptionUpdate,
+            "param_crm_haircut": CrmHaircutUpdate,
+            "param_concentration_limit": ConcentrationLimitUpdate,
+            "param_credit_threshold": CreditThresholdUpdate,
+            "param_liquidity_threshold": LiquidityThresholdUpdate,
+            "param_liquidity_haircut": LiquidityHaircutUpdate,
+        }[subject]
+        before = TypeAdapter(dict[str, JsonValue]).validate_python(original_details["before"])
+        assert model.model_validate({**payload, **before}) == model.model_validate(
+            {**previous_payload, "effective_from": payload["effective_from"]}
+        )
         historical = AuditEvent(
             organization_id=ORG_1,
             actor_user_id=original.actor_user_id,
@@ -2214,7 +2237,11 @@ def test_shared_register_visibility_redaction_and_integrity(
     sequences: dict[UUID, int | None] = {}
     for bank_id in (BANK, SIBLING, other_jurisdiction, other_class):
         url = f"/api/v1/banks/{bank_id}/audit-log"
-        response = db_client.get(url, headers=headers(ORG_1), params={"event_type": action})
+        response = db_client.get(
+            url,
+            headers=headers(ORG_1),
+            params={"event_type": action, "start": original.created_at.isoformat()},
+        )
         assert response.status_code == 200, response.text
         rows = AuditLogRead.model_validate_json(response.text).events
         if bank_id not in expected_banks:
@@ -2223,7 +2250,7 @@ def test_shared_register_visibility_redaction_and_integrity(
         assert {row.id for row in rows} == expected_ids
         for row in rows:
             assert row.integrity == "verified" and row.sequence
-            assert row.after == change and row.target_id == BANK
+            assert row.before == before and row.after == change and row.target_id == BANK
             if bank_id == BANK:
                 sequences[row.id] = row.sequence
                 assert row.actor == ("private-staff@example.test" if staff else str(USER_1))
@@ -2240,6 +2267,7 @@ def test_shared_register_visibility_redaction_and_integrity(
                         else {}
                     ),
                     "effective_from": "2026-10-01",
+                    "before": before,
                     "after": change,
                     **{
                         key: original_details[key]
@@ -2258,6 +2286,7 @@ def test_shared_register_visibility_redaction_and_integrity(
             headers=headers(ORG_1),
             params={
                 "event_type": action,
+                "start": original.created_at.isoformat(),
                 "actor": "private-staff@example.test" if staff else str(USER_1),
             },
         )

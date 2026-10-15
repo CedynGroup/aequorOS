@@ -20,6 +20,7 @@ from decimal import Decimal
 from typing import cast
 
 from fastapi import HTTPException, status
+from pydantic import JsonValue
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -286,6 +287,7 @@ def update_register(
             detail=f"Threshold percentages must be positive: {', '.join(non_positive)}.",
         )
 
+    previous_thresholds: dict[str, JsonValue] = {}
     now = utc_now()
     for code, pct in payload.thresholds.items():
         open_rows = db.scalars(
@@ -306,6 +308,7 @@ def update_register(
                         "already starts on or after the requested effective date."
                     ),
                 )
+            previous_thresholds[row.threshold_code] = str(row.threshold_pct)
             row.effective_to = payload.effective_from
         db.add(
             ParamLiquidityThreshold(
@@ -332,6 +335,7 @@ def update_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "codes": sorted(payload.thresholds),
+            "before": {"thresholds": previous_thresholds},
             "after": {
                 "thresholds": {code: str(value) for code, value in payload.thresholds.items()}
             },
@@ -414,6 +418,7 @@ def update_haircut_schedule(
             detail=f"Haircut percentages must be within [0, 100]: {', '.join(out_of_range)}.",
         )
 
+    previous_haircuts: dict[str, JsonValue] = {}
     now = utc_now()
     for asset_class, pct in payload.haircuts.items():
         normalized = asset_class.strip().upper()
@@ -434,6 +439,7 @@ def update_haircut_schedule(
                         "already starts on or after the requested effective date."
                     ),
                 )
+            previous_haircuts[row.asset_class] = str(row.haircut_pct)
             row.effective_to = payload.effective_from
         db.add(
             ParamLiquidityHaircut(
@@ -458,6 +464,7 @@ def update_haircut_schedule(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "asset_classes": sorted(cls.strip().upper() for cls in payload.haircuts),
+            "before": {"haircuts": previous_haircuts},
             "after": {
                 "haircuts": {
                     cls.strip().upper(): str(value) for cls, value in payload.haircuts.items()

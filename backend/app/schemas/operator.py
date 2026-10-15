@@ -288,6 +288,7 @@ class OperatorAuditLogListRead(ClosedModel):
     items: list[OperatorAuditLogRead]
     #: Total rows matching the filters (before ``limit``/``offset``).
     total: int
+    as_of: datetime
 
 
 # -- fleet overview --------------------------------------------------------------

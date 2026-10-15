@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query
+from pydantic import AwareDatetime
 
 from app.operator.deps import OperatorAdmin, OperatorDb, record_operator_action
 from app.operator.services import operator_views
@@ -29,6 +30,7 @@ def read_audit_log(  # noqa: PLR0913 - one argument per query parameter
     action: Annotated[str | None, Query(description="Prefix match on the action")] = None,
     from_: Annotated[datetime | None, Query(alias="from")] = None,
     to: datetime | None = None,
+    as_of: Annotated[datetime, AwareDatetime] | None = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> OperatorAuditLogListRead:
@@ -42,6 +44,7 @@ def read_audit_log(  # noqa: PLR0913 - one argument per query parameter
         action=action,
         from_ts=from_,
         to_ts=to,
+        as_of=as_of,
         limit=limit,
         offset=offset,
     )

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,7 +8,7 @@ import {
   RotateCcw,
   Search,
 } from "lucide-react";
-import { getAudit, type AuditLogItem } from "@/lib/api";
+import { createAuditBrowser, type AuditLogItem } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
 import { DASH, fmtTimestamp, fmtTs } from "@/lib/format";
 import {
@@ -51,45 +51,38 @@ const LIMIT_OPTIONS = [25, 50, 100, 200];
 export default function AuditView() {
   const [draft, setDraft] = useState<Filters>(BLANK_FILTERS);
   const [applied, setApplied] = useState<Filters>(BLANK_FILTERS);
-  const [asOf, setAsOf] = useState(() => new Date().toISOString());
+  const browseAudit = useMemo(
+    () =>
+      createAuditBrowser({
+        operatorEmail: applied.operatorEmail || undefined,
+        targetOrg: applied.targetOrg || undefined,
+        action: applied.action || undefined,
+        from: applied.from || undefined,
+        to: applied.to || undefined,
+      }),
+    [applied],
+  );
   const [limit, setLimit] = useState(50);
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<AuditLogItem | null>(null);
 
   const { data, error, loading, reload } = useApi(
     () =>
-      getAudit({
-        asOf,
-        operatorEmail: applied.operatorEmail || undefined,
-        targetOrg: applied.targetOrg || undefined,
-        action: applied.action || undefined,
-        from: applied.from || undefined,
-        to: applied.to || undefined,
+      browseAudit({
         limit,
         offset,
       }),
-    [
-      asOf,
-      applied.operatorEmail,
-      applied.targetOrg,
-      applied.action,
-      applied.from,
-      applied.to,
-      limit,
-      offset,
-    ],
+    [browseAudit, limit, offset],
   );
 
   function apply() {
-    setAsOf(new Date().toISOString());
     setApplied({ ...draft });
     setOffset(0);
   }
 
   function resetFilters() {
-    setAsOf(new Date().toISOString());
     setDraft(BLANK_FILTERS);
-    setApplied(BLANK_FILTERS);
+    setApplied({ ...BLANK_FILTERS });
     setOffset(0);
   }
 

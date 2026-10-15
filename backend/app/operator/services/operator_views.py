@@ -270,10 +270,13 @@ def read_operator_audit_log(  # noqa: PLR0913 - one filter per query parameter
     action: str | None = None,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
+    as_of: datetime | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> OperatorAuditLogListRead:
-    filters = []
+    now = utc_now()
+    bound = min(as_of, now) if as_of is not None else now
+    filters = [OperatorAuditLog.created_at < bound]
     if operator_email is not None:
         filters.append(OperatorAuditLog.operator_email == operator_email)
     if target_org is not None:
@@ -295,7 +298,9 @@ def read_operator_audit_log(  # noqa: PLR0913 - one filter per query parameter
             .offset(offset)
         )
     )
-    return OperatorAuditLogListRead(items=[_audit_log_read(row) for row in rows], total=total)
+    return OperatorAuditLogListRead(
+        items=[_audit_log_read(row) for row in rows], total=total, as_of=bound
+    )
 
 
 # -- fleet overview --------------------------------------------------------------

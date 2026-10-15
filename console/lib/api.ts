@@ -2002,11 +2002,11 @@ export interface AuditLogItem {
 export interface AuditLogResponse {
   items: AuditLogItem[];
   total: number;
+  as_of: string;
 }
 
-/** GET /operator/v1/audit — the append-only operator_audit_log, filterable. */
-export function getAudit(opts: {
-  asOf: string;
+interface AuditLogOptions {
+  asOf?: string;
   operatorEmail?: string;
   targetOrg?: string;
   action?: string;
@@ -2014,23 +2014,44 @@ export function getAudit(opts: {
   to?: string;
   limit?: number;
   offset?: number;
-}): Promise<AuditLogResponse> {
+}
+
+/** GET /operator/v1/audit — the append-only operator_audit_log, filterable. */
+export function getAudit(opts: AuditLogOptions): Promise<AuditLogResponse> {
   return request<AuditLogResponse>(
     `/operator/v1/audit${query({
       operator_email: opts.operatorEmail,
       target_org: opts.targetOrg,
       action: opts.action,
       from: opts.from,
-      to: new Date(
-        Math.min(
-          Date.parse(opts.asOf),
-          opts.to ? Date.parse(opts.to) : Infinity,
-        ),
-      ).toISOString(),
+      to: opts.to ? new Date(opts.to).toISOString() : undefined,
+      as_of: opts.asOf,
       limit: opts.limit,
       offset: opts.offset,
     })}`,
   );
+}
+
+export function createAuditBrowser(
+  filters: Omit<AuditLogOptions, "asOf" | "limit" | "offset"> = {},
+) {
+  let firstPage: Promise<AuditLogResponse> | undefined;
+  return async (
+    opts: Pick<AuditLogOptions, "limit" | "offset">,
+  ): Promise<AuditLogResponse> => {
+    if (firstPage) {
+      const { as_of } = await firstPage;
+      return getAudit({ ...filters, ...opts, asOf: as_of });
+    }
+    const page = getAudit({ ...filters, ...opts });
+    firstPage = page;
+    try {
+      return await page;
+    } catch (error) {
+      firstPage = undefined;
+      throw error;
+    }
+  };
 }
 
 // --------------------------------------------------------------------------

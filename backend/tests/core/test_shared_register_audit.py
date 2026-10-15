@@ -1,5 +1,6 @@
 """Shared-register audit projections execute with the hermetic database."""
 
+from collections.abc import Iterator
 from uuid import UUID
 
 import pytest
@@ -12,8 +13,31 @@ from app.identity.service.audit_log import Filters, read_log
 from app.models import Bank
 from app.operator.services.operator_views import get_tenant_activity
 from app.services.audit import record_event
+from tests.conftest import (
+    ApiTestDatabase,
+    build_test_database,
+    rollback_sessionmaker_lifecycle,
+    seed_demo_tenants,
+    sqlite_database_url,
+)
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, ORG_2, USER_1
+
+
+@pytest.fixture(scope="module")
+def projection_database(tmp_path_factory: pytest.TempPathFactory) -> Iterator[ApiTestDatabase]:
+    with build_test_database(
+        sqlite_database_url(tmp_path_factory, "shared-register-projection"), seed=seed_demo_tenants
+    ) as database:
+        yield database
+
+
+@pytest.fixture
+def projection_session(
+    projection_database: ApiTestDatabase, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[Session]:
+    with rollback_sessionmaker_lifecycle(projection_database, monkeypatch) as maker, maker() as db:
+        yield db
 
 
 @pytest.mark.parametrize(
@@ -28,8 +52,10 @@ from tests.support.helpers import ORG_1, ORG_2, USER_1
     ],
 )
 @pytest.mark.parametrize("staff", [False, True])
-def test_shared_register_bank_projections(db_session: Session, subject: str, staff: bool) -> None:
-    db = db_session
+def test_shared_register_bank_projections(
+    projection_session: Session, subject: str, staff: bool
+) -> None:
+    db = projection_session
     source, sibling, jurisdiction, klass, foreign = (
         "BK-SHARED001",
         "BK-SHARED002",
@@ -77,6 +103,7 @@ def test_shared_register_bank_projections(db_session: Session, subject: str, sta
         "reason": "Private reason",
         "approved_by": "Private approver",
         "support_reference": "PRIVATE-REF",
+        "before": {"value": "20"},
         "after": {"value": "25"},
         "effective_from": "2026-10-01",
     }
@@ -123,6 +150,7 @@ def test_shared_register_bank_projections(db_session: Session, subject: str, sta
         assert len(page.events) == 1
         entry = page.events[0]
         assert entry.id == original_id and entry.target_id == source
+        assert entry.before == {"value": "20"}
         assert entry.after == {"value": "25"} and entry.details["bank_id"] == source
         if bank_id == source:
             assert entry.actor == ("private@example.test" if staff else str(USER_1))
@@ -132,6 +160,7 @@ def test_shared_register_bank_projections(db_session: Session, subject: str, sta
             assert entry.actor is None and entry.reason is None and entry.support_reference is None
             assert entry.details == {
                 "bank_id": source,
+                "before": {"value": "20"},
                 "after": {"value": "25"},
                 "effective_from": "2026-10-01",
                 **({"institution_class": "bank"} if subject == "param_liquidity_threshold" else {}),

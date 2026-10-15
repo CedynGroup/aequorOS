@@ -451,11 +451,11 @@ def _present(row: StoredEvent, bank_id: str) -> AuditEventRead:
                 "rows",
                 "codes",
                 "asset_classes",
+                "before",
                 "after",
                 "outcome",
             }
         }
-        item.before = None
         item.after = item.details.get("after")
         item.source = None
     return item

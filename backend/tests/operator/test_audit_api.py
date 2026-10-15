@@ -7,14 +7,17 @@ and the operator_admin gate.
 
 from __future__ import annotations
 
-from typing import cast
+from datetime import timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
 from app.models import OperatorAuditLog
+from app.operator.services import operator_views
+from app.schemas.operator import OperatorAuditLogListRead
 from tests.operator.conftest import operator_headers, provision_payload
 from tests.operator.test_operator_auth import PASSWORD, bearer, login, make_operator
 
@@ -96,36 +99,38 @@ def test_target_org_filter(operator_client: TestClient) -> None:
 
 
 def test_limit_and_offset_page_without_changing_total(
-    operator_client: TestClient, operator_db: Session
+    operator_client: TestClient, operator_db: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _seed_actions(operator_client)
     operator_client.get(AUDIT, headers=operator_headers())
-    params: dict[str, str | int] = {"to": utc_now().isoformat(), "limit": 2, "offset": 0}
-    page1 = operator_client.get(AUDIT, params=params, headers=operator_headers()).json()
-    assert len(page1["items"]) == 2
-    assert page1["total"] == 4
-    page2 = operator_client.get(
+    server_now = utc_now()
+    browser_now = server_now + timedelta(minutes=2)
+    monkeypatch.setattr(operator_views, "utc_now", lambda: server_now)
+    response = operator_client.get(
+        AUDIT, params={"as_of": browser_now.isoformat(), "limit": 2}, headers=operator_headers()
+    )
+    assert response.status_code == 200, response.text
+    page1 = OperatorAuditLogListRead.model_validate_json(response.text)
+    assert page1.as_of == server_now and page1.as_of < browser_now
+    assert len(page1.items) == 2 and page1.total == 4
+    params: dict[str, str | int] = {"as_of": page1.as_of.isoformat(), "limit": 2, "offset": 0}
+    response = operator_client.get(
         AUDIT, params={**params, "offset": 2}, headers=operator_headers()
-    ).json()
-    assert len(page2["items"]) == 2
-    assert page2["total"] == 4
-    assert {i["id"] for i in page1["items"]}.isdisjoint({i["id"] for i in page2["items"]})
-    assert "audit.read" in {
-        i["action"] for i in cast(list[dict[str, object]], page1["items"] + page2["items"])
-    }
-    previous = cast(
-        dict[str, object],
-        operator_client.get(AUDIT, params=params, headers=operator_headers()).json(),
     )
+    assert response.status_code == 200, response.text
+    page2 = OperatorAuditLogListRead.model_validate_json(response.text)
+    assert len(page2.items) == 2 and page2.total == 4 and page2.as_of == page1.as_of
+    assert {item.id for item in page1.items}.isdisjoint({item.id for item in page2.items})
+    assert "audit.read" in {item.action for item in page1.items + page2.items}
+    response = operator_client.get(AUDIT, params=params, headers=operator_headers())
+    assert response.status_code == 200, response.text
+    previous = OperatorAuditLogListRead.model_validate_json(response.text)
     assert previous == page1
-    resized = cast(
-        dict[str, object],
-        operator_client.get(
-            AUDIT, params={**params, "limit": 3}, headers=operator_headers()
-        ).json(),
-    )
-    assert resized["total"] == 4
-    assert resized["items"] == (page1["items"] + page2["items"])[:3]
+    response = operator_client.get(AUDIT, params={**params, "limit": 3}, headers=operator_headers())
+    assert response.status_code == 200, response.text
+    resized = OperatorAuditLogListRead.model_validate_json(response.text)
+    assert resized.total == 4 and resized.as_of == page1.as_of
+    assert resized.items == (page1.items + page2.items)[:3]
     assert (
         operator_db.scalar(
             select(func.count())
