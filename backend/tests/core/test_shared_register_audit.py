@@ -135,7 +135,7 @@ def test_shared_register_bank_projections(
     )
     db.flush()
     original_id = original.id
-    expected_banks = {source, sibling} | (
+    expected_banks: set[str] = {source, sibling} | (
         {klass} if subject != "param_liquidity_threshold" else set()
     )
     activity = get_tenant_activity(db, ORG_1, 100)

@@ -1020,8 +1020,7 @@
  "app.operator.services.operator_views": {
   "reportAny": 1,
   "reportMissingParameterType": 1,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 5,
+  "reportUnknownArgumentType": 1,
   "reportUnknownParameterType": 1
  },
  "app.operator.services.regulatory_parameters": {
@@ -3818,7 +3817,7 @@
   "reportUnusedFunction": 3
  },
  "tests.operator.test_audit_api": {
-  "reportAny": 19
+  "reportAny": 13
  },
  "tests.operator.test_audit_log": {
   "reportAny": 1

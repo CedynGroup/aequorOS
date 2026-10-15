@@ -2076,6 +2076,79 @@ def _update_shared_register(
         )
 
 
+def _prepare_shared_register_banks() -> tuple[str, str]:
+    other_jurisdiction = "BK-AUDIT004"
+    other_class = "BK-AUDIT005"
+    with _session() as db:
+        for bank_id, jurisdiction, currency, kind in (
+            (other_jurisdiction, "NG", "NGN", "universal_bank"),
+            (other_class, "GH", "GHS", "savings_and_loans"),
+        ):
+            db.add(
+                Bank(
+                    id=bank_id,
+                    organization_id=ORG_1,
+                    name="Unaffected audit fixture",
+                    short_name="Audit fixture",
+                    currency=currency,
+                    jurisdiction_code=jurisdiction,
+                    license_type=kind,
+                    institution_type=kind,
+                )
+            )
+        db.commit()
+    for bank_id in (BANK, SIBLING, other_jurisdiction, other_class):
+        grant(RoleBundle.SECURITY_OFFICER, bank=bank_id)
+    return other_jurisdiction, other_class
+
+
+def _assert_shared_register_change_values(
+    original_details: dict[str, JsonValue],
+    subject: str,
+    payload: dict[str, JsonValue],
+    previous_payload: dict[str, JsonValue],
+) -> tuple[dict[str, JsonValue], dict[str, JsonValue]]:
+    after = TypeAdapter(dict[str, JsonValue]).validate_python(original_details["after"])
+    model: type[BaseModel] = {
+        "param_ecl_assumption": EclAssumptionUpdate,
+        "param_crm_haircut": CrmHaircutUpdate,
+        "param_concentration_limit": ConcentrationLimitUpdate,
+        "param_credit_threshold": CreditThresholdUpdate,
+        "param_liquidity_threshold": LiquidityThresholdUpdate,
+        "param_liquidity_haircut": LiquidityHaircutUpdate,
+    }[subject]
+    assert model.model_validate({**payload, **after}) == model.model_validate(payload)
+    before = TypeAdapter(dict[str, JsonValue]).validate_python(original_details["before"])
+    assert model.model_validate({**payload, **before}) == model.model_validate(
+        {**previous_payload, "effective_from": payload["effective_from"]}
+    )
+    return before, after
+
+
+def _assert_shared_register_inspection_visibility(
+    db: Session, original_id: UUID, expected_banks: set[str], staff: bool
+) -> None:
+    for bank_id in expected_banks:
+        db.execute(
+            text(
+                "SELECT set_config('app.organization_id', :org, true), "
+                "set_config('app.audit_bank_id', :bank, true)"
+            ),
+            {"org": ORG_1, "bank": bank_id},
+        )
+        context = cast(
+            object,
+            db.scalar(
+                text("SELECT bank_audit_inspection_context('audit_events', :event)"),
+                {"event": original_id},
+            ),
+        )
+        if staff and bank_id == BANK:
+            assert context is not None
+        else:
+            assert context is None
+
+
 @pytest.mark.parametrize("staff", [False, True])
 @pytest.mark.parametrize(
     ("subject", "action", "change"),
@@ -2116,28 +2189,7 @@ def _update_shared_register(
 def test_shared_register_visibility_redaction_and_integrity(
     db_client: TestClient, subject: str, action: str, change: dict[str, JsonValue], staff: bool
 ) -> None:
-    other_jurisdiction = "BK-AUDIT004"
-    other_class = "BK-AUDIT005"
-    with _session() as db:
-        for bank_id, jurisdiction, currency, kind in (
-            (other_jurisdiction, "NG", "NGN", "universal_bank"),
-            (other_class, "GH", "GHS", "savings_and_loans"),
-        ):
-            db.add(
-                Bank(
-                    id=bank_id,
-                    organization_id=ORG_1,
-                    name="Unaffected audit fixture",
-                    short_name="Audit fixture",
-                    currency=currency,
-                    jurisdiction_code=jurisdiction,
-                    license_type=kind,
-                    institution_type=kind,
-                )
-            )
-        db.commit()
-    for bank_id in (BANK, SIBLING, other_jurisdiction, other_class):
-        grant(RoleBundle.SECURITY_OFFICER, bank=bank_id)
+    other_jurisdiction, other_class = _prepare_shared_register_banks()
     payload: dict[str, JsonValue] = {
         **change,
         "effective_from": "2026-10-01",
@@ -2176,19 +2228,8 @@ def test_shared_register_visibility_redaction_and_integrity(
         assert original is not None
         original_details = TypeAdapter(dict[str, JsonValue]).validate_python(original.details)
         assert original_details["bank_id"] == BANK
-        after = TypeAdapter(dict[str, JsonValue]).validate_python(original_details["after"])
-        model: type[BaseModel] = {
-            "param_ecl_assumption": EclAssumptionUpdate,
-            "param_crm_haircut": CrmHaircutUpdate,
-            "param_concentration_limit": ConcentrationLimitUpdate,
-            "param_credit_threshold": CreditThresholdUpdate,
-            "param_liquidity_threshold": LiquidityThresholdUpdate,
-            "param_liquidity_haircut": LiquidityHaircutUpdate,
-        }[subject]
-        assert model.model_validate({**payload, **after}) == model.model_validate(payload)
-        before = TypeAdapter(dict[str, JsonValue]).validate_python(original_details["before"])
-        assert model.model_validate({**payload, **before}) == model.model_validate(
-            {**previous_payload, "effective_from": payload["effective_from"]}
+        before, after = _assert_shared_register_change_values(
+            original_details, subject, payload, previous_payload
         )
         historical = AuditEvent(
             organization_id=ORG_1,
@@ -2220,25 +2261,7 @@ def test_shared_register_visibility_redaction_and_integrity(
         assert {
             item.bank_id for item in activity.items if item.summary.startswith(action)
         } == expected_banks
-        for bank_id in expected_banks:
-            db.execute(
-                text(
-                    "SELECT set_config('app.organization_id', :org, true), "
-                    "set_config('app.audit_bank_id', :bank, true)"
-                ),
-                {"org": ORG_1, "bank": bank_id},
-            )
-            context = cast(
-                object,
-                db.scalar(
-                    text("SELECT bank_audit_inspection_context('audit_events', :event)"),
-                    {"event": original.id},
-                ),
-            )
-            if staff and bank_id == BANK:
-                assert context is not None
-            else:
-                assert context is None
+        _assert_shared_register_inspection_visibility(db, original.id, expected_banks, staff)
     sequences: dict[UUID, int | None] = {}
     for bank_id in (BANK, SIBLING, other_jurisdiction, other_class):
         url = f"/api/v1/banks/{bank_id}/audit-log"

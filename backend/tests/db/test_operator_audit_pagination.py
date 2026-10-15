@@ -32,6 +32,25 @@ pytestmark = [
 ]
 
 
+def _assert_reader_waits_for_writer(
+    administrator: Engine, writer_pid: int, reader_pid: int
+) -> None:
+    blocked = False
+    deadline = time.monotonic() + 10
+    with administrator.connect() as observer:
+        while not blocked and time.monotonic() < deadline:
+            blocked = cast(
+                bool,
+                observer.scalar(
+                    text("SELECT :writer = ANY(pg_blocking_pids(:reader))"),
+                    {"writer": writer_pid, "reader": reader_pid},
+                ),
+            )
+            if not blocked:
+                time.sleep(0.01)
+    assert blocked
+
+
 def test_cursor_excludes_late_commit_ahead_of_the_last_displayed_row(
     administrator: Engine, role_banks: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -93,20 +112,7 @@ def test_cursor_excludes_late_commit_ahead_of_the_last_displayed_row(
         try:
             reader_pid = reader_pids.get(timeout=10)
             assert ready.wait(timeout=10)
-            blocked = False
-            deadline = time.monotonic() + 10
-            with administrator.connect() as observer:
-                while not blocked and time.monotonic() < deadline:
-                    blocked = cast(
-                        bool,
-                        observer.scalar(
-                            text("SELECT :writer = ANY(pg_blocking_pids(:reader))"),
-                            {"writer": writer_pid, "reader": reader_pid},
-                        ),
-                    )
-                    if not blocked:
-                        time.sleep(0.01)
-            assert blocked
+            _assert_reader_waits_for_writer(administrator, writer_pid, reader_pid)
             pending.commit()
             first = future.result(timeout=10)
         finally:
