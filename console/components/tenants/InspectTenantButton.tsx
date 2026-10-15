@@ -22,7 +22,7 @@ import { Button, Field, Input, Modal, Select, Textarea } from "@/components/ui";
 // backend's InspectorMode values, sent as-is.
 type InspectMode = "consent" | "break_glass";
 
-const TTL_PRESETS = [15, 30, 60, 120];
+const TTL_PRESETS = [15, 30, 60];
 
 export function InspectTenantButton({
   orgId,
