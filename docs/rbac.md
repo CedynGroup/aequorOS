@@ -1128,7 +1128,8 @@ transfer remain staff-plane work.
 **Phase 1 — org admin console + invites.**
 The Members identity/grant table and scalar grant assignment are built. The
 remaining phase adds `organizations`/`users` fields, `invitations`, invite
-modal, seat limits, suspend/deactivate, and `audit_log` (write path + view).
+modal, seat limits, and suspend/deactivate. Audit delivery follows
+[§12.5](#125-audit-log-view).
 Banks will then be able to onboard their own people by email. **The invite modal
 offers the unit presets from §5.1** (Treasury / ALM / Risk / Finance / Credit / Operations
 / Executive / Internal Audit → the §5 persona bundles) so an org admin invites

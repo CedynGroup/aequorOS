@@ -191,7 +191,7 @@ verification resolve it through the same catalogue. Recorded `note` explanations
 become the public `reason`; batch actions name the batch as their target, and bank
 actions without a more specific target name their bank. New inspector sessions
 require a support reference, captured by both console entry forms. Both forms
-display session duration in hours; the API continues to accept whole
+default to hours and offer a minutes/hours selector; the API continues to accept whole
 `ttl_minutes` within the bounds in `InspectorSessionCreate`. The Inspector's
 five-minute input steps are rounded to whole minutes before submission. The shared
 staff writer snapshots the caller-owned session's explanation and reference,

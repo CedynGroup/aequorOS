@@ -20,7 +20,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from pydantic import AwareDatetime, BaseModel
-from sqlalchemy import JSON, Boolean, String, bindparam, func, select, text, tuple_
+from sqlalchemy import JSON, Boolean, String, bindparam, func, literal, select, text, tuple_
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session
 
@@ -311,7 +311,7 @@ def read_operator_audit_log(  # noqa: PLR0913 - one filter per query parameter
     if after is not None:
         filters.append(
             tuple_(OperatorAuditLog.created_at, OperatorAuditLog.id)
-            < tuple_(after.created_at, after.event_id)
+            < tuple_(literal(after.created_at), literal(after.event_id))
         )
     rows = list(
         db.scalars(
@@ -920,10 +920,8 @@ def _activity_event_banks(db: Session, event: AuditEvent) -> list[str | None]:
             )
         )
     marker: object = details.get("bank_id")
-    if isinstance(marker, str):
-        return [marker]
-    if event.entity_type == "bank":
-        return [event.entity_id]
+    if isinstance(marker, str) or event.entity_type == "bank":
+        return [marker if isinstance(marker, str) else event.entity_id]
     scope: object = details.get("scope")
     institution: object = details.get("institution_id")
     if isinstance(scope, dict):
