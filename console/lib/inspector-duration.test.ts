@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { startInspectorSession } from "./api";
-import { inspectorHours, inspectorMinutes } from "./inspector-duration";
+import {
+  inspectorHours,
+  inspectorMinutes,
+  inspectorDurationValue,
+  inspectorDurationMinutes,
+} from "./inspector-duration";
 
 test("short and multi-hour sessions retain useful hour precision", () => {
   assert.deepEqual([15, 30, 60, 120].map(inspectorHours), [0.25, 0.5, 1, 2]);
@@ -62,4 +67,40 @@ test("hour inputs submit the existing minute-based API contract", async (t) => {
       ttl_minutes,
     })),
   );
+});
+
+test("switching duration units preserves every available minute value", () => {
+  for (let minutes = 15; minutes <= 120; minutes += 5) {
+    for (const unit of ["minutes", "hours"] as const) {
+      const displayed = inspectorDurationValue(minutes, unit);
+      assert.equal(displayed, unit === "minutes" ? minutes : minutes / 60);
+      assert.equal(inspectorDurationMinutes(displayed, unit), minutes);
+    }
+  }
+});
+
+test("both selected units submit the same session duration", async (t) => {
+  const submitted: unknown[] = [];
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async (_url: string, init: RequestInit) => {
+      submitted.push(JSON.parse(String(init.body)));
+      return Response.json({ session_id: "synthetic-session" });
+    },
+  );
+  for (const [value, unit] of [
+    [0.5, "hours"],
+    [30, "minutes"],
+  ] as const) {
+    await startInspectorSession({
+      organization_id: "OR-DEMO0001",
+      reason: "Demo investigation",
+      support_reference: "DEMO-123",
+      mode: "consent",
+      ttl_minutes: inspectorDurationMinutes(value, unit),
+    });
+  }
+  assert.deepEqual(submitted[0], submitted[1]);
+  assert.equal((submitted[0] as { ttl_minutes: number }).ttl_minutes, 30);
 });

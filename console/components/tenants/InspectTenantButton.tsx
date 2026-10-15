@@ -37,6 +37,9 @@ export function InspectTenantButton({
   const [supportReference, setSupportReference] = useState("");
   const [mode, setMode] = useState<InspectMode>("consent");
   const [ttl, setTtl] = useState(30);
+  const [durationUnit, setDurationUnit] = useState<"hours" | "minutes">(
+    "hours",
+  );
 
   const start = useMutation(startInspectorSession, {
     successMessage: "Inspector session started",
@@ -48,6 +51,7 @@ export function InspectTenantButton({
       setSupportReference("");
       setMode("consent");
       setTtl(30);
+      setDurationUnit("hours");
     },
   });
 
@@ -138,18 +142,38 @@ export function InspectTenantButton({
                 </option>
               </Select>
             </Field>
-            <Field label="Session duration (hours)">
-              <Select
-                value={String(ttl)}
-                onChange={(e) => setTtl(Number(e.target.value))}
-              >
-                {TTL_PRESETS.map((m) => (
-                  <option key={m} value={m}>
-                    {inspectorHours(m)} h
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            <div className="grid grid-cols-2 items-start gap-2">
+              <Field label="Session duration" htmlFor="tenant-inspect-duration">
+                <Select
+                  id="tenant-inspect-duration"
+                  value={String(ttl)}
+                  onChange={(e) => setTtl(Number(e.target.value))}
+                >
+                  {TTL_PRESETS.map((m) => (
+                    <option key={m} value={m}>
+                      {durationUnit === "hours"
+                        ? `${inspectorHours(m)} h`
+                        : `${m} min`}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Unit" htmlFor="tenant-inspect-duration-unit">
+                <Select
+                  id="tenant-inspect-duration-unit"
+                  aria-label="Session duration unit"
+                  value={durationUnit}
+                  onChange={(e) =>
+                    setDurationUnit(
+                      e.target.value === "minutes" ? "minutes" : "hours",
+                    )
+                  }
+                >
+                  <option value="hours">Hours</option>
+                  <option value="minutes">Minutes</option>
+                </Select>
+              </Field>
+            </div>
           </div>
 
           {breakGlass && (

@@ -35,7 +35,11 @@ import {
 } from "@/components/ui";
 import { AdminBoundary } from "./AdminBoundary";
 import { isSessionLive } from "./util";
-import { inspectorHours, inspectorMinutes } from "@/lib/inspector-duration";
+import {
+  inspectorDurationValue,
+  inspectorDurationMinutes,
+  type InspectorDurationUnit,
+} from "@/lib/inspector-duration";
 
 interface StartForm {
   organization_id: string;
@@ -59,6 +63,8 @@ export default function InspectorView() {
   const [activeOnly, setActiveOnly] = useState(false);
   const [orgFilter, setOrgFilter] = useState("");
   const [startOpen, setStartOpen] = useState(false);
+  const [durationUnit, setDurationUnit] =
+    useState<InspectorDurationUnit>("hours");
   const [form, setForm] = useState<StartForm>(BLANK_FORM);
   const [formErr, setFormErr] = useState<
     Partial<Record<keyof StartForm, string>>
@@ -113,6 +119,7 @@ export default function InspectorView() {
 
   function openStart() {
     setForm(BLANK_FORM);
+    setDurationUnit("hours");
     setFormErr({});
     startM.reset();
     setStartOpen(true);
@@ -131,7 +138,10 @@ export default function InspectorView() {
       form.ttl_minutes < 15 ||
       form.ttl_minutes > 60
     ) {
-      errs.ttl_minutes = "Session duration must be between 0.25 and 1 hour.";
+      errs.ttl_minutes =
+        durationUnit === "hours"
+          ? "Session duration must be between 0.25 and 1 hour."
+          : "Session duration must be between 15 and 60 minutes.";
     }
     setFormErr(errs);
     if (Object.keys(errs).length > 0) return;
@@ -504,28 +514,50 @@ export default function InspectorView() {
               </Select>
             </Field>
 
-            <Field
-              label="Session duration (hours)"
-              required
-              error={formErr.ttl_minutes}
-              htmlFor="insp-ttl"
-            >
-              <Input
-                id="insp-ttl"
-                type="number"
-                min={0.25}
-                max={1}
-                step={5 / 60}
-                value={String(inspectorHours(form.ttl_minutes))}
-                invalid={Boolean(formErr.ttl_minutes)}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    ttl_minutes: inspectorMinutes(Number(e.target.value)),
-                  }))
-                }
-              />
-            </Field>
+            <div className="grid grid-cols-2 items-start gap-2">
+              <Field
+                label="Session duration"
+                required
+                error={formErr.ttl_minutes}
+                htmlFor="insp-ttl"
+              >
+                <Input
+                  id="insp-ttl"
+                  type="number"
+                  min={durationUnit === "hours" ? 0.25 : 15}
+                  max={durationUnit === "hours" ? 1 : 60}
+                  step={durationUnit === "hours" ? 5 / 60 : 5}
+                  value={String(
+                    inspectorDurationValue(form.ttl_minutes, durationUnit),
+                  )}
+                  invalid={Boolean(formErr.ttl_minutes)}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      ttl_minutes: inspectorDurationMinutes(
+                        Number(e.target.value),
+                        durationUnit,
+                      ),
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="Unit" htmlFor="insp-duration-unit">
+                <Select
+                  id="insp-duration-unit"
+                  aria-label="Session duration unit"
+                  value={durationUnit}
+                  onChange={(e) =>
+                    setDurationUnit(
+                      e.target.value === "minutes" ? "minutes" : "hours",
+                    )
+                  }
+                >
+                  <option value="hours">Hours</option>
+                  <option value="minutes">Minutes</option>
+                </Select>
+              </Field>
+            </div>
           </div>
 
           {form.mode === "break_glass" && (
