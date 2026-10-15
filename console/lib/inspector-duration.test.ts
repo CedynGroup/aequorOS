@@ -19,10 +19,16 @@ test("five-minute steps in either direction produce whole API minutes", () => {
   assert.equal(inspectorMinutes(0.5833333333333331), 35);
   for (let minutes = 15; minutes <= 60; minutes += 5) {
     if (minutes < 60) {
-      assert.equal(inspectorMinutes(inspectorHours(minutes) + 5 / 60), minutes + 5);
+      assert.equal(
+        inspectorMinutes(inspectorHours(minutes) + 5 / 60),
+        minutes + 5,
+      );
     }
     if (minutes > 15) {
-      assert.equal(inspectorMinutes(inspectorHours(minutes) - 5 / 60), minutes - 5);
+      assert.equal(
+        inspectorMinutes(inspectorHours(minutes) - 5 / 60),
+        minutes - 5,
+      );
     }
   }
 });

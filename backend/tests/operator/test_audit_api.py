@@ -7,6 +7,8 @@ and the operator_admin gate.
 
 from __future__ import annotations
 
+from typing import cast
+
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -99,9 +101,7 @@ def test_limit_and_offset_page_without_changing_total(
     _seed_actions(operator_client)
     operator_client.get(AUDIT, headers=operator_headers())
     params: dict[str, str | int] = {"to": utc_now().isoformat(), "limit": 2, "offset": 0}
-    page1 = operator_client.get(
-        AUDIT, params=params, headers=operator_headers()
-    ).json()
+    page1 = operator_client.get(AUDIT, params=params, headers=operator_headers()).json()
     assert len(page1["items"]) == 2
     assert page1["total"] == 4
     page2 = operator_client.get(
@@ -110,12 +110,20 @@ def test_limit_and_offset_page_without_changing_total(
     assert len(page2["items"]) == 2
     assert page2["total"] == 4
     assert {i["id"] for i in page1["items"]}.isdisjoint({i["id"] for i in page2["items"]})
-    assert "audit.read" in {i["action"] for i in page1["items"] + page2["items"]}
-    previous = operator_client.get(AUDIT, params=params, headers=operator_headers()).json()
+    assert "audit.read" in {
+        i["action"] for i in cast(list[dict[str, object]], page1["items"] + page2["items"])
+    }
+    previous = cast(
+        dict[str, object],
+        operator_client.get(AUDIT, params=params, headers=operator_headers()).json(),
+    )
     assert previous == page1
-    resized = operator_client.get(
-        AUDIT, params={**params, "limit": 3}, headers=operator_headers()
-    ).json()
+    resized = cast(
+        dict[str, object],
+        operator_client.get(
+            AUDIT, params={**params, "limit": 3}, headers=operator_headers()
+        ).json(),
+    )
     assert resized["total"] == 4
     assert resized["items"] == (page1["items"] + page2["items"])[:3]
     assert (
