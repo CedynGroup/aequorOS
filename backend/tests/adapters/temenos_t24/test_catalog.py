@@ -125,7 +125,16 @@ def test_override_can_enable_a_reference_domain_with_dataset_key() -> None:
     catalog = load_mode_catalog("OFS")
     overridden = apply_overrides(
         catalog,
-        {"HISTORICAL_BALANCES": {"supported": True, "dataset_key": "historical_financials"}},
+        {
+            "HISTORICAL_BALANCES": {
+                "supported": True,
+                "dataset_key": "historical_financials",
+                "field_map": {
+                    "PERIOD.END": "period_end",
+                    "NET.INTEREST": "net_interest_income_ghs",
+                },
+            }
+        },
     )
     assert CoreBankingDomain.HISTORICAL_BALANCES in supported_domains(overridden)
 

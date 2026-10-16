@@ -51,21 +51,19 @@ UNIT_FIELD_MAX_LENGTHS: dict[str, int] = {
     "region": 120,
 }
 
-SCHEMA = register(
-    ReferenceSchema(
-        kind="business_units",
-        description=(
-            "Branch / business-unit register: identity, the bank's declared region, and the "
-            "hierarchy and outlet / cost-centre keys that tie a unit to the rest of its books"
-        ),
-        grain="one row per business unit; the whole register per push (latest as-of wins)",
-        required=("business_unit_id", "business_unit_name"),
-        optional=("region", "parent_unit_id", "outlet_number", "cost_centre", "notes"),
-        # The widths of ``bi_dim_branch.branch_code`` / ``name`` / ``region``, which
-        # carry these three verbatim (pinned by test against the model). A longer
-        # value is refused here rather than failing the whole mart build on Postgres.
-        max_lengths=UNIT_FIELD_MAX_LENGTHS,
-    )
+_DECLARED = ReferenceSchema(
+    kind="business_units",
+    description=(
+        "Branch / business-unit register: identity, the bank's declared region, and the "
+        "hierarchy and outlet / cost-centre keys that tie a unit to the rest of its books"
+    ),
+    grain="one row per business unit; the whole register per push (latest as-of wins)",
+    required=("business_unit_id", "business_unit_name"),
+    optional=("region", "parent_unit_id", "outlet_number", "cost_centre", "notes"),
+    # The widths of ``bi_dim_branch.branch_code`` / ``name`` / ``region``, which
+    # carry these three verbatim (pinned by test against the model). A longer
+    # value is refused here rather than failing the whole mart build on Postgres.
+    max_lengths=UNIT_FIELD_MAX_LENGTHS,
 )
 
 
@@ -86,13 +84,13 @@ def normalise_row(row: Mapping[str, object]) -> dict[str, object]:
     return normalised
 
 
-def validate_business_unit_row(row: dict) -> list[str]:
+def validate_business_unit_row(row: Mapping[str, object]) -> list[str]:
     """Schema problems AFTER alias resolution — so a row that uses the documented
     spelling is well-formed, while a row that uses neither is told the canonical
     name — plus the two rules the register's own shape imposes: a field spelt
     both ways must agree with itself, and a unit cannot be its own parent."""
     normalised = normalise_row(row)
-    problems = SCHEMA.validate_row(normalised)
+    problems = _DECLARED.validate_row(normalised)
     for alias, canonical in ALIASES.items():
         canonical_value, alias_value = row.get(canonical), row.get(alias)
         if canonical_value in (None, "") or alias_value in (None, ""):
@@ -113,4 +111,4 @@ def validate_business_unit_row(row: dict) -> list[str]:
 # to. Re-registered so ``schema_for('business_units')`` returns the schema WITH its
 # rules — the ingestion path asks ``problems_for``, and without this binding it
 # would silently get the declarative half only (audit A7-07 / H-027).
-SCHEMA = register(dataclasses.replace(SCHEMA, row_validator=validate_business_unit_row))
+SCHEMA = register(dataclasses.replace(_DECLARED, row_validator=validate_business_unit_row))

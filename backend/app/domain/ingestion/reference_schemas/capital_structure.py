@@ -15,19 +15,12 @@ Docs: docs/API_INTEGRATION.md §3.5.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 from decimal import Decimal, InvalidOperation
-from typing import Protocol, cast
 
 from app.domain.ingestion.capital_tiers import DOCUMENTED_TIERS, parse_capital_tier
 
 from . import ReferenceSchema, register
-
-
-class _DeclarativeChecks(Protocol):
-    """``ReferenceSchema.validate_row`` with the row typed (the base leaves it bare)."""
-
-    def validate_row(self, row: dict[str, object], /) -> list[str]: ...
-
 
 _DECLARED = ReferenceSchema(
     kind="capital_structure",
@@ -40,9 +33,9 @@ _DECLARED = ReferenceSchema(
 )
 
 
-def validate_capital_structure_row(row: dict[str, object]) -> list[str]:
+def validate_capital_structure_row(row: Mapping[str, object]) -> list[str]:
     """Schema problems plus the tier vocabulary rule."""
-    problems = cast(_DeclarativeChecks, _DECLARED).validate_row(row)
+    problems = _DECLARED.validate_row(row)
     amount = row.get("amount_ghs")
     if amount not in (None, ""):
         try:
