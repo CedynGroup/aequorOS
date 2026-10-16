@@ -1020,8 +1020,7 @@
  "app.operator.services.operator_views": {
   "reportAny": 1,
   "reportMissingParameterType": 1,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 5,
+  "reportUnknownArgumentType": 1,
   "reportUnknownParameterType": 1
  },
  "app.operator.services.regulatory_parameters": {
@@ -3173,12 +3172,12 @@
   "reportAny": 1,
   "reportDeprecated": 4,
   "reportMissingParameterType": 4,
-  "reportMissingTypeArgument": 8,
+  "reportMissingTypeArgument": 7,
   "reportUnknownArgumentType": 4,
   "reportUnknownLambdaType": 4,
   "reportUnknownMemberType": 9,
-  "reportUnknownParameterType": 12,
-  "reportUnknownVariableType": 9,
+  "reportUnknownParameterType": 11,
+  "reportUnknownVariableType": 8,
   "reportUnusedFunction": 10
  },
  "tests.core.test_error_boundary": {
@@ -3812,14 +3811,13 @@
   "reportMissingTypeArgument": 3,
   "reportMissingTypeStubs": 1,
   "reportPrivateUsage": 3,
-  "reportUnknownLambdaType": 2,
   "reportUnknownMemberType": 1,
   "reportUnknownParameterType": 3,
-  "reportUnknownVariableType": 3,
+  "reportUnknownVariableType": 2,
   "reportUnusedFunction": 3
  },
  "tests.operator.test_audit_api": {
-  "reportAny": 19
+  "reportAny": 13
  },
  "tests.operator.test_audit_log": {
   "reportAny": 1
@@ -5111,8 +5109,8 @@
  },
  "tests.test_database_fixture_isolation": {
   "reportPrivateUsage": 5,
-  "reportUnknownMemberType": 5,
-  "reportUnknownVariableType": 6
+  "reportUnknownMemberType": 1,
+  "reportUnknownVariableType": 2
  },
  "tests.test_health": {
   "reportAny": 8,

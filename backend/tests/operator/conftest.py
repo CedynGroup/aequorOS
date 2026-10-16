@@ -88,6 +88,7 @@ def start_inspection(
     response = client.post(
         "/operator/v1/inspector/sessions",
         json={
+            "support_reference": "SUP-TEST",
             "organization_id": organization_id,
             "reason": "test inspection",
             "mode": mode,

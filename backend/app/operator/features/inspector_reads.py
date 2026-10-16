@@ -40,6 +40,7 @@ def get_tenant_metrics(org_id: str, db: OperatorDb, operator: Operator) -> Tenan
     record_operator_action(
         db,
         operator,
+        resources=result,
         action="inspector.read.metrics",
         target_org=organization_id,
         detail={"session_id": str(session.id)},
@@ -63,6 +64,7 @@ def get_tenant_findings(
     record_operator_action(
         db,
         operator,
+        resources=result,
         action="inspector.read.findings",
         target_org=organization_id,
         detail={"session_id": str(session.id)},
@@ -86,6 +88,7 @@ def get_tenant_ingestion(
     record_operator_action(
         db,
         operator,
+        resources=result,
         action="inspector.read.ingestion",
         target_org=organization_id,
         detail={"session_id": str(session.id)},
@@ -107,6 +110,7 @@ def get_tenant_ingestion_batch(
     record_operator_action(
         db,
         operator,
+        resources=result,
         action="inspector.read.ingestion_batch",
         target_org=organization_id,
         detail={"session_id": str(session.id), "batch_id": str(batch_id)},
@@ -126,6 +130,7 @@ def get_tenant_config(org_id: str, db: OperatorDb, operator: Operator) -> Tenant
     record_operator_action(
         db,
         operator,
+        resources=result,
         action="inspector.read.config",
         target_org=organization_id,
         detail={"session_id": str(session.id)},

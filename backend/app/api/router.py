@@ -92,6 +92,7 @@ from app.icaap.api.manage_icaap_supervisory_addons import (
     router as icaap_supervisory_addons_router,
 )
 from app.icaap.api.manage_icaap_workflow import router as icaap_workflow_router
+from app.identity.api.audit_log import router as audit_log_router
 from app.identity.api.auth import router as auth_router
 from app.identity.api.list_organization_users import router as organization_users_router
 from app.identity.api.manage_authorization import router as authorization_router
@@ -182,6 +183,7 @@ v1_router.include_router(package_attachments_router, dependencies=BANK_ROUTE_DEP
 # bounded exception, so a blocked tenant could only be unblocked by a database
 # write. Class-agnostic — the control applies to every institution.
 v1_router.include_router(reconciliation_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(audit_log_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(organization_users_router)
 v1_router.include_router(institution_profile_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(integration_keys_router)
