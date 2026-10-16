@@ -27,6 +27,14 @@ const team = [
     linkedin: 'https://linkedin.com/in/delaanthonio',
     linkedinLabel: 'linkedin.com/in/delaanthonio',
   },
+  {
+    name: 'Lawrence Ansah-Addo',
+    role: 'Co-founder & COO · Edmonton, Canada / Accra',
+    photo: '/images/lawrence.jpg',
+    bio: 'Project finance and treasury at UNOPS (United Nations) in Copenhagen, closing more than 1,000 donor-funded projects under IFRS and IPSAS. Co-founder and COO of 2Point Logistics; founder of SweepPro and AfriHex. PMP certified, University of Ghana; about a decade in finance and operations. Leads operations and finance.',
+    linkedin: 'https://www.linkedin.com/in/lawrence-ansah-addo/',
+    linkedinLabel: 'linkedin.com/in/lawrence-ansah-addo',
+  },
 ];
 
 export default function CompanyPage() {
@@ -85,11 +93,15 @@ export default function CompanyPage() {
               Verifiable on LinkedIn, reachable by email.
             </h2>
           </div>
-          <div className="grid md:grid-cols-2 gap-7">
-            {team.map((member) => (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-7">
+            {team.map((member, index) => (
               <div
                 key={member.name}
-                className="bg-white border border-hairline rounded-md p-7 md:p-8 flex flex-col sm:flex-row gap-6"
+                className={`bg-white border border-hairline rounded-md p-7 md:p-8 flex flex-col sm:flex-row lg:flex-col gap-6${
+                  team.length % 2 === 1 && index === team.length - 1
+                    ? ' md:col-span-2 lg:col-span-1'
+                    : ''
+                }`}
               >
                 <Image
                   src={member.photo}

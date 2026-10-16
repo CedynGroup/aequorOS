@@ -65,13 +65,13 @@ lib/
   product-screens.ts # screenshot catalog + captions
   team.ts
 public/images/
-  founder.jpg, dela.jpg
+  founder.jpg, dela.jpg, lawrence.jpg
   product/*.png      # live product UI captures
 ```
 
 ## Assets
 
-- `public/images/founder.jpg` / `dela.jpg` — team headshots
+- `public/images/founder.jpg` / `dela.jpg` / `lawrence.jpg` — team headshots (800×800 head-and-shoulders crops)
 - `public/images/product/*.png` — product UI captures (refresh from `docs/collateral/screenshots/`)
 - Favicon: `app/icon.svg` + `app/icon.png` + `app/apple-icon.png`
 - Open Graph: `app/opengraph-image.tsx` (generated)
