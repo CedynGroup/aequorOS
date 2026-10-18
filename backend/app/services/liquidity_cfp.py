@@ -460,6 +460,14 @@ def activate_cfp(
                 ),
             },
         )
+    if plan.approval_expires_at is None or _approval_overdue(plan):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "cfp_approval_expired",
+                "message": "Renew Board approval before activating this plan.",
+            },
+        )
     if plan.active:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

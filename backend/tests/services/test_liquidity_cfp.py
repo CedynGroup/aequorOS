@@ -10,12 +10,18 @@ regulator-notification event on activation and de-escalation.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
+from hypothesis import settings
+from hypothesis.stateful import (
+    RuleBasedStateMachine,
+    rule,
+    run_state_machine_as_test,  # pyright: ignore[reportUnknownVariableType] - Hypothesis factory generic
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,7 +35,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.identity.service import authorization
-from app.models import BankReportingPeriod, Notification, User
+from app.models import BankReportingPeriod, ContingencyFundingPlan, Notification, User
 from app.schemas.liquidity_cfp import (
     CfpActivationCreate,
     CfpApprove,
@@ -430,3 +436,132 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
 
     summary = liquidity_cfp.get_cfp(db_session, MAKER, SAMPLE_BANK_ID)
     assert summary.approved is not None and summary.approved.active is False
+
+
+def test_expired_approval_refuses_activation_without_event_but_allows_stand_down(
+    db_session: Session,
+) -> None:
+    materialize_canonical_test_book(db_session)
+    _seed_ewi_book(db_session)
+    _ensure_checker(db_session)
+    _grant_cfp_authority(db_session)
+    period_id = _period_id(db_session)
+    liquidity_cfp.put_cfp(
+        db_session, MAKER, SAMPLE_BANK_ID, CfpPut(content=_full_content(), reason="Draft")
+    )
+    approved = liquidity_cfp.approve_cfp(
+        db_session,
+        CHECKER,
+        SAMPLE_BANK_ID,
+        CfpApprove(approval_reference="Board minute", reason="Approved"),
+    )
+    plan = db_session.get(ContingencyFundingPlan, approved.id)
+    assert plan is not None
+    plan.approval_expires_at = date.today() - timedelta(days=1)
+    db_session.commit()
+    payload = CfpActivationCreate(reporting_period_id=period_id, reason="Funding stress")
+    with pytest.raises(HTTPException) as refused:
+        liquidity_cfp.activate_cfp(db_session, CHECKER, SAMPLE_BANK_ID, payload)
+    assert refused.value.status_code == 409
+    assert refused.value.detail == {
+        "error_code": "cfp_approval_expired",
+        "message": "Renew Board approval before activating this plan.",
+    }
+    assert liquidity_cfp.list_events(db_session, MAKER, SAMPLE_BANK_ID).events == []
+    assert plan.active is False
+    # An existing activation must remain reversible after annual approval expires.
+    plan.active = True
+    db_session.commit()
+    event = liquidity_cfp.de_escalate_cfp(db_session, CHECKER, SAMPLE_BANK_ID, payload)
+    assert event.event_type == "de_escalated"
+    assert event.approval_overdue is True
+    assert plan.active is False
+
+
+def test_cfp_generated_lifecycle_sequences(db_session: Session) -> None:
+    class CfpMachine(RuleBasedStateMachine):
+        def __init__(self) -> None:
+            super().__init__()
+            self.savepoint = db_session.connection().begin_nested()
+            self.db = Session(
+                bind=db_session.connection(), join_transaction_mode="create_savepoint"
+            )
+            materialize_canonical_test_book(self.db)
+            _seed_ewi_book(self.db)
+            _ensure_checker(self.db)
+            _grant_cfp_authority(self.db)
+            self.period = _period_id(self.db)
+            self.state = "empty"
+            self.active = False
+            self.event_count = 0
+            self.has_approval = False
+
+        @rule()
+        def save_draft(self) -> None:
+            liquidity_cfp.put_cfp(
+                self.db,
+                MAKER,
+                SAMPLE_BANK_ID,
+                CfpPut(content=_full_content(), reason="Draft revision"),
+            )
+            self.state = "draft"
+
+        @rule()
+        def maker_cannot_approve(self) -> None:
+            with pytest.raises(HTTPException):
+                liquidity_cfp.approve_cfp(
+                    self.db,
+                    MAKER,
+                    SAMPLE_BANK_ID,
+                    CfpApprove(approval_reference="Board", reason="Review"),
+                )
+            assert (
+                len(liquidity_cfp.list_events(self.db, MAKER, SAMPLE_BANK_ID).events)
+                == self.event_count
+            )
+
+        @rule()
+        def approve(self) -> None:
+            payload = CfpApprove(approval_reference="Board", reason="Review")
+            if self.state != "draft":
+                with pytest.raises(HTTPException):
+                    liquidity_cfp.approve_cfp(self.db, CHECKER, SAMPLE_BANK_ID, payload)
+                return
+            liquidity_cfp.approve_cfp(self.db, CHECKER, SAMPLE_BANK_ID, payload)
+            self.state = "approved"
+            self.has_approval = True
+
+        @rule()
+        def activate(self) -> None:
+            payload = CfpActivationCreate(reporting_period_id=self.period, reason="Activate")
+            if self.has_approval and not self.active:
+                liquidity_cfp.activate_cfp(self.db, CHECKER, SAMPLE_BANK_ID, payload)
+                self.active = True
+                self.event_count += 1
+            else:
+                with pytest.raises(HTTPException):
+                    liquidity_cfp.activate_cfp(self.db, CHECKER, SAMPLE_BANK_ID, payload)
+
+        @rule()
+        def stand_down(self) -> None:
+            payload = CfpActivationCreate(reporting_period_id=self.period, reason="Stand down")
+            if self.active:
+                liquidity_cfp.de_escalate_cfp(self.db, CHECKER, SAMPLE_BANK_ID, payload)
+                self.active = False
+                self.event_count += 1
+            else:
+                with pytest.raises(HTTPException):
+                    liquidity_cfp.de_escalate_cfp(self.db, CHECKER, SAMPLE_BANK_ID, payload)
+            assert (
+                len(liquidity_cfp.list_events(self.db, MAKER, SAMPLE_BANK_ID).events)
+                == self.event_count
+            )
+
+        def teardown(self) -> None:
+            self.db.close()
+            self.savepoint.rollback()
+
+    run_state_machine_as_test(
+        CfpMachine,
+        settings=settings(max_examples=10, stateful_step_count=12, derandomize=True, deadline=None),
+    )
