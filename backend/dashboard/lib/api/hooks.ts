@@ -19,6 +19,11 @@ import {
 } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import type {
+  CfpRead,
+  CfpEventRead,
+  CfpPut,
+  CfpApprove,
+  CfpActivationCreate,
   LiveModule,
   AnalysisRunCreate,
   SavedAnalysisCreate,
@@ -4202,6 +4207,50 @@ export function useCfpEvents(bankId: string | undefined) {
         liquidityCfpApi.listContingencyFundingPlanEvents({ bankId: bankId! }),
       ),
     enabled: Boolean(bankId),
+  });
+}
+
+export function useCfpLifecycle(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      command:
+        | { action: "draft"; payload: CfpPut }
+        | { action: "approve"; payload: CfpApprove }
+        | { action: "activate" | "standDown"; payload: CfpActivationCreate },
+    ) =>
+      apiCall<CfpRead | CfpEventRead>(() => {
+        if (!bankId) throw new Error("Select an institution first.");
+        switch (command.action) {
+          case "draft":
+            return liquidityCfpApi.putContingencyFundingPlanDraft({
+              bankId,
+              cfpPut: command.payload,
+            });
+          case "approve":
+            return liquidityCfpApi.approveContingencyFundingPlan({
+              bankId,
+              cfpApprove: command.payload,
+            });
+          case "activate":
+            return liquidityCfpApi.activateContingencyFundingPlan({
+              bankId,
+              cfpActivationCreate: command.payload,
+            });
+          case "standDown":
+            return liquidityCfpApi.deEscalateContingencyFundingPlan({
+              bankId,
+              cfpActivationCreate: command.payload,
+            });
+        }
+      }),
+    onSuccess: async () => {
+      await Promise.all(
+        ["cfp-summary", "cfp-events", "ewi-dashboard", "notifications"].map(
+          (prefix) => queryClient.invalidateQueries({ queryKey: [prefix] }),
+        ),
+      );
+    },
   });
 }
 

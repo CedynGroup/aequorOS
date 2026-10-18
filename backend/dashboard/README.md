@@ -828,3 +828,28 @@ the overflow you cannot remove, remove the one you can. **Design changes are
 reviewed as pixels**: follow the visual-tour capture instructions under
 [End-to-end (Playwright)](#end-to-end-playwright) and compare the screenshots
 before and after. Type-checking cannot see a clipped column.
+
+### Contingency funding plan lifecycle
+
+Liquidity → CFP authors each of the seven required plan-content blocks and
+optional behavioral overlays. Every command requires a reason; Board approval
+also requires an approval reference and an independent checker. The server
+remains authoritative for the complete Liquidity/Confidential binding and
+maker-checker decision. Readers see disabled controls with permission reasons.
+
+| Source             | Command               | Authority and guard                                    | Result                                             |
+| ------------------ | --------------------- | ------------------------------------------------------ | -------------------------------------------------- |
+| No plan / approved | Save draft            | Create                                                 | New draft version; previous approval retained      |
+| Draft              | Save draft            | Edit                                                   | Draft revised; preparer updated                    |
+| Draft              | Record Board approval | Approve, independent of preparer, complete contents    | Approved version; prior approval superseded        |
+| Approved, inactive | Activate              | Approve, unexpired approval, selected reporting period | Active; append-only event and indicator snapshot   |
+| Approved, active   | Stand down            | Approve, selected reporting period, reason             | Inactive; append-only event and indicator snapshot |
+
+Activation without approval, expired approval and duplicate activation are
+refused. Stand-down without an active plan is refused; an active plan can still
+be stood down after its annual approval expires. Each accepted command reloads
+plan, event and indicator reads. Activation and stand-down produce internal
+regulator-notification records; aequorOS does not transmit them externally.
+Draft and approval audit records remain in the audit trail; the activation log
+contains activation and stand-down events. This workflow does not create or
+replace official regulatory runs. Related journeys and guards: #289, #315, #323.
