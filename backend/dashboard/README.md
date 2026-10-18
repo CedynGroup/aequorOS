@@ -868,8 +868,8 @@ IRRBB `/irr/scenarios`, Liquidity `/liquidity/stress`, FX `/fx/scenarios`, FTP
 `/ftp/scenarios`, and Capital `/basel/stress`. Opening a tab creates no runs.
 Liquidity scenario definitions require Liquidity confidential view; they no
 longer require the unrelated Risk & Limits view. Definitions require the owning
-module's confidential view; result summaries retain the server's existing
-sensitivity-specific projection.
+module's confidential view with whole-institution coverage; result summaries
+retain the server's existing sensitivity-specific projection.
 
 The enterprise stress workbench remains at `/irr/enterprise-stress`, with its
 own IRRBB tab and links from the module workspaces. It runs a governed macro
@@ -878,9 +878,12 @@ Its IRRBB correctness dependency remains #306.
 
 FTP what-if compares baseline with a chosen module scenario and optional curve
 shift, funding-spread addition, product margin floor and NMD core policy-band
-overrides. Preview requires FTP/Confidential/Run. Saving an analysis
-requires FTP/Confidential/Create. Each request is checked by the server;
-readers see disabled controls and grant reasons. Saving recomputes and snapshots
+overrides. Blank overrides retain the scenario's values and governed rules.
+Rule percentages must be between 0 and 100, and the NMD core minimum cannot
+exceed its maximum. Preview requires FTP/Confidential/Run. Saving an analysis
+requires FTP/Confidential/Create. Both require whole-institution coverage.
+Each request is checked by the server; readers see disabled controls and grant
+reasons. Saving recomputes and snapshots
 the supplied inputs and results. Reopening reads the stored snapshot. Parameter
 registers and official regulatory runs are unchanged. Related work: #314, #316
 (module run controls), #309 (full stored-run/history views), #289 (journeys).

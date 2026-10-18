@@ -129,7 +129,9 @@ export default function RunModuleScenarios({ module }: { module: Module }) {
             onChange={(event) => setPeriodId(event.target.value)}
             disabled={busy || !bank || periods.length === 0}
           >
-            {!period && <option value="">No reporting periods available</option>}
+            {!period && (
+              <option value="">No reporting periods available</option>
+            )}
             {periods.map((entry) => (
               <option key={entry.id} value={entry.id}>
                 {entry.label} · {fmtDateUTC(entry.periodEnd)}
