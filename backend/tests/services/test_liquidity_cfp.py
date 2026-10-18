@@ -10,7 +10,7 @@ regulator-notification event on activation and de-escalation.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import date, timedelta
 from decimal import Decimal
 from queue import Queue
@@ -592,6 +592,53 @@ def test_cfp_api_refuses_unseen_revisions_until_checker_reloads(
     ) == (replacement.revision, "draft", changed, approved.revision, "approved", changed)
 
 
+def _wait_for_plan_row_lock(database: Engine, pid: int) -> None:
+    deadline = monotonic() + 10
+    while monotonic() < deadline:
+        with Session(database) as observer:
+            blocked = cast(
+                object,
+                observer.scalar(
+                    text("SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = :pid"),
+                    {"pid": pid},
+                ),
+            )
+        if blocked is True:
+            break
+        sleep(0.01)
+    else:
+        pytest.fail("The second CFP action did not wait for the plan row lock.")
+
+
+def _assert_serialized_cfp_results(
+    first_action: Literal["save", "approve"],
+    draft: CfpRead,
+    changed: CfpContent,
+    first_result: Future[CfpRead],
+    second_result: Future[CfpRead],
+) -> None:
+    completed = first_result.result(timeout=10)
+    if first_action == "save":
+        with pytest.raises(HTTPException) as refused:
+            second_result.result(timeout=10)
+        assert refused.value.status_code == 409
+        assert cast(object, refused.value.detail) == {
+            "error_code": "stale_cfp_revision",
+            "message": (
+                "The plan changed since you loaded it. Reload the latest plan "
+                "and review it before approving."
+            ),
+        }
+        assert completed.status == "draft"
+    else:
+        saved = second_result.result(timeout=10)
+        assert completed.status == "approved"
+        assert completed.content == draft.content
+        assert saved.status == "draft"
+        assert saved.version == draft.version + 1
+        assert saved.content == changed
+
+
 @pytest.mark.committing_db
 @pytest.mark.parametrize("first_action", ["save", "approve"])
 def test_cfp_edit_and_approval_serialize_on_the_displayed_revision(
@@ -665,45 +712,10 @@ def test_cfp_edit_and_approval_serialize_on_the_displayed_revision(
             assert entered.wait(10)
             second_result = pool.submit(second)
             pid = waiting_pids.get(timeout=10)
-            deadline = monotonic() + 10
-            while monotonic() < deadline:
-                with Session(database) as observer:
-                    blocked = cast(
-                        object,
-                        observer.scalar(
-                            text(
-                                "SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = :pid"
-                            ),
-                            {"pid": pid},
-                        ),
-                    )
-                if blocked is True:
-                    break
-                sleep(0.01)
-            else:
-                pytest.fail("The second CFP action did not wait for the plan row lock.")
+            _wait_for_plan_row_lock(database, pid)
         finally:
             release.set()
-        completed = first_result.result(timeout=10)
-        if first_action == "save":
-            with pytest.raises(HTTPException) as refused:
-                second_result.result(timeout=10)
-            assert refused.value.status_code == 409
-            assert cast(object, refused.value.detail) == {
-                "error_code": "stale_cfp_revision",
-                "message": (
-                    "The plan changed since you loaded it. Reload the latest plan "
-                    "and review it before approving."
-                ),
-            }
-            assert completed.status == "draft"
-        else:
-            saved = second_result.result(timeout=10)
-            assert completed.status == "approved"
-            assert completed.content == draft.content
-            assert saved.status == "draft"
-            assert saved.version == draft.version + 1
-            assert saved.content == changed
+        _assert_serialized_cfp_results(first_action, draft, changed, first_result, second_result)
     db_session.expire_all()
     persisted = liquidity_cfp.get_cfp(db_session, CHECKER, SAMPLE_BANK_ID)
     assert persisted.current is not None
