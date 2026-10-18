@@ -878,8 +878,8 @@ Its IRRBB correctness dependency remains #306.
 
 FTP what-if compares baseline with a chosen module scenario and optional curve
 shift, funding-spread addition, product margin floor and NMD core policy-band
-overrides. Preview requires FTP/Confidential/Run. Saving an analysis or reusable
-scenario requires FTP/Confidential/Create. Each request is checked by the server;
+overrides. Preview requires FTP/Confidential/Run. Saving an analysis
+requires FTP/Confidential/Create. Each request is checked by the server;
 readers see disabled controls and grant reasons. Saving recomputes and snapshots
 the supplied inputs and results. Reopening reads the stored snapshot. Parameter
 registers and official regulatory runs are unchanged. Related work: #314, #316

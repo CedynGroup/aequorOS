@@ -13,6 +13,19 @@ import type {
 } from "@aequoros/risk-service-api";
 import FtpWhatIf from "@/components/ftp/FtpWhatIf";
 
+function MetricValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined) return "Unavailable";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") {
+    return (
+      <pre className="whitespace-pre-wrap break-words">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    );
+  }
+  return String(value);
+}
+
 export const MODULE_NAMES: Record<WorkbenchModule, string> = {
   irr: "IRRBB",
   liquidity: "Liquidity",
@@ -49,6 +62,7 @@ export default function ScenarioWorkbench({
     module: module === "irr" ? "irr" : module,
     reportingPeriodId: period?.id,
     limit: 100,
+    allPages: true,
   });
   const enterprise = hrefAccess("/irr/enterprise-stress", moduleScope);
   // The API registry is newest first. Retain each scenario's latest stored result.
@@ -146,13 +160,10 @@ export default function ScenarioWorkbench({
                   <dl className="grid gap-2 sm:grid-cols-3 text-caption">
                     {Object.entries(run.metrics).map(
                       ([key, value]: [string, unknown]) => (
-                        <div key={key}>
+                        <div key={key} className="min-w-0">
                           <dt>{labelize(key.replace(/_ghs$/, ""))}</dt>
                           <dd className="font-mono">
-                            {typeof value === "string" ||
-                            typeof value === "number"
-                              ? String(value)
-                              : "Unavailable"}
+                            <MetricValue value={value} />
                           </dd>
                         </div>
                       ),

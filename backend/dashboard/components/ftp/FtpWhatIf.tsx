@@ -17,7 +17,6 @@ import { fmtDateUTC, labelize } from "@/lib/api/values";
 import { currencyCode } from "@/lib/format";
 import {
   useRunScenarioAnalysis,
-  useCreateStressScenario,
   useSaveScenarioAnalysis,
   useSavedAnalyses,
   useSavedScenarioAnalysis,
@@ -100,14 +99,12 @@ export default function FtpWhatIf({
     useBankContext();
   const run = useRunScenarioAnalysis(bank?.id, "ftp");
   const save = useSaveScenarioAnalysis(bank?.id, "ftp");
-  const create = useCreateStressScenario(bank?.id, "ftp");
   const saved = useSavedAnalyses(bank?.id, "ftp");
   const [selectedAnalysis, setSelectedAnalysis] = useState<string>();
   const detail = useSavedScenarioAnalysis(bank?.id, "ftp", selectedAnalysis);
   const [selected, setSelected] = useState("system:baseline");
   const [values, setValues] = useState<Record<string, string>>({});
   const [name, setName] = useState("");
-  const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
   const [preview, setPreview] = useState<{
     signature: string;
@@ -145,10 +142,10 @@ export default function FtpWhatIf({
       ? { kind: "custom", scenarioId: entry.scenarioId, overrides }
       : { kind: "system", code: entry?.code ?? "baseline", overrides };
   const signature = JSON.stringify([period?.id, reference]);
-  const busy = run.isPending || save.isPending || create.isPending;
+  const busy = run.isPending || save.isPending;
   const ready = !!period && !!entry && entry.configured && validInputs;
 
-  async function execute(action: "run" | "save" | "create") {
+  async function execute(action: "run" | "save") {
     if (!ready || !period || (action === "run" ? !canRun : !canCreate)) return;
     if (action !== "run" && !name.trim()) return;
     setMessage("");
@@ -159,7 +156,7 @@ export default function FtpWhatIf({
           scenarios: [{ kind: "system", code: "baseline" }, reference],
         });
         setPreview({ signature, results: result.results });
-      } else if (action === "save") {
+      } else {
         const result = await save.mutateAsync({
           reportingPeriodId: period.id,
           name: name.trim(),
@@ -167,14 +164,6 @@ export default function FtpWhatIf({
         });
         setSelectedAnalysis(result.id);
         setMessage("Analysis recomputed and saved with these inputs.");
-      } else {
-        if (!/^[a-z0-9_]{1,60}$/.test(code)) return;
-        await create.mutateAsync({
-          code,
-          name: name.trim(),
-          shocks: { ...entry!.shocks, ...overrides },
-        });
-        setMessage("FTP scenario definition saved.");
       }
     } catch (error) {
       setMessage(
@@ -184,16 +173,10 @@ export default function FtpWhatIf({
       );
     }
   }
-  const control = (action: "run" | "save" | "create", text: string) => {
+  const control = (action: "run" | "save", text: string) => {
     const permitted = action === "run" ? canRun : canCreate;
     const disabled =
-      !permitted ||
-      !ready ||
-      busy ||
-      (action !== "run" && !name.trim()) ||
-      (action === "create" &&
-        (!/^[a-z0-9_]{1,60}$/.test(code) ||
-          Object.keys({ ...entry?.shocks, ...overrides }).length === 0));
+      !permitted || !ready || busy || (action !== "run" && !name.trim());
     const button = (id?: string) => (
       <button
         type="button"
@@ -273,29 +256,17 @@ export default function FtpWhatIf({
             Inputs changed. Preview again to refresh the comparison.
           </p>
         )}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-caption">
-            Analysis / scenario name
-            <input
-              maxLength={200}
-              className={inputCls}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </label>
-          <label className="text-caption">
-            Reusable scenario code
-            <input
-              maxLength={60}
-              className={inputCls}
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-            />
-          </label>
-        </div>
+        <label className="block text-caption">
+          Analysis name
+          <input
+            maxLength={200}
+            className={inputCls}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
         <div className="flex flex-wrap gap-3">
           {control("save", "Save FTP analysis")}
-          {control("create", "Save FTP scenario definition")}
         </div>
         {message && <p role="status">{message}</p>}
         <QueryBoundary
