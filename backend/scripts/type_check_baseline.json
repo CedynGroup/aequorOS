@@ -3948,13 +3948,13 @@
  },
  "tests.services.data_gaps.test_atm_operations": {
   "reportAny": 41,
-  "reportUnknownMemberType": 11,
+  "reportUnknownMemberType": 7,
   "reportUnknownVariableType": 1
  },
  "tests.services.data_gaps.test_capital_expenditure": {
   "reportAny": 36,
-  "reportUnknownMemberType": 26,
-  "reportUnknownVariableType": 2
+  "reportUnknownMemberType": 25,
+  "reportUnknownVariableType": 1
  },
  "tests.services.data_gaps.test_eod_ladder": {
   "reportAny": 33
@@ -3963,36 +3963,33 @@
   "reportAny": 65,
   "reportArgumentType": 1,
   "reportUnknownArgumentType": 1,
-  "reportUnknownLambdaType": 1,
-  "reportUnknownVariableType": 1
+  "reportUnknownLambdaType": 1
  },
  "tests.services.data_gaps.test_interest_accruals": {
   "reportAny": 35,
   "reportUnknownArgumentType": 1,
-  "reportUnknownLambdaType": 1,
-  "reportUnknownVariableType": 1
+  "reportUnknownLambdaType": 1
  },
  "tests.services.data_gaps.test_loan_attributes": {
   "reportAny": 19
  },
  "tests.services.data_gaps.test_remittance_flows": {
   "reportAny": 29,
-  "reportUnknownMemberType": 15,
+  "reportUnknownMemberType": 10,
   "reportUnknownVariableType": 1
  },
  "tests.services.data_gaps.test_subsidiaries": {
   "reportAny": 32,
-  "reportUnknownMemberType": 10,
-  "reportUnknownVariableType": 2
+  "reportUnknownMemberType": 9,
+  "reportUnknownVariableType": 1
  },
  "tests.services.data_gaps.test_tariff_schedule": {
   "reportAny": 26,
-  "reportUnknownMemberType": 4,
   "reportUnknownVariableType": 1
  },
  "tests.services.data_gaps.test_teller_withdrawals": {
   "reportAny": 47,
-  "reportUnknownMemberType": 12,
+  "reportUnknownMemberType": 7,
   "reportUnknownVariableType": 1
  },
  "tests.services.factories.assessments": {

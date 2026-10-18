@@ -163,18 +163,23 @@ def migrate_isolated_postgres_schema(
                         .read_text()
                     )
                 )
-                connection.execute(
-                    text(
-                        f'CREATE ROLE "{migration_role}" NOLOGIN NOSUPERUSER NOBYPASSRLS '
-                        "NOINHERIT NOCREATEDB NOREPLICATION CREATEROLE"
-                    )
-                )
                 # The per-grant ADMIN/INHERIT/SET options are PostgreSQL 16+. CI
                 # runs 17 and production 15.13, so a fixture pinned to the newer
                 # syntax cannot catch a migration that uses it — which is how one
                 # reached production and took the API down.
                 server_version = cast(
                     int, connection.exec_driver_sql("SHOW server_version_num").scalar_one()
+                )
+                # Match the effective inherited owner grants on PostgreSQL 15,
+                # where inheritance is a role attribute rather than a grant
+                # option. Ownership handoffs in the historical audit migrations
+                # need these rights after ALTER TABLE ... OWNER.
+                inheritance = "NOINHERIT" if int(server_version) >= 160000 else "INHERIT"
+                connection.execute(
+                    text(
+                        f'CREATE ROLE "{migration_role}" NOLOGIN NOSUPERUSER NOBYPASSRLS '
+                        f"{inheritance} NOCREATEDB NOREPLICATION CREATEROLE"
+                    )
                 )
                 admin_grant_options = (
                     "WITH ADMIN TRUE, INHERIT TRUE, SET TRUE"
