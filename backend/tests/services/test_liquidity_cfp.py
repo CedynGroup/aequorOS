@@ -10,19 +10,25 @@ regulator-notification event on activation and de-escalation.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from decimal import Decimal
+from queue import Queue
+from threading import Event
+from time import monotonic, sleep
+from typing import Literal, cast
 from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from hypothesis import settings
 from hypothesis.stateful import (
     RuleBasedStateMachine,
     rule,
     run_state_machine_as_test,  # pyright: ignore[reportUnknownVariableType] - Hypothesis factory generic
 )
-from sqlalchemy import select
+from sqlalchemy import Engine, event, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -35,12 +41,16 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.identity.service import authorization
-from app.models import BankReportingPeriod, ContingencyFundingPlan, Notification, User
+from app.models import AuditEvent, BankReportingPeriod, ContingencyFundingPlan, Notification, User
+from app.schemas.common import ErrorResponse
 from app.schemas.liquidity_cfp import (
     CfpActivationCreate,
     CfpApprove,
     CfpContent,
+    CfpEventListRead,
     CfpPut,
+    CfpRead,
+    CfpSummaryRead,
     EwiIndicatorUpdate,
     EwiRegisterPut,
 )
@@ -52,6 +62,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.services.test_le_and_lmt import _CanonicalSeeder
+from tests.support.helpers import headers
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID,
@@ -355,7 +366,7 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
             ]
         }
     )
-    liquidity_cfp.put_cfp(
+    draft = liquidity_cfp.put_cfp(
         db_session, MAKER, SAMPLE_BANK_ID, CfpPut(content=incomplete, reason="First draft")
     )
     with pytest.raises(HTTPException) as excinfo:
@@ -363,12 +374,16 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
             db_session,
             CHECKER,
             SAMPLE_BANK_ID,
-            CfpApprove(approval_reference="BM-2026-08", reason="Annual approval"),
+            CfpApprove(
+                expected_revision=draft.revision,
+                approval_reference="BM-2026-08",
+                reason="Annual approval",
+            ),
         )
     assert excinfo.value.detail["error_code"] == "cfp_missing_intraday"  # type: ignore[index]
 
     # Complete the draft; the preparer cannot approve their own plan.
-    liquidity_cfp.put_cfp(
+    draft = liquidity_cfp.put_cfp(
         db_session, MAKER, SAMPLE_BANK_ID, CfpPut(content=_full_content(), reason="Complete")
     )
     with pytest.raises(HTTPException) as excinfo:
@@ -376,7 +391,11 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
             db_session,
             MAKER,
             SAMPLE_BANK_ID,
-            CfpApprove(approval_reference="BM-2026-08", reason="Annual approval"),
+            CfpApprove(
+                expected_revision=draft.revision,
+                approval_reference="BM-2026-08",
+                reason="Annual approval",
+            ),
         )
     assert excinfo.value.detail["error_code"] == "self_approval"  # type: ignore[index]
 
@@ -384,7 +403,11 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
         db_session,
         CHECKER,
         SAMPLE_BANK_ID,
-        CfpApprove(approval_reference="BM-2026-08", reason="Annual approval"),
+        CfpApprove(
+            expected_revision=draft.revision,
+            approval_reference="BM-2026-08",
+            reason="Annual approval",
+        ),
     )
     assert approved.status == "approved"
     assert approved.approval_expires_at is not None
@@ -438,6 +461,257 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
     assert summary.approved is not None and summary.approved.active is False
 
 
+def test_cfp_api_refuses_unseen_revisions_until_checker_reloads(
+    db_client: TestClient,
+    db_session: Session,
+) -> None:
+    materialize_canonical_test_book(db_session)
+    _ensure_checker(db_session)
+    _grant_cfp_authority(db_session)
+    maker = db_session.get(User, MAKER.actor_user_id)
+    checker = db_session.get(User, CHECKER.actor_user_id)
+    assert maker is not None and checker is not None
+    maker_headers = headers(
+        DEMO_ORG_ID, maker.id, authorization_version=maker.authorization_version
+    )
+    checker_headers = headers(
+        DEMO_ORG_ID, checker.id, authorization_version=checker.authorization_version
+    )
+    url = f"/api/v1/banks/{SAMPLE_BANK_ID}/liquidity/cfp"
+    first = db_client.put(
+        url,
+        headers=maker_headers,
+        json={
+            "content": _full_content().model_dump(mode="json"),
+            "reason": "Initial draft",
+        },
+    )
+    assert first.status_code == 200, first.text
+    displayed = CfpSummaryRead.model_validate_json(
+        db_client.get(url, headers=checker_headers).text
+    ).current
+    assert displayed is not None
+    changed = _full_content()
+    changed.funding_options[0].source = "Replacement intraday facility"
+    latest_response = db_client.put(
+        url,
+        headers=maker_headers,
+        json={
+            "content": changed.model_dump(mode="json"),
+            "reason": "Revised funding source",
+        },
+    )
+    assert latest_response.status_code == 200, latest_response.text
+    latest = CfpRead.model_validate_json(latest_response.text)
+    assert latest.id == displayed.id
+    assert latest.version == displayed.version
+    assert latest.revision != displayed.revision
+    payload = {
+        "expected_revision": displayed.revision,
+        "approval_reference": "Board minute",
+        "reason": "Reviewed displayed content",
+    }
+    stale = db_client.post(f"{url}/approve", headers=checker_headers, json=payload)
+    assert stale.status_code == 409, stale.text
+    expected_error = {
+        "error_code": "stale_cfp_revision",
+        "message": (
+            "The plan changed since you loaded it. Reload the latest plan "
+            "and review it before approving."
+        ),
+    }
+    assert (
+        cast(object, ErrorResponse.model_validate_json(stale.text).error.details) == expected_error
+    )
+    reloaded = CfpSummaryRead.model_validate_json(db_client.get(url, headers=checker_headers).text)
+    assert reloaded.current is not None
+    assert (
+        reloaded.current.id,
+        reloaded.current.revision,
+        reloaded.current.content,
+        reloaded.current.status,
+        reloaded.current.approval_reference,
+        reloaded.current.approved_by_user_id,
+        reloaded.current.approval_timestamp,
+        reloaded.approved,
+    ) == (latest.id, latest.revision, changed, "draft", None, None, None, None)
+    assert (
+        CfpEventListRead.model_validate_json(
+            db_client.get(f"{url}/events", headers=checker_headers).text
+        ).events
+        == []
+    )
+    assert (
+        db_session.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "liquidity_cfp.approved",
+            )
+        )
+        is None
+    )
+    unbound = db_client.post(
+        f"{url}/approve",
+        headers=checker_headers,
+        json={
+            "approval_reference": "Board minute",
+            "reason": "No displayed revision",
+        },
+    )
+    assert unbound.status_code == 422
+    payload["expected_revision"] = reloaded.current.revision
+    approved_response = db_client.post(f"{url}/approve", headers=checker_headers, json=payload)
+    assert approved_response.status_code == 200, approved_response.text
+    approved = CfpRead.model_validate_json(approved_response.text)
+    assert approved.status == "approved"
+    assert approved.content == changed
+    replacement_response = db_client.put(
+        url,
+        headers=maker_headers,
+        json={
+            "content": changed.model_dump(mode="json"),
+            "reason": "Next version",
+        },
+    )
+    assert replacement_response.status_code == 200, replacement_response.text
+    replacement = CfpRead.model_validate_json(replacement_response.text)
+    assert replacement.version == displayed.version + 1
+    stale = db_client.post(f"{url}/approve", headers=checker_headers, json=payload)
+    assert stale.status_code == 409
+    assert (
+        cast(object, ErrorResponse.model_validate_json(stale.text).error.details) == expected_error
+    )
+    persisted = CfpSummaryRead.model_validate_json(db_client.get(url, headers=checker_headers).text)
+    assert persisted.current is not None and persisted.approved is not None
+    assert (
+        persisted.current.revision,
+        persisted.current.status,
+        persisted.current.content,
+        persisted.approved.revision,
+        persisted.approved.status,
+        persisted.approved.content,
+    ) == (replacement.revision, "draft", changed, approved.revision, "approved", changed)
+
+
+@pytest.mark.committing_db
+@pytest.mark.parametrize("first_action", ["save", "approve"])
+def test_cfp_edit_and_approval_serialize_on_the_displayed_revision(
+    db_session: Session,
+    first_action: Literal["save", "approve"],
+) -> None:
+    database = db_session.get_bind()
+    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL row locks and independent connections are required.")
+    materialize_canonical_test_book(db_session)
+    _ensure_checker(db_session)
+    _grant_cfp_authority(db_session)
+    draft = liquidity_cfp.put_cfp(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        CfpPut(
+            content=_full_content(),
+            reason="Initial draft",
+        ),
+    )
+    changed = _full_content()
+    changed.funding_options[0].source = "Replacement intraday facility"
+    entered, release = Event(), Event()
+    waiting_pids: Queue[int] = Queue()
+
+    def pause_after_loading_plan(_db: Session, instance: object) -> None:
+        if not isinstance(instance, ContingencyFundingPlan) or entered.is_set():
+            return
+        entered.set()
+        if not release.wait(15):
+            raise RuntimeError("The test did not release the first CFP action.")
+
+    def run_action(db: Session, action: Literal["save", "approve"]) -> CfpRead:
+        if action == "save":
+            return liquidity_cfp.put_cfp(
+                db,
+                MAKER,
+                SAMPLE_BANK_ID,
+                CfpPut(
+                    content=changed,
+                    reason="Revised funding source",
+                ),
+            )
+        return liquidity_cfp.approve_cfp(
+            db,
+            CHECKER,
+            SAMPLE_BANK_ID,
+            CfpApprove(
+                expected_revision=draft.revision,
+                approval_reference="Board",
+                reason="Reviewed",
+            ),
+        )
+
+    def first() -> CfpRead:
+        with Session(database) as db:
+            event.listen(db, "loaded_as_persistent", pause_after_loading_plan)
+            return run_action(db, first_action)
+
+    def second() -> CfpRead:
+        with Session(database) as db:
+            pid = cast(object, db.scalar(text("SELECT pg_backend_pid()")))
+            assert isinstance(pid, int)
+            waiting_pids.put(pid)
+            return run_action(db, "approve" if first_action == "save" else "save")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first_result = pool.submit(first)
+        try:
+            assert entered.wait(10)
+            second_result = pool.submit(second)
+            pid = waiting_pids.get(timeout=10)
+            deadline = monotonic() + 10
+            while monotonic() < deadline:
+                with Session(database) as observer:
+                    blocked = cast(
+                        object,
+                        observer.scalar(
+                            text(
+                                "SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = :pid"
+                            ),
+                            {"pid": pid},
+                        ),
+                    )
+                if blocked is True:
+                    break
+                sleep(0.01)
+            else:
+                pytest.fail("The second CFP action did not wait for the plan row lock.")
+        finally:
+            release.set()
+        completed = first_result.result(timeout=10)
+        if first_action == "save":
+            with pytest.raises(HTTPException) as refused:
+                second_result.result(timeout=10)
+            assert refused.value.status_code == 409
+            assert cast(object, refused.value.detail) == {
+                "error_code": "stale_cfp_revision",
+                "message": (
+                    "The plan changed since you loaded it. Reload the latest plan "
+                    "and review it before approving."
+                ),
+            }
+            assert completed.status == "draft"
+        else:
+            saved = second_result.result(timeout=10)
+            assert completed.status == "approved"
+            assert completed.content == draft.content
+            assert saved.status == "draft"
+            assert saved.version == draft.version + 1
+            assert saved.content == changed
+    db_session.expire_all()
+    persisted = liquidity_cfp.get_cfp(db_session, CHECKER, SAMPLE_BANK_ID)
+    assert persisted.current is not None
+    assert persisted.current.content == changed
+    assert persisted.current.status == "draft"
+    assert (persisted.approved is not None) == (first_action == "approve")
+
+
 def test_expired_approval_refuses_activation_without_event_but_allows_stand_down(
     db_session: Session,
 ) -> None:
@@ -446,14 +720,16 @@ def test_expired_approval_refuses_activation_without_event_but_allows_stand_down
     _ensure_checker(db_session)
     _grant_cfp_authority(db_session)
     period_id = _period_id(db_session)
-    liquidity_cfp.put_cfp(
+    draft = liquidity_cfp.put_cfp(
         db_session, MAKER, SAMPLE_BANK_ID, CfpPut(content=_full_content(), reason="Draft")
     )
     approved = liquidity_cfp.approve_cfp(
         db_session,
         CHECKER,
         SAMPLE_BANK_ID,
-        CfpApprove(approval_reference="Board minute", reason="Approved"),
+        CfpApprove(
+            expected_revision=draft.revision, approval_reference="Board minute", reason="Approved"
+        ),
     )
     plan = db_session.get(ContingencyFundingPlan, approved.id)
     assert plan is not None
@@ -491,6 +767,7 @@ def test_cfp_generated_lifecycle_sequences(db_session: Session) -> None:
             _ensure_checker(self.db)
             _grant_cfp_authority(self.db)
             self.period = _period_id(self.db)
+            self.revision = "not-loaded"
             self.state = "empty"
             self.active = False
             self.event_count = 0
@@ -498,12 +775,13 @@ def test_cfp_generated_lifecycle_sequences(db_session: Session) -> None:
 
         @rule()
         def save_draft(self) -> None:
-            liquidity_cfp.put_cfp(
+            draft = liquidity_cfp.put_cfp(
                 self.db,
                 MAKER,
                 SAMPLE_BANK_ID,
                 CfpPut(content=_full_content(), reason="Draft revision"),
             )
+            self.revision = draft.revision
             self.state = "draft"
 
         @rule()
@@ -513,7 +791,9 @@ def test_cfp_generated_lifecycle_sequences(db_session: Session) -> None:
                     self.db,
                     MAKER,
                     SAMPLE_BANK_ID,
-                    CfpApprove(approval_reference="Board", reason="Review"),
+                    CfpApprove(
+                        expected_revision=self.revision, approval_reference="Board", reason="Review"
+                    ),
                 )
             assert (
                 len(liquidity_cfp.list_events(self.db, MAKER, SAMPLE_BANK_ID).events)
@@ -522,12 +802,15 @@ def test_cfp_generated_lifecycle_sequences(db_session: Session) -> None:
 
         @rule()
         def approve(self) -> None:
-            payload = CfpApprove(approval_reference="Board", reason="Review")
+            payload = CfpApprove(
+                expected_revision=self.revision, approval_reference="Board", reason="Review"
+            )
             if self.state != "draft":
                 with pytest.raises(HTTPException):
                     liquidity_cfp.approve_cfp(self.db, CHECKER, SAMPLE_BANK_ID, payload)
                 return
-            liquidity_cfp.approve_cfp(self.db, CHECKER, SAMPLE_BANK_ID, payload)
+            approved = liquidity_cfp.approve_cfp(self.db, CHECKER, SAMPLE_BANK_ID, payload)
+            self.revision = approved.revision
             self.state = "approved"
             self.has_approval = True
 
