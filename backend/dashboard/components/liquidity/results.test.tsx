@@ -70,6 +70,8 @@ loader._load = (request, parent, isMain) => {
         institutionCapabilities: [],
         authorityPending: false,
         period: null,
+        periods: [],
+        setPeriodId: () => {},
       }),
       useModuleScope: () => scope,
     };
