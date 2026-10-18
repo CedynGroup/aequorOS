@@ -1,5 +1,6 @@
 "use client";
 
+import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import KpiStat, { type KpiStatus } from "@/components/ui/KpiStat";
@@ -270,6 +271,9 @@ export default function BaselOverview() {
         }
       />
 
+      <PageContainer className="py-4">
+        <RunModuleScenarios module="capital" />
+      </PageContainer>
       <QueryBoundary
         isLoading={dashboard.isLoading}
         error={dashboard.error}
