@@ -58,6 +58,7 @@ const plan = {
   id: "plan",
   bank_id: "BK-SAMP0001",
   version: 1,
+  revision: "revision-1",
   status: "draft",
   prepared_by: "maker",
   content: {},
@@ -347,6 +348,7 @@ print(json.dumps(True))
         content: body.content,
         prepared_by: context.actor,
         updated_at: "2026-04-01T00:00:00Z",
+        revision: "revision-2",
       };
       return HttpResponse.json(current);
     }),
@@ -428,6 +430,7 @@ it("blocks maker approval, then an independent approver can approve, activate an
     ),
     http.post(`${url}/approve`, async ({ request }) => {
       expect(await request.json()).toEqual({
+        expected_revision: "revision-1",
         approval_reference: "Board 42",
         reason: "Reviewed",
       });
@@ -435,6 +438,7 @@ it("blocks maker approval, then an independent approver can approve, activate an
         ...current,
         status: "approved",
         updated_at: "2026-04-01T00:00:00Z",
+        revision: "revision-2",
       };
       return HttpResponse.json(current);
     }),
@@ -496,6 +500,104 @@ it("blocks maker approval, then an independent approver can approve, activate an
   await user.type(screen.getByLabelText("Reason / evidence"), "Evidence");
   await user.click(screen.getByRole("button", { name: "Stand down CFP" }));
   await waitFor(() => expect(active).toBe(false));
+});
+
+it("refuses cross-session approval until the checker reloads and reviews the latest revision", async () => {
+  context.actor = "checker";
+  const latest = {
+    ...plan,
+    revision: "revision-2",
+    updated_at: "2026-03-31T00:00:00.000001Z",
+    content: {
+      ...authoredContent,
+      funding_options: [
+        {
+          ...authoredContent.funding_options[0],
+          source: "Replacement facility",
+        },
+      ],
+    },
+  };
+  let current = { ...plan, content: authoredContent };
+  let approved = false;
+  const requests: unknown[] = [];
+  server.use(
+    http.get(url, () =>
+      HttpResponse.json({ current, approved: approved ? current : null }),
+    ),
+    http.post(`${url}/approve`, async ({ request }) => {
+      const body = (await request.json()) as { expected_revision: string };
+      requests.push(body);
+      if (body.expected_revision !== current.revision)
+        return HttpResponse.json(
+          {
+            error: {
+              code: "conflict",
+              message: "Conflict",
+              details: {
+                error_code: "stale_cfp_revision",
+                message:
+                  "The plan changed since you loaded it. Reload the latest plan and review it before approving.",
+              },
+            },
+          },
+          { status: 409 },
+        );
+      approved = true;
+      current = { ...current, status: "approved", revision: "revision-3" };
+      return HttpResponse.json(current);
+    }),
+  );
+  const user = userEvent.setup();
+  mount();
+  expect(await screen.findByDisplayValue("Committed facility")).toBeVisible();
+  current = latest;
+  await user.type(screen.getByLabelText("Reason / evidence"), "Reviewed");
+  await user.type(
+    screen.getByLabelText("Board approval reference"),
+    "Board 42",
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Record Board approval" }),
+  );
+  expect(
+    await screen.findByText(/The plan changed since you loaded it/),
+  ).toBeVisible();
+  expect(approved).toBe(false);
+  expect(requests).toEqual([
+    {
+      expected_revision: "revision-1",
+      approval_reference: "Board 42",
+      reason: "Reviewed",
+    },
+  ]);
+  expect(
+    screen.getByRole("button", { name: "Record Board approval" }),
+  ).toBeDisabled();
+  expect(screen.getByDisplayValue("Committed facility")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Reload latest plan" }));
+  expect(await screen.findByDisplayValue("Replacement facility")).toBeVisible();
+  expect(screen.getByLabelText("Reason / evidence")).toHaveValue("");
+  expect(screen.getByLabelText("Board approval reference")).toHaveValue("");
+  await user.type(
+    screen.getByLabelText("Reason / evidence"),
+    "Reviewed latest",
+  );
+  await user.type(
+    screen.getByLabelText("Board approval reference"),
+    "Board 43",
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Record Board approval" }),
+  );
+  await screen.findByText(/Current plan: v1 · approved/);
+  expect(approved).toBe(true);
+  expect(requests[1]).toEqual({
+    expected_revision: "revision-2",
+    approval_reference: "Board 43",
+    reason: "Reviewed latest",
+  });
+  expect(screen.getByDisplayValue("Replacement facility")).toBeVisible();
 });
 
 it("keeps readers' mutation controls disabled with scoped reasons", async () => {

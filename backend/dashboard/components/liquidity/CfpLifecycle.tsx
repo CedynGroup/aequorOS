@@ -18,6 +18,7 @@ import { hasEffectiveCapability, hasStructuralCapability } from "@/lib/modules";
 import { useCfpSummary, useCfpLifecycle } from "@/lib/api/hooks";
 import { fmtDateUTC } from "@/lib/api/values";
 import { cfpContentToWire } from "@/lib/api/cfp";
+import { isApiError } from "@/lib/api/client";
 
 const label = (value: string) =>
   value.replaceAll(/([A-Z])/g, " $1").replaceAll("_", " ");
@@ -133,15 +134,22 @@ export default function CfpLifecycle() {
     >
       {summary.data && (
         <CfpEditor
-          key={`${bank?.id}:${summary.data.current?.id ?? "new"}:${summary.data.current?.updatedAt.toISOString() ?? ""}`}
+          key={`${bank?.id}:${summary.data.current?.revision ?? "new"}`}
           summary={summary.data}
+          onReload={() => void summary.refetch()}
         />
       )}
     </QueryBoundary>
   );
 }
 
-function CfpEditor({ summary }: { summary: CfpSummaryRead }) {
+function CfpEditor({
+  summary,
+  onReload,
+}: {
+  summary: CfpSummaryRead;
+  onReload: () => void;
+}) {
   const { bank, period, institutionCapabilities, authorityPending } =
     useBankContext();
   const { profile } = useUserProfile();
@@ -175,15 +183,20 @@ function CfpEditor({ summary }: { summary: CfpSummaryRead }) {
   const hasUnsavedContent =
     JSON.stringify(cfpContentToWire(content)) !==
     JSON.stringify(cfpContentToWire(current?.content ?? {}));
+  const staleRevision =
+    isApiError(mutation.error) &&
+    mutation.error.errorCode === "stale_cfp_revision";
   const approveReason = !canApprove
     ? "Requires Liquidity · Confidential · Approve authority."
-    : selfApproval
-      ? "The preparer cannot approve their own plan. Ask an independent approver."
-      : current?.status !== "draft"
-        ? "Save a draft before Board approval."
-        : hasUnsavedContent
-          ? "Save your content changes before Board approval. Saving makes you the preparer and requires an independent approver."
-          : undefined;
+    : staleRevision
+      ? "Reload the latest plan and review it before approving."
+      : selfApproval
+        ? "The preparer cannot approve their own plan. Ask an independent approver."
+        : current?.status !== "draft"
+          ? "Save a draft before Board approval."
+          : hasUnsavedContent
+            ? "Save your content changes before Board approval. Saving makes you the preparer and requires an independent approver."
+            : undefined;
   const activateReason = !canApprove
     ? "Requires Liquidity · Confidential · Approve authority."
     : !period
@@ -223,6 +236,7 @@ function CfpEditor({ summary }: { summary: CfpSummaryRead }) {
         await mutation.mutateAsync({
           action,
           payload: {
+            expectedRevision: current!.revision,
             approvalReference: reference.trim(),
             reason: reason.trim(),
           },
@@ -484,6 +498,11 @@ function CfpEditor({ summary }: { summary: CfpSummaryRead }) {
           </p>
         )}
         {message && <p role="status">{message}</p>}
+        {staleRevision && (
+          <button type="button" className="btn-secondary" onClick={onReload}>
+            Reload latest plan
+          </button>
+        )}
         {mutation.isPending && <p role="status">Recording CFP action…</p>}
       </div>
     </SectionCard>

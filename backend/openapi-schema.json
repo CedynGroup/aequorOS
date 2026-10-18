@@ -14407,6 +14407,12 @@
             "title": "Approval Reference",
             "type": "string"
           },
+          "expected_revision": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Expected Revision",
+            "type": "string"
+          },
           "reason": {
             "maxLength": 2000,
             "minLength": 1,
@@ -14415,6 +14421,7 @@
           }
         },
         "required": [
+          "expected_revision",
           "approval_reference",
           "reason"
         ],
@@ -15150,6 +15157,10 @@
             ],
             "title": "Prepared By"
           },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          },
           "status": {
             "$ref": "#/components/schemas/CfpStatus"
           },
@@ -15167,6 +15178,7 @@
           "id",
           "bank_id",
           "version",
+          "revision",
           "status",
           "content",
           "created_at",
