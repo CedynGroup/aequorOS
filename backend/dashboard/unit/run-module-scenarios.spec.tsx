@@ -27,6 +27,16 @@ const context = vi.hoisted(() => ({
 vi.mock("@/components/shell/BankContext", () => ({
   useBankContext: () => ({
     bank: { id: "BK-SAMP0001" },
+    periods: context.period
+      ? [
+          {
+            id: context.period,
+            label: context.period,
+            periodEnd: new Date("2026-03-31"),
+          },
+        ]
+      : [],
+    setPeriodId: vi.fn(),
     period: context.period
       ? {
           id: context.period,

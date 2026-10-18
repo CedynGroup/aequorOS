@@ -31,8 +31,14 @@ const POLICY = {
 
 /** Explicit command: never run on mount, reads, or reporting-period selection. */
 export default function RunModuleScenarios({ module }: { module: Module }) {
-  const { bank, period, institutionCapabilities, authorityPending } =
-    useBankContext();
+  const {
+    bank,
+    period,
+    periods,
+    setPeriodId,
+    institutionCapabilities,
+    authorityPending,
+  } = useBankContext();
   const scope = useQueryAuthorityScope();
   const client = useQueryClient();
   const liquidity = useRunAllLiquidityScenarios(bank?.id);
@@ -115,18 +121,29 @@ export default function RunModuleScenarios({ module }: { module: Module }) {
       aria-label={`${policy.label} regulatory scenario controls`}
     >
       <div className="flex flex-wrap items-center gap-3">
+        <label className="flex flex-wrap items-center gap-2 text-caption text-slate">
+          As-of reporting period
+          <select
+            className="rounded border border-border-light bg-surface px-3 py-2 text-navy"
+            value={period?.id ?? ""}
+            onChange={(event) => setPeriodId(event.target.value)}
+            disabled={busy || !bank || periods.length === 0}
+          >
+            {!period && <option value="">No reporting periods available</option>}
+            {periods.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.label} · {fmtDateUTC(entry.periodEnd)}
+              </option>
+            ))}
+          </select>
+        </label>
         {reason ? (
           <DisabledWithReason reason={reason}>{button}</DisabledWithReason>
         ) : (
           button()
         )}
         <span className="text-caption text-slate">
-          As of{" "}
-          {period
-            ? `${period.label} · ${fmtDateUTC(period.periodEnd)}`
-            : "no period selected"}
-          . Creates stored regulatory runs; current live results remain
-          separate.
+          Creates stored regulatory runs; current live results remain separate.
         </span>
       </div>
       {outcome?.signature === signature && (
