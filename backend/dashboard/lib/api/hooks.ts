@@ -4488,6 +4488,32 @@ export function useSavedAnalyses(
   });
 }
 
+export function useSavedScenarioAnalysis(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+  analysisId: string | undefined,
+) {
+  const scope = useQueryAuthorityScope();
+  return useQuery({
+    queryKey: scopedQueryKey(
+      "scenario-analysis",
+      scope,
+      bankId ?? null,
+      module,
+      analysisId ?? null,
+    ),
+    queryFn: () =>
+      apiCall(() =>
+        scenarioWorkbenchApi.getScenarioAnalysis({
+          bankId: bankId!,
+          module,
+          analysisId: analysisId!,
+        }),
+      ),
+    enabled: Boolean(bankId && analysisId),
+  });
+}
+
 export function useSaveScenarioAnalysis(
   bankId: string | undefined,
   module: WorkbenchModule,
