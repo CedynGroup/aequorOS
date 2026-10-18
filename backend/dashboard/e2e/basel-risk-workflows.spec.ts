@@ -2,7 +2,7 @@
 /**
  * Basel capital, worked end to end by an analyst: read the fixture's capital
  * ratios, RWA build-up and capital structure back off the Basel tabs, drive an
- * enterprise stress from the Stress tab, then plan: move the what-if planner
+ * enterprise stress via the Scenarios tab, then plan: move the what-if planner
  * and refresh the ILAAP evidence, and confirm both the stress run and the ILAAP
  * snapshot are what the platform kept.
  *
@@ -171,7 +171,16 @@ test.describe("Basel capital functional workflow", () => {
     ).toBeVisible();
 
     // ---- Stress: a governed adverse path through every engine.
-    await openTab(page, "Stress");
+    await openTab(page, "Scenarios");
+    await expect(
+      page.getByRole("heading", { name: "Capital Scenarios", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("link", { name: "Open enterprise stress workbench" })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
+    ).toBeVisible();
     const run = await runEnterpriseStress(
       page,
       "Adverse domestic downturn (moderate)",
@@ -189,7 +198,7 @@ test.describe("Basel capital functional workflow", () => {
     await expectPersistedStressRun(page, run, "34.47%");
 
     // ---- Planning: the what-if planner, then refresh and persist ILAAP evidence.
-    await openTab(page, "Planning");
+    await page.goto("/basel/planning");
     await expect(
       page.getByRole("heading", { name: "Capital Planning" }),
     ).toBeVisible();

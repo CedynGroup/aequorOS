@@ -9,22 +9,34 @@ import {
   it,
   vi,
 } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import type { WorkbenchModule } from "@aequoros/risk-service-api";
 import ScenarioWorkbench from "../components/workbench/ScenarioWorkbench";
+import EnterpriseStressPage from "../app/(app)/irr/enterprise-stress/page";
 import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
 import { queryAuthorityScope } from "../lib/api/queryPolicy";
 import { apiBaseUrl } from "../lib/api/client";
 import { setAccessToken } from "../lib/api/token";
-const context = vi.hoisted(() => ({ permissions: ["view", "run", "create"] }));
+const context = vi.hoisted(() => ({
+  permissions: ["view", "run", "create"],
+  hasPeriod: true,
+}));
 vi.mock("@/components/shell/BankContext", () => ({
   useBankContext: () => ({
     bank: { id: "BK-SAMP0001" },
-    period: { id: "period", label: "March", periodEnd: new Date("2026-03-31") },
+    period: context.hasPeriod
+      ? { id: "period", label: "March", periodEnd: new Date("2026-03-31") }
+      : undefined,
     authorityPending: false,
     institutionCapabilities: ["liq", "cap", "irrbb", "fx", "ftp"].flatMap(
       (module) =>
@@ -77,6 +89,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterAll(() => server.close());
 beforeEach(() => {
   context.permissions = ["view", "run", "create"];
+  context.hasPeriod = true;
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   setAccessToken("fixture");
   server.use(
@@ -102,7 +115,7 @@ beforeEach(() => {
               kind: "system",
               code: "baseline",
               name: `${params.module} baseline definition`,
-              shocks: {},
+              shocks: { curve_shift_bp: "125" },
               configured: true,
               locked: true,
               is_archived: false,
@@ -132,6 +145,7 @@ it.each(["irr", "liquidity", "capital", "fx", "ftp"] as const)(
       ),
     ).toBeVisible();
     expect(screen.getByText(/No stored .* scenario runs/)).toBeVisible();
+    expect(screen.getByText("Curve Shift Bp:")).toBeVisible();
   },
 );
 it("sends FTP curve and rule overrides to preview and save, then reopens the saved result", async () => {
@@ -408,3 +422,224 @@ it("offers readers disabled scoped run and save controls", async () => {
     screen.getByRole("button", { name: "Save FTP analysis" }),
   ).toBeDisabled();
 });
+
+it("keeps enterprise stress on its own page and explains a missing reporting period", async () => {
+  context.hasPeriod = false;
+  server.use(
+    http.get(`${apiBaseUrl}/macro-scenarios`, () =>
+      HttpResponse.json({ scenarios: [] }),
+    ),
+    http.get(`${apiBaseUrl}/management-action-plans`, () =>
+      HttpResponse.json({ plans: [] }),
+    ),
+  );
+  render(
+    <QueryClientProvider client={client}>
+      <QueryAuthorityScopeProvider
+        scope={queryAuthorityScope("org", "fixture", 1)}
+      >
+        <EnterpriseStressPage />
+      </QueryAuthorityScopeProvider>
+    </QueryClientProvider>,
+  );
+  expect(
+    screen.getByRole("heading", { name: "Enterprise Stress Workbench" }),
+  ).toBeVisible();
+  expect(screen.getByText("A reporting period is required")).toBeVisible();
+  expect(
+    screen.getByRole("link", { name: "Open Data Engine" }),
+  ).toHaveAttribute("href", "/data-engine");
+  expect(
+    screen.queryByRole("button", { name: "Run enterprise stress" }),
+  ).not.toBeInTheDocument();
+});
+
+it("sends the selected FTP scenario and shows a refused preview before a successful retry", async () => {
+  let attempts = 0;
+  server.use(
+    http.get(`${base}/scenario-workbench/ftp/scenarios`, () =>
+      HttpResponse.json({
+        bank_id: "BK-SAMP0001",
+        module: "ftp",
+        as_of_date: "2026-03-31",
+        allowed_keys: [],
+        allowed_prefixes: [],
+        scenarios: ["baseline", "funding_shock"].map((code) => ({
+          kind: "system",
+          code,
+          name: code,
+          shocks: {},
+          configured: true,
+          locked: true,
+          is_archived: false,
+        })),
+      }),
+    ),
+    http.post(
+      `${base}/scenario-workbench/ftp/analysis`,
+      async ({ request }) => {
+        expect(await request.json()).toEqual({
+          reporting_period_id: "period",
+          scenarios: [
+            { kind: "system", code: "baseline" },
+            { kind: "system", code: "funding_shock", overrides: {} },
+          ],
+        });
+        if (++attempts === 1) {
+          return HttpResponse.json(
+            {
+              error: {
+                code: "inputs_unavailable",
+                message: "Governed FTP inputs unavailable",
+              },
+            },
+            { status: 409 },
+          );
+        }
+        return HttpResponse.json({
+          bank_id: "BK-SAMP0001",
+          module: "ftp",
+          reporting_period_id: "period",
+          period_label: "March",
+          as_of_date: "2026-03-31",
+          engine_version: "ftp",
+          computed_at: "2026-03-31T00:00:00Z",
+          results: [
+            {
+              ...result("250"),
+              validations: [
+                {
+                  rule_code: "floor",
+                  message: "Margin floor met",
+                  passed: true,
+                },
+                {
+                  rule_code: "nmd",
+                  message: "NMD policy breached",
+                  passed: false,
+                },
+              ],
+            },
+          ],
+        });
+      },
+    ),
+  );
+  const user = userEvent.setup();
+  mount("ftp");
+  await screen.findByRole("option", { name: "funding_shock" });
+  await user.selectOptions(
+    screen.getByLabelText("Base FTP scenario"),
+    "system:funding_shock",
+  );
+  const preview = screen.getByRole("button", { name: "Preview FTP what-if" });
+  await user.click(preview);
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Governed FTP inputs unavailable",
+  );
+  expect(screen.queryByText(/What-if ·/)).not.toBeInTheDocument();
+  await user.click(preview);
+  expect(
+    await screen.findByText("Baseline · FTP 250 · succeeded"),
+  ).toBeVisible();
+  await user.click(screen.getByText("Applied inputs and validations"));
+  expect(screen.getByText("Margin floor met · Passed")).toBeVisible();
+  expect(screen.getByText("NMD policy breached · Failed")).toBeVisible();
+  expect(attempts).toBe(2);
+});
+
+it.each(["definitions", "runs", "saved analyses", "saved detail"])(
+  "recovers the FTP %s read using its own Retry control",
+  async (resource) => {
+    const analysis = {
+      id: "retry",
+      module: "ftp",
+      reporting_period_id: "period",
+      name: "Recovered analysis",
+      engine_version: "ftp",
+      scenario_count: 2,
+      scenarios: [],
+      results: [result("0")],
+      created_at: "2026-03-31T00:00:00Z",
+    };
+    const responses = {
+      definitions: {
+        path: "scenario-workbench/ftp/scenarios",
+        body: {
+          bank_id: "BK-SAMP0001",
+          module: "ftp",
+          as_of_date: "2026-03-31",
+          allowed_keys: [],
+          allowed_prefixes: [],
+          scenarios: [],
+        },
+      },
+      runs: {
+        path: "regulatory-runs",
+        body: { runs: [], total: 0, limit: 100, offset: 0 },
+      },
+      "saved analyses": {
+        path: "scenario-workbench/ftp/analyses",
+        body: { analyses: [], total: 0, limit: 25, offset: 0 },
+      },
+      "saved detail": {
+        path: "scenario-workbench/ftp/analyses/retry",
+        body: analysis,
+      },
+    };
+    const response = responses[resource as keyof typeof responses];
+    let reads = 0;
+    server.use(
+      http.get(`${base}/${response.path}`, () => {
+        if (++reads === 1)
+          return HttpResponse.json(
+            {
+              error: {
+                code: "registry_unavailable",
+                message: "Temporary registry failure",
+              },
+            },
+            { status: 503 },
+          );
+        return HttpResponse.json(response.body);
+      }),
+    );
+    if (resource === "saved detail") {
+      server.use(
+        http.get(`${base}/scenario-workbench/ftp/analyses`, () =>
+          HttpResponse.json({
+            analyses: [analysis],
+            total: 1,
+            limit: 25,
+            offset: 0,
+          }),
+        ),
+      );
+    }
+    mount("ftp");
+    if (resource === "saved detail") {
+      await screen.findByRole("option", { name: /Recovered analysis/ });
+      await userEvent.selectOptions(
+        screen.getByLabelText("Saved FTP analyses"),
+        "retry",
+      );
+    }
+    expect(await screen.findByText("Temporary registry failure")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Temporary registry failure"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(reads).toBe(2);
+    if (resource === "saved detail") {
+      expect(
+        await screen.findByText("Saved: Recovered analysis"),
+      ).toBeVisible();
+    } else if (resource === "runs") {
+      expect(
+        await screen.findByText("No stored FTP scenario runs for this period."),
+      ).toBeVisible();
+    }
+  },
+);
