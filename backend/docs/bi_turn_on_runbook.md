@@ -29,6 +29,8 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
    makes `risk-migrate` exit 1 and takes prod down (the surgical-DDL incident).
    Migration `202610120099` adds the guarded API query-log partition capability
    documented in the [database role handoff](../../docs/ops/database-roles.md#target-matrix).
+   The chain continues through measured reverse-lineage indexes `202610140100`
+   before worker access `202610120100`.
    Partition-function permissions and the worker's restricted wrappers follow
    [the worker compatibility contract](../../docs/ops/database-roles.md#worker-compatibility-migration).
    Apply `202610120100` before activating the least-privilege BI worker; do not

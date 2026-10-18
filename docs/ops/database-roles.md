@@ -166,7 +166,9 @@ these prerequisites; never use the primary database.
 
 ## Worker compatibility migration
 
-Migration `202610120100` follows the API query-log partition migration `202610120099`. This is a captain-reviewed
+Migration `202610120100` follows main's measured reverse-lineage indexes
+`202610140100`, which follows API query-log partitions `202610120099`, preserving
+a single Alembic head and both changes. This is a captain-reviewed
 worker cutover: **non-breaking; works on current and new worker role; deployment switch is a separate runbook step**. It does
 not change the attributes or credentials of an existing deployment role. The
 effective migration actor needs CREATE on the target database to create the
