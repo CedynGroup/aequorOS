@@ -1245,8 +1245,8 @@ and line-section CHECK constraints for IRR/FX/FTP; those modules add no further 
 ### Liquidity, stress and capital extensions
 
 - **product.md §Phase 2 is fully built.** All 11 LMTD appendix tables; per-currency gaps +
-  `usd_funding_stress` (snapshot `bank-facts-v3`); server-side EWI/CFP with the ¶74
-  notification (`/banks/{id}/liquidity/ewis|cfp`); reverse stress (module
+  `usd_funding_stress` (snapshot `bank-facts-v3`); server-side EWI/CFP
+  (`/banks/{id}/liquidity/ewis|cfp`; [dashboard lifecycle and notification behavior](backend/dashboard/README.md#contingency-funding-plan-lifecycle)); reverse stress (module
   `reverse_stress`); STRESS-PACK return (family `stress`, event-driven); IFRS 9 ECL
   ([assumption and coverage contract](#ecl-assumption-and-coverage-contract)) +
   CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +

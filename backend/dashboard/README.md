@@ -837,6 +837,12 @@ also requires an approval reference and an independent checker. The server
 remains authoritative for the complete Liquidity/Confidential binding and
 maker-checker decision. Readers see disabled controls with permission reasons.
 
+Save any content changes before recording Board approval. Saving makes you the
+preparer, so an independent checker must review the saved draft. Approval is
+bound to the revision the checker loaded: if another session saves a revision,
+the server refuses approval with HTTP 409. Use **Reload latest plan**, review
+the revised contents, then record approval again.
+
 | Source             | Command               | Authority and guard                                    | Result                                             |
 | ------------------ | --------------------- | ------------------------------------------------------ | -------------------------------------------------- |
 | No plan / approved | Save draft            | Create                                                 | New draft version; previous approval retained      |
