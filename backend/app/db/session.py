@@ -176,22 +176,6 @@ def get_cross_tenant_engine(database_url: str, application_name: str, setting_na
     return engine
 
 
-def get_preauth_sessionmaker() -> sessionmaker[Session]:
-    settings = get_settings()
-    url = (
-        settings.database.preauth_database_url
-        or settings.worker.worker_database_url
-        or settings.database.database_url
-    )
-    if url is None:
-        raise RlsBlindError("PREAUTH_DATABASE_URL is required for authentication lookups.")
-    return sessionmaker(
-        bind=get_cross_tenant_engine(url, "aequoros-preauth", "PREAUTH_DATABASE_URL"),
-        autoflush=False,
-        expire_on_commit=False,
-    )
-
-
 @lru_cache
 def get_bi_engine(database_url: str) -> Engine:
     """The BI query pool: a small, separately named sibling of :func:`get_engine`.

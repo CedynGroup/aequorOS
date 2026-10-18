@@ -126,10 +126,13 @@ mise run risk-service:dev
 
 Database: configure `backend/.env` and apply the migration chain before starting the API.
 
-Configure `PREAUTH_DATABASE_URL` and `OPERATOR_DATABASE_URL` through the
+Authentication uses the API `DATABASE_URL` sessionmaker. Operator sessions use
+`OPERATOR_DATABASE_URL`, falling back only to `DATABASE_URL`. Neither uses
+`WORKER_DATABASE_URL`. Keep the existing API credential until the separate
+captain-reviewed lookup-function PR is deployed. The worker credential switch
+requires this compatibility PR and remains a separate deployment step under the
 [database-role handoff](../docs/ops/database-roles.md#worker-compatibility-migration),
-which owns credential resolution, the temporary broad-access requirement,
-activation prerequisites and rollback.
+which owns activation prerequisites and rollback.
 Two operational notes for a remote database:
 
 - **RLS hides everything without the tenant GUC.** Ad-hoc `psql` against the remote shows zero

@@ -55,12 +55,9 @@ class DatabaseSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
-    preauth_database_url: str | None = Field(default=None, alias="PREAUTH_DATABASE_URL")
     migration_database_url: str | None = Field(default=None, alias="MIGRATION_DATABASE_URL")
 
-    @field_validator(
-        "database_url", "preauth_database_url", "migration_database_url", mode="before"
-    )
+    @field_validator("database_url", "migration_database_url", mode="before")
     @classmethod
     def empty_means_unconfigured(cls, value: str | None) -> str | None:
         """An empty runtime or migration database URL means unconfigured.
@@ -1423,7 +1420,6 @@ def get_migration_database_url() -> str:
     if settings.app.app_env in {"production", "staging"}:
         runtime_urls = (
             settings.database.database_url,
-            settings.database.preauth_database_url,
             settings.worker.worker_database_url,
             settings.bi.database_url,
             get_operator_settings().operator_database_url,

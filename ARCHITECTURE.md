@@ -327,8 +327,11 @@ on one canonical store — the live tier for intraday awareness, the official ti
   queue through narrowly granted platform functions using `aqs_worker` on
   `WORKER_DATABASE_URL`. Per-job work sets organization and bank context under forced RLS.
   [The deployment runbook](docs/ops/database-roles.md#worker-compatibility-migration)
-  owns credential resolution, the staged switch, temporary broad pre-authentication
-  and operator access, and retirement of legacy bypass access.
+  owns the separate deployment switch, which requires this worker compatibility PR.
+  Authentication uses the API `DATABASE_URL` sessionmaker; operator sessions use
+  `OPERATOR_DATABASE_URL` with only `DATABASE_URL` as fallback. Both are independent
+  of `WORKER_DATABASE_URL`. The API credential switch still waits for the separate
+  captain-reviewed lookup-function PR.
 - **Live tier** — `pipeline.run_refresh` (`job_type=pipeline_refresh`): re-derives facts, then for
   each cheap module computes a baseline metric + limit evaluation (`compute_live`, reusing the
   same domain engines as the detail views), **upserts** one `live_metrics` row, and reconciles open `live_findings`

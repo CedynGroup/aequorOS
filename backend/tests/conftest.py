@@ -11,7 +11,6 @@ from contextlib import contextmanager
 os.environ["RUN_INPROCESS_WORKER"] = "0"
 os.environ["TLS_ALLOW_PLAINTEXT"] = "1"
 os.environ["DATABASE_URL"] = ""
-os.environ["PREAUTH_DATABASE_URL"] = ""
 os.environ["MIGRATION_DATABASE_URL"] = ""
 os.environ["WORKER_DATABASE_URL"] = ""
 
@@ -98,7 +97,6 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # Postgres-gated tests opt in explicitly via TEST_DATABASE_URL and run in
     # a disposable per-run schema).
     monkeypatch.setenv("DATABASE_URL", "")
-    monkeypatch.setenv("PREAUTH_DATABASE_URL", "")
     monkeypatch.setenv("MIGRATION_DATABASE_URL", "")
     monkeypatch.setenv("WORKER_DATABASE_URL", "")
     monkeypatch.setenv("CORS_ORIGINS", "")
@@ -572,7 +570,7 @@ def _rollback_sessionmaker_lifecycle(
         return original_sessionmaker(*args, **kwargs)
 
     monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
-    monkeypatch.setattr(auth_mod, "get_preauth_sessionmaker", lambda: bound_sessionmaker)
+    monkeypatch.setattr(auth_mod, "get_sessionmaker", lambda: bound_sessionmaker)
     monkeypatch.setattr(session_mod, "get_engine", shared_engine)
     monkeypatch.setattr(session_mod, "sessionmaker", shared_sessionmaker)
     try:
@@ -653,7 +651,7 @@ def _committing_test_database(
     # The engine the application resolves for this test; the session fixture's
     # own engine only outlives it so the schema can be dropped at the end.
     engine = get_engine(database_url)
-    monkeypatch.setattr(auth_mod, "get_preauth_sessionmaker", get_sessionmaker)
+    monkeypatch.setattr(auth_mod, "get_sessionmaker", get_sessionmaker)
     if engine.dialect.name == "sqlite":
         _enable_sqlite_foreign_keys(engine)
     database = _TestDatabase(

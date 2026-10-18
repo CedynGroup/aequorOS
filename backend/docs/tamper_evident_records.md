@@ -182,7 +182,7 @@ Complete [deployment follow-up #509](https://github.com/CedynGroup/aequorOS/issu
 before deploying this migration in production or staging:
 
 - Give the migration container its own `MIGRATION_DATABASE_URL`, distinct from
-  API `DATABASE_URL`, `PREAUTH_DATABASE_URL`, `WORKER_DATABASE_URL`, `OPERATOR_DATABASE_URL` and
+  API/authentication `DATABASE_URL`, `WORKER_DATABASE_URL`, `OPERATOR_DATABASE_URL` and
   `BI_DATABASE_URL`. Alembic refuses a missing migration URL or a shared role in
   production/staging; local/test runs retain the existing URL fallback. Runtime
   containers must never receive migration credentials.

@@ -19,7 +19,6 @@ def clear_operator_settings() -> Iterator[None]:
     "runtime_setting",
     [
         "DATABASE_URL",
-        "PREAUTH_DATABASE_URL",
         "WORKER_DATABASE_URL",
         "OPERATOR_DATABASE_URL",
         "BI_DATABASE_URL",

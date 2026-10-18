@@ -91,7 +91,7 @@ default to 120 seconds), then restores the role default. The five-minute BI idle
 abandoned read transaction without changing those query budgets.
 
 `backend/app/db/session.py` supplies connection startup options for legacy
-usernames, separately for API/pre-authentication/operator, worker and BI pools, including when all
+usernames, separately for API/authentication/operator, worker and BI pools, including when all
 URLs still share one login. This does not alter that role's defaults or other
 clients. Recognized new role usernames use their administrator-configured role
 defaults. Existing URL options, including `search_path`, are preserved. Alembic
@@ -151,8 +151,9 @@ The bootstrap pins Alembic to the validated local URL, including when a shell
 has a separate migration URL configured. The local SQL sets clearly identified
 development passwords equal to role names;
 never execute `database_roles_local.sql` on a deployment. Existing DATABASE_URL
-and worker/operator fallbacks keep working. All runtime pools identify API,
-pre-authentication, worker, BI and operator connections separately through `application_name`.
+and the worker-to-API and operator-to-API fallbacks keep working. Runtime pools
+identify API/authentication, worker, BI and operator connections separately through
+`application_name`.
 
 For externally supplied test services, an administrator must prepare the versioned
 foundation SQL, `backend/scripts/database_session_timeouts.sql`, and the test actor's
@@ -189,46 +190,42 @@ serializes each daily key across tenants and retains completed-job cadence. Only
 `aqs_worker` can execute it; tenant job kinds are refused. Legacy credentials keep
 the existing global enqueue path.
 
-The captain approved retaining the existing broad pre-authentication and operator
-access explicitly during this worker-only stage. Authentication resolves
-`PREAUTH_DATABASE_URL`, then legacy `WORKER_DATABASE_URL`, then `DATABASE_URL`.
-Operator sessions resolve `OPERATOR_DATABASE_URL`, then legacy `WORKER_DATABASE_URL`,
-then `DATABASE_URL`. Both boundaries refuse restricted PostgreSQL credentials
-with a configuration error; no role, grant or BYPASSRLS attribute is added.
-Their pools identify as `aequoros-preauth` and `aequoros-operator`; tenant sessions
-continue to use only `DATABASE_URL` and `aequoros-api`.
+This captain-reviewed PR retains the existing broad API and operator access during
+this worker-only stage. Authentication uses the API `DATABASE_URL` sessionmaker
+and its `aequoros-api` pool. Operator sessions and the first-account provisioning
+CLI resolve `OPERATOR_DATABASE_URL`, then `DATABASE_URL`; neither falls back to
+`WORKER_DATABASE_URL`. The operator session boundary refuses restricted PostgreSQL
+credentials with a configuration error. Its pool identifies as `aequoros-operator`.
+No role, grant or BYPASSRLS attribute is added for authentication or operator access.
 
 Eric owns this handoff; this PR applies no production configuration:
 
 1. Deploy the compatibility code and migration `202610120100` while retaining the
    legacy worker credential. Restart long-lived API, operator and worker processes.
-2. Set `PREAUTH_DATABASE_URL` to the secrets-manager reference for the existing
-   legacy pre-authentication credential, and set `OPERATOR_DATABASE_URL` explicitly
-   to the existing operator credential. These credentials retain broad cross-tenant
-   access temporarily. Reuse existing credentials; do not create new database users
-   or change their grants. Keep the current `DATABASE_URL` unchanged.
-3. Restart the API and operator processes and verify password login, refresh,
-   logout revocation, SSO lookup and expected cross-bank operator visibility.
+2. Keep the current `DATABASE_URL` unchanged for API and authentication access.
+   Retain `OPERATOR_DATABASE_URL` if configured; otherwise operator access uses
+   `DATABASE_URL`. Reuse existing credentials; do not create new database users
+   or change their grants.
+3. Verify password login, refresh, logout revocation, SSO lookup and expected
+   cross-bank operator visibility.
 4. Only after product-owner review and those checks may Eric switch
    `WORKER_DATABASE_URL` to the prepared `aqs_worker` secret and restart the workers.
-   Repeat identity/operator checks and prove tenant job context and worker refusals.
+   This separate deployment step requires this compatibility PR. Repeat
+   identity/operator checks and prove tenant job context and worker refusals.
 
-Rollback restores the previous `WORKER_DATABASE_URL` and restarts affected processes;
-leave the explicit pre-authentication and operator URLs in place. If rolling back
-the code too, restore the legacy worker secret first so older code's worker fallback
-retains identity/operator visibility. Never clear the explicit URLs while the worker
-uses restricted credentials. The fallbacks preserve the documented split API/legacy
-worker configuration before cutover and after rollback.
+Rollback restores the previous `WORKER_DATABASE_URL` and restarts affected processes.
+Keep `DATABASE_URL` and any configured `OPERATOR_DATABASE_URL` unchanged. If rolling
+back the code too, restore the legacy worker secret first so older code's worker
+fallback retains identity/operator visibility.
 
 Operator metadata views remain the separate next stage. The captain-reviewed
-bounded API lookup follow-up remains later; a broader API credential switch to
-`aqs_api` is still blocked because integration-key and bank-key lookup support is
-not supplied here. Existing split API credentials remain supported for the
-authentication paths tested in this stage.
+bounded API lookup follow-up remains later; the API credential switch to `aqs_api`
+is still blocked because pre-tenant authentication, integration-key and bank-key
+lookup support is not supplied here. This PR is non-breaking and supports both
+current and new worker credentials.
 Before switching the worker secret, configure explicit credentials for
-[first-account provisioning](../../backend/scripts/create_operator.py) and
-[logical backups](../../backend/scripts/backup_database.py); those tools retain
-legacy worker-URL fallbacks.
+[logical backups](../../backend/scripts/backup_database.py); that tool retains its
+legacy worker-URL fallback.
 
 Each handler transaction sets `app.organization_id` and `app.bank_id`. A bank
 carried in the payload must agree with the dispatch envelope and belong to that
@@ -345,12 +342,13 @@ WHERE rolname IN ('aqs_worker', 'aqs_operator');
 
 After the new connections are healthy and old pools drained, Eric removes
 BYPASSRLS from the retired worker/operator roles or retires their credentials.
-Preserve any legacy role still used by the API, pre-authentication pool or an
-operator awaiting its cutover. No
+Preserve any legacy role still used by API/authentication or an operator awaiting
+its cutover. No
 engineering migration alters those existing role attributes. **Do not switch the
 API credential yet:** `aqs_api` cannot authenticate integration keys or look up
-bank encryption keys. Pre-tenant authentication follows the explicit credential
-handoff in [Worker compatibility migration](#worker-compatibility-migration).
+bank encryption keys. Pre-tenant authentication continues to use the API
+`DATABASE_URL` sessionmaker as described in
+[Worker compatibility migration](#worker-compatibility-migration).
 The API switch waits for the separate captain-reviewed
 pre-authentication PR after the operator PR, followed by verification of both
 lookup paths, refusal of direct table access and refusal of other-bank
