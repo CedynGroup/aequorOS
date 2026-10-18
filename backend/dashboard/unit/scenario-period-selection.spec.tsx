@@ -100,7 +100,8 @@ it("selects a historical period, runs and reloads its stored results without rep
         bank_id: bankId,
         module: "liquidity",
         as_of_date:
-          new URL(request.url).searchParams.get("reporting_period_id") === "august"
+          new URL(request.url).searchParams.get("reporting_period_id") ===
+          "august"
             ? "2026-08-31"
             : "2026-09-30",
         allowed_keys: [],
@@ -110,7 +111,8 @@ it("selects a historical period, runs and reloads its stored results without rep
     ),
     http.get(`${base}/regulatory-runs`, ({ request }) => {
       const historic =
-        new URL(request.url).searchParams.get("reporting_period_id") === "august";
+        new URL(request.url).searchParams.get("reporting_period_id") ===
+        "august";
       const runs = historic && writes > 0 ? [stored] : [];
       return HttpResponse.json({
         runs,
