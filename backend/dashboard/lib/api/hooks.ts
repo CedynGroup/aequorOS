@@ -78,6 +78,7 @@ import type {
   WhatIfShockCode,
 } from "@aequoros/risk-service-api";
 import { FeatureFlagsApi } from "@aequoros/risk-service-api";
+import { cfpContentToWire } from "./cfp";
 import {
   ApiError,
   apiCall,
@@ -4223,10 +4224,21 @@ export function useCfpLifecycle(bankId: string | undefined) {
         if (!bankId) throw new Error("Select an institution first.");
         switch (command.action) {
           case "draft":
-            return liquidityCfpApi.putContingencyFundingPlanDraft({
-              bankId,
-              cfpPut: command.payload,
-            });
+            return liquidityCfpApi
+              .withPreMiddleware(async ({ url, init }) => ({
+                url,
+                init: {
+                  ...init,
+                  body: JSON.stringify({
+                    content: cfpContentToWire(command.payload.content),
+                    reason: command.payload.reason,
+                  }),
+                },
+              }))
+              .putContingencyFundingPlanDraft({
+                bankId,
+                cfpPut: command.payload,
+              });
           case "approve":
             return liquidityCfpApi.approveContingencyFundingPlan({
               bankId,

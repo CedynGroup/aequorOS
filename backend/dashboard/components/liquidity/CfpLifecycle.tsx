@@ -17,6 +17,7 @@ import { inputCls } from "@/components/institution/shared";
 import { hasEffectiveCapability, hasStructuralCapability } from "@/lib/modules";
 import { useCfpSummary, useCfpLifecycle } from "@/lib/api/hooks";
 import { fmtDateUTC } from "@/lib/api/values";
+import { cfpContentToWire } from "@/lib/api/cfp";
 
 const label = (value: string) =>
   value.replaceAll(/([A-Z])/g, " $1").replaceAll("_", " ");
@@ -26,6 +27,9 @@ type Field = {
   options?: readonly string[];
   optional?: boolean;
   numeric?: boolean;
+  step?: number | "any";
+  min?: number;
+  max?: number;
 };
 
 /** Repeatable, labelled inputs keep each directive content block editable. */
@@ -76,6 +80,9 @@ function Rows<T extends object>({
                   className={inputCls}
                   required={!field.optional}
                   type={field.numeric ? "number" : "text"}
+                  step={field.numeric ? (field.step ?? 1) : undefined}
+                  min={field.min}
+                  max={field.max}
                   value={String(Reflect.get(row, field.key) ?? "")}
                   onChange={(event) =>
                     onChange(
@@ -165,13 +172,18 @@ function CfpEditor({ summary }: { summary: CfpSummaryRead }) {
     );
   const selfApproval =
     !!current?.preparedBy && current.preparedBy === profile?.userId;
+  const hasUnsavedContent =
+    JSON.stringify(cfpContentToWire(content)) !==
+    JSON.stringify(cfpContentToWire(current?.content ?? {}));
   const approveReason = !canApprove
     ? "Requires Liquidity · Confidential · Approve authority."
     : selfApproval
       ? "The preparer cannot approve their own plan. Ask an independent approver."
       : current?.status !== "draft"
         ? "Save a draft before Board approval."
-        : undefined;
+        : hasUnsavedContent
+          ? "Save your content changes before Board approval. Saving makes you the preparer and requires an independent approver."
+          : undefined;
   const activateReason = !canApprove
     ? "Requires Liquidity · Confidential · Approve authority."
     : !period
@@ -350,7 +362,7 @@ function CfpEditor({ summary }: { summary: CfpSummaryRead }) {
               title="Escalation procedures"
               rows={content.escalationProcedures ?? []}
               fields={[
-                { key: "priority", numeric: true },
+                { key: "priority", numeric: true, min: 1, max: 99 },
                 { key: "stage" },
                 { key: "trigger" },
                 { key: "actions" },
@@ -407,8 +419,8 @@ function CfpEditor({ summary }: { summary: CfpSummaryRead }) {
                   options: Object.values(CfpHorizon),
                 },
                 { key: "linkedAction" },
-                { key: "depositRunoffUpliftPct", numeric: true },
-                { key: "fundingCostUpliftBps", numeric: true },
+                { key: "depositRunoffUpliftPct", numeric: true, step: "any" },
+                { key: "fundingCostUpliftBps", numeric: true, step: "any" },
                 { key: "notes", optional: true },
               ]}
               empty={{
