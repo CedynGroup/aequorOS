@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import os
+from threading import Event
+from time import monotonic
 
 import pytest
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from pydantic import JsonValue, TypeAdapter
 
 from app.api import health
 from app.core.config import get_settings
@@ -483,6 +488,8 @@ def test_live_health(client: TestClient, monkeypatch: pytest.MonkeyPatch, requir
     try:
         response = client.get("/api/health/live")
         assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+        assert "location" not in response.headers
         assert response.json() == {
             "service": "risk-service",
             "environment": "test",
@@ -506,6 +513,8 @@ def test_ready_health_skips_database_when_unconfigured_in_test(client: TestClien
     response = client.get("/api/health/ready")
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert "location" not in response.headers
     body = response.json()
     assert body["service"] == "risk-service"
     assert body["environment"] == "test"
@@ -515,6 +524,146 @@ def test_ready_health_skips_database_when_unconfigured_in_test(client: TestClien
         "detail": "DATABASE_URL is unset.",
     }
     assert body["checks"]["worker"]["status"] == "skipped"
+
+
+@pytest.mark.parametrize("healthy", [True, False])
+def test_overlapping_readiness_callers_share_dependency_result(
+    monkeypatch: pytest.MonkeyPatch, healthy: bool
+) -> None:
+    entered, release = Event(), Event()
+    calls: list[str] = []
+
+    class SlowStorage:
+        def health_check(self) -> StorageHealth:
+            calls.append("probed")
+            entered.set()
+            assert release.wait(timeout=5)
+            return StorageHealth(
+                healthy=healthy, backend="s3", detail="synthetic-private-storage-detail"
+            )
+
+    monkeypatch.setattr(health, "get_storage_client", SlowStorage)
+    monkeypatch.setattr(health, "_READINESS_TIMEOUT_SECONDS", 2)
+
+    async def exercise() -> None:
+        async with AsyncClient(
+            transport=ASGITransport(app=create_app()), base_url="http://testserver"
+        ) as client:
+            requests = [asyncio.create_task(client.get("/api/health/ready"))]
+            try:
+                assert await asyncio.to_thread(entered.wait, 2)
+                requests.append(asyncio.create_task(client.get("/api/health/ready")))
+                done, _ = await asyncio.wait(requests, timeout=0.05)
+                assert not done
+                assert calls == ["probed"]
+                assert (await client.get("/api/health/live")).status_code == 200
+                release.set()
+                responses = await asyncio.gather(*requests)
+                for response in responses:
+                    assert response.status_code == (200 if healthy else 503)
+                    assert response.headers["cache-control"] == "no-store"
+                    assert "synthetic-private" not in response.text
+                    if healthy:
+                        assert response.json()["status"] == "ok"
+                        assert response.json()["checks"]["storage"]["status"] == "ok"
+                    else:
+                        assert response.json()["error"]["message"] == (
+                            "Storage connectivity check failed."
+                        )
+                response_bodies = [
+                    TypeAdapter(dict[str, JsonValue]).validate_json(response.content)
+                    for response in responses
+                ]
+                assert response_bodies[0].get("checks") == response_bodies[1].get("checks")
+                assert calls == ["probed"]
+            finally:
+                release.set()
+                await asyncio.gather(*requests, return_exceptions=True)
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def test_readiness_deadline_preserves_liveness_and_recovers(
+    monkeypatch: pytest.MonkeyPatch,
+    cancel: bool,
+) -> None:
+    entered, release, finished = Event(), Event(), Event()
+    calls: list[str] = []
+
+    class SlowStorage:
+        def health_check(self) -> StorageHealth:
+            calls.append("probed")
+            entered.set()
+            try:
+                assert release.wait(timeout=5)
+                return StorageHealth(healthy=True, backend="s3")
+            finally:
+                finished.set()
+
+    monkeypatch.setattr(health, "get_storage_client", SlowStorage)
+    monkeypatch.setattr(health, "_READINESS_TIMEOUT_SECONDS", 0.1)
+
+    async def exercise() -> None:
+        async with AsyncClient(
+            transport=ASGITransport(app=create_app()), base_url="http://testserver"
+        ) as client:
+            started = monotonic()
+            requests = [asyncio.create_task(client.get("/api/health/ready"))]
+            try:
+                assert await asyncio.to_thread(entered.wait, 2)
+                monkeypatch.setattr(health, "_READINESS_TIMEOUT_SECONDS", 1)
+                requests.append(asyncio.create_task(client.get("/api/health/ready")))
+                done, _ = await asyncio.wait([requests[1]], timeout=0.05)
+                assert not done
+                if cancel:
+                    requests[0].cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await requests[0]
+                else:
+                    response = await requests[0]
+                    assert monotonic() - started < 2
+                    assert response.status_code == 503
+                    assert response.json()["error"]["message"] == "Readiness check timed out."
+                    assert response.headers["cache-control"] == "no-store"
+                assert not requests[1].done()
+                assert not finished.is_set()
+                requests.append(asyncio.create_task(client.get("/api/health/ready")))
+                done, _ = await asyncio.wait(requests[1:], timeout=0.05)
+                assert not done
+                assert calls == ["probed"]
+                assert (await client.get("/api/health/live")).status_code == 200
+                release.set()
+                for response in await asyncio.gather(*requests[1:]):
+                    assert response.status_code == 200
+                    assert response.headers["cache-control"] == "no-store"
+                assert calls == ["probed"]
+                assert (await client.get("/api/health/ready")).status_code == 200
+                assert calls == ["probed", "probed"]
+            finally:
+                release.set()
+                await asyncio.gather(*requests, return_exceptions=True)
+                assert await asyncio.to_thread(finished.wait, 2)
+
+    asyncio.run(exercise())
+
+
+def test_ready_dependency_failure_is_uncached_and_sanitized(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class UnreachableStorage:
+        def health_check(self) -> StorageHealth:
+            raise RuntimeError("synthetic-private-credential-and-driver-detail")
+
+    monkeypatch.setattr(health, "get_storage_client", UnreachableStorage)
+    response = client.get("/api/health/ready")
+
+    assert response.status_code == 503
+    assert response.headers["cache-control"] == "no-store"
+    assert "location" not in response.headers
+    assert response.json()["error"]["message"] == "Storage connectivity check failed."
+    assert "synthetic-private" not in response.text
+    assert client.get("/api/health/live").status_code == 200
 
 
 def test_request_id_is_propagated(client: TestClient) -> None:

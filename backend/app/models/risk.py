@@ -57,11 +57,11 @@ class RiskCase(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
-    case_type: Mapped[str] = mapped_column(String(120), nullable=False)
-    subject_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    case_type: Mapped[str] = mapped_column(Text, nullable=False)
+    subject_type: Mapped[str | None] = mapped_column(Text, nullable=True)
     subject_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
     assigned_to_user_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -117,7 +117,7 @@ class StoredObject(UuidV4PrimaryKeyMixin, Base):
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
-    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
     bucket: Mapped[str] = mapped_column(Text, nullable=False)
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
     version_id: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -125,7 +125,7 @@ class StoredObject(UuidV4PrimaryKeyMixin, Base):
     byte_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     sha256: Mapped[str | None] = mapped_column(Text, nullable=True)
     etag: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
     created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -155,13 +155,13 @@ class Document(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("stored_objects.id"), nullable=False
     )
     filename: Mapped[str] = mapped_column(Text, nullable=False)
-    document_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    document_type: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(
-        String(40), default="upload", server_default=sql_text("'upload'"), nullable=False
+        Text, default="upload", server_default=sql_text("'upload'"), nullable=False
     )
-    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
     parse_status: Mapped[str] = mapped_column(
-        String(40), default="not_started", server_default=sql_text("'not_started'"), nullable=False
+        Text, default="not_started", server_default=sql_text("'not_started'"), nullable=False
     )
     parse_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     uploaded_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
@@ -201,9 +201,9 @@ class DocumentExtraction(UuidV4PrimaryKeyMixin, Base):
     document_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("documents.id"), nullable=False
     )
-    extraction_type: Mapped[str] = mapped_column(String(120), nullable=False)
-    schema_version: Mapped[str] = mapped_column(String(40), nullable=False)
-    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    extraction_type: Mapped[str] = mapped_column(Text, nullable=False)
+    schema_version: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
     extracted_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
@@ -222,8 +222,8 @@ class RiskAssessment(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("risk_cases.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    assessment_type: Mapped[str] = mapped_column(String(120), nullable=False)
-    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    assessment_type: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
     input_snapshot: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
@@ -240,9 +240,9 @@ class RiskAssessmentRun(UuidV4PrimaryKeyMixin, Base):
     assessment_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("risk_assessments.id"), nullable=False
     )
-    status: Mapped[str] = mapped_column(String(40), nullable=False)
-    engine_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    prompt_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    engine_version: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(Text, nullable=True)
     input_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -323,16 +323,16 @@ class RiskFinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     run_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("risk_assessment_runs.id"), nullable=True
     )
-    risk_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    risk_type: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
-    severity: Mapped[str] = mapped_column(String(40), nullable=False)
-    likelihood: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    impact: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    severity: Mapped[str] = mapped_column(Text, nullable=False)
+    likelihood: Mapped[str | None] = mapped_column(Text, nullable=True)
+    impact: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
     status: Mapped[str] = mapped_column(
-        String(40), default="open", server_default=sql_text("'open'"), nullable=False
+        Text, default="open", server_default=sql_text("'open'"), nullable=False
     )
     disposition_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(

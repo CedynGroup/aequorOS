@@ -169,12 +169,6 @@ def migrate_isolated_postgres_schema(
                         "NOINHERIT NOCREATEDB NOREPLICATION CREATEROLE"
                     )
                 )
-                quoted_database = connection.dialect.identifier_preparer.quote_identifier(
-                    cast(str, connection.scalar(text("SELECT current_database()")))
-                )
-                connection.execute(
-                    text(f'GRANT CREATE ON DATABASE {quoted_database} TO "{migration_role}"')
-                )
                 # The per-grant ADMIN/INHERIT/SET options are PostgreSQL 16+. CI
                 # runs 17 and production 15.13, so a fixture pinned to the newer
                 # syntax cannot catch a migration that uses it — which is how one
@@ -186,6 +180,13 @@ def migrate_isolated_postgres_schema(
                     "WITH ADMIN TRUE, INHERIT TRUE, SET TRUE"
                     if int(server_version) >= 160000
                     else "WITH ADMIN OPTION"
+                )
+                database_name = cast(str, connection.scalar(text("SELECT current_database()")))
+                quoted_database = connection.dialect.identifier_preparer.quote_identifier(
+                    database_name
+                )
+                connection.execute(
+                    text(f'GRANT CREATE ON DATABASE {quoted_database} TO "{migration_role}"')
                 )
                 connection.execute(
                     text(f"""

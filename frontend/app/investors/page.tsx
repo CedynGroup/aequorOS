@@ -18,7 +18,7 @@ const thesis = [
   },
   {
     label: 'FOUNDER-LED',
-    body: 'A quantitative-risk founder and a systems CTO, both verifiable on LinkedIn. Ghanaian roots, US market discipline, building in public.',
+    body: 'A quantitative-risk founder, a systems CTO, and a project-finance and operations COO, all verifiable on LinkedIn. Ghanaian roots, US market discipline, building in public.',
   },
 ];
 
