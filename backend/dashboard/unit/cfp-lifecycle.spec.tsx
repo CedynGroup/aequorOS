@@ -11,6 +11,7 @@ import {
 } from "vitest";
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -24,6 +25,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import CfpLifecycle from "../components/liquidity/CfpLifecycle";
+import ContingencyFundingPlan from "../app/(app)/liquidity/cfp/page";
 import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
 import { queryAuthorityScope } from "../lib/api/queryPolicy";
 import { apiBaseUrl } from "../lib/api/client";
@@ -128,13 +130,13 @@ const editableSections = [
   { title: "Communication plans", field: "channel" },
   { title: "Behavioral liquidity scenarios", field: "name" },
 ];
-function mount() {
+function mount(content = <CfpLifecycle />) {
   return render(
     <QueryClientProvider client={client}>
       <QueryAuthorityScopeProvider
         scope={queryAuthorityScope("org", "fixture", 1)}
       >
-        <CfpLifecycle />
+        {content}
       </QueryAuthorityScopeProvider>
     </QueryClientProvider>,
   );
@@ -152,6 +154,144 @@ afterEach(() => {
   client.clear();
   server.resetHandlers();
   setAccessToken(null);
+});
+
+it("retries a failed plan read before allowing a draft to be authored", async () => {
+  server.use(
+    http.get(url, () => HttpResponse.error(), { once: true }),
+    http.get(url, () => HttpResponse.json({ current: null, approved: null })),
+  );
+  const user = userEvent.setup();
+  mount();
+  await user.click(await screen.findByRole("button", { name: "Retry" }));
+  expect(await screen.findByText(/No draft or approved plan/)).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Add funding options" }),
+  ).toBeEnabled();
+  expect(
+    screen.queryByRole("button", { name: "Retry" }),
+  ).not.toBeInTheDocument();
+});
+
+it("refuses an implicit draft submission with whitespace evidence, then saves with a reason", async () => {
+  const requests: unknown[] = [];
+  let current: typeof plan | null = null;
+  server.use(
+    http.get(url, () => HttpResponse.json({ current, approved: null })),
+    http.put(url, async ({ request }) => {
+      requests.push(await request.json());
+      current = plan;
+      return HttpResponse.json(current);
+    }),
+  );
+  const user = userEvent.setup();
+  mount();
+  const reason = await screen.findByLabelText("Reason / evidence");
+  await user.type(reason, "   ");
+  // A form submission must enforce the same reason rule as the disabled button.
+  fireEvent.submit(reason.closest("form")!);
+  expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
+  await user.clear(reason);
+  await user.type(reason, "Treasury evidence");
+  await user.click(screen.getByRole("button", { name: "Save draft" }));
+  await screen.findByText(/Current plan: v1 · draft/);
+  expect(requests).toEqual([
+    expect.objectContaining({ reason: "Treasury evidence" }),
+  ]);
+});
+
+it("retries the event log independently and shows event-time snapshots when live indicators are unavailable", async () => {
+  const event = {
+    cfp_id: "plan",
+    cfp_version: 1,
+    created_at: "2026-03-31T12:00:00Z",
+    approval_overdue: false,
+  };
+  server.use(
+    http.get(url, () => HttpResponse.json({ current: plan, approved: null })),
+    http.get(`${url}/events`, () => HttpResponse.error(), { once: true }),
+    http.get(`${url}/events`, () =>
+      HttpResponse.json({
+        events: [
+          {
+            ...event,
+            id: "activation",
+            event_type: "activated",
+            reason: "Activate committed facility",
+            regulator_notification_id: "internal-record",
+            ewi_snapshot: [
+              {
+                code: "LCR",
+                name: "Liquidity coverage",
+                metric_basis: "lcr_pct",
+                direction: "below",
+                unit: "percent",
+                status: "action",
+                value: "92.5",
+              },
+            ],
+          },
+          {
+            ...event,
+            id: "stand-down",
+            event_type: "de_escalated",
+            reason: "Liquidity restored",
+            approval_overdue: true,
+            ewi_snapshot: [
+              {
+                code: "LCR",
+                name: "Liquidity coverage",
+                metric_basis: "lcr_pct",
+                direction: "below",
+                unit: "percent",
+                status: "normal",
+                value: "125",
+              },
+            ],
+          },
+        ],
+      }),
+    ),
+    http.get(`${apiBaseUrl}/banks/BK-SAMP0001/liquidity/ewis`, () =>
+      HttpResponse.json({
+        available: false,
+        error_code: "liquidity_unavailable",
+        reason: "No live liquidity facts",
+      }),
+    ),
+  );
+  const user = userEvent.setup();
+  mount(<ContingencyFundingPlan />);
+  expect(
+    screen.getByRole("heading", {
+      name: "Contingency Funding Plan",
+      level: 1,
+    }),
+  ).toBeVisible();
+  await user.click(await screen.findByRole("button", { name: "Retry" }));
+  const activation = (
+    await screen.findByText("Activate committed facility")
+  ).closest("li")!;
+  const standDown = screen.getByText("Liquidity restored").closest("li")!;
+  expect(within(activation).getByText("Activated")).toBeVisible();
+  expect(
+    within(activation).getByText(/internal regulator-notification recorded/),
+  ).toBeVisible();
+  expect(within(standDown).getByText("De-escalated")).toBeVisible();
+  expect(
+    within(standDown).getByText(/Board approval was overdue at event time/),
+  ).toBeVisible();
+  for (const row of [activation, standDown]) {
+    await user.click(within(row).getByText("Indicator snapshot at event time"));
+  }
+  expect(
+    within(activation).getByText("Liquidity coverage: 92.50% · Action"),
+  ).toBeVisible();
+  expect(
+    within(standDown).getByText("Liquidity coverage: 125.00% · Normal"),
+  ).toBeVisible();
+  expect(await screen.findByText("No live liquidity facts")).toBeVisible();
+  expect(screen.getByText(/does not transmit them externally/)).toBeVisible();
 });
 
 it("saves every authored collection against the closed backend schema, allowing fractional overlays but integral priorities", async () => {
