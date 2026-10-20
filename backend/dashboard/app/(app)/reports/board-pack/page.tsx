@@ -174,9 +174,7 @@ export default function BoardPackPage() {
                   (live.data?.reconciliation?.blocksFiling
                     ? "Balance-sheet control blocks filing — figures withheld."
                     : liveEvidenceProblem(view));
-                const metric = problem
-                  ? null
-                  : liveBoardHeadline(view);
+                const metric = problem ? null : liveBoardHeadline(view);
                 return (
                   <div key={view.module} className="bp-avoid-break">
                     <KpiStat

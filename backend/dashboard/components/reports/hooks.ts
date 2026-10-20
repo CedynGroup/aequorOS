@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Reports-module hooks and pure helpers, layered over lib/api/client and the
@@ -8,42 +8,42 @@
  * the registry too.
  */
 
-import { useMemo } from 'react';
+import { useMemo } from "react";
 import type {
   RegulatoryModule,
   RegulatoryRunSummaryRead,
-} from '@aequoros/risk-service-api';
-import { useRegulatoryRuns } from '@/lib/api/hooks';
-import { fmtDateUTC } from '@/lib/api/values';
+} from "@aequoros/risk-service-api";
+import { useRegulatoryRuns } from "@/lib/api/hooks";
+import { fmtDateUTC } from "@/lib/api/values";
 
 /** Where each regulatory module's dashboard lives. */
 export const MODULE_HREFS: Record<string, string> = {
-  liquidity: '/liquidity',
-  capital: '/basel',
-  credit: '/credit',
-  irr: '/irr',
-  fx: '/fx',
-  ftp: '/ftp',
-  forecast: '/forecasting',
-  optimizer: '/forecasting',
-  whatif: '/forecasting',
-  reverse_stress: '/forecasting/reverse-stress',
-  enterprise_stress: '/liquidity/stress',
+  liquidity: "/liquidity",
+  capital: "/basel",
+  credit: "/credit",
+  irr: "/irr",
+  fx: "/fx",
+  ftp: "/ftp",
+  forecast: "/forecasting",
+  optimizer: "/forecasting",
+  whatif: "/forecasting",
+  reverse_stress: "/forecasting/reverse-stress",
+  enterprise_stress: "/liquidity/stress",
 };
 
 /** Human labels for the run registry's module column and filters. */
 export const MODULE_LABELS: Record<string, string> = {
-  liquidity: 'Liquidity',
-  capital: 'Basel Capital',
-  credit: 'Credit',
-  irr: 'IRRBB',
-  fx: 'FX Risk',
-  ftp: 'FTP',
-  forecast: 'Forecasting',
-  optimizer: 'Optimizer',
-  whatif: 'What-if',
-  reverse_stress: 'Reverse Stress',
-  enterprise_stress: 'Enterprise Stress',
+  liquidity: "Liquidity",
+  capital: "Basel Capital",
+  credit: "Credit",
+  irr: "IRRBB",
+  fx: "FX Risk",
+  ftp: "FTP",
+  forecast: "Forecasting",
+  optimizer: "Optimizer",
+  whatif: "What-if",
+  reverse_stress: "Reverse Stress",
+  enterprise_stress: "Enterprise Stress",
 };
 
 /** A same-day batch of runs, newest day first. */
@@ -62,7 +62,7 @@ export type RunDayGroup = {
  * order is preserved within groups.
  */
 export function groupRunsByDay(
-  runs: RegulatoryRunSummaryRead[]
+  runs: RegulatoryRunSummaryRead[],
 ): RunDayGroup[] {
   const groups: RunDayGroup[] = [];
   const index = new Map<string, RunDayGroup>();
@@ -86,7 +86,7 @@ export function groupRunsByDay(
  */
 export function useOfficialRunsRegistry(
   bankId: string | undefined,
-  moduleFilter: RegulatoryModule | null
+  moduleFilter: RegulatoryModule | null,
 ) {
   const query = useRegulatoryRuns(bankId, {
     module: moduleFilter ?? undefined,
@@ -105,7 +105,7 @@ export function useLatestRunsByModule(bankId: string | undefined) {
   const byModule = useMemo(() => {
     const map = new Map<string, RegulatoryRunSummaryRead>();
     for (const run of query.data?.runs ?? []) {
-      if (run.status !== 'succeeded' || !run.module) continue;
+      if (run.status !== "succeeded" || !run.module) continue;
       // API order is newest-first; keep the first hit per module.
       if (!map.has(run.module)) map.set(run.module, run);
     }
