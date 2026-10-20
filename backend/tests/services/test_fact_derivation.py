@@ -835,10 +835,9 @@ def test_canonical_fx_history_is_capped_only_after_calendar_alignment(db_session
     assert result.intervals[-1][1] == FIXTURE_AS_OF
     assert result.portfolio_var == Decimal("10.0000")
     assert result.standalone_total == Decimal("10.0000")
-    assert (
-        compute_stressed_var(positions, histories, Decimal("99"), (0, 2), Decimal("1"))
-        == Decimal("20.0000")
-    )
+    assert compute_stressed_var(
+        positions, histories, Decimal("99"), (0, 2), Decimal("1")
+    ) == Decimal("20.0000")
 
 
 def test_legacy_reference_path_without_canonical_market_data(db_session: Session) -> None:
