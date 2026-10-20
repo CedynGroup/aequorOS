@@ -97,8 +97,8 @@ export function useOfficialRunsRegistry(
 }
 
 /**
- * Latest successful run per module — provenance (engine version, input hash,
- * created-at) for board-pack module blocks and the Settings About panel.
+ * Latest successful registry entries per module for the Settings About panel.
+ * These entries do not establish provenance for live dashboard figures.
  */
 export function useLatestRunsByModule(bankId: string | undefined) {
   const query = useRegulatoryRuns(bankId, { limit: 100 });

@@ -1,63 +1,31 @@
 "use client";
 
-/**
- * Board Pack — a print-optimized composite report: cover page, cross-module
- * executive summary from the live engine, and one-page module briefs with
- * metric tables, validation counts, and official-run provenance.
- *
- * Print fidelity comes from app/print.css (imported here only): A4 pages,
- * per-section breaks, forced light palette. Tables and KPIs, not charts.
- */
-
-import PageContainer from "@/components/ui/PageContainer";
+/** All financial figures and evidence come from one live-summary response. */
 import "@/app/print.css";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Printer } from "lucide-react";
-import type { LiveStatus } from "@aequoros/risk-service-api";
+import { Printer } from "lucide-react";
+import type { LiveModule, LiveStatus } from "@aequoros/risk-service-api";
+import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import KpiStat, { type KpiStatus } from "@/components/ui/KpiStat";
 import EmptyState from "@/components/ui/EmptyState";
 import QueryBoundary from "@/components/ui/QueryBoundary";
-import { SkeletonCard, SkeletonTable } from "@/components/ui/Skeleton";
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
 import { isHrefVisible } from "@/lib/modules";
 import {
+  LIVE_MODULE_HREFS,
   LIVE_MODULE_LABELS,
-  livePrimaryMetric,
+  livePrimaryMetricIsAdvisory,
 } from "@/components/live/moduleDisplay";
+import { BoardPage, ModuleBrief } from "@/components/reports/BoardPackSections";
 import {
-  BoardPage,
-  ModuleBrief,
-  type MetricRow,
-} from "@/components/reports/BoardPackSections";
-import { useLatestRunsByModule } from "@/components/reports/hooks";
-import {
-  useBankAlerts,
-  useCapitalDashboard,
-  useCreditDashboard,
-  useFtpDashboard,
-  useFxDashboard,
-  useIrrDashboard,
-  useLiquidityDashboard,
-  useLiveSummary,
-} from "@/lib/api/hooks";
-import {
-  fmtDateUTC,
-  fmtTimestamp,
-  labelize,
-  num,
-  statusTone,
-  formatFigure,
-} from "@/lib/api/values";
-import {
-  fmtCurrency,
-  fmtNum,
-  fmtPct,
-  regShort,
-  centralBankName,
-} from "@/lib/format";
+  boardTimestamp,
+  liveBoardRows,
+  liveBoardHeadline,
+  liveEvidenceProblem,
+} from "@/components/reports/liveBoardPack";
+import { useLiveSummary } from "@/lib/api/hooks";
+import { fmtDateUTC, labelize, statusTone } from "@/lib/api/values";
 
 const LIVE_KPI_STATUS: Record<LiveStatus, KpiStatus | undefined> = {
   green: "ok",
@@ -65,83 +33,52 @@ const LIVE_KPI_STATUS: Record<LiveStatus, KpiStatus | undefined> = {
   red: "crit",
   na: undefined,
 };
+const BRIEF_MODULES: LiveModule[] = [
+  "liquidity",
+  "capital",
+  "credit",
+  "irr",
+  "fx",
+  "ftp",
+];
 
 export default function BoardPackPage() {
-  const { bank, period } = useBankContext();
-  const bankId = bank?.id;
-  const periodId = period?.id;
-
-  const live = useLiveSummary(bankId);
-  const alerts = useBankAlerts(bankId);
-  // Scope the module fetches (docs/sdi.md §3.2): an SDI does not run FX/FTP, so
-  // gating avoids a 403 for a module it is not entitled to.
+  const { bank } = useBankContext();
   const scope = useModuleScope();
-  const liq = useLiquidityDashboard(
-    scope.liquidityAggregatedView ? bankId : undefined,
-    periodId,
+  const live = useLiveSummary(bank?.id);
+  const briefModules = BRIEF_MODULES.filter((module) =>
+    module === "liquidity"
+      ? scope.liquidityAggregatedView
+      : isHrefVisible(LIVE_MODULE_HREFS[module], scope),
   );
-  const cap = useCapitalDashboard(
-    scope.capitalAggregatedView ? bankId : undefined,
-    periodId,
-  );
-  const credit = useCreditDashboard(bankId, periodId);
-  const irr = useIrrDashboard(
-    isHrefVisible("/irr/limits", scope) ? bankId : undefined,
-    periodId,
-  );
-  const fx = useFxDashboard(
-    isHrefVisible("/fx/limits", scope) ? bankId : undefined,
-    periodId,
-  );
-  const ftp = useFtpDashboard(
-    isHrefVisible("/ftp/products", scope) ? bankId : undefined,
-    periodId,
-  );
-  const { byModule } = useLatestRunsByModule(bankId);
-
-  // Client-only timestamp — avoids an SSR/hydration mismatch on the cover.
-  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
-  useEffect(() => {
-    setGeneratedAt(new Date());
-  }, []);
-
-  if (!period) {
-    return (
-      <>
-        <div className="no-print">
-          <PageHeader eyebrow="Reports" title="Board Pack" />
-        </div>
-        <PageContainer className="py-6">
-          <EmptyState
-            title="No reporting period"
-            description="Upload and activate data in the Data Engine to compose a board pack for an as-of period."
-          />
-        </PageContainer>
-      </>
-    );
-  }
+  const modulesWithBriefs = [
+    ...new Set([
+      ...briefModules,
+      ...(live.data?.modules.map((view) => view.module) ?? []),
+    ]),
+  ];
+  const staleProblem = live.data?.isStale
+    ? "Live evidence is stale after an input change or withdrawal — figures withheld until recomputation completes."
+    : null;
+  const canPrint =
+    Boolean(live.data?.modules.length) && !live.isLoading && !live.error;
 
   return (
     <>
-      {/* Screen-only toolbar — the print pipeline never sees it. */}
       <div className="no-print">
         <PageHeader
           eyebrow="Reports"
           title="Board Pack"
-          asOf={fmtDateUTC(period.periodEnd)}
           action={
             <div className="flex items-center gap-2">
-              <Link
-                href="/reports"
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface hover:text-navy"
-              >
-                <ArrowLeft size={13} aria-hidden />
+              <Link href="/reports" className="btn-secondary">
                 Reports library
               </Link>
               <button
                 type="button"
+                disabled={!canPrint}
                 onClick={() => window.print()}
-                className="btn-primary inline-flex items-center gap-2 px-4 py-2 text-caption font-medium"
+                className="btn-primary inline-flex items-center gap-2"
               >
                 <Printer size={14} aria-hidden />
                 Print / Save as PDF
@@ -150,517 +87,163 @@ export default function BoardPackPage() {
           }
         />
       </div>
-
       <PageContainer className="board-pack py-6 space-y-6">
-        {/* ------------------------------------------------------------ */}
-        {/* Cover page                                                    */}
-        {/* ------------------------------------------------------------ */}
-        <BoardPage>
-          <div className="card px-8 py-12 flex flex-col gap-8 bp-avoid-break">
-            <div>
-              <p className="text-micro font-medium uppercase tracking-wider text-slate">
-                AequorOS · Regulatory Command
+        <QueryBoundary
+          isLoading={live.isLoading}
+          error={live.error}
+          onRetry={() => live.refetch()}
+        >
+          <BoardPage>
+            <div className="card px-8 py-12 space-y-6">
+              <p className="text-micro uppercase text-slate">
+                aequorOS · Regulatory Command
               </p>
-              <h1 className="mt-3 text-display text-navy">
+              <h1 className="text-display text-navy">
                 Board Risk &amp; Regulatory Pack
               </h1>
-              <p className="mt-2 text-body text-slate">
-                Cross-module risk position, regulatory ratios, and calculation
-                provenance for board review.
+              <dl className="grid grid-cols-2 gap-5 text-body">
+                <div>
+                  <dt>Institution</dt>
+                  <dd className="text-h3">{bank?.name ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Reporting currency</dt>
+                  <dd>{bank?.currency ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Report basis</dt>
+                  <dd>Current live generations · Baseline</dd>
+                </div>
+                <div>
+                  <dt>Latest computation</dt>
+                  <dd>
+                    {live.data?.computedAt
+                      ? boardTimestamp(live.data.computedAt)
+                      : "Unavailable"}
+                  </dd>
+                </div>
+              </dl>
+              <p className="text-body">
+                The reporting-period selector does not apply to this pack. This
+                is a current live view, not a historical snapshot. Each module
+                declares its own source date and computation time; modules may
+                have different generations and dates.
               </p>
+              <p className="text-caption">
+                Headlines, brief tables, hashes and engine versions come from
+                the same live-summary payload. Baseline analyses may include
+                internal shocks, identified in their tables. Official runs,
+                stress-run history and current alerts are not evidence for these
+                figures. No official run is attested by this pack; official
+                evidence may be absent, failed or withdrawn.
+              </p>
+              <p className="text-caption">
+                Only metrics published by the live engine are included. A
+                missing metric is unavailable; validation counts and additional
+                dashboard detail are not included in this live basis.
+              </p>
+              {staleProblem && (
+                <p role="alert" className="text-critical">
+                  {staleProblem}
+                </p>
+              )}
+              {live.data?.reconciliation?.blocksFiling && (
+                <p role="alert" className="text-critical">
+                  Balance-sheet control blocks filing. Figures are withheld.{" "}
+                  {live.data.reconciliation.message}
+                </p>
+              )}
+              {live.data && !live.data.modules.length && (
+                <EmptyState
+                  title="No live evidence"
+                  description="No computed modules are available for your access. Upload data through the Data Engine and wait for computation."
+                />
+              )}
             </div>
-
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 text-body">
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  Institution
-                </dt>
-                <dd className="mt-1 text-h3 text-navy">{bank?.name ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  License · Regulator
-                </dt>
-                <dd className="mt-1 text-navy">
-                  {bank ? labelize(bank.licenseType) : "—"} ·{" "}
-                  {centralBankName()}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  As-of period
-                </dt>
-                <dd className="mt-1 text-navy">
-                  {period.label} ·{" "}
-                  <span className="font-mono tnum">
-                    {fmtDateUTC(period.periodEnd)}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  Generated
-                </dt>
-                <dd className="mt-1 font-mono text-navy tnum">
-                  {generatedAt ? fmtTimestamp(generatedAt) : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  Reporting currency
-                </dt>
-                <dd className="mt-1 font-mono text-navy">
-                  {bank?.currency ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-                  Data state
-                </dt>
-                <dd className="mt-1 text-navy">
-                  {/* isStale answers "was data ingested after these figures were
-                      computed?" — not drift versus the last official run, which
-                      is the /freshness endpoint. The old copy named the wrong
-                      concept and, while isStale was hardcoded false server-side,
-                      always claimed the reassuring half of it. */}
-                  {live.data
-                    ? live.data.isStale
-                      ? "Recomputing — new data ingested since these figures"
-                      : "Current with the latest ingested data"
-                    : "—"}
-                </dd>
-                {live.data?.reconciliation?.blocksFiling ? (
-                  <div className="sm:col-span-2">
-                    <dt className="text-micro font-medium uppercase tracking-wider text-critical">
-                      Balance-sheet control
-                    </dt>
-                    <dd className="mt-1 text-navy">
-                      This book does not balance. Every figure in this pack is
-                      computed on a balance sheet that was forced to add up and
-                      none of it may be filed.
-                    </dd>
-                  </div>
-                ) : null}
-              </div>
-            </dl>
-
-            <p className="text-caption text-slate leading-relaxed border-t border-border-light pt-4">
-              All figures are computed server-side by deterministic regulatory
-              engines. Each module brief carries the engine version and input
-              hash of its latest official run — identical inputs reproduce
-              identical outputs. Synthetic demonstration dataset; no production
-              bank data.
+          </BoardPage>
+          <BoardPage>
+            <h2 className="text-h2 mb-2">Executive summary</h2>
+            <p className="text-caption mb-4">
+              Current baseline position. Source dates and producing generations
+              are stated below.
             </p>
-          </div>
-        </BoardPage>
-
-        {/* ------------------------------------------------------------ */}
-        {/* Executive summary                                             */}
-        {/* ------------------------------------------------------------ */}
-        <BoardPage>
-          <h2 className="text-h2 text-navy mb-1">Executive summary</h2>
-          <p className="text-caption text-slate mb-4">
-            Live cross-module position for {period.label} — headline metric and
-            traffic-light status per module.
-          </p>
-          <QueryBoundary
-            isLoading={live.isLoading}
-            error={live.error}
-            onRetry={() => live.refetch()}
-            skeleton={
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <SkeletonCard key={i} />
-                ))}
-              </div>
-            }
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {(live.data?.modules ?? []).map((view) => {
-                const metric = livePrimaryMetric(
-                  view.module,
-                  view.metrics as Record<string, unknown>,
-                );
+                const problem =
+                  staleProblem ??
+                  (live.data?.reconciliation?.blocksFiling
+                    ? "Balance-sheet control blocks filing — figures withheld."
+                    : liveEvidenceProblem(view));
+                const metric = problem
+                  ? null
+                  : liveBoardHeadline(view);
                 return (
-                  <KpiStat
-                    key={view.module}
-                    label={LIVE_MODULE_LABELS[view.module]}
-                    value={metric?.value ?? "—"}
-                    hint={metric?.label ?? "Not yet computed"}
-                    status={LIVE_KPI_STATUS[view.status]}
-                    className="bp-avoid-break"
-                  />
+                  <div key={view.module} className="bp-avoid-break">
+                    <KpiStat
+                      label={LIVE_MODULE_LABELS[view.module]}
+                      value={metric?.value ?? "Unavailable"}
+                      hint={
+                        problem ??
+                        `${metric?.label ?? "Metric unavailable"}${livePrimaryMetricIsAdvisory(view.module) ? " · Advisory / monitoring" : ""}`
+                      }
+                      status={
+                        problem || !metric
+                          ? undefined
+                          : LIVE_KPI_STATUS[view.status]
+                      }
+                    />
+                    <p className="text-caption mt-1">
+                      Source{" "}
+                      {view.sourceAsOfDate &&
+                      Number.isFinite(view.sourceAsOfDate.getTime())
+                        ? fmtDateUTC(view.sourceAsOfDate)
+                        : "Unavailable"}{" "}
+                      · Generation {view.calculationGeneration} · Computed{" "}
+                      {view.computedAt &&
+                      Number.isFinite(view.computedAt.getTime())
+                        ? boardTimestamp(view.computedAt)
+                        : "Unavailable"}
+                    </p>
+                  </div>
                 );
               })}
-              <KpiStat
-                label="Open breach alerts"
-                value={alerts.data ? fmtNum(alerts.data.total) : "—"}
-                hint="Across all module limits"
-                status={
-                  alerts.data
-                    ? alerts.data.total > 0
-                      ? "crit"
-                      : "ok"
-                    : undefined
-                }
-                className="bp-avoid-break"
-              />
             </div>
-          </QueryBoundary>
-        </BoardPage>
-
-        {/* ------------------------------------------------------------ */}
-        {/* Module briefs — one printable page each                       */}
-        {/* ------------------------------------------------------------ */}
-        <BoardPage>
-          <QueryBoundary
-            isLoading={liq.isLoading}
-            error={liq.error}
-            onRetry={() => liq.refetch()}
-            skeleton={<SkeletonTable rows={4} />}
-          >
-            {liq.data && (
-              <ModuleBrief
-                name="Liquidity"
-                code="02"
-                statusTone={statusTone(liq.data.metrics.lcrStatus)}
-                statusLabel={`LCR ${labelize(liq.data.metrics.lcrStatus)}`}
-                run={byModule.get("liquidity")}
-                computedAt={liq.data.live?.computedAt}
-                rows={[
-                  {
-                    label: "Liquidity Coverage Ratio",
-                    hint: `${regShort()} minimum 100%`,
-                    value: formatFigure(liq.data.metrics.lcrPct, (value) =>
-                      fmtPct(value, 2),
-                    ),
-                    tone: statusTone(liq.data.metrics.lcrStatus),
-                    toneLabel: labelize(liq.data.metrics.lcrStatus),
-                  },
-                  {
-                    label: "Net Stable Funding Ratio",
-                    hint: `${regShort()} minimum 100%`,
-                    value: formatFigure(liq.data.metrics.nsfrPct, (value) =>
-                      fmtPct(value, 2),
-                    ),
-                    tone: statusTone(liq.data.metrics.nsfrStatus),
-                    toneLabel: labelize(liq.data.metrics.nsfrStatus),
-                  },
-                  {
-                    label: "High-quality liquid assets",
-                    value: formatFigure(
-                      liq.data.metrics.hqlaTotalGhs,
-                      fmtCurrency,
-                    ),
-                  },
-                  {
-                    label: "Net outflows (30 days)",
-                    value: formatFigure(
-                      liq.data.metrics.netOutflows30dGhs,
-                      fmtCurrency,
-                    ),
-                  },
-                ]}
-              />
-            )}
-          </QueryBoundary>
-        </BoardPage>
-
-        <BoardPage>
-          <QueryBoundary
-            isLoading={cap.isLoading}
-            error={cap.error}
-            onRetry={() => cap.refetch()}
-            skeleton={<SkeletonTable rows={4} />}
-          >
-            {cap.data && (
-              <ModuleBrief
-                name="Basel Capital"
-                code="04"
-                statusTone={statusTone(cap.data.metrics.carStatus)}
-                statusLabel={`CAR ${labelize(cap.data.metrics.carStatus)}`}
-                validations={{
-                  total: cap.data.validations.length,
-                  failed: cap.data.validations.filter((v) => !v.passed).length,
-                }}
-                run={byModule.get("capital")}
-                computedAt={cap.data.live?.computedAt}
-                rows={[
-                  {
-                    label: "Capital Adequacy Ratio",
-                    hint: "CRD minimum 13% incl. buffers",
-                    value: fmtPct(num(cap.data.metrics.carPct), 2),
-                    tone: statusTone(cap.data.metrics.carStatus),
-                    toneLabel: labelize(cap.data.metrics.carStatus),
-                  },
-                  {
-                    label: "CET1 ratio",
-                    value: fmtPct(num(cap.data.metrics.cet1RatioPct), 2),
-                    tone: statusTone(cap.data.metrics.cet1Status),
-                    toneLabel: labelize(cap.data.metrics.cet1Status),
-                  },
-                  {
-                    label: "Tier 1 ratio",
-                    value: fmtPct(num(cap.data.metrics.tier1RatioPct), 2),
-                    tone: statusTone(cap.data.metrics.tier1Status),
-                    toneLabel: labelize(cap.data.metrics.tier1Status),
-                  },
-                  {
-                    label: "Leverage ratio",
-                    value: fmtPct(num(cap.data.metrics.leverageRatioPct), 2),
-                    tone: statusTone(cap.data.metrics.leverageStatus),
-                    toneLabel: labelize(cap.data.metrics.leverageStatus),
-                  },
-                  {
-                    label: "Total risk-weighted assets",
-                    value: fmtCurrency(num(cap.data.metrics.totalRwaGhs)),
-                  },
-                  {
-                    label: "Total regulatory capital",
-                    value: fmtCurrency(num(cap.data.metrics.totalCapitalGhs)),
-                  },
-                ]}
-              />
-            )}
-          </QueryBoundary>
-        </BoardPage>
-
-        <BoardPage>
-          <QueryBoundary
-            isLoading={credit.isLoading}
-            error={credit.error}
-            onRetry={() => credit.refetch()}
-            skeleton={<SkeletonTable rows={4} />}
-          >
-            {credit.data && (
-              <ModuleBrief
-                name="Credit / Loan Book"
-                code="03"
-                statusTone={statusTone(credit.data.metrics.nplStatus ?? "na")}
-                statusLabel={`NPL ${labelize(credit.data.metrics.nplStatus ?? "na")}`}
-                validations={{
-                  total: credit.data.validations.length,
-                  failed: credit.data.validations.filter((v) => !v.passed)
-                    .length,
-                }}
-                run={byModule.get("credit")}
-                computedAt={credit.data.live?.computedAt}
-                rows={[
-                  {
-                    label: "NPL ratio",
-                    hint:
-                      credit.data.metrics.nplLimitPct != null
-                        ? `${centralBankName()} ceiling ${fmtNum(num(credit.data.metrics.nplLimitPct), 0)}%`
-                        : "Prudential ceiling not configured",
-                    value: fmtPct(num(credit.data.metrics.nplRatioPct), 2),
-                    tone: statusTone(credit.data.metrics.nplStatus ?? "na"),
-                    toneLabel: labelize(credit.data.metrics.nplStatus ?? "na"),
-                  },
-                  {
-                    label: "Non-performing exposure",
-                    value: fmtCurrency(num(credit.data.metrics.nplExposureGhs)),
-                  },
-                  {
-                    label: "Provision coverage",
-                    hint: "Specific provisions held ÷ NPL",
-                    value:
-                      credit.data.metrics.provisionCoveragePct != null
-                        ? fmtPct(
-                            num(credit.data.metrics.provisionCoveragePct),
-                            2,
-                          )
-                        : "—",
-                  },
-                  {
-                    label: "Gross loan book",
-                    value: fmtCurrency(num(credit.data.metrics.grossLoansGhs)),
-                  },
-                  {
-                    label: "Provisions required",
-                    value: fmtCurrency(
-                      num(credit.data.metrics.totalProvisionRequiredGhs),
-                    ),
-                  },
-                ]}
-              />
-            )}
-          </QueryBoundary>
-        </BoardPage>
-
-        <BoardPage>
-          <QueryBoundary
-            isLoading={irr.isLoading}
-            error={irr.error}
-            onRetry={() => irr.refetch()}
-            skeleton={<SkeletonTable rows={4} />}
-          >
-            {irr.data && (
-              <ModuleBrief
-                name="Interest Rate Risk (IRRBB)"
-                code="01"
-                statusTone={statusTone(irr.data.metrics.eveStatus)}
-                statusLabel={`EVE ${labelize(irr.data.metrics.eveStatus)}`}
-                validations={{
-                  total: irr.data.validations.length,
-                  failed: irr.data.validations.filter((v) => !v.passed).length,
-                }}
-                run={byModule.get("irr")}
-                computedAt={irr.data.live?.computedAt}
-                rows={[
-                  {
-                    label: "Worst ΔEVE / Tier 1",
-                    hint: `Worst scenario: ${labelize(
-                      irr.data.metrics.worstScenarioCode,
-                    )}`,
-                    value: fmtPct(
-                      num(irr.data.metrics.worstEveChangePctTier1),
-                      2,
-                    ),
-                    tone: statusTone(irr.data.metrics.eveStatus),
-                    toneLabel: labelize(irr.data.metrics.eveStatus),
-                  },
-                  {
-                    label: "Worst ΔEVE",
-                    value: fmtCurrency(num(irr.data.metrics.worstEveChangeGhs)),
-                  },
-                  {
-                    label: "Duration gap",
-                    value: `${num(irr.data.metrics.durationGap).toFixed(2)} yrs`,
-                  },
-                  {
-                    label: "NII (base, 12m)",
-                    value: fmtCurrency(num(irr.data.metrics.niiBaseGhs)),
-                  },
-                  {
-                    label: "EaR +200bp / −200bp",
-                    value: `${fmtCurrency(
-                      num(irr.data.metrics.earUp200Ghs),
-                    )} / ${fmtCurrency(num(irr.data.metrics.earDown200Ghs))}`,
-                  },
-                ]}
-              />
-            )}
-          </QueryBoundary>
-        </BoardPage>
-
-        <BoardPage>
-          <QueryBoundary
-            isLoading={fx.isLoading}
-            error={fx.error}
-            onRetry={() => fx.refetch()}
-            skeleton={<SkeletonTable rows={4} />}
-          >
-            {fx.data && (
-              <ModuleBrief
-                name="FX Risk"
-                code="03"
-                statusTone={statusTone(fx.data.metrics.nopStatus)}
-                statusLabel={`NOP ${labelize(fx.data.metrics.nopStatus)}`}
-                validations={{
-                  total: fx.data.validations.length,
-                  failed: fx.data.validations.filter((v) => !v.passed).length,
-                }}
-                run={byModule.get("fx")}
-                computedAt={fx.data.live?.computedAt}
-                rows={[
-                  {
-                    label: "Net open position / Tier 1",
-                    hint: `Aggregate limit ${fmtPct(
-                      num(fx.data.metrics.nopAggregateLimitPct),
-                      0,
-                    )}`,
-                    value: fmtPct(num(fx.data.metrics.nopPctTier1), 2),
-                    tone: statusTone(fx.data.metrics.nopStatus),
-                    toneLabel: labelize(fx.data.metrics.nopStatus),
-                  },
-                  {
-                    label: "Net open position",
-                    value: fmtCurrency(num(fx.data.metrics.nopGhs)),
-                  },
-                  {
-                    label: `Largest single currency (${fx.data.metrics.singleCcyMaxCurrency})`,
-                    hint: `Single-currency limit ${fmtPct(
-                      num(fx.data.metrics.nopSingleLimitPct),
-                      0,
-                    )}`,
-                    value: fmtPct(num(fx.data.metrics.singleCcyMaxPct), 2),
-                    tone: statusTone(fx.data.metrics.singleCcyStatus),
-                    toneLabel: labelize(fx.data.metrics.singleCcyStatus),
-                  },
-                  {
-                    label: "Standalone VaR (total)",
-                    value: fmtCurrency(
-                      num(fx.data.metrics.standaloneVarTotalGhs),
-                    ),
-                  },
-                  {
-                    label: "Stressed VaR",
-                    value: fmtCurrency(num(fx.data.metrics.stressedVarGhs)),
-                  },
-                ]}
-              />
-            )}
-          </QueryBoundary>
-        </BoardPage>
-
-        <BoardPage>
-          <QueryBoundary
-            isLoading={ftp.isLoading}
-            error={ftp.error}
-            onRetry={() => ftp.refetch()}
-            skeleton={<SkeletonTable rows={4} />}
-          >
-            {ftp.data && (
-              <ModuleBrief
-                name="Funds Transfer Pricing"
-                code="05"
-                statusTone={statusTone(ftp.data.metrics.nmdCoreStatus)}
-                statusLabel={`Core NMD ${labelize(
-                  ftp.data.metrics.nmdCoreStatus,
-                )}`}
-                validations={{
-                  total: ftp.data.validations.length,
-                  failed: ftp.data.validations.filter((v) => !v.passed).length,
-                }}
-                run={byModule.get("ftp")}
-                computedAt={ftp.data.live?.computedAt}
-                rows={[
-                  {
-                    label: "Portfolio NIM",
-                    value: fmtPct(num(ftp.data.metrics.portfolioNimPct), 2),
-                  },
-                  {
-                    label: "Blended assigned FTP",
-                    value: fmtPct(
-                      num(ftp.data.metrics.blendedAssignedFtpPct),
-                      2,
-                    ),
-                  },
-                  {
-                    label: "Core NMD share",
-                    hint: `Band ${fmtPct(
-                      num(ftp.data.metrics.nmdCoreMinPct),
-                      0,
-                    )}–${fmtPct(num(ftp.data.metrics.nmdCoreMaxPct), 0)}`,
-                    value: fmtPct(num(ftp.data.metrics.nmdCorePct), 2),
-                    tone: statusTone(ftp.data.metrics.nmdCoreStatus),
-                    toneLabel: labelize(ftp.data.metrics.nmdCoreStatus),
-                  },
-                  {
-                    label: "Products below minimum margin",
-                    value: `${fmtNum(
-                      ftp.data.metrics.productsBelowMinMargin,
-                    )} of ${fmtNum(ftp.data.metrics.totalProducts)}`,
-                  },
-                  {
-                    label: "Total funded balance",
-                    value: fmtCurrency(num(ftp.data.metrics.totalBalanceGhs)),
-                  },
-                ]}
-              />
-            )}
-          </QueryBoundary>
-        </BoardPage>
+          </BoardPage>
+          {modulesWithBriefs.map((module) => {
+            const view = live.data?.modules.find(
+              (item) => item.module === module,
+            );
+            const problem =
+              staleProblem ??
+              (live.data?.reconciliation?.blocksFiling
+                ? "Balance-sheet control blocks filing — figures withheld."
+                : liveEvidenceProblem(view));
+            return (
+              <BoardPage key={module}>
+                {problem || !view ? (
+                  <div className="card p-5">
+                    <h2 className="text-h2">{LIVE_MODULE_LABELS[module]}</h2>
+                    <p className="text-body mt-2">{problem}</p>
+                  </div>
+                ) : (
+                  <ModuleBrief
+                    name={LIVE_MODULE_LABELS[module]}
+                    statusTone={statusTone(view.status)}
+                    statusLabel={labelize(view.status)}
+                    live={view}
+                    rows={liveBoardRows(view, bank?.currency ?? "")}
+                  >
+                    {livePrimaryMetricIsAdvisory(module) && (
+                      <p className="px-5 py-2 text-caption">
+                        Advisory / monitoring figures.
+                      </p>
+                    )}
+                  </ModuleBrief>
+                )}
+              </BoardPage>
+            );
+          })}
+        </QueryBoundary>
       </PageContainer>
     </>
   );
