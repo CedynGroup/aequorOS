@@ -191,8 +191,9 @@ Invariants every new engine must copy (verified in `app/services/calculations.py
     order. `fact.id` must **never** enter the snapshot: the live engine re-derives facts on every
     refresh (`fact_derivation` deletes and re-inserts each row with a fresh UUID), so an
     id-dependent hash would make a filed official run non-reproducible after the next data change.
-    The `bank-facts-v2` input schema (all six regulatory modules) encodes this rule; `-v1`
-    embedded `fact.id` and predates the live engine.
+    Regulatory input schemas preserve this rule across versions; FX calendar policy
+    evidence is described in §3b. The legacy `bank-facts-v1` schema embedded `fact.id`
+    and predates the live engine.
 - **Versions as module-level constants**, stored per row:
   `ENGINE_VERSION = "balance-sheet-v1.0.0"`, `INPUT_SCHEMA_VERSION = "calculation-input-v1"`,
   `OUTPUT_SCHEMA_VERSION = "balance-sheet-output-v1"` (calculations);

@@ -309,7 +309,7 @@ def compute_var(
     return_histories: Mapping[str, Sequence[FxReturn]],
     confidence_pct: Decimal,
 ) -> VarResult:
-    """1-day historical-simulation VaR at ``confidence_pct`` over the full window.
+    """1-day historical-simulation VaR at ``confidence_pct`` over the governed sample.
 
     Returns the diversified portfolio VaR, each currency's standalone VaR, and
     the diversification benefit (standalone sum minus portfolio VaR).

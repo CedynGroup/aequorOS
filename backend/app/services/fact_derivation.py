@@ -168,7 +168,8 @@ market_risk / fx_position
     unconvertible-hedge refusal remains a separate capital concern.
 
 fx_return_history
-    ``fx_rates_historical`` per currency, chronological: simple daily returns
+    ``fx_rates_historical`` per currency, chronological: simple returns between
+    consecutive observations,
     ``r_t = S_t / S_(t-1) - 1`` as Decimal strings with start/end dates.
     Retain intervals until the engine intersects currencies, then cap at 250.
     The legacy rounded ``returns`` field remains a 250-value compatibility projection.

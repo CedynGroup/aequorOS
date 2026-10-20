@@ -1,24 +1,29 @@
-'use client';
+"use client";
 
-import { useMemo } from 'react';
-import type { FxStandaloneVarRead } from '@aequoros/risk-service-api';
-import KpiStat from '@/components/ui/KpiStat';
-import SectionCard from '@/components/ui/SectionCard';
-import ChartFrame from '@/components/ui/ChartFrame';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import FxModuleFrame, { type FxFrameContext } from '@/components/fx/FxModuleFrame';
-import VarWaterfall from '@/components/fx/charts/VarWaterfall';
-import TrendChart from '@/components/fx/charts/TrendChart';
-import ScenarioStrip from '@/components/fx/ScenarioStrip';
-import { fxRunParameters } from '@/components/fx/params';
-import { num } from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned, fmtPct, currencyCode } from '@/lib/format';
+import { useMemo } from "react";
+import type { FxStandaloneVarRead } from "@aequoros/risk-service-api";
+import KpiStat from "@/components/ui/KpiStat";
+import SectionCard from "@/components/ui/SectionCard";
+import ChartFrame from "@/components/ui/ChartFrame";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import FxModuleFrame, {
+  type FxFrameContext,
+} from "@/components/fx/FxModuleFrame";
+import VarWaterfall from "@/components/fx/charts/VarWaterfall";
+import TrendChart from "@/components/fx/charts/TrendChart";
+import ScenarioStrip from "@/components/fx/ScenarioStrip";
+import { fxRunParameters } from "@/components/fx/params";
+import { num } from "@/lib/api/values";
+import {
+  fmtCurrency,
+  fmtCurrencySigned,
+  fmtPct,
+  currencyCode,
+} from "@/lib/format";
 
 export default function FxVarPage() {
   return (
-    <FxModuleFrame
-      title="FX Value at Risk & Stress"
-    >
+    <FxModuleFrame title="FX Value at Risk & Stress">
       {(ctx) => <VarBody ctx={ctx} />}
     </FxModuleFrame>
   );
@@ -56,30 +61,30 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
     ? `Historical VaR re-run on the currency-crisis slice of the return history ` +
       `(observations ${params.crisis.windowStart}–${params.crisis.windowEnd}), scaled by a ` +
       `+${(params.crisis.correlationUplift * 100).toFixed(0)}% correlation uplift.`
-    : 'Historical VaR re-run on the currency-crisis slice of the return history with a supervisory correlation uplift — persist a run to surface the exact window parameters.';
+    : "Historical VaR re-run on the currency-crisis slice of the return history with a supervisory correlation uplift — persist a run to surface the exact window parameters.";
 
   const columns: Column<FxStandaloneVarRead>[] = [
-    { key: 'ccy', header: 'Currency', render: (r) => r.currency, width: '22%' },
+    { key: "ccy", header: "Currency", render: (r) => r.currency, width: "22%" },
     {
-      key: 'net',
+      key: "net",
       header: `Net position (${currencyCode()})`,
       numeric: true,
       render: (r) => fmtCurrencySigned(num(r.netGhs)),
     },
     {
-      key: 'var',
+      key: "var",
       header: `Standalone VaR (${confidence.toFixed(0)}%, 1d)`,
       numeric: true,
       render: (r) => fmtCurrency(num(r.standaloneVarGhs)),
     },
     {
-      key: 'share',
-      header: 'Share of undiversified',
+      key: "share",
+      header: "Share of undiversified",
       numeric: true,
       render: (r) =>
         standaloneTotal > 0
           ? fmtPct((num(r.standaloneVarGhs) / standaloneTotal) * 100, 1)
-          : '—',
+          : "—",
     },
   ];
 
@@ -102,7 +107,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
           status="ok"
           hint={
             benefitPct === null
-              ? 'No standalone VaR to compare against'
+              ? "No standalone VaR to compare against"
               : `${fmtPct(benefitPct, 1)} of standalone sum`
           }
         />
@@ -112,7 +117,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
           status="warn"
           hint={
             upliftRatio === null
-              ? 'Currency-crisis calibration'
+              ? "Currency-crisis calibration"
               : `${upliftRatio.toFixed(2)}× base VaR`
           }
         />
@@ -126,7 +131,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
           className="xl:col-span-3"
           footer={
             <span>
-              Undiversified sum {fmtCurrency(standaloneTotal)} − diversification{' '}
+              Undiversified sum {fmtCurrency(standaloneTotal)} − diversification{" "}
               {fmtCurrency(benefit)} = portfolio VaR {fmtCurrency(portfolioVar)}
             </span>
           }
@@ -148,13 +153,15 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
             <p className="font-mono text-kpi text-navy tnum">
               {fmtCurrency(stressed)}
             </p>
-            <p className="text-caption text-slate leading-relaxed">{stressedNote}</p>
+            <p className="text-caption text-slate leading-relaxed">
+              {stressedNote}
+            </p>
             <p className="text-caption text-slate">
               Base VaR {fmtCurrency(portfolioVar)}
               {upliftRatio !== null && (
                 <>
-                  {' '}
-                  · stress multiple{' '}
+                  {" "}
+                  · stress multiple{" "}
                   <span className="font-mono font-medium text-navy tnum">
                     {upliftRatio.toFixed(2)}×
                   </span>
@@ -168,7 +175,11 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
             subtitle="Single-currency historical VaR before diversification"
             noPadding
           >
-            <DataTable columns={columns} rows={data.standaloneVars} density="compact" />
+            <DataTable
+              columns={columns}
+              rows={data.standaloneVars}
+              density="compact"
+            />
           </SectionCard>
         </div>
       </div>
