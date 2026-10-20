@@ -31,6 +31,7 @@ from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.services import (
     fact_derivation,
     loan_classification,
+    regulatory_capital,
     regulatory_irr,
     sdi_capital,
     sdi_capital_checks,
@@ -296,3 +297,13 @@ def test_sdi_irrbb_live_headline_uses_the_official_net_own_funds_denominator(
     )
     assert live.metrics["eve_base_ghs"] == official.metrics["eve_base_ghs"]
     assert live.input_hash == official.input_hash  # the denominator stays out of the hash
+
+
+def test_sdi_live_capital_carries_its_producing_version(db_session: Session) -> None:
+    sdi = _onboard_sdi(db_session)
+    period = _period(db_session, sdi)
+    fact_derivation.derive_current_facts(db_session, _CTX, sdi.id, FIXTURE_AS_OF)
+    live = regulatory_capital.compute_live(db_session, _CTX, sdi, period)
+    assert live.metrics["capital_regime"] == "s29"
+    assert Decimal(live.metrics["car_pct"]) > 0
+    assert live.engine_version == regulatory_capital.ENGINE_VERSION

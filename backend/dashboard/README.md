@@ -75,7 +75,15 @@ blocked computations, and incomplete provenance withhold figures visibly. Missin
 modules show an unavailable-evidence notice. Only live-published metrics appear;
 validation counts, additional dashboard detail and independently changing alerts
 are outside this report basis. The print view carries the same evidence and
-refusals.
+refusals. Placeholder engine versions (`live-<module>`) withhold figures with
+“version unavailable, recompute to certify” until a new generation supplies its
+producing version. FX portfolio VaR carries the producer's exact shared-interval
+sample qualification, including the existing insufficient-pilot-evidence warning.
+The one-day VaR label does not assume a confidence level.
+
+SDI rating still requires producing-version and input-hash provenance beyond a
+pass-through; its incomplete evidence remains withheld. This is follow-up work,
+not an alternative version inferred by the board pack.
 
 ### Forecasting tools
 

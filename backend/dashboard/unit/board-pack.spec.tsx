@@ -402,3 +402,99 @@ it("preserves a measured zero as a figure", async () => {
   await screen.findAllByText("0.00%");
   expect(screen.getAllByText("0.00%")).toHaveLength(2);
 });
+
+it.each([
+  "liquidity",
+  "capital",
+  "credit",
+  "irr",
+  "fx",
+  "ftp",
+  "rating",
+  "forecast",
+])(
+  "withholds the %s placeholder version until a certified generation arrives",
+  async (module) => {
+    serve(
+      summary([{ ...generation(), module, engine_version: `live-${module}` }]),
+    );
+    render(view());
+    await screen.findAllByText(/version unavailable, recompute to certify/);
+    expect(screen.queryByText(`Engine live-${module}`)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Input hash:/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByText("4.75%")).not.toBeInTheDocument();
+
+    serve(
+      summary([{ ...generation(), module, engine_version: `${module}-v3` }]),
+    );
+    await client.invalidateQueries({ queryKey: ["live-summary"] });
+    await screen.findByText(`Engine ${module}-v3`);
+    expect(
+      screen.queryByText(/version unavailable, recompute to certify/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(`Input hash: ${"b".repeat(64)}`)).toBeVisible();
+  },
+);
+
+it.each(["", "   "])(
+  "withholds an absent engine version %j",
+  async (engineVersion) => {
+    serve(summary([{ ...generation(), engine_version: engineVersion }]));
+    render(view());
+    await screen.findAllByText(/version unavailable, recompute to certify/);
+    expect(screen.queryByText("4.75%")).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  },
+);
+
+it.each([1, 249, 250])(
+  "prints portfolio VaR with the producing qualification for %i shared intervals",
+  async (observations) => {
+    const qualification = `FX VaR uses ${observations}/250 exact shared return intervals from 2026-01-01 to 2026-02-28 under exact-interval-intersection-v1. ${observations < 250 ? "Insufficient sample: indicative management estimate only; not adequate pilot risk evidence. " : ""}No calendar filling or unmatched intervals; standalone VaR uses the same sample.`;
+    serve(
+      summary([
+        {
+          ...generation(),
+          module: "fx",
+          engine_version: "regulatory-fx-v1.2.0",
+          metrics: {
+            nop_pct_tier1: "4.5",
+            var_99_1d_ghs: "0",
+            standalone_var_total_ghs: "12500",
+            var_confidence_pct: "95",
+            var_sample_evidence: qualification,
+          },
+        },
+      ]),
+    );
+    render(view());
+    const brief = await screen.findByRole("region", { name: "FX Risk brief" });
+    const row = within(brief).getByRole("row", { name: /Portfolio VaR/ });
+    expect(within(row).getByText("Portfolio VaR (1 day)")).toBeVisible();
+    expect(within(row).getByText("EUR 0.00")).toBeVisible();
+    expect(within(row).getByText(qualification)).toBeVisible();
+    expect(within(brief).queryByText(/99%/)).not.toBeInTheDocument();
+    expect(within(brief).queryByText(/EUR 12,500/)).not.toBeInTheDocument();
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    fireEvent.click(
+      screen.getByRole("button", { name: /Print \/ Save as PDF/ }),
+    );
+    expect(print).toHaveBeenCalledOnce();
+    expect(within(row).getByText(qualification)).toBeVisible();
+  },
+);
+
+it("qualifies legacy live VaR without sample evidence as unavailable for review", async () => {
+  serve(
+    summary([
+      {
+        ...generation(),
+        module: "fx",
+        metrics: { nop_pct_tier1: "4.5", var_99_1d_ghs: "12500" },
+      },
+    ]),
+  );
+  render(view());
+  await screen.findByText(/Sample qualification unavailable — recompute/);
+});

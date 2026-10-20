@@ -20,8 +20,13 @@ export function liveEvidenceProblem(
     return "Live analysis unavailable — figures withheld.";
   }
   if (
+    !view.engineVersion?.trim() ||
+    view.engineVersion.trim().startsWith("live-")
+  ) {
+    return "Incomplete live-generation evidence — version unavailable, recompute to certify. Figures withheld.";
+  }
+  if (
     !view.computedFromInputHash ||
-    !view.engineVersion ||
     !view.calculationGeneration ||
     !Number.isFinite(view.computedAt?.getTime()) ||
     !Number.isFinite(view.sourceAsOfDate?.getTime())
@@ -90,7 +95,7 @@ const METRICS: Partial<Record<LiveModule, readonly MetricSpec[]>> = {
     ["nop_ghs", "Net open position", "amount"],
     ["single_ccy_max_pct", "Largest single currency / Tier 1", "pct"],
     ["single_ccy_max_currency", "Largest single currency", "text"],
-    ["var_99_1d_ghs", "Standalone VaR (99%, 1 day)", "amount"],
+    ["var_99_1d_ghs", "Portfolio VaR (1 day)", "amount"],
   ],
   rating: [["pit_pd_upper_pct", "PIT PD upper band", "pct"]],
   forecast: [["year5_car_pct", "Year-5 CAR", "pct"]],
@@ -119,6 +124,13 @@ export function liveBoardRows(
             : null;
       return {
         label,
+        hint:
+          view.module === "fx" && key === "var_99_1d_ghs"
+            ? typeof view.metrics.var_sample_evidence === "string" &&
+              view.metrics.var_sample_evidence.trim()
+              ? view.metrics.var_sample_evidence
+              : "Sample qualification unavailable — recompute before using VaR as risk evidence."
+            : undefined,
         value:
           unit === "text"
             ? typeof raw === "string" && raw
