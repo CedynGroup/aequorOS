@@ -19,7 +19,10 @@ from app.services.fact_derivation import (
     _Canonical,  # pyright: ignore[reportPrivateUsage]
     _derive_fx_returns,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.services.test_nop_currency_coverage import _book  # pyright: ignore[reportPrivateUsage]
+from tests.services.test_nop_currency_coverage import (
+    _add_unrepresented_currency,  # pyright: ignore[reportPrivateUsage]
+    _book,  # pyright: ignore[reportPrivateUsage]
+)
 
 
 @pytest.mark.parametrize("source", ["reference", "market"])
@@ -191,8 +194,9 @@ def test_saved_trend_without_var_evidence_preserves_nop(
 
 
 @pytest.mark.parametrize("stored", [True, False])
-def test_january_to_march_retains_nop_when_march_var_is_insufficient(
-    db_session: Session, stored: bool
+@pytest.mark.parametrize("sample", ["short", "disjoint", "missing", "invalid"])
+def test_january_to_march_retains_nop_when_var_is_unavailable(
+    db_session: Session, stored: bool, sample: str
 ) -> None:
     bank, latest, ctx = _book(db_session)
     periods = list(
@@ -210,7 +214,8 @@ def test_january_to_march_retains_nop_when_march_var_is_insufficient(
         select(RegulatoryRun).where(RegulatoryRun.bank_id == bank.id, RegulatoryRun.module == "fx")
     ):
         run.status = "failed"
-    for period, nop_pct, observations in zip(periods, (10, 20, 30), (250, 250, 249), strict=True):
+    counts = (250, 250, 249) if sample == "short" else (250, 250, 250)
+    for period, nop_pct, observations in zip(periods, (10, 20, 30), counts, strict=True):
         facts = list(
             db_session.scalars(
                 select(BankFinancialFact).where(
@@ -226,6 +231,20 @@ def test_january_to_march_retains_nop_when_march_var_is_insufficient(
                 intervals = TypeAdapter(list[dict[str, str]]).validate_python(
                     attributes["intervals"]
                 )
+                if period.period_end.month == 2:
+                    if sample == "disjoint":
+                        day = 1 if fact.category == "USD" else 2
+                        intervals = [
+                            {
+                                "start_date": date(2026, 1, day).isoformat(),
+                                "end_date": date(2026, 1, day + 1).isoformat(),
+                                "value": "0.1",
+                            }
+                        ]
+                    elif sample == "missing" and fact.category == "USD":
+                        intervals = []
+                    elif sample == "invalid" and fact.category == "USD":
+                        intervals = [intervals[-1], intervals[-1]]
                 fact.attributes = {**attributes, "intervals": intervals[-observations:]}
             elif fact.fact_group == "fx_position":
                 fact.amount = (
@@ -241,17 +260,71 @@ def test_january_to_march_retains_nop_when_march_var_is_insufficient(
                     "net_ghs": str(fact.amount),
                 }
         db_session.flush()
-        if stored:
+        if stored and (sample == "short" or period.period_end.month != 2):
             run = regulatory_fx._create_and_execute(db_session, ctx, bank, period, "baseline")  # pyright: ignore[reportPrivateUsage]
             assert run.status == "succeeded"
     dashboard = regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, latest.id)
     period_ids = {period.id for period in periods}
     points = [point for point in dashboard.trend if point.reporting_period_id in period_ids]
     assert [point.nop_pct_tier1 for point in points] == [Decimal(10), Decimal(20), Decimal(30)]
-    assert [point.stored for point in points] == [stored] * 3
-    assert all(point.var_99_1d_ghs is not None for point in points[:2])
-    assert points[2].var_99_1d_ghs is None
+    assert [point.stored for point in points] == [stored, stored and sample == "short", stored]
+    unavailable_index = 2 if sample == "short" else 1
+    assert [point.var_99_1d_ghs is None for point in points] == [
+        index == unavailable_index for index in range(3)
+    ]
     assert dashboard.metrics.nop_pct_tier1 - points[-2].nop_pct_tier1 == Decimal(10)
+    if sample != "short":
+        message = {
+            "disjoint": "No matching dated FX return intervals",
+            "missing": "fx_return_history:USD",
+            "invalid": "Invalid or duplicate FX return interval",
+        }[sample]
+        with pytest.raises(ModuleDataUnavailable, match=message):
+            regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, periods[1].id)
+
+
+@pytest.mark.parametrize("refusal", ["currency", "quote", "conversion"])
+def test_var_unavailability_does_not_bypass_nop_refusals(db_session: Session, refusal: str) -> None:
+    bank, latest, ctx = _book(db_session)
+    february = db_session.scalars(
+        select(BankReportingPeriod).where(
+            BankReportingPeriod.bank_id == bank.id,
+            BankReportingPeriod.period_end == date(2026, 2, 28),
+        )
+    ).one()
+    facts = db_session.scalars(
+        select(BankFinancialFact).where(
+            BankFinancialFact.bank_id == bank.id,
+            BankFinancialFact.reporting_period_id == february.id,
+        )
+    ).all()
+    for fact in facts:
+        attributes = cast(dict[str, object], fact.attributes)
+        if fact.fact_group == "fx_return_history":
+            day = 1 if fact.category == "USD" else 2
+            fact.attributes = {
+                **attributes,
+                "intervals": [
+                    {
+                        "start_date": date(2026, 1, day).isoformat(),
+                        "end_date": date(2026, 1, day + 1).isoformat(),
+                        "value": "0.1",
+                    }
+                ],
+            }
+        elif fact.fact_group == "fx_position" and fact.category == "USD":
+            if refusal == "quote":
+                fact.attributes = {**attributes, "spot_ghs": None}
+            elif refusal == "conversion":
+                fact.amount = Decimal(0)
+    if refusal == "currency":
+        _add_unrepresented_currency(db_session, bank, february)
+    db_session.flush()
+    dashboard = regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, latest.id)
+    assert latest.id in {point.reporting_period_id for point in dashboard.trend}
+    assert february.id not in {point.reporting_period_id for point in dashboard.trend}
+    with pytest.raises(ModuleDataUnavailable, match="CHF" if refusal == "currency" else "USD"):
+        regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, february.id)
 
 
 class _Evidence(BaseModel):

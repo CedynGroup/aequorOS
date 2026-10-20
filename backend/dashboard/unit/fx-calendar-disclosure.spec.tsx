@@ -8,6 +8,8 @@ import FxVarPage from "../app/(app)/fx/var/page";
 import FxExposurePage from "../app/(app)/fx/page";
 import FxLimitsPage from "../app/(app)/fx/limits/page";
 
+const evidence = vi.hoisted(() => ({ missingFebruary: false }));
+
 vi.mock("../components/bi/EChart", () => ({
   default: ({
     ariaLabel,
@@ -76,8 +78,8 @@ vi.mock("../lib/api/hooks", () => ({
           period_end: "2026-02-28",
           nop_ghs: "20",
           nop_pct_tier1: "20",
-          var_99_1d_ghs: "0",
-          stored: true,
+          var_99_1d_ghs: evidence.missingFebruary ? null : "0",
+          stored: !evidence.missingFebruary,
         },
         {
           reporting_period_id: "march",
@@ -85,7 +87,7 @@ vi.mock("../lib/api/hooks", () => ({
           period_end: "2026-03-31",
           nop_ghs: "30",
           nop_pct_tier1: "30",
-          var_99_1d_ghs: null,
+          var_99_1d_ghs: evidence.missingFebruary ? "0" : null,
           stored: false,
         },
       ],
@@ -117,6 +119,7 @@ vi.mock("../lib/api/hooks", () => ({
 }));
 
 beforeEach(() => {
+  evidence.missingFebruary = false;
   vi.stubGlobal("matchMedia", () => ({
     matches: false,
     addEventListener() {},
@@ -143,34 +146,60 @@ it("shows sample and stress qualifications alongside every FX tab's figures", ()
   expect(screen.queryByText("Hedge detail")).toBeNull();
 });
 
-it("explains omitted insufficient-evidence periods beside the VaR trend", () => {
-  render(<FxVarPage />);
-  const chart = screen
-    .getByRole("heading", {
-      name: "Portfolio VaR trend (99%, 1-day)",
-    })
-    .closest("section");
-  expect(chart?.textContent).toContain(
-    "Periods with insufficient sample evidence are omitted.",
-  );
-  const plot = screen.getByRole("img", { name: "Portfolio VaR across 2 periods" });
-  expect(plot.textContent).toContain('"labels":["January","February"]');
-  expect(plot.textContent).toContain('"value":0');
-  expect(plot.textContent).not.toContain("March");
-});
+it.each([false, true])(
+  "omits unavailable VaR while keeping measured zero (February gap: %s)",
+  (missingFebruary) => {
+    evidence.missingFebruary = missingFebruary;
+    render(<FxVarPage />);
+    const chart = screen
+      .getByRole("heading", {
+        name: "Portfolio VaR trend (99%, 1-day)",
+      })
+      .closest("section");
+    expect(chart?.textContent).toContain(
+      "Periods with insufficient sample evidence are omitted.",
+    );
+    const plot = screen.getByRole("img", {
+      name: missingFebruary
+        ? "Portfolio VaR across 2 periods, 1 computed inline"
+        : "Portfolio VaR across 2 periods",
+    });
+    expect(plot.textContent).toContain(
+      missingFebruary
+        ? '"labels":["January","March"]'
+        : '"labels":["January","February"]',
+    );
+    expect(plot.textContent).toContain('"value":0');
+    expect(plot.textContent).not.toContain(
+      missingFebruary ? "February" : "March",
+    );
+  },
+);
 
-it("compares March NOP with February despite March's insufficient VaR", () => {
-  render(<FxExposurePage />);
-  const nop = screen.getByText("Aggregate NOP / Tier 1").closest(".card");
-  expect(nop?.textContent).toContain("+10.0 pts");
-  expect(nop?.textContent).not.toContain("+20.0 pts");
-});
+it.each([false, true])(
+  "compares March NOP with February independently of VaR (February gap: %s)",
+  (missingFebruary) => {
+    evidence.missingFebruary = missingFebruary;
+    render(<FxExposurePage />);
+    const nop = screen.getByText("Aggregate NOP / Tier 1").closest(".card");
+    expect(nop?.textContent).toContain("+10.0 pts");
+    expect(nop?.textContent).not.toContain("+20.0 pts");
+  },
+);
 
-it("keeps all three NOP periods in the limits chart", () => {
-  render(<FxLimitsPage />);
-  const plot = screen.getByRole("img", {
-    name: "NOP / Tier 1 across 3 periods, 1 computed inline",
-  });
-  expect(plot.textContent).toContain('"labels":["January","February","March"]');
-  expect(plot.textContent).toContain('"value":30');
-});
+it.each([false, true])(
+  "keeps all NOP periods in the limits chart (February gap: %s)",
+  (missingFebruary) => {
+    evidence.missingFebruary = missingFebruary;
+    render(<FxLimitsPage />);
+    const plot = screen.getByRole("img", {
+      name: missingFebruary
+        ? "NOP / Tier 1 across 3 periods, 2 computed inline"
+        : "NOP / Tier 1 across 3 periods, 1 computed inline",
+    });
+    expect(plot.textContent).toContain(
+      '"labels":["January","February","March"]',
+    );
+    expect(plot.textContent).toContain('"value":30');
+  },
+);

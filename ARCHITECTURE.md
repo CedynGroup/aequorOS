@@ -372,6 +372,8 @@ on one canonical store — the live tier for intraday awareness, the official ti
   audit records but cannot supply FX dashboard headlines or VaR trend values without calendar
   evidence. Shared trend points retain NOP values; VaR is null without the governed 250-interval
   sample, and the VaR chart omits those values while NOP comparisons retain the prior period.
+  Inline trends compute NOP independently of return-history availability; full FX analysis
+  still refuses an empty calendar intersection, and NOP coverage and valuation refusals apply.
   The input snapshot seals the policy version/target and dated values; output metrics retain
   exact effective intervals. FX tabs and saved validations disclose sample count and date span.
   Stress retains its configured index window (and available-tail fallback) **after** alignment,

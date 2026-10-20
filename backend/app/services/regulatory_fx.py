@@ -42,7 +42,6 @@ from app.domain.authority.outcomes import (
     OutcomeDetail,
 )
 from app.domain.capital.engine import (
-    CAPITAL_REGISTER_REFUSED_CATEGORY,
     CapitalFact,
     CapitalRegisterRefused,
     tier1_capital,
@@ -1038,25 +1037,45 @@ def _build_trend(
             )
             continue
         try:
-            analysis = _compute_inline_from_batch(db, ctx, bank, period, batch)
+            facts = batch.facts.get(period.id, [])
+            active = _fx_params_from_batch(batch, period.period_end)
+            tier1 = _tier1_from_facts(facts)
+            if active is None:
+                continue
+            require_currency_coverage(
+                batch.currencies[period.period_end],
+                {
+                    str(cast(object, fact.attributes.get("currency")) or fact.category)
+                    .strip()
+                    .upper()
+                    for fact in facts
+                    if fact.fact_group == "fx_position"
+                },
+            )
+            positions = _positions_from_facts(facts)
+            nop = compute_nop(
+                positions,
+                tier1,
+                active.single_limit_pct,
+                active.aggregate_limit_pct,
+            )
         except FxRunError as exc:
-            if exc.code == CAPITAL_REGISTER_REFUSED_CATEGORY:
-                raise ModuleDataUnavailable(exc.code, exc.message) from exc
+            raise ModuleDataUnavailable(exc.code, exc.message) from exc
+        except (FxComputationError, NotComputable):
             continue
-        except (MissingParameterError, FxComputationError, NotComputable):
-            continue
+        try:
+            var = compute_var(positions, _returns_from_facts(facts), active.var_confidence_pct)
+            var_value = var.portfolio_var if var.observations >= FX_SAMPLE_TARGET else None
+        except (MissingParameterError, FxComputationError):
+            var_value = None
         points.append(
             FxTrendPointRead(
                 reporting_period_id=period.id,
                 label=period.label,
                 period_end=period.period_end,
-                nop_ghs=analysis.nop.overall_nop,
-                nop_pct_tier1=analysis.nop.nop_pct_tier1,
-                var_99_1d_ghs=(
-                    analysis.var.portfolio_var
-                    if analysis.var.observations >= FX_SAMPLE_TARGET
-                    else None
-                ),
+                nop_ghs=nop.overall_nop,
+                nop_pct_tier1=nop.nop_pct_tier1,
+                var_99_1d_ghs=var_value,
                 stored=False,
             )
         )
