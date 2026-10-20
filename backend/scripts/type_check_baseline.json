@@ -1779,7 +1779,7 @@
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_fx": {
-  "reportAny": 44,
+  "reportAny": 43,
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_irr": {

@@ -12,12 +12,12 @@ import weakref
 from calendar import monthrange
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Engine, delete, select
+from sqlalchemy import Connection, Engine, delete, select
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
@@ -693,10 +693,13 @@ _DEPENDENT_COLUMNS: weakref.WeakKeyDictionary[Engine, dict[str, frozenset[str]]]
 )
 
 
-def _dependent_table_columns(engine: Engine) -> dict[str, frozenset[str]]:
+def _dependent_table_columns(connection: Connection) -> dict[str, frozenset[str]]:
+    engine = connection.engine
     columns = _DEPENDENT_COLUMNS.get(engine)
     if columns is None:
-        inspector = sql_inspect(engine)
+        # Read through the fixture transaction: larger dated histories can spill
+        # SQLite pages and lock a second reflection connection.
+        inspector = sql_inspect(connection)
         existing = set(inspector.get_table_names())
         columns = {
             table: frozenset(column["name"] for column in inspector.get_columns(table))
@@ -708,7 +711,7 @@ def _dependent_table_columns(engine: Engine) -> dict[str, frozenset[str]]:
 
 
 def _delete_bank_dependents(session: Session) -> None:
-    dependent_columns = _dependent_table_columns(session.get_bind().engine)
+    dependent_columns = _dependent_table_columns(session.connection())
     if session.get_bind().dialect.name == "postgresql":
         # Migration 202608220031 makes approvals/submission events append-only.
         # This fixture is the sole test-only reset path and runs in a disposable
@@ -1090,7 +1093,18 @@ def _fx_return_fact(
         "fx_return_history",
         currency,
         Decimal(_FX_RETURN_WINDOW),
-        attributes={"currency": currency, "returns": _fx_return_series(seed_index)},
+        attributes={
+            "currency": currency,
+            "returns": _fx_return_series(seed_index),
+            "intervals": [
+                {
+                    "start_date": (period.period_end - timedelta(days=250 - i)).isoformat(),
+                    "end_date": (period.period_end - timedelta(days=249 - i)).isoformat(),
+                    "value": str(value),
+                }
+                for i, value in enumerate(_fx_return_series(seed_index))
+            ],
+        },
     )
 
 

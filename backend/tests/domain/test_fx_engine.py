@@ -9,13 +9,16 @@ straight echo of the engine's own output.
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
 
 from app.domain.fx.engine import (
+    FxComputationError,
     FxHedge,
     FxPosition,
+    FxReturn,
     MissingParameterError,
     assess_hedges,
     compute_nop,
@@ -90,7 +93,7 @@ def test_var_golden_five_day_hand_check() -> None:
     }
     # Portfolio P&L_t = 30M*USD_t + (-7M)*EUR_t:
     #   [160000, -600000, 220000, -970000, 105000]; sorted worst (rank 1) = -970000.
-    var = compute_var(positions, returns, CONFIDENCE)
+    var = compute_var(positions, _dated(returns), CONFIDENCE)
     assert var.portfolio_var == Decimal("970000")
     assert var.observations == 5
     standalone = {item.currency: item.standalone_var for item in var.currency_vars}
@@ -117,12 +120,12 @@ def test_stressed_var_uses_only_the_crisis_window() -> None:
     returns: dict[str, list[float]] = {
         "USD": [0.02, 0.02, -0.04, -0.02, -0.05, -0.01, 0.03, -0.06],
     }
-    base = compute_var(positions, returns, CONFIDENCE)
+    base = compute_var(positions, _dated(returns), CONFIDENCE)
     assert base.portfolio_var == Decimal("1800000")
 
     # Crisis window [2, 5] -> returns [-0.04, -0.02, -0.05, -0.01]; worst -0.05.
     # Crisis VaR = 30M * 0.05 = 1500000; with a 0.3 uplift -> 1950000.
-    stressed = compute_stressed_var(positions, returns, CONFIDENCE, (2, 5), Decimal("0.3"))
+    stressed = compute_stressed_var(positions, _dated(returns), CONFIDENCE, (2, 5), Decimal("0.3"))
     assert stressed == Decimal("1950000")
     # A full-window stressed figure would instead be 1800000 * 1.3 = 2340000.
     assert stressed != Decimal("2340000")
@@ -134,7 +137,7 @@ def test_stressed_var_clamps_window_to_short_history() -> None:
     # observations here) rather than failing the whole FX analysis.
     positions = [_pos("USD", "30", "12.5")]
     returns: dict[str, list[float]] = {"USD": [0.02, -0.05, -0.02, -0.04]}
-    stressed = compute_stressed_var(positions, returns, CONFIDENCE, (2, 5), Decimal("0.3"))
+    stressed = compute_stressed_var(positions, _dated(returns), CONFIDENCE, (2, 5), Decimal("0.3"))
     # Clamped window [0, 3]; worst return -0.05 -> 30M * 0.05 = 1500000 * 1.3.
     assert stressed == Decimal("1950000")
     # With the full history present the configured window is used unchanged.
@@ -142,7 +145,7 @@ def test_stressed_var_clamps_window_to_short_history() -> None:
         "USD": [0.02, 0.02, -0.04, -0.02, -0.05, -0.01, 0.03, -0.06],
     }
     assert compute_stressed_var(
-        positions, long_returns, CONFIDENCE, (2, 5), Decimal("0.3")
+        positions, _dated(long_returns), CONFIDENCE, (2, 5), Decimal("0.3")
     ) == Decimal("1950000")
 
 
@@ -218,5 +221,65 @@ def test_missing_return_history_raises() -> None:
     positions = [_pos("USD", "30", "12.5"), _pos("EUR", "-7", "14.0")]
     returns: dict[str, list[float]] = {"USD": [0.01, -0.02, 0.0]}
     with pytest.raises(MissingParameterError) as excinfo:
-        compute_var(positions, returns, CONFIDENCE)
+        compute_var(positions, _dated(returns), CONFIDENCE)
     assert "EUR" in excinfo.value.name
+
+
+def _dated(histories: dict[str, list[float]]) -> dict[str, list[FxReturn]]:
+    start = date(2026, 1, 1)
+    return {
+        currency: [
+            FxReturn(start + timedelta(days=i), start + timedelta(days=i + 1), Decimal(str(value)))
+            for i, value in enumerate(values)
+        ]
+        for currency, values in histories.items()
+    }
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_unequal_starts_join_dates_and_opposite_exposures(reverse: bool) -> None:
+    positions = [_pos("USD", "0.0001", "1"), _pos("EUR", "-0.0001", "1")]
+    histories = _dated({"USD": [-0.1, 0.1], "EUR": [-0.1, 0.1]})
+    histories["EUR"] = histories["EUR"][1:]
+    if reverse:
+        positions.reverse()
+        histories = {key: list(reversed(value)) for key, value in reversed(histories.items())}
+    result = compute_var(positions, histories, CONFIDENCE)
+    assert result.portfolio_var == 0
+    assert result.observations == 1
+    assert result.intervals == ((date(2026, 1, 2), date(2026, 1, 3)),)
+    assert compute_stressed_var(positions, histories, CONFIDENCE, (0, 1), Decimal("0.3")) == 0
+
+
+def test_equal_lengths_with_interior_calendar_gap_require_both_endpoints() -> None:
+    positions = [_pos("USD", "0.0001", "1"), _pos("EUR", "-0.0001", "1")]
+    histories = _dated({"USD": [-0.5, 0.1, 0.2], "EUR": [0.9, 0.1, 0.2]})
+    histories["EUR"] = [
+        FxReturn(date(2026, 1, 1), date(2026, 1, 3), Decimal("0.9")),
+        histories["EUR"][2],
+        FxReturn(date(2026, 1, 4), date(2026, 1, 5), Decimal("0.3")),
+    ]
+    result = compute_var(positions, histories, CONFIDENCE)
+    assert result.observations == 1
+    assert result.intervals == ((date(2026, 1, 3), date(2026, 1, 4)),)
+    assert result.portfolio_var == 0
+
+
+def test_no_shared_interval_refuses_both_var_paths() -> None:
+    histories = _dated({"USD": [-0.1, 0.1], "EUR": [-0.1, 0.1]})
+    histories["USD"] = histories["USD"][:1]
+    histories["EUR"] = histories["EUR"][1:]
+    positions = [_pos("USD", "1", "1"), _pos("EUR", "1", "1")]
+    with pytest.raises(FxComputationError, match="No matching dated"):
+        compute_var(positions, histories, CONFIDENCE)
+    with pytest.raises(FxComputationError, match="No matching dated"):
+        compute_stressed_var(positions, histories, CONFIDENCE, (0, 1), Decimal("0"))
+
+
+def test_cap_is_applied_after_calendar_intersection() -> None:
+    histories = _dated({"USD": [-0.1] * 600, "EUR": [-0.1] * 600})
+    histories["EUR"] = histories["EUR"][::2]
+    result = compute_var([_pos("USD", "1", "1"), _pos("EUR", "-1", "1")], histories, CONFIDENCE)
+    assert result.observations == 250
+    assert result.intervals[0][0] == date(2026, 1, 1) + timedelta(days=100)
+    assert result.portfolio_var == 0
