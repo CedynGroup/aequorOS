@@ -1018,11 +1018,12 @@ def _build_trend(
                 batch.require_run_coverage(period, run)
             except NotComputable:
                 continue
-            if run.metrics.get("var_sample_policy") != FX_SAMPLE_POLICY:
-                continue
             observations = cast(object, run.metrics.get("var_observations"))
-            if not isinstance(observations, int) or observations < FX_SAMPLE_TARGET:
-                continue
+            sufficient_var = (
+                run.metrics.get("var_sample_policy") == FX_SAMPLE_POLICY
+                and isinstance(observations, int)
+                and observations >= FX_SAMPLE_TARGET
+            )
             metrics = run.metrics
             points.append(
                 FxTrendPointRead(
@@ -1031,7 +1032,7 @@ def _build_trend(
                     period_end=period.period_end,
                     nop_ghs=_decimal(metrics, "nop_ghs"),
                     nop_pct_tier1=_decimal(metrics, "nop_pct_tier1"),
-                    var_99_1d_ghs=_decimal(metrics, "var_99_1d_ghs"),
+                    var_99_1d_ghs=_decimal(metrics, "var_99_1d_ghs") if sufficient_var else None,
                     stored=True,
                 )
             )
@@ -1044,8 +1045,6 @@ def _build_trend(
             continue
         except (MissingParameterError, FxComputationError, NotComputable):
             continue
-        if analysis.var.observations < FX_SAMPLE_TARGET:
-            continue
         points.append(
             FxTrendPointRead(
                 reporting_period_id=period.id,
@@ -1053,7 +1052,11 @@ def _build_trend(
                 period_end=period.period_end,
                 nop_ghs=analysis.nop.overall_nop,
                 nop_pct_tier1=analysis.nop.nop_pct_tier1,
-                var_99_1d_ghs=analysis.var.portfolio_var,
+                var_99_1d_ghs=(
+                    analysis.var.portfolio_var
+                    if analysis.var.observations >= FX_SAMPLE_TARGET
+                    else None
+                ),
                 stored=False,
             )
         )

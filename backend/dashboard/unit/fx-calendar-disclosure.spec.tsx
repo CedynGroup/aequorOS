@@ -1,15 +1,34 @@
 // @vitest-environment jsdom
 import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FxDashboardReadFromJSON } from "@aequoros/risk-service-api";
 import FxModuleFrame from "../components/fx/FxModuleFrame";
 import FxVarPage from "../app/(app)/fx/var/page";
+import FxExposurePage from "../app/(app)/fx/page";
+import FxLimitsPage from "../app/(app)/fx/limits/page";
 
 vi.mock("../components/bi/EChart", () => ({
-  default: ({ ariaLabel }: { ariaLabel: string }) => (
-    <div role="img" aria-label={ariaLabel} />
+  default: ({
+    ariaLabel,
+    option,
+  }: {
+    ariaLabel: string;
+    option: { xAxis: { data?: string[] }; series: { data: unknown[] }[] };
+  }) => (
+    <div role="img" aria-label={ariaLabel}>
+      {JSON.stringify({
+        labels: option.xAxis.data,
+        series: option.series.map((series) => series.data),
+      })}
+    </div>
   ),
+}));
+
+vi.mock("../lib/api/bi", () => ({
+  useBiAvailability: () => ({ biEnabled: false }),
+  useBiCatalogue: () => ({ data: undefined }),
+  useBiInsights: () => ({}),
 }));
 
 vi.mock("../components/shell/BankContext", () => ({
@@ -23,14 +42,19 @@ vi.mock("../lib/api/hooks", () => ({
   useFxDashboard: () => ({
     data: FxDashboardReadFromJSON({
       bank: {},
-      period: { id: "period" },
+      period: { id: "march", period_end: "2026-03-31" },
       metrics: {
+        nop_ghs: "30",
+        nop_pct_tier1: "30",
+        nop_aggregate_limit_pct: "40",
+        nop_single_limit_pct: "10",
+        nop_status: "green",
         var_99_1d_ghs: "10",
         standalone_var_total_ghs: "10",
         diversification_benefit_ghs: "0",
         stressed_var_ghs: "20",
         var_confidence_pct: "99",
-        var_observations: 1,
+        var_observations: 249,
       },
       positions: [],
       standalone_vars: [],
@@ -38,17 +62,30 @@ vi.mock("../lib/api/hooks", () => ({
       scenarios: [],
       trend: [
         {
-          reporting_period_id: "previous",
-          label: "Previous period",
+          reporting_period_id: "january",
+          label: "January",
           period_end: "2026-01-31",
+          nop_ghs: "10",
+          nop_pct_tier1: "10",
           var_99_1d_ghs: "10",
           stored: true,
         },
         {
-          reporting_period_id: "latest",
-          label: "Latest period",
+          reporting_period_id: "february",
+          label: "February",
           period_end: "2026-02-28",
-          var_99_1d_ghs: "12",
+          nop_ghs: "20",
+          nop_pct_tier1: "20",
+          var_99_1d_ghs: "0",
+          stored: true,
+        },
+        {
+          reporting_period_id: "march",
+          label: "March",
+          period_end: "2026-03-31",
+          nop_ghs: "30",
+          nop_pct_tier1: "30",
+          var_99_1d_ghs: null,
           stored: false,
         },
       ],
@@ -59,7 +96,7 @@ vi.mock("../lib/api/hooks", () => ({
           passed: false,
           severity: "warning",
           message:
-            "FX VaR uses 1/250 exact shared return intervals from 2026-01-02 to 2026-01-03. Insufficient sample: not adequate pilot risk evidence.",
+            "FX VaR uses 249/250 exact shared return intervals from 2025-07-01 to 2026-03-31. Insufficient sample: not adequate pilot risk evidence.",
         },
         {
           rule_code: "stressed_var_disclosed",
@@ -79,6 +116,13 @@ vi.mock("../lib/api/hooks", () => ({
   }),
 }));
 
+beforeEach(() => {
+  vi.stubGlobal("matchMedia", () => ({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  }));
+});
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -90,7 +134,7 @@ it("shows sample and stress qualifications alongside every FX tab's figures", ()
     </FxModuleFrame>,
   );
   expect(
-    screen.getByText(/1\/250 exact shared return intervals/).textContent,
+    screen.getByText(/249\/250 exact shared return intervals/).textContent,
   ).toContain("not adequate pilot risk evidence");
   expect(
     screen.getByText(/indicative management stress estimate/),
@@ -100,11 +144,6 @@ it("shows sample and stress qualifications alongside every FX tab's figures", ()
 });
 
 it("explains omitted insufficient-evidence periods beside the VaR trend", () => {
-  vi.stubGlobal("matchMedia", () => ({
-    matches: false,
-    addEventListener() {},
-    removeEventListener() {},
-  }));
   render(<FxVarPage />);
   const chart = screen
     .getByRole("heading", {
@@ -114,9 +153,24 @@ it("explains omitted insufficient-evidence periods beside the VaR trend", () => 
   expect(chart?.textContent).toContain(
     "Periods with insufficient sample evidence are omitted.",
   );
-  expect(
-    screen.getByRole("img", {
-      name: "Portfolio VaR across 2 periods, 1 computed inline",
-    }),
-  ).toBeTruthy();
+  const plot = screen.getByRole("img", { name: "Portfolio VaR across 2 periods" });
+  expect(plot.textContent).toContain('"labels":["January","February"]');
+  expect(plot.textContent).toContain('"value":0');
+  expect(plot.textContent).not.toContain("March");
+});
+
+it("compares March NOP with February despite March's insufficient VaR", () => {
+  render(<FxExposurePage />);
+  const nop = screen.getByText("Aggregate NOP / Tier 1").closest(".card");
+  expect(nop?.textContent).toContain("+10.0 pts");
+  expect(nop?.textContent).not.toContain("+20.0 pts");
+});
+
+it("keeps all three NOP periods in the limits chart", () => {
+  render(<FxLimitsPage />);
+  const plot = screen.getByRole("img", {
+    name: "NOP / Tier 1 across 3 periods, 1 computed inline",
+  });
+  expect(plot.textContent).toContain('"labels":["January","February","March"]');
+  expect(plot.textContent).toContain('"value":30');
 });

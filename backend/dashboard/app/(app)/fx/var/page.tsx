@@ -46,11 +46,11 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
     varGhs: num(s.standaloneVarGhs),
   }));
 
-  const varTrend = data.trend.map((p) => ({
-    label: p.label,
-    value: num(p.var991dGhs),
-    stored: p.stored,
-  }));
+  const varTrend = data.trend.flatMap((p) =>
+    p.var991dGhs == null
+      ? []
+      : [{ label: p.label, value: num(p.var991dGhs), stored: p.stored }],
+  );
 
   const stressedNote = params?.crisis
     ? `Historical VaR re-run on the currency-crisis slice of the return history ` +

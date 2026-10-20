@@ -369,7 +369,9 @@ on one canonical store — the live tier for intraday awareness, the official ti
   A nonempty shorter sample is an indicative management estimate, explicitly insufficient
   for pilot risk evidence. An empty intersection, invalid/duplicate interval or undated legacy
   history refuses computation. Re-derive old facts and rerun; old saved results remain immutable
-  audit records but cannot supply FX dashboard headlines or trends without calendar evidence.
+  audit records but cannot supply FX dashboard headlines or VaR trend values without calendar
+  evidence. Shared trend points retain NOP values; VaR is null without the governed 250-interval
+  sample, and the VaR chart omits those values while NOP comparisons retain the prior period.
   The input snapshot seals the policy version/target and dated values; output metrics retain
   exact effective intervals. FX tabs and saved validations disclose sample count and date span.
   Stress retains its configured index window (and available-tail fallback) **after** alignment,

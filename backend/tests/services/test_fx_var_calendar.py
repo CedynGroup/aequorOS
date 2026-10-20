@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ModuleDataUnavailable
 from app.domain.fx.engine import FxComputationError, FxPosition, compute_var
-from app.models import BankFinancialFact, RegulatoryRun
+from app.models import BankFinancialFact, BankReportingPeriod, RegulatoryRun
 from app.services import regulatory_fx
 from app.services.fact_derivation import (
     _Canonical,  # pyright: ignore[reportPrivateUsage]
@@ -127,7 +127,7 @@ def test_old_saved_results_cannot_supply_dashboard_var(db_session: Session) -> N
 
 @pytest.mark.parametrize("stored", [True, False])
 @pytest.mark.parametrize("observations", [1, 249, 250])
-def test_trends_omit_insufficient_samples(
+def test_trends_omit_only_insufficient_var_samples(
     db_session: Session, stored: bool, observations: int
 ) -> None:
     bank, period, ctx = _book(db_session)
@@ -161,10 +161,97 @@ def test_trends_omit_insufficient_samples(
     assert dashboard.stored is stored
     assert dashboard.metrics.var_observations == observations
     points = [point for point in dashboard.trend if point.reporting_period_id == period.id]
-    assert len(points) == (1 if observations == 250 else 0)
-    if points:
-        assert points[0].stored is stored
+    assert len(points) == 1
+    assert points[0].stored is stored
+    assert points[0].nop_ghs == dashboard.metrics.nop_ghs
+    assert points[0].nop_pct_tier1 == dashboard.metrics.nop_pct_tier1
+    if observations == 250:
         assert points[0].var_99_1d_ghs == dashboard.metrics.var_99_1d_ghs
+    else:
+        assert points[0].var_99_1d_ghs is None
+        assert points[0].model_dump(mode="json")["var_99_1d_ghs"] is None
+
+
+@pytest.mark.parametrize("missing_field", ["var_sample_policy", "var_observations"])
+def test_saved_trend_without_var_evidence_preserves_nop(
+    db_session: Session, missing_field: str
+) -> None:
+    bank, period, ctx = _book(db_session)
+    run = db_session.scalars(
+        select(RegulatoryRun).where(RegulatoryRun.bank_id == bank.id, RegulatoryRun.module == "fx")
+    ).one()
+    metrics = cast(dict[str, object], run.metrics)
+    nop = Decimal(str(metrics["nop_ghs"]))
+    run.metrics = {key: value for key, value in metrics.items() if key != missing_field}
+    db_session.flush()
+    points = regulatory_fx._build_trend(db_session, ctx, bank, [period])  # pyright: ignore[reportPrivateUsage]
+    assert len(points) == 1
+    assert points[0].nop_ghs == nop
+    assert points[0].var_99_1d_ghs is None
+
+
+@pytest.mark.parametrize("stored", [True, False])
+def test_january_to_march_retains_nop_when_march_var_is_insufficient(
+    db_session: Session, stored: bool
+) -> None:
+    bank, latest, ctx = _book(db_session)
+    periods = list(
+        db_session.scalars(
+            select(BankReportingPeriod)
+            .where(
+                BankReportingPeriod.bank_id == bank.id,
+                BankReportingPeriod.period_end >= date(2026, 1, 1),
+            )
+            .order_by(BankReportingPeriod.period_end)
+        )
+    )
+    assert [period.period_end.month for period in periods] == [1, 2, 3]
+    for run in db_session.scalars(
+        select(RegulatoryRun).where(RegulatoryRun.bank_id == bank.id, RegulatoryRun.module == "fx")
+    ):
+        run.status = "failed"
+    for period, nop_pct, observations in zip(periods, (10, 20, 30), (250, 250, 249), strict=True):
+        facts = list(
+            db_session.scalars(
+                select(BankFinancialFact).where(
+                    BankFinancialFact.bank_id == bank.id,
+                    BankFinancialFact.reporting_period_id == period.id,
+                )
+            )
+        )
+        tier1 = regulatory_fx._tier1_from_facts(facts)  # pyright: ignore[reportPrivateUsage]
+        for fact in facts:
+            attributes = cast(dict[str, object], fact.attributes)
+            if fact.fact_group == "fx_return_history":
+                intervals = TypeAdapter(list[dict[str, str]]).validate_python(
+                    attributes["intervals"]
+                )
+                fact.attributes = {**attributes, "intervals": intervals[-observations:]}
+            elif fact.fact_group == "fx_position":
+                fact.amount = (
+                    tier1 * Decimal(nop_pct) / 100 if fact.category == "USD" else Decimal(0)
+                )
+                net_ccy = fact.amount / Decimal(str(attributes["spot_ghs"]))
+                fact.attributes = {
+                    **attributes,
+                    "net_ccy": str(net_ccy),
+                    "assets_ccy": str(net_ccy),
+                    "liabilities_ccy": "0",
+                    "net_derivatives_ccy": "0",
+                    "net_ghs": str(fact.amount),
+                }
+        db_session.flush()
+        if stored:
+            run = regulatory_fx._create_and_execute(db_session, ctx, bank, period, "baseline")  # pyright: ignore[reportPrivateUsage]
+            assert run.status == "succeeded"
+    dashboard = regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, latest.id)
+    period_ids = {period.id for period in periods}
+    points = [point for point in dashboard.trend if point.reporting_period_id in period_ids]
+    assert [point.nop_pct_tier1 for point in points] == [Decimal(10), Decimal(20), Decimal(30)]
+    assert [point.stored for point in points] == [stored] * 3
+    assert all(point.var_99_1d_ghs is not None for point in points[:2])
+    assert points[2].var_99_1d_ghs is None
+    assert dashboard.metrics.nop_pct_tier1 - points[-2].nop_pct_tier1 == Decimal(10)
 
 
 class _Evidence(BaseModel):
