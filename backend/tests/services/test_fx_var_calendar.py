@@ -125,6 +125,48 @@ def test_old_saved_results_cannot_supply_dashboard_var(db_session: Session) -> N
         regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, period.id)
 
 
+@pytest.mark.parametrize("stored", [True, False])
+@pytest.mark.parametrize("observations", [1, 249, 250])
+def test_trends_omit_insufficient_samples(
+    db_session: Session, stored: bool, observations: int
+) -> None:
+    bank, period, ctx = _book(db_session)
+    facts = db_session.scalars(
+        select(BankFinancialFact).where(
+            BankFinancialFact.bank_id == bank.id,
+            BankFinancialFact.reporting_period_id == period.id,
+            BankFinancialFact.fact_group == "fx_return_history",
+        )
+    ).all()
+    assert facts
+    for fact in facts:
+        attributes = cast(dict[str, object], fact.attributes)
+        intervals = TypeAdapter(list[dict[str, str]]).validate_python(attributes["intervals"])
+        assert len(intervals) >= observations
+        fact.attributes = {**attributes, "intervals": intervals[-observations:]}
+    if stored:
+        run = regulatory_fx._create_and_execute(db_session, ctx, bank, period, "baseline")  # pyright: ignore[reportPrivateUsage]
+        assert run.status == "succeeded"
+    else:
+        for run in db_session.scalars(
+            select(RegulatoryRun).where(
+                RegulatoryRun.bank_id == bank.id,
+                RegulatoryRun.reporting_period_id == period.id,
+                RegulatoryRun.module == "fx",
+            )
+        ):
+            run.status = "failed"
+    db_session.flush()
+    dashboard = regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, period.id)
+    assert dashboard.stored is stored
+    assert dashboard.metrics.var_observations == observations
+    points = [point for point in dashboard.trend if point.reporting_period_id == period.id]
+    assert len(points) == (1 if observations == 250 else 0)
+    if points:
+        assert points[0].stored is stored
+        assert points[0].var_99_1d_ghs == dashboard.metrics.var_99_1d_ghs
+
+
 class _Evidence(BaseModel):
     var_observations: int
     var_sample_limited: bool

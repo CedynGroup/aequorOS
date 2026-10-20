@@ -1190,7 +1190,7 @@ def _load_market_data(
         if spot is not None:
             market_spots[currency] = spot.rate
         history = market_data_sources.preferred_fx_history(
-            db, ctx.organization_id, bank.id, currency, base_ccy, as_of
+            db, ctx.organization_id, bank.id, currency, base_ccy, as_of, limit=0
         )
         if len(history) >= _MARKET_FX_HISTORY_MIN_OBSERVATIONS:
             market_fx_history[currency] = history

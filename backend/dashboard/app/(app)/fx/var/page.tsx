@@ -187,6 +187,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
         <ChartFrame
           title={`Portfolio VaR trend (${confidence.toFixed(0)}%, 1-day)`}
           subtitle="Trailing periods · hollow points are live computations not yet stored"
+          footer="Periods with insufficient sample evidence are omitted."
           height={260}
         >
           <TrendChart

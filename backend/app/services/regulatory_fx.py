@@ -1020,6 +1020,9 @@ def _build_trend(
                 continue
             if run.metrics.get("var_sample_policy") != FX_SAMPLE_POLICY:
                 continue
+            observations = cast(object, run.metrics.get("var_observations"))
+            if not isinstance(observations, int) or observations < FX_SAMPLE_TARGET:
+                continue
             metrics = run.metrics
             points.append(
                 FxTrendPointRead(
@@ -1040,6 +1043,8 @@ def _build_trend(
                 raise ModuleDataUnavailable(exc.code, exc.message) from exc
             continue
         except (MissingParameterError, FxComputationError, NotComputable):
+            continue
+        if analysis.var.observations < FX_SAMPLE_TARGET:
             continue
         points.append(
             FxTrendPointRead(
