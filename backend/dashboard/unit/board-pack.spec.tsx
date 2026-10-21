@@ -23,26 +23,15 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { mkdirSync, writeFileSync } from "node:fs";
 import BoardPackPage from "../app/(app)/reports/board-pack/page";
+import PackCards from "../components/reports/PackCards";
 import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
 import { queryAuthorityScope } from "../lib/api/queryPolicy";
 import { apiBaseUrl } from "../lib/api/client";
 import { setAccessToken } from "../lib/api/token";
 
 const selection = vi.hoisted(() => ({ period: "Period A" }));
-vi.mock("../components/shell/BankContext", () => ({
-  useBankContext: () => ({
-    bank: {
-      id: "BK-SAMP0001",
-      name: "Synthetic Board Pack Test Bank",
-      currency: "EUR",
-    },
-    period: {
-      id: selection.period,
-      label: selection.period,
-      periodEnd: new Date("2026-01-31"),
-    },
-  }),
-  useModuleScope: () => ({
+vi.mock("../components/shell/BankContext", () => {
+  const useModuleScope = () => ({
     modules: new Set(["liquidity", "capital", "credit", "irrbb", "fx", "ftp"]),
     entitledModules: new Set([
       "liquidity",
@@ -70,8 +59,24 @@ vi.mock("../components/shell/BankContext", () => ({
         dataScope: { kind: "all", branches: [], regions: [] },
       }),
     ),
-  }),
-}));
+  });
+  return {
+    useBankContext: () => ({
+      moduleScope: useModuleScope(),
+      bank: {
+        id: "BK-SAMP0001",
+        name: "Synthetic Board Pack Test Bank",
+        currency: "EUR",
+      },
+      period: {
+        id: selection.period,
+        label: selection.period,
+        periodEnd: new Date("2026-01-31"),
+      },
+    }),
+    useModuleScope,
+  };
+});
 const server = setupServer();
 let client: QueryClient;
 let requests: string[];
@@ -105,13 +110,13 @@ function summary(modules = [generation()]) {
     modules,
   };
 }
-function view() {
+function view(children: React.ReactNode = <BoardPackPage />) {
   return (
     <QueryClientProvider client={client}>
       <QueryAuthorityScopeProvider
         scope={queryAuthorityScope("OR-SAMP0001", "fixture@example.test", 1)}
       >
-        <BoardPackPage />
+        {children}
       </QueryAuthorityScopeProvider>
     </QueryClientProvider>
   );
@@ -144,6 +149,22 @@ afterEach(() => {
   server.resetHandlers();
   setAccessToken(null);
   vi.restoreAllMocks();
+});
+
+it("labels the library card with its live basis regardless of the selected period", () => {
+  const card = () =>
+    view(<PackCards bankId={undefined} periodId={selection.period} />);
+  const rendered = render(card());
+  expect(screen.getByText("Current live generations · Baseline")).toBeVisible();
+  expect(screen.queryByText(/Period A/)).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open board pack" })).toHaveAttribute(
+    "href",
+    "/reports/board-pack",
+  );
+  selection.period = "Period B";
+  rendered.rerender(card());
+  expect(screen.getByText("Current live generations · Baseline")).toBeVisible();
+  expect(screen.queryByText(/Period B/)).not.toBeInTheDocument();
 });
 
 it("prints current baseline figures with their producing generation despite historical selection and unrelated run history", async () => {
