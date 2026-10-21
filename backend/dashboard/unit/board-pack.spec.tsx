@@ -155,16 +155,21 @@ it("labels the library card with its live basis regardless of the selected perio
   const card = () =>
     view(<PackCards bankId={undefined} periodId={selection.period} />);
   const rendered = render(card());
-  expect(screen.getByText("Current live generations · Baseline")).toBeVisible();
-  expect(screen.queryByText(/Period A/)).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Open board pack" })).toHaveAttribute(
+  const boardPack = within(
+    screen.getByRole("heading", { name: "Board Pack" }).closest<HTMLElement>(".card")!,
+  );
+  expect(boardPack.getByText("Current live generations · Baseline")).toBeVisible();
+  expect(boardPack.queryByText(/Period A/)).not.toBeInTheDocument();
+  expect(screen.getByText("Period Period A")).toBeVisible();
+  expect(boardPack.getByRole("link", { name: "Open board pack" })).toHaveAttribute(
     "href",
     "/reports/board-pack",
   );
   selection.period = "Period B";
   rendered.rerender(card());
-  expect(screen.getByText("Current live generations · Baseline")).toBeVisible();
-  expect(screen.queryByText(/Period B/)).not.toBeInTheDocument();
+  expect(boardPack.getByText("Current live generations · Baseline")).toBeVisible();
+  expect(boardPack.queryByText(/Period B/)).not.toBeInTheDocument();
+  expect(screen.getByText("Period Period B")).toBeVisible();
 });
 
 it("prints current baseline figures with their producing generation despite historical selection and unrelated run history", async () => {
@@ -264,6 +269,24 @@ it.each(["failed", "blocked"])(
     expect(screen.queryByText(/Input hash:/)).not.toBeInTheDocument();
   },
 );
+
+it("withholds unavailable analysis even when a ready generation retains figures", async () => {
+  const live = generation();
+  serve(
+    summary([
+      {
+        ...live,
+        metrics: { ...live.metrics, availability: "unavailable" },
+      },
+    ]),
+  );
+  render(view());
+  await screen.findAllByText("Live analysis unavailable — figures withheld.");
+  expect(screen.queryByText("4.75%")).not.toBeInTheDocument();
+  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  expect(screen.queryByText(/Input hash:/)).not.toBeInTheDocument();
+  expect(screen.queryByText("Engine ftp-test-v2")).not.toBeInTheDocument();
+});
 
 it("withholds stale evidence after withdrawal, then recovers only with the new generation", async () => {
   serve({ ...summary(), is_stale: true });
