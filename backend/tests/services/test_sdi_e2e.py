@@ -305,5 +305,6 @@ def test_sdi_live_capital_carries_its_producing_version(db_session: Session) -> 
     fact_derivation.derive_current_facts(db_session, _CTX, sdi.id, FIXTURE_AS_OF)
     live = regulatory_capital.compute_live(db_session, _CTX, sdi, period)
     assert live.metrics["capital_regime"] == "s29"
+    assert isinstance(live.metrics["car_pct"], str)
     assert Decimal(live.metrics["car_pct"]) > 0
     assert live.engine_version == regulatory_capital.ENGINE_VERSION
