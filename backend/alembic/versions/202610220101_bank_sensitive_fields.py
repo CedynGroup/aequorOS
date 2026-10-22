@@ -84,6 +84,9 @@ def _current_index(column: str) -> None:
 
 
 def upgrade() -> None:
+    # Field reads and writes resolve bank key configuration in the runtime
+    # session. Key registration and rotation remain control-plane mutations.
+    op.execute("GRANT SELECT ON bank_encryption_keys TO aqs_api, aqs_worker")
     _alert_reasons((*ALERT_REASONS, IDENTITY_REASON))
     for table, column, width in WIDENED:
         op.alter_column(table, column, existing_type=sa.String(width), type_=sa.Text())
@@ -147,6 +150,7 @@ def downgrade() -> None:
                     )
                 ):
                     raise RuntimeError("Bank-encrypted fields prohibit schema downgrade.")
+    op.execute("REVOKE SELECT ON bank_encryption_keys FROM aqs_api, aqs_worker")
     _alert_reasons(ALERT_REASONS)
     op.drop_index("ix_related_parties_name_blind", table_name=PARTIES)
     op.drop_index("ix_counterparties_name_blind", table_name=COUNTERPARTIES)

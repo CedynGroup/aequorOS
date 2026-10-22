@@ -240,6 +240,10 @@ def test_matrix_detects_public_column_grants(administrator: Engine, privilege: s
             ["bank_encryption_keys", column, role, privilege, False]
             for column in ("bank_id", "key_id")
             for role in sorted(ROLES)
+            if privilege
+            not in cast(dict[str, dict[str, list[str]]], before["tables"])[
+                "bank_encryption_keys"
+            ].get(role, [])
         ]
         connection.rollback()
 
