@@ -147,12 +147,12 @@ def _party_names(db: Session, organization_id: str, bank: Bank) -> set[str]:
     except ImportError:  # pragma: no cover - the register always exists today
         return set()
     rows = db.scalars(
-        select(RelatedParty.full_name).where(
+        select(RelatedParty).where(
             RelatedParty.organization_id == organization_id,
             RelatedParty.bank_id == bank.id,
         )
     )
-    return {value.strip() for value in rows if value}
+    return {party.full_name.strip() for party in rows if party.full_name}
 
 
 def jurisdiction_deny_terms(db: Session) -> frozenset[str]:

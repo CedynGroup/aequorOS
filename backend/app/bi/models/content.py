@@ -67,6 +67,7 @@ from sqlalchemy import (
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.key_management.fields import ProtectedJSON
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
 # --- vocabularies (the CHECK constraints derive from these) -------------------
@@ -291,7 +292,10 @@ class BiDashboardVersion(UuidV4PrimaryKeyMixin, _TenantKeys, Base):
     #: schema's own ``BiPackWidget``. Stored as the model dumped it, so a copy of
     #: a certified pack is literally a copy of that pack's widgets.
     spec: Mapped[dict[str, Any]] = mapped_column(
-        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+        ProtectedJSON(empty_object=True),
+        default=dict,
+        server_default=sql_text("'{}'"),
+        nullable=False,
     )
     #: Value-based digest of ``spec`` (``app/bi/service/content.py``), so two
     #: versions can be compared without re-reading the JSON and an unchanged

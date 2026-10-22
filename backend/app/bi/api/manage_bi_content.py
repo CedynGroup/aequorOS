@@ -106,6 +106,7 @@ from app.bi.schemas.content import (
 from app.bi.schemas.query import BiLayoutItem, BiPackWidget, BiPackWidgetRead
 from app.bi.service import content, query_log
 from app.bi.service.authorization import UnknownMember
+from app.bi.service.identity_policy import IDENTITY_MESSAGE, IDENTITY_REASON
 from app.identity import public as grant_administration
 from app.identity.public import SodDecisionRead, SodPolicyFindingRead, User
 from app.services import audit
@@ -356,7 +357,9 @@ def _denied(cat: Catalogue, exc: content.MembersDenied) -> HTTPException:
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
             "error_code": "bi_authorization_denied",
-            "message": (
+            "message": IDENTITY_MESSAGE
+            if exc.reason == IDENTITY_REASON
+            else (
                 "Your access does not cover every field this view needs. "
                 "An Org Owner can grant the fields listed here."
             ),
@@ -549,7 +552,9 @@ def _dashboard_read(  # noqa: PLR0913 - one document, its reader, its date and i
     widgets = [_widget_read(resolved, layout_by_id) for resolved in canvas.widgets]
     restricted = canvas.restricted_widgets
     readable = canvas.readable_widgets
-    if readable and restricted == readable:
+    if canvas.refusal_reason == IDENTITY_REASON:
+        message = IDENTITY_MESSAGE
+    elif readable and restricted == readable:
         message = PACK_MESSAGES["restricted"]
     elif restricted:
         message = PACK_MESSAGES["partial"]

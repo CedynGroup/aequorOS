@@ -167,6 +167,7 @@ from app.bi.schemas.query import (
 )
 from app.bi.service import execution
 from app.bi.service.errors import InvalidQuery, UnknownMember
+from app.bi.service.identity_policy import require_numeric_bi
 from app.core.config import get_settings
 from app.db.base import Base
 
@@ -2486,6 +2487,17 @@ def compile_query(  # noqa: PLR0913 - the contract signature (bi_contracts.md)
     """
     retention_days = get_settings().bi.daily_retention_days
     certified = _load_certified(db, q, cat, organization_id=organization_id, bank_id=bank_id)
+    from app.bi.service.authorization import query_members  # noqa: PLC0415
+
+    walked = expand_calculated_measures(
+        db, cat, q, organization_id=organization_id, bank_id=bank_id
+    )
+    require_numeric_bi(
+        db, organization_id, bank_id, (member.id for member in query_members(cat, walked))
+    )
+    require_numeric_bi(
+        db, organization_id, bank_id, (predicate.member for predicate in injected_filters)
+    )
     resolved = _resolve(cat, q, injected_filters, certified, retention_days)
     dialect = db.get_bind().dialect.name
     build = _Build(

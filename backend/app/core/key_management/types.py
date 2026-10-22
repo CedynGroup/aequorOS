@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
 
+FIELD_FORMAT = "aqs-bank-field-v1"
+
 
 class KeyUnavailableError(RuntimeError):
     """The bank key cannot be used; callers must refuse without a fallback."""

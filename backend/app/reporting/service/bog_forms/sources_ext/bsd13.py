@@ -379,7 +379,7 @@ def contracts(rc: ResolveContext) -> tuple[Contract, ...]:
             CanonicalPositionSnapshot.notional,
             CanonicalPositionSnapshot.contractual_maturity,
             CanonicalPositionSnapshot.attributes,
-            CanonicalCounterparty.name,
+            CanonicalCounterparty,
         )
         .select_from(CanonicalPositionSnapshot)
         .join(
@@ -422,7 +422,7 @@ def contracts(rc: ResolveContext) -> tuple[Contract, ...]:
                 kind=_classify(attributes, maturity, rc.period.period_end),
                 origination=origination,
                 maturity=maturity,
-                counterparty=str(cp_name) if cp_name else None,
+                counterparty=cp_name.name if cp_name else None,
             )
         )
     book.sort(key=lambda c: (c.maturity or date.max, c.source_reference))

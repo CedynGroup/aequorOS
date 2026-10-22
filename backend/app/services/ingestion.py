@@ -28,6 +28,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import String, and_, any_, bindparam, func, select
 from sqlalchemy.dialects.postgresql import ARRAY, insert
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
 from app.api.deps import TenantContext
@@ -414,7 +415,12 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
         event_type="ml_etl.completed",
         entity_type="ingestion_batch",
         entity_id=batch.id,
-        details=batch.etl_report,
+        details={
+            "bank_id": bank.id,
+            "batch_id": str(batch.id),
+            "operation_count": len(etl_result.operations),
+            "linkage_count": len(etl_result.linkages),
+        },
     )
 
     batch.status = "translating"
@@ -1617,6 +1623,18 @@ def _known_references(
     """Current-generation canonical references already ingested for the bank."""
 
     def current(column, model) -> frozenset[str]:
+        if model is CanonicalCounterparty:
+            return frozenset(
+                row.source_reference
+                for row in db.scalars(
+                    select(CanonicalCounterparty).where(
+                        CanonicalCounterparty.organization_id == ctx.organization_id,
+                        CanonicalCounterparty.bank_id == bank.id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                    )
+                )
+            )
         return frozenset(
             db.scalars(
                 select(column).where(
@@ -1852,6 +1870,18 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
         return record_statuses.get((entity_type, source_reference), UNVALIDATED_STATUS)
 
     def existing_ids(key_column: Any, model: Any) -> dict[str, UUID]:
+        if model is CanonicalCounterparty:
+            return {
+                row.source_reference: row.id
+                for row in db.scalars(
+                    select(CanonicalCounterparty).where(
+                        CanonicalCounterparty.organization_id == ctx.organization_id,
+                        CanonicalCounterparty.bank_id == bank.id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                    )
+                )
+            }
         rows = db.execute(
             select(key_column, model.id).where(
                 model.organization_id == ctx.organization_id,
@@ -1863,6 +1893,19 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
         return {key: row_id for key, row_id in rows}
 
     def current_by_key(key_column, model, *conditions: Any) -> dict[str, Any]:
+        if model is CanonicalCounterparty:
+            return {
+                row.source_reference: row
+                for row in db.scalars(
+                    select(CanonicalCounterparty).where(
+                        CanonicalCounterparty.organization_id == ctx.organization_id,
+                        CanonicalCounterparty.bank_id == bank.id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                        *cast(tuple[ColumnElement[bool], ...], conditions),
+                    )
+                )
+            }
         rows = db.execute(
             select(key_column, model).where(
                 model.organization_id == ctx.organization_id,

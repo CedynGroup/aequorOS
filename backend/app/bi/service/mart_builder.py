@@ -118,6 +118,7 @@ from app.bi.schemas.query import BiDateRange, BiQuery, BiTime
 from app.bi.service import partitions
 from app.bi.service.compiler import compile_query
 from app.bi.service.errors import BiQueryError
+from app.bi.service.identity_policy import connected
 from app.bi.service.versions import BUILDER_VERSION
 from app.credit.public import loan_classification
 from app.data_engine.public import (
@@ -530,6 +531,7 @@ def fingerprint_for(db: Session, *, organization_id: str, bank_id: str, as_of: d
         )
     ).one()
     payload = {
+        "bank_key_identity_policy": connected(db, organization_id, bank_id),
         "builder_version": BUILDER_VERSION,
         "catalogue_version": CATALOGUE_VERSION,
         "as_of": as_of.isoformat(),
@@ -803,7 +805,7 @@ def _log_attribute_overflows(
     )
 
 
-def _build_positions(  # noqa: PLR0913 - one build carries its whole identity
+def _build_positions(  # noqa: PLR0912, PLR0913 - one build carries its whole identity
     db: Session,
     ctx: TenantContext,
     bank: Bank,
@@ -860,6 +862,7 @@ def _build_positions(  # noqa: PLR0913 - one build carries its whole identity
     # narrower than the value (audit A360 H3): counted per key and logged once,
     # never a value, never a build failure. The row lands with the column NULL.
     overflows: dict[str, int] = defaultdict(int)
+    protected = connected(db, organization_id, bank_id)
     for snapshot, position, counterparty, product, gl_account in _stream_snapshots(
         db, organization_id, bank_id, as_of
     ):
@@ -873,7 +876,10 @@ def _build_positions(  # noqa: PLR0913 - one build carries its whole identity
             classified=classified.get(snapshot.id),
         )
         _count_attribute_overflows(overflows, snapshot.attributes)
-        pending.append(_position_values(row, built_at))
+        values = _position_values(row, built_at)
+        if protected:
+            values["counterparty_group"] = None
+        pending.append(values)
         result.rows += 1
         result.aggregates[tuple(getattr(row, column) for column in _AGG_GRAIN)].add(row)
         if row.branch_code is not None:
@@ -1563,6 +1569,7 @@ def _build_dim_counterparty(  # noqa: PLR0913 - one build carries its whole iden
     seen: _PositionPass,
     built_at: datetime,
 ) -> int:
+    protected = connected(db, organization_id, bank_id)
     parties: dict[UUID, CanonicalCounterparty] = dict(seen.counterparties)
     for party in _latest_current_rows(db, CanonicalCounterparty, organization_id, bank_id, as_of):
         parties.setdefault(party.id, party)
@@ -1571,10 +1578,10 @@ def _build_dim_counterparty(  # noqa: PLR0913 - one build carries its whole iden
             "organization_id": organization_id,
             "bank_id": bank_id,
             "counterparty_id": party.id,
-            "source_reference": party.source_reference,
-            "name": party.name,
+            "source_reference": str(party.id) if protected else party.source_reference,
+            "name": str(party.id) if protected else party.name,
             "counterparty_type": party.counterparty_type,
-            "group_reference": party.group_reference,
+            "group_reference": None if protected else party.group_reference,
             "country_code": party.country_code,
             "rating": party.rating,
             "builder_version": BUILDER_VERSION,

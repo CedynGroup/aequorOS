@@ -148,6 +148,7 @@ from app.bi.service.authorization import (
 from app.bi.service.compiler import ColumnSpec, CompiledQuery, compile_query
 from app.bi.service.errors import BiQueryError
 from app.bi.service.execution import QueryResult, execute
+from app.bi.service.identity_policy import IDENTITY_MESSAGE, IDENTITY_REASON
 from app.bi.service.insights import assemble as assemble_insights
 from app.bi.service.insights import (
     default_compare_to,
@@ -359,7 +360,9 @@ def _denied(cat: Catalogue, decision: BiAuthorization) -> HTTPException:
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
             "error_code": "bi_authorization_denied",
-            "message": (
+            "message": IDENTITY_MESSAGE
+            if decision.reason == IDENTITY_REASON
+            else (
                 "Your access does not cover every field this view needs. "
                 "An Org Owner can grant the fields listed here."
             ),

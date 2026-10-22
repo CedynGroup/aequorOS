@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.key_management.aws import AwsKmsKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
+from app.core.key_management.preflight import require_clean_immutable_history
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import (
     KeyDescription,
@@ -22,7 +23,7 @@ from app.core.key_management.types import (
     KeyStatus,
     KeyUnavailableError,
 )
-from app.db.base import utc_now
+from app.db.base import Base, utc_now
 
 type ProviderFactory = Callable[[str], KeyProvider]
 
@@ -52,6 +53,16 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     key: KeyReference,
     providers: ProviderFactory = provider_for,
 ) -> BankEncryptionKey:
+    banks = Base.metadata.tables["banks"]
+    _ = db.scalar(
+        select(banks.c.id)
+        .where(
+            banks.c.id == bank_id,
+            banks.c.organization_id == organization_id,
+        )
+        .with_for_update()
+    )
+    require_clean_immutable_history(db, organization_id, bank_id)
     _lock_keys(db, key)
     resolved = require_active(providers(key.provider).describe(key))
     context = {"bank_id": bank_id, "purpose": "onboarding-key-probe"}
@@ -188,6 +199,63 @@ class EnvelopeStore(Protocol):
     def open(self, slug: str, envelope_id: UUID, context: dict[str, str]) -> ObjectKey: ...
 
 
+def prepare_envelope(
+    db: Session,
+    row: BankEncryptionKey,
+    context: dict[str, str],
+    providers: ProviderFactory = provider_for,
+) -> ObjectKey:
+    """Append an envelope in the caller's transaction, holding its bank-key lock."""
+    _lock_keys(db, reference(row))
+    digest = context_digest(context)
+    data_key = providers(row.provider).generate_data_key(
+        reference(row), wrapping_context(row.bank_id, digest)
+    )
+    envelope_id = uuid4()
+    db.add(
+        ObjectKeyEnvelope(
+            id=envelope_id,
+            bank_id=row.bank_id,
+            organization_id=row.organization_id,
+            context_digest=digest,
+            wrapped_key=data_key.wrapped,
+        )
+    )
+    return ObjectKey(envelope_id, row.key_id, data_key.plaintext)
+
+
+def lock_envelopes(db: Session, row: BankEncryptionKey) -> None:
+    """Serialize lazy catalogue creation with existing envelope/rotation writers."""
+    _lock_keys(db, reference(row))
+
+
+def open_envelope(
+    db: Session,
+    row: BankEncryptionKey,
+    envelope_id: UUID,
+    context: dict[str, str],
+    providers: ProviderFactory = provider_for,
+) -> ObjectKey:
+    """Unwrap a bank/context-bound envelope under the caller's shared bank lock."""
+    envelope = db.scalar(
+        select(ObjectKeyEnvelope)
+        .where(
+            ObjectKeyEnvelope.bank_id == row.bank_id,
+            ObjectKeyEnvelope.organization_id == row.organization_id,
+            ObjectKeyEnvelope.id == envelope_id,
+        )
+        .execution_options(populate_existing=True)
+    )
+    if envelope is None or envelope.context_digest != context_digest(context):
+        raise KeyIntegrityError("The data key does not belong to this bank and record.")
+    plaintext = providers(row.provider).unwrap(
+        reference(row),
+        envelope.wrapped_key,
+        wrapping_context(row.bank_id, envelope.context_digest),
+    )
+    return ObjectKey(envelope_id, row.key_id, plaintext)
+
+
 class DatabaseEnvelopeStore:
     def __init__(
         self, sessions: Callable[[], Session], providers: ProviderFactory = provider_for
@@ -210,45 +278,14 @@ class DatabaseEnvelopeStore:
     def prepare(self, slug: str, context: dict[str, str]) -> ObjectKey:
         with self._sessions() as db, db.begin():
             row = self._bank(db, slug)
-            _lock_keys(db, reference(row))
             _scope_envelopes(db, row.organization_id)
-            digest = context_digest(context)
-            data_key = self._providers(row.provider).generate_data_key(
-                reference(row), wrapping_context(row.bank_id, digest)
-            )
-            envelope_id = uuid4()
-            db.add(
-                ObjectKeyEnvelope(
-                    id=envelope_id,
-                    bank_id=row.bank_id,
-                    organization_id=row.organization_id,
-                    context_digest=digest,
-                    wrapped_key=data_key.wrapped,
-                )
-            )
-            return ObjectKey(envelope_id, row.key_id, data_key.plaintext)
+            return prepare_envelope(db, row, context, self._providers)
 
     def open(self, slug: str, envelope_id: UUID, context: dict[str, str]) -> ObjectKey:
         with self._sessions() as db, db.begin():
             row = self._bank(db, slug, read=True)
             _scope_envelopes(db, row.organization_id)
-            envelope = db.scalar(
-                select(ObjectKeyEnvelope)
-                .where(
-                    ObjectKeyEnvelope.bank_id == row.bank_id,
-                    ObjectKeyEnvelope.organization_id == row.organization_id,
-                    ObjectKeyEnvelope.id == envelope_id,
-                )
-                .execution_options(populate_existing=True)
-            )
-            if envelope is None or envelope.context_digest != context_digest(context):
-                raise KeyIntegrityError("The object key does not belong to this bank and object.")
-            plaintext = self._providers(row.provider).unwrap(
-                reference(row),
-                envelope.wrapped_key,
-                wrapping_context(row.bank_id, envelope.context_digest),
-            )
-            return ObjectKey(envelope_id, row.key_id, plaintext)
+            return open_envelope(db, row, envelope_id, context, self._providers)
 
 
 def _scope_envelopes(db: Session, organization_id: str) -> None:

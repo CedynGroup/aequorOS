@@ -79,6 +79,7 @@ from app.bi.domain.catalogue import UnknownMember as CatalogueUnknownMember
 from app.bi.domain.catalogue.measures import ENTITLEMENT_BY_MODULE
 from app.bi.schemas.query import BiQuery
 from app.bi.service.errors import UnknownMember
+from app.bi.service.identity_policy import IDENTITY_REASON, refused_identity
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.observability import authorization_denied
 from app.db.base import Base
@@ -532,6 +533,16 @@ def authorize_query(  # noqa: PLR0913 - the complete authorization sentence
     )
     members = query_members(cat, walked)
     member_ids = tuple(member.id for member in members)
+    refused = refused_identity(db, ctx.organization_id, bank.id, member_ids)
+    if refused:
+        return BiAuthorization(
+            allowed=False,
+            denied_members=refused,
+            matching_binding_ids=(),
+            data_scope=NO_INSTITUTION_DATA,
+            reason=IDENTITY_REASON,
+            member_ids=member_ids,
+        )
     telemetry_surface = f"bi_{surface}"
 
     if not _interactive_human(ctx):

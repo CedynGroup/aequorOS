@@ -56,15 +56,14 @@ from __future__ import annotations
 
 import logging
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
@@ -270,7 +269,12 @@ def _run(session: Session, job: Job, batch: IngestionBatch) -> None:
         event_type=DEDUP_COMPLETED_EVENT,
         entity_type="ingestion_batch",
         entity_id=batch.id,
-        details=batch.etl_report,
+        details={
+            "bank_id": facts.bank_id,
+            "batch_id": str(batch.id),
+            "linkage_count": overlay["linkage_count"],
+            "anomaly_count": anomaly_count,
+        },
     )
     session.commit()
     job.progress = {
@@ -575,11 +579,7 @@ def _load_cross_source_rows(
                 CanonicalPositionSnapshot.interest_rate.label("interest_rate"),
                 CanonicalPositionSnapshot.balance.label("balance"),
                 CanonicalProduct.product_code.label("product_code"),
-                CanonicalCounterparty.id.label("counterparty_id"),
-                CanonicalCounterparty.source_reference.label("counterparty_reference"),
-                CanonicalCounterparty.name.label("counterparty_name"),
-                CanonicalCounterparty.country_code.label("counterparty_country"),
-                CanonicalCounterparty.counterparty_type.label("counterparty_type"),
+                CanonicalCounterparty,
             )
             .join(
                 CanonicalPosition,
@@ -605,7 +605,20 @@ def _load_cross_source_rows(
         .mappings()
         .all()
     )
-    keys = _counterparty_keys(rows)
+    flattened: list[dict[str, Any]] = []
+    for row in rows:
+        party = cast(CanonicalCounterparty | None, row["CanonicalCounterparty"])
+        flattened.append(
+            {
+                **row,
+                "counterparty_id": party.id if party else None,
+                "counterparty_reference": party.source_reference if party else None,
+                "counterparty_name": party.name if party else None,
+                "counterparty_country": party.country_code if party else None,
+                "counterparty_type": party.counterparty_type if party else None,
+            }
+        )
+    keys = _counterparty_keys(flattened)
     return [
         CanonicalPositionRow(
             row_id=str(row["position_id"]),
@@ -620,11 +633,11 @@ def _load_cross_source_rows(
             interest_rate=row["interest_rate"],
             balance=row["balance"],
         )
-        for row in rows
+        for row in flattened
     ]
 
 
-def _counterparty_keys(rows: Sequence[RowMapping]) -> dict[str, str]:
+def _counterparty_keys(rows: Sequence[Mapping[str, Any]]) -> dict[str, str]:
     """Resolve each counterparty to a CROSS-SOURCE identity, in two tiers.
 
     Tier A — the bank's own customer identifier used by more than one source
