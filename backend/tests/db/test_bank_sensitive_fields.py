@@ -27,6 +27,7 @@ from app.reporting.models.packages import RegulatoryPackage
 from tests.core.test_bank_field_encryption import (
     IDENTIFIER,
     NAME,
+    assert_unicode_name_round_trip,
     counterparty,
     raw_fields,
     saved_version,
@@ -79,6 +80,28 @@ def sensitive_db(
         )
         db.commit()
         yield db, provider, key
+
+
+@pytest.mark.parametrize("connected", [False, True])
+def test_unicode_name_indexes_fit_postgres_columns(
+    sensitive_db: tuple[Session, LocalKeyProvider, KeyReference], connected: bool
+) -> None:
+    db, provider, key = sensitive_db
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    if connected:
+        registry.register(
+            db,
+            bank_id="BK-SAMP0001",
+            organization_id=ORG_1,
+            storage_slug="bk-samp0001",
+            key=key,
+            providers=providers,
+        )
+        db.commit()
+    assert_unicode_name_round_trip(db, connected)
 
 
 @pytest.mark.parametrize("connected", [False, True])

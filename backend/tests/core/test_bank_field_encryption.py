@@ -62,6 +62,7 @@ KEY_A = KeyReference("aws_kms", "synthetic-bank-a", "us-east-1", "111122223333")
 KEY_B = KeyReference("aws_kms", "synthetic-bank-b", "us-east-1", "111122223333")
 NEXT = KeyReference("aws_kms", "synthetic-next-a", "us-east-1", "111122223333")
 NAME = "Synthetic Borrower Ñ"
+EXPANDING_NAME = "\ufb03" * 130
 IDENTIFIER = "SYNTHETIC-CARD-17"
 CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, roles=("admin",))
 
@@ -114,6 +115,7 @@ def counterparty(  # noqa: PLR0913
     include_package: bool = True,
     source_system: str = "EXCEL_CSV",
     as_of: date = AS_OF,
+    name: str = NAME,
 ) -> CanonicalCounterparty:
     batch = IngestionBatch(
         organization_id=ORG_1,
@@ -149,7 +151,7 @@ def counterparty(  # noqa: PLR0913
         ingestion_batch_id=batch.id,
         lineage_id=lineage.id,
         validation_status="accepted",
-        name=NAME,
+        name=name,
         counterparty_type="RETAIL_INDIVIDUAL",
         group_reference="SYNTHETIC-GROUP-17",
         external_identifiers={"national_id": IDENTIFIER},
@@ -478,6 +480,70 @@ def test_register_crud_search_and_new_audits_omit_names(
     assert event is not None and "full_name" not in event.details
 
 
+def assert_unicode_name_round_trip(db: Session, connected: bool) -> None:
+    borrower = counterparty(db, include_package=False, name=EXPANDING_NAME)
+    borrower_id = borrower.id
+    party = institution_profile.create_related_party(
+        db,
+        CTX,
+        BANK_A,
+        RelatedPartyCreate(
+            reason="Synthetic Unicode names", party_type="individual", full_name=EXPANDING_NAME
+        ),
+    )
+    for name, equivalent in ((EXPANDING_NAME, "FFI" * 130), ("\ufb04" * 130, "FFL" * 130)):
+        if name != EXPANDING_NAME:
+            borrower = db.get(CanonicalCounterparty, borrower_id)
+            assert borrower is not None
+            borrower.name = name
+            institution_profile.update_related_party(
+                db,
+                CTX,
+                BANK_A,
+                party.id,
+                RelatedPartyUpdate(
+                    reason="Synthetic Unicode rename", party_type="individual", full_name=name
+                ),
+            )
+        db.expunge_all()
+        loaded = db.get(CanonicalCounterparty, borrower_id)
+        assert loaded is not None and loaded.name == name
+        assert [
+            row.name for row in find_counterparties(db, CTX, BANK_A, field="name", value=equivalent)
+        ] == [name]
+        assert [
+            row.full_name
+            for row in institution_profile.find_related_parties_by_name(db, CTX, BANK_A, equivalent)
+        ] == [name]
+        assert find_counterparties(db, CTX, BANK_A, field="name", value=equivalent + "x") == []
+        assert (
+            institution_profile.find_related_parties_by_name(db, CTX, BANK_A, equivalent + "x") == []
+        )
+        stored = db.execute(
+            text(
+                "SELECT name, name_blind_index FROM canonical_counterparties "
+                "UNION ALL SELECT full_name, full_name_blind_index FROM related_parties"
+            )
+        ).all()
+        assert len(stored) == 2
+        for record in stored:
+            stored_name, token = cast(object, record[0]), cast(object, record[1])
+            assert isinstance(token, str) and 0 < len(token) <= 255
+            if connected:
+                assert stored_name != name
+            else:
+                assert stored_name == name
+
+
+@pytest.mark.parametrize("connected", [False, True])
+def test_unicode_name_writes_updates_and_normalized_search(
+    db_session: Session, provider: LocalKeyProvider, connected: bool
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    assert_unicode_name_round_trip(db_session, connected)
+
+
 def test_numeric_sql_aggregation_preserves_decrypted_concentration_labels(
     db_session: Session,
     provider: LocalKeyProvider,
@@ -603,12 +669,14 @@ def withdraw_counterparties(db: Session) -> CanonicalWithdrawal:
 
 @pytest.mark.parametrize("connected", [False, True])
 @pytest.mark.parametrize("withdraw", [False, True])
-def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
+@pytest.mark.parametrize("initial_name", [NAME, EXPANDING_NAME])
+def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(  # noqa: PLR0913
     db_session: Session,
     provider: LocalKeyProvider,
     tmp_path: Path,
     connected: bool,
     withdraw: bool,
+    initial_name: str,
 ) -> None:
     if connected:
         connect(db_session, provider)
@@ -648,7 +716,7 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
         ),
     )
     storage = InMemoryStorageClient()
-    for name in (NAME, "Synthetic replacement borrower"):
+    for name in (initial_name, "Synthetic replacement borrower"):
         workbook = Workbook()
         customers = workbook.active
         assert customers is not None
@@ -679,6 +747,16 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
             db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER
         )
         assert len(matches) == 1 and matches[0].name == name
+        assert [
+            row.name
+            for row in find_counterparties(
+                db_session,
+                CTX,
+                BANK_A,
+                field="name",
+                value="FFI" * 130 if name == EXPANDING_NAME else name.swapcase(),
+            )
+        ] == [name]
         raw = cast(
             object,
             db_session.execute(
@@ -692,7 +770,7 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
             assert name not in str(raw) and str(raw).startswith("aqs-bank-field-v1:")
         else:
             assert raw == name
-        if withdraw and name == NAME:
+        if withdraw and name == initial_name:
             withdrawal = withdraw_counterparties(db_session)
     assert (
         db_session.execute(
@@ -719,7 +797,7 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
         matches = find_counterparties(
             db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER
         )
-        assert len(matches) == 1 and matches[0].name == NAME
+        assert len(matches) == 1 and matches[0].name == initial_name
 
 
 @pytest.mark.parametrize("connected", [False, True])
