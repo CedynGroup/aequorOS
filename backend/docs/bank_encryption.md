@@ -177,8 +177,8 @@ unit of work may finish with its previous version while later work uses the new
 one. Ciphertext records its version UUID, and old versions keep their exact KMS
 references. Failed rotation rolls back the new pointer/version. Object writes
 reference committed versions, so business rollback cannot orphan published
-ciphertext. See [the field design](bank_field_encryption.md#envelope-and-application-boundary)
-for bounded key-cache lifetime and separate resumable re-encryption.
+ciphertext. See [the field design](bank_field_encryption.md#keys-and-storage)
+for bounded key-cache lifetime and versioned encryption.
 
 Keep the old key decrypt-capable until every backup with its old wrappers has
 aged out, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
@@ -233,10 +233,10 @@ revocation.
 The shared database and its storage encryption remain on the platform key.
 Object artifacts and their object backups use the bank-held hierarchy above.
 [Sensitive-field encryption](bank_field_encryption.md) reuses its `KeyProvider`
-and envelope catalogue for borrower identities and retained operational copies;
-that document defines coverage, backfill, the numeric-only BI pilot and approved
-historical-evidence cutover preconditions. Existing physical backups retain
-their original protection and require the documented recovery/retention plan.
+and envelope catalogue for newly written borrower identities and operational
+payloads. That document lists the covered fields and numeric-only BI behavior.
+Existing rows are not converted; demo datasets are re-imported after connecting
+the bank key. Existing physical backups retain their original protection.
 Signing keys and credential custody remain
 [issue 355](https://github.com/CedynGroup/aequorOS/issues/355). Scheduled
 key-health monitoring, alerting and support workflows remain
