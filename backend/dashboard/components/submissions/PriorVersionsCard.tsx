@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Prior versions — the superseded chain, made answerable.
@@ -23,7 +23,7 @@
  * rendered here; nothing in this file decides what changed.
  */
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -32,87 +32,91 @@ import {
   GitCompareArrows,
   Loader2,
   ShieldCheck,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   PackageComparisonRead,
   PackageVersionChainEntryRead,
   PackageVersionSignatureRead,
   RegulatoryArtifactVersionRead,
   SnapshotSectionDiffRead,
-} from '@aequoros/risk-service-api';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import CopyButton from '@/components/ui/CopyButton';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
+} from "@aequoros/risk-service-api";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import CopyButton from "@/components/ui/CopyButton";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import {
   useComparePackageVersions,
   usePackageVersionChain,
-} from '@/lib/api/hooks';
-import { fmtTimestamp, shortId } from '@/lib/api/values';
+} from "@/lib/api/hooks";
+import { fmtTimestamp, shortId } from "@/lib/api/values";
 import {
   AttestationStatePill,
   fmtSignatureTimestamp,
   roleAttribution,
-} from '@/components/attestation/shared';
+} from "@/components/attestation/shared";
 import {
   downloadArtifact,
   downloadArtifactVersion,
   fmtBytes,
-} from '@/components/submissions/shared';
-import { fmtSnapshotCell } from '@/components/submissions/SnapshotPreview';
-import type { AttestationState } from '@aequoros/risk-service-api';
+} from "@/components/submissions/shared";
+import { fmtSnapshotCell } from "@/components/submissions/SnapshotPreview";
+import type { AttestationState } from "@aequoros/risk-service-api";
 
 const CHANGE_TONES: Record<string, StatusTone> = {
-  added: 'action',
-  removed: 'critical',
-  changed: 'amber',
+  added: "action",
+  removed: "critical",
+  changed: "amber",
 };
 
 const CHANGE_LABELS: Record<string, string> = {
-  added: 'Added',
-  removed: 'Removed',
-  changed: 'Changed',
+  added: "Added",
+  removed: "Removed",
+  changed: "Changed",
 };
 
 /** A movement carries its sign explicitly — the parenthesised-negative
  * convention reads as a balance, not as a direction of travel. */
 function fmtDelta(delta: string | null): string {
-  if (delta === null) return '—';
+  if (delta === null) return "—";
   const parsed = Number(delta);
   if (!Number.isFinite(parsed)) return delta;
-  const magnitude = Math.abs(parsed).toLocaleString('en-GB', {
+  const magnitude = Math.abs(parsed).toLocaleString("en-GB", {
     maximumFractionDigits: 2,
   });
-  if (parsed === 0) return '0';
-  return `${parsed > 0 ? '+' : '−'}${magnitude}`;
+  if (parsed === 0) return "0";
+  return `${parsed > 0 ? "+" : "−"}${magnitude}`;
 }
 
-function SignatureLine({ signature }: { signature: PackageVersionSignatureRead }) {
+function SignatureLine({
+  signature,
+}: {
+  signature: PackageVersionSignatureRead;
+}) {
   const name = signature.signerDisplayName ?? signature.signerId;
   return (
     <li
       className={`flex items-start gap-2 ${
-        signature.withdrawn ? 'text-slate' : 'text-navy/85'
+        signature.withdrawn ? "text-slate" : "text-navy/85"
       }`}
     >
       <ShieldCheck
         size={12}
         aria-hidden
         className={`mt-0.5 shrink-0 ${
-          signature.withdrawn ? 'text-slate' : 'text-success'
+          signature.withdrawn ? "text-slate" : "text-success"
         }`}
       />
       <span className="min-w-0 text-caption leading-relaxed">
-        <span className={signature.withdrawn ? 'line-through' : ''}>
+        <span className={signature.withdrawn ? "line-through" : ""}>
           {roleAttribution(signature.signingRole)} {name}
-          {signature.officerTitle ? ` — ${signature.officerTitle}` : ''},{' '}
+          {signature.officerTitle ? ` — ${signature.officerTitle}` : ""},{" "}
           {fmtSignatureTimestamp(signature.signedAt)}
-        </span>{' '}
+        </span>{" "}
         <span className="font-mono text-micro text-slate">
           {signature.signerId}
         </span>
         {signature.withdrawn && (
-          <span className="ml-1.5 inline-flex items-center rounded border border-border px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
+          <span className="ml-1.5 inline-flex items-center rounded-sm border border-border px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider text-slate">
             Withdrawn · cycle {signature.attestationCycle}
           </span>
         )}
@@ -137,7 +141,7 @@ function VersionFileRow({
   ariaLabel: string;
 }) {
   return (
-    <li className="flex items-center gap-2 rounded border border-border-light bg-surface px-3 py-2">
+    <li className="flex items-center gap-2 rounded-sm border border-border-light bg-surface px-3 py-2">
       <span className="font-mono text-caption font-medium text-navy uppercase whitespace-nowrap">
         {label}
       </span>
@@ -155,7 +159,7 @@ function VersionFileRow({
         type="button"
         onClick={onDownload}
         aria-label={ariaLabel}
-        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+        className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
       >
         <Download size={11} aria-hidden />
         Download
@@ -166,29 +170,25 @@ function VersionFileRow({
 
 function signedRevisionLabel(version: RegulatoryArtifactVersionRead): string {
   const signer = version.signedBy;
-  if (!signer) return 'Archived render';
+  if (!signer) return "Archived render";
   const name = signer.signerDisplayName ?? signer.signerId;
   return `Signed by ${name} as ${signer.signingRole}`;
 }
 
-function ComparisonTable({
-  section,
-}: {
-  section: SnapshotSectionDiffRead;
-}) {
+function ComparisonTable({ section }: { section: SnapshotSectionDiffRead }) {
   return (
-    <div className="rounded border border-border-light overflow-hidden">
+    <div className="rounded-sm border border-border-light overflow-hidden">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2 bg-surface border-b border-border-light">
         <span className="text-caption font-medium text-navy">
           {section.title || section.code}
         </span>
-        <StatusPill tone={CHANGE_TONES[section.change] ?? 'slate'}>
+        <StatusPill tone={CHANGE_TONES[section.change] ?? "slate"}>
           {CHANGE_LABELS[section.change] ?? section.change}
         </StatusPill>
         {section.unchangedLineCount > 0 && (
           <span className="ml-auto text-micro text-slate">
             {section.unchangedLineCount} line
-            {section.unchangedLineCount === 1 ? '' : 's'} unchanged
+            {section.unchangedLineCount === 1 ? "" : "s"} unchanged
           </span>
         )}
       </div>
@@ -217,11 +217,13 @@ function ComparisonTable({
                 </td>
                 <td className="px-3 py-1.5 text-navy/90">{line.description}</td>
                 <td className="px-3 py-1.5 text-right font-mono tnum text-slate">
-                  {line.change === 'added' ? '—' : fmtSnapshotCell(line.baseValue)}
+                  {line.change === "added"
+                    ? "—"
+                    : fmtSnapshotCell(line.baseValue)}
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono tnum text-navy">
-                  {line.change === 'removed'
-                    ? '—'
+                  {line.change === "removed"
+                    ? "—"
                     : fmtSnapshotCell(line.targetValue)}
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono tnum text-navy/80 whitespace-nowrap">
@@ -258,9 +260,9 @@ export function ComparisonPanel({
   if (comparison.identical) {
     return (
       <p className="text-caption text-navy/85 leading-relaxed">
-        No figure differs from v{currentVersion}. Every line item in{' '}
+        No figure differs from v{currentVersion}. Every line item in{" "}
         {comparison.unchangedSectionCount} section
-        {comparison.unchangedSectionCount === 1 ? '' : 's'} matches — this
+        {comparison.unchangedSectionCount === 1 ? "" : "s"} matches — this
         version was superseded without any change to the figures.
       </p>
     );
@@ -268,11 +270,11 @@ export function ComparisonPanel({
   return (
     <div className="space-y-2.5">
       <p className="text-caption text-navy/85">
-        Against v{currentVersion}:{' '}
-        <span className="font-medium">{comparison.changedCount} changed</span>,{' '}
-        {comparison.addedCount} added, {comparison.removedCount} removed across{' '}
+        Against v{currentVersion}:{" "}
+        <span className="font-medium">{comparison.changedCount} changed</span>,{" "}
+        {comparison.addedCount} added, {comparison.removedCount} removed across{" "}
         {comparison.sections.length} section
-        {comparison.sections.length === 1 ? '' : 's'}.
+        {comparison.sections.length === 1 ? "" : "s"}.
       </p>
       {comparison.sections.map((section) => (
         <ComparisonTable
@@ -302,11 +304,13 @@ function PriorVersionRow({
     bankId,
     entry.packageId,
     currentPackageId,
-    comparing
+    comparing,
   );
 
   const failed = (error: unknown) =>
-    setDownloadError(error instanceof Error ? error.message : 'Download failed.');
+    setDownloadError(
+      error instanceof Error ? error.message : "Download failed.",
+    );
 
   return (
     <li className="border-b border-border-light last:border-b-0">
@@ -332,10 +336,10 @@ function PriorVersionRow({
           {entry.hasRetrievableFiles
             ? `${entry.artifacts.length + entry.artifactVersions.length} file${
                 entry.artifacts.length + entry.artifactVersions.length === 1
-                  ? ''
-                  : 's'
+                  ? ""
+                  : "s"
               }`
-            : 'Never exported'}
+            : "Never exported"}
         </span>
         <span className="ml-auto font-mono text-micro text-slate tnum">
           {fmtTimestamp(entry.generatedAt)}
@@ -368,8 +372,10 @@ function PriorVersionRow({
                 {/* Optional datetimes generate as `string | null` while required
                     ones generate as `Date`, so they are wrapped at the call
                     site — the same shape AttestationPanel uses. */}
-                {entry.voidedAt ? ` ${fmtTimestamp(new Date(entry.voidedAt))}` : ''}:{' '}
-                {entry.voidReason}
+                {entry.voidedAt
+                  ? ` ${fmtTimestamp(new Date(entry.voidedAt))}`
+                  : ""}
+                : {entry.voidReason}
               </p>
             )}
           </div>
@@ -413,8 +419,8 @@ function PriorVersionRow({
               <p className="mt-1.5 inline-flex items-start gap-1.5 text-caption text-slate leading-relaxed">
                 <FileX2 size={13} className="mt-0.5 shrink-0" aria-hidden />
                 Never exported — no artifact was ever rendered for this version,
-                so there is no file to retrieve. Its figures are still comparable
-                below.
+                so there is no file to retrieve. Its figures are still
+                comparable below.
               </p>
             )}
             {downloadError && (
@@ -432,7 +438,7 @@ function PriorVersionRow({
                   type="button"
                   onClick={() => setComparing(true)}
                   disabled={comparing}
-                  className="ml-auto inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-micro font-medium text-navy hover:bg-surface disabled:opacity-60"
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-sm border border-border px-2.5 py-1 text-micro font-medium text-navy hover:bg-surface disabled:opacity-60"
                 >
                   {comparison.isFetching ? (
                     <Loader2 size={11} className="animate-spin" aria-hidden />
@@ -478,7 +484,7 @@ export default function PriorVersionsCard({
   const chainQuery = usePackageVersionChain(bankId, packageId);
   const chain = chainQuery.data;
   const priorVersions = (chain?.versions ?? []).filter(
-    (entry) => !entry.isCurrent
+    (entry) => !entry.isCurrent,
   );
   const currentEntry = (chain?.versions ?? []).find((entry) => entry.isCurrent);
 

@@ -214,7 +214,7 @@ export default function Sidebar() {
                     {collapsed && !reason && (
                       <span
                         role="tooltip"
-                        className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 whitespace-nowrap rounded bg-nav border border-white/15 px-2.5 py-1.5 text-caption text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shadow-pop"
+                        className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 whitespace-nowrap rounded-sm bg-nav border border-white/15 px-2.5 py-1.5 text-caption text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shadow-pop"
                       >
                         {label}
                       </span>
@@ -229,7 +229,7 @@ export default function Sidebar() {
 
       <div className="border-t border-white/10 p-3">
         {!collapsed && (
-          <div className="rounded bg-white/5 p-3 mb-2">
+          <div className="rounded-sm bg-white/5 p-3 mb-2">
             <p className="text-caption text-white/50 uppercase tracking-wider font-medium">
               Institution workspace
             </p>

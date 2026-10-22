@@ -1,8 +1,14 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { AlertTriangle, ArrowRight, Plus, ShieldCheck, Waypoints } from 'lucide-react';
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Plus,
+  ShieldCheck,
+  Waypoints,
+} from "lucide-react";
 import {
   approveCurveDefinitionVersion,
   createCurveDefinition,
@@ -10,15 +16,15 @@ import {
   proposeCurveDefinitionVersion,
   type DeskCurveDefinition,
   type DeskCurveDefinitionFields,
-} from '@/lib/api';
-import { useApi, useMutation } from '@/lib/use-api';
-import { fmtDate, fmtTs, DASH } from '@/lib/format';
+} from "@/lib/api";
+import { useApi, useMutation } from "@/lib/use-api";
+import { fmtDate, fmtTs, DASH } from "@/lib/format";
 import {
   CeremonyBanner,
   CurveDefinitionStatusPill,
   DefinitionForm,
-} from '@/components/curves';
-import { DefinitionVersionDiff } from '@/components/curves/DefinitionVersionDiff';
+} from "@/components/curves";
+import { DefinitionVersionDiff } from "@/components/curves/DefinitionVersionDiff";
 import {
   Button,
   Chip,
@@ -34,7 +40,7 @@ import {
   QueryBoundary,
   SectionCard,
   StatusPill,
-} from '@/components/ui';
+} from "@/components/ui";
 
 /**
  * /desk/curves — governed forward-curve DEFINITIONS register (FC-4, spec §4.1).
@@ -46,8 +52,10 @@ import {
  * ceremony — deliberately heavier than a Track-1 run (spec §2.6).
  */
 
-function currentApproved(versions: DeskCurveDefinition[]): DeskCurveDefinition | null {
-  const approved = versions.filter((v) => v.status === 'approved');
+function currentApproved(
+  versions: DeskCurveDefinition[],
+): DeskCurveDefinition | null {
+  const approved = versions.filter((v) => v.status === "approved");
   return approved.length > 0 ? approved[approved.length - 1] : null;
 }
 
@@ -69,30 +77,55 @@ export default function CurveDefinitionsPage() {
     return {
       codes: codes.length,
       approved: codes.filter((v) => currentApproved(v) !== null).length,
-      drafts: (data?.definitions ?? []).filter((d) => d.status === 'draft').length,
+      drafts: (data?.definitions ?? []).filter((d) => d.status === "draft")
+        .length,
     };
   }, [byCode, data]);
 
   // ---- ceremony state -----------------------------------------------------
   const [creating, setCreating] = useState(false);
   const [proposeFor, setProposeFor] = useState<string | null>(null);
-  const [approveFor, setApproveFor] = useState<{ code: string; version: number } | null>(null);
-  const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [approveFor, setApproveFor] = useState<{
+    code: string;
+    version: number;
+  } | null>(null);
+  const [effectiveFrom, setEffectiveFrom] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
 
   // ---- mutations (Track 2) ------------------------------------------------
   const createMut = useMutation(
     (fields: DeskCurveDefinitionFields, curveCode: string) =>
       createCurveDefinition({ ...fields, curve_code: curveCode }),
-    { toast: false, onSuccess: () => { setCreating(false); reload(); } },
+    {
+      toast: false,
+      onSuccess: () => {
+        setCreating(false);
+        reload();
+      },
+    },
   );
   const proposeMut = useMutation(
-    (code: string, fields: DeskCurveDefinitionFields) => proposeCurveDefinitionVersion(code, fields),
-    { toast: false, onSuccess: () => { setProposeFor(null); reload(); } },
+    (code: string, fields: DeskCurveDefinitionFields) =>
+      proposeCurveDefinitionVersion(code, fields),
+    {
+      toast: false,
+      onSuccess: () => {
+        setProposeFor(null);
+        reload();
+      },
+    },
   );
   const approveMut = useMutation(
     (code: string, version: number, from: string) =>
       approveCurveDefinitionVersion(code, version, { effective_from: from }),
-    { toast: false, onSuccess: () => { setApproveFor(null); reload(); } },
+    {
+      toast: false,
+      onSuccess: () => {
+        setApproveFor(null);
+        reload();
+      },
+    },
   );
 
   const approveDualControl =
@@ -103,45 +136,62 @@ export default function CurveDefinitionsPage() {
   // ---- version table columns ----------------------------------------------
   const versionColumns = (code: string): Column<DeskCurveDefinition>[] => [
     {
-      key: 'version',
-      header: 'Version',
+      key: "version",
+      header: "Version",
       sortable: true,
       sortAccessor: (v) => v.version,
       render: (v) => <span className="font-mono text-navy">v{v.version}</span>,
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (v) => <CurveDefinitionStatusPill status={v.status} />,
     },
     {
-      key: 'effective',
-      header: 'Effective from',
+      key: "effective",
+      header: "Effective from",
       sortable: true,
-      sortAccessor: (v) => v.effective_from ?? '',
-      render: (v) => <span className="text-caption text-ink">{fmtDate(v.effective_from)}</span>,
+      sortAccessor: (v) => v.effective_from ?? "",
+      render: (v) => (
+        <span className="text-caption text-ink">
+          {fmtDate(v.effective_from)}
+        </span>
+      ),
     },
     {
-      key: 'projection',
-      header: 'Projection',
-      render: (v) => <span className="font-mono text-micro text-slate">{v.projection_index ?? DASH}</span>,
+      key: "projection",
+      header: "Projection",
+      render: (v) => (
+        <span className="font-mono text-micro text-slate">
+          {v.projection_index ?? DASH}
+        </span>
+      ),
     },
     {
-      key: 'interp',
-      header: 'Interp',
-      render: (v) => <span className="font-mono text-micro text-slate">{v.interpolation_method}</span>,
+      key: "interp",
+      header: "Interp",
+      render: (v) => (
+        <span className="font-mono text-micro text-slate">
+          {v.interpolation_method}
+        </span>
+      ),
     },
     {
-      key: 'proposed_by',
-      header: 'Proposed by',
-      render: (v) => <span className="font-mono text-micro text-slate">{v.proposed_by}</span>,
+      key: "proposed_by",
+      header: "Proposed by",
+      render: (v) => (
+        <span className="font-mono text-micro text-slate">{v.proposed_by}</span>
+      ),
     },
     {
-      key: 'approved_by',
-      header: 'Approved by',
+      key: "approved_by",
+      header: "Approved by",
       render: (v) =>
         v.approved_by ? (
-          <span className="font-mono text-micro text-slate" title={fmtTs(v.approved_at)}>
+          <span
+            className="font-mono text-micro text-slate"
+            title={fmtTs(v.approved_at)}
+          >
             {v.approved_by}
           </span>
         ) : (
@@ -149,11 +199,11 @@ export default function CurveDefinitionsPage() {
         ),
     },
     {
-      key: 'action',
-      header: '',
-      align: 'right',
+      key: "action",
+      header: "",
+      align: "right",
       render: (v) =>
-        v.status === 'draft' ? (
+        v.status === "draft" ? (
           <Button
             variant="secondary"
             size="sm"
@@ -169,9 +219,10 @@ export default function CurveDefinitionsPage() {
     },
   ];
 
-  const proposeVersions = proposeFor ? byCode.get(proposeFor) ?? [] : [];
+  const proposeVersions = proposeFor ? (byCode.get(proposeFor) ?? []) : [];
   const proposeBase = proposeFor
-    ? currentApproved(proposeVersions) ?? proposeVersions[proposeVersions.length - 1]
+    ? (currentApproved(proposeVersions) ??
+      proposeVersions[proposeVersions.length - 1])
     : undefined;
   const proposeNext = proposeVersions.length
     ? proposeVersions[proposeVersions.length - 1].version + 1
@@ -196,17 +247,21 @@ export default function CurveDefinitionsPage() {
       />
 
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <KpiStat label="Curve codes" value={stats.codes} hint="Governed definitions" />
+        <KpiStat
+          label="Curve codes"
+          value={stats.codes}
+          hint="Governed definitions"
+        />
         <KpiStat
           label="With approved version"
           value={stats.approved}
-          status={stats.approved === stats.codes ? 'ok' : 'warn'}
+          status={stats.approved === stats.codes ? "ok" : "warn"}
           hint="Constructable today"
         />
         <KpiStat
           label="Draft versions"
           value={stats.drafts}
-          status={stats.drafts > 0 ? 'warn' : undefined}
+          status={stats.drafts > 0 ? "warn" : undefined}
           hint="Awaiting second line"
         />
       </div>
@@ -223,7 +278,10 @@ export default function CurveDefinitionsPage() {
               title="No curve definitions yet"
               description="Register a definition to start. It needs a currency, calendar, instrument set, interpolation method and output basis — then a second operator approves it before construction can run."
               action={
-                <Button icon={<Plus size={14} />} onClick={() => setCreating(true)}>
+                <Button
+                  icon={<Plus size={14} />}
+                  onClick={() => setCreating(true)}
+                >
                   New definition
                 </Button>
               }
@@ -249,10 +307,14 @@ export default function CurveDefinitionsPage() {
                       {active ? (
                         <StatusPill tone="success">
                           approved · v{active.version}
-                          {active.effective_from ? ` · from ${fmtDate(active.effective_from)}` : ''}
+                          {active.effective_from
+                            ? ` · from ${fmtDate(active.effective_from)}`
+                            : ""}
                         </StatusPill>
                       ) : (
-                        <StatusPill tone="amber">no approved version — construction refused</StatusPill>
+                        <StatusPill tone="amber">
+                          no approved version — construction refused
+                        </StatusPill>
                       )}
                       {head && <Chip mono>{head.currency}</Chip>}
                       {head && (
@@ -288,9 +350,9 @@ export default function CurveDefinitionsPage() {
                     columns={versionColumns(code)}
                     rows={versions}
                     density="compact"
-                    initialSort={{ key: 'version', dir: 'desc' }}
+                    initialSort={{ key: "version", dir: "desc" }}
                     rowClassName={(v) =>
-                      active?.version === v.version ? 'bg-success-light/30' : ''
+                      active?.version === v.version ? "bg-success-light/30" : ""
                     }
                   />
                   <div className="border-t border-border-light">
@@ -316,22 +378,30 @@ export default function CurveDefinitionsPage() {
       >
         <div className="space-y-4">
           <CeremonyBanner>
-            <p className="font-medium text-navy">Track-2 — register a new curve definition</p>
+            <p className="font-medium text-navy">
+              Track-2 — register a new curve definition
+            </p>
             <p className="mt-1">
-              Creates v1 as a DRAFT with a documented rationale. A second operator must approve it
-              (dual control) before any construction or publish can run against this code. The curve
-              code is the AEQ.* golden-copy name and cannot change later.
+              Creates v1 as a DRAFT with a documented rationale. A second
+              operator must approve it (dual control) before any construction or
+              publish can run against this code. The curve code is the AEQ.*
+              golden-copy name and cannot change later.
             </p>
           </CeremonyBanner>
           <DefinitionForm
             mode="create"
             busy={createMut.loading}
             submitLabel="Create v1 draft"
-            onSubmit={(fields, curveCode) => void createMut.mutate(fields, curveCode)}
+            onSubmit={(fields, curveCode) =>
+              void createMut.mutate(fields, curveCode)
+            }
             onCancel={() => setCreating(false)}
           />
           {createMut.error && (
-            <ErrorPanel error={createMut.error} context="Creating the curve definition" />
+            <ErrorPanel
+              error={createMut.error}
+              context="Creating the curve definition"
+            />
           )}
         </div>
       </Modal>
@@ -343,7 +413,8 @@ export default function CurveDefinitionsPage() {
         size="xl"
         title={
           <span>
-            Propose v{proposeNext} of <span className="font-mono">{proposeFor}</span>
+            Propose v{proposeNext} of{" "}
+            <span className="font-mono">{proposeFor}</span>
           </span>
         }
         description="Track-2 definition change — not part of a weekly run"
@@ -355,9 +426,10 @@ export default function CurveDefinitionsPage() {
                 Track-2 definition change — NOT part of a weekly run
               </p>
               <p className="mt-1">
-                Drafts v{proposeNext} prefilled from the current version. Requires approval by a
-                second operator and is effective-dated; running constructions keep their bound
-                version. The latest version must be approved before a new one can be proposed.
+                Drafts v{proposeNext} prefilled from the current version.
+                Requires approval by a second operator and is effective-dated;
+                running constructions keep their bound version. The latest
+                version must be approved before a new one can be proposed.
               </p>
             </CeremonyBanner>
             <DefinitionForm
@@ -369,7 +441,10 @@ export default function CurveDefinitionsPage() {
               onCancel={() => setProposeFor(null)}
             />
             {proposeMut.error && (
-              <ErrorPanel error={proposeMut.error} context="Proposing a new version" />
+              <ErrorPanel
+                error={proposeMut.error}
+                context="Proposing a new version"
+              />
             )}
           </div>
         )}
@@ -381,7 +456,8 @@ export default function CurveDefinitionsPage() {
         onClose={() => setApproveFor(null)}
         title={
           <span>
-            Approve v{approveFor?.version} of <span className="font-mono">{approveFor?.code}</span>
+            Approve v{approveFor?.version} of{" "}
+            <span className="font-mono">{approveFor?.code}</span>
           </span>
         }
         description="Track-2 approval — dual control (the proposer cannot approve)"
@@ -396,7 +472,11 @@ export default function CurveDefinitionsPage() {
               icon={<ShieldCheck size={14} />}
               onClick={() =>
                 approveFor &&
-                void approveMut.mutate(approveFor.code, approveFor.version, effectiveFrom)
+                void approveMut.mutate(
+                  approveFor.code,
+                  approveFor.version,
+                  effectiveFrom,
+                )
               }
             >
               Approve v{approveFor?.version}
@@ -408,9 +488,10 @@ export default function CurveDefinitionsPage() {
           <CeremonyBanner>
             <p className="font-medium text-navy">Track-2 approval</p>
             <p className="mt-1">
-              Approving makes this the governing definition from its effective date. Dual control
-              applies: the proposer cannot approve their own version. Construction picks the latest
-              approved version whose effective date is on or before the cob.
+              Approving makes this the governing definition from its effective
+              date. Dual control applies: the proposer cannot approve their own
+              version. Construction picks the latest approved version whose
+              effective date is on or before the cob.
             </p>
           </CeremonyBanner>
           <Field label="Effective from" required className="max-w-xs">
@@ -421,12 +502,12 @@ export default function CurveDefinitionsPage() {
             />
           </Field>
           {approveMut.error && approveDualControl && (
-            <div className="flex items-start gap-2 rounded border border-warning/50 bg-warning-light p-3">
+            <div className="flex items-start gap-2 rounded-sm border border-warning/50 bg-warning-light p-3">
               <ShieldCheck size={14} className="mt-0.5 shrink-0 text-warning" />
               <div className="min-w-0">
                 <p className="text-body font-medium text-navy">
-                  Dual control: the proposer cannot approve their own curve definition — sign in as a
-                  second operator.
+                  Dual control: the proposer cannot approve their own curve
+                  definition — sign in as a second operator.
                 </p>
                 <p className="mt-1 text-caption text-slate">
                   API said: “{approveMut.error.message}”
@@ -435,7 +516,10 @@ export default function CurveDefinitionsPage() {
             </div>
           )}
           {approveMut.error && !approveDualControl && (
-            <ErrorPanel error={approveMut.error} context="Approving the version" />
+            <ErrorPanel
+              error={approveMut.error}
+              context="Approving the version"
+            />
           )}
         </div>
       </Modal>
