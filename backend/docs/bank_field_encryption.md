@@ -44,9 +44,11 @@ them.
 Reuse `app/core/key_management/types.py`'s `KeyProvider`, the connected
 `BankEncryptionKey`, and the committed-message helpers in `sdk.py`. Extend the
 existing envelope catalogue and rotation path, rather than adding another master
-key registry or provider. Each protected record gets random data-key material
-wrapped by its bank's master key. Store only ciphertext and the wrapped-key
-reference. Authenticate organization, bank, table, record ID, field/payload name
+key registry or provider. Each bank write operation gets random wrapping
+material protected by its master key; the SDK generates independent payload data
+keys for the field messages. Operation-local reuse bounds KMS calls for large
+batches; no plaintext material survives the flush. Store only ciphertext and the
+wrapped-key reference. Authenticate organization, bank, table, record ID, field/payload name
 and format version; reject ciphertext moved between banks, records or fields.
 Encryption context must contain no identity values.
 
@@ -155,6 +157,39 @@ payload it cannot legally update; never disable its content guard. A bank with
 such legacy plaintext filings cannot complete protection cutover without an
 explicit retained-evidence migration. The pilot starts with newly encrypted
 filings, rather than treating a failed backfill as successful.
+
+## BI identity boundary (decision pending)
+
+BI is another persisted copy of the protected identities: `bi_dim_counterparty`
+stores `name`, `source_reference` and `group_reference`, and
+`bi_fact_position_daily` / `bi_fact_position_eom` store `counterparty_group`.
+The mart builder copies decrypted canonical identities into those tables with
+bulk inserts. Encrypting canonical fields alone therefore does not establish
+complete identity confidentiality for a bank that builds BI marts.
+
+The BI catalogue exposes these values as restricted dimensions and its compiler
+uses SQL for identity filtering, ordering, grouping, member discovery and pivots.
+Simply replacing the copied strings with randomized ciphertext would break that
+contract; adding exact-match blind indexes alone does not preserve every current
+query operation. Saved-view specifications can also retain identity filter
+values. The query log itself stores hashes and member IDs, not request bodies.
+
+A product-scope decision is required before the bank-key pilot can claim this
+boundary complete:
+
+- Preserve all current identity BI behavior with an additional secured BI layer:
+  store only encrypted identities / bank-scoped opaque indexes, translate
+  authorized filters, recover labels after bank-key access, and protect saved
+  specifications. Verify grouping, ordering, discovery, pivots and exports.
+- Explicitly exclude identity BI from the protected pilot while retaining numeric
+  BI: stop persisting readable identity copies and refuse identity dimensions and
+  saved identity filters for protected banks until that layer ships. This changes
+  product availability and needs approval; it is not an implicit implementation
+  fallback.
+
+Neither leaving BI identity copies readable nor silently disabling working BI is
+an accepted resolution. The operational-field implementation must not be reported
+as complete protection while this decision remains open.
 
 ## Strict-bank dedicated-database option (plan only)
 
