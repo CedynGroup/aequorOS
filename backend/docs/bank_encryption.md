@@ -143,15 +143,16 @@ active inspector session uses these routes on the separate operator API:
 | ------ | -------------------------------------------------- | ------------------------------------------------------------------------- |
 | GET    | `/tenants/{org_id}/banks/{bank_id}/encryption-key` | Read custody reference and last checked status                            |
 | PUT    | same                                               | Connect a bank key once; reject replacement without rotation              |
-| POST   | same + `/rotate`                                   | Re-wrap all bank envelopes and atomically switch the key                  |
+| POST   | same + `/rotate`                                   | Publish a new data-key version; see rotation below                        |
 | POST   | same + `/retire`                                   | Authorize retirement only after current references and backup holds clear |
 
 Rotation accepts the same key fields plus a meaningful `reason` and must retain
 the bank's ownership account. Changing providers requires an explicit migration.
 Routes verify the bank belongs to the organization, require staff inspection
 authority and write operator audit events in their transaction. The tenant API
-mounts none of these routes. Status observations do not authorize access: storage contacts the
-provider on every operation, and recovers after the bank restores permission.
+mounts none of these routes. Status observations do not authorize access; provider
+checks and key reuse follow the
+[unit-of-work boundary](bank_field_encryption.md#envelope-and-application-boundary).
 
 ## Downloads
 
@@ -177,8 +178,7 @@ one. Ciphertext records its version UUID, and old versions keep their exact KMS
 references. Failed rotation rolls back the new pointer/version. Object writes
 reference committed versions, so business rollback cannot orphan published
 ciphertext. See [the field design](bank_field_encryption.md#envelope-and-application-boundary)
-for bounded key-cache lifetime and separate resumable re-encryption. The legacy
-`envelopes_rewrapped` result is zero because rotation no longer re-wraps history.
+for bounded key-cache lifetime and separate resumable re-encryption.
 
 Keep the old key decrypt-capable until every backup with its old wrappers has
 aged out, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
@@ -216,11 +216,11 @@ the database backup. Use the restore command documented in
 metadata unchanged, then read through `StorageClient`. Restore verifies
 ciphertext checksums before uploading. Without the bank key, even restored
 ciphertext and wrapped keys cannot be read. A copied object can use a newly
-rotated live catalogue because its envelope UUID is stable. An old database
-snapshot, however, contains old wrappers: restore and re-wrap that catalogue
-under bank-approved access before retiring its old key, or retain the old key
-for the snapshot's recovery lifetime. Physical historical database backups are
-immutable and are not rewritten by live rotation.
+rotated live catalogue because its envelope UUID is stable, provided its recorded
+KMS key remains decrypt-capable. An old database snapshot also requires its
+recorded keys for its recovery lifetime; live rotation does not migrate those
+wrappers. Physical historical database backups are immutable and are not
+rewritten by live rotation.
 
 Existing platform-only/plaintext objects need an explicitly planned migration
 before connecting a bank key or enabling mandatory enforcement; the new reader

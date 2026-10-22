@@ -79,9 +79,10 @@ Encryption reads and writes acquire no key-row or advisory locks. Optional
 plaintext field writes retain the bank-row cutover guard, before any encryption:
 a stale no-key session refuses if a connection appeared, and registration waits
 for earlier plaintext writers before checking immutable history. Connected-key
-field/object operations never take that guard. Rotation serializes its bookkeeping, creates and commits a new wrapped version, then
-moves the current pointer. Concurrent work may finish with its previously
-resolved version; new work uses the new version. Rotation never rewrites existing
+field/object operations never take that guard. Rotation serializes its bookkeeping
+and atomically publishes a new wrapped version and current pointer on commit.
+Concurrent work may finish with its previously resolved version; new work uses
+the new version. Rotation never rewrites existing
 ciphertext or envelopes. Prior KMS keys and versions remain decrypt-capable.
 Retirement refuses any key still referenced by an envelope as well as any
 unexpired backup hold.
@@ -100,11 +101,11 @@ bytes, immutable-history guards and the numeric-only BI restriction are unchange
 
 ## Exact-match indexes
 
-Create a random, per-bank index secret wrapped through the same provider and
-envelope catalogue. Derive domain-separated HMAC-SHA-256 values over a versioned,
-length-delimited encoding of organization, bank, field identity and normalized
+Use the domain-separated secret from the fixed index version defined above,
+distinct from every payload key. Derive domain-separated HMAC-SHA-256 values over
+a versioned JSON encoding of organization, bank, field identity and normalized
 query value. No platform-wide secret and no unkeyed hashes of names or national
-identifiers. Use a domain-separated secret from the fixed index version, distinct from every payload key.
+identifiers.
 
 Names use Unicode normalization, case folding and collapsed whitespace;
 source-system identifiers retain case and significant punctuation. External

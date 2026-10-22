@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -234,7 +234,7 @@ def _unit(db: Session) -> _Unit:
 
 
 @event.listens_for(Session, "after_transaction_end")
-def _discard_material(db: Session, transaction: SessionTransaction) -> None:
+def discard_material(db: Session, transaction: SessionTransaction) -> None:
     if transaction.parent is None:
         db.info.pop("bank_key_unit", None)
 
@@ -380,7 +380,7 @@ class DatabaseEnvelopeStore:
         return DatabaseEnvelopeStore(self._sessions, self._providers, session=db)
 
     @contextmanager
-    def _transaction(self) -> Iterator[Session]:
+    def _transaction(self) -> Generator[Session]:
         if self._session is not None:
             with self._session.no_autoflush:
                 yield self._session

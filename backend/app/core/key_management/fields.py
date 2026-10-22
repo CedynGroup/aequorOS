@@ -1,7 +1,7 @@
 """Bank-scoped ORM field boundary, using the existing provider/envelope hierarchy.
 
-Raw SQL sees SDK ciphertext. ORM entity loads authenticate the row's scope before
-releasing values. Scalar ciphertext projections deliberately remain opaque: callers
+For connected banks, raw SQL sees SDK ciphertext. ORM entity loads authenticate the
+row's scope before releasing values. Scalar ciphertext projections remain opaque: callers
 must select the scoped entity instead. Bulk writes cannot bypass this boundary.
 """
 
@@ -225,7 +225,7 @@ def blind_index(  # noqa: PLR0913 - explicit scope at the search boundary
     value: str,
     normalization: Normalization = "identifier",
 ) -> str:
-    """Compute a scoped exact-match token; key access is required on every call."""
+    """Compute a scoped exact-match token using the unit's authenticated index key."""
     with db.no_autoflush:
         row = registry.bank_key(db, organization_id, bank_id)
         if row is None and get_key_settings().bank_key_required:
