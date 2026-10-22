@@ -153,11 +153,18 @@ The reason for this boundary is structural: `202610100090` hashes `to_jsonb(NEW)
 into the audit chain, and `core/audit_integrity.py::verify_chains` recomputes from
 raw stored source bytes. Replacing historical names with ciphertext would break
 verification even if application reads decrypted them. Existing audit guards and
-verification remain intact. Likewise, backfill must refuse any locked filing
-payload it cannot legally update; never disable its content guard. A bank with
-such legacy plaintext filings cannot complete protection cutover without an
-explicit retained-evidence migration. The pilot starts with newly encrypted
-filings, rather than treating a failed backfill as successful.
+verification remain intact.
+
+The captain also approved a clean-history cutover precondition: a bank may
+connect its key only when it has no legacy plaintext documents in
+`bi_dashboard_versions.spec` or `regulatory_packages.snapshot`. These whole
+protected documents are checked conservatively, without guessing which nested
+fields contain identities. Key registration and backfill explicitly refuse such
+history with a clear reason before modifying data. A bank with these records
+needs a separately approved retained-evidence storage transition. Existing guards
+and privileges remain unchanged; no reset is required for synthetic history.
+The pilot starts with newly encrypted filings and dashboard versions, rather
+than treating a failed backfill as successful.
 
 ## BI identity boundary (approved numeric-only pilot)
 
@@ -181,9 +188,8 @@ existing BI behavior. No bank may claim cutover until backfill succeeds.
 Saved dashboard-version `spec` and subscription `query` objects use the same
 bank-held field encryption as operational records, protecting historical filter
 values. New saves and executions evaluate the same identity-member restriction.
-Append-only historical dashboard versions follow the existing immutable-row
-backfill refusal: cutover requires a separately authorized storage transition
-or removal of disposable test content; this change does not bypass guards.
+Append-only historical dashboard versions follow the approved clean-history
+precondition above; this change never bypasses their guards.
 The query log stores digests and member IDs, never raw filter values.
 
 ## Strict-bank dedicated-database option (plan only)
