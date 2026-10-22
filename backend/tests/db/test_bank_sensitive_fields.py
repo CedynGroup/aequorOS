@@ -280,7 +280,11 @@ def sensitive_db(
     provider = LocalKeyProvider()
     key = KeyReference("aws_kms", "synthetic-field-regression", "us-east-1", "111122223333")
     provider.add_key(key)
-    monkeypatch.setattr(registry, "provider_for", lambda _name: provider)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     with Session(forward_migrated_postgres_schema.app_engine, expire_on_commit=False) as db:
         db.info["organization_id"] = ORG_1
         db.add(Organization(id=ORG_1, name="Synthetic organization"))
@@ -494,7 +498,11 @@ def test_legacy_envelopes_gain_exact_references_and_initialize_without_rewrap(
     provider = LocalKeyProvider()
     key = KeyReference("aws_kms", "synthetic-legacy-version", "us-east-1", "111122223333")
     provider.add_key(key)
-    monkeypatch.setattr(registry, "provider_for", lambda _name: provider)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     envelope_id = uuid4()
     context = {
         "purpose": "bank-sensitive-index-v1",

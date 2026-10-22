@@ -1,22 +1,35 @@
 """Bank-key refusals must render as capability decisions, preserving numeric BI."""
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TypedDict, cast
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 from sqlalchemy.orm import Session
 
-from app.bi.schemas.query import BiCatalogueRead, BiQueryResult
+from app.bi.domain.catalogue import catalogue
+from app.bi.models.notifications import BiAlert, BiAlertEvent, BiSubscription
+from app.bi.schemas.notifications import (
+    BiAlertListRead,
+    BiAlertRead,
+    BiSubscriptionDeliveryListRead,
+)
+from app.bi.schemas.query import BiCatalogueRead, BiFilter, BiQuery, BiQueryResult
+from app.bi.service import alerts, subscriptions
+from app.bi.service.authorization import query_members
+from app.bi.service.identity_policy import IDENTITY_MESSAGE, IDENTITY_REASON
 from app.core.authorization import ModuleScope, SensitivityScope
 from app.core.key_management import registry
 from app.core.key_management.backfill import backfill_bank
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference
 from app.identity.public import Bank
+from app.models import Job
 from tests.bi.api import test_bi_routes as routes
-from tests.support.helpers import ORG_1, headers
+from tests.support.helpers import ORG_1, USER_1, headers
 
 mart = routes.mart
 bi_on = routes.bi_on
@@ -99,28 +112,7 @@ def test_connected_bank_refusal_explains_capability_and_keeps_numeric_concentrat
     assert "loans.largest_single_name_share_pct" in {measure.id for measure in catalogue.measures}
 
 
-@pytest.mark.parametrize("identity_first", [False, True])
-def test_saved_alert_capability_decisions_are_order_independent(
-    db_client: TestClient,
-    db_session: Session,
-    mart: Bank,
-    bi_on: None,
-    monkeypatch: pytest.MonkeyPatch,
-    identity_first: bool,
-) -> None:
-    from datetime import UTC, datetime, timedelta
-
-    from app.bi.domain.catalogue import catalogue
-    from app.bi.models.notifications import BiAlert, BiAlertEvent
-    from app.bi.schemas.notifications import BiAlertListRead, BiAlertRead
-    from app.bi.schemas.query import BiFilter, BiQuery
-    from app.bi.service import alerts
-    from app.bi.service.authorization import query_members
-    from app.bi.service.identity_policy import IDENTITY_MESSAGE, IDENTITY_REASON
-    from tests.support.helpers import USER_1
-
-    authv = routes.grant_only(db_session, (routes.Grant(ModuleScope.ALL, SensitivityScope.ALL),))
-    request_headers = headers(authorization_version=authv)
+def _saved_alerts(db_session: Session, mart: Bank, identity_first: bool) -> dict[bool, UUID]:
     identity_filters: list[dict[str, object]] = [
         {"member": "counterparty.id", "op": "eq", "values": [str(routes.CP_ONE)]}
     ]
@@ -172,11 +164,30 @@ def test_saved_alert_capability_decisions_are_order_independent(
         )
         saved[is_identity] = alert
     db_session.commit()
-    ids = {identity: alert.id for identity, alert in saved.items()}
+    return {identity: alert.id for identity, alert in saved.items()}
+
+
+@pytest.mark.usefixtures("bi_on")
+@pytest.mark.parametrize("identity_first", [False, True])
+def test_saved_alert_capability_decisions_are_order_independent(
+    db_client: TestClient,
+    db_session: Session,
+    mart: Bank,
+    monkeypatch: pytest.MonkeyPatch,
+    identity_first: bool,
+) -> None:
+
+    authv = routes.grant_only(db_session, (routes.Grant(ModuleScope.ALL, SensitivityScope.ALL),))
+    request_headers = headers(authorization_version=authv)
+    ids = _saved_alerts(db_session, mart, identity_first)
     provider = LocalKeyProvider()
     key = KeyReference("aws_kms", "synthetic-saved-alerts", "us-east-1", "111122223333")
     provider.add_key(key)
-    monkeypatch.setattr(registry, "provider_for", lambda _name: provider)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     registry.register(
         db_session,
         organization_id=ORG_1,
@@ -239,12 +250,6 @@ def test_saved_subscription_delivery_history_explains_bank_key_capability(
     bi_on: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.bi.models.notifications import BiSubscription
-    from app.bi.schemas.notifications import BiSubscriptionDeliveryListRead
-    from app.bi.service import subscriptions
-    from app.bi.service.identity_policy import IDENTITY_MESSAGE, IDENTITY_REASON
-    from app.models import Job
-    from tests.support.helpers import USER_1
 
     authv = routes.grant_only(db_session, (routes.Grant(ModuleScope.ALL, SensitivityScope.ALL),))
     subscription = BiSubscription(
@@ -271,7 +276,11 @@ def test_saved_subscription_delivery_history_explains_bank_key_capability(
     provider = LocalKeyProvider()
     key = KeyReference("aws_kms", "synthetic-subscription-history", "us-east-1", "111122223333")
     provider.add_key(key)
-    monkeypatch.setattr(registry, "provider_for", lambda _name: provider)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     registry.register(
         db_session,
         organization_id=ORG_1,

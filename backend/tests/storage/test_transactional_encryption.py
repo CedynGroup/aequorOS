@@ -7,7 +7,7 @@ from threading import Event
 from typing import Literal, cast
 
 import pytest
-from botocore.exceptions import EndpointConnectionError
+from botocore.exceptions import EndpointConnectionError  # pyright: ignore[reportMissingTypeStubs]
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
@@ -18,6 +18,7 @@ from app.api import deps
 from app.bi.models.content import BiDashboard, BiDashboardVersion
 from app.core.key_management import registry
 from app.core.key_management.backfill import backfill_bank
+from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.data_engine.service.field_search import find_counterparties
@@ -221,26 +222,7 @@ def _exercise(
         assert attachment.byte_size > 0
 
 
-@pytest.mark.parametrize(
-    "scenario",
-    [
-        (bank, operation)
-        for bank in (BANK_A, SIBLING)
-        for operation in ("ingestion", "push", "export", "attachment")
-    ],
-)
-def test_transactional_storage_runs_during_version_rotation(
-    bank_storage: BankStorage,
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    scenario: tuple[str, Operation],
-) -> None:
-    rotation_bank, operation = scenario
-    database = db_session.get_bind()
-    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
-        pytest.skip("PostgreSQL lock queues and independent connections are required.")
-    monkeypatch.setattr(registry, "provider_for", lambda _name: bank_storage.provider)
+def _register_sibling(db_session: Session, providers: registry.ProviderFactory) -> None:
     db_session.add(
         Bank(
             id=SIBLING,
@@ -261,9 +243,36 @@ def test_transactional_storage_runs_during_version_rotation(
         organization_id=ORG_1,
         storage_slug="bk-samp0002",
         key=KEY,
-        providers=lambda _name: bank_storage.provider,
+        providers=providers,
     )
     db_session.commit()
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        (bank, operation)
+        for bank in (BANK_A, SIBLING)
+        for operation in ("ingestion", "push", "export", "attachment")
+    ],
+)
+def test_transactional_storage_runs_during_version_rotation(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    scenario: tuple[str, Operation],
+) -> None:
+    rotation_bank, operation = scenario
+    database = db_session.get_bind()
+    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL lock queues and independent connections are required.")
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    _register_sibling(db_session, providers)
     path = tmp_path / "synthetic.xlsx"
     if operation == "ingestion":
         _workbook(db_session, path)
@@ -429,7 +438,11 @@ def test_bulk_fields_and_objects_unwrap_once_per_version_and_discard_on_boundary
 ) -> None:
 
     provider = bank_storage.provider
-    monkeypatch.setattr(registry, "provider_for", lambda _name: provider)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     for number in range(30):
         counterparty(db_session, reference=f"SYNTHETIC-BULK-{number}", include_package=False)
     location = StorageLocation(SLUG, "raw", "synthetic/bulk.csv")
@@ -472,7 +485,10 @@ def test_resumable_reencryption_moves_mutable_fields_and_keeps_indexes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 
-    monkeypatch.setattr(registry, "provider_for", lambda _name: bank_storage.provider)
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     party = counterparty(db_session)
     party_id = party.id
     db_session.commit()
@@ -526,7 +542,11 @@ def test_package_download_siblings_do_not_wait_for_rotation(
     database = db_session.get_bind()
     if not isinstance(database, Engine) or database.dialect.name != "postgresql":
         pytest.skip("PostgreSQL independent connections are required.")
-    monkeypatch.setattr(registry, "provider_for", lambda _name: bank_storage.provider)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     monkeypatch.setattr(ingest_data, "get_storage_client", lambda: bank_storage.storage)
     monkeypatch.setattr(exports, "get_storage_client", lambda: bank_storage.storage)
     package = _package(db_session)
