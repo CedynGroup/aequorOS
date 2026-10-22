@@ -214,7 +214,12 @@ def _assert_immutable_cutover(
         ("BK-SAMP0002", "bi_dashboard_versions", "spec"),
         ("BK-SAMP0003", "regulatory_packages", "snapshot"),
     ):
-        before = cast(object, db.execute(text(f"SELECT {column}::text FROM {table}")).scalar_one())
+        scope = {"bank": bank_id, "org": ORG_1}
+        read = text(
+            f"SELECT {column}::text FROM {table} "
+            "WHERE bank_id = :bank AND organization_id = :org"
+        )
+        before = cast(object, db.execute(read, scope).scalar_one())
         with pytest.raises(KeyUnavailableError, match="legacy plaintext"):
             registry.register(
                 db,
@@ -245,8 +250,14 @@ def _assert_immutable_cutover(
         db.commit()
         with pytest.raises(KeyUnavailableError, match="existing content guards remain unchanged"):
             backfill_bank(db, organization_id=ORG_1, bank_id=bank_id)
-        assert db.execute(text(f"SELECT {column}::text FROM {table}")).scalar_one() == before
+        assert db.execute(read, scope).scalar_one() == before
         with pytest.raises(DatabaseError):
-            db.execute(text(f"UPDATE {table} SET {column} = '{{}}'"))
+            db.execute(
+                text(
+                    f"UPDATE {table} SET {column} = '{{}}' "
+                    "WHERE bank_id = :bank AND organization_id = :org"
+                ),
+                scope,
+            )
         db.rollback()
-        assert db.execute(text(f"SELECT {column}::text FROM {table}")).scalar_one() == before
+        assert db.execute(read, scope).scalar_one() == before
