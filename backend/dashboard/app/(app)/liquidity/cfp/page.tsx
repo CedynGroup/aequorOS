@@ -1,5 +1,6 @@
 "use client";
 
+import CfpLifecycle from "@/components/liquidity/CfpLifecycle";
 import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
 import PageHeader from "@/components/ui/PageHeader";
@@ -135,10 +136,10 @@ const indicatorColumns: Column<EwiEvaluationRead>[] = [
 ];
 
 export default function ContingencyFundingPlan() {
-  const { bank, moduleScope } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
-  const ewis = useEwiDashboard(bankId);
+  const ewis = useEwiDashboard(bankId, period?.id);
   const cfp = useCfpSummary(bankId);
   const events = useCfpEvents(bankId);
 
@@ -184,6 +185,81 @@ export default function ContingencyFundingPlan() {
   return (
     <>
       <PageHeader eyebrow="Liquidity" title="Contingency Funding Plan" />
+
+      <PageContainer className="py-6">
+        <CfpLifecycle key={bankId} />
+      </PageContainer>
+
+      <PageContainer className="pb-6">
+        <QueryBoundary
+          isLoading={events.isLoading}
+          error={events.error}
+          onRetry={() => events.refetch()}
+        >
+          <SectionCard
+            title="Activation log"
+            subtitle="¶74 events — each carries the EWI snapshot at event time and the regulator-notification evidence"
+            noPadding
+            footer={
+              <span>
+                Activation and de-escalation are approver-gated Board acts
+                recorded append-only. Internal regulator-notification records
+                are created; aequorOS does not transmit them externally.
+              </span>
+            }
+          >
+            {events.data && events.data.events.length > 0 ? (
+              <ul className="divide-y divide-border-light">
+                {events.data.events.map((event) => (
+                  <li
+                    key={event.id}
+                    className="px-5 py-4 flex items-start gap-4"
+                  >
+                    <StatusPill
+                      tone={
+                        event.eventType === "activated" ? "critical" : "success"
+                      }
+                    >
+                      {event.eventType === "activated"
+                        ? "Activated"
+                        : "De-escalated"}
+                    </StatusPill>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-body text-navy">{event.reason}</p>
+                      <p className="mt-1 text-caption text-slate">
+                        CFP v{event.cfpVersion} · {fmtDateUTC(event.createdAt)}
+                        {event.approvalOverdue
+                          ? " · Board approval was overdue at event time (¶71)"
+                          : ""}
+                        {event.regulatorNotificationId
+                          ? " · internal regulator-notification recorded"
+                          : ""}
+                      </p>
+                      <details className="mt-2 text-caption">
+                        <summary>Indicator snapshot at event time</summary>
+                        <ul>
+                          {event.ewiSnapshot.map((indicator) => (
+                            <li key={indicator.code}>
+                              {indicator.name}: {fmtValue(indicator)} ·{" "}
+                              {STATUS_LABEL[indicator.status] ??
+                                indicator.status}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-5 py-6 text-body text-slate">
+                No activation events. The CFP has never been triggered for this
+                institution.
+              </p>
+            )}
+          </SectionCard>
+        </QueryBoundary>
+      </PageContainer>
 
       <QueryBoundary
         isLoading={ewis.isLoading}
@@ -239,7 +315,7 @@ export default function ContingencyFundingPlan() {
                 label="CFP activation"
                 value={dashboard.cfpActive ? "ACTIVE" : "Not active"}
                 status={dashboard.cfpActive ? "crit" : "ok"}
-                hint={`Activation notifies ${regShort()} (LRMD ¶74)`}
+                hint={`Activation records an internal ${regShort()} notification (LRMD ¶74)`}
               />
               <KpiStat
                 label="Funding horizons covered"
@@ -342,60 +418,6 @@ export default function ContingencyFundingPlan() {
                 columns={indicatorColumns}
                 rows={dashboard.indicators}
               />
-            </SectionCard>
-
-            <SectionCard
-              title="Activation log"
-              subtitle="¶74 events — each carries the EWI snapshot at event time and the regulator-notification evidence"
-              noPadding
-              footer={
-                <span>
-                  Activation and de-escalation are approver-gated Board acts
-                  recorded append-only; the plan document itself (¶72(a)–(g)
-                  contents) is maintained through the CFP API workspace.
-                </span>
-              }
-            >
-              {events.data && events.data.events.length > 0 ? (
-                <ul className="divide-y divide-border-light">
-                  {events.data.events.map((event) => (
-                    <li
-                      key={event.id}
-                      className="px-5 py-4 flex items-start gap-4"
-                    >
-                      <StatusPill
-                        tone={
-                          event.eventType === "activated"
-                            ? "critical"
-                            : "success"
-                        }
-                      >
-                        {event.eventType === "activated"
-                          ? "Activated"
-                          : "De-escalated"}
-                      </StatusPill>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-body text-navy">{event.reason}</p>
-                        <p className="mt-1 text-caption text-slate">
-                          CFP v{event.cfpVersion} ·{" "}
-                          {fmtDateUTC(event.createdAt)}
-                          {event.approvalOverdue
-                            ? " · Board approval was overdue at event time (¶71)"
-                            : ""}
-                          {event.regulatorNotificationId
-                            ? " · regulator-notification recorded"
-                            : ""}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="px-5 py-6 text-body text-slate">
-                  No activation events. The CFP has never been triggered for
-                  this institution.
-                </p>
-              )}
             </SectionCard>
 
             <div className="grid gap-6 xl:grid-cols-2">
