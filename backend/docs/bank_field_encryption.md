@@ -17,6 +17,7 @@ well as current rows. The initial field catalogue is:
 | `related_parties` | `full_name`, `contact` | The shared record for directors, shareholders, beneficial owners and other registered parties. Protect the entire contact object, including arbitrary source-specific identity fields. |
 | `related_party_roles` | `other_responsibilities`, `term_of_appointment`, `icag_registration` | Free text and professional identifiers can identify the person even when the party name is encrypted. Resolve the owning bank through the organization-scoped parent party. |
 | `ingestion_batches` | `validation_report`, `etl_report`, `error_message` | Validation findings and matching samples can copy source identities. |
+| `bi_dashboard_versions`, `bi_subscriptions` | `spec`, `query` respectively | Saved identity-filter values, including historical views. Connected banks refuse identity BI until issue 595. |
 | `translation_failures` | `raw_record`, `error_message` | Preserve rejected input for authorized review without exposing its identity fields. |
 | `lineage_records` | `details` | Transformation and deduplication evidence can copy identities. Organization-wide, bankless nodes remain outside this bank-scoped boundary. |
 | `regulatory_packages` | `snapshot`, `validation_report`, `notes` | Generated corporate and large-exposure returns contain registered names and named findings. Protect the complete document payload; numeric canonical balances remain queryable. |
@@ -158,38 +159,32 @@ such legacy plaintext filings cannot complete protection cutover without an
 explicit retained-evidence migration. The pilot starts with newly encrypted
 filings, rather than treating a failed backfill as successful.
 
-## BI identity boundary (decision pending)
+## BI identity boundary (approved numeric-only pilot)
 
-BI is another persisted copy of the protected identities: `bi_dim_counterparty`
-stores `name`, `source_reference` and `group_reference`, and
-`bi_fact_position_daily` / `bi_fact_position_eom` store `counterparty_group`.
-The mart builder copies decrypted canonical identities into those tables with
-bulk inserts. Encrypting canonical fields alone therefore does not establish
-complete identity confidentiality for a bank that builds BI marts.
+For connected-key banks, numeric BI remains available. Identity dimensions
+(`counterparty.id`, `name`, `source_reference`, `group`) and queries that use
+them are explicitly refused, including filters in saved dashboards,
+subscriptions, hierarchies, pivots, sort keys and concentration measures.
+The response explains bank-held encryption and asks the reader to remove the
+identity fields or filters; granting roles cannot remove this restriction.
+Full secured identity BI is follow-up
+https://github.com/CedynGroup/aequorOS/issues/595.
 
-The BI catalogue exposes these values as restricted dimensions and its compiler
-uses SQL for identity filtering, ordering, grouping, member discovery and pivots.
-Simply replacing the copied strings with randomized ciphertext would break that
-contract; adding exact-match blind indexes alone does not preserve every current
-query operation. Saved-view specifications can also retain identity filter
-values. The query log itself stores hashes and member IDs, not request bodies.
+The builder writes opaque canonical UUID aliases in
+`bi_dim_counterparty.name` / `source_reference`, with NULL group references.
+Daily and end-of-month position facts carry NULL `counterparty_group`.
+Classification dimensions (type, country, rating) and numeric facts retain their
+normal behavior. Bank backfill removes existing derived identity copies, scoped
+to that bank, and can safely repeat. Keyless optional-rollout banks retain their
+existing BI behavior. No bank may claim cutover until backfill succeeds.
 
-A product-scope decision is required before the bank-key pilot can claim this
-boundary complete:
-
-- Preserve all current identity BI behavior with an additional secured BI layer:
-  store only encrypted identities / bank-scoped opaque indexes, translate
-  authorized filters, recover labels after bank-key access, and protect saved
-  specifications. Verify grouping, ordering, discovery, pivots and exports.
-- Explicitly exclude identity BI from the protected pilot while retaining numeric
-  BI: stop persisting readable identity copies and refuse identity dimensions and
-  saved identity filters for protected banks until that layer ships. This changes
-  product availability and needs approval; it is not an implicit implementation
-  fallback.
-
-Neither leaving BI identity copies readable nor silently disabling working BI is
-an accepted resolution. The operational-field implementation must not be reported
-as complete protection while this decision remains open.
+Saved dashboard-version `spec` and subscription `query` objects use the same
+bank-held field encryption as operational records, protecting historical filter
+values. New saves and executions evaluate the same identity-member restriction.
+Append-only historical dashboard versions follow the existing immutable-row
+backfill refusal: cutover requires a separately authorized storage transition
+or removal of disposable test content; this change does not bypass guards.
+The query log stores digests and member IDs, never raw filter values.
 
 ## Strict-bank dedicated-database option (plan only)
 
