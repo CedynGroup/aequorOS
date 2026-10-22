@@ -97,7 +97,7 @@ _NATURAL_KEYS: dict[str, tuple[str, ...]] = {
         "organization_id",
         "bank_id",
         "source_system",
-        "source_reference",
+        "source_reference_blind_index",
         "as_of_date",
     ),
     "product": ("organization_id", "bank_id", "product_code", "as_of_date"),

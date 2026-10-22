@@ -25,6 +25,7 @@ from app.bi.service.compiler import compile_query
 from app.bi.service.errors import BiQueryError
 from app.bi.service.execution import execute
 from app.bi.service.identity_policy import IDENTITY_REASON
+from app.core.ids import new_uuid7
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
@@ -34,7 +35,7 @@ from app.data_engine.service.field_search import find_counterparties
 from app.db.base import utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
-from app.identity.public import Bank
+from app.identity.public import Bank, User
 from app.identity.schemas.institution_profile import (
     RelatedPartyCreate,
     RelatedPartyRoleInput,
@@ -44,10 +45,12 @@ from app.identity.service import institution_profile
 from app.ml.behavioral.history import load_deposit_month_aggregates
 from app.models.audit_event import AuditEvent
 from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
+from app.models.canonical_withdrawal import CanonicalWithdrawal
 from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailure
 from app.reporting.models.packages import RegulatoryPackage
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import ingestion
+from app.services import canonical_withdrawal, ingestion
+from app.services.canonical_withdrawal import WithdrawalError
 from tests.bi.fixtures import materialize_bi_plane
 from tests.support.helpers import ORG_1, USER_1
 from tests.support.inmemory_storage import InMemoryStorageClient
@@ -103,17 +106,23 @@ def connect(db: Session, provider: LocalKeyProvider, bank_id: str = BANK_A) -> N
     db.commit()
 
 
-def counterparty(
-    db: Session, bank_id: str = BANK_A, reference: str = IDENTIFIER, *, include_package: bool = True
+def counterparty(  # noqa: PLR0913
+    db: Session,
+    bank_id: str = BANK_A,
+    reference: str = IDENTIFIER,
+    *,
+    include_package: bool = True,
+    source_system: str = "EXCEL_CSV",
+    as_of: date = AS_OF,
 ) -> CanonicalCounterparty:
     batch = IngestionBatch(
         organization_id=ORG_1,
         bank_id=bank_id,
-        source_system="EXCEL_CSV",
+        source_system=source_system,
         adapter_version="synthetic",
         extraction_mode="full",
         status="accepted",
-        as_of_date=AS_OF,
+        as_of_date=as_of,
         validation_report={"name": NAME},
         etl_report={"name": NAME},
         error_message=NAME,
@@ -134,8 +143,8 @@ def counterparty(
     row = CanonicalCounterparty(
         organization_id=ORG_1,
         bank_id=bank_id,
-        as_of_date=AS_OF,
-        source_system="EXCEL_CSV",
+        as_of_date=as_of,
+        source_system=source_system,
         source_reference=reference,
         ingestion_batch_id=batch.id,
         lineage_id=lineage.id,
@@ -166,7 +175,7 @@ def counterparty(
                 bank_id=bank_id,
                 return_family="large_exposures",
                 return_code=reference,
-                reporting_date=AS_OF,
+                reporting_date=as_of,
                 frequency="monthly",
                 status="generated",
                 version=1,
@@ -559,12 +568,51 @@ def test_failed_sensitive_write_rolls_back_without_a_platform_fallback(
     assert raw_fields(db_session) == before
 
 
+def withdraw_counterparties(db: Session) -> CanonicalWithdrawal:
+    checker = User(
+        id=new_uuid7(),
+        organization_id=ORG_1,
+        email=f"synthetic-checker-{new_uuid7()}@example.test",
+        display_name="Synthetic checker",
+    )
+    db.add(checker)
+    db.flush()
+    bank = db.get(Bank, BANK_A)
+    assert bank is not None
+    requested = canonical_withdrawal.request_withdrawal(
+        db,
+        CTX,
+        bank,
+        entity="counterparty",
+        source_system="EXCEL_CSV",
+        as_of_date=AS_OF,
+        reason="Synthetic book withdrawal",
+        requested_by="synthetic-analyst@example.test",
+    )
+    applied = canonical_withdrawal.approve_withdrawal(
+        db,
+        TenantContext(organization_id=ORG_1, actor_user_id=checker.id),
+        bank,
+        requested.id,
+        approved_by=checker.email,
+    )
+    assert applied.status == "applied" and applied.rows_withdrawn == 1
+    db.commit()
+    return applied
+
+
+@pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("withdraw", [False, True])
 def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
     db_session: Session,
     provider: LocalKeyProvider,
     tmp_path: Path,
+    connected: bool,
+    withdraw: bool,
 ) -> None:
-    connect(db_session, provider)
+    if connected:
+        connect(db_session, provider)
+    withdrawal: CanonicalWithdrawal | None = None
     mapping = MappingConfig(
         field_mappings={
             "counterparty": EntityMapping(
@@ -634,16 +682,83 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
         raw = cast(
             object,
             db_session.execute(
-                text("SELECT name FROM canonical_counterparties WHERE superseded_by IS NULL")
+                text(
+                    "SELECT name FROM canonical_counterparties "
+                    "WHERE superseded_by IS NULL AND withdrawn_at IS NULL"
+                )
             ).scalar_one(),
         )
-        assert name not in str(raw) and str(raw).startswith("aqs-bank-field-v1:")
+        if connected:
+            assert name not in str(raw) and str(raw).startswith("aqs-bank-field-v1:")
+        else:
+            assert raw == name
+        if withdraw and name == NAME:
+            withdrawal = withdraw_counterparties(db_session)
     assert (
         db_session.execute(
             text("SELECT balance FROM canonical_position_snapshots WHERE superseded_by IS NULL")
         ).scalar_one()
         == 123
     )
+    if withdrawal is not None:
+        bank = db_session.get(Bank, BANK_A)
+        assert bank is not None
+        with pytest.raises(WithdrawalError, match="same natural key") as refused:
+            canonical_withdrawal.reverse_withdrawal(
+                db_session, CTX, bank, withdrawal.id, reversed_by="Synthetic checker", reason="Restore"
+            )
+        assert refused.value.status_code == 409
+        db_session.flush()
+        assert withdrawal.status == "applied"
+        withdraw_counterparties(db_session)
+        restored = canonical_withdrawal.reverse_withdrawal(
+            db_session, CTX, bank, withdrawal.id, reversed_by="Synthetic checker", reason="Restore"
+        )
+        db_session.commit()
+        assert restored.status == "reversed" and restored.rows_restored == 1
+        matches = find_counterparties(
+            db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER
+        )
+        assert len(matches) == 1 and matches[0].name == NAME
+
+
+@pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("axis", ["none", "reference", "source", "date", "bank"])
+def test_counterparty_reversal_preserves_natural_key_scope(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    connected: bool,
+    axis: str,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+        connect(db_session, provider, BANK_B)
+    original = counterparty(db_session, include_package=False)
+    original_id = original.id
+    withdrawal = withdraw_counterparties(db_session)
+    replacement = None
+    if axis != "none":
+        replacement = counterparty(
+            db_session,
+            bank_id=BANK_B if axis == "bank" else BANK_A,
+            reference="SYNTHETIC-OTHER" if axis == "reference" else IDENTIFIER,
+            source_system="API_PUSH" if axis == "source" else "EXCEL_CSV",
+            as_of=date(2026, 7, 31) if axis == "date" else AS_OF,
+            include_package=False,
+        )
+        db_session.commit()
+    bank = db_session.get(Bank, BANK_A)
+    assert bank is not None
+    restored = canonical_withdrawal.reverse_withdrawal(
+        db_session, CTX, bank, withdrawal.id, reversed_by="Synthetic checker", reason="Restore"
+    )
+    db_session.commit()
+    assert restored.status == "reversed" and restored.rows_restored == 1
+    db_session.expire_all()
+    loaded = db_session.get(CanonicalCounterparty, original_id)
+    assert loaded is not None and loaded.withdrawn_at is None and loaded.name == NAME
+    if replacement is not None:
+        assert replacement.withdrawn_at is None and replacement.superseded_by is None
 
 
 def test_connected_bank_bi_keeps_numeric_facts_without_identity_copies(
