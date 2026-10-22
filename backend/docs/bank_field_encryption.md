@@ -56,6 +56,9 @@ Searches scope by organization and bank and confirm decrypted candidate values.
 A stable index-version pointer keeps exact matches working across payload-key
 rotation. Numeric concentration grouping uses opaque indexes.
 
+Name index tokens are 64 characters for both connected and optional banks.
+Optional banks use unkeyed SHA-256 tokens and retain plaintext names.
+
 ## BI
 
 Connected-key banks retain numeric BI. The builder stores opaque UUID aliases
