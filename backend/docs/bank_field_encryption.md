@@ -2,9 +2,8 @@
 
 Design for [issue 353](https://github.com/CedynGroup/aequorOS/issues/353),
 building on [bank-held object encryption](bank_encryption.md). This is the
-design layer, not a claim that database fields are already encrypted. Historical
-audit treatment below needs a decision before implementation can establish the
-complete protection boundary.
+design layer; implementation follows in the stacked change. The historical
+audit scope exception below is an explicit captain decision.
 
 ## Covered data
 
@@ -17,17 +16,21 @@ well as current rows. The initial field catalogue is:
 | `canonical_counterparties` | `name`, `external_identifiers`, `group_reference`, `attributes`, `source_reference` | Names, national/tax/registration identifiers, connected-person relationships and free-form identity attributes; a source customer reference can itself be a personal identifier. |
 | `related_parties` | `full_name`, `contact` | The shared record for directors, shareholders, beneficial owners and other registered parties. Protect the entire contact object, including arbitrary source-specific identity fields. |
 | `related_party_roles` | `other_responsibilities`, `term_of_appointment`, `icag_registration` | Free text and professional identifiers can identify the person even when the party name is encrypted. Resolve the owning bank through the organization-scoped parent party. |
-| Ingestion and transformation copies | Sensitive values in translation failures, validation/ETL reports, lineage details and persisted matching/review payloads | Encrypt whole free-form payloads when they can contain covered values; protecting only the final canonical row is insufficient. Inventory producers before the implementation cutover. |
-| Bank audit evidence | Covered identity values in event details, including the `full_name` currently written by related-party create/update | Avoid retaining readable duplicates of the protected register. Historical handling is the decision below. |
+| `ingestion_batches` | `validation_report`, `etl_report`, `error_message` | Validation findings and matching samples can copy source identities. |
+| `translation_failures` | `raw_record`, `error_message` | Preserve rejected input for authorized review without exposing its identity fields. |
+| `lineage_records` | `details` | Transformation and deduplication evidence can copy identities. Organization-wide, bankless nodes remain outside this bank-scoped boundary. |
+| `regulatory_packages` | `snapshot`, `validation_report`, `notes` | Generated corporate and large-exposure returns contain registered names and named findings. Protect the complete document payload; numeric canonical balances remain queryable. |
 
 Numeric balances, notionals, positions, rates, share quantities, ownership
 percentages and allowances retain ordinary database encryption at rest. Keep
 foreign-key UUIDs, platform IDs, role/status codes, dates and provenance links
 queryable. This protection does not promise relationship unlinkability: the
-database still shows which opaque party owns a position or shareholding. Adapter
-and reporting review must also identify copies of customer references in
-position attributes and other free-form payloads rather than treating those
-copies as safe merely because the source column has a different name.
+database still shows which opaque party owns a position or shareholding. Source account/position locators and numeric classification attributes remain
+operational metadata; direct borrower identity belongs in the protected
+counterparty record. This catalogue protects the listed fields and their named
+report/ingestion copies, not arbitrary personal information placed in unrelated
+free-text fields by a user. Expanding the catalogue requires a reviewed producer
+and consumer inventory.
 
 Uploaded inputs, canonical artifacts and exports continue through `StorageClient`
 under the existing bank key. No plaintext identity should be added to logs,
@@ -128,33 +131,30 @@ reads and searches; interrupted/repeated backfill producing identical completed
 state. Exercise migrated PostgreSQL constraints/RLS as well as hermetic provider
 tests.
 
-## Historical audit decision
+## Historical audit scope exception (approved)
 
-`identity/service/institution_profile.py` currently includes `full_name` in
-`related_party.created` and `related_party.updated` audit details. Migration
-`202610100090` hashes `to_jsonb(NEW)` into `aequoros-audit-v1` chain entries;
-`core/audit_integrity.py::verify_chains` recomputes that hash from the stored
-source row. Migration `202610110095` forbids updating/deleting those events.
-Application-level decryption does not preserve this SQL verifier's input.
+The captain chose to preserve existing audit source bytes: no audit-chain epoch
+transition, rehash or append-only guard change. No banks are live; existing audit
+rows contain only test data. Those historical test audit names remain readable
+in the shared database and are an explicit exception to historical identity
+confidentiality. Do not describe them as bank-key protected.
 
-Two materially different outcomes need firstmate direction:
+New `related_party.created` and `related_party.updated` audit events omit
+`full_name` and retain the opaque party ID, bank, role codes and mutation reason.
+New ETL audit events retain counts and opaque batch references instead of copying
+whole reports; detailed reports remain in the protected operational payloads.
+User-entered reasons remain audit evidence, so officers should not enter borrower
+identity into those reasons.
 
-- **Complete historical confidentiality:** authorize an explicit audit-chain
-  format transition. Verify and independently retain the old chain checkpoint,
-  encrypt historical sensitive event payloads, and bind the new representation
-  and predecessor checkpoint in a migration receipt/new chain epoch. Specify
-  how an authorized examiner validates continuity without publishing plaintext
-  and how old retained backups are handled. This changes the existing evidence
-  contract and needs approval before changing guards or verification.
-- **Preserve historical source bytes:** leave existing sealed events unchanged,
-  stop copying names into new events (use opaque party references), and encrypt
-  operational identity fields. Historical audit names remain readable in the
-  shared database. This is an explicit scope exception, so it cannot satisfy
-  issue 353's complete covered-identity protection claim without acceptance of
-  that limitation.
-
-Do not disable append-only guards, rehash old history in place or silently omit
-the historical audit copies while waiting for that decision.
+The reason for this boundary is structural: `202610100090` hashes `to_jsonb(NEW)`
+into the audit chain, and `core/audit_integrity.py::verify_chains` recomputes from
+raw stored source bytes. Replacing historical names with ciphertext would break
+verification even if application reads decrypted them. Existing audit guards and
+verification remain intact. Likewise, backfill must refuse any locked filing
+payload it cannot legally update; never disable its content guard. A bank with
+such legacy plaintext filings cannot complete protection cutover without an
+explicit retained-evidence migration. The pilot starts with newly encrypted
+filings, rather than treating a failed backfill as successful.
 
 ## Strict-bank dedicated-database option (plan only)
 
@@ -172,3 +172,29 @@ test restore/rotation, and document cost, residency, retention and operational
 ownership. A migration needs reconciled counts, bank approval and a controlled
 cutover; all old shared copies and backups need a retention decision. This issue
 does not provision dedicated databases or change deployment routing.
+
+## Rollout entry point and evidence
+
+After applying the additive schema migration, run the dedicated maintenance
+session from `backend/` with the owning bank's grant available:
+
+```sh
+PYTHONPATH=. uv run python scripts/encrypt_bank_fields.py \
+  --organization-id OR-DEM00001 --bank-id BK-SAMP0001 --batch-size 100
+```
+
+The IDs above are synthetic examples. The command accepts no key material and
+prints only counts. It authenticates completed ciphertext on every repeat,
+commits bounded batches, and fails on unavailable keys or protected historical
+records. Backfill the bank before serving it with a connected key; normal reads
+refuse legacy plaintext for a connected bank. A downgrade refuses encrypted
+columns rather than silently discarding or decrypting them.
+
+The codec lives in `app/core/key_management/fields.py`, shares
+`object_key_envelopes` and the existing rotation lock, and rejects bulk writes
+that bypass scoped ORM encryption. Scalar SQL projections of protected columns
+are opaque; product consumers load authenticated, bank-scoped entities instead.
+Exact-match services confirm decrypted candidates after keyed-index lookup.
+`tests/core/test_bank_field_encryption.py` exercises the field catalogue and
+product behavior with synthetic providers and data; PostgreSQL migration and
+retained-evidence suites exercise the deployed schema contracts.
