@@ -47,6 +47,7 @@ from sqlalchemy import (
     Uuid,
 )
 from sqlalchemy import text as sql_text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.key_management.fields import ProtectedJSON, ProtectedText
@@ -294,7 +295,10 @@ class CanonicalCounterparty(CanonicalMetadataMixin, Base):
     name_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
     concentration_group_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
     external_identifiers_blind_indexes: Mapped[dict[str, str]] = mapped_column(
-        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+        JSON().with_variant(JSONB(), "postgresql"),
+        default=dict,
+        server_default=sql_text("'{}'"),
+        nullable=False,
     )
 
 

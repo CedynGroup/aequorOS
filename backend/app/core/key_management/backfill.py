@@ -16,7 +16,7 @@ from app.core.key_management.fields import (
     mark_for_backfill,
     needs_backfill,
 )
-from app.core.key_management.preflight import require_clean_immutable_history
+from app.core.key_management.preflight import IMMUTABLE_FIELDS, require_clean_immutable_history
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.db.base import Base
 
@@ -114,21 +114,27 @@ def backfill_bank(  # noqa: PLR0912, PLR0915 - one explicit maintenance transact
                 page_conditions = list(conditions)
                 if after is not None:
                     page_conditions.append(table.c.id > after)
-                page = list(
-                    db.scalars(
-                        select(model)
-                        .where(*page_conditions)
-                        .order_by(table.c.id)
-                        .limit(batch_size)
-                        .with_for_update()
-                        .execution_options(populate_existing=True)
-                    )
+                statement = (
+                    select(model)
+                    .where(*page_conditions)
+                    .order_by(table.c.id)
+                    .limit(batch_size)
+                    .execution_options(populate_existing=True)
                 )
+                immutable = table.name in {name for name, _ in IMMUTABLE_FIELDS}
+                if not immutable:
+                    statement = statement.with_for_update()
+                page = list(db.scalars(statement))
                 if not page:
                     break
                 for item in page:
                     checked += 1
                     if needs_backfill(item):
+                        if immutable:
+                            raise KeyUnavailableError(
+                                "Bank-key cutover refused: immutable history "
+                                "contains legacy plaintext."
+                            )
                         mark_for_backfill(item)
                         encrypted += 1
                 after = cast(UUID, cast(InstanceState[object], inspect(page[-1])).dict["id"])

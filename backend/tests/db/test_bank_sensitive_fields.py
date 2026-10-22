@@ -17,12 +17,15 @@ from app.core.key_management.backfill import backfill_bank
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.types import KeyReference, KeyUnavailableError
+from app.core.tenancy import TenantContext
+from app.data_engine.service.field_search import find_counterparties
 from app.db.base import utc_now
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
 from app.identity.public import Bank, User
 from app.models.audit_event import AuditEvent
 from app.models.organization import Organization
 from app.reporting.models.packages import RegulatoryPackage
+from tests.core.test_bank_field_encryption import IDENTIFIER, NAME, counterparty
 from tests.db import test_postgres_migrations as migrations
 from tests.support.helpers import ORG_1, USER_1
 
@@ -150,6 +153,21 @@ def _assert_immutable_cutover(
         )
     )
     db.flush()
+    # Execute JSON blind-index predicates on the deployed JSONB column, not
+    # merely on SQLite's JSON implementation.
+    party_id = counterparty(db).id
+    db.commit()
+    db.expunge_all()
+    matches = find_counterparties(
+        db,
+        TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+        "BK-SAMP0001",
+        field="external_identifier",
+        value=IDENTIFIER,
+        namespace="national_id",
+    )
+    assert [party.id for party in matches] == [party_id]
+    assert matches[0].name == NAME
     dashboard = BiDashboard(
         organization_id=ORG_1,
         bank_id="BK-SAMP0002",
