@@ -29,24 +29,21 @@ Storage and operator callers depend on this contract, not boto3 KMS operations.
 Runtime configuration currently accepts only `aws_kms`. Azure, Google, Vault
 and HSM adapters can implement the same conformance suite.
 
-Each object has a random wrapping secret, itself protected in a small Encryption
-SDK message using the bank's KMS keyring. The object SDK message uses that
-secret with an SDK raw AES keyring; the SDK generates and wraps its payload data
-key and owns all encryption formats and integrity checks. AequorOS persists only
-the wrapped secret in `object_key_envelopes`; S3 metadata holds its UUID. This
-extra indirection allows rotation without modifying large object ciphertext,
-locked objects or historical versions. Plaintext secrets live only during one
-operation.
+A bank data-key version is a random secret wrapped in a small Encryption SDK
+message using the bank's KMS keyring. Each object's authenticated context derives
+a distinct wrapping secret from that version; the object SDK message uses it
+with a raw AES keyring. The SDK generates and wraps the actual payload key and
+owns the encryption format and integrity checks. Only the wrapped version and
+its exact KMS reference are persisted in `object_key_envelopes`; S3 metadata
+holds the version UUID. Legacy independent object envelopes remain readable.
 
-There is no plaintext data-key cache across operations. Every bank-encrypted
-read, including a previously issued application download link, unwraps through
-the provider again. SDK caching would retain plaintext key material and extend
-access after the bank removes its grant, so immediate refusal takes precedence
-over the optional cache. See
-[AWS Encryption SDK data-key caching](https://docs.aws.amazon.com/encryption-sdk/latest/developer-guide/data-key-caching.html).
-Revocation blocks subsequent unwraps once KMS enforces the permission change; it
-cannot recall plaintext already delivered or stop an operation that already
-obtained its data key.
+Each database unit of work unwraps each required version once, sharing it
+between field loads and session-bound storage. Plaintext version material is
+session-local and excluded from logs; commit, rollback and close discard it.
+Standalone operations own short-lived units. Revocation refuses the next unit
+once KMS enforces the permission change; an already admitted unit may complete.
+No persistent or process-wide plaintext cache is permitted. See the
+[field design](bank_field_encryption.md#envelope-and-application-boundary).
 
 ## Bank-side AWS setup
 
@@ -172,14 +169,16 @@ S3 URLs; document transfer under bank keys remains follow-up work.
 ## Rotation, backups and recovery
 
 The bank grants access to its replacement key while retaining the old grant.
-Rotation verifies the replacement can encrypt and decrypt, locks the bank key
-record, re-wraps every envelope and commits all wrappers and the reference
-together. Readers hold a shared bank-key lock through unwrap; rotation takes an
-exclusive lock. Readers and uploads arriving during rotation wait and use the
-replacement after commit. Existing operations complete before rotation takes its
-lock. Failed rotation rolls back the transaction. S3 bytes and version IDs do
-not change. KMS automatic material rotation within the same key ARN needs no
-application re-wrap.
+Rotation verifies the replacement and publishes a new immutable data-key
+version in the existing envelope catalogue. Only rotation bookkeeping locks the
+registry. Encryption and downloads use lock-free version lookups; an admitted
+unit of work may finish with its previous version while later work uses the new
+one. Ciphertext records its version UUID, and old versions keep their exact KMS
+references. Failed rotation rolls back the new pointer/version. Object writes
+reference committed versions, so business rollback cannot orphan published
+ciphertext. See [the field design](bank_field_encryption.md#envelope-and-application-boundary)
+for bounded key-cache lifetime and separate resumable re-encryption. The legacy
+`envelopes_rewrapped` result is zero because rotation no longer re-wraps history.
 
 Keep the old key decrypt-capable until every backup with its old wrappers has
 aged out, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
@@ -187,7 +186,7 @@ Set `ENCRYPTION_BACKUP_RETENTION_DAYS` to at least the longest database
 or object backup retention window before rotation. Rotation records a per-bank
 retention hold; an unset setting keeps that hold indefinitely. Reusing a key
 extends rather than shortens its hold, and a sibling bank still using it remains
-available. Retirement refuses while any bank currently references the key or a
+available. Retirement refuses while any bank or retained envelope references the key or a
 backup hold remains, including holds for other banks sharing the key. It checks
 both the recorded deadline and the current retention setting; lowering the
 setting cannot shorten the recorded hold. The bank administers the actual grant

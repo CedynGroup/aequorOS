@@ -21,6 +21,7 @@ class _Arguments(argparse.Namespace):
     organization_id: str
     bank_id: str
     batch_size: int
+    reencrypt: bool
 
 
 def main() -> None:
@@ -29,6 +30,7 @@ def main() -> None:
     parser.add_argument("--organization-id", required=True)
     parser.add_argument("--bank-id", required=True)
     parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument("--reencrypt", action="store_true")
     args = parser.parse_args(namespace=_Arguments())
     sessions = cast(Callable[[], Callable[[], Session]], database.get_sessionmaker)()
     with sessions() as db:
@@ -37,8 +39,12 @@ def main() -> None:
             organization_id=args.organization_id,
             bank_id=args.bank_id,
             batch_size=args.batch_size,
+            reencrypt=args.reencrypt,
         )
-        print(f"Checked {result.checked}; encrypted {result.encrypted}; batches {result.batches}.")
+        print(
+            f"Checked {result.checked}; encrypted {result.encrypted}; batches {result.batches}; "
+            f"retained immutable {result.retained_immutable}."
+        )
 
 
 if __name__ == "__main__":

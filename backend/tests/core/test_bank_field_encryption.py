@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from alembic.script import ScriptDirectory
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import func, select, text
@@ -17,7 +18,7 @@ from app.attestation.service.digests import register_state_digest
 from app.bi.domain.catalogue import catalogue
 from app.bi.models.content import BiDashboard, BiDashboardVersion
 from app.bi.models.marts import BiDimCounterparty, BiFactPositionDaily, BiFactPositionEom
-from app.bi.models.notifications import BiSubscription
+from app.bi.models.notifications import BiAlert, BiSubscription
 from app.bi.schemas.content import BiDashboardSpec
 from app.bi.schemas.query import BiFilter, BiPackQuery, BiQuery, BiTime
 from app.bi.service import content
@@ -28,12 +29,13 @@ from app.bi.service.identity_policy import IDENTITY_REASON
 from app.bi.service.mart_builder import fingerprint_for
 from app.core.key_management import registry
 from app.core.key_management.backfill import backfill_bank
+from app.core.key_management.fields import ProtectedJSON, ProtectedText
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.data_engine.service.field_search import find_counterparties
-from app.db.base import utc_now
+from app.db.base import Base, utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
 from app.identity.public import Bank
@@ -347,7 +349,6 @@ def test_bank_scoped_exact_search_and_master_key_rotation(
     row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
     registry.rotate(db_session, row, NEXT, lambda _provider: provider)
     db_session.commit()
-    provider.set_status(KEY_A, KeyStatus.DISABLED)
     db_session.expunge_all()
     assert [
         row.id for row in find_counterparties(db_session, CTX, BANK_A, field="name", value=NAME)
@@ -600,17 +601,17 @@ def test_interrupted_backfill_resumes_and_preserves_completed_ciphertext(
     db_session.commit()
     connect(db_session, provider)
     db_session.expunge_all()
-    original = provider.generate_data_key
+    original = provider.unwrap
     calls = 0
 
-    def interrupt(key: KeyReference, context: dict[str, str]):
+    def interrupt(key: KeyReference, wrapped: bytes, context: dict[str, str]) -> bytes:
         nonlocal calls
         calls += 1
-        if calls == 3:
+        if calls == 2:
             raise KeyUnavailableError("Synthetic provider outage.")
-        return original(key, context)
+        return original(key, wrapped, context)
 
-    monkeypatch.setattr(provider, "generate_data_key", interrupt)
+    monkeypatch.setattr(provider, "unwrap", interrupt)
     with pytest.raises(KeyUnavailableError, match="outage"):
         backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A, batch_size=1)
     names = cast(
@@ -622,7 +623,7 @@ def test_interrupted_backfill_resumes_and_preserves_completed_ciphertext(
         ),
     )
     assert str(names[0]).startswith("aqs-bank-field-v1:") and names[1] == NAME
-    monkeypatch.setattr(provider, "generate_data_key", original)
+    monkeypatch.setattr(provider, "unwrap", original)
     resumed = backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A, batch_size=1)
     assert resumed.encrypted == 7 and resumed.checked == 8
     completed = cast(
@@ -1005,7 +1006,6 @@ def test_saved_alert_list_filters_backfill_and_round_trip(
     provider: LocalKeyProvider,
     filters: list[dict[str, object]] | None,
 ) -> None:
-    from app.bi.models.notifications import BiAlert
 
     alert = BiAlert(
         organization_id=ORG_1,
@@ -1041,10 +1041,6 @@ def test_saved_alert_list_filters_backfill_and_round_trip(
 
 
 def test_downgrade_catalogue_covers_the_protected_storage_contract() -> None:
-    from alembic.script import ScriptDirectory
-
-    from app.core.key_management.fields import ProtectedJSON, ProtectedText
-    from app.db.base import Base
 
     revision = ScriptDirectory(str(Path(__file__).parents[2] / "alembic")).get_revision(
         "202610220101"
@@ -1053,11 +1049,14 @@ def test_downgrade_catalogue_covers_the_protected_storage_contract() -> None:
     migration = revision.module
     text_catalogue = cast(tuple[tuple[str, str], ...], migration.PROTECTED_TEXT)
     json_catalogue = cast(tuple[tuple[str, str], ...], migration.PROTECTED_JSON)
-    for kind, catalogue in ((ProtectedText, text_catalogue), (ProtectedJSON, json_catalogue)):
+    for kind, protected_columns in (
+        (ProtectedText, text_catalogue),
+        (ProtectedJSON, json_catalogue),
+    ):
         protected = {
             (table.name, column.name)
             for table in Base.metadata.tables.values()
             for column in table.columns
             if isinstance(column.type, kind)
         }
-        assert set(catalogue) == protected
+        assert set(protected_columns) == protected

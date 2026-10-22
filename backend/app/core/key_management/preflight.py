@@ -18,8 +18,7 @@ def require_clean_immutable_history(db: Session, organization_id: str, bank_id: 
     """Check raw storage before key registration or any backfill mutations.
 
     Whole documents are protected: do not guess whether an arbitrary nested
-    field is an identity. Registration holds the bank's exclusive row lock;
-    sensitive writers hold its shared lock, closing the plaintext-insert race.
+    field is an identity.
     """
     with db.no_autoflush:
         for name, column in IMMUTABLE_FIELDS:

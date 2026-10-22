@@ -10,13 +10,14 @@ from sqlalchemy import String, Table, inspect, select, text, update
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import InstanceState, Session
 
+from app.core.key_management import registry
 from app.core.key_management.fields import (
     field_columns,
     mark_for_backfill,
     needs_backfill,
+    needs_reencryption,
 )
 from app.core.key_management.preflight import IMMUTABLE_FIELDS, require_clean_immutable_history
-from app.core.key_management.registry import bank_key
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.db.base import Base
 
@@ -50,10 +51,16 @@ class BackfillResult:
     checked: int
     encrypted: int
     batches: int
+    retained_immutable: int = 0
 
 
 def backfill_bank(  # noqa: PLR0912, PLR0915 - one explicit maintenance transaction lifecycle
-    db: Session, *, organization_id: str, bank_id: str, batch_size: int = 100
+    db: Session,
+    *,
+    organization_id: str,
+    bank_id: str,
+    batch_size: int = 100,
+    reencrypt: bool = False,
 ) -> BackfillResult:
     """Commit bounded batches; reruns authenticate and skip completed ciphertext.
 
@@ -71,7 +78,7 @@ def backfill_bank(  # noqa: PLR0912, PLR0915 - one explicit maintenance transact
     db.info["organization_id"] = organization_id
     previous_backfill = cast(object, db.info.get("bank_field_backfill"))
     db.info["bank_field_backfill"] = True
-    checked = encrypted = batches = 0
+    checked = encrypted = batches = retained_immutable = 0
     try:
         # The caller may already have begun a clean transaction before setting
         # session.info; after_begin cannot retroactively install its RLS GUC.
@@ -80,9 +87,14 @@ def backfill_bank(  # noqa: PLR0912, PLR0915 - one explicit maintenance transact
                 text("SELECT set_config('app.organization_id', :org, true)"),
                 {"org": organization_id},
             )
-        if bank_key(db, organization_id, bank_id, writing=True) is None:
+        row = registry.bank_key(db, organization_id, bank_id)
+        if row is None:
             raise KeyUnavailableError("Backfill requires a connected bank key.")
         require_clean_immutable_history(db, organization_id, bank_id)
+        if row.current_version_id is None:
+            row = registry.scoped_key(db, organization_id=organization_id, bank_id=bank_id)
+            registry.initialize_version(db, row, registry.provider_for)
+        target_version = registry.current_version(db, row)
         _remove_derived_identity(db, organization_id, bank_id)
         db.commit()
         for mapper in sorted(
@@ -129,7 +141,11 @@ def backfill_bank(  # noqa: PLR0912, PLR0915 - one explicit maintenance transact
                     break
                 for item in page:
                     checked += 1
-                    if needs_backfill(item):
+                    obsolete = reencrypt and needs_reencryption(item, target_version)
+                    if immutable and obsolete and not needs_backfill(item):
+                        retained_immutable += 1
+                        continue
+                    if needs_backfill(item) or obsolete:
                         if immutable:
                             raise KeyUnavailableError(
                                 "Bank-key cutover refused: immutable history "
@@ -142,7 +158,7 @@ def backfill_bank(  # noqa: PLR0912, PLR0915 - one explicit maintenance transact
                 db.expunge_all()
                 batches += 1
         db.commit()
-        return BackfillResult(checked, encrypted, batches)
+        return BackfillResult(checked, encrypted, batches, retained_immutable)
     except BaseException:
         db.rollback()
         raise

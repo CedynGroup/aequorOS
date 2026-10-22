@@ -42,38 +42,61 @@ them.
 
 ## Envelope and application boundary
 
-Reuse `app/core/key_management/types.py`'s `KeyProvider`, the connected
-`BankEncryptionKey`, and the committed-message helpers in `sdk.py`. Extend the
-existing envelope catalogue and rotation path, rather than adding another master
-key registry or provider. Each bank write operation gets random wrapping
-material protected by its master key; the SDK generates independent payload data
-keys for the field messages. Operation-local reuse bounds KMS calls for large
-batches; no plaintext material survives the flush. Store only ciphertext and the
-wrapped-key reference. Authenticate organization, bank, table, record ID, field/payload name
-and format version; reject ciphertext moved between banks, records or fields.
-Encryption context must contain no identity values.
+The captain's revised decision (review R1, review-1, R7 and R8) replaces
+transaction-held encryption locks with immutable, versioned data keys. This
+supersedes the earlier shared-lock/rotation-exclusion decision. Reuse
+`BankEncryptionKey`, `ObjectKeyEnvelope`, `KeyProvider` and the existing SDK;
+there is no parallel master-key hierarchy.
 
-Reads and writes use explicitly scoped application services. Unavailable
-connected keys, missing envelopes, context mismatch and corrupt ciphertext fail
-closed with a safe error. Never fall back to a platform key or serve a legacy
-plaintext value for a connected bank. No plaintext-key cache survives an
-operation. Bankless rollout must follow the existing optional-key contract and
-must never be presented as bank-held protection; enable protection only after
-that bank's migration and verification complete.
+`BankEncryptionKey` points to the current version in `ObjectKeyEnvelope`.
+Each version contains a random bank data key wrapped by the bank's KMS key,
+its exact KMS reference, and an opaque version UUID. Field ciphertext and object
+metadata already carry an envelope UUID; that UUID now identifies the immutable
+version. Legacy envelopes retain their recorded KMS references and remain
+readable. The schema migration records those references without accessing KMS.
+Existing connections initialize their first current version through the explicit
+maintenance/backfill entry point before accepting new encrypted writes.
 
-Keep API field shapes unchanged. Inventory both full-model reads and scalar SQL
-projections: reports, AI deny-term collection, deduplication and behavioral
-history all read identity fields today. Fetch/decrypt under bank scope before
-formatting or matching. Move name ordering into the application. Group numeric
-SQL aggregates by opaque identities or a dedicated grouping index, then decrypt
-labels; randomized ciphertext is not a stable SQL grouping key.
+Each database unit of work resolves its current version once and unwraps each
+required version once. Only authenticated material is retained in session-local
+memory, excluded from representations and logs; root transaction completion,
+rollback and session close discard it. A new unit of work must contact KMS
+again, so disabled keys fail closed. A revocation during an already admitted
+unit of work takes effect at its next boundary. Bulk entity loads and storage
+bound with `StorageClient.for_session(db)` share this cache. Standalone storage
+operations own a short-lived unit of work; download dependencies bind storage
+to the request session. No global plaintext-key cache is permitted.
 
-Storage used alongside a database unit of work is bound with
-`StorageClient.for_session(db)`. Field and object envelopes then use the same
-transaction and lock owner; the caller commits or rolls back both catalogues.
-The process-wide client stays unbound for standalone downloads and maintenance.
-No plaintext data key is cached across operations. Rotation and retirement keep
-their exclusive locks, including when banks share a master key.
+Payload keys are domain-separated by their authenticated encryption context.
+Messages additionally authenticate organization, bank, table, record and field,
+or the complete storage context. The initial version also supplies a separately
+domain-separated blind-index secret; its stable version pointer preserves exact
+matches across payload-key rotation. Existing independent index envelopes are
+retained unchanged. Each required historical/index version adds at most one
+unwrap per unit of work, rather than one unwrap per entity.
+
+Encryption reads and writes acquire no key-row or advisory locks. Optional
+plaintext field writes retain the bank-row cutover guard, before any encryption:
+a stale no-key session refuses if a connection appeared, and registration waits
+for earlier plaintext writers before checking immutable history. Connected-key
+field/object operations never take that guard. Rotation serializes its bookkeeping, creates and commits a new wrapped version, then
+moves the current pointer. Concurrent work may finish with its previously
+resolved version; new work uses the new version. Rotation never rewrites existing
+ciphertext or envelopes. Prior KMS keys and versions remain decrypt-capable.
+Retirement refuses any key still referenced by an envelope as well as any
+unexpired backup hold.
+
+A published object must reference an already committed version. Object writes
+create no transactional envelope that could disappear when the business
+transaction rolls back. Even if publication succeeds and the follow-up stat
+fails, overwritten push manifests and all other published versions remain
+readable. An uncommitted connection or rotation cannot publish an object using
+its uncommitted version.
+
+Unavailable keys, unknown versions, scope/context mismatch, corrupt ciphertext
+and legacy plaintext at a connected bank fail closed. Optional banks retain
+their existing behavior. API field shapes, numeric aggregation, audit source
+bytes, immutable-history guards and the numeric-only BI restriction are unchanged.
 
 ## Exact-match indexes
 
@@ -81,7 +104,7 @@ Create a random, per-bank index secret wrapped through the same provider and
 envelope catalogue. Derive domain-separated HMAC-SHA-256 values over a versioned,
 length-delimited encoding of organization, bank, field identity and normalized
 query value. No platform-wide secret and no unkeyed hashes of names or national
-identifiers. Use an independent secret from payload encryption material.
+identifiers. Use a domain-separated secret from the fixed index version, distinct from every payload key.
 
 Names use Unicode normalization, case folding and collapsed whitespace;
 source-system identifiers retain case and significant punctuation. External
@@ -107,7 +130,7 @@ until all rows are rebuilt, then retire the old index.
 2. Run an explicit per-bank backfill with bank-approved key access, tenant RLS
    context, bank-scoped queries and bounded row locks/batches. Encrypt, index,
    clear the old plaintext and mark the completed format in one transaction per
-   batch. Coordinate writers with the same lock/cutover protocol. No real bank
+   batch. Require completed registration/version initialization before accepting protected writes. No real bank
    data or credentials enter tests or checked-in migration fixtures.
 3. Resume by format/version, authenticate completed envelopes and skip already
    migrated rows. Preserve business timestamps and value digests during the
@@ -119,12 +142,16 @@ until all rows are rebuilt, then retire the old index.
    the protected bank. Remove plaintext compatibility columns only after the
    fleet completes migration. Downgrading must never silently decrypt data.
 
-Master-key rotation re-wraps payload and index secrets in the existing atomic
-bank-key rotation transaction; ciphertext, blind-index values and envelope IDs
-stay stable. Readers and writers share its bank-key locking protocol. Keep old
-master keys decrypt-capable for the full backup-retention hold, as already
-required by `bank_encryption.md`. Automatic KMS material rotation under one ARN
-does not rebuild data or indexes.
+Rotation creates a new current version; it does not re-wrap old versions.
+The separate resumable `--reencrypt` maintenance mode migrates mutable fields
+to the current version while preserving blind indexes and business timestamps.
+Already migrated fields are skipped on repeat. Immutable snapshots and dashboard
+versions keep their recorded versions and unchanged guards; they require the
+separately approved retained-evidence transition before any old key can retire.
+Object versions also retain their original version until an explicit retained
+object migration. Old physical backups and stable index versions remain key
+references. Automatic KMS material rotation under one ARN does not change these
+version pointers or rebuild indexes.
 
 Old physical backups can contain plaintext even after live backfill. Inventory
 them, restrict restore/use, establish a verified post-migration recovery point
@@ -236,7 +263,7 @@ refuse legacy plaintext for a connected bank. A downgrade refuses encrypted
 columns rather than silently discarding or decrypting them.
 
 The codec lives in `app/core/key_management/fields.py`, shares
-`object_key_envelopes` and the existing rotation lock, and rejects bulk writes
+`object_key_envelopes` and the session-scoped version cache, and rejects bulk writes
 that bypass scoped ORM encryption. Scalar SQL projections of protected columns
 are opaque; product consumers load authenticated, bank-scoped entities instead.
 Exact-match services confirm decrypted candidates after keyed-index lookup.

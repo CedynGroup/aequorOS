@@ -4,19 +4,25 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from contextlib import suppress
 from datetime import date
+from decimal import Decimal
 from typing import cast
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session
 
+from alembic import command
 from app.bi.models.content import BiDashboard, BiDashboardVersion
+from app.bi.models.notifications import BiAlert, BiAlertEvent
+from app.bi.service.identity_policy import IDENTITY_REASON
 from app.core.key_management import registry
 from app.core.key_management.backfill import backfill_bank
 from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.models import BankEncryptionKey
+from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference, KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.data_engine.service.field_search import find_counterparties
@@ -24,6 +30,7 @@ from app.db.base import utc_now
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
 from app.identity.public import Bank, User
 from app.models.audit_event import AuditEvent
+from app.models.ingestion import IngestionBatch
 from app.models.organization import Organization
 from app.reporting.models.packages import RegulatoryPackage
 from tests.core.test_bank_field_encryption import IDENTIFIER, NAME, counterparty
@@ -371,8 +378,6 @@ def test_package_validation_preserves_immutable_snapshot(
 def test_downgrade_refuses_only_encrypted_failed_ingestion(
     sensitive_db: tuple[Session, LocalKeyProvider, KeyReference], column: str
 ) -> None:
-    from alembic import command
-    from app.models.ingestion import IngestionBatch
 
     db, provider, key = sensitive_db
     registry.register(
@@ -407,7 +412,7 @@ def test_downgrade_refuses_only_encrypted_failed_ingestion(
     with pytest.raises(RuntimeError, match="Bank-encrypted fields prohibit schema downgrade"):
         command.downgrade(migrations.alembic_config_for_app(), "202610140100")
     assert (
-        cast(object, db.scalar(text("SELECT version_num FROM alembic_version"))) == "202610220101"
+        cast(object, db.scalar(text("SELECT version_num FROM alembic_version"))) == "202610220102"
     )
     assert "source_reference_blind_index" in {
         column["name"] for column in inspect(db.get_bind()).get_columns("canonical_counterparties")
@@ -417,10 +422,6 @@ def test_downgrade_refuses_only_encrypted_failed_ingestion(
 def test_migrated_alert_filters_encrypt_backfill_and_preserve_list_shape(
     sensitive_db: tuple[Session, LocalKeyProvider, KeyReference],
 ) -> None:
-    from decimal import Decimal
-
-    from app.bi.models.notifications import BiAlert, BiAlertEvent
-    from app.bi.service.identity_policy import IDENTITY_REASON
 
     db, provider, key = sensitive_db
     filters: list[dict[str, object]] = [
@@ -478,3 +479,103 @@ def test_migrated_alert_filters_encrypt_backfill_and_preserve_list_shape(
     reloaded = db.get(BiAlert, alert_id)
     assert reloaded is not None and reloaded.filters == []
     assert backfill_bank(db, organization_id=ORG_1, bank_id="BK-SAMP0001").encrypted == 0
+
+
+def test_legacy_envelopes_gain_exact_references_and_initialize_without_rewrap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    schemas = migrations.migrate_isolated_postgres_schema(
+        monkeypatch,
+        downgrade=False,
+        revision="202610220101",
+    )
+    migrated = next(schemas)
+    provider = LocalKeyProvider()
+    key = KeyReference("aws_kms", "synthetic-legacy-version", "us-east-1", "111122223333")
+    provider.add_key(key)
+    monkeypatch.setattr(registry, "provider_for", lambda _name: provider)
+    envelope_id = uuid4()
+    context = {
+        "purpose": "bank-sensitive-index-v1",
+        "organization_id": ORG_1,
+        "bank_id": "BK-SAMP0001",
+    }
+    digest = registry.context_digest(context)
+    generated = provider.generate_data_key(key, registry.wrapping_context("BK-SAMP0001", digest))
+    try:
+        with Session(migrated.app_engine) as db:
+            db.info["organization_id"] = ORG_1
+            db.add(Organization(id=ORG_1, name="Synthetic legacy organization"))
+            db.flush()
+            db.add(
+                Bank(
+                    id="BK-SAMP0001",
+                    organization_id=ORG_1,
+                    name="Synthetic",
+                    short_name="Synthetic",
+                    currency="GHS",
+                    jurisdiction_code="GH",
+                    institution_type="universal_bank",
+                    license_type="universal_bank",
+                    storage_slug="bk-samp0001",
+                )
+            )
+            db.flush()
+            db.execute(
+                text("""INSERT INTO bank_encryption_keys
+                (id, bank_id, organization_id, storage_slug, provider, key_id,
+                 region, owner_account, status, checked_at, created_at, updated_at)
+                VALUES (:id, 'BK-SAMP0001', :org, 'bk-samp0001', :provider, :key,
+                        :region, :owner, 'active', now(), now(), now())"""),
+                {
+                    "id": uuid4(),
+                    "org": ORG_1,
+                    "provider": key.provider,
+                    "key": key.key_id,
+                    "region": key.region,
+                    "owner": key.owner_account,
+                },
+            )
+            db.execute(
+                text("""INSERT INTO object_key_envelopes
+                (id, bank_id, organization_id, context_digest, wrapped_key, created_at)
+                VALUES (:id, 'BK-SAMP0001', :org, :digest, :wrapped, now())"""),
+                {"id": envelope_id, "org": ORG_1, "digest": digest, "wrapped": generated.wrapped},
+            )
+            db.commit()
+        command.upgrade(migrations.alembic_config_for_app(), "head")
+        with Session(migrated.app_engine) as db:
+            db.info["organization_id"] = ORG_1
+            row = registry.bank_key(db, ORG_1, "BK-SAMP0001")
+            assert row is not None and row.current_version_id is None
+            envelope = db.get(ObjectKeyEnvelope, envelope_id)
+            assert envelope is not None and registry.reference(envelope) == key
+            assert (
+                registry.open_envelope(
+                    db, row, envelope_id, context, lambda _name: provider
+                ).plaintext
+                == generated.plaintext
+            )
+            result = backfill_bank(db, organization_id=ORG_1, bank_id="BK-SAMP0001")
+            assert result.encrypted == 0
+            db.refresh(row)
+            assert row.current_version_id is not None and row.current_version_id != envelope_id
+            assert row.index_version_id == envelope_id
+            db.refresh(envelope)
+            assert envelope.wrapped_key == generated.wrapped
+            assert (
+                registry.open_envelope(
+                    db, row, envelope_id, context, lambda _name: provider
+                ).plaintext
+                == generated.plaintext
+            )
+            assert (
+                registry.prepare_envelope(
+                    db, row, {"purpose": "synthetic-new-payload"}, lambda _name: provider
+                ).envelope_id
+                == row.current_version_id
+            )
+    finally:
+        with suppress(StopIteration):
+            next(schemas)

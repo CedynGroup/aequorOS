@@ -1,22 +1,32 @@
 from __future__ import annotations
 
+import io
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from queue import Queue
+from threading import Event
 from typing import Literal, cast
 
 import pytest
+from botocore.exceptions import EndpointConnectionError
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from sqlalchemy import Connection, Engine, event, select, text
 from sqlalchemy.orm import Session, SessionTransaction
 
+from app.api import deps
+from app.bi.models.content import BiDashboard, BiDashboardVersion
 from app.core.key_management import registry
+from app.core.key_management.backfill import backfill_bank
 from app.core.key_management.models import ObjectKeyEnvelope
-from app.core.key_management.types import KeyStatus
+from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.data_engine.service.field_search import find_counterparties
+from app.db.base import utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.features import ingest_data
 from app.identity.public import Bank
 from app.models.canonical import CanonicalCounterparty
+from app.reporting.api import manage_package_attachments, manage_regulatory_reporting
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.service import attachments, exports
 from app.reporting.service.registry import get_definition
@@ -24,13 +34,14 @@ from app.reporting.service.templates import get_template
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.schemas.push import PushBatchOpen, PushRecordsPage
 from app.services import ingestion, push_ingestion
-from app.storage.client import StorageLocation
+from app.storage import encryption
+from app.storage.client import StorageAccessError, StorageError, StorageLocation
 from app.storage.config import StorageEngineSettings
 from app.storage.encryption import ObjectEncryption
 from app.storage.s3_compatible import S3CompatibleStorageClient
 from tests.core.test_bank_field_encryption import AS_OF, BANK_A, CTX, NAME, counterparty
+from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption import KEY, NEXT_KEY, SLUG, BankStorage, bank_storage
-from tests.storage.test_key_rotation_concurrency import _observed_session, _wait_for_row_lock
 from tests.support.helpers import ORG_1, USER_1
 
 __all__ = ["bank_storage"]
@@ -101,13 +112,41 @@ def _package(db: Session) -> RegulatoryPackage:
     return package
 
 
+def _rotation_storage(db_session: Session, bank_storage: BankStorage) -> S3CompatibleStorageClient:
+    database = db_session.get_bind()
+
+    def budget(_db: Session, _transaction: SessionTransaction, connection: Connection) -> None:
+        _ = connection.exec_driver_sql("SET LOCAL lock_timeout='1s'")
+
+    def independent_session() -> Session:
+        db = Session(database)
+        event.listen(db, "after_begin", budget)
+        return db
+
+    storage = S3CompatibleStorageClient(
+        StorageEngineSettings.model_validate(
+            {
+                "STORAGE_BACKEND": "s3",
+                "STORAGE_ENV": "dev",
+                "S3_ENDPOINT": None,
+                "S3_REGION": "us-east-1",
+            }
+        ),
+        client_factory=lambda *_args, **_kwargs: bank_storage.s3,
+        encryption=ObjectEncryption(
+            registry.DatabaseEnvelopeStore(independent_session, lambda _name: bank_storage.provider)
+        ),
+    )
+    event.listen(db_session, "after_begin", budget)
+    return storage
+
+
 def _exercise(
     operation: Operation,
     db: Session,
     storage: S3CompatibleStorageClient,
     path: Path,
     package: RegulatoryPackage,
-    bank: Bank,
 ) -> None:
     if operation == "ingestion":
         result = ingestion.start_ingestion(
@@ -165,6 +204,8 @@ def _exercise(
         artifact = exports.export_package(db, CTX, package, "csv")
         assert artifact.size_bytes > 0
     else:
+        bank = db.get(Bank, BANK_A)
+        assert bank is not None
         attachment = attachments.upload_package_attachment(
             db,
             CTX,
@@ -180,21 +221,26 @@ def _exercise(
         assert attachment.byte_size > 0
 
 
-@pytest.mark.parametrize("operation", ["ingestion", "push", "export", "attachment"])
-@pytest.mark.parametrize("rotation_bank", [BANK_A, SIBLING])
-def test_transactional_storage_never_waits_on_its_own_queued_rotation(
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        (bank, operation)
+        for bank in (BANK_A, SIBLING)
+        for operation in ("ingestion", "push", "export", "attachment")
+    ],
+)
+def test_transactional_storage_runs_during_version_rotation(
     bank_storage: BankStorage,
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    operation: Operation,
-    rotation_bank: str,
+    scenario: tuple[str, Operation],
 ) -> None:
+    rotation_bank, operation = scenario
     database = db_session.get_bind()
     if not isinstance(database, Engine) or database.dialect.name != "postgresql":
         pytest.skip("PostgreSQL lock queues and independent connections are required.")
-    provider = bank_storage.provider
-    monkeypatch.setattr(registry, "provider_for", lambda _name: provider)
+    monkeypatch.setattr(registry, "provider_for", lambda _name: bank_storage.provider)
     db_session.add(
         Bank(
             id=SIBLING,
@@ -215,88 +261,42 @@ def test_transactional_storage_never_waits_on_its_own_queued_rotation(
         organization_id=ORG_1,
         storage_slug="bk-samp0002",
         key=KEY,
-        providers=lambda _name: provider,
+        providers=lambda _name: bank_storage.provider,
     )
     db_session.commit()
     path = tmp_path / "synthetic.xlsx"
     if operation == "ingestion":
         _workbook(db_session, path)
     package = _package(db_session)
-    opened_sessions = 0
 
-    def budget(_db: Session, _transaction: SessionTransaction, connection: Connection) -> None:
-        _ = connection.exec_driver_sql("SET LOCAL lock_timeout='1s'")
-
-    def independent_session() -> Session:
-        nonlocal opened_sessions
-        opened_sessions += 1
-        db = Session(database)
-        event.listen(db, "after_begin", budget)
-        return db
-
-    storage = S3CompatibleStorageClient(
-        StorageEngineSettings.model_validate(
-            {
-                "STORAGE_BACKEND": "s3",
-                "STORAGE_ENV": "dev",
-                "S3_ENDPOINT": None,
-                "S3_REGION": "us-east-1",
-            }
-        ),
-        client_factory=lambda *_args, **_kwargs: bank_storage.s3,
-        encryption=ObjectEncryption(
-            registry.DatabaseEnvelopeStore(independent_session, lambda _name: provider)
-        ),
-    )
+    storage = _rotation_storage(db_session, bank_storage)
     monkeypatch.setattr(exports, "get_storage_client", lambda: storage)
-    event.listen(db_session, "after_begin", budget)
-    db_session.commit()
-    original = counterparty(db_session, include_package=False)
-    original_id = original.id
-    bank = db_session.get(Bank, BANK_A)
-    assert bank is not None
-    caller_pid = cast(object, db_session.scalar(text("SELECT pg_backend_pid()")))
-    waiting_pids: Queue[int] = Queue()
+    original_id = counterparty(db_session, include_package=False).id
+    entered, release = Event(), Event()
 
     def rotate() -> int:
-        with _observed_session(database, waiting_pids) as writer, writer.begin():
-            _ = writer.execute(text("SET LOCAL lock_timeout='15s'"))
-            _ = writer.execute(
-                text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG_1}
-            )
+        with Session(database) as writer, writer.begin():
+            _ = writer.execute(text("SET LOCAL lock_timeout='1s'"))
             row = registry.scoped_key(writer, bank_id=rotation_bank, organization_id=ORG_1)
-            return registry.rotate(writer, row, NEXT_KEY, lambda _name: provider)
+            count = registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
+            entered.set()
+            assert release.wait(15)
+            return count
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         rotating = pool.submit(rotate)
         try:
-            writer_pid = waiting_pids.get(timeout=10)
-            assert writer_pid != caller_pid
-            _wait_for_row_lock(database, writer_pid)
-            assert not rotating.done()
-            if rotation_bank == SIBLING:
-                with Session(database) as observer:
-                    assert (
-                        cast(
-                            object,
-                            observer.scalar(
-                                text("SELECT wait_event FROM pg_stat_activity WHERE pid=:pid"),
-                                {"pid": writer_pid},
-                            ),
-                        )
-                        == "advisory"
-                    )
-            _exercise(operation, db_session, storage, path, package, bank)
-            assert opened_sessions == 0
+            assert entered.wait(10)
+            _exercise(operation, db_session, storage, path, package)
             db_session.commit()
         finally:
             db_session.rollback()
-        rotating.result(timeout=10)
+            release.set()
+        assert rotating.result(timeout=10) == 0
     if rotation_bank == SIBLING:
         row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
-        assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: provider) > 0
+        assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 0
         db_session.commit()
-    provider.set_status(KEY, KeyStatus.DISABLED)
     db_session.expunge_all()
     restored = db_session.get(CanonicalCounterparty, original_id)
     assert restored is not None and restored.name == NAME
@@ -318,12 +318,6 @@ def test_transactional_storage_never_waits_on_its_own_queued_rotation(
         _, body = storage.read(descriptor.location, descriptor.version_id)
         with body:
             assert body.read()
-    assert (
-        db_session.scalar(
-            select(ObjectKeyEnvelope.id).where(ObjectKeyEnvelope.bank_id == BANK_A).limit(1)
-        )
-        is not None
-    )
 
 
 def test_bank_key_detection_uses_the_unit_of_work_session(
@@ -331,7 +325,6 @@ def test_bank_key_detection_uses_the_unit_of_work_session(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.storage import encryption
 
     def no_secondary_factory() -> None:
         pytest.fail("A session-bound storage read must not obtain another session factory.")
@@ -344,7 +337,7 @@ def test_bank_key_detection_uses_the_unit_of_work_session(
     )
 
 
-def test_bound_envelopes_follow_caller_commit_and_rollback(
+def test_committed_key_versions_survive_caller_rollback(
     bank_storage: BankStorage,
     db_session: Session,
 ) -> None:
@@ -359,11 +352,361 @@ def test_bound_envelopes_follow_caller_commit_and_rollback(
     pending = bound.prepare(SLUG, context)
     assert bound.open(SLUG, pending.envelope_id, context).plaintext == pending.plaintext
     with Session(database) as peer:
-        assert peer.get(ObjectKeyEnvelope, pending.envelope_id) is None
+        assert peer.get(ObjectKeyEnvelope, pending.envelope_id) is not None
     db_session.commit()
     assert store.open(SLUG, pending.envelope_id, context).plaintext == pending.plaintext
     rolled_back = bound.prepare(SLUG, {"purpose": "synthetic-rollback"})
     db_session.rollback()
     with Session(database) as peer:
-        assert peer.get(ObjectKeyEnvelope, rolled_back.envelope_id) is None
+        assert peer.get(ObjectKeyEnvelope, rolled_back.envelope_id) is not None
     assert store.open(SLUG, pending.envelope_id, context).plaintext == pending.plaintext
+
+
+def test_published_push_manifest_remains_readable_after_stat_failure_and_rollback(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    storage = bank_storage.storage
+    opened = push_ingestion.open_push_batch(
+        db_session,
+        CTX,
+        BANK_A,
+        PushBatchOpen(
+            as_of_date=AS_OF,
+            idempotency_key="synthetic-publication-rollback",
+            reason="Synthetic rollback test",
+        ),
+        storage,
+    )
+    db_session.commit()
+    page = PushRecordsPage(
+        entities={
+            "counterparty": [
+                {
+                    "source_reference": REFERENCE,
+                    "name": NAME,
+                    "counterparty_type": "RETAIL_INDIVIDUAL",
+                }
+            ]
+        }
+    )
+    push_ingestion.stage_push_records(db_session, CTX, BANK_A, opened.push_batch_id, page, storage)
+    db_session.commit()
+    target = f"push/{opened.push_batch_id}/manifest.json"
+    head = bank_storage.s3.head_object
+    calls = 0
+
+    def fail_second_manifest_stat(**kwargs: object) -> object:
+        nonlocal calls
+        if kwargs.get("Key") == target:
+            calls += 1
+            if calls == 2:
+                raise EndpointConnectionError(endpoint_url="https://synthetic.invalid")
+        return head(**kwargs)
+
+    with monkeypatch.context() as failure:
+        failure.setattr(bank_storage.s3, "head_object", fail_second_manifest_stat)
+        with pytest.raises(StorageError):
+            push_ingestion.stage_push_records(
+                db_session, CTX, BANK_A, opened.push_batch_id, page, storage
+            )
+        db_session.rollback()
+    current = push_ingestion.get_push_batch(db_session, CTX, BANK_A, opened.push_batch_id, storage)
+    assert current.pages_staged == 2 and current.total_records_staged == 2
+    db_session.commit()
+    result = push_ingestion.commit_push_batch(
+        db_session, CTX, BANK_A, opened.push_batch_id, storage
+    )
+    assert result.batch.id is not None
+
+
+def test_bulk_fields_and_objects_unwrap_once_per_version_and_discard_on_boundary(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    provider = bank_storage.provider
+    monkeypatch.setattr(registry, "provider_for", lambda _name: provider)
+    for number in range(30):
+        counterparty(db_session, reference=f"SYNTHETIC-BULK-{number}", include_package=False)
+    location = StorageLocation(SLUG, "raw", "synthetic/bulk.csv")
+    bank_storage.storage.for_session(db_session).write(
+        location, io.BytesIO(b"synthetic"), metadata_for(SLUG, "raw", b"synthetic")
+    )
+    db_session.commit()
+    db_session.expunge_all()
+    unwrap = provider.unwrap
+    calls = 0
+
+    def count(key: KeyReference, wrapped: bytes, context: dict[str, str]) -> bytes:
+        nonlocal calls
+        calls += 1
+        return unwrap(key, wrapped, context)
+
+    monkeypatch.setattr(provider, "unwrap", count)
+    loaded = list(db_session.scalars(select(CanonicalCounterparty)))
+    assert len(loaded) == 30 and all(row.name == NAME for row in loaded)
+    for _ in range(3):
+        _, body = bank_storage.storage.for_session(db_session).read(location)
+        with body:
+            assert body.read() == b"synthetic"
+    assert calls == 1
+    provider.set_status(KEY, KeyStatus.DISABLED)
+    db_session.expunge_all()
+    assert len(list(db_session.scalars(select(CanonicalCounterparty)))) == 30
+    db_session.commit()
+    db_session.expunge_all()
+    with pytest.raises(KeyUnavailableError):
+        list(db_session.scalars(select(CanonicalCounterparty)))
+    db_session.rollback()
+    with pytest.raises(StorageAccessError):
+        bank_storage.storage.for_session(db_session).read(location)
+
+
+def test_resumable_reencryption_moves_mutable_fields_and_keeps_indexes(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    monkeypatch.setattr(registry, "provider_for", lambda _name: bank_storage.provider)
+    party = counterparty(db_session)
+    party_id = party.id
+    db_session.commit()
+    before = cast(
+        object,
+        db_session.scalar(
+            text("SELECT name_blind_index FROM canonical_counterparties WHERE id=:id"),
+            {"id": party_id},
+        ),
+    )
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider)
+    db_session.commit()
+    db_session.expunge_all()
+    result = backfill_bank(
+        db_session, organization_id=ORG_1, bank_id=BANK_A, batch_size=1, reencrypt=True
+    )
+    assert result.encrypted == 4 and result.retained_immutable == 1
+    assert (
+        cast(
+            object,
+            db_session.scalar(
+                text("SELECT name_blind_index FROM canonical_counterparties WHERE id=:id"),
+                {"id": party_id},
+            ),
+        )
+        == before
+    )
+    assert (
+        find_counterparties(
+            db_session, CTX, BANK_A, field="source_reference", value="SYNTHETIC-CARD-17"
+        )[0].name
+        == NAME
+    )
+    assert (
+        backfill_bank(
+            db_session, organization_id=ORG_1, bank_id=BANK_A, batch_size=1, reencrypt=True
+        ).encrypted
+        == 0
+    )
+
+
+@pytest.mark.parametrize("download", ["attachment", "email-fallback"])
+def test_package_download_siblings_do_not_wait_for_rotation(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    download: str,
+) -> None:
+
+    database = db_session.get_bind()
+    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL independent connections are required.")
+    monkeypatch.setattr(registry, "provider_for", lambda _name: bank_storage.provider)
+    monkeypatch.setattr(ingest_data, "get_storage_client", lambda: bank_storage.storage)
+    monkeypatch.setattr(exports, "get_storage_client", lambda: bank_storage.storage)
+    package = _package(db_session)
+    exports.export_package(db_session, CTX, package, "csv")
+    bank = db_session.get(Bank, BANK_A)
+    assert bank is not None
+    attached = attachments.upload_package_attachment(
+        db_session,
+        CTX,
+        bank,
+        package,
+        bank_storage.storage,
+        kind="supporting_document",
+        title="Synthetic",
+        filename="synthetic.pdf",
+        content=b"%PDF-1.7\nSynthetic\n%%EOF\n",
+        max_bytes=1024,
+    )
+    package_id = package.id
+    db_session.commit()
+    db_session.expunge_all()
+    loaded, rotating, release = Event(), Event(), Event()
+    app = FastAPI()
+    app.include_router(manage_package_attachments.router, prefix="/api/v1")
+    app.include_router(manage_regulatory_reporting.router, prefix="/api/v1")
+    app.dependency_overrides[deps.get_tenant_db_session] = lambda: db_session
+
+    def package_access() -> deps.PackageAccess:
+        row = db_session.get(RegulatoryPackage, package_id)
+        institution = db_session.get(Bank, BANK_A)
+        assert row is not None and institution is not None
+        loaded.set()
+        assert rotating.wait(10)
+        return deps.PackageAccess(ctx=CTX, bank=institution, package=row)
+
+    app.dependency_overrides[deps.require_package_view] = package_access
+
+    def rotate() -> None:
+        assert loaded.wait(10)
+        with Session(database) as writer, writer.begin():
+            _ = writer.execute(text("SET LOCAL lock_timeout='1s'"))
+            row = registry.scoped_key(writer, bank_id=BANK_A, organization_id=ORG_1)
+            registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
+            rotating.set()
+            assert release.wait(10)
+
+    suffix = (
+        f"attachments/{attached.id}/download" if download == "attachment" else "email-fallback.eml"
+    )
+    with TestClient(app) as client, ThreadPoolExecutor(max_workers=2) as pool:
+        rotation = pool.submit(rotate)
+        response = pool.submit(
+            client.get, f"/api/v1/banks/{BANK_A}/regulatory-packages/{package_id}/{suffix}"
+        )
+        try:
+            result = response.result(timeout=8)
+            assert result.status_code == 200, result.text
+            assert result.content
+        finally:
+            release.set()
+            db_session.rollback()
+        rotation.result(timeout=5)
+
+
+@pytest.mark.parametrize("boundary", ["rollback", "close"])
+def test_cached_material_is_discarded_at_session_boundary(
+    bank_storage: BankStorage,
+    db_session: Session,
+    boundary: str,
+) -> None:
+
+    with Session(db_session.get_bind()) as db:
+        bound = registry.DatabaseEnvelopeStore(
+            lambda: Session(db_session.get_bind()),
+            lambda _name: bank_storage.provider,
+        ).for_session(db)
+        context = {"purpose": "synthetic-cache-lifetime"}
+        original = bound.prepare(SLUG, context)
+        bank_storage.provider.set_status(KEY, KeyStatus.DISABLED)
+        assert bound.open(SLUG, original.envelope_id, context) == original
+        if boundary == "rollback":
+            db.rollback()
+        else:
+            db.close()
+        with pytest.raises(KeyUnavailableError):
+            bound.open(SLUG, original.envelope_id, context)
+
+
+def test_uncommitted_key_version_cannot_publish_objects(
+    bank_storage: BankStorage,
+    db_session: Session,
+) -> None:
+
+    database = db_session.get_bind()
+    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL independent transactions are required.")
+    location = StorageLocation(SLUG, "raw", "synthetic/uncommitted.csv")
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider)
+    with pytest.raises(StorageAccessError):
+        bank_storage.storage.for_session(db_session).write(
+            location,
+            io.BytesIO(b"synthetic"),
+            metadata_for(SLUG, "raw", b"synthetic"),
+        )
+    db_session.rollback()
+    assert not list(bank_storage.storage.list(SLUG, "raw", "synthetic/uncommitted.csv"))
+
+
+@pytest.mark.parametrize("kind", ["package", "dashboard"])
+def test_stale_optional_session_refuses_plaintext_after_key_connection(
+    bank_storage: BankStorage,
+    db_session: Session,
+    kind: str,
+) -> None:
+    database = db_session.get_bind()
+    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL independent transactions are required.")
+    db_session.add(
+        Bank(
+            id=SIBLING,
+            organization_id=ORG_1,
+            name="Synthetic optional",
+            short_name="Synthetic",
+            currency="GHS",
+            jurisdiction_code="GH",
+            institution_type="universal_bank",
+            license_type="universal_bank",
+            storage_slug="bk-samp0002",
+        )
+    )
+    db_session.flush()
+    dashboard = BiDashboard(
+        organization_id=ORG_1,
+        bank_id=SIBLING,
+        owner_user_id=USER_1,
+        title="Synthetic",
+        visibility="private",
+        badge="personal",
+        current_version=1,
+    )
+    db_session.add(dashboard)
+    db_session.commit()
+    assert registry.bank_key(db_session, ORG_1, SIBLING) is None
+    with Session(database) as peer, peer.begin():
+        registry.register(
+            peer,
+            bank_id=SIBLING,
+            organization_id=ORG_1,
+            storage_slug="bk-samp0002",
+            key=KEY,
+            providers=lambda _name: bank_storage.provider,
+        )
+    if kind == "package":
+        row = RegulatoryPackage(
+            organization_id=ORG_1,
+            bank_id=SIBLING,
+            return_family="large_exposures",
+            return_code="SYNTHETIC",
+            reporting_date=AS_OF,
+            frequency="monthly",
+            status="generated",
+            version=1,
+            generated_by=USER_1,
+            snapshot={"name": NAME},
+        )
+    else:
+        row = BiDashboardVersion(
+            organization_id=ORG_1,
+            bank_id=SIBLING,
+            dashboard_id=dashboard.id,
+            version=1,
+            title="Synthetic",
+            spec={"name": NAME},
+            spec_digest="synthetic",
+            created_by_user_id=USER_1,
+            created_at=utc_now(),
+        )
+    db_session.add(row)
+    with pytest.raises(KeyUnavailableError, match="connection changed"):
+        db_session.flush()
+    db_session.rollback()
+    assert not list(db_session.scalars(select(type(row)).where(type(row).bank_id == SIBLING)))
