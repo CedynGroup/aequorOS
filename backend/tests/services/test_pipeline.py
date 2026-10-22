@@ -124,6 +124,22 @@ def test_run_refresh_populates_live_metrics_for_every_module(db_session: Session
     # Cheap modules carry a baseline input hash for the freshness comparison.
     assert rows["liquidity"].computed_from_input_hash
     assert len(rows["liquidity"].computed_from_input_hash) == 64
+    versions = {
+        "liquidity": regulatory_liquidity.ENGINE_VERSION,
+        "capital": regulatory_capital.ENGINE_VERSION,
+        "irr": regulatory_irr.ENGINE_VERSION,
+        "fx": regulatory_fx.ENGINE_VERSION,
+        "ftp": regulatory_ftp.ENGINE_VERSION,
+    }
+    for module, version in versions.items():
+        assert rows[module].engine_version == version
+        rows[module].engine_version = f"live-{module}"
+    db_session.commit()
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    updated = _live_rows(db_session)
+    for module, version in versions.items():
+        assert updated[module].engine_version == version
+        assert updated[module].calculation_generation == 2
 
 
 def test_run_refresh_creates_zero_regulatory_runs(db_session: Session) -> None:

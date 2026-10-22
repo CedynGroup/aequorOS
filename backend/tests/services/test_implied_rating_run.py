@@ -302,6 +302,7 @@ def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(  # n
     live = implied_rating.compute_live(db_session, CTX, bank, period)
 
     assert_published_metrics("rating", live.metrics)
+    assert live.engine_version == implied_rating.ENGINE_VERSION
     assert live.metrics["pit_rating_grade"] == "ccc+"
     assert live.metrics["pit_pd_upper_pct"]
     # Driver metrics the live card depends on are present on the success path.
