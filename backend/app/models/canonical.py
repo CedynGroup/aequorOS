@@ -291,7 +291,7 @@ class CanonicalCounterparty(CanonicalMetadataMixin, Base):
     )
 
     source_reference: Mapped[str] = mapped_column(ProtectedText(), nullable=False)
-    source_reference_blind_index: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_reference_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
     concentration_group_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
     external_identifiers_blind_indexes: Mapped[dict[str, str]] = mapped_column(

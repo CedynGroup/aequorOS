@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.key_management.aws import AwsKmsKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
-from app.core.key_management.preflight import require_clean_immutable_history
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import (
     KeyDescription,
@@ -25,7 +24,7 @@ from app.core.key_management.types import (
     KeyStatus,
     KeyUnavailableError,
 )
-from app.db.base import Base, utc_now
+from app.db.base import utc_now
 
 type ProviderFactory = Callable[[str], KeyProvider]
 
@@ -55,16 +54,6 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     key: KeyReference,
     providers: ProviderFactory = provider_for,
 ) -> BankEncryptionKey:
-    banks = Base.metadata.tables["banks"]
-    _ = db.scalar(
-        select(banks.c.id)
-        .where(
-            banks.c.id == bank_id,
-            banks.c.organization_id == organization_id,
-        )
-        .with_for_update()
-    )
-    require_clean_immutable_history(db, organization_id, bank_id)
     _lock_keys(db, key)
     resolved = require_active(providers(key.provider).describe(key))
     row = BankEncryptionKey(
@@ -80,14 +69,12 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     )
     db.add(row)
     db.flush()
-    initialize_version(db, row, providers)
+    _new_version(db, row, resolved, providers)
     _unit(db).banks.pop((organization_id, bank_id), None)
     return row
 
 
-def bank_key(
-    db: Session, organization: str, bank: str, *, plaintext_write: bool = False
-) -> BankEncryptionKey | None:
+def bank_key(db: Session, organization: str, bank: str) -> BankEncryptionKey | None:
     scope = (organization, bank)
     unit = _unit(db)
     if scope not in unit.banks:
@@ -99,24 +86,6 @@ def bank_key(
             )
             .execution_options(populate_existing=True)
         )
-    if plaintext_write and unit.banks[scope] is None:
-        banks = Base.metadata.tables["banks"]
-        _ = db.scalar(
-            select(banks.c.id)
-            .where(
-                banks.c.id == bank,
-                banks.c.organization_id == organization,
-            )
-            .with_for_update(read=True, key_share=True)
-        )
-        connected = db.scalar(
-            select(BankEncryptionKey.id).where(
-                BankEncryptionKey.bank_id == bank,
-                BankEncryptionKey.organization_id == organization,
-            )
-        )
-        if connected is not None:
-            raise KeyUnavailableError("The bank key connection changed; restart this transaction.")
     return unit.banks[scope]
 
 
@@ -274,39 +243,12 @@ def _new_version(
     return version
 
 
-def initialize_version(
-    db: Session, row: BankEncryptionKey, providers: ProviderFactory = provider_for
-) -> None:
-    if row.current_version_id is None:
-        legacy_index = db.scalar(
-            select(ObjectKeyEnvelope.id).where(
-                ObjectKeyEnvelope.organization_id == row.organization_id,
-                ObjectKeyEnvelope.bank_id == row.bank_id,
-                ObjectKeyEnvelope.context_digest
-                == context_digest(
-                    {
-                        "purpose": "bank-sensitive-index-v1",
-                        "organization_id": row.organization_id,
-                        "bank_id": row.bank_id,
-                    }
-                ),
-            )
-        )
-        row.index_version_id = legacy_index
-        _new_version(
-            db, row, require_active(providers(row.provider).describe(reference(row))), providers
-        )
-        db.flush()
-
-
 def current_version(db: Session, row: BankEncryptionKey) -> UUID:
     unit = _unit(db)
     scope = (row.organization_id, row.bank_id)
     if scope not in unit.current:
         if row.current_version_id is None:
-            raise KeyUnavailableError(
-                "The bank data-key version requires maintenance initialization."
-            )
+            raise KeyUnavailableError("The bank data-key version is unavailable.")
         unit.current[scope] = row.current_version_id
     return unit.current[scope]
 
@@ -340,13 +282,11 @@ def open_envelope(
         if envelope is None:
             raise KeyIntegrityError("The data key does not belong to this bank and record.")
         unit.envelopes[envelope_id] = envelope
-    versioned = envelope.context_digest == context_digest(
-        version_context(row.organization_id, row.bank_id)
-    )
     if (
         envelope.bank_id != row.bank_id
         or envelope.organization_id != row.organization_id
-        or not (versioned or envelope.context_digest == context_digest(context))
+        or envelope.context_digest
+        != context_digest(version_context(row.organization_id, row.bank_id))
     ):
         raise KeyIntegrityError("The data key does not belong to this bank and record.")
     plaintext = unit.material.get(envelope_id)
@@ -357,10 +297,9 @@ def open_envelope(
             wrapping_context(row.bank_id, envelope.context_digest),
         )
         unit.material[envelope_id] = plaintext
-    if versioned:
-        plaintext = hmac.new(
-            plaintext, ("bank-payload:" + context_digest(context)).encode(), hashlib.sha256
-        ).digest()
+    plaintext = hmac.new(
+        plaintext, ("bank-payload:" + context_digest(context)).encode(), hashlib.sha256
+    ).digest()
     return ObjectKey(envelope_id, envelope.key_id, plaintext)
 
 

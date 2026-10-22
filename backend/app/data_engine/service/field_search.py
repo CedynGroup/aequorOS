@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, cast
 
-from sqlalchemy import JSON, or_, select
+from sqlalchemy import JSON, select
 from sqlalchemy.orm import Session
 
 from app.core.key_management.fields import blind_index, normalize
@@ -37,10 +37,7 @@ def find_counterparties(  # noqa: PLR0913 - explicit bank and identifier namespa
         normalization=normalization,
     )
     if field == "name":
-        predicate = or_(
-            CanonicalCounterparty.name_blind_index == token,
-            CanonicalCounterparty.name_blind_index.is_(None),
-        )
+        predicate = CanonicalCounterparty.name_blind_index == token
     elif field == "source_reference":
         predicate = CanonicalCounterparty.source_reference_blind_index == token
     else:
@@ -49,10 +46,7 @@ def find_counterparties(  # noqa: PLR0913 - explicit bank and identifier namespa
             JSON.Comparator[object],
             CanonicalCounterparty.external_identifiers_blind_indexes[namespace].comparator,
         )
-        predicate = or_(
-            identifier.as_string() == token,
-            CanonicalCounterparty.external_identifiers_blind_indexes == {},
-        )
+        predicate = identifier.as_string() == token
     candidates = db.scalars(
         select(CanonicalCounterparty).where(
             CanonicalCounterparty.organization_id == ctx.organization_id,

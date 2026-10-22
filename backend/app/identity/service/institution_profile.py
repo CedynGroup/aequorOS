@@ -22,7 +22,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.key_management.fields import blind_index, normalize
@@ -904,10 +904,7 @@ def find_related_parties_by_name(
             select(RelatedParty).where(
                 RelatedParty.organization_id == ctx.organization_id,
                 RelatedParty.bank_id == bank.id,
-                or_(
-                    RelatedParty.full_name_blind_index == token,
-                    RelatedParty.full_name_blind_index.is_(None),
-                ),
+                RelatedParty.full_name_blind_index == token,
             )
         )
         if normalize(party.full_name, "name") == normalize(name, "name")

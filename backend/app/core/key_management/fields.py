@@ -31,7 +31,6 @@ from app.db.base import Base, UuidV4PrimaryKeyMixin
 
 FORMAT = FIELD_FORMAT
 _RESTORE = "bank_field_restore"
-_VERSIONS = "bank_field_versions"
 _JSON = TypeAdapter(object)
 type Normalization = Literal["name", "identifier"]
 
@@ -185,7 +184,7 @@ def _index_context(row: BankEncryptionKey) -> dict[str, str]:
 
 def _index_key(db: Session, row: BankEncryptionKey) -> bytes:
     if row.index_version_id is None:
-        raise KeyUnavailableError("The bank index key requires maintenance initialization.")
+        raise KeyUnavailableError("The bank index key is unavailable.")
     return registry.open_envelope(
         db, row, row.index_version_id, _index_context(row), registry.provider_for
     ).plaintext
@@ -207,8 +206,7 @@ def _index(  # noqa: PLR0913 - scoped, domain-separated index contract
 ) -> str:
     normalized = normalize(value, normalization)
     if secret is None:
-        # Optional, unprotected banks retain their existing plaintext storage
-        # contract. Connecting a key refuses those rows until backfill finishes.
+        # Optional banks retain ordinary field storage before key connection.
         return normalized
     payload = json.dumps(
         [FORMAT, organization, bank, domain, normalized], ensure_ascii=False, separators=(",", ":")
@@ -287,8 +285,6 @@ def _update_indexes(
 class _Restore:
     instance: object
     values: dict[str, object] = field(repr=False)
-    encrypted: bool
-    envelope_id: UUID | None = None
 
 
 @event.listens_for(Session, "before_flush")
@@ -328,9 +324,7 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
             organization, bank = _scope(db, state, columns)
             scope = (organization, bank) if bank is not None else None
             if scope is not None and scope not in bank_rows:
-                bank_rows[scope] = registry.bank_key(
-                    db, organization, scope[1], plaintext_write=True
-                )
+                bank_rows[scope] = registry.bank_key(db, organization, scope[1])
             row = bank_rows[scope] if scope is not None else None
             if bank is not None and row is None and get_key_settings().bank_key_required:
                 raise KeyUnavailableError("The bank encryption key is not connected.")
@@ -340,7 +334,7 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                 if state.pending or state.attrs[col.attribute].history.has_changes()
             ]
             values = {col.attribute: cast(object, state.dict.get(col.attribute)) for col in changed}
-            restores.append(_Restore(instance, values, row is not None))
+            restores.append(_Restore(instance, values))
             if row is None:
                 if bank is not None:
                     _update_indexes(state, organization, bank, None)
@@ -354,7 +348,6 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                     db, row, _envelope_context(organization, row.bank_id), registry.provider_for
                 )
             key = write_keys[scope]
-            restores[-1].envelope_id = key.envelope_id
             if cast(Table, state.mapper.local_table).name in {
                 "canonical_counterparties",
                 "related_parties",
@@ -379,17 +372,9 @@ def _restore(db: Session, *, failed: bool = False) -> None:
         state = cast(InstanceState[object], inspect(restore.instance))
         if failed and state.persistent:
             db.expire(restore.instance)
-            state.info.pop(_VERSIONS, None)
-            state.info.pop("bank_field_envelopes", None)
             continue
-        versions = cast(dict[str, bool], state.info.setdefault(_VERSIONS, {}))
         for key, value in restore.values.items():
             attributes.set_committed_value(restore.instance, key, value)
-            versions[key] = restore.encrypted or value is None
-            envelopes = cast(
-                dict[str, UUID | None], state.info.setdefault("bank_field_envelopes", {})
-            )
-            envelopes[key] = restore.envelope_id if value is not None else None
 
 
 @event.listens_for(Session, "after_flush_postexec")
@@ -426,20 +411,13 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
         row = registry.bank_key(db, organization, bank) if bank is not None else None
         if bank is not None and row is None and get_key_settings().bank_key_required:
             raise KeyUnavailableError("The bank encryption key is not connected.")
-        versions = cast(dict[str, bool], state.info.setdefault(_VERSIONS, {}))
-        envelopes = cast(dict[str, UUID | None], state.info.setdefault("bank_field_envelopes", {}))
         for col in present:
             value = cast(object, state.dict[col.attribute])
             if not isinstance(value, SealedField):
-                versions[col.attribute] = value is None
-                envelopes[col.attribute] = None
-                if value is not None and row is not None and not db.info.get("bank_field_backfill"):
-                    raise KeyUnavailableError("Legacy sensitive fields require bank-key backfill.")
                 continue
             if row is None:
                 raise KeyUnavailableError("The bank encryption key is not connected.")
             context = _context(state, organization, row.bank_id)
-            envelopes[col.attribute] = value.envelope_id
             secret = registry.open_envelope(
                 db,
                 row,
@@ -462,7 +440,6 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
                 if not valid_shape:
                     raise KeyIntegrityError("Encrypted JSON field has an invalid value.")
             attributes.set_committed_value(instance, col.attribute, decoded)
-            versions[col.attribute] = True
 
 
 @event.listens_for(Base, "load", propagate=True, restore_load_context=True)
@@ -474,27 +451,3 @@ def decrypt_loaded(instance: Base, _context: object) -> None:
 def decrypt_refreshed(instance: Base, _context: object, attrs: object) -> None:
     refreshed = TypeAdapter(set[str]).validate_python(attrs) if attrs is not None else None
     _decrypt_entity(instance, refreshed)
-
-
-def needs_backfill(instance: Base) -> bool:
-    state = cast(InstanceState[object], inspect(instance))
-    versions = cast(dict[str, bool], state.info.get(_VERSIONS, {}))
-    return any(not versions.get(col.attribute, False) for col in field_columns(state))
-
-
-def mark_for_backfill(instance: Base) -> None:
-    state = cast(InstanceState[object], inspect(instance))
-    for col in field_columns(state):
-        if col.attribute in state.dict:
-            attributes.flag_modified(instance, col.attribute)
-    # Encryption changes storage, not business history. An explicit unchanged
-    # timestamp suppresses TimestampMixin's onupdate value and preserves filed
-    # register-state digests across a representation-only migration.
-    if "updated_at" in state.dict:
-        attributes.flag_modified(instance, "updated_at")
-
-
-def needs_reencryption(instance: Base, version_id: UUID) -> bool:
-    state = cast(InstanceState[object], inspect(instance))
-    envelopes = cast(dict[str, UUID | None], state.info.get("bank_field_envelopes", {}))
-    return any(value is not None and value != version_id for value in envelopes.values())

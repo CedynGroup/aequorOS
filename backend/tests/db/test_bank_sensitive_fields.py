@@ -1,275 +1,41 @@
-"""Exercise field backfill against the deployed migration and RLS schema."""
+"""Bank field encryption on the deployed PostgreSQL schema."""
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Iterator
-from contextlib import suppress
 from datetime import date
 from decimal import Decimal
 from typing import cast
-from uuid import uuid4
 
 import pytest
-from sqlalchemy import inspect, select, text
+from sqlalchemy import text
 from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session
 
-from alembic import command
-from app.bi.models.content import BiDashboard, BiDashboardVersion
-from app.bi.models.notifications import BiAlert, BiAlertEvent
+from app.bi.models.notifications import BiAlert, BiAlertEvent, BiSubscription
 from app.bi.service.identity_policy import IDENTITY_REASON
 from app.core.key_management import registry
-from app.core.key_management.backfill import backfill_bank
 from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
-from app.core.key_management.types import KeyReference, KeyUnavailableError
-from app.core.tenancy import TenantContext
-from app.data_engine.service.field_search import find_counterparties
-from app.db.base import utc_now
+from app.core.key_management.types import KeyReference
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
 from app.identity.public import Bank, User
-from app.models.audit_event import AuditEvent
-from app.models.ingestion import IngestionBatch
+from app.models.canonical import CanonicalCounterparty
 from app.models.organization import Organization
 from app.reporting.models.packages import RegulatoryPackage
-from tests.core.test_bank_field_encryption import IDENTIFIER, NAME, counterparty
+from tests.core.test_bank_field_encryption import (
+    IDENTIFIER,
+    NAME,
+    counterparty,
+    raw_fields,
+    saved_version,
+)
 from tests.db import test_postgres_migrations as migrations
 from tests.support.helpers import ORG_1, USER_1
 
 forward_migrated_postgres_schema = migrations.forward_migrated_postgres_schema
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
-
-
-def test_migrated_field_capacity_scoped_backfill_and_unchanged_historical_audit(
-    forward_migrated_postgres_schema: migrations.MigratedPostgresSchema,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    provider = LocalKeyProvider()
-    key = KeyReference("aws_kms", "synthetic-field-migration-key", "us-east-1", "111122223333")
-    provider.add_key(key)
-
-    def resolve(_name: str) -> LocalKeyProvider:
-        return provider
-
-    monkeypatch.setattr(registry, "provider_for", resolve)
-    with Session(forward_migrated_postgres_schema.app_engine, expire_on_commit=False) as db:
-        db.info["organization_id"] = ORG_1
-        db.add(Organization(id=ORG_1, name="Synthetic migration organization"))
-        db.flush()
-        for bank_id in ("BK-SAMP0001", "BK-SAMP0002", "BK-SAMP0003"):
-            db.add(
-                Bank(
-                    id=bank_id,
-                    organization_id=ORG_1,
-                    name="Synthetic migration bank",
-                    short_name="Synthetic",
-                    currency="GHS",
-                    jurisdiction_code="GH",
-                    institution_type="universal_bank",
-                    license_type="universal_bank",
-                    storage_slug=bank_id.lower(),
-                )
-            )
-        db.flush()
-        party = RelatedParty(
-            organization_id=ORG_1,
-            bank_id="BK-SAMP0001",
-            party_type="individual",
-            full_name="Synthetic historical director",
-            contact={"national_id": "SYNTHETIC-17"},
-        )
-        sibling = RelatedParty(
-            organization_id=ORG_1,
-            bank_id="BK-SAMP0002",
-            party_type="individual",
-            full_name="Synthetic sibling director",
-            contact={"national_id": "SYNTHETIC-18"},
-        )
-        db.add_all([party, sibling])
-        db.flush()
-        db.add(
-            RelatedPartyRole(
-                organization_id=ORG_1,
-                party_id=party.id,
-                role="director",
-                term_of_appointment="Synthetic appointment details",
-                icag_registration="SYNTHETIC-19",
-            )
-        )
-        db.add(
-            AuditEvent(
-                organization_id=ORG_1,
-                event_type="related_party.created",
-                details={"full_name": "Synthetic historical director"},
-            )
-        )
-        db.commit()
-        original_updated_at = party.updated_at
-        historical = cast(
-            str, db.execute(text("SELECT details::text FROM audit_events")).scalar_one()
-        )
-        registry.register(
-            db,
-            bank_id="BK-SAMP0001",
-            organization_id=ORG_1,
-            storage_slug="bk-samp0001",
-            key=key,
-            providers=resolve,
-        )
-        db.commit()
-        db.expunge_all()
-        result = backfill_bank(db, organization_id=ORG_1, bank_id="BK-SAMP0001", batch_size=1)
-        assert result.checked == result.encrypted == 2
-        stored = cast(
-            str,
-            db.execute(
-                text("SELECT full_name FROM related_parties WHERE bank_id='BK-SAMP0001'")
-            ).scalar_one(),
-        )
-        assert stored.startswith("aqs-bank-field-v1:") and "historical director" not in stored
-        assert (
-            db.execute(
-                text("SELECT full_name FROM related_parties WHERE bank_id='BK-SAMP0002'")
-            ).scalar_one()
-            == "Synthetic sibling director"
-        )
-        assert db.execute(text("SELECT details::text FROM audit_events")).scalar_one() == historical
-        again = backfill_bank(db, organization_id=ORG_1, bank_id="BK-SAMP0001", batch_size=1)
-        assert again.encrypted == 0 and again.checked == 2
-        assert (
-            db.execute(
-                text("SELECT full_name FROM related_parties WHERE bank_id='BK-SAMP0001'")
-            ).scalar_one()
-            == stored
-        )
-        loaded = db.scalar(select(RelatedParty).where(RelatedParty.bank_id == "BK-SAMP0001"))
-        assert loaded is not None and loaded.contact == {"national_id": "SYNTHETIC-17"}
-        assert loaded.updated_at == original_updated_at
-
-        _assert_immutable_cutover(db, key, resolve)
-
-
-def _assert_immutable_cutover(
-    db: Session, key: KeyReference, resolve: registry.ProviderFactory
-) -> None:
-    db.add(
-        User(
-            id=USER_1,
-            organization_id=ORG_1,
-            email="synthetic@example.test",
-            display_name="Synthetic",
-            role="viewer",
-        )
-    )
-    db.flush()
-    # Execute JSON blind-index predicates on the deployed JSONB column, not
-    # merely on SQLite's JSON implementation.
-    party_id = counterparty(db).id
-    db.commit()
-    db.expunge_all()
-    matches = find_counterparties(
-        db,
-        TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
-        "BK-SAMP0001",
-        field="external_identifier",
-        value=IDENTIFIER,
-        namespace="national_id",
-    )
-    assert [party.id for party in matches] == [party_id]
-    assert matches[0].name == NAME
-    dashboard = BiDashboard(
-        organization_id=ORG_1,
-        bank_id="BK-SAMP0002",
-        owner_user_id=USER_1,
-        title="Synthetic",
-        description="",
-        visibility="private",
-        badge="personal",
-        current_version=1,
-    )
-    db.add(dashboard)
-    db.flush()
-    db.add(
-        BiDashboardVersion(
-            organization_id=ORG_1,
-            bank_id="BK-SAMP0002",
-            dashboard_id=dashboard.id,
-            version=1,
-            title="Synthetic",
-            description="",
-            spec={"filters": [{"value": "Synthetic historical identity"}]},
-            spec_digest="a" * 64,
-            change_note="",
-            created_by_user_id=USER_1,
-            created_at=utc_now(),
-        )
-    )
-    db.add(
-        RegulatoryPackage(
-            organization_id=ORG_1,
-            bank_id="BK-SAMP0003",
-            return_family="large_exposures",
-            return_code="SYNTHETIC",
-            reporting_date=date(2026, 6, 30),
-            frequency="monthly",
-            status="generated",
-            version=1,
-            snapshot={"counterparty_name": "Synthetic historical identity"},
-            generated_by=USER_1,
-        )
-    )
-    db.commit()
-    for bank_id, table, column in (
-        ("BK-SAMP0002", "bi_dashboard_versions", "spec"),
-        ("BK-SAMP0003", "regulatory_packages", "snapshot"),
-    ):
-        scope = {"bank": bank_id, "org": ORG_1}
-        read = text(
-            f"SELECT {column}::text FROM {table} WHERE bank_id = :bank AND organization_id = :org"
-        )
-        before = cast(object, db.execute(read, scope).scalar_one())
-        with pytest.raises(KeyUnavailableError, match="legacy plaintext"):
-            registry.register(
-                db,
-                organization_id=ORG_1,
-                bank_id=bank_id,
-                storage_slug=bank_id.lower(),
-                key=key,
-                providers=resolve,
-            )
-        db.rollback()
-        assert (
-            db.scalar(select(BankEncryptionKey).where(BankEncryptionKey.bank_id == bank_id)) is None
-        )
-        # Catalogue rows from an older release must hit the same refusal in
-        # maintenance, without attempting an UPDATE forbidden by the guard.
-        db.add(
-            BankEncryptionKey(
-                organization_id=ORG_1,
-                bank_id=bank_id,
-                storage_slug=bank_id.lower(),
-                provider=key.provider,
-                key_id=key.key_id,
-                region=key.region,
-                owner_account=key.owner_account,
-                status="active",
-            )
-        )
-        db.commit()
-        with pytest.raises(KeyUnavailableError, match="existing content guards remain unchanged"):
-            backfill_bank(db, organization_id=ORG_1, bank_id=bank_id)
-        assert db.execute(read, scope).scalar_one() == before
-        with pytest.raises(DatabaseError):
-            db.execute(
-                text(
-                    f"UPDATE {table} SET {column} = '{{}}' "
-                    "WHERE bank_id = :bank AND organization_id = :org"
-                ),
-                scope,
-            )
-        db.rollback()
-        assert db.execute(read, scope).scalar_one() == before
 
 
 @pytest.fixture
@@ -378,9 +144,8 @@ def test_package_validation_preserves_immutable_snapshot(
     db.rollback()
 
 
-@pytest.mark.parametrize("column", ["validation_report", "etl_report", "error_message"])
-def test_downgrade_refuses_only_encrypted_failed_ingestion(
-    sensitive_db: tuple[Session, LocalKeyProvider, KeyReference], column: str
+def test_alert_filters_encrypt_and_preserve_list_shape(
+    sensitive_db: tuple[Session, LocalKeyProvider, KeyReference],
 ) -> None:
 
     db, provider, key = sensitive_db
@@ -393,41 +158,6 @@ def test_downgrade_refuses_only_encrypted_failed_ingestion(
         providers=lambda _name: provider,
     )
     db.commit()
-    values: dict[str, object] = {"validation_report": {}, "etl_report": None, "error_message": None}
-    values[column] = NAME if column == "error_message" else {"name": NAME}
-    batch = IngestionBatch(
-        organization_id=ORG_1,
-        bank_id="BK-SAMP0001",
-        source_system="EXCEL_CSV",
-        adapter_version="synthetic",
-        extraction_mode="full",
-        status="failed",
-        as_of_date=date(2026, 6, 30),
-        **values,
-    )
-    db.add(batch)
-    db.flush()
-    if column != "validation_report":
-        db.execute(
-            text("UPDATE ingestion_batches SET validation_report='{}' WHERE id=:id"),
-            {"id": batch.id},
-        )
-    db.commit()
-    with pytest.raises(RuntimeError, match="Bank-encrypted fields prohibit schema downgrade"):
-        command.downgrade(migrations.alembic_config_for_app(), "202610140100")
-    assert (
-        cast(object, db.scalar(text("SELECT version_num FROM alembic_version"))) == "202610220102"
-    )
-    assert "source_reference_blind_index" in {
-        column["name"] for column in inspect(db.get_bind()).get_columns("canonical_counterparties")
-    }
-
-
-def test_migrated_alert_filters_encrypt_backfill_and_preserve_list_shape(
-    sensitive_db: tuple[Session, LocalKeyProvider, KeyReference],
-) -> None:
-
-    db, provider, key = sensitive_db
     filters: list[dict[str, object]] = [
         {"member": "counterparty.name", "op": "eq", "values": [NAME]}
     ]
@@ -446,17 +176,7 @@ def test_migrated_alert_filters_encrypt_backfill_and_preserve_list_shape(
     db.add(alert)
     db.commit()
     alert_id = alert.id
-    registry.register(
-        db,
-        bank_id="BK-SAMP0001",
-        organization_id=ORG_1,
-        storage_slug="bk-samp0001",
-        key=key,
-        providers=lambda _name: provider,
-    )
-    db.commit()
     db.expunge_all()
-    assert backfill_bank(db, organization_id=ORG_1, bank_id="BK-SAMP0001").encrypted == 1
     raw = cast(object, db.scalar(text("SELECT filters::text FROM bi_alerts")))
     assert isinstance(raw, str) and NAME not in raw and "aqs-bank-field-v1" in raw
     loaded = db.get(BiAlert, alert_id)
@@ -482,108 +202,71 @@ def test_migrated_alert_filters_encrypt_backfill_and_preserve_list_shape(
     db.expunge_all()
     reloaded = db.get(BiAlert, alert_id)
     assert reloaded is not None and reloaded.filters == []
-    assert backfill_bank(db, organization_id=ORG_1, bank_id="BK-SAMP0001").encrypted == 0
 
 
-def test_legacy_envelopes_gain_exact_references_and_initialize_without_rewrap(
-    monkeypatch: pytest.MonkeyPatch,
+def test_new_sensitive_fields_are_ciphertext_in_postgres(
+    sensitive_db: tuple[Session, LocalKeyProvider, KeyReference],
 ) -> None:
-
-    schemas = migrations.migrate_isolated_postgres_schema(
-        monkeypatch,
-        downgrade=False,
-        revision="202610220101",
+    db, provider, key = sensitive_db
+    registry.register(
+        db,
+        bank_id="BK-SAMP0001",
+        organization_id=ORG_1,
+        storage_slug="bk-samp0001",
+        key=key,
+        providers=lambda _name: provider,
     )
-    migrated = next(schemas)
-    provider = LocalKeyProvider()
-    key = KeyReference("aws_kms", "synthetic-legacy-version", "us-east-1", "111122223333")
-    provider.add_key(key)
-
-    def providers(_name: str) -> LocalKeyProvider:
-        return provider
-
-    monkeypatch.setattr(registry, "provider_for", providers)
-    envelope_id = uuid4()
-    context = {
-        "purpose": "bank-sensitive-index-v1",
-        "organization_id": ORG_1,
-        "bank_id": "BK-SAMP0001",
-    }
-    digest = registry.context_digest(context)
-    generated = provider.generate_data_key(key, registry.wrapping_context("BK-SAMP0001", digest))
-    try:
-        with Session(migrated.app_engine) as db:
-            db.info["organization_id"] = ORG_1
-            db.add(Organization(id=ORG_1, name="Synthetic legacy organization"))
-            db.flush()
-            db.add(
-                Bank(
-                    id="BK-SAMP0001",
-                    organization_id=ORG_1,
-                    name="Synthetic",
-                    short_name="Synthetic",
-                    currency="GHS",
-                    jurisdiction_code="GH",
-                    institution_type="universal_bank",
-                    license_type="universal_bank",
-                    storage_slug="bk-samp0001",
-                )
-            )
-            db.flush()
-            db.execute(
-                text("""INSERT INTO bank_encryption_keys
-                (id, bank_id, organization_id, storage_slug, provider, key_id,
-                 region, owner_account, status, checked_at, created_at, updated_at)
-                VALUES (:id, 'BK-SAMP0001', :org, 'bk-samp0001', :provider, :key,
-                        :region, :owner, 'active', now(), now(), now())"""),
-                {
-                    "id": uuid4(),
-                    "org": ORG_1,
-                    "provider": key.provider,
-                    "key": key.key_id,
-                    "region": key.region,
-                    "owner": key.owner_account,
-                },
-            )
-            db.execute(
-                text("""INSERT INTO object_key_envelopes
-                (id, bank_id, organization_id, context_digest, wrapped_key, created_at)
-                VALUES (:id, 'BK-SAMP0001', :org, :digest, :wrapped, now())"""),
-                {"id": envelope_id, "org": ORG_1, "digest": digest, "wrapped": generated.wrapped},
-            )
-            db.commit()
-        command.upgrade(migrations.alembic_config_for_app(), "head")
-        with Session(migrated.app_engine) as db:
-            db.info["organization_id"] = ORG_1
-            row = registry.bank_key(db, ORG_1, "BK-SAMP0001")
-            assert row is not None and row.current_version_id is None
-            envelope = db.get(ObjectKeyEnvelope, envelope_id)
-            assert envelope is not None and registry.reference(envelope) == key
-            assert (
-                registry.open_envelope(
-                    db, row, envelope_id, context, lambda _name: provider
-                ).plaintext
-                == generated.plaintext
-            )
-            result = backfill_bank(db, organization_id=ORG_1, bank_id="BK-SAMP0001")
-            assert result.encrypted == 0
-            db.refresh(row)
-            assert row.current_version_id is not None and row.current_version_id != envelope_id
-            assert row.index_version_id == envelope_id
-            db.refresh(envelope)
-            assert envelope.wrapped_key == generated.wrapped
-            assert (
-                registry.open_envelope(
-                    db, row, envelope_id, context, lambda _name: provider
-                ).plaintext
-                == generated.plaintext
-            )
-            assert (
-                registry.prepare_envelope(
-                    db, row, {"purpose": "synthetic-new-payload"}, lambda _name: provider
-                ).envelope_id
-                == row.current_version_id
-            )
-    finally:
-        with suppress(StopIteration):
-            next(schemas)
+    db.commit()
+    borrower = counterparty(db)
+    borrower_id = borrower.id
+    party = RelatedParty(
+        organization_id=ORG_1,
+        bank_id="BK-SAMP0001",
+        party_type="individual",
+        full_name=NAME,
+        contact={"national_id": IDENTIFIER},
+    )
+    db.add(party)
+    db.flush()
+    db.add(
+        RelatedPartyRole(
+            organization_id=ORG_1,
+            party_id=party.id,
+            role="director",
+            other_responsibilities=NAME,
+            term_of_appointment=NAME,
+            icag_registration=IDENTIFIER,
+            sitting_allowance=Decimal("12.34"),
+        )
+    )
+    db.add(saved_version(db, {"borrower": NAME}))
+    db.add(
+        BiSubscription(
+            organization_id=ORG_1,
+            bank_id="BK-SAMP0001",
+            owner_user_id=USER_1,
+            name="Synthetic",
+            query={"borrower": NAME},
+            artifact_format="csv",
+            cadence="daily",
+            hour=7,
+            minute=30,
+            recipient_user_ids=[],
+        )
+    )
+    db.commit()
+    for table, records in raw_fields(db).items():
+        assert records, table
+        for record in records:
+            for value in record:
+                encoded = json.dumps(value, ensure_ascii=False, default=str)
+                assert "aqs-bank-field-v1" in encoded, table
+                assert NAME not in encoded and IDENTIFIER not in encoded
+    for table, column in (("bi_dashboard_versions", "spec"), ("bi_subscriptions", "query")):
+        stored = cast(object, db.scalar(text(f"SELECT {column}::text FROM {table}")))
+        assert NAME not in str(stored) and "aqs-bank-field-v1" in str(stored)
+    assert db.scalar(text("SELECT sitting_allowance FROM related_party_roles")) == Decimal("12.34")
+    db.expunge_all()
+    restored = db.get(CanonicalCounterparty, borrower_id)
+    assert restored is not None and restored.name == NAME
+    assert restored.external_identifiers == {"national_id": IDENTIFIER}

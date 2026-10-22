@@ -4,7 +4,7 @@ import io
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
-from typing import Literal, cast
+from typing import Literal
 
 import pytest
 from botocore.exceptions import EndpointConnectionError  # pyright: ignore[reportMissingTypeStubs]
@@ -15,14 +15,11 @@ from sqlalchemy import Connection, Engine, event, select, text
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.api import deps
-from app.bi.models.content import BiDashboard, BiDashboardVersion
 from app.core.key_management import registry
-from app.core.key_management.backfill import backfill_bank
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.data_engine.service.field_search import find_counterparties
-from app.db.base import utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.features import ingest_data
 from app.identity.public import Bank
@@ -479,58 +476,6 @@ def test_bulk_fields_and_objects_unwrap_once_per_version_and_discard_on_boundary
         bank_storage.storage.for_session(db_session).read(location)
 
 
-def test_resumable_reencryption_moves_mutable_fields_and_keeps_indexes(
-    bank_storage: BankStorage,
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-
-    def providers(_name: str) -> LocalKeyProvider:
-        return bank_storage.provider
-
-    monkeypatch.setattr(registry, "provider_for", providers)
-    party = counterparty(db_session)
-    party_id = party.id
-    db_session.commit()
-    before = cast(
-        object,
-        db_session.scalar(
-            text("SELECT name_blind_index FROM canonical_counterparties WHERE id=:id"),
-            {"id": party_id},
-        ),
-    )
-    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
-    registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider)
-    db_session.commit()
-    db_session.expunge_all()
-    result = backfill_bank(
-        db_session, organization_id=ORG_1, bank_id=BANK_A, batch_size=1, reencrypt=True
-    )
-    assert result.encrypted == 4 and result.retained_immutable == 1
-    assert (
-        cast(
-            object,
-            db_session.scalar(
-                text("SELECT name_blind_index FROM canonical_counterparties WHERE id=:id"),
-                {"id": party_id},
-            ),
-        )
-        == before
-    )
-    assert (
-        find_counterparties(
-            db_session, CTX, BANK_A, field="source_reference", value="SYNTHETIC-CARD-17"
-        )[0].name
-        == NAME
-    )
-    assert (
-        backfill_bank(
-            db_session, organization_id=ORG_1, bank_id=BANK_A, batch_size=1, reencrypt=True
-        ).encrypted
-        == 0
-    )
-
-
 @pytest.mark.parametrize("download", ["attachment", "email-fallback"])
 def test_package_download_siblings_do_not_wait_for_rotation(
     bank_storage: BankStorage,
@@ -654,79 +599,3 @@ def test_uncommitted_key_version_cannot_publish_objects(
         )
     db_session.rollback()
     assert not list(bank_storage.storage.list(SLUG, "raw", "synthetic/uncommitted.csv"))
-
-
-@pytest.mark.parametrize("kind", ["package", "dashboard"])
-def test_stale_optional_session_refuses_plaintext_after_key_connection(
-    bank_storage: BankStorage,
-    db_session: Session,
-    kind: str,
-) -> None:
-    database = db_session.get_bind()
-    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
-        pytest.skip("PostgreSQL independent transactions are required.")
-    db_session.add(
-        Bank(
-            id=SIBLING,
-            organization_id=ORG_1,
-            name="Synthetic optional",
-            short_name="Synthetic",
-            currency="GHS",
-            jurisdiction_code="GH",
-            institution_type="universal_bank",
-            license_type="universal_bank",
-            storage_slug="bk-samp0002",
-        )
-    )
-    db_session.flush()
-    dashboard = BiDashboard(
-        organization_id=ORG_1,
-        bank_id=SIBLING,
-        owner_user_id=USER_1,
-        title="Synthetic",
-        visibility="private",
-        badge="personal",
-        current_version=1,
-    )
-    db_session.add(dashboard)
-    db_session.commit()
-    assert registry.bank_key(db_session, ORG_1, SIBLING) is None
-    with Session(database) as peer, peer.begin():
-        registry.register(
-            peer,
-            bank_id=SIBLING,
-            organization_id=ORG_1,
-            storage_slug="bk-samp0002",
-            key=KEY,
-            providers=lambda _name: bank_storage.provider,
-        )
-    if kind == "package":
-        row = RegulatoryPackage(
-            organization_id=ORG_1,
-            bank_id=SIBLING,
-            return_family="large_exposures",
-            return_code="SYNTHETIC",
-            reporting_date=AS_OF,
-            frequency="monthly",
-            status="generated",
-            version=1,
-            generated_by=USER_1,
-            snapshot={"name": NAME},
-        )
-    else:
-        row = BiDashboardVersion(
-            organization_id=ORG_1,
-            bank_id=SIBLING,
-            dashboard_id=dashboard.id,
-            version=1,
-            title="Synthetic",
-            spec={"name": NAME},
-            spec_digest="synthetic",
-            created_by_user_id=USER_1,
-            created_at=utc_now(),
-        )
-    db_session.add(row)
-    with pytest.raises(KeyUnavailableError, match="connection changed"):
-        db_session.flush()
-    db_session.rollback()
-    assert not list(db_session.scalars(select(type(row)).where(type(row).bank_id == SIBLING)))

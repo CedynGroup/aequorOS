@@ -7,17 +7,16 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from alembic.script import ScriptDirectory
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
-from sqlalchemy import func, select, text
+from sqlalchemy import Uuid, bindparam, select, text
 from sqlalchemy.orm import Session
 
 from app.attestation.service import register_state
 from app.attestation.service.digests import register_state_digest
 from app.bi.domain.catalogue import catalogue
 from app.bi.models.content import BiDashboard, BiDashboardVersion
-from app.bi.models.marts import BiDimCounterparty, BiFactPositionDaily, BiFactPositionEom
+from app.bi.models.marts import BiFactPositionDaily, BiFactPositionEom
 from app.bi.models.notifications import BiAlert, BiSubscription
 from app.bi.schemas.content import BiDashboardSpec
 from app.bi.schemas.query import BiFilter, BiPackQuery, BiQuery, BiTime
@@ -26,16 +25,13 @@ from app.bi.service.compiler import compile_query
 from app.bi.service.errors import BiQueryError
 from app.bi.service.execution import execute
 from app.bi.service.identity_policy import IDENTITY_REASON
-from app.bi.service.mart_builder import fingerprint_for
 from app.core.key_management import registry
-from app.core.key_management.backfill import backfill_bank
-from app.core.key_management.fields import ProtectedJSON, ProtectedText
 from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
+from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.data_engine.service.field_search import find_counterparties
-from app.db.base import Base, utc_now
+from app.db.base import utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
 from app.identity.public import Bank
@@ -415,34 +411,6 @@ def test_bank_a_key_cannot_unwrap_bank_b_and_revocation_refuses_reads(
         find_counterparties(db_session, CTX, BANK_B, field="name", value=NAME)
 
 
-def test_backfill_encrypts_legacy_rows_and_is_idempotent(
-    db_session: Session,
-    provider: LocalKeyProvider,
-) -> None:
-    cp_id = counterparty(db_session, include_package=False).id
-    db_session.commit()
-    assert NAME in json.dumps(raw_fields(db_session), ensure_ascii=False)
-    connect(db_session, provider)
-    db_session.expunge_all()
-    with pytest.raises(KeyUnavailableError, match="backfill"):
-        db_session.get(CanonicalCounterparty, cp_id)
-    db_session.expunge_all()
-    first = backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A, batch_size=1)
-    assert first.encrypted == first.checked == 4
-    stored = raw_fields(db_session)
-    count = db_session.scalar(select(func.count()).select_from(ObjectKeyEnvelope))
-    again = backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A, batch_size=1)
-    assert again.checked == first.checked and again.encrypted == 0
-    assert raw_fields(db_session) == stored
-    assert db_session.scalar(select(func.count()).select_from(ObjectKeyEnvelope)) == count
-    assert [
-        row.id
-        for row in find_counterparties(
-            db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER
-        )
-    ] == [cp_id]
-
-
 def test_register_crud_search_and_new_audits_omit_names(
     db_session: Session,
     provider: LocalKeyProvider,
@@ -591,73 +559,6 @@ def test_failed_sensitive_write_rolls_back_without_a_platform_fallback(
     assert raw_fields(db_session) == before
 
 
-def test_interrupted_backfill_resumes_and_preserves_completed_ciphertext(
-    db_session: Session,
-    provider: LocalKeyProvider,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    counterparty(db_session, include_package=False)
-    counterparty(db_session, reference="SYNTHETIC-SECOND", include_package=False)
-    db_session.commit()
-    connect(db_session, provider)
-    db_session.expunge_all()
-    original = provider.unwrap
-    calls = 0
-
-    def interrupt(key: KeyReference, wrapped: bytes, context: dict[str, str]) -> bytes:
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise KeyUnavailableError("Synthetic provider outage.")
-        return original(key, wrapped, context)
-
-    monkeypatch.setattr(provider, "unwrap", interrupt)
-    with pytest.raises(KeyUnavailableError, match="outage"):
-        backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A, batch_size=1)
-    names = cast(
-        list[object],
-        list(
-            db_session.execute(
-                text("SELECT name FROM canonical_counterparties ORDER BY id")
-            ).scalars()
-        ),
-    )
-    assert str(names[0]).startswith("aqs-bank-field-v1:") and names[1] == NAME
-    monkeypatch.setattr(provider, "unwrap", original)
-    resumed = backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A, batch_size=1)
-    assert resumed.encrypted == 7 and resumed.checked == 8
-    completed = cast(
-        object,
-        db_session.execute(
-            text("SELECT name FROM canonical_counterparties ORDER BY id LIMIT 1")
-        ).scalar_one(),
-    )
-    assert completed == names[0]
-    assert backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A).encrypted == 0
-
-
-def test_backfill_preserves_historical_test_audit_source_bytes(
-    db_session: Session,
-    provider: LocalKeyProvider,
-) -> None:
-    counterparty(db_session, include_package=False)
-    db_session.add(
-        AuditEvent(
-            organization_id=ORG_1,
-            event_type="related_party.created",
-            details={"full_name": NAME, "reason": "Historical synthetic test event"},
-        )
-    )
-    db_session.commit()
-    before = cast(object, db_session.execute(text("SELECT details FROM audit_events")).scalar_one())
-    connect(db_session, provider)
-    backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A)
-    after = cast(object, db_session.execute(text("SELECT details FROM audit_events")).scalar_one())
-    assert before == after
-    event = db_session.scalar(select(AuditEvent))
-    assert event is not None and event.details["full_name"] == NAME
-
-
 def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
     db_session: Session,
     provider: LocalKeyProvider,
@@ -750,6 +651,7 @@ def test_connected_bank_bi_keeps_numeric_facts_without_identity_copies(
     provider: LocalKeyProvider,
 ) -> None:
 
+    connect(db_session, provider)
     party = counterparty(db_session, include_package=False)
     common = dict(
         organization_id=ORG_1,
@@ -778,44 +680,32 @@ def test_connected_bank_bi_keeps_numeric_facts_without_identity_copies(
         )
     )
     db_session.commit()
-    before = fingerprint_for(db_session, organization_id=ORG_1, bank_id=BANK_A, as_of=AS_OF)
     outcome = materialize_bi_plane(db_session, organization_id=ORG_1, bank_id=BANK_A, as_of=AS_OF)
     assert outcome is not None and outcome.status == "succeeded"
-    assert db_session.scalar(select(BiDimCounterparty.name)) == NAME
-    connect(db_session, provider)
-    assert fingerprint_for(db_session, organization_id=ORG_1, bank_id=BANK_A, as_of=AS_OF) != before
     db_session.expunge_all()
-    backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A)
-    for rebuild in (False, True):
-        if rebuild:
-            outcome = materialize_bi_plane(
-                db_session, organization_id=ORG_1, bank_id=BANK_A, as_of=AS_OF
+    identity = db_session.execute(
+        text("SELECT name, source_reference, group_reference FROM bi_dim_counterparty")
+    ).one()
+    assert NAME not in str(identity) and IDENTIFIER not in str(identity)
+    assert identity[2] is None
+    assert db_session.scalar(select(BiFactPositionDaily.counterparty_group)) is None
+    assert db_session.scalar(select(BiFactPositionEom.counterparty_group)) is None
+    q = BiQuery(measures=["deposits.balance_rc"], time=BiTime(as_of=AS_OF))
+    compiled = compile_query(db_session, catalogue(), q, organization_id=ORG_1, bank_id=BANK_A)
+    result = execute(db_session, compiled, timeout_ms=1000, row_cap=10)
+    assert result.rows == [(Decimal("123"),)]
+    for restricted in (
+        q.model_copy(update={"dimensions": ["counterparty.name"]}),
+        q.model_copy(update={"dimensions": ["counterparty"]}),
+        q.model_copy(
+            update={"filters": [BiFilter(member="counterparty.name", op="eq", values=[NAME])]}
+        ),
+    ):
+        with pytest.raises(BiQueryError, match="bank-held encryption") as refused:
+            compile_query(
+                db_session, catalogue(), restricted, organization_id=ORG_1, bank_id=BANK_A
             )
-            assert outcome is not None and outcome.status == "succeeded"
-        identity = db_session.execute(
-            text("SELECT name, source_reference, group_reference FROM bi_dim_counterparty")
-        ).one()
-        assert NAME not in str(identity) and IDENTIFIER not in str(identity)
-        assert identity[2] is None
-        assert db_session.scalar(select(BiFactPositionDaily.counterparty_group)) is None
-        assert db_session.scalar(select(BiFactPositionEom.counterparty_group)) is None
-        q = BiQuery(measures=["deposits.balance_rc"], time=BiTime(as_of=AS_OF))
-        compiled = compile_query(db_session, catalogue(), q, organization_id=ORG_1, bank_id=BANK_A)
-        result = execute(db_session, compiled, timeout_ms=1000, row_cap=10)
-        assert result.rows == [(Decimal("123"),)]
-        for restricted in (
-            q.model_copy(update={"dimensions": ["counterparty.name"]}),
-            q.model_copy(update={"dimensions": ["counterparty"]}),
-            q.model_copy(
-                update={"filters": [BiFilter(member="counterparty.name", op="eq", values=[NAME])]}
-            ),
-        ):
-            with pytest.raises(BiQueryError, match="bank-held encryption") as refused:
-                compile_query(
-                    db_session, catalogue(), restricted, organization_id=ORG_1, bank_id=BANK_A
-                )
-            assert refused.value.code == "bank_key_identity_bi_unavailable"
-    assert backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A).encrypted == 0
+        assert refused.value.code == "bank_key_identity_bi_unavailable"
 
 
 def saved_version(db: Session, spec: dict[str, object]) -> BiDashboardVersion:
@@ -858,8 +748,8 @@ def test_saved_identity_filter_is_encrypted_and_explicitly_refused(
         window="as_of",
         filters=[BiFilter(member="counterparty.name", op="eq", values=[NAME])],
     )
-    # Historical/storage-boundary representation; the product save gate below
-    # refuses this question before accepting a new user-authored canvas.
+    # Exercise the storage boundary; the product save gate below rejects
+    # identity queries before accepting a user-authored canvas.
     version = saved_version(db_session, {"query": saved_query.model_dump(mode="json")})
     db_session.add(version)
     subscription = BiSubscription(
@@ -927,50 +817,11 @@ def test_saved_identity_filter_is_encrypted_and_explicitly_refused(
     assert authority.refused_members(query) == ("counterparty.name",)
 
 
-@pytest.mark.parametrize("legacy", ["dashboard", "filing"])
-def test_key_connection_and_backfill_refuse_immutable_plaintext_before_changes(
-    db_session: Session,
-    provider: LocalKeyProvider,
-    legacy: str,
-) -> None:
-    if legacy == "filing":
-        counterparty(db_session)
-    else:
-        db_session.add(saved_version(db_session, {"filters": [{"value": NAME}]}))
-    db_session.commit()
-    before = raw_fields(db_session)
-    with pytest.raises(
-        KeyUnavailableError,
-        match="legacy plaintext.*" + ("spec" if legacy == "dashboard" else "snapshot"),
-    ):
-        connect(db_session, provider)
-    db_session.rollback()
-    assert db_session.scalar(select(BankEncryptionKey)) is None
-    assert raw_fields(db_session) == before
-    # Simulate a preexisting connection from an older release; maintenance must
-    # detect the same precondition before any batch/scrub commits.
-    db_session.add(
-        BankEncryptionKey(
-            organization_id=ORG_1,
-            bank_id=BANK_A,
-            storage_slug=BANK_A.lower(),
-            provider=KEY_A.provider,
-            key_id=KEY_A.key_id,
-            region=KEY_A.region,
-            owner_account=KEY_A.owner_account,
-            status=KeyStatus.ACTIVE.value,
-        )
-    )
-    db_session.commit()
-    with pytest.raises(KeyUnavailableError, match="existing content guards remain unchanged"):
-        backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A)
-    assert raw_fields(db_session) == before
-
-
-def test_register_digest_tracks_values_across_encryption_backfill(
+def test_register_digest_tracks_decrypted_values(
     db_session: Session,
     provider: LocalKeyProvider,
 ) -> None:
+    connect(db_session, provider)
     party = RelatedParty(
         organization_id=ORG_1,
         bank_id=BANK_A,
@@ -985,8 +836,7 @@ def test_register_digest_tracks_values_across_encryption_backfill(
     # on reload; a freshly-created in-memory timestamp is not that baseline.
     db_session.expunge_all()
     before = register_state_digest(register_state.register_state_rows(db_session, CTX, BANK_A))
-    connect(db_session, provider)
-    assert backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A).encrypted == 1
+    db_session.expunge_all()
     after = register_state_digest(register_state.register_state_rows(db_session, CTX, BANK_A))
     assert after == before
     loaded = db_session.get(RelatedParty, party_id)
@@ -1001,12 +851,13 @@ def test_register_digest_tracks_values_across_encryption_backfill(
 @pytest.mark.parametrize(
     "filters", [None, [], [{"member": "counterparty.name", "op": "eq", "values": [NAME]}]]
 )
-def test_saved_alert_list_filters_backfill_and_round_trip(
+def test_saved_alert_list_filters_encrypt_and_round_trip(
     db_session: Session,
     provider: LocalKeyProvider,
     filters: list[dict[str, object]] | None,
 ) -> None:
 
+    connect(db_session, provider)
     alert = BiAlert(
         organization_id=ORG_1,
         bank_id=BANK_A,
@@ -1022,9 +873,7 @@ def test_saved_alert_list_filters_backfill_and_round_trip(
     db_session.add(alert)
     db_session.commit()
     alert_id = alert.id
-    connect(db_session, provider)
     db_session.expunge_all()
-    assert backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A).encrypted == 1
     raw = cast(object, db_session.execute(text("SELECT filters FROM bi_alerts")).scalar_one())
     assert "aqs-bank-field-v1" in str(raw) and NAME not in str(raw)
     loaded = db_session.get(BiAlert, alert_id)
@@ -1037,26 +886,36 @@ def test_saved_alert_list_filters_backfill_and_round_trip(
     assert updated.filters == [
         {"member": "counterparty.id", "op": "eq", "values": ["synthetic-id"]}
     ]
-    assert backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A).encrypted == 0
 
 
-def test_downgrade_catalogue_covers_the_protected_storage_contract() -> None:
-
-    revision = ScriptDirectory(str(Path(__file__).parents[2] / "alembic")).get_revision(
-        "202610220101"
+def test_key_connection_encrypts_new_writes_without_rewriting_existing_records(
+    db_session: Session,
+    provider: LocalKeyProvider,
+) -> None:
+    previous = counterparty(db_session)
+    previous_id = previous.id
+    version = saved_version(db_session, {"borrower": NAME})
+    db_session.add(version)
+    db_session.commit()
+    stored = raw_fields(db_session)
+    connect(db_session, provider)
+    assert raw_fields(db_session) == stored
+    db_session.expunge_all()
+    unchanged = db_session.get(CanonicalCounterparty, previous_id)
+    assert unchanged is not None and unchanged.name == NAME
+    current = counterparty(db_session, reference="SYNTHETIC-AFTER-CONNECTION")
+    current_id = current.id
+    db_session.commit()
+    raw = cast(
+        object,
+        db_session.scalar(
+            text("SELECT name FROM canonical_counterparties WHERE id=:id").bindparams(
+                bindparam("id", type_=Uuid(as_uuid=True))
+            ),
+            {"id": current_id},
+        ),
     )
-    assert revision is not None
-    migration = revision.module
-    text_catalogue = cast(tuple[tuple[str, str], ...], migration.PROTECTED_TEXT)
-    json_catalogue = cast(tuple[tuple[str, str], ...], migration.PROTECTED_JSON)
-    for kind, protected_columns in (
-        (ProtectedText, text_catalogue),
-        (ProtectedJSON, json_catalogue),
-    ):
-        protected = {
-            (table.name, column.name)
-            for table in Base.metadata.tables.values()
-            for column in table.columns
-            if isinstance(column.type, kind)
-        }
-        assert set(protected_columns) == protected
+    assert NAME not in str(raw) and "aqs-bank-field-v1" in str(raw)
+    db_session.expunge_all()
+    restored = db_session.get(CanonicalCounterparty, current_id)
+    assert restored is not None and restored.name == NAME

@@ -23,7 +23,6 @@ from app.bi.service.authorization import query_members
 from app.bi.service.identity_policy import IDENTITY_MESSAGE, IDENTITY_REASON
 from app.core.authorization import ModuleScope, SensitivityScope
 from app.core.key_management import registry
-from app.core.key_management.backfill import backfill_bank
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference
 from app.identity.public import Bank
@@ -84,7 +83,6 @@ def test_connected_bank_refusal_explains_capability_and_keeps_numeric_concentrat
         providers=providers,
     )
     db_session.commit()
-    backfill_bank(db_session, organization_id=ORG_1, bank_id=mart.id)
     numeric = db_client.post(routes.BASE + "/query", json=query, headers=request_headers)
     assert numeric.status_code == 200, numeric.text
     assert BiQueryResult.model_validate(cast(object, numeric.json())).rows == expected.rows
@@ -198,7 +196,6 @@ def test_saved_alert_capability_decisions_are_order_independent(
     )
     db_session.commit()
     db_session.expunge_all()
-    backfill_bank(db_session, organization_id=ORG_1, bank_id=mart.id)
     response = db_client.get(routes.BASE + "/alerts", headers=request_headers)
     assert response.status_code == 200, response.text
     listed = BiAlertListRead.model_validate(cast(object, response.json())).alerts
@@ -291,7 +288,6 @@ def test_saved_subscription_delivery_history_explains_bank_key_capability(
     )
     db_session.commit()
     db_session.expunge_all()
-    backfill_bank(db_session, organization_id=ORG_1, bank_id=mart.id)
     job = Job(
         organization_id=ORG_1,
         bank_id=mart.id,

@@ -2,9 +2,6 @@
 
 Revision ID: 202610220101
 Revises: 202610140100
-
-Key access belongs to the explicit per-bank backfill, not schema migration.
-Historical audit sources and their chains are deliberately unchanged.
 """
 
 from __future__ import annotations
@@ -13,7 +10,6 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
-from app.db.session import force_rls_suspended
 
 revision = "202610220101"
 down_revision = "202610140100"
@@ -32,27 +28,6 @@ WIDENED = (
     ("related_party_roles", "icag_registration", 60),
 )
 
-PROTECTED_TEXT = (
-    *((table, column) for table, column, _ in WIDENED),
-    ("related_party_roles", "other_responsibilities"),
-    ("ingestion_batches", "error_message"),
-    ("translation_failures", "error_message"),
-    ("regulatory_packages", "notes"),
-)
-PROTECTED_JSON = (
-    (COUNTERPARTIES, "external_identifiers"),
-    (COUNTERPARTIES, "attributes"),
-    (PARTIES, "contact"),
-    ("ingestion_batches", "validation_report"),
-    ("ingestion_batches", "etl_report"),
-    ("lineage_records", "details"),
-    ("translation_failures", "raw_record"),
-    ("bi_dashboard_versions", "spec"),
-    ("bi_subscriptions", "query"),
-    ("bi_alerts", "filters"),
-    ("regulatory_packages", "snapshot"),
-    ("regulatory_packages", "validation_report"),
-)
 ALERT_REASONS = (
     "authorization_revoked",
     "no_governed_limit",
@@ -106,17 +81,6 @@ def upgrade() -> None:
         ),
     )
     op.add_column(PARTIES, sa.Column("full_name_blind_index", sa.String(255), nullable=True))
-    # Preserve existing uniqueness before any bank obtains key access for its
-    # resumable backfill. Never let FORCE RLS turn this into a partial update.
-    with force_rls_suspended(op.get_bind(), COUNTERPARTIES):
-        op.execute(
-            sa.text(
-                "UPDATE canonical_counterparties "
-                "SET source_reference_blind_index = source_reference, "
-                "concentration_group_blind_index = coalesce(group_reference, name)"
-            )
-        )
-    op.alter_column(COUNTERPARTIES, "source_reference_blind_index", nullable=False)
     op.drop_index("uq_canonical_counterparties_current", table_name=COUNTERPARTIES)
     _current_index("source_reference_blind_index")
     op.create_index(
@@ -132,24 +96,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Downgrading capacity cannot decrypt data, discard indexes under ciphertext,
-    # or produce a database an older binary could misinterpret as plaintext.
-    tables = tuple(dict.fromkeys(table for table, _ in (*PROTECTED_TEXT, *PROTECTED_JSON)))
-    with force_rls_suspended(op.get_bind(), *tables, "bi_alert_events"):
-        for catalogue, predicate in (
-            (PROTECTED_TEXT, "{column} LIKE 'aqs-bank-field-v1:%'"),
-            (PROTECTED_JSON, "{column}::jsonb ? 'aqs-bank-field-v1'"),
-            ((("bi_alert_events", "reason"),), "{column} = 'bank_key_identity_bi_unavailable'"),
-        ):
-            for table, column in catalogue:
-                if op.get_bind().scalar(
-                    sa.text(
-                        f"SELECT EXISTS (SELECT 1 FROM {table} WHERE "
-                        + predicate.format(column=column)
-                        + ")"
-                    )
-                ):
-                    raise RuntimeError("Bank-encrypted fields prohibit schema downgrade.")
     op.execute("REVOKE SELECT ON bank_encryption_keys FROM aqs_api, aqs_worker")
     _alert_reasons(ALERT_REASONS)
     op.drop_index("ix_related_parties_name_blind", table_name=PARTIES)
