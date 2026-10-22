@@ -97,6 +97,7 @@ def test_migrated_field_capacity_scoped_backfill_and_unchanged_historical_audit(
             )
         )
         db.commit()
+        original_updated_at = party.updated_at
         historical = cast(
             str, db.execute(text("SELECT details::text FROM audit_events")).scalar_one()
         )
@@ -136,6 +137,7 @@ def test_migrated_field_capacity_scoped_backfill_and_unchanged_historical_audit(
         )
         loaded = db.scalar(select(RelatedParty).where(RelatedParty.bank_id == "BK-SAMP0001"))
         assert loaded is not None and loaded.contact == {"national_id": "SYNTHETIC-17"}
+        assert loaded.updated_at == original_updated_at
 
         _assert_immutable_cutover(db, key, resolve)
 

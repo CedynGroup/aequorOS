@@ -231,12 +231,14 @@ revocation.
 
 ## Scope and executable evidence
 
-The shared database and its storage encryption remain on the platform key. Object artifacts and their object backups use the bank-held hierarchy above.
+The shared database and its storage encryption remain on the platform key.
+Object artifacts and their object backups use the bank-held hierarchy above.
 [Sensitive-field encryption](bank_field_encryption.md) reuses its `KeyProvider`
 and envelope catalogue for borrower identities and retained operational copies;
 that document defines coverage, backfill, the numeric-only BI pilot and approved
 historical-evidence cutover preconditions. Existing physical backups retain
-their original protection and require the documented recovery/retention plan. Signing keys and credential custody remain
+their original protection and require the documented recovery/retention plan.
+Signing keys and credential custody remain
 [issue 355](https://github.com/CedynGroup/aequorOS/issues/355). Scheduled
 key-health monitoring, alerting and support workflows remain
 [issue 354](https://github.com/CedynGroup/aequorOS/issues/354); this change

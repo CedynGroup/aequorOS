@@ -103,7 +103,8 @@ until all rows are rebuilt, then retire the old index.
    batch. Coordinate writers with the same lock/cutover protocol. No real bank
    data or credentials enter tests or checked-in migration fixtures.
 3. Resume by format/version, authenticate completed envelopes and skip already
-   migrated rows. Re-running must not change ciphertext, create extra wrappers
+   migrated rows. Preserve business timestamps and value digests during the
+   storage-only change. Re-running must not change ciphertext, create extra wrappers
    or erase data. Provider failure rolls back the batch. Never silently skip a
    bank whose key is unavailable or report a partial RLS-visible scan as complete.
 4. Compare scoped counts and product reads, verify every covered raw SQL column

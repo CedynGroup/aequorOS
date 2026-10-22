@@ -10,6 +10,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.data_engine.service.field_search import find_counterparties
 from app.domain.capital.engine import (
     CapitalFact,
     RiskWeightUnavailable,
@@ -22,7 +23,6 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
-    CanonicalCounterparty,
     CanonicalProduct,
     RegulatoryRun,
 )
@@ -196,11 +196,13 @@ def test_enterprise_expected_credit_refusals_return_409_without_creating_runs(
     if failure == "stale_bucket":
         product.regulatory_category = "SME_UNRATED"
     else:
-        cp = session.scalar(
-            select(CanonicalCounterparty).where(
-                CanonicalCounterparty.bank_id == bank_id,
-                CanonicalCounterparty.source_reference == "CP/BIGCORP",
-            )
+        cp = next(
+            iter(
+                find_counterparties(
+                    session, MAKER, bank_id, field="source_reference", value="CP/BIGCORP"
+                )
+            ),
+            None,
         )
         assert cp is not None
         cp.counterparty_type = "GOVERNMENT_ENTITY"

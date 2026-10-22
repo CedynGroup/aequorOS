@@ -12,6 +12,8 @@ from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.attestation.service import register_state
+from app.attestation.service.digests import register_state_digest
 from app.bi.domain.catalogue import catalogue
 from app.bi.models.content import BiDashboard, BiDashboardVersion
 from app.bi.models.marts import BiDimCounterparty, BiFactPositionDaily, BiFactPositionEom
@@ -961,3 +963,34 @@ def test_key_connection_and_backfill_refuse_immutable_plaintext_before_changes(
     with pytest.raises(KeyUnavailableError, match="existing content guards remain unchanged"):
         backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A)
     assert raw_fields(db_session) == before
+
+
+def test_register_digest_tracks_values_across_encryption_backfill(
+    db_session: Session,
+    provider: LocalKeyProvider,
+) -> None:
+    party = RelatedParty(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        party_type="individual",
+        full_name=NAME,
+        contact={"national_id": IDENTIFIER},
+    )
+    db_session.add(party)
+    db_session.commit()
+    party_id = party.id
+    # Compare persisted projections on both sides. SQLite drops timezone info
+    # on reload; a freshly-created in-memory timestamp is not that baseline.
+    db_session.expunge_all()
+    before = register_state_digest(register_state.register_state_rows(db_session, CTX, BANK_A))
+    connect(db_session, provider)
+    assert backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A).encrypted == 1
+    after = register_state_digest(register_state.register_state_rows(db_session, CTX, BANK_A))
+    assert after == before
+    loaded = db_session.get(RelatedParty, party_id)
+    assert loaded is not None
+    loaded.full_name = "Synthetic changed reportable name"
+    db_session.commit()
+    assert (
+        register_state_digest(register_state.register_state_rows(db_session, CTX, BANK_A)) != before
+    )

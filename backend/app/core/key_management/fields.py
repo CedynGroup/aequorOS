@@ -522,3 +522,8 @@ def mark_for_backfill(instance: Base) -> None:
     for col in field_columns(state):
         if col.attribute in state.dict:
             attributes.flag_modified(instance, col.attribute)
+    # Encryption changes storage, not business history. An explicit unchanged
+    # timestamp suppresses TimestampMixin's onupdate value and preserves filed
+    # register-state digests across a representation-only migration.
+    if "updated_at" in state.dict:
+        attributes.flag_modified(instance, "updated_at")
