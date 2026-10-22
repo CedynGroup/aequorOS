@@ -912,60 +912,61 @@ it("keeps readers' mutation controls disabled with scoped reasons", async () => 
   expect(screen.getByRole("button", { name: "Activate CFP" })).toBeDisabled();
 });
 
-it("allows approval after equivalent API content changes key order and edited fields are restored", async () => {
-  context.actor = "checker";
-  const reorderedContent = Object.fromEntries(
-    Object.entries(authoredContent)
-      .reverse()
-      .map(([key, rows]) => [
-        key,
-        rows.map((row) => Object.fromEntries(Object.entries(row).reverse())),
-      ]),
-  );
-  let reordered = false;
-  let approved = false;
-  let reads = 0;
-  const requests: unknown[] = [];
-  server.use(
-    http.get(url, () => {
-      reads += 1;
-      const current = {
-        ...plan,
-        content: reordered ? reorderedContent : authoredContent,
-        status: approved ? "approved" : "draft",
-      };
-      return HttpResponse.json({
-        current,
-        approved: approved ? current : null,
-      });
-    }),
-    http.post(`${url}/approve`, async ({ request }) => {
-      requests.push(await request.json());
-      approved = true;
-      return HttpResponse.json({
-        ...plan,
-        status: "approved",
-        content: reorderedContent,
-      });
-    }),
-  );
-  const user = userEvent.setup();
-  mount();
-  await user.type(
-    await screen.findByLabelText("Reason / evidence"),
-    "Reviewed unchanged content",
-  );
-  await user.type(
-    screen.getByLabelText("Board approval reference"),
-    "Board 42",
-  );
-  const approval = () =>
-    screen.getByRole("button", { name: "Record Board approval" });
-  expect(approval()).toBeEnabled();
-  reordered = true;
-  await client.refetchQueries({ queryKey: ["cfp-summary"] });
-  expect(reads).toBe(2);
-  for (const { title, field } of editableSections) {
+it.each(editableSections)(
+  "allows approval after equivalent API content changes key order and $title edits are restored",
+  async ({ title, field }) => {
+    context.actor = "checker";
+    const reorderedContent = Object.fromEntries(
+      Object.entries(authoredContent)
+        .reverse()
+        .map(([key, rows]) => [
+          key,
+          rows.map((row) => Object.fromEntries(Object.entries(row).reverse())),
+        ]),
+    );
+    let reordered = false;
+    let approved = false;
+    let reads = 0;
+    const requests: unknown[] = [];
+    server.use(
+      http.get(url, () => {
+        reads += 1;
+        const current = {
+          ...plan,
+          content: reordered ? reorderedContent : authoredContent,
+          status: approved ? "approved" : "draft",
+        };
+        return HttpResponse.json({
+          current,
+          approved: approved ? current : null,
+        });
+      }),
+      http.post(`${url}/approve`, async ({ request }) => {
+        requests.push(await request.json());
+        approved = true;
+        return HttpResponse.json({
+          ...plan,
+          status: "approved",
+          content: reorderedContent,
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    mount();
+    await user.type(
+      await screen.findByLabelText("Reason / evidence"),
+      "Reviewed unchanged content",
+    );
+    await user.type(
+      screen.getByLabelText("Board approval reference"),
+      "Board 42",
+    );
+    const approval = () =>
+      screen.getByRole("button", { name: "Record Board approval" });
+    expect(approval()).toBeEnabled();
+    reordered = true;
+    await client.refetchQueries({ queryKey: ["cfp-summary"] });
+    expect(reads).toBe(2);
     const input = within(
       screen.getByRole("group", { name: title }),
     ).getByLabelText(field);
@@ -976,14 +977,14 @@ it("allows approval after equivalent API content changes key order and edited fi
     await user.clear(input);
     await user.type(input, original);
     expect(approval()).toBeEnabled();
-  }
-  await user.click(approval());
-  await screen.findByText(/Current plan: v1 · approved/);
-  expect(requests).toEqual([
-    {
-      expected_revision: "revision-1",
-      approval_reference: "Board 42",
-      reason: "Reviewed unchanged content",
-    },
-  ]);
-});
+    await user.click(approval());
+    await screen.findByText(/Current plan: v1 · approved/);
+    expect(requests).toEqual([
+      {
+        expected_revision: "revision-1",
+        approval_reference: "Board 42",
+        reason: "Reviewed unchanged content",
+      },
+    ]);
+  },
+);
