@@ -206,7 +206,7 @@ def prepare_envelope(
     providers: ProviderFactory = provider_for,
 ) -> ObjectKey:
     """Append an envelope in the caller's transaction, holding its bank-key lock."""
-    _lock_keys(db, reference(row))
+    _lock_keys(db, reference(row), shared=True)
     digest = context_digest(context)
     data_key = providers(row.provider).generate_data_key(
         reference(row), wrapping_context(row.bank_id, digest)
@@ -224,9 +224,16 @@ def prepare_envelope(
     return ObjectKey(envelope_id, row.key_id, data_key.plaintext)
 
 
-def lock_envelopes(db: Session, row: BankEncryptionKey) -> None:
-    """Serialize lazy catalogue creation with existing envelope/rotation writers."""
-    _lock_keys(db, reference(row))
+def lock_envelopes(db: Session, row: BankEncryptionKey, context: dict[str, str]) -> None:
+    """Serialize lazy creation of one bank's context-specific envelope."""
+    if db.get_bind().dialect.name == "postgresql":
+        value = int.from_bytes(
+            hashlib.sha256(json.dumps([row.bank_id, context_digest(context)]).encode()).digest()[
+                :8
+            ],
+            signed=True,
+        )
+        _ = db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": value})
 
 
 def open_envelope(
@@ -264,11 +271,11 @@ class DatabaseEnvelopeStore:
         self._providers = providers
 
     @staticmethod
-    def _bank(db: Session, slug: str, *, read: bool = False) -> BankEncryptionKey:
+    def _bank(db: Session, slug: str) -> BankEncryptionKey:
         row = db.scalar(
             select(BankEncryptionKey)
             .where(BankEncryptionKey.storage_slug == slug)
-            .with_for_update(read=read)
+            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
         if row is None:
@@ -283,7 +290,7 @@ class DatabaseEnvelopeStore:
 
     def open(self, slug: str, envelope_id: UUID, context: dict[str, str]) -> ObjectKey:
         with self._sessions() as db, db.begin():
-            row = self._bank(db, slug, read=True)
+            row = self._bank(db, slug)
             _scope_envelopes(db, row.organization_id)
             return open_envelope(db, row, envelope_id, context, self._providers)
 
@@ -299,14 +306,15 @@ def _scope_envelopes(db: Session, organization_id: str) -> None:
         )
 
 
-def _lock_keys(db: Session, *keys: KeyReference) -> None:
+def _lock_keys(db: Session, *keys: KeyReference, shared: bool = False) -> None:
     if db.get_bind().dialect.name == "postgresql":
         identities = sorted({(key.provider, key.key_id) for key in keys})
         for identity in identities:
             value = int.from_bytes(
                 hashlib.sha256(json.dumps(identity).encode()).digest()[:8], signed=True
             )
-            _ = db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": value})
+            function = "pg_advisory_xact_lock_shared" if shared else "pg_advisory_xact_lock"
+            _ = db.execute(text(f"SELECT {function}(:key)"), {"key": value})
 
 
 def authorize_retirement(db: Session, row: BankEncryptionKey, key: KeyReference) -> None:

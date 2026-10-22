@@ -60,10 +60,12 @@ class ProtectedField(TypeDecorator[object]):
         self,
         *,
         empty_object: bool = False,
+        empty_list: bool = False,
         parent: tuple[str, str] | None = None,
     ) -> None:
         super().__init__()
         self.empty_object = empty_object
+        self.empty_list = empty_list
         self.parent = parent
 
     def _encode(self, value: object) -> object:
@@ -233,7 +235,7 @@ def _index_key(db: Session, row: BankEncryptionKey) -> bytes:
             None,
         )
     if envelope is None:
-        registry.lock_envelopes(db, row)
+        registry.lock_envelopes(db, row, context)
         envelope = db.scalar(
             select(ObjectKeyEnvelope).where(
                 ObjectKeyEnvelope.bank_id == row.bank_id,
@@ -372,8 +374,11 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                     if col.attribute not in state.dict:
                         _ = cast(object, attributes.get_attribute(instance, col.attribute))
             for col in columns:
-                if state.dict.get(col.attribute) is None and col.kind.empty_object:
-                    setattr(instance, col.attribute, {})
+                if state.dict.get(col.attribute) is None:
+                    if col.kind.empty_object:
+                        setattr(instance, col.attribute, {})
+                    elif col.kind.empty_list:
+                        setattr(instance, col.attribute, [])
             if state.dict.get("id") is None:
                 attributes.set_attribute(
                     instance,
@@ -387,7 +392,12 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
             row = bank_rows[scope] if scope is not None else None
             if bank is not None and row is None and get_key_settings().bank_key_required:
                 raise KeyUnavailableError("The bank encryption key is not connected.")
-            values = {col.attribute: cast(object, state.dict.get(col.attribute)) for col in columns}
+            changed = [
+                col
+                for col in columns
+                if state.pending or state.attrs[col.attribute].history.has_changes()
+            ]
+            values = {col.attribute: cast(object, state.dict.get(col.attribute)) for col in changed}
             restores.append(_Restore(instance, values, row is not None))
             if row is None:
                 if bank is not None:
@@ -409,7 +419,7 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                 if scope not in index_keys:
                     index_keys[scope] = _index_key(db, row)
                 _update_indexes(state, organization, row.bank_id, index_keys[scope])
-            for col in columns:
+            for col in changed:
                 value = values[col.attribute]
                 if value is not None:
                     message = sdk.encrypt(
@@ -498,8 +508,12 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
             decoded = _JSON.validate_json(plaintext)
             if isinstance(col.kind, ProtectedText) and not isinstance(decoded, str):
                 raise KeyIntegrityError("Encrypted text field has an invalid value.")
-            if isinstance(col.kind, ProtectedJSON) and not isinstance(decoded, dict):
-                raise KeyIntegrityError("Encrypted JSON field has an invalid value.")
+            if isinstance(col.kind, ProtectedJSON):
+                valid_shape = (
+                    isinstance(decoded, list) if col.kind.empty_list else isinstance(decoded, dict)
+                )
+                if not valid_shape:
+                    raise KeyIntegrityError("Encrypted JSON field has an invalid value.")
             attributes.set_committed_value(instance, col.attribute, decoded)
             versions[col.attribute] = True
 

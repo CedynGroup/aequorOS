@@ -172,3 +172,52 @@ def test_read_refreshes_preloaded_reference_and_wrapper_after_rotation(
         assert old_envelope.wrapped_key != wrapped
     finally:
         stale.close()
+
+
+def test_field_flush_allows_separate_storage_transactions_and_excludes_rotation(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tests.core.test_bank_field_encryption import NAME, counterparty
+
+    database = db_session.get_bind()
+    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL row locks and independent connections are required.")
+    monkeypatch.setattr(registry, "provider_for", lambda _name: bank_storage.provider)
+    party = counterparty(db_session, include_package=False)
+    party_id = party.id
+    location = StorageLocation(SLUG, "raw", "synthetic/field-and-object.csv")
+    content = b"synthetic uploaded identity"
+    storage = bank_storage.storage
+    descriptor = storage.write(location, io.BytesIO(content), metadata_for(SLUG, "raw", content))
+    stored, stream = storage.read(location, version_id=descriptor.version_id)
+    assert stream.read() == content and stored.metadata.kms_key_id == KEY.key_id
+    stream.close()
+    waiting_pids: Queue[int] = Queue()
+
+    def rotate() -> int:
+        with _observed_session(database, waiting_pids) as writer, writer.begin():
+            row = registry.scoped_key(writer, bank_id="BK-SAMP0001", organization_id=ORG_1)
+            _ = writer.execute(
+                text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG_1}
+            )
+            return registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        rotation = pool.submit(rotate)
+        try:
+            _wait_for_row_lock(database, waiting_pids.get(timeout=10))
+            assert not rotation.done()
+        finally:
+            db_session.commit()
+        assert rotation.result(timeout=10) >= 3
+    bank_storage.provider.set_status(KEY, KeyStatus.DISABLED)
+    db_session.expunge_all()
+    from app.models.canonical import CanonicalCounterparty
+
+    loaded = db_session.get(CanonicalCounterparty, party_id)
+    assert loaded is not None and loaded.name == NAME
+    _, stream = storage.read(location, version_id=descriptor.version_id)
+    assert stream.read() == content
+    stream.close()

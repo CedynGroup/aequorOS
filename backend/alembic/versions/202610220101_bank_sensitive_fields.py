@@ -32,6 +32,45 @@ WIDENED = (
     ("related_party_roles", "icag_registration", 60),
 )
 
+PROTECTED_TEXT = (
+    *((table, column) for table, column, _ in WIDENED),
+    ("related_party_roles", "other_responsibilities"),
+    ("ingestion_batches", "error_message"),
+    ("translation_failures", "error_message"),
+    ("regulatory_packages", "notes"),
+)
+PROTECTED_JSON = (
+    (COUNTERPARTIES, "external_identifiers"),
+    (COUNTERPARTIES, "attributes"),
+    (PARTIES, "contact"),
+    ("ingestion_batches", "validation_report"),
+    ("ingestion_batches", "etl_report"),
+    ("lineage_records", "details"),
+    ("translation_failures", "raw_record"),
+    ("bi_dashboard_versions", "spec"),
+    ("bi_subscriptions", "query"),
+    ("bi_alerts", "filters"),
+    ("regulatory_packages", "snapshot"),
+    ("regulatory_packages", "validation_report"),
+)
+ALERT_REASONS = (
+    "authorization_revoked",
+    "no_governed_limit",
+    "no_figure",
+    "unknown_member",
+    "query_refused",
+    "data_scope_unsupported",
+)
+IDENTITY_REASON = "bank_key_identity_bi_unavailable"
+
+
+def _alert_reasons(reasons: tuple[str, ...]) -> None:
+    op.drop_constraint("ck_bi_alert_events_reason", "bi_alert_events", type_="check")
+    values = ", ".join(f"'{reason}'" for reason in reasons)
+    op.create_check_constraint(
+        "ck_bi_alert_events_reason", "bi_alert_events", f"reason IS NULL OR reason IN ({values})"
+    )
+
 
 def _current_index(column: str) -> None:
     op.create_index(
@@ -45,6 +84,7 @@ def _current_index(column: str) -> None:
 
 
 def upgrade() -> None:
+    _alert_reasons((*ALERT_REASONS, IDENTITY_REASON))
     for table, column, width in WIDENED:
         op.alter_column(table, column, existing_type=sa.String(width), type_=sa.Text())
     for column in (
@@ -91,16 +131,23 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Downgrading capacity cannot decrypt data, discard indexes under ciphertext,
     # or produce a database an older binary could misinterpret as plaintext.
-    tables = tuple(dict.fromkeys(table for table, _, _ in WIDENED))
-    with force_rls_suspended(op.get_bind(), *tables):
-        for table, column, _ in WIDENED:
-            if op.get_bind().scalar(
-                sa.text(
-                    f"SELECT EXISTS (SELECT 1 FROM {table} "
-                    f"WHERE {column} LIKE 'aqs-bank-field-v1:%')"
-                )
-            ):
-                raise RuntimeError("Bank-encrypted fields prohibit schema downgrade.")
+    tables = tuple(dict.fromkeys(table for table, _ in (*PROTECTED_TEXT, *PROTECTED_JSON)))
+    with force_rls_suspended(op.get_bind(), *tables, "bi_alert_events"):
+        for catalogue, predicate in (
+            (PROTECTED_TEXT, "{column} LIKE 'aqs-bank-field-v1:%'"),
+            (PROTECTED_JSON, "{column}::jsonb ? 'aqs-bank-field-v1'"),
+            ((("bi_alert_events", "reason"),), "{column} = 'bank_key_identity_bi_unavailable'"),
+        ):
+            for table, column in catalogue:
+                if op.get_bind().scalar(
+                    sa.text(
+                        f"SELECT EXISTS (SELECT 1 FROM {table} WHERE "
+                        + predicate.format(column=column)
+                        + ")"
+                    )
+                ):
+                    raise RuntimeError("Bank-encrypted fields prohibit schema downgrade.")
+    _alert_reasons(ALERT_REASONS)
     op.drop_index("ix_related_parties_name_blind", table_name=PARTIES)
     op.drop_index("ix_counterparties_name_blind", table_name=COUNTERPARTIES)
     op.drop_index("uq_canonical_counterparties_current", table_name=COUNTERPARTIES)

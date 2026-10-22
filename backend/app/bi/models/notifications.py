@@ -113,6 +113,7 @@ ALERT_EVENT_STATES: tuple[str, ...] = ("breached", "cleared", "not_evaluated")
 ALERT_NOT_EVALUATED_REASONS: tuple[str, ...] = (
     # The owner's authority no longer admits the measure (or they are inactive).
     "authorization_revoked",
+    "bank_key_identity_bi_unavailable",
     # ``threshold_basis='governed_limit'`` and the resolver refused: no register
     # row, a unit it will not convert, a scope it cannot resolve.
     "no_governed_limit",
@@ -229,7 +230,10 @@ class BiAlert(UuidV4PrimaryKeyMixin, _TenantKeys, TimestampMixin, Base):
     #: (``MEMBER_ID_MAX_LENGTH``).
     measure_id: Mapped[str] = mapped_column(String(120), nullable=False)
     filters: Mapped[list[dict[str, object]]] = mapped_column(
-        JSON, default=list, server_default=sql_text("'[]'"), nullable=False
+        ProtectedJSON(empty_list=True),
+        default=list,
+        server_default=sql_text("'[]'"),
+        nullable=False,
     )
     direction: Mapped[str] = mapped_column(String(8), nullable=False)
     threshold_basis: Mapped[str] = mapped_column(String(16), nullable=False)

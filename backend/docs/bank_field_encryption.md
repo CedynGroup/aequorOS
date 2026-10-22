@@ -17,7 +17,7 @@ well as current rows. The initial field catalogue is:
 | `related_parties` | `full_name`, `contact` | The shared record for directors, shareholders, beneficial owners and other registered parties. Protect the entire contact object, including arbitrary source-specific identity fields. |
 | `related_party_roles` | `other_responsibilities`, `term_of_appointment`, `icag_registration` | Free text and professional identifiers can identify the person even when the party name is encrypted. Resolve the owning bank through the organization-scoped parent party. |
 | `ingestion_batches` | `validation_report`, `etl_report`, `error_message` | Validation findings and matching samples can copy source identities. |
-| `bi_dashboard_versions`, `bi_subscriptions` | `spec`, `query` respectively | Saved identity-filter values, including historical views. Connected banks refuse identity BI until issue 595. |
+| `bi_dashboard_versions`, `bi_subscriptions`, `bi_alerts` | `spec`, `query`, `filters` respectively | Saved identity-filter values, including historical views. Connected banks refuse identity BI until issue 595. |
 | `translation_failures` | `raw_record`, `error_message` | Preserve rejected input for authorized review without exposing its identity fields. |
 | `lineage_records` | `details` | Transformation and deduplication evidence can copy identities. Organization-wide, bankless nodes remain outside this bank-scoped boundary. |
 | `regulatory_packages` | `snapshot`, `validation_report`, `notes` | Generated corporate and large-exposure returns contain registered names and named findings. Protect the complete document payload; numeric canonical balances remain queryable. |
@@ -187,7 +187,7 @@ normal behavior. Bank backfill removes existing derived identity copies, scoped
 to that bank, and can safely repeat. Keyless optional-rollout banks retain their
 existing BI behavior. No bank may claim cutover until backfill succeeds.
 
-Saved dashboard-version `spec` and subscription `query` objects use the same
+Saved dashboard-version `spec`, subscription `query` objects and alert `filters` lists use the same
 bank-held field encryption as operational records, protecting historical filter
 values. New saves and executions evaluate the same identity-member restriction.
 Append-only historical dashboard versions follow the approved clean-history

@@ -995,3 +995,69 @@ def test_register_digest_tracks_values_across_encryption_backfill(
     assert (
         register_state_digest(register_state.register_state_rows(db_session, CTX, BANK_A)) != before
     )
+
+
+@pytest.mark.parametrize(
+    "filters", [None, [], [{"member": "counterparty.name", "op": "eq", "values": [NAME]}]]
+)
+def test_saved_alert_list_filters_backfill_and_round_trip(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    filters: list[dict[str, object]] | None,
+) -> None:
+    from app.bi.models.notifications import BiAlert
+
+    alert = BiAlert(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        owner_user_id=USER_1,
+        name="Synthetic saved alert",
+        measure_id="loans.balance_rc",
+        filters=filters,
+        direction="above",
+        threshold_basis="stated",
+        threshold=Decimal(100),
+        notify_user_ids=[],
+    )
+    db_session.add(alert)
+    db_session.commit()
+    alert_id = alert.id
+    connect(db_session, provider)
+    db_session.expunge_all()
+    assert backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A).encrypted == 1
+    raw = cast(object, db_session.execute(text("SELECT filters FROM bi_alerts")).scalar_one())
+    assert "aqs-bank-field-v1" in str(raw) and NAME not in str(raw)
+    loaded = db_session.get(BiAlert, alert_id)
+    assert loaded is not None and loaded.filters == (filters or [])
+    loaded.filters = [{"member": "counterparty.id", "op": "eq", "values": ["synthetic-id"]}]
+    db_session.commit()
+    db_session.expunge_all()
+    updated = db_session.get(BiAlert, alert_id)
+    assert updated is not None
+    assert updated.filters == [
+        {"member": "counterparty.id", "op": "eq", "values": ["synthetic-id"]}
+    ]
+    assert backfill_bank(db_session, organization_id=ORG_1, bank_id=BANK_A).encrypted == 0
+
+
+def test_downgrade_catalogue_covers_the_protected_storage_contract() -> None:
+    from alembic.script import ScriptDirectory
+
+    from app.core.key_management.fields import ProtectedJSON, ProtectedText
+    from app.db.base import Base
+
+    revision = ScriptDirectory(str(Path(__file__).parents[2] / "alembic")).get_revision(
+        "202610220101"
+    )
+    assert revision is not None
+    migration = revision.module
+    text_catalogue = cast(tuple[tuple[str, str], ...], migration.PROTECTED_TEXT)
+    json_catalogue = cast(tuple[tuple[str, str], ...], migration.PROTECTED_JSON)
+    for kind, catalogue in ((ProtectedText, text_catalogue), (ProtectedJSON, json_catalogue)):
+        protected = {
+            (table.name, column.name)
+            for table in Base.metadata.tables.values()
+            for column in table.columns
+            if isinstance(column.type, kind)
+        }
+        assert set(catalogue) == protected
