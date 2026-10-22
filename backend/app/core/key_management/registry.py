@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
@@ -84,6 +85,31 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     db.add(row)
     db.flush()
     return row
+
+
+def bank_key(
+    db: Session, organization: str, bank: str, *, writing: bool = False
+) -> BankEncryptionKey | None:
+    # Serialize optional-plaintext writes with key connection, including the
+    # interval before any bank_encryption_keys row exists to lock.
+    banks = Base.metadata.tables["banks"]
+    _ = db.scalar(
+        select(banks.c.id)
+        .where(
+            banks.c.id == bank,
+            banks.c.organization_id == organization,
+        )
+        .with_for_update(read=True)
+    )
+    return db.scalar(
+        select(BankEncryptionKey)
+        .where(
+            BankEncryptionKey.organization_id == organization,
+            BankEncryptionKey.bank_id == bank,
+        )
+        .with_for_update(read=not writing)
+        .execution_options(populate_existing=True)
+    )
 
 
 def scoped_key(db: Session, *, bank_id: str, organization_id: str) -> BankEncryptionKey:
@@ -194,6 +220,8 @@ class ObjectKey:
 
 
 class EnvelopeStore(Protocol):
+    def for_session(self, db: Session) -> EnvelopeStore: ...
+
     def prepare(self, slug: str, context: dict[str, str]) -> ObjectKey: ...
 
     def open(self, slug: str, envelope_id: UUID, context: dict[str, str]) -> ObjectKey: ...
@@ -265,37 +293,55 @@ def open_envelope(
 
 class DatabaseEnvelopeStore:
     def __init__(
-        self, sessions: Callable[[], Session], providers: ProviderFactory = provider_for
+        self,
+        sessions: Callable[[], Session],
+        providers: ProviderFactory = provider_for,
+        *,
+        session: Session | None = None,
     ) -> None:
         self._sessions = sessions
         self._providers = providers
+        self._session = session
+
+    def for_session(self, db: Session) -> DatabaseEnvelopeStore:
+        return DatabaseEnvelopeStore(self._sessions, self._providers, session=db)
+
+    @contextmanager
+    def _transaction(self) -> Iterator[Session]:
+        if self._session is not None:
+            with self._session.no_autoflush:
+                yield self._session
+        else:
+            with self._sessions() as db, db.begin():
+                yield db
 
     @staticmethod
     def _bank(db: Session, slug: str) -> BankEncryptionKey:
-        row = db.scalar(
-            select(BankEncryptionKey)
-            .where(BankEncryptionKey.storage_slug == slug)
-            .with_for_update(read=True)
-            .execution_options(populate_existing=True)
-        )
+        row = db.scalar(select(BankEncryptionKey).where(BankEncryptionKey.storage_slug == slug))
         if row is None:
             raise KeyUnavailableError("The bank encryption key is not connected.")
-        return row
+        _scope_envelopes(db, row.organization_id)
+        locked = bank_key(db, row.organization_id, row.bank_id)
+        if locked is None or locked.storage_slug != slug:
+            raise KeyUnavailableError("The bank encryption key is not connected.")
+        return locked
 
     def prepare(self, slug: str, context: dict[str, str]) -> ObjectKey:
-        with self._sessions() as db, db.begin():
+        with self._transaction() as db:
             row = self._bank(db, slug)
-            _scope_envelopes(db, row.organization_id)
-            return prepare_envelope(db, row, context, self._providers)
+            key = prepare_envelope(db, row, context, self._providers)
+            db.flush()
+            return key
 
     def open(self, slug: str, envelope_id: UUID, context: dict[str, str]) -> ObjectKey:
-        with self._sessions() as db, db.begin():
+        with self._transaction() as db:
             row = self._bank(db, slug)
-            _scope_envelopes(db, row.organization_id)
             return open_envelope(db, row, envelope_id, context, self._providers)
 
 
 def _scope_envelopes(db: Session, organization_id: str) -> None:
+    if db.info.get("organization_id") not in (None, organization_id):
+        raise KeyIntegrityError("The storage key does not belong to this organization.")
     db.info["organization_id"] = organization_id
     # Resolving the pre-tenant registry already began the transaction, so
     # after_begin ran before the organization was known.

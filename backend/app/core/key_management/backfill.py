@@ -11,12 +11,12 @@ from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import InstanceState, Session
 
 from app.core.key_management.fields import (
-    bank_key,
     field_columns,
     mark_for_backfill,
     needs_backfill,
 )
 from app.core.key_management.preflight import IMMUTABLE_FIELDS, require_clean_immutable_history
+from app.core.key_management.registry import bank_key
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.db.base import Base
 

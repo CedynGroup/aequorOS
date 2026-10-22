@@ -166,6 +166,7 @@ def upload_attachment(  # noqa: PLR0913 - an upload is its seven named parts
     content: bytes,
     section_key: str | None = None,
 ) -> IcaapAttachmentRead:
+    storage = storage.for_session(db)
     cycle = guards.get_cycle_or_404(db, access, cycle_id, for_update=True)
     guards.require_attachable(cycle)
     framework = guards.require_framework(cycle)

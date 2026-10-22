@@ -73,6 +73,7 @@ def open_push_batch(
     payload: PushBatchOpen,
     storage: StorageClient,
 ) -> PushBatchStatusRead:
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     storage.ensure_institution(slug)
@@ -135,6 +136,7 @@ def stage_push_records(  # noqa: PLR0913 - mirrors record_event's shape
     page: PushRecordsPage,
     storage: StorageClient,
 ) -> PushBatchStatusRead:
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     manifest = _get_manifest_or_404(ctx, bank, slug, push_batch_id, storage)
@@ -192,6 +194,7 @@ def commit_push_batch(
     push_batch_id: UUID,
     storage: StorageClient,
 ) -> IngestionBatchStartRead:
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     manifest = _get_manifest_or_404(ctx, bank, slug, push_batch_id, storage)
@@ -252,6 +255,7 @@ def get_push_batch(
     push_batch_id: UUID,
     storage: StorageClient,
 ) -> PushBatchStatusRead:
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     return _status_read(_get_manifest_or_404(ctx, bank, slug, push_batch_id, storage))

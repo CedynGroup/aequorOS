@@ -308,6 +308,7 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
     Locks last until commit or rollback, including when the caller owns the
     transaction via ``commit=False``. SQLite skips reservations and row locks.
     """
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     try:
         adapter, mapping_record, mapping, source_path, extraction = _prepare_extraction(
@@ -2207,6 +2208,7 @@ def upload_source(  # noqa: PLR0913 - mirrors record_event's shape
     provenance metadata. The temp tier's 30-day lifecycle cleans up staged
     files that never get ingested.
     """
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     storage.ensure_institution(slug)

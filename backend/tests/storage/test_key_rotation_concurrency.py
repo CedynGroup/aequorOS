@@ -174,7 +174,7 @@ def test_read_refreshes_preloaded_reference_and_wrapper_after_rotation(
         stale.close()
 
 
-def test_field_flush_allows_separate_storage_transactions_and_excludes_rotation(
+def test_field_flush_and_storage_share_transaction_and_exclude_rotation(
     bank_storage: BankStorage,
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -189,7 +189,7 @@ def test_field_flush_allows_separate_storage_transactions_and_excludes_rotation(
     party_id = party.id
     location = StorageLocation(SLUG, "raw", "synthetic/field-and-object.csv")
     content = b"synthetic uploaded identity"
-    storage = bank_storage.storage
+    storage = bank_storage.storage.for_session(db_session)
     descriptor = storage.write(location, io.BytesIO(content), metadata_for(SLUG, "raw", content))
     stored, stream = storage.read(location, version_id=descriptor.version_id)
     assert stream.read() == content and stored.metadata.kms_key_id == KEY.key_id

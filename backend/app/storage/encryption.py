@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
+from copy import copy
 from typing import BinaryIO, cast
 from uuid import UUID
 
@@ -34,27 +35,32 @@ class ObjectEncryption:
     def __init__(self, store: EnvelopeStore | None = None) -> None:
         self._store = store
         self._injected_store = store is not None
+        self._session: Session | None = None
+
+    def for_session(self, db: Session) -> ObjectEncryption:
+        bound = copy(self)
+        bound._session = db
+        return bound
 
     def bank_key_required(self, location: StorageLocation) -> bool:
         """Connected keys always fail closed, independently of the rollout flag."""
         if self._injected_store or get_key_settings().bank_key_required:
             return True
+        statement = select(BankEncryptionKey.id).where(
+            BankEncryptionKey.storage_slug == location.institution_slug
+        )
+        if self._session is not None:
+            with self._session.no_autoflush:
+                return self._session.scalar(statement) is not None
         sessions = cast(Callable[[], Callable[[], Session]], database.get_sessionmaker)()
         with sessions() as db:
-            return (
-                db.scalar(
-                    select(BankEncryptionKey.id).where(
-                        BankEncryptionKey.storage_slug == location.institution_slug
-                    )
-                )
-                is not None
-            )
+            return db.scalar(statement) is not None
 
     def _envelopes(self) -> EnvelopeStore:
         if self._store is None:
             sessions = cast(Callable[[], Callable[[], Session]], database.get_sessionmaker)()
             self._store = DatabaseEnvelopeStore(sessions)
-        return self._store
+        return self._store.for_session(self._session) if self._session is not None else self._store
 
     def encrypt(
         self, location: StorageLocation, data: BinaryIO, metadata: ObjectMetadata

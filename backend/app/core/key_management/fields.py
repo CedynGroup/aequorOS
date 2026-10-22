@@ -158,31 +158,6 @@ def _scope(
     return organization, bank
 
 
-def bank_key(
-    db: Session, organization: str, bank: str, *, writing: bool = False
-) -> BankEncryptionKey | None:
-    # Serialize optional-plaintext writes with key connection, including the
-    # interval before any bank_encryption_keys row exists to lock.
-    banks = Base.metadata.tables["banks"]
-    _ = db.scalar(
-        select(banks.c.id)
-        .where(
-            banks.c.id == bank,
-            banks.c.organization_id == organization,
-        )
-        .with_for_update(read=True)
-    )
-    return db.scalar(
-        select(BankEncryptionKey)
-        .where(
-            BankEncryptionKey.organization_id == organization,
-            BankEncryptionKey.bank_id == bank,
-        )
-        .with_for_update(read=not writing)
-        .execution_options(populate_existing=True)
-    )
-
-
 def _context(state: InstanceState[object], organization: str, bank: str) -> dict[str, str]:
     record_id = cast(object, state.dict.get("id"))
     if not isinstance(record_id, UUID):
@@ -288,7 +263,7 @@ def blind_index(  # noqa: PLR0913 - explicit scope at the search boundary
 ) -> str:
     """Compute a scoped exact-match token; key access is required on every call."""
     with db.no_autoflush:
-        row = bank_key(db, organization_id, bank_id)
+        row = registry.bank_key(db, organization_id, bank_id)
         if row is None and get_key_settings().bank_key_required:
             raise KeyUnavailableError("The bank encryption key is not connected.")
         secret = _index_key(db, row) if row is not None else None
@@ -388,7 +363,7 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
             organization, bank = _scope(db, state, columns)
             scope = (organization, bank) if bank is not None else None
             if scope is not None and scope not in bank_rows:
-                bank_rows[scope] = bank_key(db, organization, scope[1])
+                bank_rows[scope] = registry.bank_key(db, organization, scope[1])
             row = bank_rows[scope] if scope is not None else None
             if bank is not None and row is None and get_key_settings().bank_key_required:
                 raise KeyUnavailableError("The bank encryption key is not connected.")
@@ -475,7 +450,7 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
             if attribute not in state.dict:
                 _ = cast(object, attributes.get_attribute(instance, attribute))
         organization, bank = _scope(db, state, columns)
-        row = bank_key(db, organization, bank) if bank is not None else None
+        row = registry.bank_key(db, organization, bank) if bank is not None else None
         if bank is not None and row is None and get_key_settings().bank_key_required:
             raise KeyUnavailableError("The bank encryption key is not connected.")
         versions = cast(dict[str, bool], state.info.setdefault(_VERSIONS, {}))

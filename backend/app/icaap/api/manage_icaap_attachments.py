@@ -129,6 +129,7 @@ def download_icaap_attachment(  # noqa: PLR0913 - the addressed file is five pat
     access: IcaapView,
     storage: IcaapStorage,
 ) -> StreamingResponse:
+    storage = storage.for_session(db)
     _ = bank_id
     row, slug = attachments.prepare_download(db, access, cycle_id, attachment_id)
     _object, stream = storage.read(

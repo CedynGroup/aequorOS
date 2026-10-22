@@ -68,6 +68,13 @@ formatting or matching. Move name ordering into the application. Group numeric
 SQL aggregates by opaque identities or a dedicated grouping index, then decrypt
 labels; randomized ciphertext is not a stable SQL grouping key.
 
+Storage used alongside a database unit of work is bound with
+`StorageClient.for_session(db)`. Field and object envelopes then use the same
+transaction and lock owner; the caller commits or rolls back both catalogues.
+The process-wide client stays unbound for standalone downloads and maintenance.
+No plaintext data key is cached across operations. Rotation and retirement keep
+their exclusive locks, including when banks share a master key.
+
 ## Exact-match indexes
 
 Create a random, per-bank index secret wrapped through the same provider and
