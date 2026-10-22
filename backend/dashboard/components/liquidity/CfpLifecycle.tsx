@@ -17,7 +17,7 @@ import { inputCls } from "@/components/institution/shared";
 import { hasEffectiveCapability, hasStructuralCapability } from "@/lib/modules";
 import { useCfpSummary, useCfpLifecycle } from "@/lib/api/hooks";
 import { fmtDateUTC } from "@/lib/api/values";
-import { cfpContentToWire } from "@/lib/api/cfp";
+import { cfpContentForComparison } from "@/lib/api/cfp";
 import { isApiError } from "@/lib/api/client";
 
 const label = (value: string) =>
@@ -181,8 +181,8 @@ function CfpEditor({
   const selfApproval =
     !!current?.preparedBy && current.preparedBy === profile?.userId;
   const hasUnsavedContent =
-    JSON.stringify(cfpContentToWire(content)) !==
-    JSON.stringify(cfpContentToWire(current?.content ?? {}));
+    JSON.stringify(cfpContentForComparison(content)) !==
+    JSON.stringify(cfpContentForComparison(current?.content ?? {}));
   const staleRevision =
     isApiError(mutation.error) &&
     mutation.error.errorCode === "stale_cfp_revision";

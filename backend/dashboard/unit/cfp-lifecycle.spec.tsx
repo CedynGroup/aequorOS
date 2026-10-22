@@ -525,6 +525,159 @@ print(json.dumps(True))
   );
 }, 15_000);
 
+it.each([
+  {
+    field: "deposit Runoff Uplift Pct",
+    wireField: "deposit_runoff_uplift_pct",
+    saved: "0.500",
+    changed: "1.5",
+    original: "0.5",
+  },
+  {
+    field: "funding Cost Uplift Bps",
+    wireField: "funding_cost_uplift_bps",
+    saved: "12.500",
+    changed: "15.5",
+    original: "12.5",
+  },
+  {
+    field: "deposit Runoff Uplift Pct",
+    wireField: "deposit_runoff_uplift_pct",
+    saved: "1E-7",
+    changed: "0.0000002",
+    original: "0.0000001",
+  },
+  {
+    field: "funding Cost Uplift Bps",
+    wireField: "funding_cost_uplift_bps",
+    saved: "0.000",
+    changed: "0.5",
+    original: "0",
+  },
+])(
+  "allows approval after restoring $field loaded as a Decimal string ($saved)",
+  async ({ field, wireField, saved, changed, original }) => {
+    context.actor = "checker";
+    let current = {
+      ...plan,
+      content: {
+        ...authoredContent,
+        behavioral_liquidity_scenarios: [
+          {
+            ...authoredContent.behavioral_liquidity_scenarios[0],
+            deposit_runoff_uplift_pct: "0.500",
+            funding_cost_uplift_bps: "12.500",
+            [wireField]: saved,
+          },
+        ],
+      },
+    };
+    const requests: unknown[] = [];
+    server.use(
+      http.get(url, () =>
+        HttpResponse.json({
+          current,
+          approved: current.status === "approved" ? current : null,
+        }),
+      ),
+      http.post(`${url}/approve`, async ({ request }) => {
+        requests.push(await request.json());
+        current = { ...current, status: "approved", revision: "revision-2" };
+        return HttpResponse.json(current);
+      }),
+    );
+    const user = userEvent.setup();
+    mount();
+    await user.type(
+      await screen.findByLabelText("Reason / evidence"),
+      "Reviewed unchanged overlays",
+    );
+    await user.type(
+      screen.getByLabelText("Board approval reference"),
+      "Board 42",
+    );
+    const approval = () =>
+      screen.getByRole("button", { name: "Record Board approval" });
+    expect(approval()).toBeEnabled();
+    const input = screen.getByLabelText(field);
+    await user.clear(input);
+    await user.type(input, changed);
+    expect(approval()).toBeDisabled();
+    await user.click(approval());
+    expect(requests).toEqual([]);
+    await user.clear(input);
+    await user.type(input, original);
+    expect(approval()).toBeEnabled();
+    await user.click(approval());
+    await screen.findByText(/Current plan: v1 · approved/);
+    expect(requests).toEqual([
+      {
+        expected_revision: "revision-1",
+        approval_reference: "Board 42",
+        reason: "Reviewed unchanged overlays",
+      },
+    ]);
+  },
+);
+
+it.each([
+  {
+    field: "deposit Runoff Uplift Pct",
+    wireField: "deposit_runoff_uplift_pct",
+    saved: "0.500000000000000000001",
+    changed: "0.5",
+  },
+  {
+    field: "funding Cost Uplift Bps",
+    wireField: "funding_cost_uplift_bps",
+    saved: "12.500000000000000000001",
+    changed: "12.5",
+  },
+])(
+  "blocks approval when editing $field changes significant Decimal digits",
+  async ({ field, wireField, saved, changed }) => {
+    context.actor = "checker";
+    server.use(
+      http.get(url, () =>
+        HttpResponse.json({
+          current: {
+            ...plan,
+            content: {
+              ...authoredContent,
+              behavioral_liquidity_scenarios: [
+                {
+                  ...authoredContent.behavioral_liquidity_scenarios[0],
+                  [wireField]: saved,
+                },
+              ],
+            },
+          },
+          approved: null,
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    mount();
+    await user.type(
+      await screen.findByLabelText("Reason / evidence"),
+      "Reviewed",
+    );
+    await user.type(
+      screen.getByLabelText("Board approval reference"),
+      "Board 42",
+    );
+    expect(
+      screen.getByRole("button", { name: "Record Board approval" }),
+    ).toBeEnabled();
+    const input = screen.getByLabelText(field);
+    await user.clear(input);
+    await user.type(input, changed);
+    expect(
+      screen.getByRole("button", { name: "Record Board approval" }),
+    ).toBeDisabled();
+  },
+);
+
 it("preserves loaded and edited funding descriptions through the closed wire contract", () => {
   const requests: {
     content: ReturnType<typeof cfpContentToWire>;
