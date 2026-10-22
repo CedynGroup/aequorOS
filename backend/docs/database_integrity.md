@@ -54,12 +54,13 @@ that every other UUID in the repository is an approved unbound reference. New
 live links must declare their scoped parent. A new historical or polymorphic
 exception should name its retention/verification contract here.
 
-DB roles, session cleanup, and JSON shapes/index optimization remain separate
-workstreams. This change creates no seeding path and changes no financial figures.
+DB roles and session cleanup remain separate workstreams. The JSON shape and
+measured index contracts below create no seeding path and change no financial figures.
 
 ## Migration and validation evidence
 
-Each revision locks the affected tables and verifies across tenants through
+The ownership and live-link revisions above lock the affected tables and verify
+across tenants through
 `force_rls_suspended`: table ownership with FORCE RLS temporarily lifted, or
 existing BYPASSRLS visibility. It reports the table/reference plus invalid count
 before installing its keys. A failure rolls the transaction back; it never deletes
@@ -87,3 +88,96 @@ Loan-lineage, structural parity and live-link fixtures migrate to current head.
 Run these with native PostgreSQL 17 via
 `AQS_LOCAL_SERVICES=auto uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/db/test_*integrity.py tests/db/test_canonical_migration_structural_parity.py`
 from `backend/`; the service wrapper and fixtures isolate the test schemas.
+
+## Reference JSON shapes and column representations
+
+The [API integration guide §3.5](../../docs/API_INTEGRATION.md#35-reference-datasets)
+owns reference ingestion validation, consumed field names, retained alternatives
+and adapter mapping requirements. Registered schemas live in
+`app/domain/ingestion/reference_schemas/` and are enforced by `ReferenceRowData`.
+
+At head before this change (`202610120099`), 25 bounded model string declarations
+in `jobs` and the original case/document/assessment/finding vertical were actually
+unbounded TEXT in PostgreSQL. Models now declare TEXT too. The deployed schema is
+already the data-preserving representation, so no type-changing migration is
+needed. No value is truncated or cast to a narrower type.
+
+The intentional JSON/JSONB representation contract is owned by
+[CODEBASE_CONVENTIONS.md §1](../../CODEBASE_CONVENTIONS.md#sqlalchemy-models-appmodelspy).
+UUID, timestamp and binary representations compile to their PostgreSQL dialect
+types. The whole-root-table
+column type parity test normalizes only the documented JSON/JSONB difference;
+other type/width differences fail. Canonical FK/key/index parity remains intact.
+
+Coverage: `tests/domain/ingestion/test_reference_row_enforcement.py`,
+`tests/adapters/test_reference_boundary.py`, adapter end-to-end tests and
+`tests/db/test_column_representation_parity.py`.
+
+## Measured reverse-lineage indexes (`202610140100`)
+
+Measured on task-owned native PostgreSQL 17, port 5552, in a disposable schema
+migrated through `202610120099`; no customer or primary database was accessed.
+The generated distribution contains 300,000 positions, 900,000 snapshots across
+three dates, and 1,000 batch-bound lineage nodes. One node owns 30,000 positions
+(10% of the book); the remaining nodes own about 270 each. A real existing node
+has no children, exercising the negative reverse-FK case. The history distribution
+has 1,000 cases with 100 edits each and one case with 20,000 edits, non-sequential
+UUIDs, randomized creation timestamps and approximately 280-byte reason text.
+All financial data here is synthetic query-probe material, never provisioned bank data.
+
+The reverse-FK workload is PostgreSQL's scoped referential-integrity lookup shape:
+
+```sql
+SELECT 1 FROM ONLY canonical_positions AS x
+WHERE lineage_id = :lineage AND organization_id = :org AND bank_id = :bank
+LIMIT 1 FOR KEY SHARE OF x;
+```
+
+The same query applies to `canonical_position_snapshots`. The history workload
+comes from `financial_workspace.financial_stmt` / `financial_validation.financial_stmt`:
+
+```sql
+SELECT * FROM financial_manual_edit_history
+WHERE organization_id = :org AND case_id = :case
+ORDER BY created_at ASC, id ASC;
+```
+
+`EXPLAIN (ANALYZE, BUFFERS)` results from the initial before/after run:
+
+| Query                      | Before plan / ms                                                             | After plan / ms                       | Before / after buffer blocks (hit + read) |
+| -------------------------- | ---------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------- |
+| Positions: typical lineage | Limit → LockRows → Seq Scan / 13.451                                         | Limit → LockRows → Index Scan / 0.021 | 3,840 / 5                                 |
+| Positions: 10% fan-out     | Limit → LockRows → Seq Scan / 11.362                                         | Same sequential path / 0.016          | 3,154 / 2                                 |
+| Positions: no children     | Limit → LockRows → Seq Scan / 24.887                                         | Limit → LockRows → Index Scan / 0.008 | 6,977 / 3                                 |
+| Snapshots: typical lineage | Limit → LockRows → Seq Scan / 42.573                                         | Limit → LockRows → Index Scan / 0.014 | 12,777 / 5                                |
+| Snapshots: 10% fan-out     | Limit → LockRows → Seq Scan / 36.267                                         | Same sequential path / 0.007          | 10,576 / 3                                |
+| Snapshots: no children     | Limit → LockRows → Seq Scan / 81.986                                         | Limit → LockRows → Index Scan / 0.009 | 23,342 / 3                                |
+| History: 100 edits         | Sort → Bitmap Heap Scan → Bitmap Index Scan (existing case index) / 0.090    | Same existing path / 0.042            | 8 / 8                                     |
+| History: 20,000 edits      | Gather Merge → Sort → parallel Bitmap Heap Scan → Bitmap Index Scan / 27.590 | Same existing path / 16.176           | 1,100 / 1,100                             |
+
+High fan-out existence checks retain a sequential plan: finding the first of many
+children can already be cheap. Their faster second-run times reflect warming and
+scan placement, not use of the new index. The typical and negative lineage checks
+use the new indexes and reduce thousands of scanned buffers to at most five.
+
+The history candidate `(case_id, created_at, id)` occupied 7,094,272 bytes and was
+unused in both history plans. Its apparent time gain is cache warming, not index
+benefit; it is **not shipped**. The existing `(case_id)` path serves the measured history queries. Snapshot-parent
+references already have an `(organization_id, position_id)` path, left unchanged.
+No index is inferred for the other canonical tables or the FK census.
+
+Only `(lineage_id)` B-trees on positions and snapshots ship, sized at 2,293,760
+and 6,832,128 bytes respectively (about 8.7 MiB total in this distribution).
+The globally unique lineage UUID narrows the candidate set; organization and bank
+remain checked by the exact query and existing composite FK. These indexes cover
+all generations, including retained history, because an integrity check cannot
+ignore superseded or withdrawn evidence. They add one index write per inserted
+position/snapshot; no covering payload or speculative wide key is included.
+
+The additive migration uses transactional index builds, taking PostgreSQL's
+normal SHARE build locks on those two tables and therefore blocking concurrent
+writes for the build duration. Schedule it with the existing migration maintenance
+window; table size, I/O and actual deployment plans determine the duration.
+The migration rewrites no deployed revisions, deletes no rows and changes no
+FK, RLS, lifecycle, grants or parent-retention semantics. Downgrade removes only
+the two indexes. Timings are development evidence, not a production latency promise.

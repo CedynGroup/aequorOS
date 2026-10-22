@@ -94,7 +94,7 @@ class FxTrendPointRead(ClosedModel):
     period_end: date
     nop_ghs: Decimal
     nop_pct_tier1: Decimal
-    var_99_1d_ghs: Decimal
+    var_99_1d_ghs: Decimal | None = Field(title="Fx Trend Var")
     stored: bool
 
 

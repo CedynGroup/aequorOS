@@ -58,7 +58,7 @@ for ICAAP-STRESS (`:965`, with liquidity and capital headlines at `:1001`).
 Several returns therefore bind **more than one** run, and the signature must
 cover all of them — which the digest in §3.1 does. The run persists
 `inputs` (the full snapshot), `input_hash`, `engine_version`,
-`input_schema_version` (`bank-facts-v2`), plus child `RegulatoryLineItem`,
+`input_schema_version` (see the [calculation-run versioning contract](../ARCHITECTURE.md#3-the-calculation-run-pattern-reuse-this-for-every-new-engine)), plus child `RegulatoryLineItem`,
 `RegulatoryMetricResult`, and `RegulatoryValidation` rows.
 
 **Stage 3 — the package.** `POST /banks/{bank_id}/regulatory-packages`

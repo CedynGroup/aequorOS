@@ -26791,9 +26791,16 @@
             "type": "boolean"
           },
           "var_99_1d_ghs": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Var 99 1D Ghs",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Trend Var"
           }
         },
         "required": [

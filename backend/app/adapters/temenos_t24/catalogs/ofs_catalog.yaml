@@ -257,7 +257,9 @@ INSTITUTION:
   selection:
     COMPANY.CODE: "{company}"
   dataset_key: institution
-  field_map: {}
+  field_map:
+    COMPANY.CODE: institution_id
+    COMPANY.NAME: name
   attribute_keys: []
   lcy_fields: {}
   enum_mappings: {}

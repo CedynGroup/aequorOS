@@ -268,6 +268,9 @@ class TemenosContractSuite:
         kinds = {row.dataset_kind for row in refs}
         assert "business_units" in kinds
         assert "institution" in kinds
+        institution = next(row for row in refs if row.dataset_kind == "institution")
+        assert institution.payload["institution_id"] == "GH0010001"
+        assert institution.payload["name"] == "Sample Bank Ltd"
 
         # The kind existing is not enough, and asserting only that is how this
         # broke: when `business_units` began enforcing its own schema, every T24

@@ -23,15 +23,10 @@ const BACKEND_DIR = path.join(__dirname, "..", "..", "..");
  * added, 20 passed / 1.6 min.
  */
 export function requireObjectStorage(): void {
-  // Deliberately NOT /health/ready. `storage_configured` returns true with
-  // nothing configured at all — backend defaults to "s3", bucket and region
-  // carry defaults, and a null endpoint_url short-circuits to true before the
-  // credentials are ever considered. Readiness therefore reports storage "ok"
-  // on a machine that cannot store a byte, which is its own bug and the reason
-  // this check first failed to fire.
-  //
-  // Check the same source the backend reads instead: process.env (CI exports
-  // them) falling back to backend/.env (how a developer machine supplies them).
+  // This preflight checks explicit storage configuration before the journey
+  // exercises artifact persistence. Runtime dependency probes are documented in
+  // backend/README.md#deployment-health.
+  // Read process.env (CI exports it), falling back to backend/.env (local setup).
   const required = ["S3_ENDPOINT", "S3_ACCESS_KEY", "S3_SECRET_KEY"];
   const fromEnvFile = new Set<string>();
   try {

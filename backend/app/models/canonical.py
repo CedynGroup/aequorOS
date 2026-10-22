@@ -319,6 +319,7 @@ class CanonicalPosition(CanonicalMetadataMixin, Base):
 
     __tablename__ = "canonical_positions"
     __table_args__ = (
+        Index("ix_canonical_positions_lineage_id", "lineage_id"),
         CheckConstraint(
             f"position_type IN ({_values(POSITION_TYPES)})",
             name="ck_canonical_positions_position_type",
@@ -692,6 +693,7 @@ class CanonicalPositionSnapshot(CanonicalMetadataMixin, Base):
 
     __tablename__ = "canonical_position_snapshots"
     __table_args__ = (
+        Index("ix_canonical_position_snapshots_lineage_id", "lineage_id"),
         CheckConstraint(
             f"rate_type IN ({_values(RATE_TYPES)}) OR rate_type IS NULL",
             name="ck_canonical_position_snapshots_rate_type",

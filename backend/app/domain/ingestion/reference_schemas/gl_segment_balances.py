@@ -54,7 +54,7 @@ Docs: docs/data_engine/datasets/gl_segment_balances.md.
 from __future__ import annotations
 
 import dataclasses
-from datetime import date
+from collections.abc import Mapping
 
 from . import ReferenceSchema, register
 
@@ -72,55 +72,34 @@ RESIDUAL_BRANCH_NAME = "Unallocated (not attributed to a branch)"
 #: is copied into verbatim. Asserted equal to the model by test, not imported.
 SEGMENT_FIELD_MAX_LENGTHS: dict[str, int] = {"branch_id": 120, "gl_account_code": 80}
 
-SCHEMA = register(
-    ReferenceSchema(
-        kind="gl_segment_balances",
-        description=(
-            "General ledger by branch: the fiscal-year-to-date balance of one P&L account for "
-            "one business unit at the reporting date, on the same convention as the account's "
-            "own institution-level balance"
-        ),
-        grain=(
-            "one row per (as_of_date, gl_account_code, branch_id, currency); one reporting date "
-            "per push (as_of_date = the reporting date), the whole breakdown in that batch"
-        ),
-        required=("as_of_date", "gl_account_code", "branch_id", "ytd_balance"),
-        optional=("currency", "gl_account_name", "branch_name", "notes"),
-        numeric=("ytd_balance",),
-        dates=("as_of_date",),
-        # The widths of ``bi_fact_gl_branch_monthly.branch_code`` (also
-        # ``bi_dim_branch.branch_code``) and ``gl_account_code``, which carry these
-        # two verbatim (pinned by test against the model). ``branch_code`` is part of
-        # that mart's PRIMARY KEY, so a longer value is not a warning but a build
-        # that cannot write its rows.
-        max_lengths=SEGMENT_FIELD_MAX_LENGTHS,
-    )
+_DECLARED = ReferenceSchema(
+    kind="gl_segment_balances",
+    description=(
+        "General ledger by branch: the fiscal-year-to-date balance of one P&L account for "
+        "one business unit at the reporting date, on the same convention as the account's "
+        "own institution-level balance"
+    ),
+    grain=(
+        "one row per (as_of_date, gl_account_code, branch_id, currency); one reporting date "
+        "per push (as_of_date = the reporting date), the whole breakdown in that batch"
+    ),
+    required=("as_of_date", "gl_account_code", "branch_id", "ytd_balance"),
+    optional=("currency", "gl_account_name", "branch_name", "notes"),
+    numeric=("ytd_balance",),
+    dates=("as_of_date",),
+    # The widths of ``bi_fact_gl_branch_monthly.branch_code`` (also
+    # ``bi_dim_branch.branch_code``) and ``gl_account_code``, which carry these
+    # two verbatim (pinned by test against the model). ``branch_code`` is part of
+    # that mart's PRIMARY KEY, so a longer value is not a warning but a build
+    # that cannot write its rows.
+    max_lengths=SEGMENT_FIELD_MAX_LENGTHS,
 )
 
 
-def _iso_date_problem(field: str, value: object) -> str | None:
-    """``None`` when ``value`` is an ISO date, else the problem to report.
-
-    ``ReferenceSchema.dates`` is a template/documentation hint — ``validate_row``
-    never reads it — so a date this dataset KEYS on has to be checked here. A
-    malformed reporting date would not fail anything loudly: the row would simply
-    never match a ledger month and would be reported as unreconcilable long after
-    the push succeeded.
-    """
-    text = str(value or "").strip()
-    if not text:
-        return None  # absence is the required-field check's business, not this one
-    try:
-        date.fromisoformat(text)
-    except ValueError:
-        return f"field '{field}' must be an ISO date YYYY-MM-DD (got {value!r})"
-    return None
-
-
-def validate_gl_segment_row(row: dict) -> list[str]:
+def validate_gl_segment_row(row: Mapping[str, object]) -> list[str]:
     """Schema problems plus this dataset's own three rules.
 
-    1. ``as_of_date`` parses as an ISO date (see :func:`_iso_date_problem`).
+    1. The declarative date check verifies ``as_of_date``.
     2. ``branch_id`` is not :data:`RESIDUAL_BRANCH_ID`: that key belongs to the
        computed remainder, and a pushed row wearing it would be double-counted
        against the residual the platform derives for the same account.
@@ -129,10 +108,7 @@ def validate_gl_segment_row(row: dict) -> list[str]:
        ``gl_account`` record (BSD7's Domestic rule). A two- or four-letter value
        is a mistake that would silently split one account into two mart rows.
     """
-    problems = SCHEMA.validate_row(row)
-    date_problem = _iso_date_problem("as_of_date", row.get("as_of_date"))
-    if date_problem is not None:
-        problems.append(date_problem)
+    problems = _DECLARED.validate_row(row)
     branch_id = str(row.get("branch_id") or "").strip()
     if branch_id == RESIDUAL_BRANCH_ID:
         problems.append(
@@ -152,4 +128,4 @@ def validate_gl_segment_row(row: dict) -> list[str]:
 # ``business_units.py``: ``schema_for('gl_segment_balances')`` must return the
 # schema WITH its rules, because the ingestion path asks ``problems_for`` and
 # an unbound validator means the declarative half only runs (audit A7-07 / H-027).
-SCHEMA = register(dataclasses.replace(SCHEMA, row_validator=validate_gl_segment_row))
+SCHEMA = register(dataclasses.replace(_DECLARED, row_validator=validate_gl_segment_row))
