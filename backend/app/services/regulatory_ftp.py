@@ -1215,6 +1215,7 @@ def compute_live(
         metrics=live_metrics,
         status=status,
         input_hash=_snapshot_hash(snapshot),
+        engine_version=ENGINE_VERSION,
         findings=findings,
         source_as_of_date=current.source_as_of_date,
     )
