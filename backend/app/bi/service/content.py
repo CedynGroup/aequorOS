@@ -67,7 +67,7 @@ from app.bi.schemas.query import BiQuery as BiQuerySchema
 from app.bi.service.authorization import authorize_query, query_members, scope_pairs
 from app.bi.service.compiler import expand_calculated_measures
 from app.bi.service.errors import UnknownMember
-from app.bi.service.identity_policy import IDENTITY_REASON, refused_identity
+from app.bi.service.identity_policy import IDENTITY_REASON, query_identity_members, refused_identity
 from app.core.authorization import (
     BindingStatus,
     ConditionCheck,
@@ -404,7 +404,10 @@ class ViewerAuthority:
         )
         members = query_members(self.cat, expanded)
         refused = refused_identity(
-            self.db, self.ctx.organization_id, self.bank.id, (member.id for member in members)
+            self.db,
+            self.ctx.organization_id,
+            self.bank.id,
+            query_identity_members(self.cat, expanded),
         )
         if refused:
             self._reason = IDENTITY_REASON

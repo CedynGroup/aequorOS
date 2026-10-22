@@ -876,6 +876,7 @@ def test_saved_identity_filter_is_encrypted_and_explicitly_refused(
     db_session.add(subscription)
     db_session.commit()
     version_id = version.id
+    assert version_id.version == 4
     raw = cast(
         object, db_session.execute(text("SELECT spec FROM bi_dashboard_versions")).scalar_one()
     )

@@ -356,7 +356,9 @@ def _denied(cat: Catalogue, exc: content.MembersDenied) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
-            "error_code": "bi_authorization_denied",
+            "error_code": IDENTITY_REASON
+            if exc.reason == IDENTITY_REASON
+            else "bi_authorization_denied",
             "message": IDENTITY_MESSAGE
             if exc.reason == IDENTITY_REASON
             else (

@@ -22,12 +22,12 @@ from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import InstanceState, Session, attributes, object_session
 from sqlalchemy.types import TypeDecorator
 
-from app.core.ids import new_uuid7
+from app.core.ids import new_uuid4, new_uuid7
 from app.core.key_management import registry, sdk
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import FIELD_FORMAT, KeyIntegrityError, KeyUnavailableError
-from app.db.base import Base
+from app.db.base import Base, UuidV4PrimaryKeyMixin
 
 FORMAT = FIELD_FORMAT
 _RESTORE = "bank_field_restore"
@@ -375,7 +375,11 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                 if state.dict.get(col.attribute) is None and col.kind.empty_object:
                     setattr(instance, col.attribute, {})
             if state.dict.get("id") is None:
-                attributes.set_attribute(instance, "id", new_uuid7())
+                attributes.set_attribute(
+                    instance,
+                    "id",
+                    new_uuid4() if isinstance(instance, UuidV4PrimaryKeyMixin) else new_uuid7(),
+                )
             organization, bank = _scope(db, state, columns)
             scope = (organization, bank) if bank is not None else None
             if scope is not None and scope not in bank_rows:

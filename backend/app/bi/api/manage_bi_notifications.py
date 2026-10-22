@@ -102,6 +102,7 @@ from app.bi.schemas.query import BiFilter, BiQuery, BiTime
 from app.bi.service import query_log, subscriptions
 from app.bi.service.authorization import UnknownMember, authorize_query, query_members
 from app.bi.service.exports import policy
+from app.bi.service.identity_policy import IDENTITY_MESSAGE, IDENTITY_REASON
 from app.bi.service.insights.statements import render_value
 from app.core.authorization import Permission
 from app.core.config import get_settings
@@ -343,8 +344,12 @@ def _denied(cat: Catalogue, denied_members: Sequence[str], reason: str) -> HTTPE
     return HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
-            "error_code": "bi_authorization_denied",
-            "message": (
+            "error_code": IDENTITY_REASON
+            if reason == IDENTITY_REASON
+            else "bi_authorization_denied",
+            "message": IDENTITY_MESSAGE
+            if reason == IDENTITY_REASON
+            else (
                 "Your access does not cover every figure this needs. "
                 "An Org Owner can grant the figures listed here."
             ),

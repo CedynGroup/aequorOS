@@ -172,7 +172,8 @@ than treating a failed backfill as successful.
 For connected-key banks, numeric BI remains available. Identity dimensions
 (`counterparty.id`, `name`, `source_reference`, `group`) and queries that use
 them are explicitly refused, including filters in saved dashboards,
-subscriptions, hierarchies, pivots, sort keys and concentration measures.
+subscriptions, hierarchies, pivots and sort keys. Numeric concentration
+measures continue to aggregate opaque UUIDs under their usual authorization.
 The response explains bank-held encryption and asks the reader to remove the
 identity fields or filters; granting roles cannot remove this restriction.
 Full secured identity BI is follow-up

@@ -7,6 +7,8 @@ from collections.abc import Iterable
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
+from app.bi.domain.catalogue import Catalogue
+from app.bi.schemas.query import BiQuery
 from app.bi.service.errors import BiQueryError
 from app.core.key_management.models import BankEncryptionKey
 
@@ -24,6 +26,41 @@ IDENTITY_MESSAGE = (
     "are unavailable in BI, including saved views. Numeric BI remains available. "
     "Remove the identity fields and filters to continue."
 )
+
+
+def query_identity_members(cat: Catalogue, query: BiQuery) -> tuple[str, ...]:
+    """Identity requested in results/filters, not opaque internal aggregation.
+
+    A numeric concentration measure may group opaque UUIDs internally. It emits
+    no identity, so it remains available subject to its usual authorization.
+    """
+    roots = [
+        *query.measures,
+        *query.dimensions,
+        *(item.member for item in query.filters),
+        *(item.member for item in query.sort),
+    ]
+    if query.pivot is not None:
+        roots.append(query.pivot.dimension)
+    if query.top_n is not None:
+        roots.append(query.top_n.dimension)
+    hierarchies = {hierarchy.id: hierarchy.levels for hierarchy in cat.hierarchies()}
+    return tuple(
+        dict.fromkeys(
+            member
+            for root in roots
+            for member in hierarchies.get(root, (root,))
+            if member in IDENTITY_MEMBERS
+        )
+    )
+
+
+class IdentityBiUnavailable(BiQueryError):
+    status_code = 403
+    code = IDENTITY_REASON
+
+    def __init__(self, members: Iterable[str]) -> None:
+        super().__init__(IDENTITY_MESSAGE, members=tuple(members))
 
 
 def connected(db: Session, organization_id: str, bank_id: str) -> bool:
@@ -52,6 +89,4 @@ def require_numeric_bi(
 ) -> None:
     refused = refused_identity(db, organization_id, bank_id, members)
     if refused:
-        error = BiQueryError(IDENTITY_MESSAGE, members=refused)
-        error.code = IDENTITY_REASON
-        raise error
+        raise IdentityBiUnavailable(refused)
