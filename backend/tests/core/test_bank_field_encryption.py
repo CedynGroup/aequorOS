@@ -1573,3 +1573,42 @@ def test_profile_http_locked_read_write_and_recovery(
     assert restored.status_code == 200, restored.text
     assert restored.json()["related_parties"][0]["full_name"] == NAME
     assert json.loads(restored.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+
+
+@pytest.mark.parametrize("status", ["deferred", "failed", "completed", None])
+def test_dedup_status_remains_operational_without_unwrapping_the_report(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    status: str | None,
+) -> None:
+    connect(db_session, provider)
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        source_system="EXCEL_CSV",
+        adapter_version="synthetic",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=AS_OF,
+        etl_report={"dedup_status": "deferred", "name": NAME},
+    )
+    db_session.add(batch)
+    db_session.commit()
+    assert batch.dedup_status == "deferred"
+    batch.etl_report = {"dedup_status": status, "name": NAME} if status else None
+    db_session.commit()
+    batch_id = batch.id
+    db_session.expunge_all()
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Operational status must not unwrap the report during support access")
+
+    monkeypatch.setattr(provider, "unwrap", refuse_unwrap)
+    db_session.info[SESSION_SUPPORT] = True
+    try:
+        loaded = db_session.get(IngestionBatch, batch_id)
+        assert loaded is not None and loaded.dedup_status == status
+        assert loaded.etl_report == {LOCKED_JSON: "support"}
+    finally:
+        db_session.info.pop(SESSION_SUPPORT)

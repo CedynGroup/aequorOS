@@ -25,6 +25,7 @@ from sqlalchemy.types import TypeDecorator
 
 from app.core.ids import new_uuid4, new_uuid7
 from app.core.key_management import registry, sdk
+from app.core.key_management.concentration_identity import counterparty_group_key
 from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.presentation import (
     LOCKED_JSON,
@@ -42,7 +43,6 @@ from app.core.key_management.types import (
     ProtectedSupportAccessError,
 )
 from app.db.base import Base, UuidV4PrimaryKeyMixin
-from app.domain.credit.concentration_identity import counterparty_group_key
 
 FORMAT = FIELD_FORMAT
 _RESTORE = "bank_field_restore"

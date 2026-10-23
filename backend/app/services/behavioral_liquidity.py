@@ -19,13 +19,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
+from app.core.key_management.concentration_identity import counterparty_group_key
 from app.core.key_management.presentation import LOCKED_TEXT, contains_placeholder
-from app.domain.credit.concentration_identity import counterparty_group_key
+from app.data_engine.public import CanonicalCounterparty
 from app.identity.public import Bank
 from app.ml.behavioral import history
 from app.ml.behavioral.config import BehavioralTrainingConfig
 from app.models import ContingencyFundingPlan
-from app.models.canonical import CanonicalCounterparty
 
 _DIMENSIONS = ("product", "customer_segment", "concentration_group", "branch")
 _MIN_RATE_OBSERVATIONS = 6

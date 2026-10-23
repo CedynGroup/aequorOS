@@ -47,9 +47,10 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.key_management.concentration_identity import opaque_group_key
 from app.core.key_management.types import KeyIntegrityError
+from app.data_engine.public import CanonicalCounterparty
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
-from app.domain.credit.concentration_identity import opaque_group_key
 from app.domain.positions.credit import credit_classification_attributes
 from app.identity.public import Bank
 from app.live.public import (
@@ -59,7 +60,6 @@ from app.live.public import (
     credit_source_basis,
     load_position_records,
 )
-from app.models.canonical import CanonicalCounterparty
 from app.services import jurisdictions
 
 #: Adds the securities book, because issuer and sovereign concentration is real

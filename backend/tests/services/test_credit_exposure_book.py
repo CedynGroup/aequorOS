@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.credit.concentration_identity import counterparty_group_key
+from app.core.key_management.concentration_identity import counterparty_group_key
 from app.models import (
     Bank,
     CanonicalCounterparty,

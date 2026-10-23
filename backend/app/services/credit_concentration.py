@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, load_only
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
+from app.core.key_management.concentration_identity import counterparty_group_key, opaque_group_key
 from app.core.key_management.fields import blind_index
 from app.core.key_management.presentation import (
     LOCKED_TEXT,
@@ -34,7 +35,6 @@ from app.core.key_management.presentation import (
 )
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
-from app.domain.credit.concentration_identity import counterparty_group_key, opaque_group_key
 from app.domain.credit.concentration_monitor import (
     BucketReading,
     ConcentrationLimit,

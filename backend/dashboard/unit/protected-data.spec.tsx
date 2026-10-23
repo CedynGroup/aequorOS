@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { useState } from "react";
+import { renderToString } from "react-dom/server";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
@@ -452,3 +453,31 @@ it.each([
     }
   },
 );
+
+it.each([null, [], { "BK-SAMP0001": "invalid" }])(
+  "ignores an invalid disclosure payload %j without clearing the current lock",
+  async (payload) => {
+    notify("revoked");
+    await observeProtectedData(
+      new Response(null, {
+        headers: {
+          "X-Aequoros-Protected-Data": JSON.stringify(payload),
+        },
+      }),
+    );
+    expect(protectedDataState("BK-SAMP0001")).toBe("revoked");
+  },
+);
+
+it("starts the server-rendered disclosure notice without another request's lock", () => {
+  notify("revoked");
+  const client = new QueryClient();
+  expect(
+    renderToString(
+      <QueryClientProvider client={client}>
+        <ProtectedDataNotice />
+      </QueryClientProvider>,
+    ),
+  ).toBe("");
+  client.clear();
+});

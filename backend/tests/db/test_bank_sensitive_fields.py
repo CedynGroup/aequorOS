@@ -20,10 +20,12 @@ from app.bi.schemas.query import BiFilter, BiPackQuery
 from app.bi.service.identity_policy import IDENTITY_REASON
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.presentation import LOCKED_JSON, SESSION_SUPPORT
 from app.core.key_management.types import KeyReference
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
 from app.identity.public import Bank, User
 from app.models.canonical import CanonicalCounterparty
+from app.models.ingestion import IngestionBatch
 from app.models.organization import Organization
 from app.reporting.models.packages import RegulatoryPackage
 from tests.core.test_bank_field_encryption import (
@@ -313,3 +315,43 @@ def test_new_sensitive_fields_are_ciphertext_in_postgres(
     restored = db.get(CanonicalCounterparty, borrower_id)
     assert restored is not None and restored.name == NAME
     assert restored.external_identifiers == {"national_id": IDENTIFIER}
+
+
+def test_dedup_lifecycle_status_survives_redaction_on_the_migrated_schema(
+    sensitive_db: tuple[Session, LocalKeyProvider, KeyReference],
+) -> None:
+    db, provider, key = sensitive_db
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    registry.register(
+        db,
+        bank_id="BK-SAMP0001",
+        organization_id=ORG_1,
+        storage_slug="bk-samp0001",
+        key=key,
+        providers=providers,
+    )
+    db.commit()
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id="BK-SAMP0001",
+        source_system="EXCEL_CSV",
+        adapter_version="synthetic",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=date(2026, 9, 30),
+        etl_report={"dedup_status": "deferred", "name": NAME},
+    )
+    db.add(batch)
+    db.commit()
+    batch_id = batch.id
+    db.expunge_all()
+    db.info[SESSION_SUPPORT] = True
+    try:
+        loaded = db.get(IngestionBatch, batch_id)
+        assert loaded is not None and loaded.dedup_status == "deferred"
+        assert loaded.etl_report == {LOCKED_JSON: "support"}
+    finally:
+        db.info.pop(SESSION_SUPPORT)
