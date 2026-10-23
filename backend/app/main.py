@@ -11,6 +11,7 @@ from app.core.errors import (
     UnhandledExceptionMiddleware,
     register_exception_handlers,
 )
+from app.core.key_management.presentation import HEADER, ProtectedDataMiddleware
 from app.core.logging import REQUEST_ID_HEADER, configure_logging, logger
 from app.core.request_id import RequestIdMiddleware
 from app.core.tls import RequireTLSMiddleware, validate_service_transports
@@ -103,6 +104,7 @@ def _warn_if_trust_is_unanchored(settings: Settings) -> None:
 EXPOSED_RESPONSE_HEADERS: tuple[str, ...] = (
     "Content-Disposition",
     "X-Bi-Export-Class",
+    HEADER,
     REQUEST_ID_HEADER,
 )
 
@@ -127,6 +129,7 @@ def create_app() -> FastAPI:
         app.add_middleware(RequireTLSMiddleware)
     app.add_middleware(UnhandledExceptionMiddleware)
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(ProtectedDataMiddleware)
 
     if settings.cors.origins:
         app.add_middleware(

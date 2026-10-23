@@ -246,7 +246,7 @@ def test_an_exposures_own_pd_and_lgd_are_the_first_source(
     assert exposure.elgd == Decimal("40") / Decimal(100)
     assert exposure.pd_source == granularity_inputs.PD_SOURCE_EXPOSURE
     assert exposure.lgd_source == granularity_inputs.LGD_SOURCE_EXPOSURE
-    assert exposure.group_key == "cp:Volta Agro Ltd"
+    assert "Volta Agro Ltd" not in exposure.group_key
     assert exposure.ead == Decimal("1000000")
 
 
@@ -471,7 +471,7 @@ def test_two_facilities_to_one_connected_group_are_one_obligor(
     book.commit()
 
     exposures = _build(canonical_book, access, cycle).exposures
-    assert {exposure.group_key for exposure in exposures} == {"group:GRP-1"}
+    assert len({exposure.group_key for exposure in exposures}) == 1
 
 
 # --- governed rows: a refusal names the console row -------------------------

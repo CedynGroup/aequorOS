@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Institution Profile — Name history: a timeline of the institution's prior
@@ -6,24 +6,24 @@
  * Entries can be corrected in place; every write records an audit reason.
  */
 
-import { useMemo, useState } from 'react';
-import { History, Pencil, Plus } from 'lucide-react';
+import { useMemo, useState } from "react";
+import { History, Pencil, Plus } from "lucide-react";
 import type {
   BankNameHistoryCreate,
   BankNameHistoryRead,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import PageContainer from '@/components/ui/PageContainer';
-import SectionCard from '@/components/ui/SectionCard';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonCard } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import PageContainer from "@/components/ui/PageContainer";
+import SectionCard from "@/components/ui/SectionCard";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useCreateNameHistoryEntry,
   useInstitutionProfile,
   useUpdateNameHistoryEntry,
-} from '@/lib/api/hooks';
+} from "@/lib/api/hooks";
 import {
   Field,
   FormActions,
@@ -31,7 +31,7 @@ import {
   fmtRegisterDate,
   inputCls,
   textOrNull,
-} from '@/components/institution/shared';
+} from "@/components/institution/shared";
 
 export default function NameHistoryPage() {
   const { bank } = useBankContext();
@@ -42,13 +42,16 @@ export default function NameHistoryPage() {
     const rows = query.data?.nameHistory ?? [];
     // Timeline reads newest change first; undated entries sink to the end.
     return [...rows].sort((a, b) =>
-      (b.changedOn ?? '').localeCompare(a.changedOn ?? '')
+      (b.changedOn ?? "").localeCompare(a.changedOn ?? ""),
     );
   }, [query.data]);
 
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const editing = entries.find((entry) => entry.id === editingId) ?? null;
+  const [editor, setEditor] = useState<{
+    bankId: string | undefined;
+    row: BankNameHistoryRead;
+  } | null>(null);
+  const editing = editor && editor.bankId === bankId ? editor.row : null;
 
   return (
     <>
@@ -59,7 +62,7 @@ export default function NameHistoryPage() {
           <button
             type="button"
             onClick={() => {
-              setEditingId(null);
+              setEditor(null);
               setAdding(true);
             }}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
@@ -71,6 +74,18 @@ export default function NameHistoryPage() {
       />
 
       <PageContainer className="py-6 space-y-6">
+        {(adding || editing) && (
+          <NameHistoryForm
+            key={editing?.id ?? "new"}
+            bankId={bankId!}
+            entry={editing}
+            onClose={() => {
+              setAdding(false);
+              setEditor(null);
+            }}
+          />
+        )}
+
         <QueryBoundary
           contained
           isLoading={query.isLoading}
@@ -78,24 +93,12 @@ export default function NameHistoryPage() {
           onRetry={() => query.refetch()}
           skeleton={<SkeletonCard />}
         >
-          {(adding || editing) && (
-            <NameHistoryForm
-              key={editing?.id ?? 'new'}
-              bankId={bankId!}
-              entry={editing}
-              onClose={() => {
-                setAdding(false);
-                setEditingId(null);
-              }}
-            />
-          )}
-
           <SectionCard
             title="Timeline"
             subtitle={
               bank
                 ? `${entries.length} prior ${
-                    entries.length === 1 ? 'name' : 'names'
+                    entries.length === 1 ? "name" : "names"
                   } on record — current legal name: ${bank.name}`
                 : undefined
             }
@@ -133,7 +136,7 @@ export default function NameHistoryPage() {
                         type="button"
                         onClick={() => {
                           setAdding(false);
-                          setEditingId(entry.id);
+                          setEditor({ bankId, row: entry });
                         }}
                         className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
                       >
@@ -170,10 +173,10 @@ function NameHistoryForm({
   const update = useUpdateNameHistoryEntry(bankId);
   const mutation = entry ? update : create;
 
-  const [previousName, setPreviousName] = useState(entry?.previousName ?? '');
-  const [changedOn, setChangedOn] = useState(entry?.changedOn ?? '');
-  const [changeReason, setChangeReason] = useState(entry?.changeReason ?? '');
-  const [reason, setReason] = useState('');
+  const [previousName, setPreviousName] = useState(entry?.previousName ?? "");
+  const [changedOn, setChangedOn] = useState(entry?.changedOn ?? "");
+  const [changeReason, setChangeReason] = useState(entry?.changeReason ?? "");
+  const [reason, setReason] = useState("");
 
   const canSubmit = previousName.trim().length > 0 && reason.trim().length > 0;
 
@@ -195,7 +198,7 @@ function NameHistoryForm({
 
   return (
     <SectionCard
-      title={entry ? 'Edit name-history entry' : 'Add name-history entry'}
+      title={entry ? "Edit name-history entry" : "Add name-history entry"}
       subtitle="The name-change reason is stored on the record; the audit reason below covers this edit"
     >
       <form onSubmit={submit} className="space-y-4">
@@ -237,7 +240,7 @@ function NameHistoryForm({
         )}
 
         <FormActions
-          submitLabel={entry ? 'Save entry' : 'Add entry'}
+          submitLabel={entry ? "Save entry" : "Add entry"}
           pending={mutation.isPending}
           disabled={!canSubmit}
           onCancel={onClose}

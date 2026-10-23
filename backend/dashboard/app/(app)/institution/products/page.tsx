@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Institution Profile — Products & licences: the product register (proposed →
@@ -7,8 +7,8 @@
  * inline add/edit forms; every mutation records a required audit reason.
  */
 
-import { useMemo, useState } from 'react';
-import { FileBadge, Package, Pencil, Plus } from 'lucide-react';
+import { useMemo, useState } from "react";
+import { FileBadge, Package, Pencil, Plus } from "lucide-react";
 import type {
   BankLicenseCreate,
   BankLicenseRead,
@@ -16,23 +16,23 @@ import type {
   BankProductRead,
   LicenseStatus,
   ProductStatus,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import PageContainer from '@/components/ui/PageContainer';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import SectionCard from '@/components/ui/SectionCard';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonTable } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import PageContainer from "@/components/ui/PageContainer";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import SectionCard from "@/components/ui/SectionCard";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useCreateBankLicense,
   useCreateBankProduct,
   useInstitutionProfile,
   useUpdateBankLicense,
   useUpdateBankProduct,
-} from '@/lib/api/hooks';
-import { labelize } from '@/lib/api/values';
+} from "@/lib/api/hooks";
+import { labelize } from "@/lib/api/values";
 import {
   Field,
   FormActions,
@@ -43,7 +43,7 @@ import {
   fmtRegisterDate,
   inputCls,
   textOrNull,
-} from '@/components/institution/shared';
+} from "@/components/institution/shared";
 
 export default function ProductsLicencesPage() {
   const { bank } = useBankContext();
@@ -55,31 +55,21 @@ export default function ProductsLicencesPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Institution Profile"
-        title="Products & licences"
-      />
+      <PageHeader eyebrow="Institution Profile" title="Products & licences" />
 
       <PageContainer className="py-6 space-y-6">
-        <QueryBoundary
-          contained
-          isLoading={query.isLoading}
-          error={query.error}
-          onRetry={() => query.refetch()}
-          skeleton={
-            <div className="space-y-6">
-              <div className="card">
-                <SkeletonTable rows={4} />
-              </div>
-              <div className="card">
-                <SkeletonTable rows={4} />
-              </div>
-            </div>
-          }
-        >
-          <ProductsCard bankId={bankId!} products={products} />
-          <LicencesCard bankId={bankId!} licenses={licenses} />
-        </QueryBoundary>
+        <ProductsCard
+          key={`products-${bankId}`}
+          bankId={bankId!}
+          products={products}
+          query={query}
+        />
+        <LicencesCard
+          key={`licenses-${bankId}`}
+          bankId={bankId!}
+          licenses={licenses}
+          query={query}
+        />
       </PageContainer>
     </>
   );
@@ -92,25 +82,26 @@ export default function ProductsLicencesPage() {
 function ProductsCard({
   bankId,
   products,
+  query,
 }: {
   bankId: string;
   products: BankProductRead[];
+  query: ReturnType<typeof useInstitutionProfile>;
 }) {
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const editing = products.find((product) => product.id === editingId) ?? null;
+  const [editing, setEditing] = useState<BankProductRead | null>(null);
 
   const columns: Column<BankProductRead>[] = [
     {
-      key: 'name',
-      header: 'Name',
+      key: "name",
+      header: "Name",
       render: (product) => (
         <span className="text-body font-medium text-navy">{product.name}</span>
       ),
     },
     {
-      key: 'type',
-      header: 'Type',
+      key: "type",
+      header: "Type",
       render: (product) => (
         <span className="text-caption text-slate">
           {labelize(product.productType)}
@@ -118,13 +109,13 @@ function ProductsCard({
       ),
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (product) => <ProductStatusPill status={product.status} />,
     },
     {
-      key: 'approvalRef',
-      header: 'Approval ref',
+      key: "approvalRef",
+      header: "Approval ref",
       render: (product) => (
         <span className="font-mono text-caption text-navy/85 tnum">
           {dash(product.approvalReference)}
@@ -132,15 +123,15 @@ function ProductsCard({
       ),
     },
     {
-      key: 'edit',
-      header: '',
-      align: 'right',
+      key: "edit",
+      header: "",
+      align: "right",
       render: (product) => (
         <button
           type="button"
           onClick={() => {
             setAdding(false);
-            setEditingId(product.id);
+            setEditing(product);
           }}
           className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
         >
@@ -159,7 +150,7 @@ function ProductsCard({
         <button
           type="button"
           onClick={() => {
-            setEditingId(null);
+            setEditing(null);
             setAdding(true);
           }}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
@@ -173,27 +164,35 @@ function ProductsCard({
       {(adding || editing) && (
         <div className="px-5 pt-5 pb-4 border-b border-border-light">
           <ProductForm
-            key={editing?.id ?? 'new'}
+            key={editing?.id ?? "new"}
             bankId={bankId}
             product={editing}
             onClose={() => {
               setAdding(false);
-              setEditingId(null);
+              setEditing(null);
             }}
           />
         </div>
       )}
-      {products.length === 0 ? (
-        <div className="p-5">
-          <EmptyState
-            Icon={Package}
-            title="No products recorded"
-            description="Track product proposals through approval or withdrawal, with the regulator's approval reference."
-          />
-        </div>
-      ) : (
-        <DataTable columns={columns} rows={products} density="compact" />
-      )}
+      <QueryBoundary
+        contained
+        isLoading={query.isLoading}
+        error={query.error}
+        onRetry={() => query.refetch()}
+        skeleton={<SkeletonTable rows={4} />}
+      >
+        {products.length === 0 ? (
+          <div className="p-5">
+            <EmptyState
+              Icon={Package}
+              title="No products recorded"
+              description="Track product proposals through approval or withdrawal, with the regulator's approval reference."
+            />
+          </div>
+        ) : (
+          <DataTable columns={columns} rows={products} density="compact" />
+        )}
+      </QueryBoundary>
     </SectionCard>
   );
 }
@@ -211,15 +210,15 @@ function ProductForm({
   const update = useUpdateBankProduct(bankId);
   const mutation = product ? update : create;
 
-  const [name, setName] = useState(product?.name ?? '');
-  const [productType, setProductType] = useState(product?.productType ?? '');
+  const [name, setName] = useState(product?.name ?? "");
+  const [productType, setProductType] = useState(product?.productType ?? "");
   const [status, setStatus] = useState<ProductStatus>(
-    product?.status ?? 'proposed'
+    product?.status ?? "proposed",
   );
   const [approvalReference, setApprovalReference] = useState(
-    product?.approvalReference ?? ''
+    product?.approvalReference ?? "",
   );
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
 
   const canSubmit =
     name.trim().length > 0 &&
@@ -246,7 +245,7 @@ function ProductForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <p className="text-micro font-medium text-slate uppercase tracking-wider">
-        {product ? `Edit ${product.name}` : 'Add product'}
+        {product ? `Edit ${product.name}` : "Add product"}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Field label="Name" htmlFor="pr-name" required>
@@ -297,7 +296,7 @@ function ProductForm({
       )}
 
       <FormActions
-        submitLabel={product ? 'Save product' : 'Add product'}
+        submitLabel={product ? "Save product" : "Add product"}
         pending={mutation.isPending}
         disabled={!canSubmit}
         onCancel={onClose}
@@ -313,18 +312,19 @@ function ProductForm({
 function LicencesCard({
   bankId,
   licenses,
+  query,
 }: {
   bankId: string;
   licenses: BankLicenseRead[];
+  query: ReturnType<typeof useInstitutionProfile>;
 }) {
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const editing = licenses.find((license) => license.id === editingId) ?? null;
+  const [editing, setEditing] = useState<BankLicenseRead | null>(null);
 
   const columns: Column<BankLicenseRead>[] = [
     {
-      key: 'name',
-      header: 'Licence',
+      key: "name",
+      header: "Licence",
       render: (license) => (
         <span className="text-body font-medium text-navy">
           {license.licenseName}
@@ -332,17 +332,17 @@ function LicencesCard({
       ),
     },
     {
-      key: 'class',
-      header: 'Class',
+      key: "class",
+      header: "Class",
       render: (license) => (
         <span className="text-caption text-slate">
-          {license.licenseClass ? labelize(license.licenseClass) : '—'}
+          {license.licenseClass ? labelize(license.licenseClass) : "—"}
         </span>
       ),
     },
     {
-      key: 'issued',
-      header: 'Issued',
+      key: "issued",
+      header: "Issued",
       render: (license) => (
         <span className="font-mono text-caption text-navy/85 tnum">
           {fmtRegisterDate(license.issuedOn)}
@@ -350,20 +350,20 @@ function LicencesCard({
       ),
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (license) => <LicenseStatusPill status={license.status} />,
     },
     {
-      key: 'edit',
-      header: '',
-      align: 'right',
+      key: "edit",
+      header: "",
+      align: "right",
       render: (license) => (
         <button
           type="button"
           onClick={() => {
             setAdding(false);
-            setEditingId(license.id);
+            setEditing(license);
           }}
           className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
         >
@@ -382,7 +382,7 @@ function LicencesCard({
         <button
           type="button"
           onClick={() => {
-            setEditingId(null);
+            setEditing(null);
             setAdding(true);
           }}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
@@ -396,27 +396,35 @@ function LicencesCard({
       {(adding || editing) && (
         <div className="px-5 pt-5 pb-4 border-b border-border-light">
           <LicenseForm
-            key={editing?.id ?? 'new'}
+            key={editing?.id ?? "new"}
             bankId={bankId}
             license={editing}
             onClose={() => {
               setAdding(false);
-              setEditingId(null);
+              setEditing(null);
             }}
           />
         </div>
       )}
-      {licenses.length === 0 ? (
-        <div className="p-5">
-          <EmptyState
-            Icon={FileBadge}
-            title="No licences recorded"
-            description="Record the institution's operating licences with class and issue date."
-          />
-        </div>
-      ) : (
-        <DataTable columns={columns} rows={licenses} density="compact" />
-      )}
+      <QueryBoundary
+        contained
+        isLoading={query.isLoading}
+        error={query.error}
+        onRetry={() => query.refetch()}
+        skeleton={<SkeletonTable rows={4} />}
+      >
+        {licenses.length === 0 ? (
+          <div className="p-5">
+            <EmptyState
+              Icon={FileBadge}
+              title="No licences recorded"
+              description="Record the institution's operating licences with class and issue date."
+            />
+          </div>
+        ) : (
+          <DataTable columns={columns} rows={licenses} density="compact" />
+        )}
+      </QueryBoundary>
     </SectionCard>
   );
 }
@@ -434,13 +442,13 @@ function LicenseForm({
   const update = useUpdateBankLicense(bankId);
   const mutation = license ? update : create;
 
-  const [licenseName, setLicenseName] = useState(license?.licenseName ?? '');
-  const [licenseClass, setLicenseClass] = useState(license?.licenseClass ?? '');
-  const [issuedOn, setIssuedOn] = useState(license?.issuedOn ?? '');
+  const [licenseName, setLicenseName] = useState(license?.licenseName ?? "");
+  const [licenseClass, setLicenseClass] = useState(license?.licenseClass ?? "");
+  const [issuedOn, setIssuedOn] = useState(license?.issuedOn ?? "");
   const [status, setStatus] = useState<LicenseStatus>(
-    license?.status ?? 'active'
+    license?.status ?? "active",
   );
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
 
   const canSubmit = licenseName.trim().length > 0 && reason.trim().length > 0;
 
@@ -464,7 +472,7 @@ function LicenseForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <p className="text-micro font-medium text-slate uppercase tracking-wider">
-        {license ? `Edit ${license.licenseName}` : 'Add licence'}
+        {license ? `Edit ${license.licenseName}` : "Add licence"}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Field label="Licence name" htmlFor="lc-name" required>
@@ -516,7 +524,7 @@ function LicenseForm({
       )}
 
       <FormActions
-        submitLabel={license ? 'Save licence' : 'Add licence'}
+        submitLabel={license ? "Save licence" : "Add licence"}
         pending={mutation.isPending}
         disabled={!canSubmit}
         onCancel={onClose}

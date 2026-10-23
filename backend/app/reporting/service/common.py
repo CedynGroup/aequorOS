@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.key_management.presentation import LOCKED_JSON
 from app.data_engine.public import CanonicalGlAccount, CanonicalPositionSnapshot
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity.public import Bank
@@ -159,7 +160,7 @@ def get_package_or_404(
 
 def validation_passed(package: RegulatoryPackage) -> bool | None:
     report = package.validation_report
-    if report is None:
+    if report is None or LOCKED_JSON in report:
         return None
     return bool(report.get("passed"))
 
@@ -216,6 +217,8 @@ def read_package(db: Session, package: RegulatoryPackage) -> RegulatoryPackageRe
         )
     )
     report_payload: dict[str, Any] | None = package.validation_report
+    if report_payload is not None and LOCKED_JSON in report_payload:
+        report_payload = None
     return RegulatoryPackageRead(
         **read_summary(package).model_dump(),
         snapshot=package.snapshot,

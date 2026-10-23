@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.key_management.concentration_identity import counterparty_group_key
 from app.models import (
     Bank,
     CanonicalCounterparty,
@@ -203,25 +204,19 @@ def test_the_group_key_follows_the_connected_group_then_the_name(
     rows = _rows(db_session, bank)
     # The fixture's corporate counterparty carries no group reference, so the
     # name is the identity, and both of its facilities share it.
-    assert rows["LOAN/1"].group_key == "cp:Volta Agro Ltd"
+    assert "Volta Agro Ltd" not in rows["LOAN/1"].group_key
     assert rows["LOAN/USD"].group_key == rows["LOAN/1"].group_key
     # A position with no counterparty at all is its own name — never merged.
     assert rows["LOAN/2"].group_key == "pos:LOAN/2"
 
 
 def test_a_connected_group_reference_beats_the_counterparty_name() -> None:
-    class _Counterparty:
-        group_reference = "GRP-7"
-        attributes: dict[str, Any] = {}
-        name = "Subsidiary Ltd"
-
-    class _Unconnected:
-        group_reference = None
-        attributes = {"parent": "Holdco Plc"}
-        name = "Subsidiary Ltd"
-
-    assert credit_exposure_book.canonical_group_key("LOAN/9", _Counterparty()) == "group:GRP-7"
-    assert credit_exposure_book.canonical_group_key("LOAN/9", _Unconnected()) == "group:Holdco Plc"
+    assert counterparty_group_key("Subsidiary Ltd", "GRP-7", {}) == "group:GRP-7"
+    assert (
+        counterparty_group_key("Subsidiary Ltd", None, {"parent": "Holdco Plc"})
+        == "group:Holdco Plc"
+    )
+    assert counterparty_group_key("Subsidiary Ltd", None, {}) == "cp:Subsidiary Ltd"
     assert credit_exposure_book.canonical_group_key("LOAN/9", None) == "pos:LOAN/9"
 
 

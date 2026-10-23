@@ -60,6 +60,7 @@ from app.attestation.schemas import VerificationReportRead
 from app.attestation.service import digests, pdf_signing, signing, stepup, verify, workflow
 from app.attestation.service.identity import ensure_signer_identity
 from app.core.authorization import RoleBundle
+from app.core.key_management.types import ProtectedSupportAccessError
 from app.models import (
     AttestationSignature,
     Bank,
@@ -1074,6 +1075,22 @@ def test_replaced_artifact_bytes_fail_the_artifact_binding_check(
         if entry["artifact_version_id"] == str(version.id)
     )
     assert finding["recomputed_checksum"] != finding["recorded_checksum"]
+
+
+def test_staff_redaction_is_not_reported_as_signature_or_artifact_corruption(
+    db_session: Session,
+    storage: InMemoryStorageClient,
+    pki: _Pki,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    signed = _build_signed_pdf_package(db_session, storage, pki)
+
+    def staff_read(*_args: object, **_kwargs: object) -> None:
+        raise ProtectedSupportAccessError()
+
+    monkeypatch.setattr(storage, "read", staff_read)
+    with pytest.raises(ProtectedSupportAccessError):
+        _report(db_session, signed.package, storage_client=storage, pki=pki)
 
 
 def test_unreadable_artifact_skips_the_pdf_checks_but_fails_artifact_binding(

@@ -1,12 +1,28 @@
-'use client';
+"use client";
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { QueryAuthorityScopeProvider } from './useQueryScope';
-import type { QueryAuthorityScope } from './queryPolicy';
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+import { QueryAuthorityScopeProvider } from "./useQueryScope";
+import {
+  bindProtectedDataCache,
+  clearProtectedData,
+  isProtectedDataError,
+} from "./protectedData";
+import type { QueryAuthorityScope } from "./queryPolicy";
 
-function createAuthorityQueryClient(): QueryClient {
+export function createAuthorityQueryClient(): QueryClient {
   return new QueryClient({
+    queryCache: new QueryCache({
+      onError: (error, query) => {
+        // A failed protected read must not leave previously decrypted data visible.
+        // Mutation drafts live outside this cache and remain mounted.
+        if (isProtectedDataError(error)) query.setState({ data: undefined });
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: 30_000,
@@ -20,9 +36,18 @@ function createAuthorityQueryClient(): QueryClient {
 function AuthorityScopedCache({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createAuthorityQueryClient);
 
-  useEffect(() => () => queryClient.clear(), [queryClient]);
+  useEffect(() => {
+    const unsubscribe = bindProtectedDataCache(queryClient);
+    return () => {
+      unsubscribe();
+      queryClient.clear();
+      clearProtectedData();
+    };
+  }, [queryClient]);
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
 }
 
 export default function QueryAuthorityBoundary({

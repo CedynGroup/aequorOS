@@ -67,6 +67,7 @@ from sqlalchemy import (
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.bi.domain.identity import IDENTITY_MEMBERS
 from app.core.key_management.fields import ProtectedJSON
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
@@ -292,7 +293,7 @@ class BiDashboardVersion(UuidV4PrimaryKeyMixin, _TenantKeys, Base):
     #: schema's own ``BiPackWidget``. Stored as the model dumped it, so a copy of
     #: a certified pack is literally a copy of that pack's widgets.
     spec: Mapped[dict[str, Any]] = mapped_column(
-        ProtectedJSON(empty_object=True),
+        ProtectedJSON(empty_object=True, protected_members=IDENTITY_MEMBERS),
         default=dict,
         server_default=sql_text("'{}'"),
         nullable=False,

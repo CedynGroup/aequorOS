@@ -1324,6 +1324,7 @@ export * from "./LoanGradeBucketRead";
 export * from "./LoanGrowthOverride";
 export * from "./LoanGrowthPct";
 export * from "./Locale";
+export * from "./LockedConcentrationLimitRead";
 export * from "./LoginRequest";
 export * from "./LtpBufferCostPct";
 export * from "./LtpTotalChargeGhs";

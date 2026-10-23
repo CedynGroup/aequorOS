@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Institution Profile — Outlets: head office, branches, and agencies with
@@ -7,32 +7,32 @@
  * "closed"). Every mutation records a required audit reason.
  */
 
-import { useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { MapPin, Pencil, Plus } from 'lucide-react';
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { MapPin, Pencil, Plus } from "lucide-react";
 import type {
   OutletCreate,
   OutletRead,
   OutletStatus,
   OutletType,
-} from '@aequoros/risk-service-api';
+} from "@aequoros/risk-service-api";
 import {
   OutletStatus as OutletStatusValues,
   OutletType as OutletTypeValues,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import PageContainer from '@/components/ui/PageContainer';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import SectionCard from '@/components/ui/SectionCard';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonTable } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import PageContainer from "@/components/ui/PageContainer";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import SectionCard from "@/components/ui/SectionCard";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useCreateOutlet,
   useInstitutionProfile,
   useUpdateOutlet,
-} from '@/lib/api/hooks';
+} from "@/lib/api/hooks";
 import {
   Field,
   FormActions,
@@ -43,12 +43,12 @@ import {
   fmtRegisterDate,
   inputCls,
   textOrNull,
-} from '@/components/institution/shared';
+} from "@/components/institution/shared";
 import CsvImport, {
   isIsoCsvDate,
   type CsvRowResult,
-} from '@/components/institution/CsvImport';
-import { OUTLETS_TEMPLATE } from '@/lib/templates';
+} from "@/components/institution/CsvImport";
+import { OUTLETS_TEMPLATE } from "@/lib/templates";
 
 // ---------------------------------------------------------------------------
 // Bulk CSV import (outlets.csv) — client-side orchestration over the
@@ -57,7 +57,7 @@ import { OUTLETS_TEMPLATE } from '@/lib/templates';
 // (OutletType / OutletStatus).
 // ---------------------------------------------------------------------------
 
-type OutletCsvPayload = Omit<OutletCreate, 'reason'>;
+type OutletCsvPayload = Omit<OutletCreate, "reason">;
 
 const OUTLET_TYPE_VALUES = Object.values(OutletTypeValues);
 const OUTLET_STATUS_VALUES = Object.values(OutletStatusValues);
@@ -67,14 +67,14 @@ function parseOutletCsvRow(cells: string[]): CsvRowResult<OutletCsvPayload> {
   const errors: string[] = [];
   if (!OUTLET_TYPE_VALUES.includes(outletType as OutletType)) {
     errors.push(
-      `outlet_type '${outletType}' must be one of: ${OUTLET_TYPE_VALUES.join(', ')}`
+      `outlet_type '${outletType}' must be one of: ${OUTLET_TYPE_VALUES.join(", ")}`,
     );
   }
-  if (!name) errors.push('name is required');
-  const status = statusRaw || 'active';
+  if (!name) errors.push("name is required");
+  const status = statusRaw || "active";
   if (!OUTLET_STATUS_VALUES.includes(status as OutletStatus)) {
     errors.push(
-      `status '${statusRaw}' must be blank (= active) or one of: ${OUTLET_STATUS_VALUES.join(', ')}`
+      `status '${statusRaw}' must be blank (= active) or one of: ${OUTLET_STATUS_VALUES.join(", ")}`,
     );
   }
   if (openedOn && !isIsoCsvDate(openedOn)) {
@@ -109,14 +109,17 @@ export default function OutletsPage() {
   const outlets = useMemo(() => query.data?.outlets ?? [], [query.data]);
 
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editor, setEditor] = useState<{
+    bankId: string | undefined;
+    row: OutletRead;
+  } | null>(null);
 
-  const editing = outlets.find((outlet) => outlet.id === editingId) ?? null;
+  const editing = editor && editor.bankId === bankId ? editor.row : null;
 
   const columns: Column<OutletRead>[] = [
     {
-      key: 'type',
-      header: 'Type',
+      key: "type",
+      header: "Type",
       render: (outlet) => (
         <span className="text-caption text-slate">
           {OUTLET_TYPE_LABELS[outlet.outletType]}
@@ -124,15 +127,15 @@ export default function OutletsPage() {
       ),
     },
     {
-      key: 'name',
-      header: 'Name',
+      key: "name",
+      header: "Name",
       render: (outlet) => (
         <span className="text-body font-medium text-navy">{outlet.name}</span>
       ),
     },
     {
-      key: 'number',
-      header: 'Number',
+      key: "number",
+      header: "Number",
       render: (outlet) => (
         <span className="font-mono text-caption text-navy/85 tnum">
           {dash(outlet.outletNumber)}
@@ -140,13 +143,13 @@ export default function OutletsPage() {
       ),
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (outlet) => <OutletStatusPill status={outlet.status} />,
     },
     {
-      key: 'opened',
-      header: 'Opened',
+      key: "opened",
+      header: "Opened",
       render: (outlet) => (
         <span className="font-mono text-caption text-navy/85 tnum">
           {fmtRegisterDate(outlet.openedOn)}
@@ -154,8 +157,8 @@ export default function OutletsPage() {
       ),
     },
     {
-      key: 'closed',
-      header: 'Closed',
+      key: "closed",
+      header: "Closed",
       render: (outlet) => (
         <span className="font-mono text-caption text-navy/85 tnum">
           {fmtRegisterDate(outlet.closedOn)}
@@ -163,15 +166,15 @@ export default function OutletsPage() {
       ),
     },
     {
-      key: 'edit',
-      header: '',
-      align: 'right',
+      key: "edit",
+      header: "",
+      align: "right",
       render: (outlet) => (
         <button
           type="button"
           onClick={() => {
             setAdding(false);
-            setEditingId(outlet.id);
+            setEditor({ bankId, row: outlet });
           }}
           className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
         >
@@ -191,7 +194,7 @@ export default function OutletsPage() {
           <button
             type="button"
             onClick={() => {
-              setEditingId(null);
+              setEditor(null);
               setAdding(true);
             }}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
@@ -213,10 +216,22 @@ export default function OutletsPage() {
           }
           onFinished={() =>
             void queryClient.invalidateQueries({
-              queryKey: ['institution-profile', bankId],
+              queryKey: ["institution-profile", bankId],
             })
           }
         />
+
+        {(adding || editing) && (
+          <OutletForm
+            key={editing?.id ?? "new"}
+            bankId={bankId!}
+            outlet={editing}
+            onClose={() => {
+              setAdding(false);
+              setEditor(null);
+            }}
+          />
+        )}
 
         <QueryBoundary
           contained
@@ -229,21 +244,9 @@ export default function OutletsPage() {
             </div>
           }
         >
-          {(adding || editing) && (
-            <OutletForm
-              key={editing?.id ?? 'new'}
-              bankId={bankId!}
-              outlet={editing}
-              onClose={() => {
-                setAdding(false);
-                setEditingId(null);
-              }}
-            />
-          )}
-
           <SectionCard
             title="Outlet register"
-            subtitle={`${outlets.length} ${outlets.length === 1 ? 'outlet' : 'outlets'} on record`}
+            subtitle={`${outlets.length} ${outlets.length === 1 ? "outlet" : "outlets"} on record`}
             noPadding
           >
             {outlets.length === 0 ? (
@@ -278,17 +281,19 @@ function OutletForm({
   const mutation = outlet ? update : create;
 
   const [outletType, setOutletType] = useState<OutletType>(
-    outlet?.outletType ?? 'branch'
+    outlet?.outletType ?? "branch",
   );
-  const [name, setName] = useState(outlet?.name ?? '');
-  const [outletNumber, setOutletNumber] = useState(outlet?.outletNumber ?? '');
-  const [status, setStatus] = useState<OutletStatus>(outlet?.status ?? 'active');
-  const [openedOn, setOpenedOn] = useState(outlet?.openedOn ?? '');
-  const [closedOn, setClosedOn] = useState(outlet?.closedOn ?? '');
+  const [name, setName] = useState(outlet?.name ?? "");
+  const [outletNumber, setOutletNumber] = useState(outlet?.outletNumber ?? "");
+  const [status, setStatus] = useState<OutletStatus>(
+    outlet?.status ?? "active",
+  );
+  const [openedOn, setOpenedOn] = useState(outlet?.openedOn ?? "");
+  const [closedOn, setClosedOn] = useState(outlet?.closedOn ?? "");
   const [relocatedFrom, setRelocatedFrom] = useState(
-    outlet?.relocatedFrom ?? ''
+    outlet?.relocatedFrom ?? "",
   );
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
 
   const canSubmit = name.trim().length > 0 && reason.trim().length > 0;
 
@@ -302,7 +307,7 @@ function OutletForm({
       outletNumber: textOrNull(outletNumber),
       status,
       openedOn: textOrNull(openedOn),
-      closedOn: status === 'closed' ? textOrNull(closedOn) : null,
+      closedOn: status === "closed" ? textOrNull(closedOn) : null,
       relocatedFrom: textOrNull(relocatedFrom),
       // Structured address details are carried through unchanged (no editor yet).
       address: outlet?.address ?? {},
@@ -316,11 +321,11 @@ function OutletForm({
 
   return (
     <SectionCard
-      title={outlet ? `Edit ${outlet.name}` : 'Add outlet'}
+      title={outlet ? `Edit ${outlet.name}` : "Add outlet"}
       subtitle={
         outlet
           ? 'Full replacement — set status to "Closed" to record a closure'
-          : 'Register a new head office, branch, or agency'
+          : "Register a new head office, branch, or agency"
       }
     >
       <form onSubmit={submit} className="space-y-4">
@@ -332,11 +337,13 @@ function OutletForm({
               onChange={(e) => setOutletType(e.target.value as OutletType)}
               className={inputCls}
             >
-              {(Object.keys(OUTLET_TYPE_LABELS) as OutletType[]).map((value) => (
-                <option key={value} value={value}>
-                  {OUTLET_TYPE_LABELS[value]}
-                </option>
-              ))}
+              {(Object.keys(OUTLET_TYPE_LABELS) as OutletType[]).map(
+                (value) => (
+                  <option key={value} value={value}>
+                    {OUTLET_TYPE_LABELS[value]}
+                  </option>
+                ),
+              )}
             </select>
           </Field>
           <Field label="Name" htmlFor="ol-name" required>
@@ -375,7 +382,7 @@ function OutletForm({
               className={inputCls}
             />
           </Field>
-          {status === 'closed' && (
+          {status === "closed" && (
             <Field
               label="Closed on"
               htmlFor="ol-closed"
@@ -410,11 +417,14 @@ function OutletForm({
         </div>
 
         {mutation.error && (
-          <ErrorPanel error={mutation.error} title="Could not save the outlet" />
+          <ErrorPanel
+            error={mutation.error}
+            title="Could not save the outlet"
+          />
         )}
 
         <FormActions
-          submitLabel={outlet ? 'Save outlet' : 'Add outlet'}
+          submitLabel={outlet ? "Save outlet" : "Add outlet"}
           pending={mutation.isPending}
           disabled={!canSubmit}
           onCancel={onClose}

@@ -9,6 +9,7 @@ the contingent-leverage stress — while the existing BankFinancialFact-only pat
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date
 from decimal import Decimal
 from typing import cast
@@ -307,7 +308,9 @@ def test_bottom_up_credit_and_concentration_flow_into_the_run(db_client: TestCli
 
     # Concentration: the connected corporate group is the single largest name.
     concentration = outcome["concentration"]
-    assert concentration["largest_group_key"] == "group:GRP-1"
+    assert concentration["largest_group_key"] == (
+        "group:" + hashlib.sha256(b"group:GRP-1").hexdigest()
+    )
     assert Decimal(concentration["total_incremental_loss"]) > Decimal("0")
 
     # Contingent leverage: the derivative inflates the leverage exposure.

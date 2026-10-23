@@ -266,7 +266,7 @@ def redrive_dedup(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ingestion batch not found for this organization.",
         )
-    dedup_status = (batch.etl_report or {}).get("dedup_status")
+    dedup_status = batch.dedup_status
     if dedup_status not in STUCK_DEDUP_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

@@ -2,7 +2,8 @@
 
 Covered fields written after a bank key is connected use that bank's encryption
 key. Existing rows are not migrated. Demo datasets are re-imported through the
-Data Engine after key connection.
+Data Engine after key connection, following the
+[deployment prerequisite](bank_encryption.md#onboarding-and-operator-api).
 
 ## Covered fields
 
@@ -15,9 +16,9 @@ Data Engine after key connection.
 | `translation_failures`     | `raw_record`, `error_message`                                                       |
 | `lineage_records`          | `details` for bank-scoped records                                                   |
 | `regulatory_packages`      | `snapshot`, `validation_report`, `notes`                                            |
-| `bi_dashboard_versions`    | `spec`                                                                              |
-| `bi_subscriptions`         | `query`                                                                             |
-| `bi_alerts`                | `filters`                                                                           |
+| `bi_dashboard_versions`    | Identity filter `values` within `spec`                                              |
+| `bi_subscriptions`         | Identity filter `values` within `query`                                             |
+| `bi_alerts`                | Identity filter `values` within `filters`                                           |
 
 Numeric balances, positions, ownership percentages and calculation inputs retain
 ordinary database encryption at rest. Foreign keys, status codes and dates remain
@@ -54,7 +55,9 @@ external identifiers and related-party names. Names use Unicode normalization,
 case folding and collapsed whitespace; identifiers retain case and punctuation.
 Searches scope by organization and bank and confirm decrypted candidate values.
 A stable index-version pointer keeps exact matches working across payload-key
-rotation. Numeric concentration grouping uses opaque indexes.
+rotation. Numeric concentration grouping uses opaque indexes derived from the
+connected-group reference, falling back to the counterparty name. Positions
+without a counterparty retain literal `pos:<source_reference>` keys.
 
 Name index tokens are 64 characters for both connected and optional banks.
 Optional banks use unkeyed SHA-256 tokens and retain plaintext names.
@@ -81,3 +84,44 @@ and writes, cross-bank isolation, exact matching, old-version reads after
 rotation, numeric BI and identity refusals. PostgreSQL/storage tests exercise
 concurrent ingestion, push, exports, attachments and downloads, bounded unwrap
 counts and published-manifest readability after rollback.
+
+## Locked presentation reads
+
+Tenant GET/HEAD requests carry request-local disclosure state. If a provider is
+unreachable or disabled, covered text becomes `🔒 Protected data`; covered report
+objects carry `_aequoros_protected_data` with `unavailable` or `revoked`. The
+`X-Aequoros-Protected-Data` response header reports state by bank. Numeric columns,
+record identities, dates and statuses retain their original values. Integrity
+failures still refuse access. Background work and mutation requests never use
+presentation substitution, and submitted placeholders cannot overwrite fields.
+
+Staff inspection sessions substitute covered fields without unwrapping bank
+keys, including fields predating key connection. Protected executable BI payloads
+refuse with a named locked response rather than being treated as empty queries or
+filters. Dashboard layouts, numeric queries and numeric filter values remain
+readable without a key, as do numeric alert and subscription configurations.
+Session-bound staff downloads and download-link issuance return the named support
+refusal without decrypting object contents, including when presentation state is
+missing. Integrity consumers receive that refusal instead of placeholder bytes.
+An encrypted filing snapshot remains protected; its filing status and source-run
+references remain readable.
+
+The bank UI displays separate messages:
+
+- Revoked: "Your bank has turned off aequorOS access to protected data. Contact your bank administrator."
+- Unreachable: "Can't reach your bank's key service. Retrying."
+
+Both states offer Retry and refetch active locked or failed protected queries
+every five seconds. Staff support placeholders do not poll for recovery.
+Successful protected reads clear the notice and restore values; cached locked or
+failed reads, including inactive screens, are invalidated so returning to a
+screen refreshes it immediately. Unrelated numeric responses and responses from
+requests started before the current lock cannot clear that lock. Mutation
+errors keep the editor mounted and its draft values intact. Protected report
+previews show a locked panel, never an empty or successful validation report.
+
+The concentration monitor continues computing numeric exposures, shares and HHI
+when labels are locked. Named single-name or connected-group limits that require
+the index key appear as locked and are not evaluated; they remain included in the
+registered limit count. Literal positional limits and limits that do not need
+identity matching remain evaluable.

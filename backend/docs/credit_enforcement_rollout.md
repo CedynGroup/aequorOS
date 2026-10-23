@@ -367,10 +367,11 @@ The reasoning, route by route:
   rates; vintages are cohort PAR30+ curves; PD is a pooled hazard. Aggregate
   figures are `aggregated`.
 - **Concentration — `restricted`, and it resolves Phase 4 open decision 1.** The
-  `single_name` dimension buckets on `cp:<counterparty name>` /
-  `group:<reference>` (`credit_concentration._group_key`) and the `breaches` list
-  carries those keys, so the payload names obligors. The platform's own member
-  rule says a single obligor is `restricted`; the older route line said
+  `single_name` dimension and the `breaches` list disclose obligor labels when
+  protected data is available; grouping and locked-limit behavior follow the
+  [field encryption contract](bank_field_encryption.md#exact-match-search) and its
+  [locked presentation rules](bank_field_encryption.md#locked-presentation-reads).
+  The platform's own member rule says a single obligor is `restricted`; the older route line said
   `aggregated`. **Decided: `restricted`** — the narrower of the two, taken because
   the alternative (projecting `single_name` buckets and single-name breaches out
   for aggregated viewers) changes the numbers on a supervisory screen, which is a

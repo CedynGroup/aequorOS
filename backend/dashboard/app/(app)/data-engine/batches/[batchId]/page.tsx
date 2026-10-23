@@ -6,6 +6,9 @@
  * preserved), and where the raw file and report landed in tiered storage.
  */
 
+import ProtectedDataPlaceholder, {
+  protectedPayloadReason,
+} from "@/components/ui/ProtectedDataPlaceholder";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
@@ -234,7 +237,9 @@ export default function BatchDetailPage(props: {
               are counted in the totals above but not listed individually.
             </p>
           )}
-          {findings.length === 0 ? (
+          {protectedPayloadReason(batch.validationReport) ? (
+            <ProtectedDataPlaceholder value={batch.validationReport} />
+          ) : findings.length === 0 ? (
             <EmptyState
               title="No validation findings"
               description="Every record in this batch passed the configured rules."

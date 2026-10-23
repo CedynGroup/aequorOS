@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Standing credit-concentration monitor: portfolio concentration by
@@ -12,48 +12,50 @@
  * set" — no invented threshold, no fabricated compliance colour.
  */
 
-import { useState } from 'react';
-import Link from 'next/link';
-import type { Column } from '@/components/ui/DataTable';
-import type { ConcentrationBucketRead } from '@aequoros/risk-service-api';
-import CreditWorkspace from '@/components/credit/CreditWorkspace';
-import DataTable from '@/components/ui/DataTable';
-import KpiStat from '@/components/ui/KpiStat';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import SubTabs from '@/components/ui/SubTabs';
-import EmptyState from '@/components/ui/EmptyState';
-import { Users } from 'lucide-react';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useCreditConcentration } from '@/lib/api/hooks';
-import { labelize, num } from '@/lib/api/values';
-import { fmtCurrency, fmtInt, regShort } from '@/lib/format';
+import { useState } from "react";
+import Link from "next/link";
+import type { Column } from "@/components/ui/DataTable";
+import type { ConcentrationBucketRead } from "@aequoros/risk-service-api";
+import CreditWorkspace from "@/components/credit/CreditWorkspace";
+import DataTable from "@/components/ui/DataTable";
+import KpiStat from "@/components/ui/KpiStat";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import SubTabs from "@/components/ui/SubTabs";
+import EmptyState from "@/components/ui/EmptyState";
+import { Users } from "lucide-react";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useCreditConcentration } from "@/lib/api/hooks";
+import { labelize, num } from "@/lib/api/values";
+import { fmtCurrency, fmtInt, regShort } from "@/lib/format";
 
 const DIMENSIONS = [
-  { key: 'single_name', label: 'Single name' },
-  { key: 'sector', label: 'Sector' },
-  { key: 'geography', label: 'Geography' },
-  { key: 'product', label: 'Product' },
-  { key: 'collateral', label: 'Collateral' },
-  { key: 'employer', label: 'Employer' },
+  { key: "single_name", label: "Single name" },
+  { key: "sector", label: "Sector" },
+  { key: "geography", label: "Geography" },
+  { key: "product", label: "Product" },
+  { key: "collateral", label: "Collateral" },
+  { key: "employer", label: "Employer" },
 ];
 
 function statusPill(status: string) {
-  if (status === 'above_limit') return <StatusPill tone="critical">Above limit</StatusPill>;
-  if (status === 'within_limit') return <StatusPill tone="success">Within limit</StatusPill>;
-  if (status === 'not_computable') return <StatusPill tone="slate">Not computable</StatusPill>;
+  if (status === "above_limit")
+    return <StatusPill tone="critical">Above limit</StatusPill>;
+  if (status === "within_limit")
+    return <StatusPill tone="success">Within limit</StatusPill>;
+  if (status === "not_computable")
+    return <StatusPill tone="slate">Not computable</StatusPill>;
   return <StatusPill tone="slate">Not set</StatusPill>;
 }
 
 export default function CreditConcentrationPage() {
-  const [dimension, setDimension] = useState('single_name');
+  const [dimension, setDimension] = useState("single_name");
   const { bank } = useBankContext();
   const concentration = useCreditConcentration(bank?.id);
 
   return (
-    <CreditWorkspace
-    >
+    <CreditWorkspace>
       {() => (
         <QueryBoundary
           contained
@@ -64,77 +66,86 @@ export default function CreditConcentrationPage() {
           {concentration.data
             ? (() => {
                 const data = concentration.data;
-                const active = data.dimensions.find((d) => d.dimension === dimension);
+                const active = data.dimensions.find(
+                  (d) => d.dimension === dimension,
+                );
                 const capitalLabel =
-                  data.capitalBasis === 'net_own_funds'
-                    ? 'of Net Own Funds'
-                    : 'of Tier 1 capital';
+                  data.capitalBasis === "net_own_funds"
+                    ? "of Net Own Funds"
+                    : "of Tier 1 capital";
                 const columns: Column<ConcentrationBucketRead>[] = [
                   {
-                    key: 'name',
+                    key: "name",
                     header:
-                      dimension === 'single_name'
-                        ? 'Counterparty / group'
-                        : DIMENSIONS.find((d) => d.key === dimension)?.label ?? 'Bucket',
+                      dimension === "single_name"
+                        ? "Counterparty / group"
+                        : (DIMENSIONS.find((d) => d.key === dimension)?.label ??
+                          "Bucket"),
                     render: (r) => (
                       <span className="text-caption text-navy">
-                        {r.key.startsWith('cp:') || r.key.startsWith('group:') || r.key.startsWith('pos:')
-                          ? r.key.replace(/^(cp|group|pos):/, '')
+                        {r.key.startsWith("cp:") ||
+                        r.key.startsWith("group:") ||
+                        r.key.startsWith("pos:")
+                          ? r.key.replace(/^(cp|group|pos):/, "")
                           : labelize(r.key)}
                       </span>
                     ),
                   },
                   {
-                    key: 'loans',
-                    header: 'Exposures',
-                    align: 'right',
+                    key: "loans",
+                    header: "Exposures",
+                    align: "right",
                     numeric: true,
                     render: (r) => fmtInt(r.loanCount),
                   },
                   {
-                    key: 'exposure',
-                    header: 'Exposure',
-                    align: 'right',
+                    key: "exposure",
+                    header: "Exposure",
+                    align: "right",
                     numeric: true,
                     render: (r) => fmtCurrency(num(r.exposureGhs)),
                   },
                   {
-                    key: 'book',
-                    header: '% of book',
-                    align: 'right',
+                    key: "book",
+                    header: "% of book",
+                    align: "right",
                     numeric: true,
                     render: (r) => `${num(r.shareOfBookPct).toFixed(2)}%`,
                   },
                   {
-                    key: 'capital',
+                    key: "capital",
                     header: `% ${capitalLabel}`,
-                    align: 'right',
+                    align: "right",
                     numeric: true,
                     render: (r) =>
                       r.shareOfCapitalPct != null
                         ? `${num(r.shareOfCapitalPct).toFixed(2)}%`
-                        : '—',
+                        : "—",
                   },
                   {
-                    key: 'limit',
-                    header: 'Board limit',
-                    align: 'right',
+                    key: "limit",
+                    header: "Board limit",
+                    align: "right",
                     numeric: true,
                     render: (r) =>
-                      r.limitValue != null ? `${num(r.limitValue).toFixed(1)}%` : 'Not set',
+                      r.limitValue != null
+                        ? `${num(r.limitValue).toFixed(1)}%`
+                        : "Not set",
                   },
                   {
-                    key: 'util',
-                    header: 'Utilisation',
-                    align: 'right',
+                    key: "util",
+                    header: "Utilisation",
+                    align: "right",
                     numeric: true,
                     render: (r) =>
-                      r.utilizationPct != null ? `${num(r.utilizationPct).toFixed(0)}%` : '—',
+                      r.utilizationPct != null
+                        ? `${num(r.utilizationPct).toFixed(0)}%`
+                        : "—",
                   },
                   {
-                    key: 'status',
-                    header: 'Status',
-                    align: 'right',
+                    key: "status",
+                    header: "Status",
+                    align: "right",
                     render: (r) => statusPill(r.limitStatus),
                   },
                 ];
@@ -151,12 +162,12 @@ export default function CreditConcentrationPage() {
                         value={
                           data.capitalBaseGhs != null
                             ? fmtCurrency(num(data.capitalBaseGhs))
-                            : 'Not computable'
+                            : "Not computable"
                         }
                         hint={
-                          data.capitalBasis === 'net_own_funds'
-                            ? 'Act 930 s.29 Net Own Funds'
-                            : 'Tier 1 from current capital components'
+                          data.capitalBasis === "net_own_funds"
+                            ? "Act 930 s.29 Net Own Funds"
+                            : "Tier 1 from current capital components"
                         }
                       />
                       <KpiStat
@@ -164,20 +175,40 @@ export default function CreditConcentrationPage() {
                         value={fmtInt(data.limitCount)}
                         hint={
                           data.limitCount === 0
-                            ? 'The register is empty — limits are a Board decision'
-                            : 'Active limit rows'
+                            ? "The register is empty — limits are a Board decision"
+                            : "Active limit rows"
                         }
                       />
                       <KpiStat
                         label="Limits breached"
                         value={fmtInt(data.breaches.length)}
-                        status={data.breaches.length > 0 ? 'crit' : 'ok'}
+                        status={data.breaches.length > 0 ? "crit" : "ok"}
                       />
                     </div>
 
-                    <SubTabs items={DIMENSIONS} active={dimension} onChange={setDimension} />
+                    {data.lockedLimits && data.lockedLimits.length > 0 && (
+                      <SectionCard title="Locked limits">
+                        <ul className="space-y-2 text-body text-slate">
+                          {data.lockedLimits.map((limit, index) => (
+                            <li key={index}>
+                              {limit.bucketKey} · {labelize(limit.dimension)} ·{" "}
+                              {labelize(limit.limitKind)} {String(limit.value)}{" "}
+                              — not evaluated
+                            </li>
+                          ))}
+                        </ul>
+                      </SectionCard>
+                    )}
 
-                    {active && active.bucketCount === 0 && dimension === 'employer' ? (
+                    <SubTabs
+                      items={DIMENSIONS}
+                      active={dimension}
+                      onChange={setDimension}
+                    />
+
+                    {active &&
+                    active.bucketCount === 0 &&
+                    dimension === "employer" ? (
                       <EmptyState
                         Icon={Users}
                         title="No employer data on this book"
@@ -199,18 +230,24 @@ export default function CreditConcentrationPage() {
                             : undefined
                         }
                       >
-                        <DataTable columns={columns} rows={active.buckets} density="compact" />
+                        <DataTable
+                          columns={columns}
+                          rows={active.buckets}
+                          density="compact"
+                        />
                       </SectionCard>
                     ) : null}
 
                     <SectionCard title="About this monitor">
                       <p className="text-body text-navy/85 leading-relaxed">
-                        The {regShort()} guidelines on credit concentration risk require the Board
-                        to approve a limit structure per concentration dimension, with breach
-                        escalation, by end-2026. The guidelines prescribe no numeric limits, so
-                        this register starts empty and every limit shown is a Board decision with
-                        approval evidence. Single-name concentration is measured at the obligor
-                        and connected-group level, never per facility.
+                        The {regShort()} guidelines on credit concentration risk
+                        require the Board to approve a limit structure per
+                        concentration dimension, with breach escalation, by
+                        end-2026. The guidelines prescribe no numeric limits, so
+                        this register starts empty and every limit shown is a
+                        Board decision with approval evidence. Single-name
+                        concentration is measured at the obligor and
+                        connected-group level, never per facility.
                       </p>
                     </SectionCard>
                   </>

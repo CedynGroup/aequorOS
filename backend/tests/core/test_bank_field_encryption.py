@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import Uuid, bindparam, select, text
@@ -29,6 +30,13 @@ from app.core.ids import new_uuid7
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
+from app.core.key_management.presentation import (
+    LOCKED_JSON,
+    LOCKED_TEXT,
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+)
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.data_engine.service.field_search import find_counterparties
@@ -42,17 +50,21 @@ from app.identity.schemas.institution_profile import (
     RelatedPartyUpdate,
 )
 from app.identity.service import institution_profile
+from app.ml.behavioral import deposit_stability, nmd_duration
+from app.ml.behavioral.config import BehavioralTrainingConfig
 from app.ml.behavioral.history import load_deposit_month_aggregates
+from app.models import ParamConcentrationLimit
 from app.models.audit_event import AuditEvent
 from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
 from app.models.canonical_withdrawal import CanonicalWithdrawal
 from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailure
 from app.reporting.models.packages import RegulatoryPackage
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import canonical_withdrawal, ingestion
+from app.services import canonical_withdrawal, credit_concentration, credit_exposure_book, ingestion
+from app.services.behavioral_liquidity import get_behavioral_liquidity_report
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.bi.fixtures import materialize_bi_plane
-from tests.support.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 BANK_A = "BK-SAMP0001"
@@ -586,8 +598,237 @@ def test_numeric_sql_aggregation_preserves_decrypted_concentration_labels(
         db_session, CTX, BANK_A, AS_OF, 1, non_maturing_only=False
     )
     assert len(aggregates) == 1
-    assert aggregates[0].concentration_group == "SYNTHETIC-GROUP-17"
+    assert aggregates[0].concentration_group == db_session.scalar(
+        select(CanonicalCounterparty.concentration_group_blind_index).limit(1)
+    )
+    report = get_behavioral_liquidity_report(db_session, CTX, BANK_A)
+    assert [
+        item.segment for item in report.segments if item.dimension == "concentration_group"
+    ] == ["SYNTHETIC-GROUP-17"]
     assert aggregates[0].balance_ghs == 300 and aggregates[0].n_accounts == 2
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_locked_groups_remain_distinct_and_numeric_training_stays_available(
+    db_session: Session, provider: LocalKeyProvider, status: KeyStatus
+) -> None:
+    connect(db_session, provider)
+    parties = [counterparty(db_session), counterparty(db_session, reference="SYNTHETIC-SECOND")]
+    parties[1].group_reference = "Synthetic separate group"
+    for index, party in enumerate(parties):
+        common = dict(
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            source_system="EXCEL_CSV",
+            ingestion_batch_id=party.ingestion_batch_id,
+            lineage_id=party.lineage_id,
+            validation_status="accepted",
+        )
+        position = CanonicalPosition(
+            **common,
+            as_of_date=AS_OF,
+            source_reference=f"deposit-{index}",
+            position_type="DEPOSIT",
+            currency="GHS",
+        )
+        db_session.add(position)
+        db_session.flush()
+        for month, balance in ((5, 100 if index == 0 else 0), (6, 0 if index == 0 else 100)):
+            db_session.add(
+                CanonicalPositionSnapshot(
+                    **common,
+                    as_of_date=date(2026, month, 30),
+                    source_reference=f"snapshot-{index}-{month}",
+                    position_id=position.id,
+                    counterparty_id=party.id,
+                    balance=Decimal(balance),
+                )
+            )
+    db_session.commit()
+    db_session.expunge_all()
+    provider.set_status(KEY_A, status)
+    for estimate in (deposit_stability.estimate, nmd_duration.estimate):
+        result = estimate(db_session, CTX, BANK_A, AS_OF, BehavioralTrainingConfig())
+        assert result.products
+    db_session.info[SESSION_STATE] = PresentationState()
+    report = get_behavioral_liquidity_report(db_session, CTX, BANK_A)
+    groups = [item for item in report.segments if item.dimension == "concentration_group"]
+    assert len(groups) == 2
+    assert {item.segment for item in groups} == {LOCKED_TEXT}
+    assert sorted(item.current_balance_ghs for item in groups) == [0, 100]
+    assert (
+        next(item for item in groups if item.current_balance_ghs == 0).observed_monthly_runoff_pct
+        == 100
+    )
+    db_session.info.pop(SESSION_STATE)
+
+
+def _credit_identity_positions(db_session: Session, representation: str) -> None:
+    for index in range(2):
+        party = counterparty(
+            db_session, reference=f"credit-party-{index}", name=f"Synthetic borrower {index}"
+        )
+        party.group_reference = None
+        party.attributes = {}
+        if representation == "group_reference":
+            party.group_reference = f"Synthetic group {index}"
+        elif representation != "name":
+            key = "group_reference" if representation == "attribute_reference" else representation
+            party.attributes = {key: f"Synthetic group {index}"}
+        common = dict(
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            as_of_date=AS_OF,
+            source_system="EXCEL_CSV",
+            ingestion_batch_id=party.ingestion_batch_id,
+            lineage_id=party.lineage_id,
+            validation_status="accepted",
+        )
+        position = CanonicalPosition(
+            **common,
+            source_reference=f"credit-position-{index}",
+            position_type="LOAN",
+            currency="GHS",
+        )
+        db_session.add(position)
+        db_session.flush()
+        db_session.add(
+            CanonicalPositionSnapshot(
+                **common,
+                source_reference=f"credit-snapshot-{index}",
+                position_id=position.id,
+                counterparty_id=party.id,
+                balance=Decimal(100),
+            )
+        )
+    db_session.commit()
+    db_session.expunge_all()
+
+
+@pytest.mark.parametrize(
+    "representation", ["group_reference", "attribute_reference", "group", "parent", "name"]
+)
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_credit_concentration_identity_survives_locked_labels(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    representation: str,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    _credit_identity_positions(db_session, representation)
+    bank = db_session.get(Bank, BANK_A)
+    assert bank is not None
+    before = credit_concentration.load_credit_exposures(db_session, CTX, bank, AS_OF)
+    shared_before = credit_exposure_book.load_exposure_rows(
+        db_session,
+        CTX,
+        bank,
+        AS_OF,
+        credit_exposure_book.CONCENTRATION_POSITION_TYPES,
+    )
+    assert len({item.group_key for item in before}) == 2
+    limit = ParamConcentrationLimit(
+        organization_id=ORG_1,
+        jurisdiction_code="GH",
+        dimension="single_name",
+        limit_kind="share_of_book_pct",
+        value=Decimal(49),
+        effective_from=AS_OF,
+        approved_by="Synthetic board",
+        approval_timestamp=utc_now(),
+        bucket_key="cp:Synthetic borrower 0"
+        if representation == "name"
+        else "group:Synthetic group 0",
+    )
+    db_session.add(limit)
+    db_session.flush()
+    limited = credit_concentration.monitor(db_session, CTX, bank, AS_OF)
+    assert len(limited.breaches) == 1 and limited.breaches[0].key == before[0].group_key
+    db_session.commit()
+    db_session.expunge_all()
+    provider.set_status(KEY_A, status)
+    after = credit_concentration.load_credit_exposures(db_session, CTX, bank, AS_OF)
+    assert after == before
+    monitor = credit_concentration.monitor(db_session, CTX, bank, AS_OF)
+    dimension = monitor.dimension("single_name")
+    assert dimension is not None and dimension.hhi == Decimal(5000)
+    assert [item.share_of_book_pct for item in dimension.buckets] == [Decimal(50), Decimal(50)]
+    db_session.info[SESSION_STATE] = PresentationState()
+    shared_after = credit_exposure_book.load_exposure_rows(
+        db_session,
+        CTX,
+        bank,
+        AS_OF,
+        credit_exposure_book.CONCENTRATION_POSITION_TYPES,
+    )
+    assert [item.group_key for item in shared_after] == [item.group_key for item in shared_before]
+    report = credit_concentration.concentration_read(db_session, CTX, bank, AS_OF)
+    displayed = next(item for item in report.dimensions if item.dimension == "single_name")
+    assert len(displayed.buckets) == 2 and {item.key for item in displayed.buckets} == {LOCKED_TEXT}
+    assert report.limit_count == 1
+    assert len(report.locked_limits) == 1
+    assert report.locked_limits[0].bucket_key == LOCKED_TEXT
+    assert not report.breaches
+    assert all(item.limit_status == "not_set" for item in displayed.buckets)
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    db_session.expunge_all()
+    recovered = credit_concentration.concentration_read(db_session, CTX, bank, AS_OF)
+    assert not recovered.locked_limits
+    assert len(recovered.breaches) == 1
+    db_session.info.pop(SESSION_STATE)
+
+
+def test_positional_concentration_limit_matches_without_key(
+    db_session: Session, provider: LocalKeyProvider
+) -> None:
+    connect(db_session, provider)
+    party = counterparty(db_session)
+    common = dict(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        as_of_date=AS_OF,
+        source_system="EXCEL_CSV",
+        ingestion_batch_id=party.ingestion_batch_id,
+        lineage_id=party.lineage_id,
+        validation_status="accepted",
+    )
+    position = CanonicalPosition(
+        **common, source_reference="Synthetic position", position_type="LOAN", currency="GHS"
+    )
+    db_session.add(position)
+    db_session.flush()
+    db_session.add(
+        CanonicalPositionSnapshot(
+            **common,
+            source_reference="Synthetic snapshot",
+            position_id=position.id,
+            balance=Decimal(100),
+        )
+    )
+    db_session.add(
+        ParamConcentrationLimit(
+            organization_id=ORG_1,
+            jurisdiction_code="GH",
+            dimension="single_name",
+            limit_kind="share_of_book_pct",
+            value=Decimal(49),
+            effective_from=AS_OF,
+            approved_by="Synthetic board",
+            approval_timestamp=utc_now(),
+            bucket_key="pos:Synthetic snapshot",
+        )
+    )
+    db_session.commit()
+    db_session.expunge_all()
+    bank = db_session.get(Bank, BANK_A)
+    assert bank is not None
+    for status in (KeyStatus.ACTIVE, KeyStatus.DISABLED, KeyStatus.UNAVAILABLE):
+        provider.set_status(KEY_A, status)
+        result = credit_concentration.monitor(db_session, CTX, bank, AS_OF)
+        assert len(result.breaches) == 1
+        assert result.breaches[0].key == "pos:Synthetic snapshot"
+        assert not result.locked_limits
 
 
 def test_partial_refresh_and_update_preserve_other_encrypted_fields(
@@ -845,9 +1086,11 @@ def test_counterparty_reversal_preserves_natural_key_scope(
         assert replacement.withdrawn_at is None and replacement.superseded_by is None
 
 
+@pytest.mark.parametrize("status", [KeyStatus.ACTIVE, KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
 def test_connected_bank_bi_keeps_numeric_facts_without_identity_copies(
     db_session: Session,
     provider: LocalKeyProvider,
+    status: KeyStatus,
 ) -> None:
 
     connect(db_session, provider)
@@ -889,6 +1132,7 @@ def test_connected_bank_bi_keeps_numeric_facts_without_identity_copies(
     assert identity[2] is None
     assert db_session.scalar(select(BiFactPositionDaily.counterparty_group)) is None
     assert db_session.scalar(select(BiFactPositionEom.counterparty_group)) is None
+    provider.set_status(KEY_A, status)
     q = BiQuery(measures=["deposits.balance_rc"], time=BiTime(as_of=AS_OF))
     compiled = compile_query(db_session, catalogue(), q, organization_id=ORG_1, bank_id=BANK_A)
     result = execute(db_session, compiled, timeout_ms=1000, row_cap=10)
@@ -1014,6 +1258,87 @@ def test_saved_identity_filter_is_encrypted_and_explicitly_refused(
         measures=["deposits.balance_rc"], time=BiTime(as_of=AS_OF), filters=saved_query.filters
     )
     assert authority.refused_members(query) == ("counterparty.name",)
+    raw_spec = cast(dict[str, object], json.loads(str(raw))) if isinstance(raw, str) else raw
+    assert isinstance(raw_spec, dict) and "query" in raw_spec
+    for status in (KeyStatus.DISABLED, KeyStatus.UNAVAILABLE):
+        provider.set_status(KEY_A, status)
+        for model, record_id in (
+            (BiDashboardVersion, version_id),
+            (BiSubscription, subscription_id),
+        ):
+            db_session.commit()
+            db_session.expunge_all()
+            db_session.info[SESSION_STATE] = PresentationState()
+            with pytest.raises(KeyUnavailableError):
+                db_session.get(model, record_id)
+        db_session.info.pop(SESSION_STATE)
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    db_session.expunge_all()
+    recovered = db_session.get(BiDashboardVersion, version_id)
+    assert recovered is not None and NAME in json.dumps(recovered.spec, ensure_ascii=False)
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_numeric_saved_bi_configuration_loads_without_a_bank_key(
+    db_session: Session, provider: LocalKeyProvider, status: KeyStatus
+) -> None:
+    connect(db_session, provider)
+    query = BiPackQuery(measures=["loans.balance_rc"], window="as_of")
+    spec = BiDashboardSpec.model_validate(
+        {
+            "widgets": [
+                {
+                    "id": "loans",
+                    "kind": "table",
+                    "title": "Loans",
+                    "query": query.model_dump(mode="json"),
+                }
+            ],
+            "layout": [{"i": "loans", "x": 0, "y": 0, "w": 6, "h": 4}],
+        }
+    ).model_dump(mode="json")
+    version = saved_version(db_session, spec)
+    subscription = BiSubscription(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        name="Numeric subscription",
+        owner_user_id=USER_1,
+        query=query.for_period(AS_OF).model_dump(mode="json"),
+        artifact_format="csv",
+        cadence="daily",
+        hour=7,
+        minute=30,
+        recipient_user_ids=[],
+    )
+    filters = [{"member": "position.currency", "op": "eq", "values": ["GHS"]}]
+    alert = BiAlert(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        owner_user_id=USER_1,
+        name="Numeric alert",
+        measure_id="loans.balance_rc",
+        filters=filters,
+        direction="above",
+        threshold_basis="stated",
+        threshold=Decimal(100),
+        notify_user_ids=[],
+    )
+    db_session.add_all([version, subscription, alert])
+    db_session.commit()
+    ids = version.id, subscription.id, alert.id
+    db_session.expunge_all()
+    provider.set_status(KEY_A, status)
+    db_session.info[SESSION_STATE] = PresentationState()
+    loaded_version = db_session.get(BiDashboardVersion, ids[0])
+    loaded_subscription = db_session.get(BiSubscription, ids[1])
+    loaded_alert = db_session.get(BiAlert, ids[2])
+    assert loaded_version is not None and loaded_version.spec == spec
+    assert loaded_subscription is not None and loaded_subscription.query == query.for_period(
+        AS_OF
+    ).model_dump(mode="json")
+    assert loaded_alert is not None and loaded_alert.filters == filters
+    assert cast(PresentationState, db_session.info[SESSION_STATE]).banks == {}
+    db_session.info.pop(SESSION_STATE)
 
 
 def test_register_digest_tracks_decrypted_values(
@@ -1074,7 +1399,8 @@ def test_saved_alert_list_filters_encrypt_and_round_trip(
     alert_id = alert.id
     db_session.expunge_all()
     raw = cast(object, db_session.execute(text("SELECT filters FROM bi_alerts")).scalar_one())
-    assert "aqs-bank-field-v1" in str(raw) and NAME not in str(raw)
+    assert ("aqs-bank-field-v1" in str(raw)) == bool(filters)
+    assert NAME not in str(raw)
     loaded = db_session.get(BiAlert, alert_id)
     assert loaded is not None and loaded.filters == (filters or [])
     loaded.filters = [{"member": "counterparty.id", "op": "eq", "values": ["synthetic-id"]}]
@@ -1085,6 +1411,14 @@ def test_saved_alert_list_filters_encrypt_and_round_trip(
     assert updated.filters == [
         {"member": "counterparty.id", "op": "eq", "values": ["synthetic-id"]}
     ]
+    for status in (KeyStatus.DISABLED, KeyStatus.UNAVAILABLE):
+        provider.set_status(KEY_A, status)
+        db_session.commit()
+        db_session.expunge_all()
+        db_session.info[SESSION_STATE] = PresentationState()
+        with pytest.raises(KeyUnavailableError):
+            db_session.get(BiAlert, alert_id)
+    db_session.info.pop(SESSION_STATE)
 
 
 def test_key_connection_encrypts_new_writes_without_rewriting_existing_records(
@@ -1118,3 +1452,163 @@ def test_key_connection_encrypts_new_writes_without_rewriting_existing_records(
     db_session.expunge_all()
     restored = db_session.get(CanonicalCounterparty, current_id)
     assert restored is not None and restored.name == NAME
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_presentation_locks_and_recovers_without_changing_numeric_fields(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    row = counterparty(db_session)
+    row_id = row.id
+    db_session.commit()
+    provider.set_status(KEY_A, status)
+    db_session.expunge_all()
+    view = PresentationState()
+    db_session.info[SESSION_STATE] = view
+    locked = db_session.get(CanonicalCounterparty, row_id)
+    assert locked is not None
+    assert locked.name == LOCKED_TEXT
+    assert locked.attributes == {
+        LOCKED_JSON: "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    }
+    assert locked.as_of_date == AS_OF and locked.validation_status == "accepted"
+    assert view.banks[BANK_A] == ("revoked" if status == KeyStatus.DISABLED else "unavailable")
+    # Even an explicit echo of a locked form cannot overwrite the original ciphertext.
+    locked.name = "Synthetic edited name"
+    with pytest.raises(KeyUnavailableError) as refused:
+        db_session.flush()
+    assert refused.value.revoked == (status == KeyStatus.DISABLED)
+    db_session.rollback()
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    db_session.expunge_all()
+    db_session.info[SESSION_STATE] = PresentationState()
+    recovered = db_session.get(CanonicalCounterparty, row_id)
+    assert recovered is not None and recovered.name == NAME
+    assert recovered.attributes == {"contact_name": NAME}
+    assert cast(PresentationState, db_session.info[SESSION_STATE]).banks[BANK_A] == "available"
+    db_session.info.pop(SESSION_STATE)
+
+
+@pytest.mark.parametrize("missing_presentation", [False, True])
+def test_support_presentation_hides_fields_without_unwrapping(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    missing_presentation: bool,
+) -> None:
+    connect(db_session, provider)
+    row_id = counterparty(db_session).id
+    db_session.commit()
+    db_session.expunge_all()
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Support presentation must not unwrap bank data")
+
+    monkeypatch.setattr(provider, "unwrap", refuse_unwrap)
+    db_session.info[SESSION_SUPPORT] = True
+    if not missing_presentation:
+        db_session.info[SESSION_STATE] = PresentationState(support=True)
+    row = db_session.get(CanonicalCounterparty, row_id)
+    assert row is not None and row.name == LOCKED_TEXT
+    if not missing_presentation:
+        assert cast(PresentationState, db_session.info[SESSION_STATE]).banks == {BANK_A: "support"}
+    db_session.info.pop(SESSION_STATE, None)
+    db_session.info.pop(SESSION_SUPPORT)
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_profile_http_locked_read_write_and_recovery(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    party = institution_profile.create_related_party(
+        db_session,
+        CTX,
+        BANK_A,
+        RelatedPartyCreate(
+            reason="Synthetic protected profile",
+            party_type="individual",
+            full_name=NAME,
+            contact={"email": "synthetic@example.test"},
+            roles=[RelatedPartyRoleInput(role="director")],
+        ),
+    )
+    db_session.commit()
+    provider.set_status(KEY_A, status)
+    db_session.expunge_all()
+    response = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
+    assert response.status_code == 200, response.text
+    assert response.json()["related_parties"][0]["full_name"] == LOCKED_TEXT
+    reason = "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
+    assert "no-store" in response.headers["cache-control"]
+    payload: dict[str, object] = {
+        "reason": "Synthetic retained edit",
+        "party_type": "individual",
+        "full_name": "Synthetic draft stays in browser",
+        "contact": {},
+        "roles": [{"role": "director"}],
+    }
+    refused = db_client.put(
+        f"/api/v1/banks/{BANK_A}/related-parties/{party.id}",
+        headers=headers(),
+        json=payload,
+    )
+    assert refused.status_code == 503, refused.text
+    assert (
+        refused.json()["error"]["message"]
+        == KeyUnavailableError(
+            "private provider detail",
+            revoked=status == KeyStatus.DISABLED,
+        ).public_message
+    )
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    restored = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["related_parties"][0]["full_name"] == NAME
+    assert json.loads(restored.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+
+
+@pytest.mark.parametrize("status", ["deferred", "failed", "completed", None])
+def test_dedup_status_remains_operational_without_unwrapping_the_report(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    status: str | None,
+) -> None:
+    connect(db_session, provider)
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        source_system="EXCEL_CSV",
+        adapter_version="synthetic",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=AS_OF,
+        etl_report={"dedup_status": "deferred", "name": NAME},
+    )
+    db_session.add(batch)
+    db_session.commit()
+    assert batch.dedup_status == "deferred"
+    batch.etl_report = {"dedup_status": status, "name": NAME} if status else None
+    db_session.commit()
+    batch_id = batch.id
+    db_session.expunge_all()
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Operational status must not unwrap the report during support access")
+
+    monkeypatch.setattr(provider, "unwrap", refuse_unwrap)
+    db_session.info[SESSION_SUPPORT] = True
+    try:
+        loaded = db_session.get(IngestionBatch, batch_id)
+        assert loaded is not None and loaded.dedup_status == status
+        assert loaded.etl_report == {LOCKED_JSON: "support"}
+    finally:
+        db_session.info.pop(SESSION_SUPPORT)
