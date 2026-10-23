@@ -86,7 +86,7 @@ hitting "Reply" in Gmail goes straight back to them.
 
 1. Sign up at [resend.com](https://resend.com) with `eric@aequoros.com`
 2. Create an API key (Settings → API Keys)
-3. In Vercel → Project Settings → Environment Variables, add:
+3. In the marketing site's Coolify resource → Environment Variables, add:
    - `RESEND_API_KEY` — the key from step 2
    - `RESEND_TO_EMAIL` — (optional) destination inbox, defaults to `eric@aequoros.com`
    - `RESEND_FROM_EMAIL` — (optional) sender, defaults to `onboarding@resend.dev`
@@ -99,7 +99,7 @@ Before sending production traffic:
 1. In Resend → Domains → Add `aequoros.com`, copy the DNS records
 2. Add them at your registrar (MX, TXT for SPF, CNAME for DKIM)
 3. Wait for verification (minutes to hours)
-4. Set `RESEND_FROM_EMAIL="AequorOS <noreply@aequoros.com>"` in Vercel
+4. Set `RESEND_FROM_EMAIL="AequorOS <noreply@aequoros.com>"` in the marketing site's Coolify environment variables
 5. Redeploy
 
 ### Failure modes
@@ -111,13 +111,15 @@ Before sending production traffic:
 
 ## Deploy
 
-```bash
-npm i -g vercel
-vercel login
-vercel
-```
+The marketing site is documented as self-hosted on Coolify behind Cloudflare.
+Use the marketing site's Coolify resource to configure `aequoros.com`, manage
+environment variables and redeploy. The application defines the production
+build and start commands as `pnpm --filter @aequoros/frontend build` and
+`pnpm --filter @aequoros/frontend start`.
 
-Then configure `aequoros.com` in Vercel → Project Settings → Domains.
+No marketing Dockerfile or compose stack is committed here. Operations must
+provide the active Coolify build configuration, hosting provider and country,
+and Cloudflare routing/TLS settings for the bank's deployment evidence.
 
 ## Design tokens
 
