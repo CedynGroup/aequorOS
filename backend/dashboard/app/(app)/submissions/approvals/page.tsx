@@ -398,7 +398,7 @@ function DecidePanel({
   const awaitingHandOffNote = chain?.awaitingHandOff ? (
     <p
       data-testid="awaiting-hand-off"
-      className="rounded border border-success/30 bg-success-light/40 px-3.5 py-2.5 text-caption leading-relaxed text-navy/85"
+      className="rounded-sm border border-success/30 bg-success-light/40 px-3.5 py-2.5 text-caption leading-relaxed text-navy/85"
     >
       <span className="font-medium text-navy">Your approval is recorded.</span>{" "}
       The return is still with you until you send it to the Validator.
@@ -446,7 +446,7 @@ function DecidePanel({
         {pkg.isRehearsal && <RehearsalNotice />}
 
         {requestReason && (
-          <p className="text-caption text-navy/80 rounded border border-border-light bg-surface px-3 py-2">
+          <p className="text-caption text-navy/80 rounded-sm border border-border-light bg-surface px-3 py-2">
             Maker&apos;s note: {requestReason}
           </p>
         )}
@@ -465,7 +465,7 @@ function DecidePanel({
             Validator. The pinned stages and their recorded decisions are the
             authority, and the bank's own stage titles come with them. */}
         {chain ? (
-          <div className="rounded border border-border-light bg-surface px-3.5 py-3">
+          <div className="rounded-sm border border-border-light bg-surface px-3.5 py-3">
             <div className="flex flex-wrap items-center gap-2 text-caption">
               {chain.stages.map((stage, index) => {
                 const current = stage.seq === chain.currentStageSeq;
@@ -528,7 +528,7 @@ function DecidePanel({
         {/* What the preparer committed to, read-only — above the decision
             because it is a precondition of it, not a footnote to it. */}
         {attestation && (
-          <div className="rounded border border-border-light bg-surface px-3.5 py-3">
+          <div className="rounded-sm border border-border-light bg-surface px-3.5 py-3">
             <p className="text-micro font-medium uppercase tracking-wider text-slate">
               Attestation
             </p>
@@ -597,7 +597,7 @@ function DecidePanel({
         ) : stageNotMine ? (
           <div
             data-testid={stageTransmits ? "with-validator" : "with-approver"}
-            className="rounded border border-border-light bg-surface px-3.5 py-3"
+            className="rounded-sm border border-border-light bg-surface px-3.5 py-3"
           >
             <p className="text-body font-medium text-navy">
               This return is with {currentStageTitle}.
@@ -614,7 +614,7 @@ function DecidePanel({
           // it cannot be recalled.
           <div
             data-testid="validator-surface"
-            className="rounded border border-action/30 bg-action-light/40 px-3.5 py-3"
+            className="rounded-sm border border-action/30 bg-action-light/40 px-3.5 py-3"
           >
             <p className="text-body font-medium text-navy">
               This return is with you as Validator.
@@ -696,7 +696,7 @@ function DecidePanel({
             {sendingBack && chain && (
               <div
                 data-testid="send-back"
-                className="mt-3 rounded border border-warning/30 bg-warning-light/40 px-3.5 py-3"
+                className="mt-3 rounded-sm border border-warning/30 bg-warning-light/40 px-3.5 py-3"
               >
                 <p className="text-body font-medium text-navy">
                   Send this return back
@@ -708,7 +708,7 @@ function DecidePanel({
                     onChange={(event) =>
                       setSendBackTo(Number(event.target.value) || null)
                     }
-                    className="ml-2 rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
+                    className="ml-2 rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
                   >
                     {chain.stages
                       .filter(
@@ -734,7 +734,7 @@ function DecidePanel({
                     onChange={(event) => setSendBackComment(event.target.value)}
                     rows={2}
                     placeholder="e.g. USD outflows exclude the maturing placement."
-                    className="mt-1 w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
+                    className="mt-1 w-full rounded-sm border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
                   />
                 </label>
                 <div className="mt-2 flex items-center gap-2">
@@ -832,7 +832,7 @@ function DecidePanel({
             {alreadyDecided && !chain?.awaitingHandOff ? (
               <div
                 data-testid="already-decided"
-                className="rounded border border-success/30 bg-success-light/40 px-3.5 py-3"
+                className="rounded-sm border border-success/30 bg-success-light/40 px-3.5 py-3"
               >
                 <p className="text-body font-medium text-navy">
                   You approved this return and sent it on.
@@ -857,7 +857,7 @@ function DecidePanel({
                     onChange={(e) => setReason(e.target.value)}
                     rows={2}
                     placeholder="e.g. Cross-checked HQLA stock against the buffer dashboard."
-                    className="w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
+                    className="w-full rounded-sm border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light"
                   />
                 </div>
 
@@ -941,7 +941,7 @@ function DecidePanel({
             scroll past every LCR line to reach the button they came for.
             Earlier this card had the opposite problem and no figures at all;
             the fix for that was to show them, not to put them in the way. */}
-        <div className="rounded border border-border-light bg-surface px-3.5 py-3">
+        <div className="rounded-sm border border-border-light bg-surface px-3.5 py-3">
           <p className="text-micro font-medium uppercase tracking-wider text-slate">
             The return
           </p>
@@ -981,7 +981,7 @@ function DecidePanel({
               type="button"
               aria-label="Cancel"
               onClick={() => setConfirmingTransmit(false)}
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/50 backdrop-blur-xs"
             />
             <div className="card relative w-full max-w-4xl px-6 py-5">
               {filingSetQuery.error ? (

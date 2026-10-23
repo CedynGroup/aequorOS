@@ -241,7 +241,7 @@ export default function InspectorView() {
         <div className="flex items-center justify-end gap-1.5">
           <Link
             href={`/tenants/${s.organization_id}`}
-            className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1 text-caption font-medium text-ink transition-colors hover:bg-surface"
+            className="inline-flex items-center gap-1 rounded-sm border border-border px-2.5 py-1 text-caption font-medium text-ink transition-colors hover:bg-surface"
           >
             View tenant
             <ArrowUpRight size={13} aria-hidden />

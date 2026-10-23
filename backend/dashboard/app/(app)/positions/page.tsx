@@ -204,7 +204,7 @@ function PositionsBlotter() {
       key: "source",
       header: "Source",
       render: (p) => (
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-border-light bg-surface text-[10px] font-mono uppercase tracking-wider text-slate">
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm border border-border-light bg-surface text-[10px] font-mono uppercase tracking-wider text-slate">
           {p.sourceSystem}
         </span>
       ),

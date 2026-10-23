@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useEffect, useRef, useState } from "react";
+import { Search } from "lucide-react";
 import {
   getDeskCaptureContent,
   getDeskCaptureSnippet,
@@ -9,8 +9,8 @@ import {
   type ApiError,
   type DeskCaptureContentView,
   type DeskObservationSnippet,
-} from '@/lib/api';
-import { fmtDate } from '@/lib/format';
+} from "@/lib/api";
+import { fmtDate } from "@/lib/format";
 import {
   Button,
   Chip,
@@ -21,7 +21,7 @@ import {
   MonoId,
   SkeletonRows,
   StatusChip,
-} from '@/components/ui';
+} from "@/components/ui";
 
 /**
  * Accessible capture-content viewer (replaces the old hand-rolled, focus-leaky
@@ -43,7 +43,7 @@ export function CaptureViewer({
   const [contentError, setContentError] = useState<ApiError | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
 
-  const [needle, setNeedle] = useState('');
+  const [needle, setNeedle] = useState("");
   const [snippet, setSnippet] = useState<DeskObservationSnippet | null>(null);
   const [snippetError, setSnippetError] = useState<ApiError | null>(null);
   const [snippetBusy, setSnippetBusy] = useState(false);
@@ -55,7 +55,7 @@ export function CaptureViewer({
   useEffect(() => {
     setSnippet(null);
     setSnippetError(null);
-    setNeedle('');
+    setNeedle("");
     if (!captureId) {
       setContent(null);
       setContentError(null);
@@ -79,7 +79,7 @@ export function CaptureViewer({
   }, [captureId]);
 
   async function runSearch() {
-    if (!captureId || needle.trim() === '') return;
+    if (!captureId || needle.trim() === "") return;
     const token = ++reqToken.current;
     setSnippetBusy(true);
     setSnippetError(null);
@@ -104,7 +104,9 @@ export function CaptureViewer({
       description={captureId ? <MonoId id={captureId} /> : undefined}
     >
       {contentLoading && <SkeletonRows rows={6} />}
-      {contentError && <ErrorPanel error={contentError} context="Loading capture content" />}
+      {contentError && (
+        <ErrorPanel error={contentError} context="Loading capture content" />
+      )}
 
       {content && (
         <div className="space-y-4">
@@ -113,11 +115,15 @@ export function CaptureViewer({
             <Chip mono>{content.source_key}</Chip>
             <Chip>{content.kind}</Chip>
             <StatusChip value={content.status} />
-            <Chip tone={content.content_available ? 'ok' : 'warn'}>
-              {content.content_available ? `${content.content_bytes} bytes` : 'content not inline'}
+            <Chip tone={content.content_available ? "ok" : "warn"}>
+              {content.content_available
+                ? `${content.content_bytes} bytes`
+                : "content not inline"}
             </Chip>
             {content.truncated && <Chip tone="warn">truncated</Chip>}
-            <span className="text-caption text-slate">as of {fmtDate(content.as_of_date)}</span>
+            <span className="text-caption text-slate">
+              as of {fmtDate(content.as_of_date)}
+            </span>
           </div>
 
           {content.source_url && (
@@ -132,16 +138,16 @@ export function CaptureViewer({
           )}
 
           {content.content_omitted && (
-            <p className="rounded border border-warning/40 bg-warning-light/40 p-2.5 text-caption text-warning">
+            <p className="rounded-sm border border-warning/40 bg-warning-light/40 p-2.5 text-caption text-warning">
               {content.content_omitted}
             </p>
           )}
 
           {content.content_deferred_to && (
-            <p className="rounded border border-slate/30 bg-slate/5 p-2.5 text-caption text-slate">
-              These bytes were already captured for this source and are stored once, on
-              capture <MonoId id={content.content_deferred_to} />. The content shown below
-              is that record, read back unchanged.
+            <p className="rounded-sm border border-slate/30 bg-slate/5 p-2.5 text-caption text-slate">
+              These bytes were already captured for this source and are stored
+              once, on capture <MonoId id={content.content_deferred_to} />. The
+              content shown below is that record, read back unchanged.
             </p>
           )}
 
@@ -153,7 +159,10 @@ export function CaptureViewer({
               void runSearch();
             }}
           >
-            <Field label="Find value (field-level snippet)" className="min-w-[12rem] flex-1">
+            <Field
+              label="Find value (field-level snippet)"
+              className="min-w-48 flex-1"
+            >
               <Input
                 value={needle}
                 onChange={(e) => setNeedle(e.target.value)}
@@ -161,24 +170,33 @@ export function CaptureViewer({
                 className="font-mono"
               />
             </Field>
-            <Button type="submit" icon={<Search size={14} />} loading={snippetBusy} disabled={needle.trim() === ''}>
+            <Button
+              type="submit"
+              icon={<Search size={14} />}
+              loading={snippetBusy}
+              disabled={needle.trim() === ""}
+            >
               Search
             </Button>
           </form>
 
-          {snippetError && <ErrorPanel error={snippetError} context="Searching the capture" />}
+          {snippetError && (
+            <ErrorPanel error={snippetError} context="Searching the capture" />
+          )}
           {snippet && (
             <div>
               <h3 className="mb-1 text-body font-medium text-navy">
-                Snippet around <span className="font-mono">{snippet.needle}</span>
+                Snippet around{" "}
+                <span className="font-mono">{snippet.needle}</span>
               </h3>
               {snippet.snippet ? (
-                <pre className="whitespace-pre-wrap rounded border border-action/30 bg-action-light/30 p-3 font-mono text-caption text-ink">
+                <pre className="whitespace-pre-wrap rounded-sm border border-action/30 bg-action-light/30 p-3 font-mono text-caption text-ink">
                   {snippet.snippet}
                 </pre>
               ) : (
                 <p className="text-caption text-slate">
-                  {snippet.hint ?? 'Value not found in the stored capture text.'}
+                  {snippet.hint ??
+                    "Value not found in the stored capture text."}
                 </p>
               )}
             </div>
@@ -187,8 +205,10 @@ export function CaptureViewer({
           {/* full decoded text */}
           {content.text != null && (
             <div>
-              <h3 className="mb-1 text-body font-medium text-navy">Full text</h3>
-              <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded border border-border-light bg-surface p-3 font-mono text-micro text-ink">
+              <h3 className="mb-1 text-body font-medium text-navy">
+                Full text
+              </h3>
+              <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-sm border border-border-light bg-surface p-3 font-mono text-micro text-ink">
                 {content.text}
               </pre>
             </div>
@@ -196,8 +216,8 @@ export function CaptureViewer({
 
           {!content.content_available && content.text == null && (
             <p className="text-caption text-slate">
-              Raw bytes are not stored inline (over the size cap). Use the source URL, or re-capture
-              with a smaller artifact.
+              Raw bytes are not stored inline (over the size cap). Use the
+              source URL, or re-capture with a smaller artifact.
             </p>
           )}
         </div>

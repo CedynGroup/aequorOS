@@ -115,7 +115,7 @@ export function RehearsalPill({ className = "" }: { className?: string }) {
     <span
       title={REHEARSAL_HEADLINE}
       data-testid="rehearsal-pill"
-      className={`inline-flex items-center gap-1 rounded border border-warning/30 bg-warning-light px-2 py-0.5 text-caption font-medium uppercase tracking-wider text-warning ${className}`}
+      className={`inline-flex items-center gap-1 rounded-sm border border-warning/30 bg-warning-light px-2 py-0.5 text-caption font-medium uppercase tracking-wider text-warning ${className}`}
     >
       <FlaskConical size={11} aria-hidden />
       {REHEARSAL_SHORT}
@@ -128,7 +128,7 @@ export function RehearsalNotice({ detail }: { detail?: string }) {
   return (
     <p
       data-testid="rehearsal-notice"
-      className="flex items-start gap-2 rounded border border-warning/30 bg-warning-light/40 px-3 py-2 text-caption leading-relaxed text-navy/80"
+      className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning-light/40 px-3 py-2 text-caption leading-relaxed text-navy/80"
     >
       <FlaskConical size={13} className="mt-0.5 shrink-0" aria-hidden />
       <span>

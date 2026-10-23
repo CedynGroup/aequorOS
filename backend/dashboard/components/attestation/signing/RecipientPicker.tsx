@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Who signs next, by name.
@@ -17,16 +17,19 @@
  * and the server's refusal is surfaced verbatim when it comes.
  */
 
-import type { OrganizationUserRead, SigningRole } from '@aequoros/risk-service-api';
-import { UserCheck } from 'lucide-react';
-import { roleNoun } from '../shared';
+import type {
+  OrganizationUserRead,
+  SigningRole,
+} from "@aequoros/risk-service-api";
+import { UserCheck } from "lucide-react";
+import { roleNoun } from "../shared";
 
 /** Slots whose holder must carry the approver platform role (`routing.CHECKER_ROLES`). */
-const CHECKER_ROLES = new Set(['approver', 'board']);
+const CHECKER_ROLES = new Set(["approver", "board"]);
 
 /** Mirrors `security.has_role` — admin outranks approver, so it qualifies too. */
 function canHoldCheckerSlot(user: OrganizationUserRead): boolean {
-  return user.role === 'approver' || user.role === 'admin';
+  return user.role === "approver" || user.role === "admin";
 }
 
 export interface Nomination {
@@ -58,7 +61,8 @@ export default function RecipientPicker({
   const roster = [...users]
     .filter((user) => user.isActive)
     .sort((a, b) => {
-      const rank = Number(canHoldCheckerSlot(b)) - Number(canHoldCheckerSlot(a));
+      const rank =
+        Number(canHoldCheckerSlot(b)) - Number(canHoldCheckerSlot(a));
       if (rank !== 0) return rank;
       return (a.displayName ?? a.email).localeCompare(b.displayName ?? b.email);
     });
@@ -66,16 +70,19 @@ export default function RecipientPicker({
   return (
     <div className="space-y-3">
       {slots.map((role, index) => {
-        const selected = nominations[index]?.userId ?? '';
+        const selected = nominations[index]?.userId ?? "";
         const chosen = roster.find((user) => user.id === selected);
         const mismatch =
-          chosen != null && CHECKER_ROLES.has(role) && !canHoldCheckerSlot(chosen);
+          chosen != null &&
+          CHECKER_ROLES.has(role) &&
+          !canHoldCheckerSlot(chosen);
         return (
           <div key={`${role}-${index}`}>
             <label className="block">
               <span className="block text-caption font-medium text-navy mb-1.5">
                 {roleNoun(role)}
-                {slots.filter((slot) => slot === role).length > 1 && ` #${index + 1}`}
+                {slots.filter((slot) => slot === role).length > 1 &&
+                  ` #${index + 1}`}
               </span>
               <select
                 value={selected}
@@ -86,27 +93,31 @@ export default function RecipientPicker({
                     userId:
                       slotIndex === index
                         ? event.target.value
-                        : (nominations[slotIndex]?.userId ?? ''),
+                        : (nominations[slotIndex]?.userId ?? ""),
                   }));
                   onChange(next.filter((entry) => entry.userId.length > 0));
                 }}
-                className="w-full rounded border border-border bg-surface px-3 py-2 text-body text-navy"
+                className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-body text-navy"
               >
                 <option value="">Select an officer…</option>
                 {roster.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.displayName ?? user.email}
-                    {user.jobTitle ? ` — ${user.jobTitle}` : ''} ({user.role})
+                    {user.jobTitle ? ` — ${user.jobTitle}` : ""} ({user.role})
                   </option>
                 ))}
               </select>
             </label>
             {mismatch && (
-              <p role="status" className="mt-1 text-caption text-warning leading-relaxed">
-                {chosen.displayName ?? chosen.email} holds the &apos;{chosen.role}&apos;
-                role. The server will refuse this nomination — maker-checker cannot
-                be satisfied by a preparer — and the refusal takes your signature
-                with it, so pick somebody with the approver role.
+              <p
+                role="status"
+                className="mt-1 text-caption text-warning leading-relaxed"
+              >
+                {chosen.displayName ?? chosen.email} holds the &apos;
+                {chosen.role}&apos; role. The server will refuse this nomination
+                — maker-checker cannot be satisfied by a preparer — and the
+                refusal takes your signature with it, so pick somebody with the
+                approver role.
               </p>
             )}
           </div>
@@ -115,9 +126,9 @@ export default function RecipientPicker({
 
       <p className="inline-flex items-start gap-1.5 text-caption text-slate leading-relaxed">
         <UserCheck size={13} className="shrink-0 mt-0.5" aria-hidden />
-        They are notified as soon as your signature lands, and the return appears
-        in their signature queue. Only a named recipient can then fill the slot —
-        signing around a nomination is refused.
+        They are notified as soon as your signature lands, and the return
+        appears in their signature queue. Only a named recipient can then fill
+        the slot — signing around a nomination is refused.
       </p>
     </div>
   );

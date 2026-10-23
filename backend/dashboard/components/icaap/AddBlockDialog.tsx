@@ -112,7 +112,7 @@ export default function AddBlockDialog({
         </FieldLabel>
 
         {unavailable.length > 0 && (
-          <div className="rounded border border-border-light bg-surface/60 p-3">
+          <div className="rounded-sm border border-border-light bg-surface/60 p-3">
             <p className="text-caption font-medium text-navy">
               Not available yet
             </p>

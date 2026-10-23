@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import type { ReactNode } from 'react';
-import { Lock } from 'lucide-react';
-import { ApiError } from '@/lib/api';
-import { ErrorPanel } from '@/components/ui';
+import type { ReactNode } from "react";
+import { Lock } from "lucide-react";
+import { ApiError } from "@/lib/api";
+import { ErrorPanel } from "@/components/ui";
 
 /**
  * The Admin surfaces are `operator_admin`-gated on the backend. The console
@@ -25,16 +25,21 @@ export function AccessDeniedPanel({
           <Lock size={18} aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="text-body font-medium text-navy">Operator-admin access required</p>
+          <p className="text-body font-medium text-navy">
+            Operator-admin access required
+          </p>
           <p className="mt-1 max-w-xl text-caption text-slate">
-            {surface} is restricted to operators with the <code>operator_admin</code> role (or
-            above). Your account is authenticated but not authorized for this surface. Ask a super
-            admin to elevate your role, then reload.
+            {surface} is restricted to operators with the{" "}
+            <code>operator_admin</code> role (or above). Your account is
+            authenticated but not authorized for this surface. Ask a super admin
+            to elevate your role, then reload.
           </p>
           {error && (
-            <p className="mt-3 break-words text-micro text-slate">
-              <span className="font-mono text-caption text-warning">{error.code}</span>
-              {' · '}
+            <p className="mt-3 wrap-break-word text-micro text-slate">
+              <span className="font-mono text-caption text-warning">
+                {error.code}
+              </span>
+              {" · "}
               {error.message}
             </p>
           )}
@@ -65,7 +70,15 @@ export function AdminBoundary({
   children: ReactNode;
 }) {
   if (loading) return <>{skeleton}</>;
-  if (error && error.status === 403) return <AccessDeniedPanel surface={surface} error={error} />;
-  if (error) return <ErrorPanel error={error} onRetry={onRetry} context={`Loading ${surface}`} />;
+  if (error && error.status === 403)
+    return <AccessDeniedPanel surface={surface} error={error} />;
+  if (error)
+    return (
+      <ErrorPanel
+        error={error}
+        onRetry={onRetry}
+        context={`Loading ${surface}`}
+      />
+    );
   return <>{children}</>;
 }
