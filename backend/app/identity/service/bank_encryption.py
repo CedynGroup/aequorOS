@@ -4,10 +4,11 @@ import hmac
 import secrets
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.key_management import registry
+from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.schemas import BankKeyConnect, BankKeyRead, BankKeyRotate
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyStatus, KeyUnavailableError
@@ -99,25 +100,34 @@ def test_connection(
                 "The key failed authentication. Check the key ARN and encryption context, "
                 "then test again."
             )
+        passed = True
+        observed = KeyStatus.ACTIVE
+        message = "Connection passed: aequorOS wrapped and unwrapped a synthetic data key."
     except KeyUnavailableError as exc:
-        row = registry.bank_key(db, ctx.organization_id, bank_id)
-        if row is not None and registry.reference(row) == key:
-            row.checked_at = utc_now()
-            row.status = observed.value
-        _audit(db, ctx, bank_id, "test_failed", {"key_id": key.key_id, "message": str(exc)})
-        db.commit()
-        return BankKeyTestRead(passed=False, message=str(exc))
-    row = registry.bank_key(db, ctx.organization_id, bank_id)
-    if row is not None and registry.reference(row) == key:
-        row.last_successful_use_at = utc_now()
-        row.checked_at = utc_now()
-        row.status = KeyStatus.ACTIVE.value
-    _audit(db, ctx, bank_id, "tested", {"key_id": key.key_id})
-    db.commit()
-    return BankKeyTestRead(
-        passed=True,
-        message="Connection passed: aequorOS wrapped and unwrapped a synthetic data key.",
+        passed = False
+        message = str(exc)
+    checked_at = utc_now()
+    observation = (
+        update(BankEncryptionKey)
+        .where(
+            BankEncryptionKey.organization_id == ctx.organization_id,
+            BankEncryptionKey.bank_id == bank_id,
+            BankEncryptionKey.provider == key.provider,
+            BankEncryptionKey.key_id == key.key_id,
+            BankEncryptionKey.region == key.region,
+            BankEncryptionKey.owner_account == key.owner_account,
+        )
+        .values(checked_at=checked_at, status=observed.value)
     )
+    if passed:
+        observation = observation.values(last_successful_use_at=checked_at)
+    _ = db.execute(observation.execution_options(synchronize_session=False))
+    details = {"key_id": key.key_id}
+    if not passed:
+        details["message"] = message
+    _audit(db, ctx, bank_id, "tested" if passed else "test_failed", details)
+    db.commit()
+    return BankKeyTestRead(passed=passed, message=message)
 
 
 def connect(

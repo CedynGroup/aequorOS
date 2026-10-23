@@ -1,5 +1,6 @@
 """Key administration using synthetic banks and local key material."""
 
+from datetime import UTC, datetime
 from typing import cast
 
 import pytest
@@ -17,10 +18,16 @@ from app.core.authorization import (
 )
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.schemas import BankKeyConnect
-from app.core.key_management.types import KeyStatus, KeyUnavailableError
+from app.core.key_management.schemas import BankKeyConnect, BankKeyRotate
+from app.core.key_management.types import (
+    KeyDescription,
+    KeyReference,
+    KeyStatus,
+    KeyUnavailableError,
+)
 from app.core.tenancy import TenantContext
 from app.identity.models.bank import Bank
+from app.identity.schemas.bank_encryption import BankKeyStatusRead
 from app.identity.service import authorization, bank_encryption
 from app.models import AuditEvent, User
 from app.services.institution_types import FALLBACK_TYPE_CODE
@@ -199,3 +206,74 @@ def test_probe_really_unwraps(
     assert not result.passed and "kms:Decrypt" in result.message
     assert len(calls) == 1 and calls[0]
     assert not bank_encryption.status(db_session, CTX, BANK).connected
+
+
+@pytest.mark.committing_db
+@pytest.mark.parametrize("observed", list(KeyStatus))
+@pytest.mark.parametrize("rotate_during_probe", [False, True])
+def test_connection_observation_stays_bound_to_tested_key(
+    db_session: Session,
+    local_keys: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    observed: KeyStatus,
+    rotate_during_probe: bool,
+) -> None:
+    before = bank_encryption.connect(db_session, CTX, BANK, KEY)
+    local_keys.set_status(KEY.reference(), observed)
+    original_describe = local_keys.describe
+    rotations: list[BankKeyStatusRead] = []
+
+    def describe(key: KeyReference) -> KeyDescription:
+        description = original_describe(key)
+        if rotate_during_probe and key == KEY.reference() and not rotations:
+            with Session(db_session.get_bind()) as writer:
+                writer.info["organization_id"] = CTX.organization_id
+                rotations.append(
+                    bank_encryption.rotate(
+                        writer,
+                        CTX,
+                        BANK,
+                        BankKeyRotate(
+                            key_id=NEXT.key_id,
+                            region=NEXT.region,
+                            owner_account=NEXT.owner_account,
+                            reason="Synthetic rotation during a connection test.",
+                        ),
+                    )
+                )
+        return description
+
+    probe_at = datetime(2030, 1, 2, tzinfo=UTC)
+    monkeypatch.setattr(local_keys, "describe", describe)
+    monkeypatch.setattr(bank_encryption, "utc_now", lambda: probe_at)
+    result = bank_encryption.test_connection(db_session, CTX, BANK, KEY)
+    assert result.passed == (observed == KeyStatus.ACTIVE)
+    after = bank_encryption.status(db_session, CTX, BANK)
+    assert after.key is not None
+    if rotate_during_probe:
+        assert len(rotations) == 1
+        assert after.key == rotations[0].key
+        assert after.current_version == rotations[0].current_version
+        assert after.last_successful_use_at == rotations[0].last_successful_use_at
+        assert after.last_rotated_at == rotations[0].last_rotated_at
+    else:
+        assert after.key.key_id == KEY.key_id
+        assert after.key.status == observed
+        assert after.key.checked_at.replace(tzinfo=UTC) == probe_at
+        assert after.current_version == before.current_version
+        if result.passed:
+            assert after.last_successful_use_at is not None
+            assert after.last_successful_use_at.replace(tzinfo=UTC) == probe_at
+        else:
+            assert after.last_successful_use_at == before.last_successful_use_at
+    event_type = "bank_key.tested" if result.passed else "bank_key.test_failed"
+    events = list(
+        db_session.scalars(
+            select(AuditEvent).where(
+                AuditEvent.entity_id == BANK,
+                AuditEvent.event_type == event_type,
+            )
+        )
+    )
+    assert len(events) == 1
+    assert events[0].details["key_id"] == KEY.key_id
