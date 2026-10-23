@@ -955,6 +955,7 @@ def _persist_failure(db: Session, ctx: TenantContext, run_id: UUID, error: Credi
     run.status = "failed"
     run.completed_at = datetime.now(UTC)
     run.error_code = error.code
+    run.error_message = error.message
     run.error_details = {"message": error.message, **(error.details or {})}
     record_event(
         db,

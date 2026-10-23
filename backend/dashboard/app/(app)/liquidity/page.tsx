@@ -1,5 +1,6 @@
 "use client";
 
+import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
 import PageContainer from "@/components/ui/PageContainer";
 import { ArrowUpRight } from "lucide-react";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
@@ -211,6 +212,9 @@ export default function LiquidityCockpit() {
         }
       />
 
+      <PageContainer className="py-4">
+        <RunModuleScenarios module="liquidity" />
+      </PageContainer>
       <QueryBoundary
         isLoading={dashboard.isLoading}
         error={dashboard.error}

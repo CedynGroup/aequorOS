@@ -892,8 +892,8 @@ IRRBB `/irr/scenarios`, Liquidity `/liquidity/stress`, FX `/fx/scenarios`, FTP
 `/ftp/scenarios`, and Capital `/basel/stress`. Opening a tab creates no runs.
 Liquidity scenario definitions require Liquidity confidential view; they no
 longer require the unrelated Risk & Limits view. Definitions require the owning
-module's confidential view; result summaries retain the server's existing
-sensitivity-specific projection.
+module's confidential view with whole-institution coverage; result summaries
+retain the server's existing sensitivity-specific projection.
 
 The enterprise stress workbench remains at `/irr/enterprise-stress`, with its
 own IRRBB tab and links from the module workspaces. It runs a governed macro
@@ -902,9 +902,30 @@ Its IRRBB correctness dependency remains #306.
 
 FTP what-if compares baseline with a chosen module scenario and optional curve
 shift, funding-spread addition, product margin floor and NMD core policy-band
-overrides. Preview requires FTP/Confidential/Run. Saving an analysis
-requires FTP/Confidential/Create. Each request is checked by the server;
-readers see disabled controls and grant reasons. Saving recomputes and snapshots
+overrides. Blank overrides retain the scenario's values and governed rules.
+Rule percentages must be between 0 and 100, and the NMD core minimum cannot
+exceed its maximum. Preview requires FTP/Confidential/Run. Saving an analysis
+requires FTP/Confidential/Create. Both require whole-institution coverage.
+Each request is checked by the server; readers see disabled controls and grant
+reasons. Saving recomputes and snapshots
 the supplied inputs and results. Reopening reads the stored snapshot. Parameter
 registers and official regulatory runs are unchanged. Related work: #314, #316
 (module run controls), #309 (full stored-run/history views), #289 (journeys).
+
+### Running treasury regulatory scenario sets
+
+Liquidity, Basel Capital, FX and Credit expose **Run all … scenarios** from their
+workspaces; the Liquidity, Capital and FX Scenarios tabs offer the same action.
+The shell's selected reporting period is the explicit as-of period sent to the
+server. The control requires the owning module's Confidential/Run capability
+with whole-institution coverage. Readers, missing grants and partial scopes see
+a disabled control with a reason. The server independently enforces authority.
+
+The command persists the module's supported regulatory scenario set and shows
+success or failure per scenario in the backend's returned order. Credit currently
+returns its baseline scenario. A failure in one scenario remains visible beside
+successful scenarios. Accepted batches reload the module reads and stored-run
+registry; the scenario definitions also refresh. No page read, tab navigation or
+period selection mints a run. The current live view stays current; these actions
+do not select or promote a stored run. Full stored-history work remains #309;
+browser journeys are tracked by #289 and pilot qualification by #330/#331.

@@ -29,6 +29,7 @@ from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation as reporting_generation
 from app.schemas.regulatory_credit import CreditLoansPageRead, CreditScenarioBatchCreate
 from app.services import fact_derivation, regulatory_credit, reporting_periods
+from app.services.regulatory_liquidity import get_regulatory_run, list_regulatory_runs
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1
@@ -125,6 +126,18 @@ def test_a_failed_run_is_persisted_data_not_an_exception(db_session: Session) ->
     assert run is not None
     assert run.status == "failed"
     assert run.error_code == "no_loan_book"
+    error = batch.runs[0].error
+    assert error is not None
+    assert error.code == "no_loan_book"
+    assert "Ingest the loan book through the Data Engine." in error.message
+
+    db_session.expire_all()
+    stored = get_regulatory_run(db_session, CTX, SAMPLE_BANK_ID, run.id)
+    assert stored.error == error
+    registry = list_regulatory_runs(
+        db_session, CTX, SAMPLE_BANK_ID, module="credit", reporting_period_id=period.id
+    )
+    assert registry.runs[0].error == error
 
 
 def _seed_events(db_session: Session, events: list[dict]) -> None:

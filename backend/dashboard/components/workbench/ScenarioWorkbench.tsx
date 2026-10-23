@@ -1,5 +1,6 @@
 "use client";
 
+import { wholeInstitutionCapabilities } from "@/lib/api/dataScope";
 import { useBankContext } from "@/components/shell/BankContext";
 import SectionCard from "@/components/ui/SectionCard";
 import QueryBoundary from "@/components/ui/QueryBoundary";
@@ -11,6 +12,7 @@ import type {
   EffectiveCapabilityRead,
   WorkbenchModule,
 } from "@aequoros/risk-service-api";
+import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
 import FtpWhatIf from "@/components/ftp/FtpWhatIf";
 
 function MetricValue({ value }: { value: unknown }) {
@@ -48,7 +50,7 @@ export default function ScenarioWorkbench({
     useBankContext();
   const name = MODULE_NAMES[module];
   const confidential = hasEffectiveCapability(
-    institutionCapabilities,
+    wholeInstitutionCapabilities(institutionCapabilities),
     AUTHORITY_MODULE[module],
     "confidential",
     "view",
@@ -74,6 +76,9 @@ export default function ScenarioWorkbench({
   });
   return (
     <div className="space-y-6">
+      {(module === "liquidity" || module === "capital" || module === "fx") && (
+        <RunModuleScenarios module={module} />
+      )}
       <p className="text-body text-slate">
         {name} scenarios for{" "}
         {period

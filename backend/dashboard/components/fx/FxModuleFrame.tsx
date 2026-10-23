@@ -7,6 +7,7 @@
  * a render prop so the payload is fetched (and cached) once per query key.
  */
 
+import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
 import ValidationList from "@/components/ui/ValidationList";
 import PageContainer from "@/components/ui/PageContainer";
 import type { ReactNode } from "react";
@@ -63,6 +64,9 @@ export default function FxModuleFrame({
         }
       />
 
+      <PageContainer className="py-4">
+        <RunModuleScenarios module="fx" />
+      </PageContainer>
       <QueryBoundary
         isLoading={dashboard.isLoading}
         error={dashboard.error}

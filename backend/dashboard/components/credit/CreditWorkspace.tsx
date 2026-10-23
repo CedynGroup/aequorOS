@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Shared frame for the Credit / Loan Book tabs: page header with the live
@@ -7,14 +7,18 @@
  * presentational.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import type { ReactNode } from 'react';
-import type { CreditDashboardRead, CreditMetricsRead } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import { useBankContext } from '@/components/shell/BankContext';
-import LiveEngineNote from '@/components/live/LiveEngineNote';
-import { useCreditDashboard } from '@/lib/api/hooks';
+import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
+import PageContainer from "@/components/ui/PageContainer";
+import type { ReactNode } from "react";
+import type {
+  CreditDashboardRead,
+  CreditMetricsRead,
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { useBankContext } from "@/components/shell/BankContext";
+import LiveEngineNote from "@/components/live/LiveEngineNote";
+import { useCreditDashboard } from "@/lib/api/hooks";
 
 export type CreditTabContext = {
   data: CreditDashboardRead;
@@ -38,8 +42,15 @@ export default function CreditWorkspace({
       <PageHeader
         eyebrow="Credit"
         title="Credit"
-        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
+        action={
+          data ? (
+            <LiveEngineNote live={data.live} stored={data.stored} />
+          ) : undefined
+        }
       />
+      <PageContainer className="py-4">
+        <RunModuleScenarios module="credit" />
+      </PageContainer>
       <QueryBoundary
         isLoading={dashboard.isLoading}
         error={dashboard.error}
