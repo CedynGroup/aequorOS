@@ -58,7 +58,13 @@ def test_tenants_list_shows_the_provisioned_tenant(
         )
     )
     assert len(audit_rows) == 1
-    assert audit_rows[0].detail == {"tenant_rows": 1}
+    assert audit_rows[0].detail == {
+        "tenant_rows": 1,
+        "bank_id": bank_id,
+        "reason": "tenants list",
+        "support_reference": None,
+        "outcome": "success",
+    }
 
 
 def test_activity_feed_merges_sources_newest_first(
@@ -114,9 +120,7 @@ def test_activity_feed_merges_sources_newest_first(
 def test_activity_respects_limit(operator_client: TestClient, operator_db: Session) -> None:
     organization_id, _bank_id = _provision(operator_client)
     for index in range(5):
-        operator_db.add(
-            AuditEvent(organization_id=organization_id, event_type=f"event.{index}")
-        )
+        operator_db.add(AuditEvent(organization_id=organization_id, event_type=f"event.{index}"))
     operator_db.commit()
 
     start_inspection(operator_client, organization_id)

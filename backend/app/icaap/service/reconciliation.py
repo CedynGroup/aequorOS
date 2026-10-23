@@ -732,6 +732,7 @@ def delete_resources_line(
         db,
         access.ctx,
         event_type="icaap.reconciliation.resources_line_deleted",
+        bank_id=access.bank.id,
         entity_type="icaap_resources_reconciliation_line",
         entity_id=line_id,
         details={"cycle_id": str(cycle.id), "line_key": line_key},

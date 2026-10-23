@@ -154,6 +154,8 @@ export interface BindingPreviewRequest {
 export const BindingPreviewRequestRoleBundleEnum = {
   Viewer: "viewer",
   Auditor: "auditor",
+  SecurityOfficer: "security_officer",
+  ComplianceOfficer: "compliance_officer",
   Analyst: "analyst",
   Approver: "approver",
   Validator: "validator",

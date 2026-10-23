@@ -62,14 +62,15 @@ writers. Event, chain entry and head advance commit or roll back together.
 Each entry records its captured column names so adding a source column does not
 invalidate historical hashes. Removing or renaming captured fields requires an
 explicit chain-version migration; do not silently reinterpret old entries.
-The helper functions are not callable by application roles. Their search path
+The chain-write helper functions are not callable by application roles. Their search path
 is pinned to the migration schema with pg_catalog first and pg_temp last.
 The dedicated `aequoros_audit_owner` NOLOGIN role owns both source tables, both
 chain tables, the definer functions and the shared append-only guard. The chain
 tables force RLS; an owner-only policy allows the definer to append entries and
 advance heads. Runtime roles retain their existing source SELECT/INSERT grants
-and insert through the trigger; they have no direct chain write or helper EXECUTE
-grant. The all-tenant worker has SELECT on chain entries and heads. Source-table
+and insert through the trigger; they have no direct chain write or chain-write helper
+EXECUTE grant. Scoped read helpers are described under [Bank audit read API](#bank-audit-read-api).
+The all-tenant worker has SELECT on chain entries and heads. Source-table
 ownership also prevents runtime credentials from disabling the source guards;
 ownership of the shared guard prevents replacing its implementation.
 
@@ -127,6 +128,185 @@ not an independent ledger against a compromised database administrator. Retained
 provide the independently retained comparison boundary. Preserve the first
 backup after migration and later manifests for examiner comparison.
 
+## Bank audit read API
+
+`GET /api/v1/banks/{bank_id}/audit-log` merges bank-attributable tenant and
+staff audit events, newest first. The inclusive `start` and exclusive `end`
+require timezone-aware timestamps. Exact actor, event-type and outcome filters
+combine before cursor pagination; cursors are bound to their organization and
+bank. Each event contains its detail, recorded before/after values where present,
+source, actor identity, outcome and sequence within its own stream. Staff actors
+are explicitly classified as `aequoros_staff`; their detail is projected through
+an allow-list rather than exposing internal operator context.
+
+A complete active human binding for Audit/restricted over the requested bank
+is required. Security officer and Compliance officer carry VIEW and EXPORT;
+Auditor retains VIEW only. Viewer, Analyst, administrator and owner bundles do
+not themselves authorize this feed. The officer bundles are grantable through
+the existing owner API and confined to whole-institution Audit coverage by
+service validation and a database CHECK. No officer binding is backfilled.
+Every successful page read appends `audit_log.viewed` in the same transaction;
+a failure to retain that event refuses the read. Issue #494 is delivered as three
+stacked PRs: this read API, CSV/JSON export with an integrity summary, then the bank
+Audit log screen under Access control. The Members composer officer options also
+remain later delivery work.
+
+Attribution uses an explicit `details.bank_id`, bank entity target,
+binding `details.scope.institution_id`, or the retained subject's bank ownership.
+Organization-wide binding grants and removals cover every bank in that
+organization, including after revocation. Feed selection, chain visibility,
+verification, inspection evidence and operator activity use the same retained
+binding scope.
+The shared event writer snapshots bank ownership for ingestion batches, mapping
+configs, position snapshots, regulatory runs, packages and their artifact records,
+core-database connections, filing templates, capital/ILAAP and contingency funding
+plans, scenario analyses, bank-local scenarios and management plans, stress sign-offs,
+and ICAAP cycles and child records; their lifecycle events use this boundary. Bank
+parameter-register targets retain the initiating bank platform ID. ECL assumptions,
+CRM haircuts, concentration limits, credit thresholds and liquidity haircuts cover
+all banks of that organization and jurisdiction; liquidity thresholds additionally
+require the same institution class. Each affected bank sees the original event,
+time, initiating bank and changed values. Only the initiating bank sees the actor,
+approver, reason and inspection references; sibling projections omit those fields
+and cannot be found through actor filters. New mutations retain the previous stored
+values in `before` and flushed, refreshed persisted values in `after`, including for sibling
+banks. Partial register updates capture the replaced keys; concentration-register
+replacement captures all removed rows. Empty collections record the absence of a
+previous stored value. Numeric evidence reflects storage precision, so an event’s
+`after` matches the next mutation’s `before` for the same keys. Historical events use the retained initiating bank and threshold class.
+The original sealed payload and previous link are verified before returning the
+redacted projection; no sealed records are rewritten. Chain visibility, predecessor
+verification and operator activity use the same applicability rule. Inspection
+context is available only to the initiating bank for these events. Access requests
+retain their `institution_id` through the same writer. Push staging snapshots the
+caller's resolved bank; historical committed pushes resolve through their retained
+ingestion batch. Deleted ICAAP children resolve through the recorded cycle.
+Historical events resolve through the same tenant-scoped ownership catalogue
+without rewriting sealed records.
+Contradictory bank markers or subject ownership refuse visibility. Staff events
+use `detail.bank_id`, the retained batch/mapping ownership, or a mapping
+change’s `detail.after.bank_id`. The
+shared staff writer snapshots that ownership, and historical reads and integrity
+verification resolve it through the same catalogue. Recorded `note` explanations
+become the public `reason`; batch actions name the batch as their target, and bank
+actions without a more specific target name their bank. New inspector sessions
+require a support reference, captured by both console entry forms. Both forms
+default to hours and offer a minutes/hours selector; the API continues to accept whole
+`ttl_minutes` within the bounds in `InspectorSessionCreate`. The Inspector's
+five-minute input steps are rounded to whole minutes before submission. The shared
+staff writer snapshots the caller-owned session's explanation and reference,
+while preserving an action's own note. Historical staff and impersonated events
+resolve those fields through `bank_audit_inspection_context`, which checks the
+event's bank attribution, session tenant and operator identity before returning
+only reason/reference. The API has no inspector-session table read grant. This
+historical context supplements the sealed event payload; it is not included in
+the event's integrity claim.
+The staff writer receives the actual returned/affected resources and writes one
+separate event per bank, validating each bank's organization. It stores identities,
+not the response data; one bank's event never contains another bank's payload.
+An empty bank-specific result retains a platform event rather than inventing bank
+access. Shared tenant identity/configuration accesses apply to every bank in that
+tenant. A fleet operation without an Inspector session automatically records its
+operation purpose and a nullable support reference. Only an explicitly supplied
+session ID attaches inspection evidence; no new fleet request fields are mandatory.
+Repeated response identities are deduplicated and bank ownership is validated in
+one batch. Publication actions record each bank's delivery status and outcome:
+complete is success, failed is failure, skipped remains skipped, and unknown or
+missing statuses remain unspecified.
+
+### Staff operation coverage catalogue
+
+Every operator surface is classified below; new surfaces must choose an explicit
+bank-resource or platform-only policy. Platform-only activity is owned by AequorOS.
+Historical sealed reads with no provable resource association remain platform-only.
+The migration's source RLS, chain-entry visibility, previous-link verifier and
+session-evidence helper use the same historical batch/mapping ownership catalogue
+as the read API. Shared configuration mutations snapshot each affected bank before
+commit; ownership is retained even when a resource is later removed.
+
+| Operator surface                                                                                                                                           | Recording/ownership policy                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `tenants` list/get                                                                                                                                         | Actual returned bank rows, separately by organization and bank.                                                        |
+| Tenant users, storage, entitlements                                                                                                                        | Shared tenant configuration: every bank of that organization.                                                          |
+| `activity`                                                                                                                                                 | Bank identities of the returned ingestion/job/run/package/audit items, after paging.                                   |
+| `inspector_reads` metrics/findings/ingestion/config                                                                                                        | Banks named by actual response resources; batch detail resolves its retained batch.                                    |
+| `inspector_fix` recompute/official-run/ingestion/dedup                                                                                                     | Actual resolved bank or batch, with session evidence and remediation note.                                             |
+| `inspector_fix` mapping/threshold config                                                                                                                   | Mapping's retained bank; threshold applicability by tenant, jurisdiction and institution class. Before/after retained. |
+| Inspector session start/list/end/act-token                                                                                                                 | Shared tenant access window; each affected tenant bank. Token material is never recorded.                              |
+| `bi_backfill`                                                                                                                                              | Resolved target bank and session evidence.                                                                             |
+| `data_engines`, `jobs` and stranded-dedup boards                                                                                                           | Banks in the actual returned resources, including page/limit selection.                                                |
+| Staff `audit_log` read                                                                                                                                     | Banks named by returned staff evidence; reading itself is audited.                                                     |
+| Encryption-key get/connect/rotate/retire                                                                                                                   | Explicit bank, with existing safe key metadata.                                                                        |
+| Provisioning                                                                                                                                               | Created bank and existing success/failure step evidence; rollback failures remain platform-visible.                    |
+| Desk entitlement read/grant-tier/grant-dataset/revoke                                                                                                      | Shared tenant entitlement/configuration access: each tenant bank.                                                      |
+| Desk methodology approval                                                                                                                                  | All banks addressed by the refresh policy, including banks without current live data.                                  |
+| Desk determination/curve/operating-environment publish                                                                                                     | Actual per-bank publication results, including failed deliveries.                                                      |
+| Desk publication history read                                                                                                                              | Banks in the returned publication results.                                                                             |
+| Regulatory parameter approval                                                                                                                              | Same jurisdiction/type/class bank selection as refresh scheduling, including banks without current live data.          |
+| Regulatory parameter list/proposal; desk methodology list/create/default/propose/PDF                                                                       | Platform policy/register work, before bank applicability changes.                                                      |
+| Desk observation/capture/snippet reads/writes; unpublished determination list/get/package/create/compute/adjust/submit/approve/reject/supersede            | Platform research and maker/checker workflow; no bank-owned resource access. Existing mutation audit retained.         |
+| Curve definitions/create/propose/approve/construct/stage/submit/approve; FX-forward construct; operating-environment preview/stage/list/get/submit/approve | Platform research/calculation work before publication; existing mutation audit retained.                               |
+| Staff authentication and operator list/create/password-reset/deactivate/reactivate                                                                         | Platform staff identity; existing authentication/management evidence retained.                                         |
+| `overview`, `worker_health`                                                                                                                                | Aggregate fleet counts and runtime heartbeats, no identifiable bank resources.                                         |
+
+The operator audit API returns a server-established `as_of` timestamp before
+recording the read, and excludes events at or after that timestamp. Pages use an
+opaque `next_cursor` containing that bound and the last displayed timestamp/ID,
+ordered newest first. Late commits ahead of the cursor cannot shift the next page.
+The Console retains page cursors for Prev, retains the server bound on retries and
+page-size changes, and starts a new browsing window when filters are applied or reset.
+The requested end date also applies within the server bound. Direct
+`/operator/v1/audit` callers follow `next_cursor`; OFFSET pagination is retired.
+Future bounds are capped by the server's current time. Regression coverage is in
+`tests/operator/test_audit_api.py`, `tests/db/test_operator_audit_pagination.py`
+and `console/lib/audit-pagination.test.ts`.
+
+Password sign-in, SSO and signing re-authentication retain success and refusal
+events before returning. Known users are attributed only to banks reachable
+through their complete active scoped bindings; unidentified attempts and users
+without bank authority remain platform-visible. Verified IdP `acr` and `amr`
+claims are retained; an explicit `mfa` method also records MFA success. Password
+authentication never invents MFA evidence or stores credentials.
+
+The shared event writer and historical presentation normalize known ingestion,
+capital-run and dedup outcomes, filing status transitions and position override
+values. Outcome filters use the same mapping; events without a known or explicitly
+recorded outcome remain unspecified. Historical sealed payloads remain unchanged.
+
+Banks own incidents observable in their audit events;
+AequorOS owns incidents outside that visibility boundary.
+
+Migration `202610120100` enables forced RLS on the staff source and adds scoped
+chain-entry reads. The new API role gains SELECT on these two tables and
+EXECUTE on `bank_audit_previous_link` and `bank_audit_inspection_context`; it gains
+no global-head access, chain write permission or BYPASSRLS. `bank_audit_previous_link`
+returns only a predecessor-link boolean for an attributable event. The helpers'
+NOLOGIN audit owner, pinned search path
+and temporary schema-CREATE grant follow the existing chain custody pattern.
+The audit owner has tenant-scoped SELECT on the ownership catalogue's subject
+tables so the predecessor check applies the same historical attribution rule.
+Existing all-tenant operator and verifier policies retain their own reads.
+Legacy runtime credentials need their existing source/chain SELECT grants and
+the scoped read-helper EXECUTE grants, which the migration adds for existing chain
+readers. Before switching a legacy tenant API role without chain SELECT, apply
+the same narrow SELECT and scoped read-helper EXECUTE grants as `aqs_api`; forced RLS
+continues to restrict these reads. Do not grant global-head SELECT to the API.
+
+`integrity=verified` means the source payload matches its database-generated
+hash and its previous-hash link matches the preceding stored entry. It does
+not certify the complete platform stream, its tail/head, events hidden by
+bank visibility, or a predecessor's source payload. The explicit
+`integrity_scope=event_payload_and_previous_link` preserves this distinction.
+Missing entries and mismatches report `failed`; SQLite reports `unavailable`.
+The platform worker still owns full-chain verification and paging.
+
+Executable evidence lives in `tests/identity/api/test_audit_log.py` and
+`tests/db/test_bank_audit_reader.py`: scoped authority, filtering, cursor ties,
+view auditing, staff projection, real NOBYPASSRLS reads and privileged tampering.
+The API tests use their own migrated PostgreSQL schema and execute HTTP reads
+as `aqs_api`; they deliberately skip without `TEST_DATABASE_URL`. Run both
+modules under the native `local_services.py run --postgres --role-admin` wrapper.
+
 ## Verification evidence
 
 `tests/db/test_audit_integrity.py` executes real migrated PostgreSQL guards,
@@ -177,7 +357,8 @@ before deploying this migration in production or staging:
   SELECT/UPDATE during migration. Provision those roles first, or apply those
   narrow grants afterward when provisioning them. Preserve existing authorized
   source SELECT/INSERT grants; grant no chain INSERT/UPDATE/DELETE/TRUNCATE and
-  no audit-chain definer EXECUTE to runtime identities. Avoid blanket
+  no chain-write definer EXECUTE to runtime identities. For the scoped read-helper
+  grants, follow [Bank audit read API](#bank-audit-read-api). Avoid blanket
   post-migration grants and bootstrap ownership reassignment.
 - Confirm using the deployed API role that a normal audit insert commits its
   chain entry, while source/chain guard disabling, entry/head rewriting,

@@ -21,7 +21,8 @@ and local-development exceptions are governed by
 Bank-held object encryption and optional rollout are in
 [the bank key setup guide](docs/bank_key_setup.md).
 
-Audit-chain verification, paging, filing and session retention, backup
+Bank audit reads, Inspector support-reference capture, audit-chain verification,
+paging, filing and session retention, backup
 publication and required migration-role preparation are in
 [the tamper-evident records contract](docs/tamper_evident_records.md).
 
