@@ -149,8 +149,10 @@ active inspector session uses these routes on the separate operator API:
 Rotation accepts the same key fields plus a meaningful `reason` and must retain
 the bank's ownership account. Changing providers requires an explicit migration.
 Routes verify the bank belongs to the organization, require staff inspection
-authority and write operator audit events in their transaction. The tenant API
-mounts none of these routes. Status observations do not authorize access; provider
+authority and write operator audit events in their transaction. Bank administrators
+use separate Account-administration endpoints and the guided Settings flow in
+[bank key setup](bank_key_setup.md#bank-administrator-self-service); retirement
+remains a staff operation. Status observations do not authorize access; provider
 checks and key reuse follow the
 [unit-of-work boundary](bank_field_encryption.md#keys-and-storage).
 
@@ -239,10 +241,11 @@ the bank key. Existing physical backups retain their original protection.
 Signing keys and credential custody remain
 [issue 355](https://github.com/CedynGroup/aequorOS/issues/355). Scheduled
 key-health monitoring, alerting and support workflows remain
-[issue 354](https://github.com/CedynGroup/aequorOS/issues/354); this change
-supplies the provider `describe` contract, onboarding probe results and checked
-timestamps. No standalone health-probe endpoint is exposed. These follow-ups are
-required before claiming regulatory approval of the complete service.
+[issue 354](https://github.com/CedynGroup/aequorOS/issues/354). The provider
+`describe` contract, onboarding probes, and administrator-triggered
+`POST /api/v1/banks/{bank_id}/encryption-key/test` supply explicit observations,
+not scheduled monitoring. These follow-ups are required before claiming
+regulatory approval of the complete service.
 
 `LocalKeyProvider` supports injected hermetic tests and the provider conformance
 suite. Local evaluation without an AWS KMS account uses the existing platform

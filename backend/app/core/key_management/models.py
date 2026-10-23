@@ -15,6 +15,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Integer,
     LargeBinary,
     String,
     UniqueConstraint,
@@ -72,6 +73,10 @@ class BankEncryptionKey(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     region: Mapped[str] = mapped_column(String(64), nullable=False)
     owner_account: Mapped[str] = mapped_column(String(12), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    rotation_period_days: Mapped[int | None] = mapped_column(Integer)
+    rotation_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_successful_use_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 

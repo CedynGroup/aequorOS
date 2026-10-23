@@ -40,8 +40,15 @@ def reference(row: BankEncryptionKey | ObjectKeyEnvelope) -> KeyReference:
 
 
 def require_active(description: KeyDescription) -> KeyReference:
+    if description.status == KeyStatus.DISABLED:
+        raise KeyUnavailableError(
+            "The bank encryption key is disabled or pending deletion. "
+            "Enable the key in AWS KMS, then retry."
+        )
     if description.status != KeyStatus.ACTIVE:
-        raise KeyUnavailableError("The bank encryption key is unavailable.")
+        raise KeyUnavailableError(
+            "The bank encryption key is unavailable. Check its ARN, account and region, then retry."
+        )
     return description.reference
 
 
@@ -153,6 +160,9 @@ def rotate(
             if held.decrypt_until is not None and decrypt_until is not None
             else None
         )
+    row.rotation_period_days = None
+    row.rotation_confirmed_at = None
+    row.last_rotated_at = rotated_at
     row.key_id = target.key_id
     row.region = target.region
     row.status = KeyStatus.ACTIVE.value
@@ -234,6 +244,7 @@ def _new_version(
     )
     db.add(version)
     db.flush()
+    row.last_successful_use_at = utc_now()
     row.current_version_id = version.id
     if row.index_version_id is None:
         row.index_version_id = version.id
@@ -296,6 +307,7 @@ def open_envelope(
             envelope.wrapped_key,
             wrapping_context(row.bank_id, envelope.context_digest),
         )
+        row.last_successful_use_at = utc_now()
         unit.material[envelope_id] = plaintext
     plaintext = hmac.new(
         plaintext, ("bank-payload:" + context_digest(context)).encode(), hashlib.sha256

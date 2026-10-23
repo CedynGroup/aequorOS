@@ -93,6 +93,7 @@ from app.icaap.api.manage_icaap_supervisory_addons import (
 )
 from app.icaap.api.manage_icaap_workflow import router as icaap_workflow_router
 from app.identity.api.auth import router as auth_router
+from app.identity.api.bank_encryption import router as bank_encryption_router
 from app.identity.api.list_organization_users import router as organization_users_router
 from app.identity.api.manage_authorization import router as authorization_router
 from app.identity.api.manage_banks import router as banks_router
@@ -115,6 +116,7 @@ v1_router.include_router(auth_router)
 v1_router.include_router(feature_flags_router)
 v1_router.include_router(attestation_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(authorization_router)
+v1_router.include_router(bank_encryption_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(banks_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(ingestion_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(system_of_record_router, dependencies=BANK_ROUTE_DEPENDENCIES)
