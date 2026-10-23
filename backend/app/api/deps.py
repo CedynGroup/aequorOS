@@ -20,7 +20,7 @@ from app.core.authorization import (
     Sensitivity,
 )
 from app.core.config import get_settings
-from app.core.key_management.presentation import SESSION_STATE, PresentationState
+from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
 from app.core.observability import authorization_denied, cross_tenant_attempt
 from app.core.tenancy import TenantContext
 from app.db.session import get_sessionmaker
@@ -452,11 +452,13 @@ def get_tenant_db_session(
     refuse_impersonated_mutation(request, ctx)
     session = get_sessionmaker()()
     session.info["organization_id"] = ctx.organization_id
+    session.info[SESSION_SUPPORT] = ctx.impersonation_context is not None
     if request.method in {"GET", "HEAD"}:
         presentation = getattr(request.state, SESSION_STATE, None)
-        if isinstance(presentation, PresentationState):
-            presentation.support = ctx.impersonation_context is not None
-            cast(Session, session).info[SESSION_STATE] = presentation
+        if not isinstance(presentation, PresentationState):
+            presentation = PresentationState()
+        presentation.support = ctx.impersonation_context is not None
+        cast(Session, session).info[SESSION_STATE] = presentation
     try:
         if ctx.authorization_version is None:
             validate_tenant_context(session, ctx)

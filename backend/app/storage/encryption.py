@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 from collections.abc import Callable
 from copy import copy
 from typing import BinaryIO, cast
@@ -12,6 +13,12 @@ from sqlalchemy.orm import Session
 
 from app.core.key_management import sdk
 from app.core.key_management.models import BankEncryptionKey
+from app.core.key_management.presentation import (
+    LOCKED_TEXT,
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+)
 from app.core.key_management.registry import DatabaseEnvelopeStore, EnvelopeStore
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyUnavailableError
@@ -86,6 +93,12 @@ class ObjectEncryption:
     ) -> BinaryIO:
         close_source = True
         try:
+            if self._session is not None:
+                presentation = self._session.info.get(SESSION_STATE)
+                if self._session.info.get(SESSION_SUPPORT) or (
+                    isinstance(presentation, PresentationState) and presentation.support
+                ):
+                    return io.BytesIO(LOCKED_TEXT.encode())
             if "encryption-format" not in headers and not self.bank_key_required(location):
                 close_source = False
                 return data

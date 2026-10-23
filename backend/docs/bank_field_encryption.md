@@ -15,9 +15,9 @@ Data Engine after key connection.
 | `translation_failures`     | `raw_record`, `error_message`                                                       |
 | `lineage_records`          | `details` for bank-scoped records                                                   |
 | `regulatory_packages`      | `snapshot`, `validation_report`, `notes`                                            |
-| `bi_dashboard_versions`    | `spec`                                                                              |
-| `bi_subscriptions`         | `query`                                                                             |
-| `bi_alerts`                | `filters`                                                                           |
+| `bi_dashboard_versions`    | Identity filter `values` within `spec`                                              |
+| `bi_subscriptions`         | Identity filter `values` within `query`                                             |
+| `bi_alerts`                | Identity filter `values` within `filters`                                           |
 
 Numeric balances, positions, ownership percentages and calculation inputs retain
 ordinary database encryption at rest. Foreign keys, status codes and dates remain
@@ -95,8 +95,10 @@ presentation substitution, and submitted placeholders cannot overwrite fields.
 Staff inspection sessions substitute covered fields without unwrapping bank
 keys, including fields predating key connection. Protected executable BI payloads
 refuse with a named locked response rather than being treated as empty queries or
-filters. Numeric BI queries and certified packs remain independent of these
-stored payloads. An encrypted filing snapshot remains protected; its filing
+filters. Dashboard layouts, numeric queries and numeric filter values remain
+readable without a key, as do numeric alert and subscription configurations.
+Session-bound staff downloads return a placeholder without decrypting object
+contents, including when presentation state is missing. An encrypted filing snapshot remains protected; its filing
 status and source-run references remain readable.
 
 The bank UI distinguishes revocation from a service outage, offers Retry, and

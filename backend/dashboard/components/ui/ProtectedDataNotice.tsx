@@ -5,7 +5,7 @@ import { LockKeyhole } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
-  containsLockedData, isProtectedDataError, protectedDataMessages, protectedDataState, subscribeProtectedData,
+  containsLockedData, isLockedBankQuery, isProtectedDataError, protectedDataMessages, protectedDataState, subscribeProtectedData,
 } from '@/lib/api/protectedData';
 
 export default function ProtectedDataNotice() {
@@ -17,10 +17,10 @@ export default function ProtectedDataNotice() {
     () => 'available' as const,
   );
   const locked = state !== 'available';
-  const retry = () => { void client.refetchQueries({ type: 'active', predicate: query => isProtectedDataError(query.state.error) || containsLockedData(query.state.data) }); };
+  const retry = () => { void client.refetchQueries({ type: 'active', predicate: query => isProtectedDataError(query.state.error) || containsLockedData(query.state.data) || (isLockedBankQuery(query.queryKey) && query.state.isInvalidated) }); };
   useEffect(() => {
     if (!locked || state === 'support') return;
-    const timer = setInterval(() => { void client.refetchQueries({ type: 'active', predicate: query => isProtectedDataError(query.state.error) || containsLockedData(query.state.data) }); }, 5_000);
+    const timer = setInterval(() => { void client.refetchQueries({ type: 'active', predicate: query => isProtectedDataError(query.state.error) || containsLockedData(query.state.data) || (isLockedBankQuery(query.queryKey) && query.state.isInvalidated) }); }, 5_000);
     return () => clearInterval(timer);
   }, [client, locked, state]);
 

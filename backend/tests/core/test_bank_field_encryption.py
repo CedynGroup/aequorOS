@@ -34,6 +34,7 @@ from app.core.key_management.presentation import (
     LOCKED_JSON,
     LOCKED_TEXT,
     SESSION_STATE,
+    SESSION_SUPPORT,
     PresentationState,
 )
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
@@ -49,6 +50,8 @@ from app.identity.schemas.institution_profile import (
     RelatedPartyUpdate,
 )
 from app.identity.service import institution_profile
+from app.ml.behavioral import deposit_stability, nmd_duration
+from app.ml.behavioral.config import BehavioralTrainingConfig
 from app.ml.behavioral.history import load_deposit_month_aggregates
 from app.models.audit_event import AuditEvent
 from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
@@ -57,6 +60,7 @@ from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailu
 from app.reporting.models.packages import RegulatoryPackage
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.services import canonical_withdrawal, ingestion
+from app.services.behavioral_liquidity import get_behavioral_liquidity_report
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.bi.fixtures import materialize_bi_plane
 from tests.support.helpers import ORG_1, USER_1, headers
@@ -593,8 +597,69 @@ def test_numeric_sql_aggregation_preserves_decrypted_concentration_labels(
         db_session, CTX, BANK_A, AS_OF, 1, non_maturing_only=False
     )
     assert len(aggregates) == 1
-    assert aggregates[0].concentration_group == "SYNTHETIC-GROUP-17"
+    assert aggregates[0].concentration_group == db_session.scalar(
+        select(CanonicalCounterparty.concentration_group_blind_index).limit(1)
+    )
+    report = get_behavioral_liquidity_report(db_session, CTX, BANK_A)
+    assert [
+        item.segment for item in report.segments if item.dimension == "concentration_group"
+    ] == ["SYNTHETIC-GROUP-17"]
     assert aggregates[0].balance_ghs == 300 and aggregates[0].n_accounts == 2
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_locked_groups_remain_distinct_and_numeric_training_stays_available(
+    db_session: Session, provider: LocalKeyProvider, status: KeyStatus
+) -> None:
+    connect(db_session, provider)
+    parties = [counterparty(db_session), counterparty(db_session, reference="SYNTHETIC-SECOND")]
+    parties[1].group_reference = "Synthetic separate group"
+    for index, party in enumerate(parties):
+        common = dict(
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            source_system="EXCEL_CSV",
+            ingestion_batch_id=party.ingestion_batch_id,
+            lineage_id=party.lineage_id,
+            validation_status="accepted",
+        )
+        position = CanonicalPosition(
+            **common,
+            as_of_date=AS_OF,
+            source_reference=f"deposit-{index}",
+            position_type="DEPOSIT",
+            currency="GHS",
+        )
+        db_session.add(position)
+        db_session.flush()
+        for month, balance in ((5, 100 if index == 0 else 0), (6, 0 if index == 0 else 100)):
+            db_session.add(
+                CanonicalPositionSnapshot(
+                    **common,
+                    as_of_date=date(2026, month, 30),
+                    source_reference=f"snapshot-{index}-{month}",
+                    position_id=position.id,
+                    counterparty_id=party.id,
+                    balance=Decimal(balance),
+                )
+            )
+    db_session.commit()
+    db_session.expunge_all()
+    provider.set_status(KEY_A, status)
+    for model in (deposit_stability, nmd_duration):
+        result = model.estimate(db_session, CTX, BANK_A, AS_OF, BehavioralTrainingConfig())
+        assert result.products
+    db_session.info[SESSION_STATE] = PresentationState()
+    report = get_behavioral_liquidity_report(db_session, CTX, BANK_A)
+    groups = [item for item in report.segments if item.dimension == "concentration_group"]
+    assert len(groups) == 2
+    assert {item.segment for item in groups} == {LOCKED_TEXT}
+    assert sorted(item.current_balance_ghs for item in groups) == [0, 100]
+    assert (
+        next(item for item in groups if item.current_balance_ghs == 0).observed_monthly_runoff_pct
+        == 100
+    )
+    db_session.info.pop(SESSION_STATE)
 
 
 def test_partial_refresh_and_update_preserve_other_encrypted_fields(
@@ -1024,6 +1089,87 @@ def test_saved_identity_filter_is_encrypted_and_explicitly_refused(
         measures=["deposits.balance_rc"], time=BiTime(as_of=AS_OF), filters=saved_query.filters
     )
     assert authority.refused_members(query) == ("counterparty.name",)
+    raw_spec = cast(dict[str, object], json.loads(str(raw))) if isinstance(raw, str) else raw
+    assert isinstance(raw_spec, dict) and "query" in raw_spec
+    for status in (KeyStatus.DISABLED, KeyStatus.UNAVAILABLE):
+        provider.set_status(KEY_A, status)
+        for model, record_id in (
+            (BiDashboardVersion, version_id),
+            (BiSubscription, subscription_id),
+        ):
+            db_session.commit()
+            db_session.expunge_all()
+            db_session.info[SESSION_STATE] = PresentationState()
+            with pytest.raises(KeyUnavailableError):
+                db_session.get(model, record_id)
+        db_session.info.pop(SESSION_STATE)
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    db_session.expunge_all()
+    recovered = db_session.get(BiDashboardVersion, version_id)
+    assert recovered is not None and NAME in json.dumps(recovered.spec, ensure_ascii=False)
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_numeric_saved_bi_configuration_loads_without_a_bank_key(
+    db_session: Session, provider: LocalKeyProvider, status: KeyStatus
+) -> None:
+    connect(db_session, provider)
+    query = BiPackQuery(measures=["loans.balance_rc"], window="as_of")
+    spec = BiDashboardSpec.model_validate(
+        {
+            "widgets": [
+                {
+                    "id": "loans",
+                    "kind": "table",
+                    "title": "Loans",
+                    "query": query.model_dump(mode="json"),
+                }
+            ],
+            "layout": [{"i": "loans", "x": 0, "y": 0, "w": 6, "h": 4}],
+        }
+    ).model_dump(mode="json")
+    version = saved_version(db_session, spec)
+    subscription = BiSubscription(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        name="Numeric subscription",
+        owner_user_id=USER_1,
+        query=query.for_period(AS_OF).model_dump(mode="json"),
+        artifact_format="csv",
+        cadence="daily",
+        hour=7,
+        minute=30,
+        recipient_user_ids=[],
+    )
+    filters = [{"member": "position.currency", "op": "eq", "values": ["GHS"]}]
+    alert = BiAlert(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        owner_user_id=USER_1,
+        name="Numeric alert",
+        measure_id="loans.balance_rc",
+        filters=filters,
+        direction="above",
+        threshold_basis="stated",
+        threshold=Decimal(100),
+        notify_user_ids=[],
+    )
+    db_session.add_all([version, subscription, alert])
+    db_session.commit()
+    ids = version.id, subscription.id, alert.id
+    db_session.expunge_all()
+    provider.set_status(KEY_A, status)
+    db_session.info[SESSION_STATE] = PresentationState()
+    loaded_version = db_session.get(BiDashboardVersion, ids[0])
+    loaded_subscription = db_session.get(BiSubscription, ids[1])
+    loaded_alert = db_session.get(BiAlert, ids[2])
+    assert loaded_version is not None and loaded_version.spec == spec
+    assert loaded_subscription is not None and loaded_subscription.query == query.for_period(
+        AS_OF
+    ).model_dump(mode="json")
+    assert loaded_alert is not None and loaded_alert.filters == filters
+    assert cast(PresentationState, db_session.info[SESSION_STATE]).banks == {}
+    db_session.info.pop(SESSION_STATE)
 
 
 def test_register_digest_tracks_decrypted_values(
@@ -1084,7 +1230,8 @@ def test_saved_alert_list_filters_encrypt_and_round_trip(
     alert_id = alert.id
     db_session.expunge_all()
     raw = cast(object, db_session.execute(text("SELECT filters FROM bi_alerts")).scalar_one())
-    assert "aqs-bank-field-v1" in str(raw) and NAME not in str(raw)
+    assert ("aqs-bank-field-v1" in str(raw)) == bool(filters)
+    assert NAME not in str(raw)
     loaded = db_session.get(BiAlert, alert_id)
     assert loaded is not None and loaded.filters == (filters or [])
     loaded.filters = [{"member": "counterparty.id", "op": "eq", "values": ["synthetic-id"]}]
@@ -1095,6 +1242,14 @@ def test_saved_alert_list_filters_encrypt_and_round_trip(
     assert updated.filters == [
         {"member": "counterparty.id", "op": "eq", "values": ["synthetic-id"]}
     ]
+    for status in (KeyStatus.DISABLED, KeyStatus.UNAVAILABLE):
+        provider.set_status(KEY_A, status)
+        db_session.commit()
+        db_session.expunge_all()
+        db_session.info[SESSION_STATE] = PresentationState()
+        with pytest.raises(KeyUnavailableError):
+            db_session.get(BiAlert, alert_id)
+    db_session.info.pop(SESSION_STATE)
 
 
 def test_key_connection_encrypts_new_writes_without_rewriting_existing_records(
@@ -1168,10 +1323,12 @@ def test_presentation_locks_and_recovers_without_changing_numeric_fields(
     db_session.info.pop(SESSION_STATE)
 
 
+@pytest.mark.parametrize("missing_presentation", [False, True])
 def test_support_presentation_hides_fields_without_unwrapping(
     db_session: Session,
     provider: LocalKeyProvider,
     monkeypatch: pytest.MonkeyPatch,
+    missing_presentation: bool,
 ) -> None:
     connect(db_session, provider)
     row_id = counterparty(db_session).id
@@ -1182,11 +1339,15 @@ def test_support_presentation_hides_fields_without_unwrapping(
         pytest.fail("Support presentation must not unwrap bank data")
 
     monkeypatch.setattr(provider, "unwrap", refuse_unwrap)
-    db_session.info[SESSION_STATE] = PresentationState(support=True)
+    db_session.info[SESSION_SUPPORT] = True
+    if not missing_presentation:
+        db_session.info[SESSION_STATE] = PresentationState(support=True)
     row = db_session.get(CanonicalCounterparty, row_id)
     assert row is not None and row.name == LOCKED_TEXT
-    assert cast(PresentationState, db_session.info[SESSION_STATE]).banks == {BANK_A: "support"}
-    db_session.info.pop(SESSION_STATE)
+    if not missing_presentation:
+        assert cast(PresentationState, db_session.info[SESSION_STATE]).banks == {BANK_A: "support"}
+    db_session.info.pop(SESSION_STATE, None)
+    db_session.info.pop(SESSION_SUPPORT)
 
 
 @pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])

@@ -23,6 +23,12 @@ from app.core.config import get_settings
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
+from app.core.key_management.presentation import (
+    LOCKED_TEXT,
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+)
 from app.core.key_management.schemas import BankKeyRotate
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
@@ -162,6 +168,35 @@ def test_all_bank_object_tiers_encrypt_at_rest_and_refuse_revocation(
         bank_storage.storage.read(location)
     with pytest.raises(StorageAccessError):
         bank_storage.storage.write(location, io.BytesIO(content), metadata_for(SLUG, tier, content))
+
+
+@pytest.mark.parametrize("missing_presentation", [False, True])
+def test_staff_export_download_returns_placeholder_without_unwrapping(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    missing_presentation: bool,
+) -> None:
+    location = StorageLocation(SLUG, "outputs", "exports/identities.csv")
+    content = b"name,identifier\nSynthetic Borrower,SYNTHETIC-17\n"
+    bank_storage.storage.write(
+        location, io.BytesIO(content), metadata_for(SLUG, "outputs", content)
+    )
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Staff downloads must not unwrap protected objects")
+
+    monkeypatch.setattr(bank_storage.provider, "unwrap", refuse_unwrap)
+    db_session.info[SESSION_SUPPORT] = True
+    if not missing_presentation:
+        db_session.info[SESSION_STATE] = PresentationState(support=True)
+    try:
+        _, downloaded = bank_storage.storage.for_session(db_session).read(location)
+        with downloaded:
+            assert downloaded.read().decode() == LOCKED_TEXT
+    finally:
+        db_session.info.pop(SESSION_STATE, None)
+        db_session.info.pop(SESSION_SUPPORT)
 
 
 def test_rotation_adds_version_and_keeps_old_ciphertext_readable(

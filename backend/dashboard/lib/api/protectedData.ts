@@ -1,3 +1,5 @@
+import type { QueryClient, QueryKey } from '@tanstack/react-query';
+
 /** Bank-scoped disclosure notices; an unrelated numeric response cannot clear a lock. */
 export type ProtectedDataState = 'available' | 'revoked' | 'unavailable' | 'support';
 export const protectedDataMessages = {
@@ -35,6 +37,34 @@ export function observeProtectedData(response: Response) {
     }
     if (changed) listeners.forEach(listener => listener());
   } catch { /* A malformed notice must not interrupt the original response. */ }
+}
+
+export function isLockedBankQuery(queryKey: QueryKey): boolean {
+  return queryKey.some(
+    (part) =>
+      typeof part === 'string' && protectedDataState(part) !== 'available',
+  );
+}
+
+export function bindProtectedDataCache(client: QueryClient): () => void {
+  return subscribeProtectedData(() => {
+    void client.cancelQueries({ predicate: query => isLockedBankQuery(query.queryKey) }, { revert: false });
+    for (const query of client.getQueryCache().getAll()) {
+      if (!isLockedBankQuery(query.queryKey)) continue;
+      query.setState({
+        data: undefined,
+        dataUpdatedAt: 0,
+        isInvalidated: true,
+        status: 'pending',
+        error: null,
+      });
+    }
+    void client.refetchQueries({
+      type: 'active',
+      predicate: (query) =>
+        isLockedBankQuery(query.queryKey) && query.state.isInvalidated,
+    });
+  });
 }
 
 export function isProtectedDataError(error: unknown): boolean {

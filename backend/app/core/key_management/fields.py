@@ -12,7 +12,8 @@ import hashlib
 import hmac
 import json
 import unicodedata
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from typing import Literal, cast
 from uuid import UUID
 
@@ -29,6 +30,7 @@ from app.core.key_management.presentation import (
     LOCKED_JSON,
     LOCKED_TEXT,
     SESSION_STATE,
+    SESSION_SUPPORT,
     PresentationState,
     contains_placeholder,
 )
@@ -73,11 +75,13 @@ class ProtectedField(TypeDecorator[object]):
         empty_object: bool = False,
         empty_list: bool = False,
         parent: tuple[str, str] | None = None,
+        protected_members: frozenset[str] | None = None,
     ) -> None:
         super().__init__()
         self.empty_object = empty_object
         self.empty_list = empty_list
         self.parent = parent
+        self.protected_members = protected_members
 
     def _encode(self, value: object) -> object:
         if value is None:
@@ -128,6 +132,30 @@ class ProtectedJSON(ProtectedField):
         if isinstance(value, dict) and FORMAT in value:
             return self._decode(cast(dict[str, object], value)[FORMAT])
         return cast(object, value)
+
+
+def _identity_values(
+    value: object,
+    members: frozenset[str],
+    transform: Callable[[object, str], object],
+    path: tuple[str | int, ...] = (),
+) -> object:
+    if isinstance(value, list):
+        return [
+            _identity_values(item, members, transform, (*path, index))
+            for index, item in enumerate(cast(list[object], value))
+        ]
+    if isinstance(value, dict):
+        mapping = cast(dict[str, object], value)
+        return {
+            key: transform(item, json.dumps((*path, key), separators=(",", ":")))
+            if key == "values"
+            and isinstance(mapping.get("member"), str)
+            and mapping["member"] in members
+            else _identity_values(item, members, transform, (*path, key))
+            for key, item in mapping.items()
+        }
+    return value
 
 
 @dataclass(frozen=True)
@@ -359,11 +387,6 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                 continue
             context = _context(state, organization, row.bank_id)
             assert scope is not None
-            if scope not in write_keys:
-                write_keys[scope] = registry.prepare_envelope(
-                    db, row, _envelope_context(organization, row.bank_id), registry.provider_for
-                )
-            key = write_keys[scope]
             if cast(Table, state.mapper.local_table).name in {
                 "canonical_counterparties",
                 "related_parties",
@@ -371,15 +394,41 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                 if scope not in index_keys:
                     index_keys[scope] = _index_key(db, row)
                 _update_indexes(state, organization, row.bank_id, index_keys[scope])
+
+            def seal(value: object, field_name: str) -> SealedField:
+                if scope not in write_keys:
+                    write_keys[scope] = registry.prepare_envelope(
+                        db, row, _envelope_context(organization, row.bank_id), registry.provider_for
+                    )
+                key = write_keys[scope]
+                message = sdk.encrypt(
+                    json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode(),
+                    sdk.raw_keyring(key.plaintext, name=FORMAT),
+                    {**context, "field": field_name},
+                )
+                return SealedField(key.envelope_id, message)
+
             for col in changed:
                 value = values[col.attribute]
-                if value is not None:
-                    message = sdk.encrypt(
-                        json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode(),
-                        sdk.raw_keyring(key.plaintext, name=FORMAT),
-                        {**context, "field": col.column},
+                if value is None:
+                    continue
+                if col.kind.protected_members is None:
+                    encrypted: object = seal(value, col.column)
+                else:
+
+                    def seal_values(item: object, path: str) -> object:
+                        sealed = seal(item, col.column + ":" + path)
+                        return {
+                            FORMAT: [
+                                str(sealed.envelope_id),
+                                base64.b64encode(sealed.message).decode("ascii"),
+                            ]
+                        }
+
+                    encrypted = _OptionalPlaintext(
+                        _identity_values(value, col.kind.protected_members, seal_values)
                     )
-                    setattr(instance, col.attribute, SealedField(key.envelope_id, message))
+                setattr(instance, col.attribute, encrypted)
 
 
 def _restore(db: Session, *, failed: bool = False) -> None:
@@ -484,8 +533,39 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
         if bank is not None and row is None and get_key_settings().bank_key_required:
             raise KeyUnavailableError("The bank encryption key is not connected.")
         presentation = db.info.get(SESSION_STATE)
+        if db.info.get(SESSION_SUPPORT):
+            if not isinstance(presentation, PresentationState):
+                presentation = PresentationState(support=True)
+            presentation.support = True
         for col in present:
             value = cast(object, state.dict[col.attribute])
+            if col.kind.protected_members is not None and not isinstance(value, SealedField):
+
+                def open_values(item: object, path: str) -> object:
+                    leaf = replace(col, column=col.column + ":" + path)
+                    if _presentation_locked(instance, leaf, presentation, bank):
+                        return None
+                    if not isinstance(item, dict) or FORMAT not in item:
+                        return item
+                    sealed = col.kind._decode(cast(dict[str, object], item)[FORMAT])
+                    if row is None:
+                        raise KeyUnavailableError("The bank encryption key is not connected.")
+                    secret = _field_secret(db, row, sealed, presentation, instance, leaf)
+                    if secret is None:
+                        return None
+                    plaintext = sdk.decrypt(
+                        sealed.message,
+                        sdk.raw_keyring(secret, name=FORMAT),
+                        {**_context(state, organization, row.bank_id), "field": leaf.column},
+                    )
+                    return _JSON.validate_json(plaintext)
+
+                attributes.set_committed_value(
+                    instance,
+                    col.attribute,
+                    _identity_values(value, col.kind.protected_members, open_values),
+                )
+                continue
             if _presentation_locked(instance, col, presentation, bank):
                 continue
             if not isinstance(value, SealedField):

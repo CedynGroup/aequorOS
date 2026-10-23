@@ -11,6 +11,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 type LockReason = Literal["available", "revoked", "unavailable", "support"]
 HEADER = "X-Aequoros-Protected-Data"
 SESSION_STATE = "protected_data_presentation"
+SESSION_SUPPORT = "protected_data_support"
 LOCKED_TEXT = "🔒 Protected data"
 LOCKED_JSON = "_aequoros_protected_data"
 

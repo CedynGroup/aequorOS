@@ -23,6 +23,7 @@ from app.identity.public import Bank
 from app.ml.behavioral import history
 from app.ml.behavioral.config import BehavioralTrainingConfig
 from app.models import ContingencyFundingPlan
+from app.models.canonical import CanonicalCounterparty
 
 _DIMENSIONS = ("product", "customer_segment", "concentration_group", "branch")
 _MIN_RATE_OBSERVATIONS = 6
@@ -249,8 +250,22 @@ def get_behavioral_liquidity_report(
         db, ctx, bank.id, as_of, cfg.window_months, non_maturing_only=False
     )
     short_rates = history.load_ghs_short_rate_history(db, ctx, bank.id, as_of, cfg.window_months)
+    group_labels = {
+        party.concentration_group_blind_index: party.group_reference or party.name
+        for party in db.scalars(
+            select(CanonicalCounterparty).where(
+                CanonicalCounterparty.organization_id == ctx.organization_id,
+                CanonicalCounterparty.bank_id == bank.id,
+            )
+        )
+    }
     segments = [
-        _segment_metrics(dimension, segment, points, short_rates)
+        _segment_metrics(
+            dimension,
+            group_labels.get(segment, segment) if dimension == "concentration_group" else segment,
+            points,
+            short_rates,
+        )
         for dimension in _DIMENSIONS
         for segment, points in _series_by_dimension(rows, dimension).items()
     ]

@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { useState } from 'react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { createAuthorityQueryClient } from '../lib/api/QueryAuthorityBoundary';
 import ProtectedDataNotice from '../components/ui/ProtectedDataNotice';
+import QueryBoundary from '../components/ui/QueryBoundary';
 import ProtectedDataPlaceholder from '../components/ui/ProtectedDataPlaceholder';
 import {
-  clearProtectedData, observeProtectedData, protectedDataMessages, protectedDataState,
+  bindProtectedDataCache, clearProtectedData, observeProtectedData, protectedDataMessages, protectedDataState,
 } from '../lib/api/protectedData';
 
 vi.mock('../components/shell/BankContext', () => ({
@@ -80,5 +82,130 @@ it('discards decrypted cache data when a protected refetch is refused', async ()
   const refused = Object.assign(new Error(protectedDataMessages.revoked), { code: 'bank_key_revoked' });
   await expect(client.fetchQuery({ queryKey, staleTime: 0, retry: false, queryFn: async () => { throw refused; } })).rejects.toThrow();
   expect(client.getQueryData(queryKey)).toBeUndefined();
+  client.clear();
+});
+
+it.each(['revoked', 'unavailable', 'support'] as const)(
+  'purges sibling bank caches on %s without losing an editor draft',
+  async (reason) => {
+    const client = createAuthorityQueryClient();
+    const unsubscribe = bindProtectedDataCache(client);
+    const bank = 'BK-SAMP0001';
+    const legacyKey = ['institution-profile', bank];
+    const scopedKey = [
+      'bi-dashboard',
+      'tenant',
+      'authority',
+      bank,
+      'dashboard',
+    ];
+    client.setQueryData(legacyKey, { name: 'Synthetic private identity' });
+    client.setQueryData(scopedKey, { title: 'Synthetic identity canvas' });
+    client.setQueryData(['institution-profile', 'BK-SAMP0002'], {
+      name: 'Other bank identity',
+    });
+    let finishRead: ((value: { name: string }) => void) | undefined;
+    function Editor() {
+      const [draft, setDraft] = useState('');
+      return (
+        <input
+          aria-label="Draft"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+      );
+    }
+    function Profile() {
+      const query = useQuery({
+        queryKey: legacyKey,
+        queryFn: async () => {
+          return new Promise<{ name: string }>((resolve) => {
+            finishRead = resolve;
+          });
+        },
+      });
+      return (
+        <QueryBoundary
+          isLoading={query.isLoading}
+          error={query.error}
+          skeleton={<p>Loading profile</p>}
+        >
+          <p>{query.data?.name}</p>
+          <Editor />
+        </QueryBoundary>
+      );
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <ProtectedDataNotice />
+        <Profile />
+      </QueryClientProvider>,
+    );
+    await userEvent.type(screen.getByLabelText('Draft'), 'Unsaved draft');
+    await act(async () => {
+      notify(reason);
+    });
+    expect(client.getQueryData(legacyKey)).toBeUndefined();
+    expect(client.getQueryData(scopedKey)).toBeUndefined();
+    expect(client.getQueryData(['institution-profile', 'BK-SAMP0002'])).toEqual(
+      { name: 'Other bank identity' },
+    );
+    await waitFor(() => expect(screen.getByText('Synthetic private identity')).not.toBeVisible());
+    await act(async () => {
+      finishRead?.({ name: '🔒 Protected data' });
+    });
+    await waitFor(() => expect(screen.getByLabelText('Draft')).toBeVisible());
+    expect(screen.getByLabelText('Draft')).toHaveValue('Unsaved draft');
+    if (reason !== 'support') {
+      await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      await act(async () => {
+        notify('available');
+        finishRead?.({ name: 'Restored identity' });
+      });
+      await waitFor(() =>
+        expect(screen.getByText('Restored identity')).toBeVisible(),
+      );
+      expect(screen.getByLabelText('Draft')).toHaveValue('Unsaved draft');
+    }
+    unsubscribe();
+    client.clear();
+  },
+);
+
+it('waits for the first successful query before mounting its content', () => {
+  function Content({ value }: { value?: { name: string } }) {
+    return <p>{value!.name}</p>;
+  }
+  const view = render(
+    <QueryBoundary isLoading error={null} skeleton={<p>Loading</p>}>
+      <Content />
+    </QueryBoundary>,
+  );
+  expect(screen.getByText('Loading')).toBeVisible();
+  view.rerender(
+    <QueryBoundary isLoading={false} error={null}>
+      <Content value={{ name: 'Ready' }} />
+    </QueryBoundary>,
+  );
+  expect(screen.getByText('Ready')).toBeVisible();
+});
+
+
+it('prevents an in-flight stale read from restoring decrypted bank data after a lock', async () => {
+  const client = createAuthorityQueryClient();
+  const unsubscribe = bindProtectedDataCache(client);
+  const queryKey = ['institution-profile', 'BK-SAMP0001'];
+  await client.fetchQuery({ queryKey, queryFn: async () => 'Cached private identity' });
+  let finishRead: ((value: string) => void) | undefined;
+  const pending = client.fetchQuery({ queryKey, staleTime: 0, queryFn: async () => {
+    return new Promise<string>(resolve => { finishRead = resolve; });
+  } }).catch(() => undefined);
+  notify('revoked');
+  finishRead?.('Stale private identity');
+  await pending;
+  expect(client.getQueryData(queryKey)).toBeUndefined();
+  await client.fetchQuery({ queryKey, queryFn: async () => '🔒 Protected data' });
+  expect(client.getQueryData(queryKey)).toBe('🔒 Protected data');
+  unsubscribe();
   client.clear();
 });

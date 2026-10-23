@@ -7,7 +7,7 @@
  */
 
 import { isProtectedDataError } from '@/lib/api/protectedData';
-import type { ReactNode } from 'react';
+import { Activity, useState, type ReactNode } from 'react';
 import { AlertCircle, Database, LockKeyhole, RotateCw } from 'lucide-react';
 import { isApiError, isModuleUnavailable } from '@/lib/api/client';
 import { SkeletonCard, SkeletonChart, SkeletonTable } from './Skeleton';
@@ -110,17 +110,25 @@ export default function QueryBoundary({
   contained?: boolean;
   children: ReactNode;
 }) {
-  if (isLoading) {
-    return <>{skeleton ?? <PageSkeleton contained={contained} />}</>;
-  }
-  if (error) {
-    const panel = <ErrorPanel error={error} onRetry={onRetry} />;
-    if (contained) return panel;
-    return (
-      <PageContainer className="py-6">
-        {panel}
-      </PageContainer>
-    );
-  }
-  return <>{children}</>;
+  const hidden = isLoading || Boolean(error);
+  const [hasContent, setHasContent] = useState(false);
+  if (!hidden && !hasContent) setHasContent(true);
+  const panel = error ? <ErrorPanel error={error} onRetry={onRetry} /> : null;
+  return (
+    <>
+      {hasContent && (
+        <Activity mode={hidden ? 'hidden' : 'visible'}>{children}</Activity>
+      )}
+      {isLoading ? (
+        <>{skeleton ?? <PageSkeleton contained={contained} />}</>
+      ) : (
+        panel &&
+        (contained ? (
+          panel
+        ) : (
+          <PageContainer className="py-6">{panel}</PageContainer>
+        ))
+      )}
+    </>
+  );
 }
