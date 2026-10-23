@@ -122,6 +122,14 @@ export function bindProtectedDataCache(client: QueryClient): () => void {
       predicate: (query) =>
         isLockedBankQuery(query.queryKey) && query.state.isInvalidated,
     });
+    void client.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey.some(
+          (part) => typeof part === 'string' && notices.get(part) === 'available',
+        ) &&
+        (containsLockedData(query.state.data) || isProtectedDataError(query.state.error)),
+      refetchType: 'active',
+    }, { cancelRefetch: false });
   });
 }
 
