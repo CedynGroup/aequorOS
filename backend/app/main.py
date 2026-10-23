@@ -11,7 +11,9 @@ from app.core.errors import (
     UnhandledExceptionMiddleware,
     register_exception_handlers,
 )
+from app.core.key_management.demo import require_local_demo
 from app.core.key_management.presentation import HEADER, ProtectedDataMiddleware
+from app.core.key_management.settings import get_key_settings
 from app.core.logging import REQUEST_ID_HEADER, configure_logging, logger
 from app.core.request_id import RequestIdMiddleware
 from app.core.tls import RequireTLSMiddleware, validate_service_transports
@@ -111,6 +113,8 @@ EXPOSED_RESPONSE_HEADERS: tuple[str, ...] = (
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    if get_key_settings().demo_bank_key_file is not None:
+        require_local_demo()
     validate_service_transports(settings)
     configure_logging(settings.logging.log_level)
     _warn_if_signing_unconfigured(settings)

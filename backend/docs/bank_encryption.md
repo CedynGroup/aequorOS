@@ -13,8 +13,8 @@ preserves the existing platform storage path for tenants without keys in every
 environment. Enable it once the key-management UI ships; then onboarding and
 storage require a bank key. Encrypted objects also refuse reads when their
 bank-key record is missing. Missing bank keys alone never prevent startup. Local
-evaluation uses the existing platform/MinIO path without an AWS KMS account. No
-persistent local provider mode is introduced.
+evaluation without a connected key uses the existing platform/MinIO path without
+an AWS KMS account.
 
 The bank creates and administers a customer-managed symmetric KMS key in its own
 AWS account. AequorOS uses its workload role to request cryptographic
@@ -252,10 +252,9 @@ timestamps. No standalone health-probe endpoint is exposed. These follow-ups are
 required before claiming regulatory approval of the complete service.
 
 `LocalKeyProvider` supports injected hermetic tests and the provider conformance
-suite. Local evaluation without an AWS KMS account uses the existing platform
-storage path described in [bank key setup](bank_key_setup.md). There is no
-persistent per-tenant local provider and no fallback for an unavailable
-connected bank-owned key.
+suite. The [synthetic revocation walkthrough](encryption_demo.md) owns the
+file-controlled demo provider's setup and environment restrictions. It is not a
+fallback for an unavailable connected bank-owned key.
 
 Evidence lives in `tests/storage/test_key_providers.py` (local and moto AWS KMS
 conformance, grant denial and outage), `test_bank_encryption.py` (all S3 tiers,
