@@ -517,7 +517,8 @@ def assert_unicode_name_round_trip(db: Session, connected: bool) -> None:
         ] == [name]
         assert find_counterparties(db, CTX, BANK_A, field="name", value=equivalent + "x") == []
         assert (
-            institution_profile.find_related_parties_by_name(db, CTX, BANK_A, equivalent + "x") == []
+            institution_profile.find_related_parties_by_name(db, CTX, BANK_A, equivalent + "x")
+            == []
         )
         stored = db.execute(
             text(
@@ -783,7 +784,12 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
         assert bank is not None
         with pytest.raises(WithdrawalError, match="same natural key") as refused:
             canonical_withdrawal.reverse_withdrawal(
-                db_session, CTX, bank, withdrawal.id, reversed_by="Synthetic checker", reason="Restore"
+                db_session,
+                CTX,
+                bank,
+                withdrawal.id,
+                reversed_by="Synthetic checker",
+                reason="Restore",
             )
         assert refused.value.status_code == 409
         db_session.flush()
