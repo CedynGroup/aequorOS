@@ -109,13 +109,16 @@ bytes with an authenticated bank/organization context, then compares the result.
 A successful probe does not connect or replace a key. Connect and rotation repeat
 their own custody probe. Disabled keys, incorrect ARNs/accounts/regions and
 operation-specific permission failures produce actionable, sanitized messages.
-Connected-key tests update the last checked state; failures preserve the last
-successful-use timestamp. Ordinary field and object use records version telemetry
-best-effort in a separate short background transaction when the caller transaction ends,
-throttled to five minutes and skipping locked versions. It never updates the
+Connected-key tests update the last checked state only if the tested key's full
+identity still matches the connected key when the observation is written; a test
+racing replacement rotation cannot overwrite the replacement's health. Failures
+preserve the last successful-use timestamp. Ordinary field and object use records
+version telemetry best-effort in a separate short background transaction when the
+caller transaction ends, throttled to five minutes and skipping locked versions.
+It never updates the
 bank key row used by rotation. Status includes the latest recorded version use.
-Existing deployments have no historical
-successful-use timestamp until a new successful operation occurs.
+Existing deployments have no historical successful-use timestamp until a new
+successful operation occurs.
 
 The status panel shows connection, the immutable aequorOS data-key version,
 recorded successful use, and replacement-key rotation time. That version is

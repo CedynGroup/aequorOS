@@ -536,10 +536,9 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
         model.organization_id == row.organization_id,
         model.withdrawn_by_batch_id == row.withdrawal_batch_id,
     ]
-    # Refuse a reversal that would resurrect a duplicate: if the withdrawn book
-    # was re-ingested, its replacement holds the natural key and restoring would
-    # violate the current-generation unique index (or, on SQLite, silently
-    # double-count).
+    # Refuse restoration when a replacement already holds the financial natural
+    # key. Counterparty references must be compared after decryption because
+    # first key connection changes their index representation from raw to HMAC.
     if model is CanonicalCounterparty:
         conflicts = _counterparty_reversal_conflicts(db, row)
     else:

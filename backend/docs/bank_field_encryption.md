@@ -31,11 +31,15 @@ Field and object encryption reuse `BankEncryptionKey`, `ObjectKeyEnvelope`,
 wrapped by the bank's KMS key. Ciphertext records its version UUID.
 
 A unit of work resolves the current version once and unwraps each required version
-once. Request-bound storage shares the session cache. Root transaction completion,
-rollback or session close discards plaintext key material. Encryption takes no
-key-row or advisory locks. Rotation creates a new current version; earlier
-versions remain available to read earlier ciphertext. There is no re-encryption
-maintenance command.
+once. Request-bound storage shares the session cache; standalone storage operations
+own short-lived sessions. Plaintext material is session-local and excluded from
+logs. Root transaction completion, rollback or session close discards plaintext
+key material. Encryption takes no
+key-row or advisory locks. There is no persistent or process-wide plaintext cache.
+Revocation refuses the next unit once KMS enforces the permission change; an
+already admitted unit may complete. Rotation creates a new current version;
+earlier versions remain available to read earlier ciphertext. There is no
+re-encryption maintenance command.
 
 Object writes use committed versions, so published ciphertext remains readable
 if the caller rolls back. Authenticated context binds fields to organization,

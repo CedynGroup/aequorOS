@@ -270,14 +270,11 @@ def _record_usage(
 
 
 def last_successful_use(db: Session, row: BankEncryptionKey) -> datetime | None:
-    latest = cast(
-        datetime | None,
-        db.scalar(
-            select(func.max(ObjectKeyEnvelope.last_successful_use_at)).where(
-                ObjectKeyEnvelope.organization_id == row.organization_id,
-                ObjectKeyEnvelope.bank_id == row.bank_id,
-            )
-        ),
+    latest = db.scalar(
+        select(func.max(ObjectKeyEnvelope.last_successful_use_at)).where(
+            ObjectKeyEnvelope.organization_id == row.organization_id,
+            ObjectKeyEnvelope.bank_id == row.bank_id,
+        )
     )
     times = [time for time in (latest, row.last_successful_use_at) if time is not None]
     return max(times, key=_utc) if times else None

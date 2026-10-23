@@ -93,6 +93,8 @@ def completed_usage(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Ite
     recording = Lock()
     monkeypatch.setattr(registry, "_usage_recording", recording)
     yield recording
+    # End caller work before restoring the lock used by asynchronous usage writers.
+    db_session.rollback()
     assert recording.acquire(timeout=5)
     recording.release()
 
