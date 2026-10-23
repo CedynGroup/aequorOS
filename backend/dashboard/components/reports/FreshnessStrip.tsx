@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Freshness strip — per-module live-vs-official-run hash state for the
@@ -7,30 +7,30 @@
  * strip then points to the Data Engine to mint one.
  */
 
-import Link from 'next/link';
-import { ArrowRight, GitCommitHorizontal } from 'lucide-react';
+import Link from "next/link";
+import { ArrowRight, GitCommitHorizontal } from "lucide-react";
 import type {
   BankReportingPeriodRead,
   LiveModule,
-} from '@aequoros/risk-service-api';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import { SkeletonLine } from '@/components/ui/Skeleton';
-import { useBankFreshness } from '@/lib/api/hooks';
-import { fmtRelative, shortId } from '@/lib/api/values';
-import { LIVE_MODULE_LABELS } from '@/components/live/moduleDisplay';
+} from "@aequoros/risk-service-api";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import { SkeletonLine } from "@/components/ui/Skeleton";
+import { useBankFreshness } from "@/lib/api/hooks";
+import { fmtRelative, shortId } from "@/lib/api/values";
+import { LIVE_MODULE_LABELS } from "@/components/live/moduleDisplay";
 
 /** Short labels for the live-module grid cells — the full LIVE_MODULE_LABELS
  * truncate to "CA…"/"INT…" at these widths. */
 const SHORT_MODULE_LABELS: Record<LiveModule, string> = {
-  liquidity: 'Liquidity',
-  capital: 'Capital',
-  credit: 'Credit',
-  irr: 'IRR',
-  fx: 'FX',
-  ftp: 'FTP',
-  rating: 'Rating',
-  forecast: 'Forecast',
+  liquidity: "Liquidity",
+  capital: "Capital",
+  credit: "Credit",
+  irr: "IRR",
+  fx: "FX",
+  ftp: "FTP",
+  rating: "Rating",
+  forecast: "Forecast",
 };
 
 export default function FreshnessStrip({
@@ -52,7 +52,7 @@ export default function FreshnessStrip({
         staleCount > 0 ? (
           <Link
             href="/data-engine"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
           >
             Mint official run
             <ArrowRight size={12} aria-hidden />
@@ -62,10 +62,10 @@ export default function FreshnessStrip({
       noPadding
       footer={
         <span>
-          Period {freshness.data?.periodLabel ?? period.label} ·{' '}
+          Period {freshness.data?.periodLabel ?? period.label} ·{" "}
           {staleCount > 0
-            ? `${staleCount} module${staleCount === 1 ? '' : 's'} ahead of the last official run`
-            : 'all modules match their official runs'}
+            ? `${staleCount} module${staleCount === 1 ? "" : "s"} ahead of the last official run`
+            : "all modules match their official runs"}
         </span>
       }
     >
@@ -95,13 +95,14 @@ export default function FreshnessStrip({
                   className="text-micro uppercase tracking-wider text-slate"
                   title={LIVE_MODULE_LABELS[m.module]}
                 >
-                  {SHORT_MODULE_LABELS[m.module] ?? LIVE_MODULE_LABELS[m.module]}
+                  {SHORT_MODULE_LABELS[m.module] ??
+                    LIVE_MODULE_LABELS[m.module]}
                 </p>
                 <StatusPill
-                  tone={m.isStale ? 'amber' : 'compliant'}
+                  tone={m.isStale ? "amber" : "compliant"}
                   className="shrink-0"
                 >
-                  {m.isStale ? 'Changed' : 'Live'}
+                  {m.isStale ? "Changed" : "Live"}
                 </StatusPill>
               </div>
               <p className="mt-1.5 text-micro font-mono text-slate truncate tnum">
@@ -110,17 +111,17 @@ export default function FreshnessStrip({
                   className="inline-block mr-1 align-[-1px]"
                   aria-hidden
                 />
-                {m.liveHash ? shortId(m.liveHash, 8) : '—'}
+                {m.liveHash ? shortId(m.liveHash, 8) : "—"}
                 <span className="text-slate-light"> / </span>
-                {m.officialRunHash ? shortId(m.officialRunHash, 8) : 'no run'}
+                {m.officialRunHash ? shortId(m.officialRunHash, 8) : "no run"}
               </p>
               <p className="mt-0.5 text-micro text-slate truncate">
                 {m.computedAt
                   ? `live ${fmtRelative(m.computedAt)}`
-                  : 'not computed'}
+                  : "not computed"}
                 {m.officialRunAt
                   ? ` · official ${fmtRelative(m.officialRunAt)}`
-                  : ''}
+                  : ""}
               </p>
             </div>
           ))}

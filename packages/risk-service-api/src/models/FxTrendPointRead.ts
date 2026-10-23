@@ -11,6 +11,14 @@
  */
 
 import { mapValues } from "../runtime";
+import type { FxTrendVar } from "./FxTrendVar";
+import {
+  FxTrendVarFromJSON,
+  FxTrendVarFromJSONTyped,
+  FxTrendVarToJSON,
+  FxTrendVarToJSONTyped,
+} from "./FxTrendVar";
+
 /**
  *
  * @export
@@ -55,10 +63,10 @@ export interface FxTrendPointRead {
   stored: boolean;
   /**
    *
-   * @type {string}
+   * @type {FxTrendVar}
    * @memberof FxTrendPointRead
    */
-  var991dGhs: string;
+  var991dGhs: FxTrendVar;
 }
 
 /**
@@ -102,7 +110,7 @@ export function FxTrendPointReadFromJSONTyped(
     periodEnd: new Date(json["period_end"]),
     reportingPeriodId: json["reporting_period_id"],
     stored: json["stored"],
-    var991dGhs: json["var_99_1d_ghs"],
+    var991dGhs: FxTrendVarFromJSON(json["var_99_1d_ghs"]),
   };
 }
 
@@ -125,6 +133,6 @@ export function FxTrendPointReadToJSONTyped(
     period_end: value["periodEnd"].toISOString().substring(0, 10),
     reporting_period_id: value["reportingPeriodId"],
     stored: value["stored"],
-    var_99_1d_ghs: value["var991dGhs"],
+    var_99_1d_ghs: FxTrendVarToJSON(value["var991dGhs"]),
   };
 }

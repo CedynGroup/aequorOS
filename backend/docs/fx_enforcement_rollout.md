@@ -85,8 +85,9 @@ For an entitled institution, a missing FX view permission leaves the navigation
 link visible but disabled, with a tooltip naming the required grant. Structural
 exclusions and institutions without authority remain hidden.
 A denied `/fx` deep link returns the dashboard's not-found view and sends no FX
-dashboard query. Command Center, Risk, Alerts, and Board Pack request FX data
-only when the same FX/aggregated view capability is present.
+dashboard query. Command Center, Risk, and Alerts request FX data only when the
+same FX/aggregated view capability is present. Board Pack reads the live-summary
+projection, whose server filters FX by aggregated-view authority.
 
 Reports requests FX saved analyses and exposes the FX official-run filter only
 when FX/aggregated view is present. Saved-analysis workbench links still require

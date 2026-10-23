@@ -1,4 +1,4 @@
-import { TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from "lucide-react";
 
 /**
  * Shared chip primitives for the Markets tab: the mono code chip used for
@@ -10,7 +10,7 @@ import { TriangleAlert } from 'lucide-react';
 /** Small monospace code chip — source systems, curve tickers, index codes. */
 export function MonoChip({
   children,
-  className = '',
+  className = "",
   title,
 }: {
   children: React.ReactNode;
@@ -20,7 +20,7 @@ export function MonoChip({
   return (
     <span
       title={title}
-      className={`inline-flex items-center px-1.5 py-0.5 rounded border border-border-light bg-surface text-[10px] font-mono uppercase tracking-wider text-slate whitespace-nowrap ${className}`}
+      className={`inline-flex items-center px-1.5 py-0.5 rounded-sm border border-border-light bg-surface text-[10px] font-mono uppercase tracking-wider text-slate whitespace-nowrap ${className}`}
     >
       {children}
     </span>
@@ -28,28 +28,28 @@ export function MonoChip({
 }
 
 const CURVE_TYPE_LABELS: Record<string, string> = {
-  zero: 'Zero',
-  forward: 'Forward',
-  discount: 'Discounting',
-  sovereign: 'Sovereign',
-  interbank: 'Interbank',
-  swap: 'Swap',
-  credit_spread: 'Credit spread',
+  zero: "Zero",
+  forward: "Forward",
+  discount: "Discounting",
+  sovereign: "Sovereign",
+  interbank: "Interbank",
+  swap: "Swap",
+  credit_spread: "Credit spread",
 };
 
 /** Curve-family badge: zero / forward / discounting / sovereign / ... */
 export function CurveTypeBadge({
   curveType,
-  className = '',
+  className = "",
 }: {
   curveType: string;
   className?: string;
 }) {
   return (
     <span
-      className={`inline-flex items-center px-1.5 py-0.5 rounded border border-border bg-surface text-[10px] font-medium uppercase tracking-wider text-navy whitespace-nowrap ${className}`}
+      className={`inline-flex items-center px-1.5 py-0.5 rounded-sm border border-border bg-surface text-[10px] font-medium uppercase tracking-wider text-navy whitespace-nowrap ${className}`}
     >
-      {CURVE_TYPE_LABELS[curveType] ?? curveType.replace(/_/g, ' ')}
+      {CURVE_TYPE_LABELS[curveType] ?? curveType.replace(/_/g, " ")}
     </span>
   );
 }
@@ -58,11 +58,15 @@ export function CurveTypeBadge({
  * Truthful-naming marker for the synthetic discounting proxy: it is a
  * modelled curve with a disclosed methodology, not a traded OIS.
  */
-export function SyntheticProxyBadge({ className = '' }: { className?: string }) {
+export function SyntheticProxyBadge({
+  className = "",
+}: {
+  className?: string;
+}) {
   return (
     <span
       title="Modelled discounting proxy — not a traded curve. Methodology is disclosed and versioned."
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-warning/30 bg-warning-light text-warning text-micro font-medium uppercase tracking-wider whitespace-nowrap ${className}`}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border border-warning/30 bg-warning-light text-warning text-micro font-medium uppercase tracking-wider whitespace-nowrap ${className}`}
     >
       <TriangleAlert size={10} aria-hidden />
       Synthetic proxy

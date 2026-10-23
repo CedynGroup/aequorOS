@@ -450,7 +450,7 @@ export function TenantConfigSection({
         width="w-[560px]"
       >
         {mapping && (
-          <pre className="max-h-[70vh] overflow-auto rounded border border-border-light bg-surface p-3 font-mono text-caption leading-relaxed text-navy/90">
+          <pre className="max-h-[70vh] overflow-auto rounded-sm border border-border-light bg-surface p-3 font-mono text-caption leading-relaxed text-navy/90">
             {formatJson(mapping.config)}
           </pre>
         )}

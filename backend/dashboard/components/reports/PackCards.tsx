@@ -164,7 +164,7 @@ export default function PackCards({
               Board Pack
             </span>
           }
-          subtitle={period ? `Period ${period.label}` : undefined}
+          subtitle="Current live generations · Baseline"
           action={<StatusPill tone="action">Print-ready</StatusPill>}
         />
         <CardBody>

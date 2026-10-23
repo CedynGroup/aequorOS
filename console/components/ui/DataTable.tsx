@@ -1,9 +1,21 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+} from "lucide-react";
 
-type Align = 'left' | 'right' | 'center';
+type Align = "left" | "right" | "center";
 
 export type Column<T> = {
   key: string;
@@ -19,7 +31,7 @@ export type Column<T> = {
   sortAccessor?: (row: T) => string | number | null | undefined;
 };
 
-type SortState = { key: string; dir: 'asc' | 'desc' } | null;
+type SortState = { key: string; dir: "asc" | "desc" } | null;
 
 /**
  * The console's one table primitive. Ports the dashboard's DataTable (columns
@@ -30,23 +42,23 @@ type SortState = { key: string; dir: 'asc' | 'desc' } | null;
 export function DataTable<T>({
   columns,
   rows,
-  density = 'comfortable',
+  density = "comfortable",
   emphasizeTotals = true,
   totalsRowMatcher,
-  className = '',
+  className = "",
   stickyHeader = false,
   maxHeight,
   onRowClick,
   rowClassName,
   initialSort = null,
   getFilterText,
-  filterPlaceholder = 'Filter…',
+  filterPlaceholder = "Filter…",
   pageSize,
-  emptyMessage = 'No rows.',
+  emptyMessage = "No rows.",
 }: {
   columns: Column<T>[];
   rows: T[];
-  density?: 'compact' | 'comfortable';
+  density?: "compact" | "comfortable";
   emphasizeTotals?: boolean;
   totalsRowMatcher?: (row: T) => boolean;
   className?: string;
@@ -66,11 +78,11 @@ export function DataTable<T>({
   pageSize?: number;
   emptyMessage?: ReactNode;
 }) {
-  const padY = density === 'compact' ? 'py-1.5' : 'py-2.5';
+  const padY = density === "compact" ? "py-1.5" : "py-2.5";
   const clickable = Boolean(onRowClick);
 
   const [sort, setSort] = useState<SortState>(initialSort);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
 
   const columnByKey = useMemo(() => {
@@ -93,38 +105,49 @@ export function DataTable<T>({
     const col = columnByKey.get(sort.key);
     const accessor = col?.sortAccessor;
     if (!accessor) return filtered;
-    const dir = sort.dir === 'asc' ? 1 : -1;
+    const dir = sort.dir === "asc" ? 1 : -1;
     return [...filtered].sort((a, b) => {
       const av = accessor(a);
       const bv = accessor(b);
       if (av === bv) return 0;
       if (av === null || av === undefined) return 1;
       if (bv === null || bv === undefined) return -1;
-      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
-      return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
+      if (typeof av === "number" && typeof bv === "number")
+        return (av - bv) * dir;
+      return (
+        String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir
+      );
     });
   }, [filtered, sort, columnByKey]);
 
-  const pageCount = pageSize ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1;
+  const pageCount = pageSize
+    ? Math.max(1, Math.ceil(sorted.length / pageSize))
+    : 1;
 
   // Reset to the first page whenever the visible set changes shape.
   useEffect(() => {
     setPage(0);
   }, [query, sort, pageSize, rows]);
 
-  const visible = pageSize ? sorted.slice(page * pageSize, page * pageSize + pageSize) : sorted;
+  const visible = pageSize
+    ? sorted.slice(page * pageSize, page * pageSize + pageSize)
+    : sorted;
 
   const toggleSort = (key: string) => {
     setSort((prev) => {
-      if (!prev || prev.key !== key) return { key, dir: 'asc' };
-      if (prev.dir === 'asc') return { key, dir: 'desc' };
+      if (!prev || prev.key !== key) return { key, dir: "asc" };
+      if (prev.dir === "asc") return { key, dir: "desc" };
       return null;
     });
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTableRowElement>, row: T, i: number) => {
+  const handleKeyDown = (
+    e: KeyboardEvent<HTMLTableRowElement>,
+    row: T,
+    i: number,
+  ) => {
     if (!onRowClick) return;
-    if (e.key === 'Enter' || e.key === ' ') {
+    if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       onRowClick(row, i);
     }
@@ -140,7 +163,7 @@ export function DataTable<T>({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={filterPlaceholder}
-            className="w-full bg-transparent text-body text-navy placeholder:text-slate outline-none"
+            className="w-full bg-transparent text-body text-navy placeholder:text-slate outline-hidden"
           />
           {query && (
             <span className="shrink-0 text-caption text-slate tnum">
@@ -151,7 +174,7 @@ export function DataTable<T>({
       )}
 
       <div
-        className={`overflow-x-auto ${maxHeight !== undefined ? 'overflow-y-auto' : ''}`}
+        className={`overflow-x-auto ${maxHeight !== undefined ? "overflow-y-auto" : ""}`}
         style={maxHeight !== undefined ? { maxHeight } : undefined}
       >
         <table className="w-full border-collapse text-body tnum">
@@ -159,33 +182,37 @@ export function DataTable<T>({
             <tr className="border-b border-border bg-surface">
               {columns.map((c) => {
                 const isSorted = sort?.key === c.key;
-                const alignRight = c.align === 'right' || c.numeric;
+                const alignRight = c.align === "right" || c.numeric;
                 return (
                   <th
                     key={c.key}
                     scope="col"
                     style={{ width: c.width }}
                     className={`${padY} px-4 text-micro font-medium uppercase tracking-wider text-slate ${
-                      stickyHeader ? 'sticky top-0 z-10 bg-surface' : ''
-                    } ${alignRight ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'}`}
+                      stickyHeader ? "sticky top-0 z-10 bg-surface" : ""
+                    } ${alignRight ? "text-right" : c.align === "center" ? "text-center" : "text-left"}`}
                   >
                     {c.sortable && c.sortAccessor ? (
                       <button
                         type="button"
                         onClick={() => toggleSort(c.key)}
                         className={`inline-flex items-center gap-1 uppercase tracking-wider transition-colors hover:text-navy ${
-                          alignRight ? 'flex-row-reverse' : ''
-                        } ${isSorted ? 'text-navy' : ''}`}
+                          alignRight ? "flex-row-reverse" : ""
+                        } ${isSorted ? "text-navy" : ""}`}
                       >
                         {c.header}
                         {isSorted ? (
-                          sort?.dir === 'asc' ? (
+                          sort?.dir === "asc" ? (
                             <ArrowUp size={11} aria-hidden />
                           ) : (
                             <ArrowDown size={11} aria-hidden />
                           )
                         ) : (
-                          <ArrowUp size={11} className="opacity-25" aria-hidden />
+                          <ArrowUp
+                            size={11}
+                            className="opacity-25"
+                            aria-hidden
+                          />
                         )}
                       </button>
                     ) : (
@@ -198,7 +225,7 @@ export function DataTable<T>({
                 <th
                   scope="col"
                   aria-label="Open"
-                  className={`${padY} w-8 px-2 ${stickyHeader ? 'sticky top-0 z-10 bg-surface' : ''}`}
+                  className={`${padY} w-8 px-2 ${stickyHeader ? "sticky top-0 z-10 bg-surface" : ""}`}
                 />
               )}
             </tr>
@@ -216,29 +243,33 @@ export function DataTable<T>({
             ) : (
               visible.map((row, i) => {
                 const isTotal =
-                  emphasizeTotals && totalsRowMatcher ? totalsRowMatcher(row) : false;
+                  emphasizeTotals && totalsRowMatcher
+                    ? totalsRowMatcher(row)
+                    : false;
                 return (
                   <tr
                     key={i}
                     onClick={onRowClick ? () => onRowClick(row, i) : undefined}
-                    onKeyDown={onRowClick ? (e) => handleKeyDown(e, row, i) : undefined}
+                    onKeyDown={
+                      onRowClick ? (e) => handleKeyDown(e, row, i) : undefined
+                    }
                     tabIndex={clickable ? 0 : undefined}
                     className={`group border-b border-border-light last:border-b-0 ${
-                      isTotal ? 'bg-surface font-medium' : 'hover:bg-surface'
-                    } ${clickable ? 'cursor-pointer' : ''} ${
-                      rowClassName ? rowClassName(row, i) : ''
+                      isTotal ? "bg-surface font-medium" : "hover:bg-surface"
+                    } ${clickable ? "cursor-pointer" : ""} ${
+                      rowClassName ? rowClassName(row, i) : ""
                     }`}
                   >
                     {columns.map((c) => (
                       <td
                         key={c.key}
-                        className={`${padY} px-4 align-middle ${c.numeric ? 'num' : ''} ${
-                          c.align === 'right' && !c.numeric
-                            ? 'text-right'
-                            : c.align === 'center'
-                            ? 'text-center'
-                            : ''
-                        } ${isTotal ? 'text-navy' : 'text-navy/90'}`}
+                        className={`${padY} px-4 align-middle ${c.numeric ? "num" : ""} ${
+                          c.align === "right" && !c.numeric
+                            ? "text-right"
+                            : c.align === "center"
+                              ? "text-center"
+                              : ""
+                        } ${isTotal ? "text-navy" : "text-navy/90"}`}
                       >
                         {c.render(row, i)}
                       </td>
@@ -263,14 +294,15 @@ export function DataTable<T>({
       {pageSize && sorted.length > pageSize && (
         <div className="flex items-center justify-between gap-3 border-t border-border-light px-4 py-2.5 text-caption text-slate">
           <span className="tnum">
-            {page * pageSize + 1}–{Math.min((page + 1) * pageSize, sorted.length)} of {sorted.length}
+            {page * pageSize + 1}–
+            {Math.min((page + 1) * pageSize, sorted.length)} of {sorted.length}
           </span>
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="inline-flex items-center gap-1 rounded border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-sm border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
             >
               <ChevronLeft size={13} aria-hidden /> Prev
             </button>
@@ -281,7 +313,7 @@ export function DataTable<T>({
               type="button"
               onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
               disabled={page >= pageCount - 1}
-              className="inline-flex items-center gap-1 rounded border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-sm border border-border-light px-2 py-1 hover:bg-surface disabled:opacity-40"
             >
               Next <ChevronRight size={13} aria-hidden />
             </button>
