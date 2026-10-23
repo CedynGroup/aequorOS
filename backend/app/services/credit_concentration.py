@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, load_only
@@ -25,7 +25,14 @@ from sqlalchemy.orm import Session, load_only
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
 from app.core.key_management.fields import blind_index
-from app.core.key_management.presentation import LOCKED_TEXT, contains_placeholder
+from app.core.key_management.presentation import (
+    LOCKED_TEXT,
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+    contains_placeholder,
+)
+from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.domain.credit.concentration_identity import counterparty_group_key, opaque_group_key
 from app.domain.credit.concentration_monitor import (
@@ -180,27 +187,46 @@ def active_limits(
     rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamConcentrationLimit, as_of
     )
-    return tuple(
-        ConcentrationLimit(
-            dimension=row.dimension,
-            limit_kind=row.limit_kind,
-            value=row.value,
-            bucket_key=(
-                opaque_group_key(
-                    blind_index(
-                        db,
-                        organization_id=ctx.organization_id,
-                        bank_id=bank.id,
-                        domain="counterparty.group",
-                        value=row.bucket_key,
-                    )
-                )
-                if row.dimension == "single_name" and row.bucket_key is not None
-                else row.bucket_key
-            ),
-        )
-        for row in rows
+    limits: list[ConcentrationLimit] = []
+    presentation = cast(object, db.info.get(SESSION_STATE))
+    support = bool(cast(object, db.info.get(SESSION_SUPPORT))) or (
+        isinstance(presentation, PresentationState) and presentation.support
     )
+    for row in rows:
+        key = row.bucket_key
+        locked = False
+        if row.dimension == "single_name" and key is not None and not key.startswith("pos:"):
+            if support:
+                locked = True
+                if isinstance(presentation, PresentationState):
+                    presentation.record(bank.id, "support")
+            else:
+                try:
+                    key = opaque_group_key(
+                        blind_index(
+                            db,
+                            organization_id=ctx.organization_id,
+                            bank_id=bank.id,
+                            domain="counterparty.group",
+                            value=key,
+                        )
+                    )
+                except KeyIntegrityError:
+                    raise
+                except KeyUnavailableError as exc:
+                    locked = True
+                    if isinstance(presentation, PresentationState):
+                        presentation.record(bank.id, "revoked" if exc.revoked else "unavailable")
+        limits.append(
+            ConcentrationLimit(
+                dimension=row.dimension,
+                limit_kind=row.limit_kind,
+                value=row.value,
+                bucket_key=LOCKED_TEXT if locked else key,
+                locked=locked,
+            )
+        )
+    return tuple(limits)
 
 
 def monitor(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> ConcentrationMonitorResult:
@@ -229,6 +255,7 @@ def concentration_read(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
         ConcentrationBucketRead,
         ConcentrationDimensionRead,
         CreditConcentrationRead,
+        LockedConcentrationLimitRead,
     )
 
     result = monitor(db, ctx, bank, as_of)
@@ -277,5 +304,14 @@ def concentration_read(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
             for dimension in result.dimensions
         ],
         breaches=[bucket(b) for b in result.breaches],
-        limit_count=len(active_limits(db, ctx, bank, as_of)),
+        limit_count=result.limit_count,
+        locked_limits=[
+            LockedConcentrationLimitRead(
+                dimension=limit.dimension,
+                limit_kind=limit.limit_kind,
+                bucket_key=LOCKED_TEXT,
+                value=limit.value,
+            )
+            for limit in result.locked_limits
+        ],
     )

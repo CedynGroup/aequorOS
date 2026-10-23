@@ -42,15 +42,16 @@ export default function NameHistoryPage() {
     const rows = query.data?.nameHistory ?? [];
     // Timeline reads newest change first; undated entries sink to the end.
     return [...rows].sort((a, b) =>
-      (b.changedOn ?? '').localeCompare(a.changedOn ?? '')
+      (b.changedOn ?? '').localeCompare(a.changedOn ?? ''),
     );
   }, [query.data]);
 
   const [adding, setAdding] = useState(false);
-  const [editor, setEditor] = useState<{ bankId: string | undefined; row: BankNameHistoryRead } | null>(null);
-  const editing = editor && editor.bankId === bankId
-    ? entries.find((entry) => entry.id === editor.row.id) ?? editor.row
-    : null;
+  const [editor, setEditor] = useState<{
+    bankId: string | undefined;
+    row: BankNameHistoryRead;
+  } | null>(null);
+  const editing = editor && editor.bankId === bankId ? editor.row : null;
 
   return (
     <>
@@ -73,6 +74,18 @@ export default function NameHistoryPage() {
       />
 
       <PageContainer className="py-6 space-y-6">
+        {(adding || editing) && (
+          <NameHistoryForm
+            key={editing?.id ?? 'new'}
+            bankId={bankId!}
+            entry={editing}
+            onClose={() => {
+              setAdding(false);
+              setEditor(null);
+            }}
+          />
+        )}
+
         <QueryBoundary
           contained
           isLoading={query.isLoading}
@@ -80,18 +93,6 @@ export default function NameHistoryPage() {
           onRetry={() => query.refetch()}
           skeleton={<SkeletonCard />}
         >
-          {(adding || editing) && (
-            <NameHistoryForm
-              key={editing?.id ?? 'new'}
-              bankId={bankId!}
-              entry={editing}
-              onClose={() => {
-                setAdding(false);
-                setEditor(null);
-              }}
-            />
-          )}
-
           <SectionCard
             title="Timeline"
             subtitle={

@@ -76,6 +76,7 @@ class ConcentrationLimit:
     #: A named bucket (one employer, one sector) or None = the dimension's
     #: largest bucket.
     bucket_key: str | None = None
+    locked: bool = False
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,8 @@ class ConcentrationMonitorResult:
     dimensions: tuple[DimensionReading, ...]
     #: Every bucket currently above a Board limit, across dimensions.
     breaches: tuple[BucketReading, ...]
+    locked_limits: tuple[ConcentrationLimit, ...]
+    limit_count: int
 
     def dimension(self, name: str) -> DimensionReading | None:
         return next((d for d in self.dimensions if d.dimension == name), None)
@@ -147,7 +150,8 @@ def _limit_for(
         (
             limit.value
             for limit in limits
-            if limit.dimension == dimension
+            if not limit.locked
+            and limit.dimension == dimension
             and limit.limit_kind == kind
             and limit.bucket_key == bucket_key
         ),
@@ -294,4 +298,6 @@ def monitor_concentration(
         capital_base_ghs=capital_base_ghs,
         dimensions=tuple(dimensions),
         breaches=tuple(breaches),
+        locked_limits=tuple(limit for limit in limits if limit.locked),
+        limit_count=len(limits),
     )

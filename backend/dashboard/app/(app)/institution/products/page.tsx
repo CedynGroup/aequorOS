@@ -55,31 +55,21 @@ export default function ProductsLicencesPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Institution Profile"
-        title="Products & licences"
-      />
+      <PageHeader eyebrow="Institution Profile" title="Products & licences" />
 
       <PageContainer className="py-6 space-y-6">
-        <QueryBoundary
-          contained
-          isLoading={query.isLoading}
-          error={query.error}
-          onRetry={() => query.refetch()}
-          skeleton={
-            <div className="space-y-6">
-              <div className="card">
-                <SkeletonTable rows={4} />
-              </div>
-              <div className="card">
-                <SkeletonTable rows={4} />
-              </div>
-            </div>
-          }
-        >
-          <ProductsCard bankId={bankId!} products={products} />
-          <LicencesCard bankId={bankId!} licenses={licenses} />
-        </QueryBoundary>
+        <ProductsCard
+          key={`products-${bankId}`}
+          bankId={bankId!}
+          products={products}
+          query={query}
+        />
+        <LicencesCard
+          key={`licenses-${bankId}`}
+          bankId={bankId!}
+          licenses={licenses}
+          query={query}
+        />
       </PageContainer>
     </>
   );
@@ -92,13 +82,14 @@ export default function ProductsLicencesPage() {
 function ProductsCard({
   bankId,
   products,
+  query,
 }: {
   bankId: string;
   products: BankProductRead[];
+  query: ReturnType<typeof useInstitutionProfile>;
 }) {
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const editing = products.find((product) => product.id === editingId) ?? null;
+  const [editing, setEditing] = useState<BankProductRead | null>(null);
 
   const columns: Column<BankProductRead>[] = [
     {
@@ -140,7 +131,7 @@ function ProductsCard({
           type="button"
           onClick={() => {
             setAdding(false);
-            setEditingId(product.id);
+            setEditing(product);
           }}
           className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
         >
@@ -159,7 +150,7 @@ function ProductsCard({
         <button
           type="button"
           onClick={() => {
-            setEditingId(null);
+            setEditing(null);
             setAdding(true);
           }}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
@@ -178,22 +169,30 @@ function ProductsCard({
             product={editing}
             onClose={() => {
               setAdding(false);
-              setEditingId(null);
+              setEditing(null);
             }}
           />
         </div>
       )}
-      {products.length === 0 ? (
-        <div className="p-5">
-          <EmptyState
-            Icon={Package}
-            title="No products recorded"
-            description="Track product proposals through approval or withdrawal, with the regulator's approval reference."
-          />
-        </div>
-      ) : (
-        <DataTable columns={columns} rows={products} density="compact" />
-      )}
+      <QueryBoundary
+        contained
+        isLoading={query.isLoading}
+        error={query.error}
+        onRetry={() => query.refetch()}
+        skeleton={<SkeletonTable rows={4} />}
+      >
+        {products.length === 0 ? (
+          <div className="p-5">
+            <EmptyState
+              Icon={Package}
+              title="No products recorded"
+              description="Track product proposals through approval or withdrawal, with the regulator's approval reference."
+            />
+          </div>
+        ) : (
+          <DataTable columns={columns} rows={products} density="compact" />
+        )}
+      </QueryBoundary>
     </SectionCard>
   );
 }
@@ -313,13 +312,14 @@ function ProductForm({
 function LicencesCard({
   bankId,
   licenses,
+  query,
 }: {
   bankId: string;
   licenses: BankLicenseRead[];
+  query: ReturnType<typeof useInstitutionProfile>;
 }) {
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const editing = licenses.find((license) => license.id === editingId) ?? null;
+  const [editing, setEditing] = useState<BankLicenseRead | null>(null);
 
   const columns: Column<BankLicenseRead>[] = [
     {
@@ -363,7 +363,7 @@ function LicencesCard({
           type="button"
           onClick={() => {
             setAdding(false);
-            setEditingId(license.id);
+            setEditing(license);
           }}
           className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
         >
@@ -382,7 +382,7 @@ function LicencesCard({
         <button
           type="button"
           onClick={() => {
-            setEditingId(null);
+            setEditing(null);
             setAdding(true);
           }}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
@@ -401,22 +401,30 @@ function LicencesCard({
             license={editing}
             onClose={() => {
               setAdding(false);
-              setEditingId(null);
+              setEditing(null);
             }}
           />
         </div>
       )}
-      {licenses.length === 0 ? (
-        <div className="p-5">
-          <EmptyState
-            Icon={FileBadge}
-            title="No licences recorded"
-            description="Record the institution's operating licences with class and issue date."
-          />
-        </div>
-      ) : (
-        <DataTable columns={columns} rows={licenses} density="compact" />
-      )}
+      <QueryBoundary
+        contained
+        isLoading={query.isLoading}
+        error={query.error}
+        onRetry={() => query.refetch()}
+        skeleton={<SkeletonTable rows={4} />}
+      >
+        {licenses.length === 0 ? (
+          <div className="p-5">
+            <EmptyState
+              Icon={FileBadge}
+              title="No licences recorded"
+              description="Record the institution's operating licences with class and issue date."
+            />
+          </div>
+        ) : (
+          <DataTable columns={columns} rows={licenses} density="compact" />
+        )}
+      </QueryBoundary>
     </SectionCard>
   );
 }

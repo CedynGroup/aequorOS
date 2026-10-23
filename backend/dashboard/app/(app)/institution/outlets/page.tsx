@@ -67,14 +67,14 @@ function parseOutletCsvRow(cells: string[]): CsvRowResult<OutletCsvPayload> {
   const errors: string[] = [];
   if (!OUTLET_TYPE_VALUES.includes(outletType as OutletType)) {
     errors.push(
-      `outlet_type '${outletType}' must be one of: ${OUTLET_TYPE_VALUES.join(', ')}`
+      `outlet_type '${outletType}' must be one of: ${OUTLET_TYPE_VALUES.join(', ')}`,
     );
   }
   if (!name) errors.push('name is required');
   const status = statusRaw || 'active';
   if (!OUTLET_STATUS_VALUES.includes(status as OutletStatus)) {
     errors.push(
-      `status '${statusRaw}' must be blank (= active) or one of: ${OUTLET_STATUS_VALUES.join(', ')}`
+      `status '${statusRaw}' must be blank (= active) or one of: ${OUTLET_STATUS_VALUES.join(', ')}`,
     );
   }
   if (openedOn && !isIsoCsvDate(openedOn)) {
@@ -109,11 +109,12 @@ export default function OutletsPage() {
   const outlets = useMemo(() => query.data?.outlets ?? [], [query.data]);
 
   const [adding, setAdding] = useState(false);
-  const [editor, setEditor] = useState<{ bankId: string | undefined; row: OutletRead } | null>(null);
+  const [editor, setEditor] = useState<{
+    bankId: string | undefined;
+    row: OutletRead;
+  } | null>(null);
 
-  const editing = editor && editor.bankId === bankId
-    ? outlets.find((outlet) => outlet.id === editor.row.id) ?? editor.row
-    : null;
+  const editing = editor && editor.bankId === bankId ? editor.row : null;
 
   const columns: Column<OutletRead>[] = [
     {
@@ -220,6 +221,18 @@ export default function OutletsPage() {
           }
         />
 
+        {(adding || editing) && (
+          <OutletForm
+            key={editing?.id ?? 'new'}
+            bankId={bankId!}
+            outlet={editing}
+            onClose={() => {
+              setAdding(false);
+              setEditor(null);
+            }}
+          />
+        )}
+
         <QueryBoundary
           contained
           isLoading={query.isLoading}
@@ -231,18 +244,6 @@ export default function OutletsPage() {
             </div>
           }
         >
-          {(adding || editing) && (
-            <OutletForm
-              key={editing?.id ?? 'new'}
-              bankId={bankId!}
-              outlet={editing}
-              onClose={() => {
-                setAdding(false);
-                setEditor(null);
-              }}
-            />
-          )}
-
           <SectionCard
             title="Outlet register"
             subtitle={`${outlets.length} ${outlets.length === 1 ? 'outlet' : 'outlets'} on record`}

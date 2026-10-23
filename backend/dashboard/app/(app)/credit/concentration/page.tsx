@@ -175,6 +175,20 @@ export default function CreditConcentrationPage() {
                       />
                     </div>
 
+                    {data.lockedLimits && data.lockedLimits.length > 0 && (
+                      <SectionCard title="Locked limits">
+                        <ul className="space-y-2 text-body text-slate">
+                          {data.lockedLimits.map((limit, index) => (
+                            <li key={index}>
+                              {limit.bucketKey} · {labelize(limit.dimension)} ·{' '}
+                              {labelize(limit.limitKind)} {String(limit.value)}{' '}
+                              — not evaluated
+                            </li>
+                          ))}
+                        </ul>
+                      </SectionCard>
+                    )}
+
                     <SubTabs items={DIMENSIONS} active={dimension} onChange={setDimension} />
 
                     {active && active.bucketCount === 0 && dimension === 'employer' ? (

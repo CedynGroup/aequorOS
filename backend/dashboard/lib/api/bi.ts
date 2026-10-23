@@ -22,7 +22,7 @@
  * opened anyway.
  */
 
-import { observeProtectedData } from "./protectedData";
+import { protectedDataFetch } from "./protectedData";
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -1023,12 +1023,11 @@ async function biNotificationsFetch(
   const headers: Record<string, string> = { Accept: "application/json" };
   if (init?.body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await protectedDataFetch(`${apiBaseUrl}${path}`, {
     method: init?.method ?? "GET",
     headers,
     body: init?.body === undefined ? undefined : JSON.stringify(init.body),
   });
-  await observeProtectedData(response, `${apiBaseUrl}${path}`);
   if (response.status === 204) return null;
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {

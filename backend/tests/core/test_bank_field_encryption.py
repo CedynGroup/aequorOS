@@ -741,7 +741,6 @@ def test_credit_concentration_identity_survives_locked_labels(
     db_session.flush()
     limited = credit_concentration.monitor(db_session, CTX, bank, AS_OF)
     assert len(limited.breaches) == 1 and limited.breaches[0].key == before[0].group_key
-    db_session.delete(limit)
     db_session.commit()
     db_session.expunge_all()
     provider.set_status(KEY_A, status)
@@ -763,7 +762,69 @@ def test_credit_concentration_identity_survives_locked_labels(
     report = credit_concentration.concentration_read(db_session, CTX, bank, AS_OF)
     displayed = next(item for item in report.dimensions if item.dimension == "single_name")
     assert len(displayed.buckets) == 2 and {item.key for item in displayed.buckets} == {LOCKED_TEXT}
+    assert report.limit_count == 1
+    assert len(report.locked_limits) == 1
+    assert report.locked_limits[0].bucket_key == LOCKED_TEXT
+    assert not report.breaches
+    assert all(item.limit_status == "not_set" for item in displayed.buckets)
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    db_session.expunge_all()
+    recovered = credit_concentration.concentration_read(db_session, CTX, bank, AS_OF)
+    assert not recovered.locked_limits
+    assert len(recovered.breaches) == 1
     db_session.info.pop(SESSION_STATE)
+
+
+def test_positional_concentration_limit_matches_without_key(
+    db_session: Session, provider: LocalKeyProvider
+) -> None:
+    connect(db_session, provider)
+    party = counterparty(db_session)
+    common = dict(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        as_of_date=AS_OF,
+        source_system="EXCEL_CSV",
+        ingestion_batch_id=party.ingestion_batch_id,
+        lineage_id=party.lineage_id,
+        validation_status="accepted",
+    )
+    position = CanonicalPosition(
+        **common, source_reference="Synthetic position", position_type="LOAN", currency="GHS"
+    )
+    db_session.add(position)
+    db_session.flush()
+    db_session.add(
+        CanonicalPositionSnapshot(
+            **common,
+            source_reference="Synthetic snapshot",
+            position_id=position.id,
+            balance=Decimal(100),
+        )
+    )
+    db_session.add(
+        ParamConcentrationLimit(
+            organization_id=ORG_1,
+            jurisdiction_code="GH",
+            dimension="single_name",
+            limit_kind="share_of_book_pct",
+            value=Decimal(49),
+            effective_from=AS_OF,
+            approved_by="Synthetic board",
+            approval_timestamp=utc_now(),
+            bucket_key="pos:Synthetic snapshot",
+        )
+    )
+    db_session.commit()
+    db_session.expunge_all()
+    bank = db_session.get(Bank, BANK_A)
+    assert bank is not None
+    for status in (KeyStatus.ACTIVE, KeyStatus.DISABLED, KeyStatus.UNAVAILABLE):
+        provider.set_status(KEY_A, status)
+        result = credit_concentration.monitor(db_session, CTX, bank, AS_OF)
+        assert len(result.breaches) == 1
+        assert result.breaches[0].key == "pos:Synthetic snapshot"
+        assert not result.locked_limits
 
 
 def test_partial_refresh_and_update_preserve_other_encrypted_fields(

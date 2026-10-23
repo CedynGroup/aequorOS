@@ -42,7 +42,7 @@ import {
   TemenosApi,
   WindowAnalyticsApi,
 } from "@aequoros/risk-service-api";
-import { observeProtectedData } from "./protectedData";
+import { protectedDataFetch } from "./protectedData";
 import { getSession } from "next-auth/react";
 import { getAccessToken, setAccessToken } from "./token";
 import {
@@ -73,6 +73,7 @@ export const apiOrigin = baseUrl.replace(/\/api\/v1\/?$/, "");
 // first TokenSync effect still authenticates (no 401 race on initial load).
 export const configuration = new Configuration({
   basePath: apiOrigin,
+  fetchApi: protectedDataFetch,
   accessToken: async () => {
     // Act-as-examiner (additive, cookie-gated): when a staff inspection hand-off
     // is active, the impersonation token is the bearer and the tenant API serves
@@ -97,8 +98,7 @@ export const configuration = new Configuration({
   // returning nothing leaves the response untouched.
   middleware: [
     {
-      post: async ({ response, url }) => {
-        await observeProtectedData(response, url);
+      post: async ({ response }) => {
         if (impersonationMarkerPresent() && response.status === 401) {
           markImpersonationExpired();
         }

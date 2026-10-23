@@ -8,7 +8,11 @@
  * mutation records a required audit reason.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  protectedDataState,
+  subscribeProtectedData,
+} from '@/lib/api/protectedData';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Users, Pencil, X } from 'lucide-react';
 import type {
@@ -85,23 +89,25 @@ function parsePartyCsvRow(cells: string[]): CsvRowResult<PartyCsvPayload> {
   const errors: string[] = [];
   if (!PARTY_TYPE_VALUES.includes(partyType as PartyType)) {
     errors.push(
-      `party_type '${partyType}' must be one of: ${PARTY_TYPE_VALUES.join(', ')}`
+      `party_type '${partyType}' must be one of: ${PARTY_TYPE_VALUES.join(', ')}`,
     );
   }
   if (!fullName) errors.push('full_name is required');
   if (role && !ROLE_CODE_VALUES.includes(role as RelatedPartyRoleCode)) {
     errors.push(
-      `role '${role}' must be blank or one of: ${ROLE_CODE_VALUES.join(', ')}`
+      `role '${role}' must be blank or one of: ${ROLE_CODE_VALUES.join(', ')}`,
     );
   }
   if (appointedOn && !isIsoCsvDate(appointedOn)) {
-    errors.push(`appointed_on '${appointedOn}' must be a valid YYYY-MM-DD date`);
+    errors.push(
+      `appointed_on '${appointedOn}' must be a valid YYYY-MM-DD date`,
+    );
   }
   if (appointedOn && !role) errors.push('appointed_on requires a role');
   const regulatedFlag = regulatedElsewhere.toLowerCase();
   if (regulatedFlag && regulatedFlag !== 'true' && regulatedFlag !== 'false') {
     errors.push(
-      `regulated_elsewhere '${regulatedElsewhere}' must be true or false (blank = false)`
+      `regulated_elsewhere '${regulatedElsewhere}' must be true or false (blank = false)`,
     );
   }
   const isRegulated = regulatedFlag === 'true';
@@ -138,24 +144,28 @@ export default function RelatedPartiesPage() {
 
   const query = useInstitutionProfile(bankId);
   const createParty = useCreateRelatedParty(bankId);
-  const parties = useMemo(
-    () => query.data?.relatedParties ?? [],
-    [query.data]
-  );
+  const parties = useMemo(() => query.data?.relatedParties ?? [], [query.data]);
 
-  const [selection, setSelection] = useState<{ bankId: string | undefined; party: RelatedPartyRead } | null>(null);
+  const [selection, setSelection] = useState<{
+    bankId: string | undefined;
+    party: RelatedPartyRead;
+  } | null>(null);
   const [adding, setAdding] = useState(false);
 
-  const selected = selection && selection.bankId === bankId
-    ? parties.find((party) => party.id === selection.party.id) ?? selection.party
-    : null;
+  const selected =
+    selection && selection.bankId === bankId
+      ? (parties.find((party) => party.id === selection.party.id) ??
+        selection.party)
+      : null;
 
   const columns: Column<RelatedPartyRead>[] = [
     {
       key: 'name',
       header: 'Name',
       render: (party) => (
-        <span className="text-body font-medium text-navy">{party.fullName}</span>
+        <span className="text-body font-medium text-navy">
+          {party.fullName}
+        </span>
       ),
     },
     {
@@ -203,7 +213,7 @@ export default function RelatedPartiesPage() {
       render: (party) => {
         const total = party.shareholdings.reduce(
           (sum, holding) => sum + num(holding.pctShareholding),
-          0
+          0,
         );
         return total > 0 ? fmtPct(total) : '—';
       },
@@ -246,6 +256,14 @@ export default function RelatedPartiesPage() {
           }
         />
 
+        {adding && (
+          <PartyForm
+            bankId={bankId!}
+            party={null}
+            onClose={() => setAdding(false)}
+          />
+        )}
+
         <QueryBoundary
           contained
           isLoading={query.isLoading}
@@ -257,14 +275,6 @@ export default function RelatedPartiesPage() {
             </div>
           }
         >
-          {adding && (
-            <PartyForm
-              bankId={bankId!}
-              party={null}
-              onClose={() => setAdding(false)}
-            />
-          )}
-
           <SectionCard
             title="Register"
             subtitle={`${parties.length} related ${
@@ -287,7 +297,11 @@ export default function RelatedPartiesPage() {
                 density="compact"
                 onRowClick={(party) => {
                   setAdding(false);
-                  setSelection((prev) => prev?.bankId === bankId && prev.party.id === party.id ? null : { bankId, party });
+                  setSelection((prev) =>
+                    prev?.bankId === bankId && prev.party.id === party.id
+                      ? null
+                      : { bankId, party },
+                  );
                 }}
                 rowClassName={(party) =>
                   party.id === selected?.id ? 'bg-action-light/40' : ''
@@ -295,16 +309,16 @@ export default function RelatedPartiesPage() {
               />
             )}
           </SectionCard>
-
-          {selected && (
-            <PartyDetail
-              key={selected.id}
-              bankId={bankId!}
-              party={selected}
-              parties={parties}
-            />
-          )}
         </QueryBoundary>
+        {selected && (
+          <PartyDetail
+            key={selected.id}
+            bankId={bankId!}
+            party={selected}
+            parties={parties}
+            query={query}
+          />
+        )}
       </PageContainer>
     </>
   );
@@ -318,15 +332,18 @@ function PartyDetail({
   bankId,
   party,
   parties,
+  query,
 }: {
   bankId: string;
   party: RelatedPartyRead;
   parties: RelatedPartyRead[];
+  query: ReturnType<typeof useInstitutionProfile>;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [holdingFormFor, setHoldingFormFor] = useState<
-    { holding: ShareholdingRead | null } | null
-  >(null);
+  const [editing, setEditing] = useState<RelatedPartyRead | null>(null);
+  const [holdingFormFor, setHoldingFormFor] = useState<{
+    holding: ShareholdingRead | null;
+    parties: RelatedPartyRead[];
+  } | null>(null);
 
   const uboName = (uboPartyId: string | null) => {
     if (!uboPartyId) return '—';
@@ -338,176 +355,192 @@ function PartyDetail({
     return (
       <PartyForm
         bankId={bankId}
-        party={party}
-        onClose={() => setEditing(false)}
+        party={editing}
+        onClose={() => setEditing(null)}
       />
     );
   }
 
   return (
-    <SectionCard
-      title={
-        <span className="inline-flex items-center gap-2">
-          {party.fullName}
-          <PartyStatusPill status={party.status} />
-        </span>
-      }
-      subtitle={`${PARTY_TYPE_LABELS[party.partyType]}${
-        party.regulatedElsewhere
-          ? ` · regulated elsewhere${
-              party.regulatedJurisdiction ? ` (${party.regulatedJurisdiction})` : ''
-            }`
-          : ''
-      }`}
-      actions={
-        <>
-          <button
-            type="button"
-            onClick={() => setHoldingFormFor({ holding: null })}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
-          >
-            <Plus size={13} aria-hidden />
-            Add shareholding
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
-          >
-            <Pencil size={13} aria-hidden />
-            Edit
-          </button>
-        </>
-      }
-    >
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Roles detail */}
-        <div>
-          <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
-            Roles
-          </p>
-          {party.roles.length === 0 ? (
-            <p className="text-caption text-slate">No roles recorded.</p>
-          ) : (
-            <ul className="space-y-2.5">
-              {party.roles.map((role) => (
-                <li
-                  key={role.id}
-                  className="rounded border border-border-light bg-surface px-3 py-2 space-y-1"
-                >
-                  <p className="text-body font-medium text-navy">
-                    {roleLabel(role.role)}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-caption text-navy/80">
-                    <span>
-                      Appointed{' '}
-                      <span className="font-mono tnum">
-                        {fmtRegisterDate(role.appointedOn)}
-                      </span>
-                    </span>
-                    {role.termOfAppointment && (
-                      <span>Term {role.termOfAppointment}</span>
-                    )}
-                    {role.sittingAllowance != null && (
-                      <span>
-                        Sitting allowance{' '}
-                        <span className="font-mono tnum">
-                          {fmtCurrencyFull(num(role.sittingAllowance))}
-                        </span>
-                      </span>
-                    )}
-                    {role.travelAllowance != null && (
-                      <span>
-                        Travel allowance{' '}
-                        <span className="font-mono tnum">
-                          {fmtCurrencyFull(num(role.travelAllowance))}
-                        </span>
-                      </span>
-                    )}
-                    {role.annualFees != null && (
-                      <span>
-                        Annual fees{' '}
-                        <span className="font-mono tnum">
-                          {fmtCurrencyFull(num(role.annualFees))}
-                        </span>
-                      </span>
-                    )}
-                    {role.icagRegistration && (
-                      <span>ICAG registration {role.icagRegistration}</span>
-                    )}
-                  </div>
-                  {role.otherResponsibilities && (
-                    <p className="text-caption text-slate leading-relaxed">
-                      {role.otherResponsibilities}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Shareholdings */}
-        <div>
-          <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
-            Shareholdings
-          </p>
-          {party.shareholdings.length === 0 ? (
-            <p className="text-caption text-slate">
-              No shareholdings recorded for this party.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {party.shareholdings.map((holding) => (
-                <li
-                  key={holding.id}
-                  className="rounded border border-border-light bg-surface px-3 py-2"
-                >
-                  <div className="flex items-center gap-2 flex-wrap text-caption">
-                    <span className="font-medium text-navy">
-                      {labelize(holding.shareType)}
-                      {holding.shareSubtype ? ` · ${holding.shareSubtype}` : ''}
-                    </span>
-                    <span className="text-slate">
-                      {holding.shareholderRights === 'voting'
-                        ? 'Voting'
-                        : 'Non-voting'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setHoldingFormFor({ holding })}
-                      className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+    <>
+      <QueryBoundary
+        contained
+        isLoading={query.isLoading}
+        error={query.error}
+        onRetry={() => query.refetch()}
+      >
+        <SectionCard
+          title={
+            <span className="inline-flex items-center gap-2">
+              {party.fullName}
+              <PartyStatusPill status={party.status} />
+            </span>
+          }
+          subtitle={`${PARTY_TYPE_LABELS[party.partyType]}${
+            party.regulatedElsewhere
+              ? ` · regulated elsewhere${
+                  party.regulatedJurisdiction
+                    ? ` (${party.regulatedJurisdiction})`
+                    : ''
+                }`
+              : ''
+          }`}
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={() => setHoldingFormFor({ holding: null, parties })}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
+              >
+                <Plus size={13} aria-hidden />
+                Add shareholding
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditing(party)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
+              >
+                <Pencil size={13} aria-hidden />
+                Edit
+              </button>
+            </>
+          }
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Roles detail */}
+            <div>
+              <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
+                Roles
+              </p>
+              {party.roles.length === 0 ? (
+                <p className="text-caption text-slate">No roles recorded.</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {party.roles.map((role) => (
+                    <li
+                      key={role.id}
+                      className="rounded border border-border-light bg-surface px-3 py-2 space-y-1"
                     >
-                      <Pencil size={11} aria-hidden />
-                      Edit
-                    </button>
-                  </div>
-                  <div className="mt-1 flex items-center gap-4 flex-wrap font-mono text-caption text-navy/85 tnum">
-                    <span>{fmtInt(num(holding.numberOfShares))} shares</span>
-                    <span>{fmtPct(num(holding.pctShareholding))}</span>
-                    <span className="font-sans text-slate">
-                      UBO {uboName(holding.uboPartyId)}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+                      <p className="text-body font-medium text-navy">
+                        {roleLabel(role.role)}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-caption text-navy/80">
+                        <span>
+                          Appointed{' '}
+                          <span className="font-mono tnum">
+                            {fmtRegisterDate(role.appointedOn)}
+                          </span>
+                        </span>
+                        {role.termOfAppointment && (
+                          <span>Term {role.termOfAppointment}</span>
+                        )}
+                        {role.sittingAllowance != null && (
+                          <span>
+                            Sitting allowance{' '}
+                            <span className="font-mono tnum">
+                              {fmtCurrencyFull(num(role.sittingAllowance))}
+                            </span>
+                          </span>
+                        )}
+                        {role.travelAllowance != null && (
+                          <span>
+                            Travel allowance{' '}
+                            <span className="font-mono tnum">
+                              {fmtCurrencyFull(num(role.travelAllowance))}
+                            </span>
+                          </span>
+                        )}
+                        {role.annualFees != null && (
+                          <span>
+                            Annual fees{' '}
+                            <span className="font-mono tnum">
+                              {fmtCurrencyFull(num(role.annualFees))}
+                            </span>
+                          </span>
+                        )}
+                        {role.icagRegistration && (
+                          <span>ICAG registration {role.icagRegistration}</span>
+                        )}
+                      </div>
+                      {role.otherResponsibilities && (
+                        <p className="text-caption text-slate leading-relaxed">
+                          {role.otherResponsibilities}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
+            {/* Shareholdings */}
+            <div>
+              <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
+                Shareholdings
+              </p>
+              {party.shareholdings.length === 0 ? (
+                <p className="text-caption text-slate">
+                  No shareholdings recorded for this party.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {party.shareholdings.map((holding) => (
+                    <li
+                      key={holding.id}
+                      className="rounded border border-border-light bg-surface px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2 flex-wrap text-caption">
+                        <span className="font-medium text-navy">
+                          {labelize(holding.shareType)}
+                          {holding.shareSubtype
+                            ? ` · ${holding.shareSubtype}`
+                            : ''}
+                        </span>
+                        <span className="text-slate">
+                          {holding.shareholderRights === 'voting'
+                            ? 'Voting'
+                            : 'Non-voting'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setHoldingFormFor({ holding, parties })
+                          }
+                          className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                        >
+                          <Pencil size={11} aria-hidden />
+                          Edit
+                        </button>
+                      </div>
+                      <div className="mt-1 flex items-center gap-4 flex-wrap font-mono text-caption text-navy/85 tnum">
+                        <span>
+                          {fmtInt(num(holding.numberOfShares))} shares
+                        </span>
+                        <span>{fmtPct(num(holding.pctShareholding))}</span>
+                        <span className="font-sans text-slate">
+                          UBO {uboName(holding.uboPartyId)}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </SectionCard>
+      </QueryBoundary>
       {holdingFormFor && (
-        <div className="mt-5 border-t border-border-light pt-5">
+        <div className="card p-5">
           <ShareholdingForm
             bankId={bankId}
             partyId={party.id}
             holding={holdingFormFor.holding}
-            parties={parties}
+            parties={holdingFormFor.parties}
             onClose={() => setHoldingFormFor(null)}
           />
         </div>
       )}
-    </SectionCard>
+    </>
   );
 }
 
@@ -877,6 +910,12 @@ function ShareholdingForm({
   parties: RelatedPartyRead[];
   onClose: () => void;
 }) {
+  const locked =
+    useSyncExternalStore(
+      subscribeProtectedData,
+      () => protectedDataState(bankId),
+      () => 'available',
+    ) !== 'available';
   const create = useCreateShareholding(bankId);
   const update = useUpdateShareholding(bankId);
   const mutation = holding ? update : create;
@@ -1001,7 +1040,7 @@ function ShareholdingForm({
             <option value="">None</option>
             {uboOptions.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
-                {candidate.fullName}
+                {locked ? '🔒 Protected data' : candidate.fullName}
               </option>
             ))}
           </select>

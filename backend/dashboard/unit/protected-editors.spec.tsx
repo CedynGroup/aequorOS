@@ -1,15 +1,27 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import InstitutionProfilePage from '../app/(app)/institution/page';
 import RelatedPartiesPage from '../app/(app)/institution/parties/page';
+import NameHistoryPage from '../app/(app)/institution/history/page';
+import OutletsPage from '../app/(app)/institution/outlets/page';
+import ProductsLicencesPage from '../app/(app)/institution/products/page';
 import ProtectedDataNotice from '../components/ui/ProtectedDataNotice';
 import { createAuthorityQueryClient } from '../lib/api/QueryAuthorityBoundary';
 import { QueryAuthorityScopeProvider } from '../lib/api/useQueryScope';
-import { useDeactivateBiAlert } from '../lib/api/bi';
+import { useBiAlerts, useDeactivateBiAlert } from '../lib/api/bi';
+import { institutionProfileApi } from '../lib/api/client';
 import { setAccessToken } from '../lib/api/token';
 import {
   bindProtectedDataCache,
@@ -135,6 +147,9 @@ it.each(['party', 'shareholding'] as const)(
     const label = editor === 'party' ? /Full name/ : /Share type/;
     await userEvent.clear(screen.getByLabelText(label));
     await userEvent.type(screen.getByLabelText(label), 'Unsaved draft');
+    if (editor === 'shareholding') {
+      await userEvent.selectOptions(screen.getByLabelText(/Ultimate beneficial owner/), PARTY);
+    }
     holdRead = true;
     state = 'revoked';
     await act(async () => {
@@ -142,12 +157,18 @@ it.each(['party', 'shareholding'] as const)(
     });
     expect(client.getQueryData(profileKey)).toBeUndefined();
     await waitFor(() => expect(finishRead).toBeTypeOf('function'));
+    expect(screen.getByLabelText(label)).toBeVisible();
+    expect(screen.getByLabelText(label)).toHaveValue('Unsaved draft');
+    expect(screen.getByText(protectedDataMessages.revoked)).toBeVisible();
     await act(async () => {
       finishRead?.(profileResponse(state));
     });
     await waitFor(() => expect(screen.getByLabelText(label)).toBeVisible());
     expect(screen.getByLabelText(label)).toHaveValue('Unsaved draft');
     expect(screen.queryByText('Synthetic owner')).toBeNull();
+    if (editor === 'shareholding') {
+      expect(screen.getByLabelText(/Ultimate beneficial owner/)).toHaveValue(PARTY);
+    }
     holdRead = false;
     state = 'available';
     await userEvent.click(
@@ -155,6 +176,9 @@ it.each(['party', 'shareholding'] as const)(
     );
     await waitFor(() => expect(protectedDataState(BANK)).toBe('available'));
     expect(screen.getByLabelText(label)).toHaveValue('Unsaved draft');
+    if (editor === 'shareholding') {
+      expect(screen.getByLabelText(/Ultimate beneficial owner/)).toHaveValue(PARTY);
+    }
   },
 );
 
@@ -252,3 +276,253 @@ it.each(['revoked', 'unavailable'] as const)(
     expect(screen.getByText(protectedDataMessages[reason])).toBeVisible();
   },
 );
+
+function AlertRead() {
+  const query = useBiAlerts(BANK);
+  return <span>{query.data ? 'Alerts loaded' : 'Alerts loading'}</span>;
+}
+
+it.each(['generated', 'notifications'] as const)(
+  'rejects delayed availability from the %s client after a newer bank lock',
+  async (clientKind) => {
+    let state = 'available';
+    let delayNext = false;
+    let finishRead: ((response: Response) => void) | undefined;
+    const responseFor = (notifications: boolean, reason: string) =>
+      notifications
+        ? new Response(JSON.stringify({ alerts: [] }), {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Aequoros-Protected-Data': JSON.stringify({ [BANK]: reason }),
+            },
+          })
+        : profileResponse(reason);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const notifications = String(input).endsWith('/bi/alerts');
+        if (delayNext && notifications === (clientKind === 'notifications')) {
+          delayNext = false;
+          return new Promise<Response>((resolve) => {
+            finishRead = resolve;
+          });
+        }
+        return responseFor(notifications, state);
+      }),
+    );
+    const client = mount(
+      <>
+        <RelatedPartiesPage />
+        <AlertRead />
+      </>,
+    );
+    await screen.findByText('Synthetic owner');
+    await screen.findByText('Alerts loaded');
+    delayNext = true;
+    const pending = client.refetchQueries({
+      predicate: (query) =>
+        clientKind === 'generated'
+          ? query.queryKey.includes('institution-profile')
+          : !query.queryKey.includes('institution-profile'),
+    });
+    await waitFor(() => expect(finishRead).toBeTypeOf('function'));
+    state = 'revoked';
+    await act(async () => {
+      await institutionProfileApi.getInstitutionProfile({ bankId: BANK });
+    });
+    await waitFor(() => expect(protectedDataState(BANK)).toBe('revoked'));
+    await act(async () => {
+      finishRead?.(responseFor(clientKind === 'notifications', 'available'));
+      await pending;
+    });
+    expect(protectedDataState(BANK)).toBe('revoked');
+    expect(screen.getByText(protectedDataMessages.revoked)).toBeVisible();
+    expect(screen.queryByText('Synthetic owner')).toBeNull();
+    state = 'available';
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Retry', exact: true }),
+    );
+    await waitFor(() => expect(protectedDataState(BANK)).toBe('available'));
+    expect(await screen.findByText('Synthetic owner')).toBeVisible();
+  },
+);
+
+it.each([
+  {
+    kind: 'history',
+    Page: NameHistoryPage,
+    name: 'Synthetic prior name',
+    label: /Previous name/,
+  },
+  {
+    kind: 'outlet',
+    Page: OutletsPage,
+    name: 'Synthetic outlet',
+    label: /^Name/,
+  },
+  {
+    kind: 'product',
+    Page: ProductsLicencesPage,
+    name: 'Synthetic product',
+    label: /^Name/,
+  },
+  {
+    kind: 'licence',
+    Page: ProductsLicencesPage,
+    name: 'Synthetic licence',
+    label: /Licence name/,
+  },
+])(
+  'keeps the existing $kind editor visible while read-only rows are purged',
+  async ({ Page, name, label }) => {
+    let locked = false;
+    let finishRead: ((response: Response) => void) | undefined;
+    const common = {
+      id: PARTY,
+      bank_id: BANK,
+      created_at: '2026-06-30T00:00:00Z',
+      updated_at: '2026-06-30T00:00:00Z',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        if (locked)
+          return new Promise<Response>((resolve) => {
+            finishRead = resolve;
+          });
+        return new Response(
+          JSON.stringify({
+            bank_id: BANK,
+            profile: null,
+            related_parties: [],
+            name_history: [
+              {
+                ...common,
+                previous_name: 'Synthetic prior name',
+                changed_on: null,
+                change_reason: null,
+              },
+            ],
+            outlets: [
+              {
+                ...common,
+                name: 'Synthetic outlet',
+                outlet_type: 'branch',
+                status: 'active',
+                address: {},
+                outlet_number: null,
+                opened_on: null,
+                closed_on: null,
+                relocated_from: null,
+              },
+            ],
+            products: [
+              {
+                ...common,
+                name: 'Synthetic product',
+                product_type: 'lending',
+                status: 'approved',
+                approval_reference: null,
+              },
+            ],
+            licenses: [
+              {
+                ...common,
+                license_name: 'Synthetic licence',
+                status: 'active',
+                license_class: null,
+                issued_on: null,
+              },
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } },
+        );
+      }),
+    );
+    const client = mount(<Page />);
+    const item = await screen.findByText(name);
+    const row = item.closest('tr') ?? item.closest('li');
+    expect(row).not.toBeNull();
+    await userEvent.click(
+      within(row as HTMLElement).getByRole('button', {
+        name: 'Edit',
+        exact: true,
+      }),
+    );
+    await userEvent.clear(screen.getByLabelText(label));
+    await userEvent.type(screen.getByLabelText(label), 'Unsaved draft');
+    locked = true;
+    await act(async () => {
+      await observeProtectedData(profileResponse('revoked'));
+    });
+    await waitFor(() => expect(finishRead).toBeTypeOf('function'));
+    expect(client.getQueryData(profileKey)).toBeUndefined();
+    expect(screen.getByLabelText(label)).toBeVisible();
+    expect(screen.getByLabelText(label)).toHaveValue('Unsaved draft');
+    expect(screen.getByText(protectedDataMessages.revoked)).toBeVisible();
+    await act(async () => {
+      finishRead?.(profileResponse('revoked'));
+    });
+    await waitFor(() => expect(client.getQueryData(profileKey)).toBeDefined());
+    expect(screen.getByLabelText(label)).toBeVisible();
+    expect(screen.getByLabelText(label)).toHaveValue('Unsaved draft');
+  },
+);
+
+it('keeps the corporate-profile draft visible during a locked refetch', async () => {
+  let locked = false;
+  let finishRead: ((response: Response) => void) | undefined;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      if (!String(input).includes('/institution-profile')) {
+        return new Response(JSON.stringify({ anchors: [] }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (locked)
+        return new Promise<Response>((resolve) => {
+          finishRead = resolve;
+        });
+      return new Response(
+        JSON.stringify({
+          bank_id: BANK,
+          related_parties: [],
+          name_history: [],
+          outlets: [],
+          products: [],
+          licenses: [],
+          profile: {
+            bank_id: BANK,
+            institution_type: 'bank',
+            legal_entity_structure: 'limited_liability',
+            tin: 'Synthetic tax ID',
+            warnings: [],
+            traded_on_exchange: false,
+            created_at: '2026-06-30T00:00:00Z',
+            updated_at: '2026-06-30T00:00:00Z',
+          },
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+    }),
+  );
+  mount(<InstitutionProfilePage />);
+  await userEvent.click(
+    await screen.findByRole('button', { name: 'Edit profile', exact: true }),
+  );
+  await userEvent.clear(screen.getByLabelText('TIN'));
+  await userEvent.type(screen.getByLabelText('TIN'), 'Unsaved draft');
+  locked = true;
+  await act(async () => {
+    await observeProtectedData(profileResponse('revoked'));
+  });
+  await waitFor(() => expect(finishRead).toBeTypeOf('function'));
+  expect(screen.getByLabelText('TIN')).toBeVisible();
+  expect(screen.getByLabelText('TIN')).toHaveValue('Unsaved draft');
+  expect(screen.getByText(protectedDataMessages.revoked)).toBeVisible();
+  await act(async () => {
+    finishRead?.(profileResponse('revoked'));
+  });
+  expect(screen.getByLabelText('TIN')).toHaveValue('Unsaved draft');
+});
