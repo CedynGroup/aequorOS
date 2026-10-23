@@ -22,20 +22,29 @@ the checkout so developer `.env` files are not loaded. Use the existing
 software signing-key directory in the same throwaway directory. No worker or
 external key service is needed.
 
-From `backend/`, initialize and connect the synthetic key:
+After bootstrapping `demo.db`, define this helper from `backend/` with
+`DEMO_DIR` set to the absolute path of the throwaway directory. It runs the
+control there, with the backend on `PYTHONPATH` and without loading the
+checkout's `.env`:
 
 ```sh
-.venv/bin/python scripts/demo_bank_key.py init --directory "$DEMO_DIR" \
-  --organization OR-DEM00001 --bank BK-SAMP0001
-.venv/bin/python scripts/demo_bank_key.py connect --directory "$DEMO_DIR"
+export DEMO_BACKEND="$PWD"
+demo_key() (
+  cd "$DEMO_DIR" || exit 1
+  APP_ENV=test PYTHONPATH="$DEMO_BACKEND" \
+    "$DEMO_BACKEND/.venv/bin/python" "$DEMO_BACKEND/scripts/demo_bank_key.py" \
+    "$@" --directory "$DEMO_DIR"
+)
+demo_key init --organization OR-DEM00001 --bank BK-SAMP0001
+demo_key connect
 ```
 
-Run the demo API with `APP_ENV=test`,
+Run the demo API with `APP_ENV=test`, `TLS_ALLOW_PLAINTEXT=1` for loopback HTTP,
 `DATABASE_URL=sqlite+pysqlite:///$DEMO_DIR/demo.db`,
 `DEMO_BANK_KEY_FILE=$DEMO_DIR/demo-key.json`, and `RUN_INPROCESS_WORKER=0`.
 Use loopback ports and point the dashboard's `NEXT_PUBLIC_RISK_API_BASE_URL` to
-that API. Run from the throwaway directory with the backend on `PYTHONPATH`, so
-the demo cannot pick up a developer's `.env` file.
+that API's `/api/v1` base. Run from the throwaway directory with the backend on
+`PYTHONPATH`, so the demo cannot pick up a developer's `.env` file.
 
 Sign in using the E2E fixture's local test account. In Institution → Related
 parties, add **Synthetic Demo Director** after connecting the key. Open the page
@@ -45,20 +54,20 @@ Keep a numeric dashboard or certified analytics pack open in a second tab.
 
 ## Walkthrough — under one minute
 
-| Time | Screen / action | What changes | What to say |
-| --- | --- | --- | --- |
-| 0–10 s | Related parties; show Synthetic Demo Director | The protected name is readable | “The bank owns access to this identity.” |
-| 10–20 s | Run `revoke` below; refresh Related parties | The name becomes a lock placeholder; the bank-revocation message appears | “The bank has turned off aequorOS access. We cannot reveal the protected field.” |
-| 20–30 s | Numeric dashboard / certified pack; refresh | Ratios and numeric analytics still load | “The numeric view remains available.” |
-| 30–40 s | Return to Related parties; run `restore` | Within the five-second recovery poll, the original name returns | “The bank restored access. Nothing was re-imported or re-encrypted.” |
-| 40–55 s | Optionally run `outage`, refresh, then `restore` | The distinct key-service outage message appears, then recovers | “An unreachable service is different from the bank revoking access.” |
+| Time    | Screen / action                                  | What changes                                                             | What to say                                                                      |
+| ------- | ------------------------------------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| 0–10 s  | Related parties; show Synthetic Demo Director    | The protected name is readable                                           | “The bank owns access to this identity.”                                         |
+| 10–20 s | Run `revoke` below; refresh Related parties      | The name becomes a lock placeholder; the bank-revocation message appears | “The bank has turned off aequorOS access. We cannot reveal the protected field.” |
+| 20–30 s | Numeric dashboard / certified pack; refresh      | Ratios and numeric analytics still load                                  | “The numeric view remains available.”                                            |
+| 30–40 s | Return to Related parties; run `restore`         | Within the five-second recovery poll, the original name returns          | “The bank restored access. Nothing was re-imported or re-encrypted.”             |
+| 40–55 s | Optionally run `outage`, refresh, then `restore` | The distinct key-service outage message appears, then recovers           | “An unreachable service is different from the bank revoking access.”             |
 
 ```sh
-.venv/bin/python scripts/demo_bank_key.py revoke  --directory "$DEMO_DIR"
-.venv/bin/python scripts/demo_bank_key.py restore --directory "$DEMO_DIR"
+demo_key revoke
+demo_key restore
 # Optional outage variant:
-.venv/bin/python scripts/demo_bank_key.py outage  --directory "$DEMO_DIR"
-.venv/bin/python scripts/demo_bank_key.py restore --directory "$DEMO_DIR"
+demo_key outage
+demo_key restore
 ```
 
 The CLI rereads and atomically updates only the private state file. Each provider
@@ -73,9 +82,11 @@ change its name, revoke and press Save. The clear revocation message appears and
 the typed draft stays in the form. Restore and press Save again. Staff inspection
 shows placeholders even when the synthetic key is active.
 
-Encrypted saved dashboard definitions and filing snapshots are themselves
-protected payloads: show their locked panels separately. Use numeric dashboards,
-certified packs, filing lists and status metadata to demonstrate availability.
+For saved dashboard layouts and filter values, follow the
+[BI locked-presentation contract](bank_field_encryption.md#locked-presentation-reads).
+Use numeric dashboards and certified packs to demonstrate analytics availability;
+use filing lists and status metadata while an encrypted filing snapshot shows its
+locked panel.
 
 ## Verify and collect proof
 
