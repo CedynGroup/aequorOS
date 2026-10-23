@@ -242,8 +242,7 @@ key-health monitoring, alerting and support workflows remain
 [issue 354](https://github.com/CedynGroup/aequorOS/issues/354); this change
 supplies the provider `describe` contract, onboarding probe results and checked
 timestamps. No standalone health-probe endpoint is exposed. These follow-ups are
-required before claiming sensitive database backup protection or regulatory
-approval of the complete service.
+required before claiming regulatory approval of the complete service.
 
 `LocalKeyProvider` supports injected hermetic tests and the provider conformance
 suite. Local evaluation without an AWS KMS account uses the existing platform
