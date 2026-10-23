@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -219,7 +220,8 @@ def test_explicit_provenance_fields_record_the_persisted_history_value(
             )
             assert history is not None
             assert history.new_value == persisted
-            assert history.new_value["provenance"] == "corrected"
+            assert history.new_value is not None
+            assert cast(dict[str, object], history.new_value)["provenance"] == "corrected"
 
 
 def test_obligation_identity_uses_type_and_updates_after_correction(

@@ -325,10 +325,14 @@ on one canonical store — the live tier for intraday awareness, the official ti
   `fail_with_retry` backs off through `run_after` up to `max_attempts`.
 - **Worker** (`app/worker.py`). A poll loop (process `python -m app.worker`, or in-process behind
   `RUN_INPROCESS_WORKER`) claims → dispatches by `job_type` → completes/retries. It reads the
-  `jobs` table **across tenants**, so on an RLS-forced Postgres it must connect with a BYPASSRLS
-  role: set `WORKER_DATABASE_URL` (the app role is deliberately tenant-scoped and cannot see the
-  queue). Per-job work then runs on a session scoped to that job's `organization_id`. When
-  `WORKER_DATABASE_URL` is unset it falls back to `DATABASE_URL` (correct for SQLite tests).
+  queue through narrowly granted platform functions using `aqs_worker` on
+  `WORKER_DATABASE_URL`. Per-job work sets organization and bank context under forced RLS.
+  [The deployment runbook](docs/ops/database-roles.md#worker-compatibility-migration)
+  owns the separate deployment switch, which requires this worker compatibility PR.
+  Authentication uses the API `DATABASE_URL` sessionmaker; operator sessions use
+  `OPERATOR_DATABASE_URL` with only `DATABASE_URL` as fallback. Both are independent
+  of `WORKER_DATABASE_URL`. The API credential switch still waits for the separate
+  captain-reviewed lookup-function PR.
 - **Live tier** — `pipeline.run_refresh` (`job_type=pipeline_refresh`): re-derives facts, then for
   each cheap module computes a baseline metric + limit evaluation (`compute_live`, reusing the
   same domain engines as the detail views), **upserts** one `live_metrics` row, and reconciles open `live_findings`

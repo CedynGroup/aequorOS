@@ -16,7 +16,7 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
 
 ## The ten steps
 
-1. **Deploy the release; `risk-migrate` applies the chain through `202610120099`**
+1. **Deploy the release; `risk-migrate` applies the chain through `202610120100`**
    (verify the single head with `alembic heads` before the release). The BI
    foundation starts at `202609220066`; `202609290080` drops
    `bi_reconciliation_results` under the founder's 2026-09-29 decision.
@@ -27,15 +27,14 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
    when named directly. Before it runs, confirm
    nobody pre-created a `bi_*` table on the primary by hand — an existing table
    makes `risk-migrate` exit 1 and takes prod down (the surgical-DDL incident).
-   The original `bi_ensure_*` / `bi_drop_*` `SECURITY DEFINER` grants give
-   `EXECUTE` to the migrating role and to every `BYPASSRLS` login role that
-   exists at `0066` time ONLY (migration `202609220066`, the
-   `rolbypassrls AND rolcanlogin` loop); a worker role created later needs
-   `GRANT EXECUTE` by hand or every mart build fails with
-   `permission denied for function bi_ensure_month_partition`.
-   Migration `202610120099` adds the API capability documented in the
-   [database role handoff](../../docs/ops/database-roles.md#target-matrix);
-   it does not supply a later worker's maintenance grants.
+   Migration `202610120099` adds the guarded API query-log partition capability
+   documented in the [database role handoff](../../docs/ops/database-roles.md#target-matrix).
+   The chain continues through measured reverse-lineage indexes `202610140100`
+   before worker access `202610120100`.
+   Partition-function permissions and the worker's restricted wrappers follow
+   [the worker compatibility contract](../../docs/ops/database-roles.md#worker-compatibility-migration).
+   Apply `202610120100` before activating the least-privilege BI worker; do not
+   grant the unrestricted partition helpers to `aqs_worker` by hand.
 2. **Deploy `risk-worker-bi`** (`WORKER_JOB_TYPES=lane:bi`, `docker-compose.prod.yml`),
    flags still off. The `bi` lane is seven job types (`job_queue.JOB_LANES`):
    `bi_mart_refresh`, `bi_mart_backfill`, `bi_retention`, `bi_export`,
