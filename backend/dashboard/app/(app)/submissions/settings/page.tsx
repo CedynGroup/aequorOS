@@ -151,7 +151,7 @@ export default function SettingsPage() {
             <select
               value={channel}
               onChange={(e) => setChannel(e.target.value as ChannelCode)}
-              className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
+              className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
             >
               {CHANNELS.map((code) => (
                 <option key={code} value={code}>
@@ -278,7 +278,7 @@ function ChannelForm({
   };
 
   const inputClass =
-    "w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light";
+    "w-full rounded-sm border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light";
   const labelClass = "block text-caption font-medium text-navy mb-1.5";
 
   return (

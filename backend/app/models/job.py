@@ -20,9 +20,9 @@ class Job(UuidV4PrimaryKeyMixin, Base):
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
-    job_type: Mapped[str] = mapped_column(String(80), nullable=False)
-    status: Mapped[str] = mapped_column(String(40), nullable=False)
-    entity_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    job_type: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    entity_type: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Polymorphic reference: UUID for most entities, platform ID for banks/orgs.
     entity_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     # Live-engine dispatch fields: the target bank, an arbitrary JSON payload,

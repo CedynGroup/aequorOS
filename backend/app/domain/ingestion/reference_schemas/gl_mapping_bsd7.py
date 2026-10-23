@@ -25,6 +25,9 @@ latest as-of on/before the reporting date.
 
 from __future__ import annotations
 
+import dataclasses
+from collections.abc import Mapping
+
 from . import ReferenceSchema, register
 
 #: Official BSD7A/BSD7B item tags the P&L line map binds (item numbers of the
@@ -68,34 +71,32 @@ BSD7_ITEMS: tuple[str, ...] = (
 SIGNS: tuple[str, ...] = ("1", "-1")
 BALANCE_BASES: tuple[str, ...] = ("ytd", "period")
 
-SCHEMA = register(
-    ReferenceSchema(
-        kind="gl_mapping_bsd7",
-        description=(
-            "Bank chart-of-accounts → BSD7A/BSD7B P&L item mapping: one row per GL account "
-            "code or code prefix naming the official item it feeds, its sign and balance basis"
-        ),
-        grain=(
-            "one row per gl_account_code (exact) or gl_prefix (starts-with); a register, "
-            "re-pushed whole when the mapping changes (latest as_of wins)"
-        ),
-        required=("bsd7_item",),
-        optional=(
-            "gl_account_code",
-            "gl_prefix",
-            "sign",
-            "balance_basis",
-            "gl_account_name",
-            "notes",
-        ),
-        enums={"bsd7_item": BSD7_ITEMS, "sign": SIGNS, "balance_basis": BALANCE_BASES},
-    )
+_DECLARED = ReferenceSchema(
+    kind="gl_mapping_bsd7",
+    description=(
+        "Bank chart-of-accounts → BSD7A/BSD7B P&L item mapping: one row per GL account "
+        "code or code prefix naming the official item it feeds, its sign and balance basis"
+    ),
+    grain=(
+        "one row per gl_account_code (exact) or gl_prefix (starts-with); a register, "
+        "re-pushed whole when the mapping changes (latest as_of wins)"
+    ),
+    required=("bsd7_item",),
+    optional=(
+        "gl_account_code",
+        "gl_prefix",
+        "sign",
+        "balance_basis",
+        "gl_account_name",
+        "notes",
+    ),
+    enums={"bsd7_item": BSD7_ITEMS, "sign": SIGNS, "balance_basis": BALANCE_BASES},
 )
 
 
-def validate_mapping_row(row: dict) -> list[str]:
+def validate_mapping_row(row: Mapping[str, object]) -> list[str]:
     """Schema problems plus the one cross-field rule: exactly one selector."""
-    problems = SCHEMA.validate_row(row)
+    problems = _DECLARED.validate_row(row)
     code = str(row.get("gl_account_code") or "").strip()
     prefix = str(row.get("gl_prefix") or "").strip()
     if not code and not prefix:
@@ -103,3 +104,6 @@ def validate_mapping_row(row: dict) -> list[str]:
     elif code and prefix:
         problems.append("give either 'gl_account_code' or 'gl_prefix', not both")
     return problems
+
+
+SCHEMA = register(dataclasses.replace(_DECLARED, row_validator=validate_mapping_row))

@@ -105,8 +105,20 @@ POSITIONS = [
 ]
 
 YIELD_CURVE = [
-    {"curve_name": "GHS_SOVEREIGN", "tenor_months": 3, "rate": 0.241, "quote_date": AS_OF},
-    {"curve_name": "GHS_SOVEREIGN", "tenor_months": 12, "rate": 0.262, "quote_date": AS_OF},
+    {
+        "curve_name": "GHS_SOVEREIGN",
+        "currency": "GHS",
+        "tenor_months": 3,
+        "rate": 0.241,
+        "quote_date": AS_OF,
+    },
+    {
+        "curve_name": "GHS_SOVEREIGN",
+        "currency": "GHS",
+        "tenor_months": 12,
+        "rate": 0.262,
+        "quote_date": AS_OF,
+    },
 ]
 
 

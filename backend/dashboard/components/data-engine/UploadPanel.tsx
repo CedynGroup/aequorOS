@@ -124,7 +124,7 @@ export default function UploadPanel() {
             multiple
             accept=".xlsx,.csv,.tsv"
             onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
-            className="block text-body text-navy file:mr-3 file:px-3 file:py-1.5 file:rounded file:border file:border-border file:bg-surface file:text-caption file:font-medium file:text-navy hover:file:bg-border-light"
+            className="block text-body text-navy file:mr-3 file:px-3 file:py-1.5 file:rounded-sm file:border file:border-border file:bg-surface file:text-caption file:font-medium file:text-navy hover:file:bg-border-light"
           />
         </div>
         <div>
@@ -139,14 +139,14 @@ export default function UploadPanel() {
             type="date"
             value={asOfDate}
             onChange={(event) => setAsOfDate(event.target.value)}
-            className="px-3 py-1.5 rounded border border-border bg-surface-raised text-body text-navy font-mono"
+            className="px-3 py-1.5 rounded-sm border border-border bg-surface-raised text-body text-navy font-mono"
           />
         </div>
         <button
           type="button"
           disabled={!files.length || !asOfDate || !bank || running}
           onClick={() => void runQueue()}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {running ? (
             <Loader2 size={15} className="animate-spin" aria-hidden />
@@ -160,7 +160,7 @@ export default function UploadPanel() {
       </div>
 
       {outcomes.length > 0 && (
-        <div className="rounded border border-border divide-y divide-border-light">
+        <div className="rounded-sm border border-border divide-y divide-border-light">
           {outcomes.map((outcome, index) => (
             <div key={`${outcome.filename}-${index}`} className="p-4 space-y-3">
               <div className="flex flex-wrap items-center gap-3">
@@ -214,7 +214,7 @@ export default function UploadPanel() {
                 batchBlockerDetails(outcome.batch).map((detail, i) => (
                   <div
                     key={i}
-                    className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3"
+                    className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3"
                   >
                     <p className="text-body text-critical">{detail}</p>
                   </div>
@@ -225,7 +225,7 @@ export default function UploadPanel() {
                 </p>
               )}
               {outcome.error && (
-                <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">
+                <div className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3">
                   <p className="text-body text-critical">{outcome.error}</p>
                 </div>
               )}

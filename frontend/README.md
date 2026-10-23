@@ -10,16 +10,16 @@ product interface is shown on-site at `/product#product-ui`.
 
 - Next.js 16 (App Router) with React 19
 - TypeScript
-- Tailwind CSS v3
+- Tailwind CSS v4
 - Self-hosted Fraunces + Inter variable fonts via Fontsource
 - Deploy: Coolify (apex domain, behind Cloudflare)
 
 ## Design system
 
-The marketing design system's source of truth is the token set in
-`tailwind.config.ts` (palette, type ramp) together with the shared components
-in `components/` (`Kicker`, `PageHeader`, `Button`, `ProductFrame`,
-`ScreenTabs`, `ModuleShowcase`). A rendered style-tile reference is generated
+The marketing design system's source of truth is the token set in the
+`@theme` block of `app/globals.css` (palette, type ramp) together with the
+shared components in `components/` (`Kicker`, `PageHeader`, `Button`,
+`ProductFrame`, `ScreenTabs`, `ModuleShowcase`). A rendered style-tile reference is generated
 locally under `docs/collateral/` (that path is gitignored — client
 collateral), so regenerate it there rather than expecting it in the repo.
 
@@ -65,13 +65,13 @@ lib/
   product-screens.ts # screenshot catalog + captions
   team.ts
 public/images/
-  founder.jpg, dela.jpg
+  founder.jpg, dela.jpg, lawrence.jpg
   product/*.png      # live product UI captures
 ```
 
 ## Assets
 
-- `public/images/founder.jpg` / `dela.jpg` — team headshots
+- `public/images/founder.jpg` / `dela.jpg` / `lawrence.jpg` — team headshots (800×800 head-and-shoulders crops)
 - `public/images/product/*.png` — product UI captures (refresh from `docs/collateral/screenshots/`)
 - Favicon: `app/icon.svg` + `app/icon.png` + `app/apple-icon.png`
 - Open Graph: `app/opengraph-image.tsx` (generated)

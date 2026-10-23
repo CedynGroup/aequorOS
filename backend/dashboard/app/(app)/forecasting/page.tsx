@@ -703,7 +703,7 @@ function WaterfallSection({ run }: { run: ForecastRunRead }) {
       subtitle={`Opening → growth / run-off → closing total assets for Y${year}`}
       height={300}
       actions={
-        <div className="inline-flex gap-1 bg-surface p-1 rounded">
+        <div className="inline-flex gap-1 bg-surface p-1 rounded-sm">
           {years.map((y) => (
             <button
               key={y}
@@ -711,7 +711,7 @@ function WaterfallSection({ run }: { run: ForecastRunRead }) {
               onClick={() => setYear(y)}
               className={`px-2.5 py-1 rounded text-caption font-medium ${
                 y === year
-                  ? "bg-surface-raised text-navy shadow-sm"
+                  ? "bg-surface-raised text-navy shadow-xs"
                   : "text-slate hover:text-navy"
               }`}
             >

@@ -1692,6 +1692,7 @@ def compute_live(
         metrics=metrics,
         status=status,
         input_hash=_snapshot_hash(snapshot),
+        engine_version=ENGINE_VERSION,
         findings=findings,
         source_as_of_date=current.source_as_of_date,
     )
@@ -1746,6 +1747,7 @@ def _sdi_compute_live(  # noqa: PLR0913 - the live context, spelled out
                 as_of,
             )
         ),
+        engine_version=ENGINE_VERSION,
         findings=findings,
         source_as_of_date=as_of,
     )

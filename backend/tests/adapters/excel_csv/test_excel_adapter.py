@@ -518,9 +518,11 @@ class TestReferenceDatasets:
         assert (first.row_index, second.row_index) == (1, 2)
         assert first.payload == {
             "curve_name": "GHS_SOVEREIGN",
+            "currency": "GHS",
             "tenor_months": "3",
             "rate": "0.158",
             "quote_date": "2026-06-01",  # dates land ISO-formatted
+            "notes": "source note",
         }
 
     def test_reference_field_selection_restricts_payload_columns(self, tmp_path: Path) -> None:
@@ -538,12 +540,15 @@ class TestReferenceDatasets:
                 "yield_curves": ReferenceMapping(
                     source_table="Yield_Curves",
                     dataset_kind="yield_curve",
-                    fields=["curve_name", "rate"],
+                    fields=["curve_name", "currency", "tenor_months", "rate", "quote_date"],
                 )
             }
         )
         records = adapter.translate(adapter.extract(config, fixtures.AS_OF, []), mapping)
         assert records.reference_rows[0].payload == {
             "curve_name": "GHS_SOVEREIGN",
+            "currency": "GHS",
+            "tenor_months": "3",
             "rate": "0.158",
+            "quote_date": "2026-06-01",
         }

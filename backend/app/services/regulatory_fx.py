@@ -30,6 +30,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -41,15 +42,17 @@ from app.domain.authority.outcomes import (
     OutcomeDetail,
 )
 from app.domain.capital.engine import (
-    CAPITAL_REGISTER_REFUSED_CATEGORY,
     CapitalFact,
     CapitalRegisterRefused,
     tier1_capital,
 )
 from app.domain.fx.engine import (
+    FX_SAMPLE_POLICY,
+    FX_SAMPLE_TARGET,
     FxComputationError,
     FxHedge,
     FxPosition,
+    FxReturn,
     FxScenarioNop,
     HedgeResult,
     MissingParameterError,
@@ -61,6 +64,7 @@ from app.domain.fx.engine import (
     compute_stressed_var,
     compute_var,
     run_fx_scenarios,
+    stressed_sample_range,
     stressed_var_line_item,
 )
 from app.domain.positions.fx import (
@@ -120,9 +124,9 @@ from app.services.live_types import (
 from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
-ENGINE_VERSION = "regulatory-fx-v1.1.0"
-INPUT_SCHEMA_VERSION = "bank-facts-v2"
-OUTPUT_SCHEMA_VERSION = "fx-metrics-v1"
+ENGINE_VERSION = "regulatory-fx-v1.2.0"
+INPUT_SCHEMA_VERSION = "bank-facts-v3"
+OUTPUT_SCHEMA_VERSION = "fx-metrics-v2"
 MODULE_FX = "fx"
 #: The filed metric a refusal is raised against — the net open position is the
 #: line the regulator reads, so every fail-closed detail names it rather than
@@ -208,6 +212,7 @@ class _FxAnalysis:
     nop: NopResult
     var: VarResult
     stressed_var: Decimal
+    stressed_intervals: tuple[tuple[date, date], ...]
     hedges: HedgeResult
     scenarios: tuple[FxScenarioNop, ...]
     correlation_uplift: Decimal
@@ -493,6 +498,9 @@ def _run_analysis(  # noqa: PLR0913
         nop=nop,
         var=var,
         stressed_var=stressed,
+        stressed_intervals=tuple(
+            var.intervals[i] for i in stressed_sample_range(var.observations, active.crisis_window)
+        ),
         hedges=hedge_result,
         scenarios=scenarios,
         correlation_uplift=active.correlation_uplift,
@@ -676,6 +684,13 @@ def _metrics_payload(analysis: _FxAnalysis) -> dict[str, Any]:
         "standalone_var_total_ghs": str(var.standalone_total),
         "var_confidence_pct": str(var.confidence_pct),
         "var_observations": var.observations,
+        "var_sample_policy": FX_SAMPLE_POLICY,
+        "var_sample_target": FX_SAMPLE_TARGET,
+        "var_sample_limited": var.observations < FX_SAMPLE_TARGET,
+        "var_intervals": [[start.isoformat(), end.isoformat()] for start, end in var.intervals],
+        "stressed_var_intervals": [
+            [start.isoformat(), end.isoformat()] for start, end in analysis.stressed_intervals
+        ],
         "correlation_uplift": str(analysis.correlation_uplift),
         "hedge_effective_count": analysis.hedges.effective_count,
         "hedge_ineffective_count": analysis.hedges.ineffective_count,
@@ -753,7 +768,11 @@ def _validation_rows(
     stressed_message = (
         f"The crisis-scenario stressed VaR of {_money_text(analysis.stressed_var)} "
         f"{currency} (vs a base VaR of {_money_text(analysis.var.portfolio_var)} "
-        f"{currency}) is disclosed."
+        f"{currency}) uses {len(analysis.stressed_intervals)} shared intervals from "
+        f"{analysis.stressed_intervals[0][0]} to {analysis.stressed_intervals[-1][1]}. "
+        "The configured stress indices apply after calendar alignment; "
+        "an out-of-range window uses the available tail. "
+        "This is an indicative management stress estimate."
     )
     rows: list[tuple[str, bool, str, str]] = [
         ("nop_within_aggregate_limit", nop.within_aggregate_limit, "error", nop_message),
@@ -761,6 +780,24 @@ def _validation_rows(
         ("hedges_effective", hedges_effective, "warning", hedge_message),
         ("stressed_var_disclosed", True, "info", stressed_message),
     ]
+    sample = analysis.var
+    rows.append(
+        (
+            "var_sample_evidence",
+            sample.observations >= FX_SAMPLE_TARGET,
+            "warning" if sample.observations < FX_SAMPLE_TARGET else "info",
+            f"FX VaR uses {sample.observations}/{FX_SAMPLE_TARGET} exact shared return intervals "
+            f"from {sample.intervals[0][0]} to {sample.intervals[-1][1]} "
+            f"under {FX_SAMPLE_POLICY}. "
+            + (
+                "Insufficient sample: indicative management estimate only; "
+                "not adequate pilot risk evidence. "
+                if sample.observations < FX_SAMPLE_TARGET
+                else ""
+            )
+            + "No calendar filling or unmatched intervals; standalone VaR uses the same sample.",
+        )
+    )
     if analysis.rate_not_required:
         # Counted, not dropped (audit 2026-08-22 D-21). These currencies hold no
         # exposure on either leg, so excluding them moves no figure and nothing
@@ -864,6 +901,11 @@ def _scenarios_from_analysis(analysis: _FxAnalysis) -> list[FxScenarioNopRead]:
 
 
 def _metrics_from_run(run: RegulatoryRun) -> FxMetricsRead:
+    if run.metrics.get("var_sample_policy") != FX_SAMPLE_POLICY:
+        raise ModuleDataUnavailable(
+            "fx_calendar_evidence_missing",
+            "Stored FX VaR lacks dated common-calendar evidence; re-derive facts and rerun FX.",
+        )
     metrics = run.metrics
     nop_pct = _decimal(metrics, "nop_pct_tier1")
     aggregate_limit = _decimal(metrics, "nop_aggregate_limit_pct")
@@ -975,6 +1017,12 @@ def _build_trend(
                 batch.require_run_coverage(period, run)
             except NotComputable:
                 continue
+            observations = cast(object, run.metrics.get("var_observations"))
+            sufficient_var = (
+                run.metrics.get("var_sample_policy") == FX_SAMPLE_POLICY
+                and isinstance(observations, int)
+                and observations >= FX_SAMPLE_TARGET
+            )
             metrics = run.metrics
             points.append(
                 FxTrendPointRead(
@@ -983,27 +1031,51 @@ def _build_trend(
                     period_end=period.period_end,
                     nop_ghs=_decimal(metrics, "nop_ghs"),
                     nop_pct_tier1=_decimal(metrics, "nop_pct_tier1"),
-                    var_99_1d_ghs=_decimal(metrics, "var_99_1d_ghs"),
+                    var_99_1d_ghs=_decimal(metrics, "var_99_1d_ghs") if sufficient_var else None,
                     stored=True,
                 )
             )
             continue
         try:
-            analysis = _compute_inline_from_batch(db, ctx, bank, period, batch)
+            facts = batch.facts.get(period.id, [])
+            active = _fx_params_from_batch(batch, period.period_end)
+            tier1 = _tier1_from_facts(facts)
+            if active is None:
+                continue
+            require_currency_coverage(
+                batch.currencies[period.period_end],
+                {
+                    str(cast(object, fact.attributes.get("currency")) or fact.category)
+                    .strip()
+                    .upper()
+                    for fact in facts
+                    if fact.fact_group == "fx_position"
+                },
+            )
+            positions = _positions_from_facts(facts)
+            nop = compute_nop(
+                positions,
+                tier1,
+                active.single_limit_pct,
+                active.aggregate_limit_pct,
+            )
         except FxRunError as exc:
-            if exc.code == CAPITAL_REGISTER_REFUSED_CATEGORY:
-                raise ModuleDataUnavailable(exc.code, exc.message) from exc
+            raise ModuleDataUnavailable(exc.code, exc.message) from exc
+        except (FxComputationError, NotComputable):
             continue
-        except (MissingParameterError, FxComputationError, NotComputable):
-            continue
+        try:
+            var = compute_var(positions, _returns_from_facts(facts), active.var_confidence_pct)
+            var_value = var.portfolio_var if var.observations >= FX_SAMPLE_TARGET else None
+        except (MissingParameterError, FxComputationError):
+            var_value = None
         points.append(
             FxTrendPointRead(
                 reporting_period_id=period.id,
                 label=period.label,
                 period_end=period.period_end,
-                nop_ghs=analysis.nop.overall_nop,
-                nop_pct_tier1=analysis.nop.nop_pct_tier1,
-                var_99_1d_ghs=analysis.var.portfolio_var,
+                nop_ghs=nop.overall_nop,
+                nop_pct_tier1=nop.nop_pct_tier1,
+                var_99_1d_ghs=var_value,
                 stored=False,
             )
         )
@@ -1260,20 +1332,25 @@ def compute_live(
         current.source_as_of_date,
     )
     metrics = _metrics_from_analysis(analysis)
+    validations = _validation_rows(analysis, base_currency(bank))
     live_metrics = {
         "nop_ghs": str(metrics.nop_ghs),
         "nop_pct_tier1": str(metrics.nop_pct_tier1),
         "single_ccy_max_pct": str(metrics.single_ccy_max_pct),
         "single_ccy_max_currency": metrics.single_ccy_max_currency,
         "var_99_1d_ghs": str(metrics.var_99_1d_ghs),
+        "var_sample_evidence": next(
+            message for rule, _, _, message in validations if rule == "var_sample_evidence"
+        ),
         "tier1_ghs": str(metrics.tier1_ghs),
     }
     status = worst_status(metrics.nop_status, metrics.single_ccy_status)
-    findings = findings_from_validations(_validation_rows(analysis, base_currency(bank)), status)
+    findings = findings_from_validations(validations, status)
     return LiveModuleResult(
         metrics=live_metrics,
         status=status,
         input_hash=_snapshot_hash(snapshot),
+        engine_version=ENGINE_VERSION,
         findings=findings,
         source_as_of_date=current.source_as_of_date,
     )
@@ -1353,13 +1430,20 @@ def _positions_from_facts(facts: Sequence[FinancialFactRow]) -> list[FxPosition]
     return list(_read_positions(facts).positions)
 
 
-def _returns_from_facts(facts: Sequence[FinancialFactRow]) -> dict[str, list[float]]:
-    histories: dict[str, list[float]] = {}
+def _returns_from_facts(facts: Sequence[FinancialFactRow]) -> dict[str, list[FxReturn]]:
+    histories: dict[str, list[FxReturn]] = {}
     for fact in facts:
         if fact.fact_group != "fx_return_history":
             continue
         attributes = fact.attributes
-        histories[attributes["currency"]] = [float(value) for value in attributes["returns"]]
+        try:
+            histories[str(attributes["currency"])] = TypeAdapter(list[FxReturn]).validate_python(
+                attributes.get("intervals")
+            )
+        except ValidationError as exc:
+            raise FxComputationError(
+                "Dated FX return intervals are required; re-derive historical FX facts."
+            ) from exc
     return histories
 
 
@@ -1516,6 +1600,7 @@ def _build_snapshot(
             key=lambda entry: json.dumps(entry, sort_keys=True),
         ),
         "parameters": _snapshot_parameters(active),
+        "var_sample_policy": {"version": FX_SAMPLE_POLICY, "target": FX_SAMPLE_TARGET},
     }
 
 

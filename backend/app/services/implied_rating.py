@@ -1448,6 +1448,7 @@ def compute_live(
         },
         status=live_status,
         input_hash=_digest(snapshot),
+        engine_version=ENGINE_VERSION,
         findings=tuple(findings),
         source_as_of_date=date.fromisoformat(str(snapshot["period_end"])),
     )

@@ -43,7 +43,13 @@ import {
 } from "@/lib/api/icaapRiskCapital";
 import ParameterProvenance from "./ParameterProvenance";
 import P2Unavailable, { p2UnavailableNotice } from "./availability";
-import { ICON_SM, REASON_MAX, ROWS_LONG, ROWS_MEDIUM, TITLE_MAX } from "./display";
+import {
+  ICON_SM,
+  REASON_MAX,
+  ROWS_LONG,
+  ROWS_MEDIUM,
+  TITLE_MAX,
+} from "./display";
 import {
   REVIEWER_NOT_INDEPENDENT,
   reviewOpinionLabel,
@@ -111,7 +117,7 @@ export default function AuditReview({
                   return (
                     <li
                       key={review.reviewId}
-                      className="rounded border border-border-light p-3"
+                      className="rounded-sm border border-border-light p-3"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -120,7 +126,9 @@ export default function AuditReview({
                           </p>
                           <p className="text-caption text-slate">
                             Recorded by {review.recordedBy}
-                            {review.performedOn ? ` · ${review.performedOn}` : ""}
+                            {review.performedOn
+                              ? ` · ${review.performedOn}`
+                              : ""}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -146,7 +154,9 @@ export default function AuditReview({
 
                       {review.scope && (
                         <p className="mt-2 text-body text-navy/80">
-                          <span className="text-caption text-slate">Scope: </span>
+                          <span className="text-caption text-slate">
+                            Scope:{" "}
+                          </span>
                           {review.scope}
                         </p>
                       )}
@@ -163,7 +173,9 @@ export default function AuditReview({
                         </ul>
                       )}
                       <p className="mt-1 text-body text-navy/80">
-                        <span className="text-caption text-slate">Opinion: </span>
+                        <span className="text-caption text-slate">
+                          Opinion:{" "}
+                        </span>
                         {reviewOpinionLabel(review.overallOpinion)}
                       </p>
                       {review.status === "finalised" && (
@@ -342,17 +354,23 @@ function RecordReviewDialog({
             onChange={(event) => setConclusion(event.target.value)}
             className="mt-1 w-full rounded-md border border-border px-2 py-2 text-body"
           >
-            {["satisfactory", "satisfactory_with_findings", "needs_improvement", "unsatisfactory"].map(
-              (opinion) => (
-                <option key={opinion} value={opinion}>
-                  {reviewOpinionLabel(opinion)}
-                </option>
-              ),
-            )}
+            {[
+              "satisfactory",
+              "satisfactory_with_findings",
+              "needs_improvement",
+              "unsatisfactory",
+            ].map((opinion) => (
+              <option key={opinion} value={opinion}>
+                {reviewOpinionLabel(opinion)}
+              </option>
+            ))}
           </select>
         </FieldLabel>
 
-        <FieldLabel label="How often this review is performed" hint="Recorded with the review.">
+        <FieldLabel
+          label="How often this review is performed"
+          hint="Recorded with the review."
+        >
           <input
             value={reason}
             maxLength={REASON_MAX}

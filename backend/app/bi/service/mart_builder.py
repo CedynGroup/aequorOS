@@ -1185,7 +1185,7 @@ def _gl_segment_allocations(  # noqa: PLR0913 - the tenant keys, the window and 
 
     A row whose own fields the register's schema rejects is skipped and NOT
     guessed at: the schema is enforced at ingestion
-    (``contracts.ENFORCED_REFERENCE_KINDS``), so a malformed row here means a
+    (``contracts.ReferenceRowData``), so a malformed row here means a
     payload stored before that enforcement, and inventing a branch or an amount
     for it would put a figure in a board pack that no bank sent.
     """
@@ -1412,7 +1412,7 @@ def _build_dim_branch(  # noqa: PLR0913 - one build carries its whole identity
     for payload in reference_rows(db, organization_id, bank_id, BUSINESS_UNITS_KIND, as_of):
         # A row the register's own schema rejects is skipped and NOT guessed at,
         # exactly as ``_gl_segment_allocations`` does: the schema is enforced at
-        # ingestion (``contracts.ENFORCED_REFERENCE_KINDS``), so a malformed row
+        # ingestion (``contracts.ReferenceRowData``), so a malformed row
         # here is a payload stored before that enforcement — and a unit id or
         # name wider than the dimension's column (audit A360 H3) would otherwise
         # fail the whole build on Postgres, or be truncated into a different
