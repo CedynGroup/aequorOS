@@ -72,7 +72,7 @@ export function DisabledWithReason({
               id={tooltipId}
               role="tooltip"
               style={tooltipStyle}
-              className={`pointer-events-none fixed z-[100] w-max max-w-80 rounded border border-white/15 bg-nav px-3 py-2 text-left text-caption font-normal normal-case leading-relaxed tracking-normal text-white shadow-pop ${tooltipClassName}`}
+              className={`pointer-events-none fixed z-100 w-max max-w-80 rounded-sm border border-white/15 bg-nav px-3 py-2 text-left text-caption font-normal normal-case leading-relaxed tracking-normal text-white shadow-pop ${tooltipClassName}`}
             >
               {reason}
             </span>,

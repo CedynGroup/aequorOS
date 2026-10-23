@@ -48,8 +48,9 @@ native disabled controls expose their explanation through a
 keyboard-focusable wrapper.
 
 Reports → Saved Analyses requests FTP summaries only with aggregated view.
-Cross-module board-pack and limit-monitor queries use the same FTP route access
-decision, so they do not issue FTP requests for an unauthorized user.
+Limit-monitor queries use the same FTP route access decision, so they do not
+issue FTP requests for an unauthorized user. Board Pack reads the live-summary
+projection, whose server filters FTP by aggregated-view authority.
 
 ## Deny-impact inventory
 

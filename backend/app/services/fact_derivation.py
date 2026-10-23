@@ -168,8 +168,11 @@ market_risk / fx_position
     unconvertible-hedge refusal remains a separate capital concern.
 
 fx_return_history
-    ``fx_rates_historical`` per currency, chronological: simple daily returns
-    ``r_t = S_t / S_(t-1) - 1`` (rounded to 6 dp), most recent 250 kept.
+    ``fx_rates_historical`` per currency, chronological: simple returns between
+    consecutive observations,
+    ``r_t = S_t / S_(t-1) - 1`` as Decimal strings with start/end dates.
+    Retain intervals until the engine intersects currencies, then cap at 250.
+    The legacy rounded ``returns`` field remains a 250-value compatibility projection.
 
 fx_hedge
     FX_HEDGE positions → one fact per hedge (category = hedge id, amount =
@@ -326,7 +329,6 @@ _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 # Bills vs bonds fallback split: remaining maturity at or under 397 days is a bill.
 _BILL_MAX_REMAINING_DAYS = 397
 _LCR_WINDOW_DAYS = 30
-_FX_RETURN_WINDOW = 250
 # A canonical FX spot history replaces the legacy reference-row history for a
 # currency only when it is deep enough to feed a meaningful VaR return series.
 _MARKET_FX_HISTORY_MIN_OBSERVATIONS = 30
@@ -1189,7 +1191,7 @@ def _load_market_data(
         if spot is not None:
             market_spots[currency] = spot.rate
         history = market_data_sources.preferred_fx_history(
-            db, ctx.organization_id, bank.id, currency, base_ccy, as_of
+            db, ctx.organization_id, bank.id, currency, base_ccy, as_of, limit=0
         )
         if len(history) >= _MARKET_FX_HISTORY_MIN_OBSERVATIONS:
             market_fx_history[currency] = history
@@ -3269,9 +3271,13 @@ def _derive_fx_returns(
     for currency in sorted(series):
         points = sorted(series[currency])
         returns: list[float] = []
-        for (_, previous), (_, current) in zip(points, points[1:], strict=False):
+        intervals: list[dict[str, str]] = []
+        for (start, previous), (end, current) in zip(points, points[1:], strict=False):
             returns.append(round(float(current / previous - _ONE), 6))
-        returns = returns[-_FX_RETURN_WINDOW:]
+            intervals.append(
+                {"start_date": start, "end_date": end, "value": str(current / previous - _ONE)}
+            )
+        # Cap only after the engine intersects every measured currency's intervals.
         if not returns:
             continue
         source_dataset = (
@@ -3285,8 +3291,12 @@ def _derive_fx_returns(
                 category=currency,
                 amount=Decimal(len(returns)),
                 derived_from="daily simple returns S_t/S_(t-1) − 1 from "
-                f"{source_dataset} (most recent 250)",
-                attributes={"currency": currency, "returns": returns},
+                f"{source_dataset} (dated intervals)",
+                attributes={
+                    "currency": currency,
+                    "returns": returns[-250:],
+                    "intervals": intervals,
+                },
             )
         )
     if specs:

@@ -8,6 +8,7 @@
  */
 
 import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
+import ValidationList from "@/components/ui/ValidationList";
 import PageContainer from "@/components/ui/PageContainer";
 import type { ReactNode } from "react";
 import type {
@@ -73,6 +74,13 @@ export default function FxModuleFrame({
       >
         {data && (
           <PageContainer className="py-6 space-y-6">
+            <ValidationList
+              validations={data.validations.filter(
+                (item) =>
+                  item.ruleCode === "var_sample_evidence" ||
+                  item.ruleCode === "stressed_var_disclosed",
+              )}
+            />
             {children({
               data,
               metrics: data.metrics,
