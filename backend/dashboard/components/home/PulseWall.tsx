@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Module pulse wall — the Command Center centerpiece.
@@ -11,41 +11,41 @@
  * navigates.
  */
 
-import Link from 'next/link';
-import type { LiveModule } from '@aequoros/risk-service-api';
-import StatusPill from '@/components/ui/StatusPill';
-import { SemanticDelta } from '@/components/ui/DeltaBadge';
-import Sparkline from '@/components/ui/Sparkline';
-import { SkeletonLine } from '@/components/ui/Skeleton';
-import { isApiError } from '@/lib/api/client';
-import { fmtRelative, statusTone } from '@/lib/api/values';
+import Link from "next/link";
+import type { LiveModule } from "@aequoros/risk-service-api";
+import StatusPill from "@/components/ui/StatusPill";
+import { SemanticDelta } from "@/components/ui/DeltaBadge";
+import Sparkline from "@/components/ui/Sparkline";
+import { SkeletonLine } from "@/components/ui/Skeleton";
+import { isApiError } from "@/lib/api/client";
+import { fmtRelative, statusTone } from "@/lib/api/values";
 import {
   LIVE_MODULE_HREFS,
   LIVE_MODULE_LABELS,
   liveMetricChangeText,
-} from '@/components/live/moduleDisplay';
-import { useModuleScope } from '@/components/shell/BankContext';
-import { isHrefVisible } from '@/lib/modules';
-import type { ModuleOrder } from './RoleLens';
+} from "@/components/live/moduleDisplay";
+import { useModuleScope } from "@/components/shell/BankContext";
+import { isHrefVisible } from "@/lib/modules";
+import type { ModuleOrder } from "./RoleLens";
 import {
   DEFAULT_MODULE_ORDER,
   STATUS_RANK,
   usePulseCards,
   type PulseCardModel,
   type Traffic,
-} from './pulse';
+} from "./pulse";
 
 const EDGE_STYLE: Record<Traffic, string> = {
-  green: 'inset 3px 0 0 rgb(var(--ok))',
-  amber: 'inset 3px 0 0 rgb(var(--warn))',
-  red: 'inset 3px 0 0 rgb(var(--crit))',
+  green: "inset 3px 0 0 rgb(var(--ok))",
+  amber: "inset 3px 0 0 rgb(var(--warn))",
+  red: "inset 3px 0 0 rgb(var(--crit))",
 };
 
-const SPARK_COLOR: Record<Traffic | 'na', string> = {
-  green: 'rgb(var(--ok))',
-  amber: 'rgb(var(--warn))',
-  red: 'rgb(var(--crit))',
-  na: 'rgb(var(--line-strong))',
+const SPARK_COLOR: Record<Traffic | "na", string> = {
+  green: "rgb(var(--ok))",
+  amber: "rgb(var(--warn))",
+  red: "rgb(var(--crit))",
+  na: "rgb(var(--line-strong))",
 };
 
 export default function PulseWall({
@@ -64,7 +64,7 @@ export default function PulseWall({
   // Scope the pulse wall to the tenant's module set (docs/sdi.md §3.2): an SDI
   // drops the FX / FTP engines it does not run, so no irrelevant tile appears.
   const order = resolveOrder(moduleOrder, cards).filter((module) =>
-    isHrefVisible(LIVE_MODULE_HREFS[module], scope)
+    isHrefVisible(LIVE_MODULE_HREFS[module], scope),
   );
 
   return (
@@ -72,7 +72,8 @@ export default function PulseWall({
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-h3 text-navy">Module pulse</h2>
         <p className="text-caption text-slate">
-          {order.length} regulatory {order.length === 1 ? 'engine' : 'engines'} · live positions
+          {order.length} regulatory {order.length === 1 ? "engine" : "engines"}{" "}
+          · live positions
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -86,12 +87,12 @@ export default function PulseWall({
 
 function resolveOrder(
   moduleOrder: ModuleOrder,
-  cards: Record<LiveModule, PulseCardModel>
+  cards: Record<LiveModule, PulseCardModel>,
 ): LiveModule[] {
-  if (moduleOrder !== 'severity') return moduleOrder;
+  if (moduleOrder !== "severity") return moduleOrder;
   // Risk lens: worst status first, stable on the default order.
   return [...DEFAULT_MODULE_ORDER].sort(
-    (a, b) => STATUS_RANK[cards[a].status] - STATUS_RANK[cards[b].status]
+    (a, b) => STATUS_RANK[cards[a].status] - STATUS_RANK[cards[b].status],
   );
 }
 
@@ -111,17 +112,17 @@ function PulseCard({ card }: { card: PulseCardModel }) {
 
   const pill =
     card.pill ??
-    (card.status !== 'na'
+    (card.status !== "na"
       ? { tone: statusTone(card.status), label: pillLabel(card.status) }
       : undefined);
 
   const edge =
-    card.status !== 'na' ? { boxShadow: EDGE_STYLE[card.status] } : undefined;
+    card.status !== "na" ? { boxShadow: EDGE_STYLE[card.status] } : undefined;
 
   return (
     <Link
       href={href}
-      className="card block px-4 py-3.5 min-w-0 transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+      className="card block px-4 py-3.5 min-w-0 transition-colors hover:bg-surface focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
       style={edge}
       aria-label={`${label} — open module`}
     >
@@ -138,17 +139,17 @@ function PulseCard({ card }: { card: PulseCardModel }) {
         <p className="mt-2 text-caption text-slate leading-relaxed">
           {isApiError(card.error)
             ? card.error.message
-            : 'Metrics unavailable for this period.'}
+            : "Metrics unavailable for this period."}
         </p>
       ) : (
         <>
           <p className="mt-2 text-micro font-medium text-slate uppercase tracking-wider truncate">
-            {card.metricLabel ?? ' '}
+            {card.metricLabel ?? " "}
           </p>
           <div className="mt-0.5 flex items-end justify-between gap-3">
             <div className="flex items-baseline gap-1 min-w-0">
               <span className="font-mono text-kpi text-navy tnum truncate">
-                {card.value ?? '—'}
+                {card.value ?? "—"}
               </span>
               {card.unit && (
                 <span className="text-body text-slate shrink-0">
@@ -183,18 +184,22 @@ function PulseCard({ card }: { card: PulseCardModel }) {
                   {liveMetricChangeText(card.delta.change)}
                 </SemanticDelta>
                 <span className="text-caption text-slate-light truncate">
-                  {card.deltaBasis === 'close' ? 'vs prior close' : 'vs prior period'}
+                  {card.deltaBasis === "close"
+                    ? "vs prior close"
+                    : "vs prior period"}
                 </span>
               </span>
             ) : (
               <span className="text-caption text-slate-light">
-                {card.deltaBasis === 'close' ? 'vs prior close —' : 'vs prior period —'}
+                {card.deltaBasis === "close"
+                  ? "vs prior close —"
+                  : "vs prior period —"}
               </span>
             )}
             <span className="text-caption text-slate truncate">
               {card.computedAt
                 ? `computed ${fmtRelative(card.computedAt)}`
-                : (card.basisNote ?? '')}
+                : (card.basisNote ?? "")}
             </span>
           </div>
         </>
@@ -204,7 +209,7 @@ function PulseCard({ card }: { card: PulseCardModel }) {
 }
 
 function pillLabel(status: Traffic): string {
-  if (status === 'green') return 'Compliant';
-  if (status === 'amber') return 'Approaching';
-  return 'Breach';
+  if (status === "green") return "Compliant";
+  if (status === "amber") return "Approaching";
+  return "Breach";
 }

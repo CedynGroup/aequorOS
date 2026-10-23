@@ -1009,12 +1009,7 @@
  },
  "app.services.analysis_workbench": {
   "reportAny": 3,
-  "reportMissingParameterType": 1,
-  "reportPrivateUsage": 1,
-  "reportUnknownArgumentType": 5,
-  "reportUnknownMemberType": 8,
-  "reportUnknownParameterType": 1,
-  "reportUnknownVariableType": 1
+  "reportPrivateUsage": 1
  },
  "app.services.assessments": {
   "reportMissingParameterType": 1,

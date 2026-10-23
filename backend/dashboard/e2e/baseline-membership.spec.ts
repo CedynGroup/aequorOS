@@ -106,7 +106,7 @@ test.describe("fresh active member baseline", () => {
     await expect(
       page.getByRole("tooltip").filter({
         hasText:
-          "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
+          "Requires Liquidity Monitoring · Confidential · View. Ask your organization owner or admin to grant it.",
       }),
     ).toBeVisible();
     if (evidenceDir) {

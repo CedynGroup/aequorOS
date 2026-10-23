@@ -126,7 +126,7 @@ export default function LimitBar({
 
       {/* Zoned track */}
       <div
-        className="relative h-3 rounded-sm overflow-hidden"
+        className="relative h-3 rounded-xs overflow-hidden"
         style={{ background: "rgb(var(--surface-hover))" }}
         role="img"
         aria-label={`${format(value)}${unit} of ${format(limit)}${unit} ${limitLabel.toLowerCase()}`}
@@ -180,7 +180,7 @@ export default function LimitBar({
 
         {/* Measured value — bullet bar, thinner than the track */}
         <div
-          className="absolute left-0 top-1/2 -translate-y-1/2 h-1.5 rounded-r-sm transition-[width] duration-300"
+          className="absolute left-0 top-1/2 -translate-y-1/2 h-1.5 rounded-r-xs transition-[width] duration-300"
           style={{ width: `${pctValue}%`, background: barColor[status] }}
           aria-hidden
         />

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Building blocks for the print-optimized board pack: an A4 "page" section
@@ -7,15 +7,16 @@
  * provenance.
  */
 
-import type { ReactNode } from 'react';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import RunBadge, { type RunBadgeRun } from '@/components/ui/RunBadge';
-import { fmtTimestamp } from '@/lib/api/values';
+import type { ReactNode } from "react";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import { boardTimestamp } from "./liveBoardPack";
+import type { LiveModuleView } from "@aequoros/risk-service-api";
+import { fmtDateUTC } from "@/lib/api/values";
 
 /** One printable A4 section — print.css inserts a page break after each. */
 export function BoardPage({
   children,
-  className = '',
+  className = "",
 }: {
   children: ReactNode;
   className?: string;
@@ -46,11 +47,16 @@ export function MetricTable({ rows }: { rows: MetricRow[] }) {
       </thead>
       <tbody>
         {rows.map((row) => (
-          <tr key={row.label} className="border-b border-border-light last:border-b-0">
+          <tr
+            key={row.label}
+            className="border-b border-border-light last:border-b-0"
+          >
             <td className="py-2.5 pr-4 text-navy/85">
               {row.label}
               {row.hint && (
-                <span className="block text-caption text-slate">{row.hint}</span>
+                <span className="block text-caption text-slate">
+                  {row.hint}
+                </span>
               )}
             </td>
             <td className="py-2.5 pr-4 text-right font-mono text-navy num whitespace-nowrap">
@@ -72,8 +78,7 @@ export function MetricTable({ rows }: { rows: MetricRow[] }) {
 
 /**
  * One module brief: header (name, status, validation counts), metric table,
- * and a provenance footer (official-run badge when one exists, otherwise the
- * live engine's computed-at timestamp).
+ * and the producing live generation’s provenance footer.
  */
 export function ModuleBrief({
   name,
@@ -82,8 +87,7 @@ export function ModuleBrief({
   statusLabel,
   validations,
   rows,
-  run,
-  computedAt,
+  live,
   children,
 }: {
   name: string;
@@ -94,14 +98,16 @@ export function ModuleBrief({
   /** Validation totals when the dashboard payload carries them. */
   validations?: { total: number; failed: number };
   rows: MetricRow[];
-  /** Latest successful official run for the module, when one exists. */
-  run?: RunBadgeRun;
-  /** Live-engine computed-at fallback when no official run exists yet. */
-  computedAt?: Date;
+  /** The same live generation that supplies every displayed figure. */
+  live: LiveModuleView;
   children?: ReactNode;
 }) {
   return (
-    <div className="card overflow-hidden bp-avoid-break">
+    <div
+      role="region"
+      aria-label={`${name} brief`}
+      className="card overflow-hidden bp-avoid-break"
+    >
       <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border-light">
         <div className="min-w-0">
           <h3 className="text-h3 text-navy inline-flex items-center gap-2">
@@ -115,7 +121,7 @@ export function ModuleBrief({
           {validations && (
             <p className="mt-0.5 text-caption text-slate">
               {validations.total} validation
-              {validations.total === 1 ? '' : 's'} ·{' '}
+              {validations.total === 1 ? "" : "s"} ·{" "}
               {validations.failed === 0 ? (
                 <span className="text-success">all passed</span>
               ) : (
@@ -137,14 +143,21 @@ export function ModuleBrief({
       {children}
 
       <div className="flex items-center justify-between gap-3 flex-wrap px-5 py-2.5 border-t border-border-light bg-surface/60">
-        <span className="text-caption text-slate">
-          {run
-            ? 'Official run provenance'
-            : computedAt
-            ? `Live figures · computed ${fmtTimestamp(computedAt)}`
-            : 'No official run minted for this period yet'}
-        </span>
-        {run && <RunBadge run={run} />}
+        <div className="text-caption text-slate min-w-0 space-y-1">
+          <p>
+            Live-generation evidence · Baseline · Generation{" "}
+            {live.calculationGeneration}
+          </p>
+          <p>
+            Source as of {fmtDateUTC(live.sourceAsOfDate)} · Computed{" "}
+            {boardTimestamp(live.computedAt)}
+          </p>
+          <p>Engine {live.engineVersion}</p>
+          <p className="font-mono break-all">
+            Input hash: {live.computedFromInputHash}
+          </p>
+          <p>No official run attested by this pack.</p>
+        </div>
       </div>
     </div>
   );

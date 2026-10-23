@@ -36,19 +36,21 @@ remains outside this cutover unless a mutation surface is introduced.
 
 ## Dashboard controls
 
-The `/ftp` dashboards require aggregated view; `/ftp/scenarios` requires
-confidential view. Both the dashboard's run-all action and the enterprise stress
-run control mounted at `/ftp/scenarios` consume the exact confidential run
-capability from effective authority. Without it, they remain visible and disabled
-with “Requires Funds Transfer Pricing · Confidential · Run. Ask your organization
-owner or admin to grant it.” The shared permission-only
+The `/ftp` dashboards require aggregated view; the dashboard's run-all action
+consumes the exact confidential run capability from effective authority.
+Without it, the action remains visible and disabled with “Requires Funds Transfer
+Pricing · Confidential · Run. Ask your organization owner or admin to grant it.”
+Scenario workspace access and FTP preview/save controls are documented in
+[Treasury scenario workspaces](../dashboard/README.md#treasury-scenario-workspaces).
+The shared permission-only
 disabled-control policy is defined in [the RBAC guide](../../docs/rbac.md);
 native disabled controls expose their explanation through a
 keyboard-focusable wrapper.
 
 Reports → Saved Analyses requests FTP summaries only with aggregated view.
-Cross-module board-pack and limit-monitor queries use the same FTP route access
-decision, so they do not issue FTP requests for an unauthorized user.
+Limit-monitor queries use the same FTP route access decision, so they do not
+issue FTP requests for an unauthorized user. Board Pack reads the live-summary
+projection, whose server filters FTP by aggregated-view authority.
 
 ## Deny-impact inventory
 

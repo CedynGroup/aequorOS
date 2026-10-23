@@ -230,7 +230,7 @@ function SigningPolicyPanelInner() {
   };
 
   const inputClass =
-    "w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light";
+    "w-full rounded-sm border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light";
   const labelClass = "block text-caption font-medium text-navy mb-1.5";
 
   return (
@@ -407,7 +407,7 @@ function SigningPolicyPanelInner() {
                     { role: "approver", minCount: "1", officerTitles: "" },
                   ])
                 }
-                className="inline-flex items-center px-2.5 py-1 text-micro font-medium text-navy border border-border rounded hover:bg-surface"
+                className="inline-flex items-center px-2.5 py-1 text-micro font-medium text-navy border border-border rounded-sm hover:bg-surface"
               >
                 Add slot
               </button>
@@ -416,7 +416,7 @@ function SigningPolicyPanelInner() {
               {form.slots.map((slot, index) => (
                 <li
                   key={`${slot.role}-${index}`}
-                  className="grid grid-cols-1 sm:grid-cols-[9rem_5rem_1fr_auto] gap-2 items-end rounded border border-border-light bg-surface px-3 py-2.5"
+                  className="grid grid-cols-1 sm:grid-cols-[9rem_5rem_1fr_auto] gap-2 items-end rounded-sm border border-border-light bg-surface px-3 py-2.5"
                 >
                   <label className="block">
                     <span className="block text-micro font-medium uppercase tracking-wider text-slate mb-1">
@@ -430,7 +430,7 @@ function SigningPolicyPanelInner() {
                           role: event.target.value as SigningRole,
                         })
                       }
-                      className="w-full rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
+                      className="w-full rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
                     >
                       {(slot.role === "board"
                         ? [...ROLE_OPTIONS, "board" as SigningRole]
@@ -454,7 +454,7 @@ function SigningPolicyPanelInner() {
                       onChange={(event) =>
                         setSlot(index, { minCount: event.target.value })
                       }
-                      className="w-full rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy tnum"
+                      className="w-full rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy tnum"
                     />
                   </label>
                   <label className="block">
@@ -469,7 +469,7 @@ function SigningPolicyPanelInner() {
                       onChange={(event) =>
                         setSlot(index, { officerTitles: event.target.value })
                       }
-                      className="w-full rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
+                      className="w-full rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
                     />
                   </label>
                   <button
@@ -480,7 +480,7 @@ function SigningPolicyPanelInner() {
                         form.slots.filter((_, i) => i !== index),
                       )
                     }
-                    className="inline-flex items-center px-2.5 py-1.5 text-micro font-medium text-critical border border-critical/30 rounded hover:bg-critical-light/40"
+                    className="inline-flex items-center px-2.5 py-1.5 text-micro font-medium text-critical border border-critical/30 rounded-sm hover:bg-critical-light/40"
                   >
                     Remove
                   </button>
@@ -706,7 +706,7 @@ function SuspensionNotices({
         <p
           role="status"
           data-testid="signing-suspended-deployment-wide"
-          className="rounded border border-warning/30 bg-warning-light/40 px-3.5 py-2.5 text-caption text-navy/85 leading-relaxed"
+          className="rounded-sm border border-warning/30 bg-warning-light/40 px-3.5 py-2.5 text-caption text-navy/85 leading-relaxed"
         >
           <strong className="font-medium text-navy">
             No return currently requires a signature.
@@ -721,7 +721,7 @@ function SuspensionNotices({
         <p
           role="status"
           data-testid="icaap-signing-suspended"
-          className="rounded border border-border bg-surface px-3.5 py-2.5 text-caption text-navy/85 leading-relaxed"
+          className="rounded-sm border border-border bg-surface px-3.5 py-2.5 text-caption text-navy/85 leading-relaxed"
         >
           <strong className="font-medium text-navy">
             The ICAAP assessment is not signed in this installation.
@@ -758,7 +758,7 @@ function BoardSignatureControl({
   return (
     <div
       data-testid="board-signature-control"
-      className="rounded border border-border-light bg-surface px-3.5 py-3"
+      className="rounded-sm border border-border-light bg-surface px-3.5 py-3"
     >
       <p className="text-caption font-medium text-navy">Board signature</p>
       <div className="mt-1.5">

@@ -41,7 +41,7 @@ export default function BlockerList({
   const rows = items ?? [];
   if (rows.length === 0) {
     return (
-      <div className="flex items-start gap-2 rounded border border-success/25 bg-success-light/50 px-3 py-2.5">
+      <div className="flex items-start gap-2 rounded-sm border border-success/25 bg-success-light/50 px-3 py-2.5">
         <CheckCircle2
           size={ICON_SM}
           className="mt-0.5 shrink-0 text-success"
@@ -63,7 +63,7 @@ export default function BlockerList({
         return (
           <li
             key={`${item.code}-${item.ref ?? ""}-${index}`}
-            className="rounded border border-border-light p-3"
+            className="rounded-sm border border-border-light p-3"
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <p className="flex items-start gap-2 text-body font-medium text-navy">

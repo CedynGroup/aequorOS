@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * IFRS 9 ECL assumptions register editor (PD/LGD per segment and stage).
@@ -11,31 +11,31 @@
  * the required audit reason. Approver-gated server-side.
  */
 
-import { useMemo, useState } from 'react';
-import { BookOpenCheck, Plus, Trash2 } from 'lucide-react';
+import { useMemo, useState } from "react";
+import { BookOpenCheck, Plus, Trash2 } from "lucide-react";
 import type {
   EclAssumptionEntry,
   EclAssumptionRead,
   EclAssumptionRegisterRead,
   EclAssumptionUpdate,
-} from '@aequoros/risk-service-api';
-import SectionCard from '@/components/ui/SectionCard';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import EmptyState from '@/components/ui/EmptyState';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { SkeletonTable } from '@/components/ui/Skeleton';
+} from "@aequoros/risk-service-api";
+import SectionCard from "@/components/ui/SectionCard";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import EmptyState from "@/components/ui/EmptyState";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { SkeletonTable } from "@/components/ui/Skeleton";
 import {
   useEclAssumptionRegister,
   useUpdateEclAssumptionRegister,
-} from '@/lib/api/hooks';
-import { fmtDateUTC, num } from '@/lib/api/values';
-import { fmtPct } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { fmtDateUTC, num } from "@/lib/api/values";
+import { fmtPct } from "@/lib/format";
 import {
   FormActions,
   ReasonField,
   inputCls,
   textOrNull,
-} from '@/components/institution/shared';
+} from "@/components/institution/shared";
 import {
   EditRegisterAction,
   EvidenceFields,
@@ -43,40 +43,44 @@ import {
   parseDecimalInput,
   sameDecimal,
   useApproverGate,
-} from './common';
+} from "./common";
 
 const viewColumns: Column<EclAssumptionRead>[] = [
   {
-    key: 'segment',
-    header: 'Segment',
-    width: '28%',
-    render: (r) => <span className="font-mono text-body text-navy">{r.segment}</span>,
+    key: "segment",
+    header: "Segment",
+    width: "28%",
+    render: (r) => (
+      <span className="font-mono text-body text-navy">{r.segment}</span>
+    ),
   },
   {
-    key: 'stage',
-    header: 'Stage',
-    align: 'center',
+    key: "stage",
+    header: "Stage",
+    align: "center",
     render: (r) => <span className="font-mono tnum">{r.stage}</span>,
   },
   {
-    key: 'pd',
-    header: 'PD',
+    key: "pd",
+    header: "PD",
     numeric: true,
     render: (r) => fmtPct(num(r.pdPct), 2),
   },
   {
-    key: 'lgd',
-    header: 'LGD',
+    key: "lgd",
+    header: "LGD",
     numeric: true,
     render: (r) => fmtPct(num(r.lgdPct), 2),
   },
   {
-    key: 'evidence',
-    header: 'Approval evidence',
+    key: "evidence",
+    header: "Approval evidence",
     render: (r) => (
       <div>
         <p className="text-body text-navy">{r.approvedBy}</p>
-        <p className="text-caption text-slate">Effective {fmtDateUTC(r.effectiveFrom)}</p>
+        <p className="text-caption text-slate">
+          Effective {fmtDateUTC(r.effectiveFrom)}
+        </p>
       </div>
     ),
   },
@@ -106,7 +110,7 @@ export default function EclAssumptionCard({ bankId }: { bankId: string }) {
           The ECL engine activates only when exposure facts and this register
           both exist — until then provisions flow from ingested figures
           unchanged. Updates are approver-gated and audited;
-          {` ${query.data?.history.length ?? 0} generation${(query.data?.history.length ?? 0) === 1 ? '' : 's'} on record.`}
+          {` ${query.data?.history.length ?? 0} generation${(query.data?.history.length ?? 0) === 1 ? "" : "s"} on record.`}
         </span>
       }
     >
@@ -128,7 +132,11 @@ export default function EclAssumptionCard({ bankId }: { bankId: string }) {
             onClose={() => setEditing(false)}
           />
         ) : query.data.assumptions.length > 0 ? (
-          <DataTable columns={viewColumns} rows={query.data.assumptions} density="compact" />
+          <DataTable
+            columns={viewColumns}
+            rows={query.data.assumptions}
+            density="compact"
+          />
         ) : (
           <div className="p-5">
             <EmptyState
@@ -143,10 +151,16 @@ export default function EclAssumptionCard({ bankId }: { bankId: string }) {
   );
 }
 
-type EclDraft = { key: string; segment: string; stage: number; pd: string; lgd: string };
+type EclDraft = {
+  key: string;
+  segment: string;
+  stage: number;
+  pd: string;
+  lgd: string;
+};
 type NewRow = { segment: string; stage: string; pd: string; lgd: string };
 
-const BLANK_NEW_ROW: NewRow = { segment: '', stage: '1', pd: '', lgd: '' };
+const BLANK_NEW_ROW: NewRow = { segment: "", stage: "1", pd: "", lgd: "" };
 
 function EclEditor({
   bankId,
@@ -166,15 +180,15 @@ function EclEditor({
       stage: row.stage,
       pd: String(row.pdPct),
       lgd: String(row.lgdPct),
-    }))
+    })),
   );
   const [newRows, setNewRows] = useState<NewRow[]>(
-    register.assumptions.length === 0 ? [{ ...BLANK_NEW_ROW }] : []
+    register.assumptions.length === 0 ? [{ ...BLANK_NEW_ROW }] : [],
   );
-  const [effectiveFrom, setEffectiveFrom] = useState('');
-  const [approvedBy, setApprovedBy] = useState('');
-  const [notes, setNotes] = useState('');
-  const [reason, setReason] = useState('');
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const [approvedBy, setApprovedBy] = useState("");
+  const [notes, setNotes] = useState("");
+  const [reason, setReason] = useState("");
 
   const currentByKey = useMemo(
     () =>
@@ -182,19 +196,19 @@ function EclEditor({
         register.assumptions.map((row) => [
           `${row.segment}:${row.stage}`,
           { pd: String(row.pdPct), lgd: String(row.lgdPct) },
-        ])
+        ]),
       ),
-    [register]
+    [register],
   );
 
   const setDraft = (key: string, patch: Partial<EclDraft>) =>
     setDrafts((prev) =>
-      prev.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft))
+      prev.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)),
     );
 
   const setNewRow = (index: number, patch: Partial<NewRow>) =>
     setNewRows((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, ...patch } : row))
+      prev.map((row, i) => (i === index ? { ...row, ...patch } : row)),
     );
 
   const validPct = (value: string): boolean => {
@@ -215,7 +229,9 @@ function EclEditor({
         !sameDecimal(draft.lgd, current.lgd);
       if (!changed) continue;
       if (!validPct(draft.pd) || !validPct(draft.lgd)) {
-        issues.push(`${draft.segment} stage ${draft.stage}: PD and LGD must be 0–100.`);
+        issues.push(
+          `${draft.segment} stage ${draft.stage}: PD and LGD must be 0–100.`,
+        );
         continue;
       }
       seen.add(draft.key);
@@ -228,12 +244,13 @@ function EclEditor({
     }
 
     for (const row of newRows) {
-      const untouched = !row.segment.trim() && !row.pd.trim() && !row.lgd.trim();
+      const untouched =
+        !row.segment.trim() && !row.pd.trim() && !row.lgd.trim();
       if (untouched) continue;
       const segment = row.segment.trim().toUpperCase();
       const stage = Number(row.stage);
       if (!segment) {
-        issues.push('New assumption rows need a segment.');
+        issues.push("New assumption rows need a segment.");
         continue;
       }
       if (!validPct(row.pd) || !validPct(row.lgd)) {
@@ -242,11 +259,18 @@ function EclEditor({
       }
       const key = `${segment}:${stage}`;
       if (seen.has(key)) {
-        issues.push(`${segment} stage ${stage} appears twice in this generation.`);
+        issues.push(
+          `${segment} stage ${stage} appears twice in this generation.`,
+        );
         continue;
       }
       seen.add(key);
-      collected.push({ segment, stage, pdPct: row.pd.trim(), lgdPct: row.lgd.trim() });
+      collected.push({
+        segment,
+        stage,
+        pdPct: row.pd.trim(),
+        lgdPct: row.lgd.trim(),
+      });
     }
 
     return { entries: collected, problems: issues };
@@ -283,7 +307,7 @@ function EclEditor({
           {drafts.map((draft) => (
             <div
               key={draft.key}
-              className="flex flex-wrap items-center justify-between gap-3 rounded border border-border-light px-3 py-2"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border-light px-3 py-2"
             >
               <div className="min-w-0">
                 <p className="text-body font-medium text-navy font-mono">
@@ -330,9 +354,9 @@ function EclEditor({
           {newRows.map((row, index) => (
             <div
               key={index}
-              className="flex flex-wrap items-end gap-3 rounded border border-border-light px-3 py-2"
+              className="flex flex-wrap items-end gap-3 rounded-sm border border-border-light px-3 py-2"
             >
-              <div className="min-w-[10rem]">
+              <div className="min-w-40">
                 <label
                   htmlFor={`ecl-new-${index}-segment`}
                   className="block text-caption font-medium text-navy mb-1"
@@ -342,7 +366,9 @@ function EclEditor({
                 <input
                   id={`ecl-new-${index}-segment`}
                   value={row.segment}
-                  onChange={(e) => setNewRow(index, { segment: e.target.value })}
+                  onChange={(e) =>
+                    setNewRow(index, { segment: e.target.value })
+                  }
                   placeholder="e.g. CORPORATE"
                   className={`${inputCls} font-mono uppercase`}
                 />
@@ -397,8 +423,10 @@ function EclEditor({
               </div>
               <button
                 type="button"
-                onClick={() => setNewRows((prev) => prev.filter((_, i) => i !== index))}
-                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                onClick={() =>
+                  setNewRows((prev) => prev.filter((_, i) => i !== index))
+                }
+                className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
               >
                 <Trash2 size={11} aria-hidden />
                 Remove
@@ -411,7 +439,7 @@ function EclEditor({
       <button
         type="button"
         onClick={() => setNewRows((prev) => [...prev, { ...BLANK_NEW_ROW }])}
-        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+        className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
       >
         <Plus size={11} aria-hidden />
         Add segment/stage assumption
@@ -441,8 +469,8 @@ function EclEditor({
 
       <p className="text-caption text-slate">
         {entries.length === 0
-          ? 'No assumptions changed yet — only changed or newly adopted rows are recorded.'
-          : `${entries.length} assumption${entries.length === 1 ? '' : 's'} will be recorded in this generation.`}
+          ? "No assumptions changed yet — only changed or newly adopted rows are recorded."
+          : `${entries.length} assumption${entries.length === 1 ? "" : "s"} will be recorded in this generation.`}
       </p>
 
       {update.error && (

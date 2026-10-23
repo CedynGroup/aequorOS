@@ -85,15 +85,17 @@ For an entitled institution, a missing FX view permission leaves the navigation
 link visible but disabled, with a tooltip naming the required grant. Structural
 exclusions and institutions without authority remain hidden.
 A denied `/fx` deep link returns the dashboard's not-found view and sends no FX
-dashboard query. Command Center, Risk, Alerts, and Board Pack request FX data
-only when the same FX/aggregated view capability is present.
+dashboard query. Command Center, Risk, and Alerts request FX data only when the
+same FX/aggregated view capability is present. Board Pack reads the live-summary
+projection, whose server filters FX by aggregated-view authority.
 
 Reports requests FX saved analyses and exposes the FX official-run filter only
 when FX/aggregated view is present. Saved-analysis workbench links still require
-FX/confidential view. The enterprise stress workbench keeps an
-unavailable FX action visible but disabled. Its tooltip names the exact
-FX/confidential `run` permission and says that an organization owner can grant
-it. After a grant change, sign in again to obtain the new authorization version.
+FX/confidential view. Module scenario and enterprise stress navigation are
+documented in
+[Treasury scenario workspaces](../dashboard/README.md#treasury-scenario-workspaces);
+enterprise execution retains the conditional FX run gate described above.
+After a grant change, sign in again to obtain the new authorization version.
 
 ## Inventory
 

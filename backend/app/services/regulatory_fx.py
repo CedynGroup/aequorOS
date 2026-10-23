@@ -1332,20 +1332,25 @@ def compute_live(
         current.source_as_of_date,
     )
     metrics = _metrics_from_analysis(analysis)
+    validations = _validation_rows(analysis, base_currency(bank))
     live_metrics = {
         "nop_ghs": str(metrics.nop_ghs),
         "nop_pct_tier1": str(metrics.nop_pct_tier1),
         "single_ccy_max_pct": str(metrics.single_ccy_max_pct),
         "single_ccy_max_currency": metrics.single_ccy_max_currency,
         "var_99_1d_ghs": str(metrics.var_99_1d_ghs),
+        "var_sample_evidence": next(
+            message for rule, _, _, message in validations if rule == "var_sample_evidence"
+        ),
         "tier1_ghs": str(metrics.tier1_ghs),
     }
     status = worst_status(metrics.nop_status, metrics.single_ccy_status)
-    findings = findings_from_validations(_validation_rows(analysis, base_currency(bank)), status)
+    findings = findings_from_validations(validations, status)
     return LiveModuleResult(
         metrics=live_metrics,
         status=status,
         input_hash=_snapshot_hash(snapshot),
+        engine_version=ENGINE_VERSION,
         findings=findings,
         source_as_of_date=current.source_as_of_date,
     )

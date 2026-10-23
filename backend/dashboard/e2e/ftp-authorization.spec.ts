@@ -88,19 +88,13 @@ test.describe("FTP reader without run permission", () => {
     ).toBeVisible();
 
     await page.goto("/ftp/scenarios");
-    await page
-      .getByRole("button", { name: "Scenarios & run", exact: true })
-      .click();
-    const enterpriseRun = page.getByRole("button", {
-      name: "Run enterprise stress",
-    });
-    await expect(enterpriseRun).toBeVisible();
-    await expect(enterpriseRun).toBeDisabled();
-    await enterpriseRun.locator("..").focus();
-    await expect(enterpriseRun.locator("..")).toHaveAccessibleDescription(
-      /Requires Funds Transfer Pricing · Confidential · Run/i,
+    const preview = page.getByRole("button", { name: "Preview FTP what-if" });
+    await expect(preview).toBeVisible();
+    await expect(preview).toBeDisabled();
+    await preview.locator("..").focus();
+    await expect(preview.locator("..")).toHaveAccessibleDescription(
+      /Requires FTP · Confidential · Run/i,
     );
-
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "ftp-reader-disabled-run.png"),
