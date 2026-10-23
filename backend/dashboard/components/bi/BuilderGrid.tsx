@@ -24,7 +24,7 @@ const BuilderGrid = dynamic(() => import("./BuilderGridCanvas"), {
   ssr: false,
   loading: () => (
     <div
-      className="h-96 w-full animate-pulse rounded bg-surface"
+      className="h-96 w-full animate-pulse rounded-sm bg-surface"
       aria-busy="true"
       aria-label="Preparing the canvas"
     />

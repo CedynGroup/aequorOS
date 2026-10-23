@@ -291,22 +291,6 @@ class PositionData(BaseModel):
     attributes: dict[str, Any] = Field(default_factory=dict)
 
 
-#: Reference dataset kinds whose registered schema is ENFORCED on ingestion.
-#: Deliberately not every kind: other schemas describe their shape without
-#: enforcement, and tenants have rows stored under them, so switching those on
-#: would refuse data that currently lands (H-027). ``performance_targets`` and
-#: ``business_units`` were enforced from their introduction, as was
-#: ``gl_segment_balances`` (P5-B): an unenforced row there would become a silent
-#: orphan in the branch mart rather than a reported translation failure at the
-#: boundary.
-#: ``capital_structure`` joins them on a different argument: an unrecognised tier
-#: used to be counted as CET1, so a refused row is the correction, not a
-#: regression — a stored row with such a tier fails the capital derivation too.
-ENFORCED_REFERENCE_KINDS: frozenset[str] = frozenset(
-    {"performance_targets", "business_units", "gl_segment_balances", "capital_structure"}
-)
-
-
 class ReferenceRowData(BaseModel):
     """One reference-dataset row, preserved as a stringified payload.
 
@@ -322,21 +306,7 @@ class ReferenceRowData(BaseModel):
 
     @model_validator(mode="after")
     def _meets_its_registered_schema(self) -> ReferenceRowData:
-        """Enforce the kind's registered schema, for the kinds that enforce it.
-
-        Only the kinds in :data:`ENFORCED_REFERENCE_KINDS`. The other registers
-        describe their shape without refusing a row, and turning that on here
-        would start rejecting pushes that succeed today for every tenant with
-        rows already stored (H-027 — the wider question is not this contract's
-        to answer).
-
-        Enforcing here rather than at a call site is deliberate: every path that
-        produces a reference row — API push, Excel/CSV, every core-banking
-        adapter — builds this model, so there is one seam and no way to reach
-        storage around it.
-        """
-        if self.dataset_kind not in ENFORCED_REFERENCE_KINDS:
-            return self
+        """Enforce every kind at the shared API/file/adapter ingestion boundary."""
         # Lazy: the schema package sweeps its own modules at import, and this
         # contract module is imported by some of them.
         from app.domain.ingestion.reference_schemas import (  # noqa: PLC0415
@@ -345,7 +315,7 @@ class ReferenceRowData(BaseModel):
 
         schema = schema_for(self.dataset_kind)
         if schema is None:
-            return self
+            raise ValueError(f"{self.dataset_kind}: no registered reference schema")
         problems = schema.problems_for(dict(self.payload))
         if problems:
             joined = "; ".join(problems)

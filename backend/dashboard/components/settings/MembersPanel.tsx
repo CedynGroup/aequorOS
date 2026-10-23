@@ -521,7 +521,7 @@ function DialogFrame({
       aria-modal="true"
       aria-labelledby={titleId}
       hidden={hidden}
-      className={`fixed inset-0 z-50 ${hidden ? "hidden" : "flex"} items-center justify-center bg-navy/45 p-4 backdrop-blur-sm`}
+      className={`fixed inset-0 z-50 ${hidden ? "hidden" : "flex"} items-center justify-center bg-navy/45 p-4 backdrop-blur-xs`}
     >
       <div
         className={`max-h-[90vh] w-full overflow-y-auto rounded-lg border border-border bg-surface-raised shadow-overlay ${wide ? "max-w-3xl" : "max-w-xl"}`}
@@ -531,14 +531,14 @@ function DialogFrame({
             id={titleId}
             ref={headingRef}
             tabIndex={-1}
-            className="text-h3 text-navy outline-none"
+            className="text-h3 text-navy outline-hidden"
           >
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1.5 text-slate hover:bg-surface-muted hover:text-navy"
+            className="rounded-sm p-1.5 text-slate hover:bg-surface-muted hover:text-navy"
             aria-label="Close"
           >
             <X size={18} aria-hidden />
@@ -740,7 +740,7 @@ function DetailFact({ label, value }: { label: string; value: string }) {
       <dt className="text-micro font-medium uppercase tracking-wider text-slate">
         {label}
       </dt>
-      <dd className="mt-1 break-words text-caption text-navy">{value}</dd>
+      <dd className="mt-1 wrap-break-word text-caption text-navy">{value}</dd>
     </div>
   );
 }

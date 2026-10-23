@@ -225,9 +225,9 @@ def build_bank_realistic(path: Path) -> Path:
     gl.append(["2000", "Customer deposits", "LIABILITY"])
 
     curves = workbook.create_sheet("Yield_Curves")
-    curves.append(["curve_name", "tenor_months", "rate", "quote_date"])
-    curves.append(["GHS_SOVEREIGN", 3, 0.158, date(2026, 6, 1)])
-    curves.append(["GHS_SOVEREIGN", 12, 0.181, date(2026, 6, 1)])
+    curves.append(["curve_name", "currency", "tenor_months", "rate", "quote_date", "notes"])
+    curves.append(["GHS_SOVEREIGN", "GHS", 3, 0.158, date(2026, 6, 1), "source note"])
+    curves.append(["GHS_SOVEREIGN", "GHS", 12, 0.181, date(2026, 6, 1), "source note"])
 
     workbook.save(path)
     return path

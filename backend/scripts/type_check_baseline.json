@@ -507,9 +507,6 @@
   "reportAny": 2,
   "reportUnnecessaryIsInstance": 1
  },
- "app.domain.ingestion.contracts": {
-  "reportUnknownMemberType": 1
- },
  "app.domain.ingestion.enrichment": {
   "reportAny": 9
  },
@@ -517,61 +514,6 @@
   "reportAny": 17,
   "reportMissingTypeArgument": 2,
   "reportUnknownArgumentType": 1
- },
- "app.domain.ingestion.reference_schemas": {
-  "reportMissingTypeArgument": 3,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 7,
-  "reportUnknownParameterType": 2,
-  "reportUnknownVariableType": 3
- },
- "app.domain.ingestion.reference_schemas.business_units": {
-  "reportConstantRedefinition": 1,
-  "reportMissingTypeArgument": 1,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 3,
-  "reportUnknownParameterType": 1,
-  "reportUnknownVariableType": 2
- },
- "app.domain.ingestion.reference_schemas.capital_expenditure": {
-  "reportMissingTypeArgument": 2,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 2,
-  "reportUnknownParameterType": 2,
-  "reportUnknownVariableType": 1
- },
- "app.domain.ingestion.reference_schemas.gl_mapping_bsd7": {
-  "reportMissingTypeArgument": 1,
-  "reportUnknownArgumentType": 2,
-  "reportUnknownMemberType": 3,
-  "reportUnknownParameterType": 1
- },
- "app.domain.ingestion.reference_schemas.gl_segment_balances": {
-  "reportConstantRedefinition": 1,
-  "reportMissingTypeArgument": 1,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 5,
-  "reportUnknownParameterType": 1
- },
- "app.domain.ingestion.reference_schemas.interest_accruals": {
-  "reportMissingTypeArgument": 1,
-  "reportUnknownArgumentType": 2,
-  "reportUnknownMemberType": 3,
-  "reportUnknownParameterType": 1
- },
- "app.domain.ingestion.reference_schemas.performance_targets": {
-  "reportConstantRedefinition": 1,
-  "reportMissingTypeArgument": 2,
-  "reportUnknownArgumentType": 11,
-  "reportUnknownMemberType": 14,
-  "reportUnknownParameterType": 2
- },
- "app.domain.ingestion.reference_schemas.subsidiaries": {
-  "reportMissingTypeArgument": 1,
-  "reportUnknownArgumentType": 2,
-  "reportUnknownMemberType": 4,
-  "reportUnknownParameterType": 1,
-  "reportUnknownVariableType": 1
  },
  "app.domain.ingestion.validation": {
   "reportAny": 10,
@@ -1229,7 +1171,7 @@
  "app.services.bi.mart_builder": {
   "reportAny": 107,
   "reportUnknownArgumentType": 20,
-  "reportUnknownMemberType": 18,
+  "reportUnknownMemberType": 15,
   "reportUnknownVariableType": 4
  },
  "app.services.bi.nlq.candidates": {
@@ -1836,7 +1778,7 @@
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_fx": {
-  "reportAny": 44,
+  "reportAny": 43,
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_irr": {
@@ -2361,10 +2303,7 @@
   "reportAny": 9
  },
  "tests.adapters.database_direct.test_contract": {
-  "reportAny": 1,
-  "reportMissingParameterType": 4,
-  "reportUnknownArgumentType": 4,
-  "reportUnknownParameterType": 4
+  "reportAny": 1
  },
  "tests.adapters.database_direct.test_drivers": {
   "reportPrivateUsage": 6
@@ -2443,7 +2382,7 @@
   "reportMissingParameterType": 11,
   "reportMissingTypeArgument": 1,
   "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 13,
+  "reportUnknownMemberType": 12,
   "reportUnknownParameterType": 11,
   "reportUnknownVariableType": 7
  },
@@ -3555,13 +3494,6 @@
   "reportUnknownParameterType": 1,
   "reportUnknownVariableType": 6
  },
- "tests.domain.ingestion.test_reference_row_enforcement": {
-  "reportUnknownMemberType": 1
- },
- "tests.domain.ingestion.test_reference_schemas": {
-  "reportUnknownMemberType": 4,
-  "reportUnknownVariableType": 3
- },
  "tests.domain.irr.test_buckets": {
   "reportPrivateUsage": 3
  },
@@ -4033,9 +3965,6 @@
   "reportAny": 7,
   "reportPrivateUsage": 5
  },
- "tests.services.bi.test_gl_monthly": {
-  "reportUnknownVariableType": 1
- },
  "tests.services.bi.test_grid_adapter": {
   "reportAny": 3
  },
@@ -4202,14 +4131,14 @@
  "tests.services.data_gaps.test_atm_operations": {
   "reportAny": 41,
   "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 20,
+  "reportUnknownMemberType": 16,
   "reportUnknownVariableType": 6
  },
  "tests.services.data_gaps.test_capital_expenditure": {
   "reportAny": 36,
   "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 35,
-  "reportUnknownVariableType": 7
+  "reportUnknownMemberType": 34,
+  "reportUnknownVariableType": 6
  },
  "tests.services.data_gaps.test_eod_ladder": {
   "reportAny": 33,
@@ -4223,14 +4152,14 @@
   "reportUnknownArgumentType": 8,
   "reportUnknownLambdaType": 1,
   "reportUnknownMemberType": 18,
-  "reportUnknownVariableType": 12
+  "reportUnknownVariableType": 11
  },
  "tests.services.data_gaps.test_interest_accruals": {
   "reportAny": 35,
   "reportUnknownArgumentType": 3,
   "reportUnknownLambdaType": 1,
   "reportUnknownMemberType": 6,
-  "reportUnknownVariableType": 4
+  "reportUnknownVariableType": 3
  },
  "tests.services.data_gaps.test_loan_attributes": {
   "reportAny": 19,
@@ -4241,25 +4170,25 @@
  "tests.services.data_gaps.test_remittance_flows": {
   "reportAny": 29,
   "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 24,
+  "reportUnknownMemberType": 19,
   "reportUnknownVariableType": 6
  },
  "tests.services.data_gaps.test_subsidiaries": {
   "reportAny": 32,
   "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 19,
-  "reportUnknownVariableType": 7
+  "reportUnknownMemberType": 18,
+  "reportUnknownVariableType": 6
  },
  "tests.services.data_gaps.test_tariff_schedule": {
   "reportAny": 26,
   "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 13,
+  "reportUnknownMemberType": 9,
   "reportUnknownVariableType": 6
  },
  "tests.services.data_gaps.test_teller_withdrawals": {
   "reportAny": 47,
   "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 21,
+  "reportUnknownMemberType": 16,
   "reportUnknownVariableType": 6
  },
  "tests.services.factories.assessments": {

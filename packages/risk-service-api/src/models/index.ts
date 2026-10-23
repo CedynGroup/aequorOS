@@ -901,6 +901,7 @@ export * from "./FxSide";
 export * from "./FxStandaloneVarRead";
 export * from "./FxStatus";
 export * from "./FxTrendPointRead";
+export * from "./FxTrendVar";
 export * from "./FxValidationRead";
 export * from "./GeneratedAt";
 export * from "./GrantReasonCategory";

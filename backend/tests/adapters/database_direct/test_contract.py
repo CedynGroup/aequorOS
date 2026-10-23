@@ -9,6 +9,7 @@ pinned alongside.
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from app.domain.ingestion.contracts import (
     ENTITY_TYPES,
     AdapterConfig,
     MappingConfig,
+    RawRecord,
 )
 from tests.adapters.contract import AdapterContractSuite
 
@@ -67,7 +69,7 @@ class TestCanonicalFidelity:
         return builder(tmp_path)
 
     def test_enum_and_locale_produce_canonical_positions(
-        self, config: AdapterConfig, mapping_config: MappingConfig, as_of
+        self, config: AdapterConfig, mapping_config: MappingConfig, as_of: date
     ) -> None:
         adapter = DatabaseDirectAdapter()
         canonical = adapter.translate(
@@ -88,7 +90,7 @@ class TestCanonicalFidelity:
         assert loan.attributes.get("ECL_PROVISION") == "18000.00"
 
     def test_product_regulatory_category_derived(
-        self, config: AdapterConfig, mapping_config: MappingConfig, as_of
+        self, config: AdapterConfig, mapping_config: MappingConfig, as_of: date
     ) -> None:
         adapter = DatabaseDirectAdapter()
         canonical = adapter.translate(
@@ -97,20 +99,41 @@ class TestCanonicalFidelity:
         by_code = {p.product_code: p for p in canonical.products}
         assert by_code["LN.CORP.5Y"].regulatory_category == "CORPORATE_LOAN_UNRATED_100RW"
 
-    def test_reference_dataset_captured(
-        self, config: AdapterConfig, mapping_config: MappingConfig, as_of
+    def test_unmapped_reference_columns_fail_without_discarding_the_raw_record(
+        self, config: AdapterConfig, mapping_config: MappingConfig, as_of: date
     ) -> None:
         adapter = DatabaseDirectAdapter()
         canonical = adapter.translate(
             adapter.extract(config, as_of, list(ENTITY_TYPES)), mapping_config
         )
-        assert canonical.reference_row_counts.get("fx_rates_current") == 3
-        pairs = {row.payload.get("CCY_PAIR") for row in canonical.reference_rows}
-        assert pairs == {"USDGHS", "EURGHS", "GBPGHS"}
+        failures = [item for item in canonical.failures if item.entity_type == "reference"]
+        assert len(failures) == 3
+        assert all(item.error_code == "invalid_reference_row" for item in failures)
+        assert {item.raw_record["CCY_PAIR"] for item in failures} == {"USDGHS", "EURGHS", "GBPGHS"}
+        assert not canonical.reference_rows
+
+    def test_a_reference_view_with_registered_column_names_is_accepted(
+        self, config: AdapterConfig, mapping_config: MappingConfig, as_of: date
+    ) -> None:
+        adapter = DatabaseDirectAdapter()
+        extraction = adapter.extract(config, as_of, ["gl_account"])
+        extraction.records = [
+            RawRecord(
+                entity_type="reference",
+                source_table="FX_RATES",
+                source_locator="FX_RATES#R1",
+                dataset_kind="fx_rates_current",
+                data={"pair": "USDGHS", "rate": "12.45", "quote_date": "2026-06-30"},
+            )
+        ]
+        canonical = adapter.translate(extraction, mapping_config)
+        assert not canonical.failures
+        assert canonical.reference_row_counts == {"fx_rates_current": 1}
+        assert canonical.reference_rows[0].payload["pair"] == "USDGHS"
 
 
 class TestEntityTypeFiltering:
-    def test_extract_honors_requested_entity_types(self, tmp_path: Path, as_of) -> None:
+    def test_extract_honors_requested_entity_types(self, tmp_path: Path, as_of: date) -> None:
         adapter = DatabaseDirectAdapter()
         config = stage_sqlserver_config(tmp_path)
         result = adapter.extract(config, as_of, ["gl_account"])

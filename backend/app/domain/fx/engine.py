@@ -2,19 +2,18 @@
 
 Every function here is deterministic and free of database or tenant concerns:
 callers supply the per-currency net open positions (in GHS-equivalent), the
-daily FX return histories, the hedge book, and the resolved parameter set, and
+dated FX return intervals, the hedge book, and the resolved parameter set, and
 receive fully materialized net-open-position (NOP), value-at-risk (VaR) and
 hedge-effectiveness results with per-line items. Monetary amounts quantize to
 ``MONEY`` (4 dp) and ratio/percentage figures to ``RATIO_PCT`` (6 dp), both with
 ``ROUND_HALF_UP``; status classification always happens AFTER quantization so
 stored and displayed values agree.
 
-Monetary and percentage arithmetic is Decimal-only. The historical-simulation
-VaR consumes daily returns that arrive as JSON floats; each element crosses the
-float -> Decimal boundary exactly once, at the point of use, via
-``Decimal(str(value))`` (see ``_as_decimal``). From there the profit-and-loss
-vector, the sort, and the percentile selection are exact Decimal operations, so
-the returned VaR figures are reproducible to the cent.
+Monetary and percentage arithmetic is Decimal-only. Dated returns retain both
+observation endpoints; portfolios use the most recent 250 exact shared intervals.
+No forward filling, holiday inference, or positional alignment is permitted.
+Shorter nonempty samples are explicitly qualified by the service as insufficient
+pilot evidence. Empty intersections refuse calculation.
 
 Methodology (Product Documentation Module 3):
 
@@ -45,6 +44,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import date
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 from typing import Literal
 
@@ -146,6 +146,17 @@ class NopResult:
     line_items: tuple[FxLineItem, ...]
 
 
+FX_SAMPLE_POLICY = "exact-interval-intersection-v1"
+FX_SAMPLE_TARGET = 250
+
+
+@dataclass(frozen=True)
+class FxReturn:
+    start_date: date
+    end_date: date
+    value: Decimal
+
+
 @dataclass(frozen=True)
 class CurrencyVar:
     currency: str
@@ -162,6 +173,7 @@ class VarResult:
     window: int
     observations: int
     confidence_pct: Decimal
+    intervals: tuple[tuple[date, date], ...]
     line_items: tuple[FxLineItem, ...]
 
 
@@ -294,10 +306,10 @@ def compute_nop(
 
 def compute_var(
     positions: Sequence[FxPosition],
-    return_histories: Mapping[str, Sequence[float | Decimal]],
+    return_histories: Mapping[str, Sequence[FxReturn]],
     confidence_pct: Decimal,
 ) -> VarResult:
-    """1-day historical-simulation VaR at ``confidence_pct`` over the full window.
+    """1-day historical-simulation VaR at ``confidence_pct`` over the governed sample.
 
     Returns the diversified portfolio VaR, each currency's standalone VaR, and
     the diversification benefit (standalone sum minus portfolio VaR).
@@ -312,16 +324,17 @@ def compute_var(
     """
     if not positions:
         raise FxComputationError("At least one FX position is required to compute VaR.")
-    window = _common_window(positions, return_histories)
+    intervals, aligned = _common_sample(positions, return_histories)
+    window = len(intervals)
 
-    portfolio_pnl = _portfolio_pnl(positions, return_histories, range(window))
+    portfolio_pnl = _portfolio_pnl(positions, aligned, range(window))
     portfolio_var = _historical_var(portfolio_pnl, confidence_pct)
 
     currency_vars: list[CurrencyVar] = []
     standalone_total = _ZERO
     for position in sorted(positions, key=lambda item: item.currency):
-        series = return_histories[position.currency]
-        standalone_pnl = [position.net_ghs * _as_decimal(series[index]) for index in range(window)]
+        series = aligned[position.currency]
+        standalone_pnl = [position.net_ghs * series[index] for index in range(window)]
         standalone_var = _historical_var(standalone_pnl, confidence_pct)
         standalone_total += standalone_var
         currency_vars.append(
@@ -339,7 +352,10 @@ def compute_var(
             section="fx_var",
             line_code="portfolio_var",
             description=(
-                f"Portfolio VaR ({_pct_text(confidence_pct)}% 1-Day, Historical Simulation)"
+                f"Portfolio VaR ({_pct_text(confidence_pct)}% 1-Day, Historical Simulation; "
+                f"{window}/{FX_SAMPLE_TARGET} shared intervals, "
+                f"{intervals[0][0]} to {intervals[-1][1]}; "
+                f"{'limited evidence' if window < FX_SAMPLE_TARGET else 'target sample'})"
             ),
             exposure_amount=None,
             rate_pct=confidence_pct,
@@ -366,55 +382,50 @@ def compute_var(
         window=window,
         observations=len(portfolio_pnl),
         confidence_pct=confidence_pct,
+        intervals=intervals,
         line_items=tuple(line_items),
     )
 
 
 def compute_stressed_var(
     positions: Sequence[FxPosition],
-    return_histories: Mapping[str, Sequence[float | Decimal]],
+    return_histories: Mapping[str, Sequence[FxReturn]],
     confidence_pct: Decimal,
     crisis_window: tuple[int, int],
     correlation_uplift: Decimal,
 ) -> Decimal:
     """1-day VaR over the cedi-crisis sub-window with a supervisory correlation uplift.
 
-    The stress uses only the ``[start, end]`` slice of each return history (the
-    2022-2023 cedi-crisis sub-window) and multiplies the resulting historical VaR
+    The stress uses the configured ``[start, end]`` indices of the exact shared
+    chronological sample and multiplies the resulting historical VaR
     by ``(1 + correlation_uplift)`` to reflect the tail co-movement the stress
     scenario prescribes.
 
-    When a bank's uploaded history is too short to reach the configured window,
-    the window is clamped to the tail of the available history (keeping its width
-    where it fits) so a short upload still yields a best-effort stress instead of
-    failing the whole FX analysis. With the full history present the window is
-    used exactly as configured, so this degradation is inert on complete data.
+    When the shared sample is too short to reach the configured window, the
+    window is clamped to its available tail (keeping its width where it fits)
+    so a nonempty sample still yields a best-effort stress instead of failing
+    the whole FX analysis. If the window fits within the shared sample, it is
+    used exactly as configured.
     """
     if not positions:
         raise FxComputationError("At least one FX position is required to compute stressed VaR.")
-    start, end = crisis_window
-    if start < 0 or start > end:
-        raise FxComputationError(f"Invalid cedi-crisis window [{start}, {end}].")
-    shortest: int | None = None
-    for position in positions:
-        series = return_histories.get(position.currency)
-        if series is None:
-            raise MissingParameterError(f"fx_return_history:{position.currency}")
-        shortest = len(series) if shortest is None else min(shortest, len(series))
-    if not shortest:
-        raise FxComputationError("At least one return observation is required for stressed VaR.")
+    _, aligned = _common_sample(positions, return_histories)
+    indices = stressed_sample_range(len(next(iter(aligned.values()))), crisis_window)
 
-    if end < shortest:
-        eff_start, eff_end = start, end
-    else:
-        width = end - start + 1
-        eff_len = min(width, shortest)
-        eff_end = shortest - 1
-        eff_start = eff_end - eff_len + 1
-
-    crisis_pnl = _portfolio_pnl(positions, return_histories, range(eff_start, eff_end + 1))
+    crisis_pnl = _portfolio_pnl(positions, aligned, indices)
     base = _historical_var(crisis_pnl, confidence_pct)
     return money(base * (_ONE + correlation_uplift))
+
+
+def stressed_sample_range(observations: int, crisis_window: tuple[int, int]) -> range:
+    """Existing stress index policy, applied to the shared chronological sample."""
+    start, end = crisis_window
+    if observations <= 0 or start < 0 or start > end:
+        raise FxComputationError(f"Invalid stress sample/window: {observations}, [{start}, {end}].")
+    if end < observations:
+        return range(start, end + 1)
+    width = min(end - start + 1, observations)
+    return range(observations - width, observations)
 
 
 def assess_hedges(
@@ -519,31 +530,53 @@ def stressed_var_line_item(stressed_var: Decimal, correlation_uplift: Decimal) -
     )
 
 
-def _common_window(
+def _common_sample(
     positions: Sequence[FxPosition],
-    return_histories: Mapping[str, Sequence[float | Decimal]],
-) -> int:
-    lengths: list[int] = []
+    return_histories: Mapping[str, Sequence[FxReturn]],
+) -> tuple[tuple[tuple[date, date], ...], dict[str, list[Decimal]]]:
+    """Join exact endpoints, sort, then cap. Never infer holidays or fill gaps."""
+    indexed: dict[str, dict[tuple[date, date], Decimal]] = {}
     for position in positions:
         series = return_histories.get(position.currency)
-        if series is None or len(series) == 0:
+        if not series:
             raise MissingParameterError(f"fx_return_history:{position.currency}")
-        lengths.append(len(series))
-    return min(lengths)
+        points: dict[tuple[date, date], Decimal] = {}
+        for observation in series:
+            key = (observation.start_date, observation.end_date)
+            if key[0] >= key[1] or key in points or not observation.value.is_finite():
+                raise FxComputationError(
+                    f"Invalid or duplicate FX return interval: {position.currency}."
+                )
+            points[key] = observation.value
+        indexed[position.currency] = points
+    common: set[tuple[date, date]] = set(next(iter(indexed.values())))
+    for points in indexed.values():
+        common.intersection_update(points)
+    intervals = tuple(sorted(common)[-FX_SAMPLE_TARGET:])
+    if not intervals:
+        raise FxComputationError(
+            "No matching dated FX return intervals across measured currencies."
+        )
+    return intervals, {
+        currency: [points[key] for key in intervals] for currency, points in indexed.items()
+    }
 
 
 def _portfolio_pnl(
     positions: Sequence[FxPosition],
-    return_histories: Mapping[str, Sequence[float | Decimal]],
+    return_histories: Mapping[str, Sequence[Decimal]],
     indices: range,
 ) -> list[Decimal]:
-    vector: list[Decimal] = []
-    for index in indices:
-        total = _ZERO
-        for position in positions:
-            total += position.net_ghs * _as_decimal(return_histories[position.currency][index])
-        vector.append(total)
-    return vector
+    return [
+        sum(
+            (
+                position.net_ghs * return_histories[position.currency][index]
+                for position in positions
+            ),
+            _ZERO,
+        )
+        for index in indices
+    ]
 
 
 def _historical_var(pnl: Sequence[Decimal], confidence_pct: Decimal) -> Decimal:
@@ -560,11 +593,6 @@ def _historical_var(pnl: Sequence[Decimal], confidence_pct: Decimal) -> Decimal:
     rank = max(1, min(rank, count))
     worst = sorted(pnl)[rank - 1]
     return money(max(_ZERO, -worst))
-
-
-def _as_decimal(value: float | Decimal) -> Decimal:
-    """Cross the float -> Decimal boundary exactly once, at the point of use."""
-    return value if isinstance(value, Decimal) else Decimal(str(value))
 
 
 def _pct_text(value: Decimal) -> str:

@@ -111,12 +111,12 @@ export default async function proxy(req: NextRequest, event: NextFetchEvent) {
   return response;
 }
 
-// Protect everything except the NextAuth routes, the operator inspection
+// Protect everything except process liveness, NextAuth, the operator inspection
 // hand-off (its accept page + API run before any cookie/session exists), and
 // static assets. /login stays matched so stale session variants are cleared
 // while the public page renders normally.
 export const config = {
   matcher: [
-    "/((?!inspect|api/auth|api/impersonation|_next/static|_next/image|branding|favicon.ico|icon.svg).*)",
+    "/((?!api/health/live$|inspect|api/auth|api/impersonation|_next/static|_next/image|branding|favicon.ico|icon.svg).*)",
   ],
 };

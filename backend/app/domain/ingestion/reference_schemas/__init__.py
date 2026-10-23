@@ -1,20 +1,24 @@
 """Per-kind schemas for reference datasets (validation + CSV template hints).
 
-Reference rows are preserved verbatim by the platform (no fixed schema at the
+ReferenceRowData payloads are preserved verbatim (no fixed schema at the
 storage layer); a :class:`ReferenceSchema` declares what a WELL-FORMED row of a
-kind looks like — required fields, numeric fields, enumerations — so the batch
+kind looks like — required fields, finite numeric values, canonical calendar dates,
+enumerations — and every admitted kind enforces it at ReferenceRowData construction, so the batch
 validator can surface missing/invalid fields as findings, the app can offer a
 CSV template, and downstream readers (bog_forms ``refs.*`` resolvers) can rely
 on documented field names. One module per kind; register it in ``SCHEMAS``.
-Docs: docs/data_engine/datasets/<kind>.md.
+Ingestion contract: docs/API_INTEGRATION.md §3.5; dataset-specific details:
+docs/data_engine/datasets/<kind>.md where present.
 """
 
 from __future__ import annotations
 
 import importlib
 import pkgutil
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import date
+from decimal import Decimal, InvalidOperation
 
 
 @dataclass(frozen=True)
@@ -37,28 +41,42 @@ class ReferenceSchema:
     max_lengths: dict[str, int] = field(default_factory=dict)
     #: one row per … (documentation)
     grain: str = ""
-    #: The kind's own extra rules, when the declarative fields above cannot
+    #: The kind's complete rules, when the declarative fields above cannot
     #: express them — "the period must be the last day of the grain it names",
-    #: "a field spelt both ways must agree with itself". Set through
+    #: "a field spelt both ways must agree with itself", or retained alternative
+    #: shapes. The callback runs the appropriate declarative checks itself. Set through
     #: ``dataclasses.replace`` after the function is defined, because the rules
     #: need the schema they belong to. :meth:`problems_for`, not
     #: :meth:`validate_row`, is what a caller should ask.
-    row_validator: Callable[[dict], list[str]] | None = None
+    row_validator: Callable[[Mapping[str, object]], list[str]] | None = None
 
-    def validate_row(self, row: dict) -> list[str]:
+    def validate_row(self, row: Mapping[str, object]) -> list[str]:  # noqa: PLR0912
         """Return human-readable problems for one payload row (empty = OK)."""
         problems: list[str] = []
         for name in self.required:
-            if row.get(name) in (None, ""):
+            value = row.get(name)
+            if value is None or (isinstance(value, str) and not value.strip()):
                 problems.append(f"missing required field '{name}'")
         for name in self.numeric:
             value = row.get(name)
             if value in (None, ""):
                 continue
             try:
-                float(str(value).replace(",", ""))
-            except ValueError:
+                number = Decimal(str(value).replace(",", ""))
+                if not number.is_finite():
+                    raise InvalidOperation
+            except InvalidOperation:
                 problems.append(f"field '{name}' must be numeric (got {value!r})")
+        for name in self.dates:
+            value = row.get(name)
+            if value in (None, ""):
+                continue
+            text = str(value)
+            try:
+                if date.fromisoformat(text).isoformat() != text:
+                    raise ValueError
+            except ValueError:
+                problems.append(f"field '{name}' must be an ISO date, YYYY-MM-DD (got {value!r})")
         for name, allowed in self.enums.items():
             value = row.get(name)
             if value not in (None, "") and str(value) not in allowed:
@@ -76,7 +94,7 @@ class ReferenceSchema:
                 )
         return problems
 
-    def problems_for(self, row: dict) -> list[str]:
+    def problems_for(self, row: Mapping[str, object]) -> list[str]:
         """EVERY problem with one row — the declarative checks plus this kind's
         own rules. This is the question the ingestion path asks.
 
