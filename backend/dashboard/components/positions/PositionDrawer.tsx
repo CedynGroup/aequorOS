@@ -11,6 +11,7 @@ import { ArrowUpRight, GitCommitHorizontal, X } from 'lucide-react';
 import type { CanonicalPositionRead } from '@aequoros/risk-service-api';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { useLineageWalk } from '@/lib/api/ingestion';
+import { useBankContext } from '@/components/shell/BankContext';
 import { fmtDateUTC, fmtTimestamp, labelize, num } from '@/lib/api/values';
 import { fmtLocale } from '@/lib/format';
 
@@ -56,7 +57,8 @@ export default function PositionDrawer({
   position: CanonicalPositionRead;
   onClose: () => void;
 }) {
-  const walk = useLineageWalk(position.lineageId);
+  const { bank } = useBankContext();
+  const walk = useLineageWalk(bank?.id, position.lineageId);
   // Nodes come newest-first; the batch is attached to the extraction root.
   const batchId =
     walk.data?.nodes

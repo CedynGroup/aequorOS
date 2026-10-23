@@ -21,11 +21,26 @@ export function clearProtectedData() {
   notices.clear();
   listeners.forEach(listener => listener());
 }
-export function observeProtectedData(response: Response) {
+export async function observeProtectedData(response: Response, url?: string) {
   const raw = response.headers.get('X-Aequoros-Protected-Data');
-  if (!raw) return;
   try {
-    const payload: unknown = JSON.parse(raw);
+    let payload: unknown;
+    if (raw) {
+      payload = JSON.parse(raw);
+    } else {
+      if (response.ok) return;
+      const bank = /\/banks\/([^/?#]+)/.exec(url ?? response.url)?.[1];
+      if (!bank) return;
+      const body: unknown = await response.clone().json();
+      if (!body || typeof body !== 'object' || !('error' in body)) return;
+      const error = body.error;
+      if (!error || typeof error !== 'object' || !('code' in error)) return;
+      const state = error.code === 'bank_key_revoked' ? 'revoked'
+        : error.code === 'bank_key_unavailable' ? 'unavailable'
+        : error.code === 'bank_protected_support' ? 'support' : null;
+      if (!state) return;
+      payload = { [decodeURIComponent(bank)]: state };
+    }
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return;
     let changed = false;
     for (const [bank, state] of Object.entries(payload)) {

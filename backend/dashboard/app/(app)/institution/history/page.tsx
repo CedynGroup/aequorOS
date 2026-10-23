@@ -47,8 +47,10 @@ export default function NameHistoryPage() {
   }, [query.data]);
 
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const editing = entries.find((entry) => entry.id === editingId) ?? null;
+  const [editor, setEditor] = useState<{ bankId: string | undefined; row: BankNameHistoryRead } | null>(null);
+  const editing = editor && editor.bankId === bankId
+    ? entries.find((entry) => entry.id === editor.row.id) ?? editor.row
+    : null;
 
   return (
     <>
@@ -59,7 +61,7 @@ export default function NameHistoryPage() {
           <button
             type="button"
             onClick={() => {
-              setEditingId(null);
+              setEditor(null);
               setAdding(true);
             }}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
@@ -85,7 +87,7 @@ export default function NameHistoryPage() {
               entry={editing}
               onClose={() => {
                 setAdding(false);
-                setEditingId(null);
+                setEditor(null);
               }}
             />
           )}
@@ -133,7 +135,7 @@ export default function NameHistoryPage() {
                         type="button"
                         onClick={() => {
                           setAdding(false);
-                          setEditingId(entry.id);
+                          setEditor({ bankId, row: entry });
                         }}
                         className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
                       >

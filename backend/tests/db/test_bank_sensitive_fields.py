@@ -15,6 +15,8 @@ from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session
 
 from app.bi.models.notifications import BiAlert, BiAlertEvent, BiSubscription
+from app.bi.schemas.content import BiDashboardSpec
+from app.bi.schemas.query import BiFilter, BiPackQuery
 from app.bi.service.identity_policy import IDENTITY_REASON
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
@@ -262,14 +264,32 @@ def test_new_sensitive_fields_are_ciphertext_in_postgres(
             sitting_allowance=Decimal("12.34"),
         )
     )
-    db.add(saved_version(db, {"borrower": NAME}))
+    query = BiPackQuery(
+        measures=["loans.balance_rc"],
+        window="as_of",
+        filters=[BiFilter(member="counterparty.name", op="eq", values=[NAME])],
+    )
+    spec = BiDashboardSpec.model_validate(
+        {
+            "widgets": [
+                {
+                    "id": "loans",
+                    "kind": "table",
+                    "title": "Loans",
+                    "query": query.model_dump(mode="json"),
+                }
+            ],
+            "layout": [{"i": "loans", "x": 0, "y": 0, "w": 6, "h": 4}],
+        }
+    )
+    db.add(saved_version(db, spec.model_dump(mode="json")))
     db.add(
         BiSubscription(
             organization_id=ORG_1,
             bank_id="BK-SAMP0001",
             owner_user_id=USER_1,
             name="Synthetic",
-            query={"borrower": NAME},
+            query=query.for_period(date(2026, 6, 30)).model_dump(mode="json"),
             artifact_format="csv",
             cadence="daily",
             hour=7,

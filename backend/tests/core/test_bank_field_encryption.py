@@ -53,13 +53,14 @@ from app.identity.service import institution_profile
 from app.ml.behavioral import deposit_stability, nmd_duration
 from app.ml.behavioral.config import BehavioralTrainingConfig
 from app.ml.behavioral.history import load_deposit_month_aggregates
+from app.models import ParamConcentrationLimit
 from app.models.audit_event import AuditEvent
 from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
 from app.models.canonical_withdrawal import CanonicalWithdrawal
 from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailure
 from app.reporting.models.packages import RegulatoryPackage
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import canonical_withdrawal, ingestion
+from app.services import canonical_withdrawal, credit_concentration, credit_exposure_book, ingestion
 from app.services.behavioral_liquidity import get_behavioral_liquidity_report
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.bi.fixtures import materialize_bi_plane
@@ -659,6 +660,109 @@ def test_locked_groups_remain_distinct_and_numeric_training_stays_available(
         next(item for item in groups if item.current_balance_ghs == 0).observed_monthly_runoff_pct
         == 100
     )
+    db_session.info.pop(SESSION_STATE)
+
+
+@pytest.mark.parametrize(
+    "representation", ["group_reference", "attribute_reference", "group", "parent", "name"]
+)
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_credit_concentration_identity_survives_locked_labels(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    representation: str,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    for index in range(2):
+        party = counterparty(
+            db_session, reference=f"credit-party-{index}", name=f"Synthetic borrower {index}"
+        )
+        party.group_reference = None
+        party.attributes = {}
+        if representation == "group_reference":
+            party.group_reference = f"Synthetic group {index}"
+        elif representation != "name":
+            key = "group_reference" if representation == "attribute_reference" else representation
+            party.attributes = {key: f"Synthetic group {index}"}
+        common = dict(
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            as_of_date=AS_OF,
+            source_system="EXCEL_CSV",
+            ingestion_batch_id=party.ingestion_batch_id,
+            lineage_id=party.lineage_id,
+            validation_status="accepted",
+        )
+        position = CanonicalPosition(
+            **common,
+            source_reference=f"credit-position-{index}",
+            position_type="LOAN",
+            currency="GHS",
+        )
+        db_session.add(position)
+        db_session.flush()
+        db_session.add(
+            CanonicalPositionSnapshot(
+                **common,
+                source_reference=f"credit-snapshot-{index}",
+                position_id=position.id,
+                counterparty_id=party.id,
+                balance=Decimal(100),
+            )
+        )
+    db_session.commit()
+    db_session.expunge_all()
+    bank = db_session.get(Bank, BANK_A)
+    assert bank is not None
+    before = credit_concentration.load_credit_exposures(db_session, CTX, bank, AS_OF)
+    shared_before = credit_exposure_book.load_exposure_rows(
+        db_session,
+        CTX,
+        bank,
+        AS_OF,
+        credit_exposure_book.CONCENTRATION_POSITION_TYPES,
+    )
+    assert len({item.group_key for item in before}) == 2
+    limit = ParamConcentrationLimit(
+        organization_id=ORG_1,
+        jurisdiction_code="GH",
+        dimension="single_name",
+        limit_kind="share_of_book_pct",
+        value=Decimal(49),
+        effective_from=AS_OF,
+        approved_by="Synthetic board",
+        approval_timestamp=utc_now(),
+        bucket_key="cp:Synthetic borrower 0"
+        if representation == "name"
+        else "group:Synthetic group 0",
+    )
+    db_session.add(limit)
+    db_session.flush()
+    limited = credit_concentration.monitor(db_session, CTX, bank, AS_OF)
+    assert len(limited.breaches) == 1 and limited.breaches[0].key == before[0].group_key
+    db_session.delete(limit)
+    db_session.commit()
+    db_session.expunge_all()
+    provider.set_status(KEY_A, status)
+    after = credit_concentration.load_credit_exposures(db_session, CTX, bank, AS_OF)
+    assert after == before
+    monitor = credit_concentration.monitor(db_session, CTX, bank, AS_OF)
+    dimension = monitor.dimension("single_name")
+    assert dimension is not None and dimension.hhi == Decimal(5000)
+    assert [item.share_of_book_pct for item in dimension.buckets] == [Decimal(50), Decimal(50)]
+    db_session.info[SESSION_STATE] = PresentationState()
+    shared_after = credit_exposure_book.load_exposure_rows(
+        db_session,
+        CTX,
+        bank,
+        AS_OF,
+        credit_exposure_book.CONCENTRATION_POSITION_TYPES,
+    )
+    assert [item.group_key for item in shared_after] == [item.group_key for item in shared_before]
+    report = credit_concentration.concentration_read(db_session, CTX, bank, AS_OF)
+    displayed = next(item for item in report.dimensions if item.dimension == "single_name")
+    assert len(displayed.buckets) == 2 and {item.key for item in displayed.buckets} == {LOCKED_TEXT}
     db_session.info.pop(SESSION_STATE)
 
 

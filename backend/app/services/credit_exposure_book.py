@@ -47,7 +47,9 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.key_management.types import KeyIntegrityError
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
+from app.domain.credit.concentration_identity import opaque_group_key
 from app.domain.positions.credit import credit_classification_attributes
 from app.identity.public import Bank
 from app.live.public import (
@@ -57,6 +59,7 @@ from app.live.public import (
     credit_source_basis,
     load_position_records,
 )
+from app.models.canonical import CanonicalCounterparty
 from app.services import jurisdictions
 
 #: Adds the securities book, because issuer and sovereign concentration is real
@@ -77,8 +80,6 @@ ATTRIBUTE_NOTIONAL_REPORTING = "notional_ghs"
 #: already defaulted, so the loss is an ECL question rather than an unexpected-
 #: loss one. A stage identifier, not a calibration.
 STAGE_CREDIT_IMPAIRED = 3
-
-_GROUP_ATTRIBUTE_KEYS = ("group_reference", "group", "parent")
 
 
 @dataclass(frozen=True)
@@ -124,7 +125,7 @@ class ExposureRow:
         return self.ifrs9_stage == STAGE_CREDIT_IMPAIRED
 
 
-def canonical_group_key(source_reference: str, counterparty: Any) -> str:
+def canonical_group_key(source_reference: str, counterparty: CanonicalCounterparty | None) -> str:
     """Connected-group / single-name identity (``le_generation``'s pattern).
 
     A connected group beats the counterparty's own name, because an
@@ -132,14 +133,9 @@ def canonical_group_key(source_reference: str, counterparty: Any) -> str:
     position is its own name — never merged with another unknown.
     """
     if counterparty is not None:
-        if counterparty.group_reference:
-            return f"group:{counterparty.group_reference}"
-        cp_attributes = counterparty.attributes or {}
-        for key in _GROUP_ATTRIBUTE_KEYS:
-            value = cp_attributes.get(key)
-            if value:
-                return f"group:{value}"
-        return f"cp:{counterparty.name}"
+        if counterparty.concentration_group_blind_index is None:
+            raise KeyIntegrityError("The counterparty concentration identity is missing.")
+        return opaque_group_key(counterparty.concentration_group_blind_index)
     return f"pos:{source_reference}"
 
 

@@ -97,8 +97,9 @@ keys, including fields predating key connection. Protected executable BI payload
 refuse with a named locked response rather than being treated as empty queries or
 filters. Dashboard layouts, numeric queries and numeric filter values remain
 readable without a key, as do numeric alert and subscription configurations.
-Session-bound staff downloads return a placeholder without decrypting object
-contents, including when presentation state is missing. An encrypted filing snapshot remains protected; its filing
+Session-bound staff downloads and download-link issuance return the named support
+refusal without decrypting object contents, including when presentation state is
+missing. Integrity consumers receive that refusal instead of placeholder bytes. An encrypted filing snapshot remains protected; its filing
 status and source-run references remain readable.
 
 The bank UI distinguishes revocation from a service outage, offers Retry, and

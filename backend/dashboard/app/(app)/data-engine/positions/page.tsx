@@ -26,7 +26,8 @@ function formatAmount(value: string | null): string {
 }
 
 function LineageChain({ lineageId }: { lineageId: string }) {
-  const walk = useLineageWalk(lineageId);
+  const { bank } = useBankContext();
+  const walk = useLineageWalk(bank?.id, lineageId);
   if (walk.isPending) {
     return <p className="text-caption text-slate px-4 py-3">Walking lineage…</p>;
   }

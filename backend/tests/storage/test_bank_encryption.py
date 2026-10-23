@@ -4,7 +4,7 @@ from __future__ import annotations
 import io
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import BinaryIO, Literal, Never, Protocol, cast
 
@@ -19,22 +19,32 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.attestation.public import RegulatoryArtifactVersion
 from app.core.config import get_settings
+from app.core.errors import register_exception_handlers
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
 from app.core.key_management.presentation import (
-    LOCKED_TEXT,
     SESSION_STATE,
     SESSION_SUPPORT,
     PresentationState,
 )
 from app.core.key_management.schemas import BankKeyRotate
 from app.core.key_management.settings import get_key_settings
-from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
+from app.core.key_management.types import (
+    KeyReference,
+    KeyStatus,
+    KeyUnavailableError,
+    ProtectedSupportAccessError,
+)
+from app.core.tenancy import TenantContext
 from app.db.base import utc_now
+from app.features.ingest_data import get_ingestion_storage
 from app.identity.public import Bank
 from app.operator.services.bank_encryption import rotate_key
+from app.reporting.models.packages import RegulatoryPackage
+from app.reporting.service.artifact_versions import read_version_bytes
 from app.storage.access_log import HashChainedAccessLog
 from app.storage.api import router
 from app.storage.client import (
@@ -57,7 +67,7 @@ from scripts.backup_storage import (
     restore_storage_backup,
 )
 from tests.storage.contract import metadata_for
-from tests.support.helpers import ORG_1
+from tests.support.helpers import ORG_1, USER_1, headers
 
 KEY = KeyReference(
     "aws_kms", "arn:aws:kms:us-east-1:123456789012:key/first", "us-east-1", "123456789012"
@@ -164,10 +174,12 @@ def test_all_bank_object_tiers_encrypt_at_rest_and_refuse_revocation(
     assert decrypted.read() == content
     decrypted.close()
     bank_storage.provider.set_status(KEY, KeyStatus.DISABLED)
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError) as refused:
         bank_storage.storage.read(location)
-    with pytest.raises(StorageAccessError):
+    assert refused.value.revoked
+    with pytest.raises(KeyUnavailableError) as refused:
         bank_storage.storage.write(location, io.BytesIO(content), metadata_for(SLUG, tier, content))
+    assert refused.value.revoked
 
 
 @pytest.mark.parametrize("missing_presentation", [False, True])
@@ -191,12 +203,112 @@ def test_staff_export_download_returns_placeholder_without_unwrapping(
     if not missing_presentation:
         db_session.info[SESSION_STATE] = PresentationState(support=True)
     try:
-        _, downloaded = bank_storage.storage.for_session(db_session).read(location)
-        with downloaded:
-            assert downloaded.read().decode() == LOCKED_TEXT
+        with pytest.raises(ProtectedSupportAccessError):
+            bank_storage.storage.for_session(db_session).read(location)
+        with pytest.raises(ProtectedSupportAccessError):
+            bank_storage.storage.for_session(db_session).presigned_url(location, "read")
     finally:
         db_session.info.pop(SESSION_STATE, None)
         db_session.info.pop(SESSION_SUPPORT)
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_ingestion_upload_preserves_key_refusal_and_recovers(
+    bank_storage: BankStorage,
+    db_client: TestClient,
+    status: KeyStatus,
+) -> None:
+    overrides = db_client.app.dependency_overrides
+    previous = overrides.get(get_ingestion_storage)
+    overrides[get_ingestion_storage] = lambda: bank_storage.storage
+    try:
+        bank_storage.provider.set_status(KEY, status)
+        response = db_client.post(
+            "/api/v1/banks/BK-SAMP0001/ingestion-uploads",
+            headers=headers(),
+            files={"file": ("customers.csv", b"name\nSynthetic borrower\n", "text/csv")},
+        )
+        assert response.status_code == 503, response.text
+        assert response.json()["error"]["code"] == (
+            "bank_key_revoked" if status == KeyStatus.DISABLED else "bank_key_unavailable"
+        )
+        assert response.json()["error"]["message"] == (
+            "Your bank has turned off aequorOS access to protected data. Contact your bank administrator."
+            if status == KeyStatus.DISABLED
+            else "Can't reach your bank's key service. Retrying."
+        )
+        assert list(bank_storage.storage.list(SLUG, "temp")) == []
+        bank_storage.provider.set_status(KEY, KeyStatus.ACTIVE)
+        restored = db_client.post(
+            "/api/v1/banks/BK-SAMP0001/ingestion-uploads",
+            headers=headers(),
+            files={"file": ("customers.csv", b"name\nSynthetic borrower\n", "text/csv")},
+        )
+        assert restored.status_code == 201, restored.text
+        assert len(list(bank_storage.storage.list(SLUG, "temp"))) == 1
+    finally:
+        if previous is None:
+            overrides.pop(get_ingestion_storage, None)
+        else:
+            overrides[get_ingestion_storage] = previous
+
+
+def test_archived_staff_download_refuses_redaction_before_integrity_checks(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(registry, "provider_for", lambda _name: bank_storage.provider)
+    package = RegulatoryPackage(
+        organization_id=ORG_1,
+        bank_id="BK-SAMP0001",
+        return_family="liquidity",
+        return_code="LCR-NSFR",
+        reporting_date=date(2026, 6, 30),
+        frequency="monthly",
+        status="generated",
+        version=1,
+        generated_by=USER_1,
+        snapshot={},
+        source_runs=[],
+    )
+    db_session.add(package)
+    db_session.flush()
+    content = b"Synthetic archived return"
+    location = StorageLocation(SLUG, "outputs", "archives/return.csv")
+    stored = bank_storage.storage.for_session(db_session).write(
+        location,
+        io.BytesIO(content),
+        metadata_for(SLUG, "outputs", content),
+    )
+    version = RegulatoryArtifactVersion(
+        organization_id=ORG_1,
+        package_id=package.id,
+        kind="csv",
+        object_path=location.object_path,
+        storage_version_id=stored.version_id,
+        checksum_sha256=stored.metadata.checksum_sha256,
+        size_bytes=len(content),
+    )
+    db_session.add(version)
+    db_session.commit()
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, roles=("admin",))
+    assert (
+        read_version_bytes(db_session, ctx, "BK-SAMP0001", version.id, bank_storage.storage)[1]
+        == content
+    )
+    db_session.commit()
+    db_session.info[SESSION_SUPPORT] = True
+    try:
+        with pytest.raises(ProtectedSupportAccessError):
+            read_version_bytes(db_session, ctx, "BK-SAMP0001", version.id, bank_storage.storage)
+    finally:
+        db_session.info.pop(SESSION_SUPPORT)
+    version.checksum_sha256 = "0" * 64
+    db_session.commit()
+    with pytest.raises(HTTPException) as corrupted:
+        read_version_bytes(db_session, ctx, "BK-SAMP0001", version.id, bank_storage.storage)
+    assert corrupted.value.status_code == 409
 
 
 def test_rotation_adds_version_and_keeps_old_ciphertext_readable(
@@ -244,8 +356,9 @@ def test_rotation_adds_version_and_keeps_old_ciphertext_readable(
     _, latest = bank_storage.storage.read(location)
     assert latest.read() == b"third"
     latest.close()
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError) as refused:
         bank_storage.storage.read(location, original.version_id)
+    assert refused.value.revoked
 
 
 def test_object_substitution_and_legacy_plaintext_are_refused(bank_storage: BankStorage) -> None:
@@ -321,6 +434,7 @@ def test_download_link_checks_key_at_redemption_and_disallows_direct_upload(
         location, io.BytesIO(b"new export"), metadata_for(SLUG, "outputs", b"new export")
     )
     app = FastAPI()
+    register_exception_handlers(app)
     app.include_router(router, prefix="/api/v1")
     app.dependency_overrides[get_storage_client] = lambda: bank_storage.storage
     with TestClient(app) as client:
@@ -723,6 +837,7 @@ def test_s3_read_failures_are_audited_without_download_credentials(
     bank_storage.log.entries.clear()
     if consumer == "download":
         app = FastAPI()
+        register_exception_handlers(app)
         app.include_router(router, prefix="/api/v1")
         app.dependency_overrides[get_storage_client] = lambda: bank_storage.storage
         with TestClient(app) as client:

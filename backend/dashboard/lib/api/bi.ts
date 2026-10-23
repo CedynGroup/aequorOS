@@ -1028,7 +1028,7 @@ async function biNotificationsFetch(
     headers,
     body: init?.body === undefined ? undefined : JSON.stringify(init.body),
   });
-  observeProtectedData(response);
+  await observeProtectedData(response, `${apiBaseUrl}${path}`);
   if (response.status === 204) return null;
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {

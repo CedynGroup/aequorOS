@@ -33,6 +33,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.key_management.types import KeyUnavailableError
 from app.core.tls import require_boto_tls, require_https
 from app.storage.access_log import AccessLogHook, HashChainedAccessLog, null_access_log
 from app.storage.client import (
@@ -163,7 +164,7 @@ class S3CompatibleStorageClient(StorageClient):
 
         try:
             encrypted, envelope_id, bank_key_id = self._encryption.encrypt(location, data, metadata)
-        except StorageAccessError:
+        except (StorageAccessError, KeyUnavailableError):
             self._log("write", location, result="key-refused")
             raise
         effective_sse_key = self._settings.kms_key_id
@@ -245,6 +246,10 @@ class S3CompatibleStorageClient(StorageClient):
                 ).items()
             }
             plaintext = self._encryption.decrypt(location, body, descriptor.metadata, headers)
+        except KeyUnavailableError:
+            body.close()
+            self._log("read", location, result="key-refused")
+            raise
         except (StorageError, ValidationError, ValueError, KeyError) as exc:
             body.close()
             self._log("read", location, result="verification-refused")
@@ -371,7 +376,12 @@ class S3CompatibleStorageClient(StorageClient):
         if operation == "write":
             self._require_output_retention_policy(location)
         try:
+            if operation == "read":
+                self._encryption.require_read_access()
             bank_key_required = self._encryption.bank_key_required(location)
+        except KeyUnavailableError:
+            self._log(audit_operation, location, result="key-refused")
+            raise
         except (RuntimeError, SQLAlchemyError) as exc:
             self._log(audit_operation, location, result="configuration-refused")
             raise StorageAccessError("The bank key configuration could not be verified.") from exc

@@ -20,11 +20,14 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
+from app.core.key_management.fields import blind_index
+from app.core.key_management.presentation import LOCKED_TEXT, contains_placeholder
 from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
+from app.domain.credit.concentration_identity import counterparty_group_key, opaque_group_key
 from app.domain.credit.concentration_monitor import (
     ConcentrationLimit,
     ConcentrationMonitorResult,
@@ -40,6 +43,7 @@ from app.models import (
     ParamConcentrationLimit,
 )
 from app.services import institution_types, jurisdictions, sdi_capital
+from app.services.credit_exposure_book import canonical_group_key
 from app.services.live_state import load_current_facts
 from app.services.params import get_active_params
 
@@ -55,20 +59,6 @@ def _dec_or_none(value: Any) -> Decimal | None:
         return Decimal(str(value))
     except ArithmeticError:
         return None
-
-
-def _group_key(source_reference: str, counterparty: CanonicalCounterparty | None) -> str:
-    """Connected-group / single-name identity (le_generation's pattern)."""
-    if counterparty is not None:
-        if counterparty.group_reference:
-            return f"group:{counterparty.group_reference}"
-        cp_attributes = counterparty.attributes or {}
-        for key in ("group_reference", "group", "parent"):
-            value = cp_attributes.get(key)
-            if value:
-                return f"group:{value}"
-        return f"cp:{counterparty.name}"
-    return f"pos:{source_reference}"
 
 
 def load_credit_exposures(
@@ -105,6 +95,13 @@ def load_credit_exposures(
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type.in_(_CONCENTRATION_POSITION_TYPES),
         )
+        .options(
+            load_only(
+                CanonicalCounterparty.id,
+                CanonicalCounterparty.concentration_group_blind_index,
+                CanonicalCounterparty.country_code,
+            )
+        )
         .order_by(CanonicalPositionSnapshot.source_reference)
     ).all()
     base_ccy = jurisdictions.base_currency(bank)
@@ -125,7 +122,7 @@ def load_credit_exposures(
             ConcentrationExposure(
                 exposure_id=snapshot.source_reference,
                 ead=balance_ghs,
-                group_key=_group_key(snapshot.source_reference, counterparty),
+                group_key=canonical_group_key(snapshot.source_reference, counterparty),
                 sector=str(sector) if sector else None,
                 geography=counterparty.country_code if counterparty is not None else None,
                 product=product_row.product_code if product_row is not None else None,
@@ -188,7 +185,19 @@ def active_limits(
             dimension=row.dimension,
             limit_kind=row.limit_kind,
             value=row.value,
-            bucket_key=row.bucket_key,
+            bucket_key=(
+                opaque_group_key(
+                    blind_index(
+                        db,
+                        organization_id=ctx.organization_id,
+                        bank_id=bank.id,
+                        domain="counterparty.group",
+                        value=row.bucket_key,
+                    )
+                )
+                if row.dimension == "single_name" and row.bucket_key is not None
+                else row.bucket_key
+            ),
         )
         for row in rows
     )
@@ -224,10 +233,21 @@ def concentration_read(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
 
     result = monitor(db, ctx, bank, as_of)
     basis = "net_own_funds" if institution_types.institution_class(db, bank) == "sdi" else "tier1"
+    group_labels = {
+        canonical_group_key("", party): LOCKED_TEXT
+        if contains_placeholder([party.name, party.group_reference, party.attributes])
+        else counterparty_group_key(party.name, party.group_reference, party.attributes or {})
+        for party in db.scalars(
+            select(CanonicalCounterparty).where(
+                CanonicalCounterparty.organization_id == ctx.organization_id,
+                CanonicalCounterparty.bank_id == bank.id,
+            )
+        )
+    }
 
     def bucket(reading: Any) -> Any:
         return ConcentrationBucketRead(
-            key=reading.key,
+            key=group_labels.get(reading.key, reading.key),
             exposure_ghs=reading.exposure_ghs,
             loan_count=reading.loan_count,
             share_of_book_pct=reading.share_of_book_pct,

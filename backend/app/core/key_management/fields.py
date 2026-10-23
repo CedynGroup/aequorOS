@@ -42,6 +42,7 @@ from app.core.key_management.types import (
     ProtectedSupportAccessError,
 )
 from app.db.base import Base, UuidV4PrimaryKeyMixin
+from app.domain.credit.concentration_identity import counterparty_group_key
 
 FORMAT = FIELD_FORMAT
 _RESTORE = "bank_field_restore"
@@ -284,11 +285,15 @@ def _update_indexes(
     if table == "canonical_counterparties":
         name = cast(str, state.dict["name"])
         source = cast(str, state.dict["source_reference"])
-        group = cast(str | None, state.dict.get("group_reference"))
+        group = counterparty_group_key(
+            name,
+            cast(str | None, state.dict.get("group_reference")),
+            cast(dict[str, object], state.dict.get("attributes") or {}),
+        )
         for column, domain, value, normalization in (
             ("name_blind_index", "counterparty.name", name, "name"),
             ("source_reference_blind_index", "counterparty.source_reference", source, "identifier"),
-            ("concentration_group_blind_index", "counterparty.group", group or name, "identifier"),
+            ("concentration_group_blind_index", "counterparty.group", group, "identifier"),
         ):
             setattr(
                 obj,

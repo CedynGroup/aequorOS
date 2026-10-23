@@ -97,8 +97,8 @@ export const configuration = new Configuration({
   // returning nothing leaves the response untouched.
   middleware: [
     {
-      post: async ({ response }) => {
-        observeProtectedData(response);
+      post: async ({ response, url }) => {
+        await observeProtectedData(response, url);
         if (impersonationMarkerPresent() && response.status === 401) {
           markImpersonationExpired();
         }

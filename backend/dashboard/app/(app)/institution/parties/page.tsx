@@ -143,10 +143,12 @@ export default function RelatedPartiesPage() {
     [query.data]
   );
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{ bankId: string | undefined; party: RelatedPartyRead } | null>(null);
   const [adding, setAdding] = useState(false);
 
-  const selected = parties.find((party) => party.id === selectedId) ?? null;
+  const selected = selection && selection.bankId === bankId
+    ? parties.find((party) => party.id === selection.party.id) ?? selection.party
+    : null;
 
   const columns: Column<RelatedPartyRead>[] = [
     {
@@ -218,7 +220,7 @@ export default function RelatedPartiesPage() {
             type="button"
             onClick={() => {
               setAdding(true);
-              setSelectedId(null);
+              setSelection(null);
             }}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
           >
@@ -285,7 +287,7 @@ export default function RelatedPartiesPage() {
                 density="compact"
                 onRowClick={(party) => {
                   setAdding(false);
-                  setSelectedId((prev) => (prev === party.id ? null : party.id));
+                  setSelection((prev) => prev?.bankId === bankId && prev.party.id === party.id ? null : { bankId, party });
                 }}
                 rowClassName={(party) =>
                   party.id === selected?.id ? 'bg-action-light/40' : ''

@@ -437,12 +437,12 @@ export function useCanonicalPositions(bankId: string | undefined, offset = 0) {
   });
 }
 
-export function useLineageWalk(lineageId: string | undefined) {
+export function useLineageWalk(bankId: string | undefined, lineageId: string | undefined) {
   return useQuery({
-    queryKey: ['de-lineage', lineageId],
+    queryKey: ['de-lineage', bankId, lineageId],
     queryFn: () =>
       apiCall(() => ingestionApi.walkLineage({ lineageId: lineageId! })),
-    enabled: Boolean(lineageId),
+    enabled: Boolean(bankId && lineageId),
   });
 }
 
