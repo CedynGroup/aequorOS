@@ -668,6 +668,19 @@ def withdraw_counterparties(db: Session) -> CanonicalWithdrawal:
     return applied
 
 
+def write_counterparty_workbook(path: Path, name: str) -> None:
+    workbook = Workbook()
+    customers = workbook.active
+    assert customers is not None
+    customers.title = "Customers"
+    customers.append(["CustomerId", "CustomerName", "Type"])
+    customers.append([IDENTIFIER, name, "RETAIL_INDIVIDUAL"])
+    loans = cast(Worksheet, workbook.create_sheet("Loans"))
+    loans.append(["Reference", "Type", "Currency", "Balance", "CustomerId"])
+    loans.append(["synthetic-loan-1", "LOAN", "GHS", 123, IDENTIFIER])
+    workbook.save(path)
+
+
 @pytest.mark.parametrize(
     "connection_timing,withdraw",
     [
@@ -726,17 +739,8 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
     )
     storage = InMemoryStorageClient()
     for name in (initial_name, "Synthetic replacement borrower"):
-        workbook = Workbook()
-        customers = workbook.active
-        assert customers is not None
-        customers.title = "Customers"
-        customers.append(["CustomerId", "CustomerName", "Type"])
-        customers.append([IDENTIFIER, name, "RETAIL_INDIVIDUAL"])
-        loans = cast(Worksheet, workbook.create_sheet("Loans"))
-        loans.append(["Reference", "Type", "Currency", "Balance", "CustomerId"])
-        loans.append(["synthetic-loan-1", "LOAN", "GHS", 123, IDENTIFIER])
         path = tmp_path / "synthetic.xlsx"
-        workbook.save(path)
+        write_counterparty_workbook(path, name)
         result = ingestion.start_ingestion(
             db_session,
             CTX,

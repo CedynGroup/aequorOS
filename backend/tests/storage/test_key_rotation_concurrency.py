@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from threading import Event, Lock
+from typing import cast
 
 import pytest
 from sqlalchemy import Connection, Engine, event, select, text
@@ -111,7 +112,8 @@ def test_usage_recording_cannot_delay_same_bank_operations_or_rotation(
     entered, release = Event(), Event()
 
     def pause_usage(peer: Session, _flush: UOWTransaction) -> None:
-        if any(isinstance(row, ObjectKeyEnvelope) for row in peer.dirty):
+        dirty = cast(Iterable[object], peer.dirty)
+        if any(isinstance(row, ObjectKeyEnvelope) for row in dirty):
             entered.set()
             assert release.wait(10)
 
