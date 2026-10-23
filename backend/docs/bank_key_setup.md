@@ -83,6 +83,6 @@ rollout. The provisioning API remains authoritative: when enforcement is enabled
 a keyless submission fails the `kms` step, and the console displays that refusal
 in the provisioning result.
 
-For connected-key failures, existing-file migration and enforcement cutover, follow
+For connected-key failures and optional-key enforcement settings, follow
 [the bank encryption contract](bank_encryption.md#standing-contract) and its
 [scope and follow-ups](bank_encryption.md#scope-and-executable-evidence).

@@ -15,7 +15,7 @@ surface consults (`tests/bi/api/test_bi_authorization_matrix.py`,
 before it reads anything (`tests/bi/api/test_bi_routes.py`).
 
 For connected-key banks, capability availability additionally follows the
-[bank-held encryption BI boundary](bank_field_encryption.md#bi-identity-boundary-approved-numeric-only-pilot).
+[bank-held encryption BI boundary](bank_field_encryption.md#bi).
 The binding rows below do not override that boundary.
 
 Run the inventory against each target deployment immediately before the release

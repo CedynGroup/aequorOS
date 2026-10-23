@@ -35,7 +35,7 @@ a distinct wrapping secret from that version; the object SDK message uses it
 with a raw AES keyring. The SDK generates and wraps the actual payload key and
 owns the encryption format and integrity checks. Only the wrapped version and
 its exact KMS reference are persisted in `object_key_envelopes`; S3 metadata
-holds the version UUID. Legacy independent object envelopes remain readable.
+holds the version UUID.
 
 Each database unit of work unwraps each required version once, sharing it
 between field loads and session-bound storage. Plaintext version material is
@@ -43,7 +43,7 @@ session-local and excluded from logs; commit, rollback and close discard it.
 Standalone operations own short-lived units. Revocation refuses the next unit
 once KMS enforces the permission change; an already admitted unit may complete.
 No persistent or process-wide plaintext cache is permitted. See the
-[field design](bank_field_encryption.md#envelope-and-application-boundary).
+[field design](bank_field_encryption.md#keys-and-storage).
 
 ## Bank-side AWS setup
 
@@ -152,7 +152,7 @@ Routes verify the bank belongs to the organization, require staff inspection
 authority and write operator audit events in their transaction. The tenant API
 mounts none of these routes. Status observations do not authorize access; provider
 checks and key reuse follow the
-[unit-of-work boundary](bank_field_encryption.md#envelope-and-application-boundary).
+[unit-of-work boundary](bank_field_encryption.md#keys-and-storage).
 
 ## Downloads
 
@@ -222,9 +222,8 @@ recorded keys for its recovery lifetime; live rotation does not migrate those
 wrappers. Physical historical database backups are immutable and are not
 rewritten by live rotation.
 
-Existing platform-only/plaintext objects need an explicitly planned migration
-before connecting a bank key or enabling mandatory enforcement; the new reader
-refuses them. Do not turn the legacy reader back on to complete onboarding.
+Existing platform-only/plaintext objects are not converted; connected-key reads
+refuse them.
 Exported plaintext that a user already downloaded is outside object-storage
 revocation.
 
