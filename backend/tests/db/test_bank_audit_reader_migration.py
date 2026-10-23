@@ -25,6 +25,11 @@ def test_audit_reader_replays_after_application_ownership_changes(
 ) -> None:
     schema = migrated_postgres_schema
     config = alembic_config_for_app()
+    lineage_indexes = {
+        "ix_canonical_positions_lineage_id",
+        "ix_canonical_position_snapshots_lineage_id",
+    }
+    assert schema.indexes(lineage_indexes) == lineage_indexes
 
     def assert_audit_index_columns(expected: dict[str, list[str]]) -> None:
         with schema.app_engine.connect() as connection:
@@ -62,7 +67,8 @@ def test_audit_reader_replays_after_application_ownership_changes(
             .all()
         )
 
-    command.downgrade(config, "202610120099")
+    command.downgrade(config, "202610140100")
+    assert schema.indexes(lineage_indexes) == lineage_indexes
     assert schema.indexes({"ix_audit_events_subject"}) == set()
     assert_audit_index_columns({"ix_audit_events_organization_id": ["organization_id"]})
 
@@ -77,6 +83,7 @@ def test_audit_reader_replays_after_application_ownership_changes(
         monkeypatch.setattr(audit_attribution, name, refuse_current_builder)
 
     command.upgrade(config, "202610120100")
+    assert schema.indexes(lineage_indexes) == lineage_indexes
     assert schema.indexes({"ix_audit_events_subject"}) == {"ix_audit_events_subject"}
     assert_audit_index_columns({"ix_audit_events_subject": ["organization_id", "entity_id"]})
     with schema.app_engine.connect() as connection:
@@ -95,7 +102,9 @@ def test_audit_reader_replays_after_application_ownership_changes(
         )
     assert replayed == original
 
-    command.downgrade(config, "202610120099")
+    command.downgrade(config, "202610140100")
+    assert schema.indexes(lineage_indexes) == lineage_indexes
     assert_audit_index_columns({"ix_audit_events_organization_id": ["organization_id"]})
     command.upgrade(config, "202610120100")
+    assert schema.indexes(lineage_indexes) == lineage_indexes
     assert_audit_index_columns({"ix_audit_events_subject": ["organization_id", "entity_id"]})

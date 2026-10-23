@@ -1,7 +1,7 @@
 """Officer bundles and tenant/bank-scoped audit verification reads.
 
 Revision ID: 202610120100
-Revises: 202610120099
+Revises: 202610140100
 
 No bindings are backfilled: a bank must explicitly assign its officers.
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "202610120100"
-down_revision = "202610120099"
+down_revision = "202610140100"
 branch_labels = None
 depends_on = None
 
