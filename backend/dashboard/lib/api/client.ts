@@ -42,6 +42,7 @@ import {
   TemenosApi,
   WindowAnalyticsApi,
 } from "@aequoros/risk-service-api";
+import { observeProtectedData } from "./protectedData";
 import { getSession } from "next-auth/react";
 import { getAccessToken, setAccessToken } from "./token";
 import {
@@ -97,6 +98,7 @@ export const configuration = new Configuration({
   middleware: [
     {
       post: async ({ response }) => {
+        observeProtectedData(response);
         if (impersonationMarkerPresent() && response.status === 401) {
           markImpersonationExpired();
         }

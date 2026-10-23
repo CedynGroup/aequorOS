@@ -81,3 +81,27 @@ and writes, cross-bank isolation, exact matching, old-version reads after
 rotation, numeric BI and identity refusals. PostgreSQL/storage tests exercise
 concurrent ingestion, push, exports, attachments and downloads, bounded unwrap
 counts and published-manifest readability after rollback.
+
+## Locked presentation reads
+
+Tenant GET/HEAD requests carry request-local disclosure state. If a provider is
+unreachable or disabled, covered text becomes `🔒 Protected data`; covered report
+objects carry `_aequoros_protected_data` with `unavailable` or `revoked`. The
+`X-Aequoros-Protected-Data` response header reports state by bank. Numeric columns,
+record identities, dates and statuses retain their original values. Integrity
+failures still refuse access. Background work and mutation requests never use
+presentation substitution, and submitted placeholders cannot overwrite fields.
+
+Staff inspection sessions substitute covered fields without unwrapping bank
+keys, including fields predating key connection. Protected executable BI payloads
+refuse with a named locked response rather than being treated as empty queries or
+filters. Numeric BI queries and certified packs remain independent of these
+stored payloads. An encrypted filing snapshot remains protected; its filing
+status and source-run references remain readable.
+
+The bank UI distinguishes revocation from a service outage, offers Retry, and
+refetches active queries every five seconds while a bank is locked. Successful
+protected reads clear the notice and restore values. Unrelated numeric responses
+do not clear a notice. Mutation errors keep the editor mounted and its draft
+values intact. Protected report previews show a locked panel, never an empty or
+successful validation report.

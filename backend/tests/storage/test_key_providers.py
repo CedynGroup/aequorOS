@@ -244,8 +244,10 @@ def test_aws_revoked_decrypt_grant_refuses_after_warm_read() -> None:
                 service_error_code="AccessDeniedException",
                 service_message="bank revoked the workload grant",
             )
-            with pytest.raises(KeyUnavailableError):
+            with pytest.raises(KeyUnavailableError) as refused:
                 provider.unwrap(key, data_key.wrapped, _CONTEXT)
+            assert refused.value.revoked
+            assert "turned off aequorOS" in refused.value.public_message
             typed.assert_no_pending_responses()
 
 

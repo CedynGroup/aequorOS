@@ -6,6 +6,7 @@
  * the exported artifacts render amounts in GHS '000 per the BoG convention.
  */
 
+import ProtectedDataPlaceholder, { protectedPayloadReason } from '@/components/ui/ProtectedDataPlaceholder';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import { labelize } from '@/lib/api/values';
 import { regShort } from '@/lib/format';
@@ -218,6 +219,7 @@ export default function SnapshotPreview({
   /** One line saying what the marks mean — required when marks are shown. */
   changedNote?: string;
 }) {
+  if (protectedPayloadReason(snapshot)) return <ProtectedDataPlaceholder value={snapshot} />;
   const sections = snapshot.sections ?? [];
   const totals = snapshot.totals ?? [];
   const marking = Boolean(changedLineKeys && changedLineKeys.size > 0);

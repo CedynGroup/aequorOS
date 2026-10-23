@@ -6,8 +6,9 @@
  * data is available.
  */
 
+import { isProtectedDataError } from '@/lib/api/protectedData';
 import type { ReactNode } from 'react';
-import { AlertCircle, Database, RotateCw } from 'lucide-react';
+import { AlertCircle, Database, LockKeyhole, RotateCw } from 'lucide-react';
 import { isApiError, isModuleUnavailable } from '@/lib/api/client';
 import { SkeletonCard, SkeletonChart, SkeletonTable } from './Skeleton';
 import PageContainer from './PageContainer';
@@ -21,6 +22,18 @@ export function ErrorPanel({
   onRetry?: () => void;
   title?: string;
 }) {
+  if (isApiError(error) && isProtectedDataError(error)) {
+    return (
+      <div role="status" className="card flex items-start gap-3 border border-border bg-surface p-5">
+        <LockKeyhole size={18} aria-hidden />
+        <div className="flex-1">
+          <p className="font-medium">Protected data locked</p>
+          <p className="mt-1">{error.message}</p>
+        </div>
+        {onRetry && <button type="button" onClick={onRetry} className="rounded border border-border px-3 py-1">Retry</button>}
+      </div>
+    );
+  }
   // "No computed data yet" is a valid state, not a failure — render a neutral
   // onboarding panel (not a red error), and don't offer a "Retry" as if it broke.
   if (isModuleUnavailable(error)) {

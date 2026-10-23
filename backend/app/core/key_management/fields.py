@@ -25,8 +25,20 @@ from sqlalchemy.types import TypeDecorator
 from app.core.ids import new_uuid4, new_uuid7
 from app.core.key_management import registry, sdk
 from app.core.key_management.models import BankEncryptionKey
+from app.core.key_management.presentation import (
+    LOCKED_JSON,
+    LOCKED_TEXT,
+    SESSION_STATE,
+    PresentationState,
+    contains_placeholder,
+)
 from app.core.key_management.settings import get_key_settings
-from app.core.key_management.types import FIELD_FORMAT, KeyIntegrityError, KeyUnavailableError
+from app.core.key_management.types import (
+    FIELD_FORMAT,
+    KeyIntegrityError,
+    KeyUnavailableError,
+    ProtectedSupportAccessError,
+)
 from app.db.base import Base, UuidV4PrimaryKeyMixin
 
 FORMAT = FIELD_FORMAT
@@ -336,6 +348,8 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                 if state.pending or state.attrs[col.attribute].history.has_changes()
             ]
             values = {col.attribute: cast(object, state.dict.get(col.attribute)) for col in changed}
+            if any(contains_placeholder(value) for value in values.values()):
+                raise KeyUnavailableError("Locked placeholders cannot be saved as protected data.")
             restores.append(_Restore(instance, values))
             if row is None:
                 if bank is not None:
@@ -389,6 +403,62 @@ def restore_after_failure(db: Session, _previous: object) -> None:
     _restore(db, failed=True)
 
 
+def _lock_field(instance: Base, col: FieldColumn, reason: str) -> None:
+    # Structured executable payloads must never become an empty query/filter.
+    # Their readers receive a named refusal, rendered as a locked panel.
+    state = cast(InstanceState[object], inspect(instance))
+    if cast(Table, state.mapper.local_table).name.startswith("bi_"):
+        if reason == "support":
+            raise ProtectedSupportAccessError()
+        raise KeyUnavailableError("Protected configuration is locked.", revoked=reason == "revoked")
+    value: object = LOCKED_TEXT if isinstance(col.kind, ProtectedText) else {LOCKED_JSON: reason}
+    attributes.set_committed_value(instance, col.attribute, value)
+
+
+def _presentation_locked(
+    instance: Base, col: FieldColumn, presentation: object, bank: str | None
+) -> bool:
+    if not isinstance(presentation, PresentationState):
+        return False
+    reason = "support" if presentation.support else presentation.banks.get(bank or "")
+    if reason not in {"support", "revoked", "unavailable"}:
+        return False
+    if bank is not None:
+        presentation.record(bank, reason)
+    _lock_field(instance, col, reason)
+    return True
+
+
+def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
+    db: Session,
+    row: BankEncryptionKey,
+    value: SealedField,
+    presentation: object,
+    instance: Base,
+    col: FieldColumn,
+) -> bytes | None:
+    try:
+        secret = registry.open_envelope(
+            db,
+            row,
+            value.envelope_id,
+            _envelope_context(row.organization_id, row.bank_id),
+            registry.provider_for,
+        ).plaintext
+    except KeyIntegrityError:
+        raise
+    except KeyUnavailableError as exc:
+        if not isinstance(presentation, PresentationState):
+            raise
+        reason = "revoked" if exc.revoked else "unavailable"
+        presentation.record(row.bank_id, reason)
+        _lock_field(instance, col, reason)
+        return None
+    if isinstance(presentation, PresentationState):
+        presentation.record(row.bank_id, "available")
+    return secret
+
+
 def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
     state = cast(InstanceState[object], inspect(instance))
     columns = field_columns(state)
@@ -413,35 +483,40 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
         row = registry.bank_key(db, organization, bank) if bank is not None else None
         if bank is not None and row is None and get_key_settings().bank_key_required:
             raise KeyUnavailableError("The bank encryption key is not connected.")
+        presentation = db.info.get(SESSION_STATE)
         for col in present:
             value = cast(object, state.dict[col.attribute])
+            if _presentation_locked(instance, col, presentation, bank):
+                continue
             if not isinstance(value, SealedField):
                 continue
             if row is None:
                 raise KeyUnavailableError("The bank encryption key is not connected.")
             context = _context(state, organization, row.bank_id)
-            secret = registry.open_envelope(
-                db,
-                row,
-                value.envelope_id,
-                _envelope_context(organization, row.bank_id),
-                registry.provider_for,
-            ).plaintext
+            secret = _field_secret(db, row, value, presentation, instance, col)
+            if secret is None:
+                continue
             plaintext = sdk.decrypt(
                 value.message,
                 sdk.raw_keyring(secret, name=FORMAT),
                 {**context, "field": col.column},
             )
-            decoded = _JSON.validate_json(plaintext)
-            if isinstance(col.kind, ProtectedText) and not isinstance(decoded, str):
-                raise KeyIntegrityError("Encrypted text field has an invalid value.")
-            if isinstance(col.kind, ProtectedJSON):
-                valid_shape = (
-                    isinstance(decoded, list) if col.kind.empty_list else isinstance(decoded, dict)
-                )
-                if not valid_shape:
-                    raise KeyIntegrityError("Encrypted JSON field has an invalid value.")
-            attributes.set_committed_value(instance, col.attribute, decoded)
+            attributes.set_committed_value(
+                instance, col.attribute, _decode_plaintext(col, plaintext)
+            )
+
+
+def _decode_plaintext(col: FieldColumn, plaintext: bytes) -> object:
+    decoded = _JSON.validate_json(plaintext)
+    if isinstance(col.kind, ProtectedText) and not isinstance(decoded, str):
+        raise KeyIntegrityError("Encrypted text field has an invalid value.")
+    if isinstance(col.kind, ProtectedJSON):
+        valid_shape = (
+            isinstance(decoded, list) if col.kind.empty_list else isinstance(decoded, dict)
+        )
+        if not valid_shape:
+            raise KeyIntegrityError("Encrypted JSON field has an invalid value.")
+    return decoded
 
 
 @event.listens_for(Base, "load", propagate=True, restore_load_context=True)

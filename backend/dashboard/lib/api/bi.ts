@@ -22,6 +22,7 @@
  * opened anyway.
  */
 
+import { observeProtectedData } from "./protectedData";
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -1027,6 +1028,7 @@ async function biNotificationsFetch(
     headers,
     body: init?.body === undefined ? undefined : JSON.stringify(init.body),
   });
+  observeProtectedData(response);
   if (response.status === 204) return null;
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {

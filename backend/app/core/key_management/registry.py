@@ -41,7 +41,10 @@ def reference(row: BankEncryptionKey | ObjectKeyEnvelope) -> KeyReference:
 
 def require_active(description: KeyDescription) -> KeyReference:
     if description.status != KeyStatus.ACTIVE:
-        raise KeyUnavailableError("The bank encryption key is unavailable.")
+        raise KeyUnavailableError(
+            "The bank encryption key is unavailable.",
+            revoked=description.status == KeyStatus.DISABLED,
+        )
     return description.reference
 
 

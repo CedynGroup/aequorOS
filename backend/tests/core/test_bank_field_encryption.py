@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import Uuid, bindparam, select, text
@@ -29,6 +30,12 @@ from app.core.ids import new_uuid7
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
+from app.core.key_management.presentation import (
+    LOCKED_JSON,
+    LOCKED_TEXT,
+    SESSION_STATE,
+    PresentationState,
+)
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.data_engine.service.field_search import find_counterparties
@@ -52,7 +59,7 @@ from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.services import canonical_withdrawal, ingestion
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.bi.fixtures import materialize_bi_plane
-from tests.support.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 BANK_A = "BK-SAMP0001"
@@ -845,9 +852,11 @@ def test_counterparty_reversal_preserves_natural_key_scope(
         assert replacement.withdrawn_at is None and replacement.superseded_by is None
 
 
+@pytest.mark.parametrize("status", [KeyStatus.ACTIVE, KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
 def test_connected_bank_bi_keeps_numeric_facts_without_identity_copies(
     db_session: Session,
     provider: LocalKeyProvider,
+    status: KeyStatus,
 ) -> None:
 
     connect(db_session, provider)
@@ -889,6 +898,7 @@ def test_connected_bank_bi_keeps_numeric_facts_without_identity_copies(
     assert identity[2] is None
     assert db_session.scalar(select(BiFactPositionDaily.counterparty_group)) is None
     assert db_session.scalar(select(BiFactPositionEom.counterparty_group)) is None
+    provider.set_status(KEY_A, status)
     q = BiQuery(measures=["deposits.balance_rc"], time=BiTime(as_of=AS_OF))
     compiled = compile_query(db_session, catalogue(), q, organization_id=ORG_1, bank_id=BANK_A)
     result = execute(db_session, compiled, timeout_ms=1000, row_cap=10)
@@ -1118,3 +1128,118 @@ def test_key_connection_encrypts_new_writes_without_rewriting_existing_records(
     db_session.expunge_all()
     restored = db_session.get(CanonicalCounterparty, current_id)
     assert restored is not None and restored.name == NAME
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_presentation_locks_and_recovers_without_changing_numeric_fields(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    row = counterparty(db_session)
+    row_id = row.id
+    db_session.commit()
+    provider.set_status(KEY_A, status)
+    db_session.expunge_all()
+    view = PresentationState()
+    db_session.info[SESSION_STATE] = view
+    locked = db_session.get(CanonicalCounterparty, row_id)
+    assert locked is not None
+    assert locked.name == LOCKED_TEXT
+    assert locked.attributes == {
+        LOCKED_JSON: "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    }
+    assert locked.as_of_date == AS_OF and locked.validation_status == "accepted"
+    assert view.banks[BANK_A] == ("revoked" if status == KeyStatus.DISABLED else "unavailable")
+    # Even an explicit echo of a locked form cannot overwrite the original ciphertext.
+    locked.name = "Synthetic edited name"
+    with pytest.raises(KeyUnavailableError) as refused:
+        db_session.flush()
+    assert refused.value.revoked == (status == KeyStatus.DISABLED)
+    db_session.rollback()
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    db_session.expunge_all()
+    db_session.info[SESSION_STATE] = PresentationState()
+    recovered = db_session.get(CanonicalCounterparty, row_id)
+    assert recovered is not None and recovered.name == NAME
+    assert recovered.attributes == {"contact_name": NAME}
+    assert cast(PresentationState, db_session.info[SESSION_STATE]).banks[BANK_A] == "available"
+    db_session.info.pop(SESSION_STATE)
+
+
+def test_support_presentation_hides_fields_without_unwrapping(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connect(db_session, provider)
+    row_id = counterparty(db_session).id
+    db_session.commit()
+    db_session.expunge_all()
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Support presentation must not unwrap bank data")
+
+    monkeypatch.setattr(provider, "unwrap", refuse_unwrap)
+    db_session.info[SESSION_STATE] = PresentationState(support=True)
+    row = db_session.get(CanonicalCounterparty, row_id)
+    assert row is not None and row.name == LOCKED_TEXT
+    assert cast(PresentationState, db_session.info[SESSION_STATE]).banks == {BANK_A: "support"}
+    db_session.info.pop(SESSION_STATE)
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_profile_http_locked_read_write_and_recovery(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    party = institution_profile.create_related_party(
+        db_session,
+        CTX,
+        BANK_A,
+        RelatedPartyCreate(
+            reason="Synthetic protected profile",
+            party_type="individual",
+            full_name=NAME,
+            contact={"email": "synthetic@example.test"},
+            roles=[RelatedPartyRoleInput(role="director")],
+        ),
+    )
+    db_session.commit()
+    provider.set_status(KEY_A, status)
+    db_session.expunge_all()
+    response = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
+    assert response.status_code == 200, response.text
+    assert response.json()["related_parties"][0]["full_name"] == LOCKED_TEXT
+    reason = "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
+    assert "no-store" in response.headers["cache-control"]
+    payload: dict[str, object] = {
+        "reason": "Synthetic retained edit",
+        "party_type": "individual",
+        "full_name": "Synthetic draft stays in browser",
+        "contact": {},
+        "roles": [{"role": "director"}],
+    }
+    refused = db_client.put(
+        f"/api/v1/banks/{BANK_A}/related-parties/{party.id}",
+        headers=headers(),
+        json=payload,
+    )
+    assert refused.status_code == 503, refused.text
+    assert (
+        refused.json()["error"]["message"]
+        == KeyUnavailableError(
+            "private provider detail",
+            revoked=status == KeyStatus.DISABLED,
+        ).public_message
+    )
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    restored = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["related_parties"][0]["full_name"] == NAME
+    assert json.loads(restored.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
