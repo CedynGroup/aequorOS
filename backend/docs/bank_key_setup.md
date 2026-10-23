@@ -110,8 +110,11 @@ A successful probe does not connect or replace a key. Connect and rotation repea
 their own custody probe. Disabled keys, incorrect ARNs/accounts/regions and
 operation-specific permission failures produce actionable, sanitized messages.
 Connected-key tests update the last checked state; failures preserve the last
-successful-use timestamp. Successful provider use in committed registry
-operations records that timestamp. Existing deployments have no historical
+successful-use timestamp. Ordinary field and object use records version telemetry
+best-effort in a separate short background transaction when the caller transaction ends,
+throttled to five minutes and skipping locked versions. It never updates the
+bank key row used by rotation. Status includes the latest recorded version use.
+Existing deployments have no historical
 successful-use timestamp until a new successful operation occurs.
 
 The status panel shows connection, the immutable aequorOS data-key version,

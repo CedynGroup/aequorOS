@@ -49,7 +49,7 @@ def status(db: Session, ctx: TenantContext, bank_id: str) -> BankKeyStatusRead:
         result.rotation_period_days = row.rotation_period_days
         result.rotation_confirmed_at = row.rotation_confirmed_at
         result.current_version = row.current_version_id
-        result.last_successful_use_at = row.last_successful_use_at
+        result.last_successful_use_at = registry.last_successful_use(db, row)
         result.last_rotated_at = row.last_rotated_at
     return result
 

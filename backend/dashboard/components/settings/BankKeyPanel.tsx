@@ -43,7 +43,7 @@ export function BankKeySetup({ bankId }: { bankId: string }) {
   const [account, setAccount] = useState("");
   const [reason, setReason] = useState("");
   const [period, setPeriod] = useState(365);
-  const [confirmed, setConfirmed] = useState(false);
+  const [acknowledgedCommand, setAcknowledgedCommand] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -330,7 +330,7 @@ export function BankKeySetup({ bankId }: { bankId: string }) {
                       setKeyId("");
                       setRegion("");
                       setAccount("");
-                      setConfirmed(false);
+                      setAcknowledgedCommand("");
                       setMessage(
                         data?.connected
                           ? "Replacement key connected. Rotation recorded in the audit log."
@@ -368,7 +368,7 @@ export function BankKeySetup({ bankId }: { bankId: string }) {
                     value={period}
                     onChange={(e) => {
                       setPeriod(Number(e.target.value));
-                      setConfirmed(false);
+                      setAcknowledgedCommand("");
                     }}
                   />
                 </label>
@@ -379,15 +379,17 @@ export function BankKeySetup({ bankId }: { bankId: string }) {
                 <label className="flex gap-2 text-body">
                   <input
                     type="checkbox"
-                    checked={confirmed}
-                    onChange={(e) => setConfirmed(e.target.checked)}
+                    checked={acknowledgedCommand === command}
+                    onChange={(e) =>
+                      setAcknowledgedCommand(e.target.checked ? command : "")
+                    }
                   />
                   I ran this command successfully in the bank’s AWS account.
                 </label>
                 <button
                   className={buttonClass}
                   disabled={
-                    !confirmed ||
+                    acknowledgedCommand !== command ||
                     !Number.isInteger(period) ||
                     period < 90 ||
                     period > 2560
@@ -406,7 +408,7 @@ export function BankKeySetup({ bankId }: { bankId: string }) {
                         }),
                       );
                       cache.setQueryData(queryKey, result);
-                      setConfirmed(false);
+                      setAcknowledgedCommand("");
                       setMessage(
                         "Bank-reported schedule confirmation recorded in the audit log.",
                       );

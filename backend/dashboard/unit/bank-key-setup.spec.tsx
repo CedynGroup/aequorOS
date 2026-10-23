@@ -231,3 +231,47 @@ it("invalidates the probe after edited references in a generated transition sequ
     { numRuns: 8 },
   );
 });
+
+it("requires acknowledgement of the refreshed key and edited interval", async () => {
+  boundary.status.mockResolvedValue(connected);
+  const replacement = {
+    ...connected,
+    currentVersion: "version-two",
+    key: { ...connected.key, keyId: `${arn}-replacement` },
+  };
+  boundary.confirm.mockResolvedValue(replacement);
+  mount();
+  const button = await screen.findByRole("button", {
+    name: "Record schedule confirmation",
+  });
+  fireEvent.click(screen.getByRole("checkbox"));
+  expect(button).toBeEnabled();
+  boundary.status.mockResolvedValue(replacement);
+  fireEvent.click(screen.getByRole("button", { name: "Test connected key" }));
+  await screen.findByText(replacement.key.keyId);
+  expect(screen.getByRole("checkbox")).not.toBeChecked();
+  expect(button).toBeDisabled();
+  fireEvent.click(button);
+  expect(boundary.confirm).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.change(
+    screen.getByLabelText("Rotation interval in days (90–2560)"),
+    {
+      target: { value: "180" },
+    },
+  );
+  expect(screen.getByRole("checkbox")).not.toBeChecked();
+  expect(button).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(boundary.confirm).toHaveBeenCalledWith({
+      bankId: "BK-SYNTHETIC",
+      bankKeyScheduleConfirm: {
+        keyId: replacement.key.keyId,
+        periodDays: 180,
+        reason: "Bank administrator confirms native AWS rotation was enabled.",
+      },
+    }),
+  );
+});

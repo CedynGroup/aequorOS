@@ -100,6 +100,7 @@ class ObjectKeyEnvelope(UuidV4PrimaryKeyMixin, Base):
     key_id: Mapped[str] = mapped_column(String(2048), nullable=False)
     region: Mapped[str] = mapped_column(String(64), nullable=False)
     owner_account: Mapped[str] = mapped_column(String(12), nullable=False)
+    last_successful_use_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
