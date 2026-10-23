@@ -647,8 +647,8 @@ def test_locked_groups_remain_distinct_and_numeric_training_stays_available(
     db_session.commit()
     db_session.expunge_all()
     provider.set_status(KEY_A, status)
-    for model in (deposit_stability, nmd_duration):
-        result = model.estimate(db_session, CTX, BANK_A, AS_OF, BehavioralTrainingConfig())
+    for estimate in (deposit_stability.estimate, nmd_duration.estimate):
+        result = estimate(db_session, CTX, BANK_A, AS_OF, BehavioralTrainingConfig())
         assert result.products
     db_session.info[SESSION_STATE] = PresentationState()
     report = get_behavioral_liquidity_report(db_session, CTX, BANK_A)
@@ -663,17 +663,7 @@ def test_locked_groups_remain_distinct_and_numeric_training_stays_available(
     db_session.info.pop(SESSION_STATE)
 
 
-@pytest.mark.parametrize(
-    "representation", ["group_reference", "attribute_reference", "group", "parent", "name"]
-)
-@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
-def test_credit_concentration_identity_survives_locked_labels(
-    db_session: Session,
-    provider: LocalKeyProvider,
-    representation: str,
-    status: KeyStatus,
-) -> None:
-    connect(db_session, provider)
+def _credit_identity_positions(db_session: Session, representation: str) -> None:
     for index in range(2):
         party = counterparty(
             db_session, reference=f"credit-party-{index}", name=f"Synthetic borrower {index}"
@@ -713,6 +703,20 @@ def test_credit_concentration_identity_survives_locked_labels(
         )
     db_session.commit()
     db_session.expunge_all()
+
+
+@pytest.mark.parametrize(
+    "representation", ["group_reference", "attribute_reference", "group", "parent", "name"]
+)
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_credit_concentration_identity_survives_locked_labels(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    representation: str,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    _credit_identity_positions(db_session, representation)
     bank = db_session.get(Bank, BANK_A)
     assert bank is not None
     before = credit_concentration.load_credit_exposures(db_session, CTX, bank, AS_OF)

@@ -218,7 +218,9 @@ def test_ingestion_upload_preserves_key_refusal_and_recovers(
     db_client: TestClient,
     status: KeyStatus,
 ) -> None:
-    overrides = db_client.app.dependency_overrides
+    app = db_client.app
+    assert isinstance(app, FastAPI)
+    overrides = app.dependency_overrides
     previous = overrides.get(get_ingestion_storage)
     overrides[get_ingestion_storage] = lambda: bank_storage.storage
     try:
@@ -233,7 +235,8 @@ def test_ingestion_upload_preserves_key_refusal_and_recovers(
             "bank_key_revoked" if status == KeyStatus.DISABLED else "bank_key_unavailable"
         )
         assert response.json()["error"]["message"] == (
-            "Your bank has turned off aequorOS access to protected data. Contact your bank administrator."
+            "Your bank has turned off aequorOS access to protected data. "
+            "Contact your bank administrator."
             if status == KeyStatus.DISABLED
             else "Can't reach your bank's key service. Retrying."
         )
@@ -258,7 +261,10 @@ def test_archived_staff_download_refuses_redaction_before_integrity_checks(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(registry, "provider_for", lambda _name: bank_storage.provider)
+    def resolve(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", resolve)
     package = RegulatoryPackage(
         organization_id=ORG_1,
         bank_id="BK-SAMP0001",

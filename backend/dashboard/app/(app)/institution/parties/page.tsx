@@ -298,7 +298,9 @@ export default function RelatedPartiesPage() {
                 onRowClick={(party) => {
                   setAdding(false);
                   setSelection((prev) =>
-                    prev?.bankId === bankId && prev.party.id === party.id
+                    prev !== null &&
+                    prev.bankId === bankId &&
+                    prev.party.id === party.id
                       ? null
                       : { bankId, party },
                   );
