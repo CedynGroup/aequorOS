@@ -1,13 +1,13 @@
-import type { QueryClient, QueryKey } from '@tanstack/react-query';
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 /** Bank-scoped disclosure notices; an unrelated numeric response cannot clear a lock. */
 export type ProtectedDataState =
-  'available' | 'revoked' | 'unavailable' | 'support';
+  "available" | "revoked" | "unavailable" | "support";
 export const protectedDataMessages = {
   revoked:
-    'Your bank has turned off aequorOS access to protected data. Contact your bank administrator.',
+    "Your bank has turned off aequorOS access to protected data. Contact your bank administrator.",
   unavailable: "Can't reach your bank's key service. Retrying.",
-  support: 'Protected data is hidden during staff support access.',
+  support: "Protected data is hidden during staff support access.",
 } as const;
 
 const notices = new Map<string, ProtectedDataState>();
@@ -22,7 +22,7 @@ export function subscribeProtectedData(listener: () => void) {
   };
 }
 export function protectedDataState(bankId: string): ProtectedDataState {
-  return notices.get(bankId) ?? 'available';
+  return notices.get(bankId) ?? "available";
 }
 export function clearProtectedData() {
   notices.clear();
@@ -49,7 +49,7 @@ export async function observeProtectedData(
   url?: string,
   started = revision,
 ) {
-  const raw = response.headers.get('X-Aequoros-Protected-Data');
+  const raw = response.headers.get("X-Aequoros-Protected-Data");
   try {
     let payload: unknown;
     if (raw) {
@@ -59,33 +59,33 @@ export async function observeProtectedData(
       const bank = /\/banks\/([^/?#]+)/.exec(url ?? response.url)?.[1];
       if (!bank) return;
       const body: unknown = await response.clone().json();
-      if (!body || typeof body !== 'object' || !('error' in body)) return;
+      if (!body || typeof body !== "object" || !("error" in body)) return;
       const error = body.error;
-      if (!error || typeof error !== 'object' || !('code' in error)) return;
+      if (!error || typeof error !== "object" || !("code" in error)) return;
       const state =
-        error.code === 'bank_key_revoked'
-          ? 'revoked'
-          : error.code === 'bank_key_unavailable'
-            ? 'unavailable'
-            : error.code === 'bank_protected_support'
-              ? 'support'
+        error.code === "bank_key_revoked"
+          ? "revoked"
+          : error.code === "bank_key_unavailable"
+            ? "unavailable"
+            : error.code === "bank_protected_support"
+              ? "support"
               : null;
       if (!state) return;
       payload = { [decodeURIComponent(bank)]: state };
     }
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+    if (!payload || typeof payload !== "object" || Array.isArray(payload))
       return;
     if (started < authorityRevision) return;
     let changed = false;
     for (const [bank, state] of Object.entries(payload)) {
       if (
-        !['available', 'revoked', 'unavailable', 'support'].includes(
+        !["available", "revoked", "unavailable", "support"].includes(
           state as string,
         )
       )
         continue;
-      if (state === 'available' && started < (locks.get(bank) ?? 0)) continue;
-      if (state !== 'available') locks.set(bank, ++revision);
+      if (state === "available" && started < (locks.get(bank) ?? 0)) continue;
+      if (state !== "available") locks.set(bank, ++revision);
       if (notices.get(bank) !== state) {
         notices.set(bank, state as ProtectedDataState);
         changed = true;
@@ -100,49 +100,60 @@ export async function observeProtectedData(
 export function isLockedBankQuery(queryKey: QueryKey): boolean {
   return queryKey.some(
     (part) =>
-      typeof part === 'string' && protectedDataState(part) !== 'available',
+      typeof part === "string" && protectedDataState(part) !== "available",
   );
 }
 
 export function bindProtectedDataCache(client: QueryClient): () => void {
   return subscribeProtectedData(() => {
-    void client.cancelQueries({ predicate: query => isLockedBankQuery(query.queryKey) }, { revert: false });
+    void client.cancelQueries(
+      { predicate: (query) => isLockedBankQuery(query.queryKey) },
+      { revert: false },
+    );
     for (const query of client.getQueryCache().getAll()) {
       if (!isLockedBankQuery(query.queryKey)) continue;
       query.setState({
         data: undefined,
         dataUpdatedAt: 0,
         isInvalidated: true,
-        status: 'pending',
+        status: "pending",
         error: null,
       });
     }
     void client.refetchQueries({
-      type: 'active',
+      type: "active",
       predicate: (query) =>
         isLockedBankQuery(query.queryKey) && query.state.isInvalidated,
     });
-    void client.invalidateQueries({
-      predicate: (query) =>
-        query.queryKey.some(
-          (part) => typeof part === 'string' && notices.get(part) === 'available',
-        ) &&
-        (containsLockedData(query.state.data) || isProtectedDataError(query.state.error)),
-      refetchType: 'active',
-    }, { cancelRefetch: false });
+    void client.invalidateQueries(
+      {
+        predicate: (query) =>
+          query.queryKey.some(
+            (part) =>
+              typeof part === "string" && notices.get(part) === "available",
+          ) &&
+          (containsLockedData(query.state.data) ||
+            isProtectedDataError(query.state.error)),
+        refetchType: "active",
+      },
+      { cancelRefetch: false },
+    );
   });
 }
 
 export function isProtectedDataError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
+  if (!error || typeof error !== "object") return false;
   const record = error as Record<string, unknown>;
-  return ['bank_key_revoked', 'bank_key_unavailable', 'bank_protected_support']
-    .includes(String(record.errorCode ?? record.code ?? ''));
+  return [
+    "bank_key_revoked",
+    "bank_key_unavailable",
+    "bank_protected_support",
+  ].includes(String(record.errorCode ?? record.code ?? ""));
 }
 
 export function containsLockedData(value: unknown): boolean {
-  if (value === '🔒 Protected data') return true;
-  if (!value || typeof value !== 'object') return false;
-  if ('_aequoros_protected_data' in value) return true;
+  if (value === "🔒 Protected data") return true;
+  if (!value || typeof value !== "object") return false;
+  if ("_aequoros_protected_data" in value) return true;
   return Object.values(value).some(containsLockedData);
 }

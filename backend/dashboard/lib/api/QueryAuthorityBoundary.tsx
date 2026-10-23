@@ -1,10 +1,18 @@
-'use client';
+"use client";
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { QueryAuthorityScopeProvider } from './useQueryScope';
-import { bindProtectedDataCache, clearProtectedData, isProtectedDataError } from './protectedData';
-import type { QueryAuthorityScope } from './queryPolicy';
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+import { QueryAuthorityScopeProvider } from "./useQueryScope";
+import {
+  bindProtectedDataCache,
+  clearProtectedData,
+  isProtectedDataError,
+} from "./protectedData";
+import type { QueryAuthorityScope } from "./queryPolicy";
 
 export function createAuthorityQueryClient(): QueryClient {
   return new QueryClient({
@@ -37,7 +45,9 @@ function AuthorityScopedCache({ children }: { children: ReactNode }) {
     };
   }, [queryClient]);
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
 }
 
 export default function QueryAuthorityBoundary({

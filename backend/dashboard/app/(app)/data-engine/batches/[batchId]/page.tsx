@@ -6,7 +6,9 @@
  * preserved), and where the raw file and report landed in tiered storage.
  */
 
-import ProtectedDataPlaceholder, { protectedPayloadReason } from "@/components/ui/ProtectedDataPlaceholder";
+import ProtectedDataPlaceholder, {
+  protectedPayloadReason,
+} from "@/components/ui/ProtectedDataPlaceholder";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";

@@ -36,6 +36,7 @@ from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.domain.credit.concentration_identity import counterparty_group_key, opaque_group_key
 from app.domain.credit.concentration_monitor import (
+    BucketReading,
     ConcentrationLimit,
     ConcentrationMonitorResult,
     monitor_concentration,
@@ -272,7 +273,7 @@ def concentration_read(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
         )
     }
 
-    def bucket(reading: Any) -> Any:
+    def bucket(reading: BucketReading) -> ConcentrationBucketRead:
         return ConcentrationBucketRead(
             key=group_labels.get(reading.key, reading.key),
             exposure_ghs=reading.exposure_ghs,

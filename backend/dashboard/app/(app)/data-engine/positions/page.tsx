@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Canonical positions: the source-agnostic balance sheet the calculation
@@ -6,20 +6,20 @@
  * adapter extraction that produced it.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, GitCommitHorizontal } from 'lucide-react';
-import type { CanonicalPositionRead } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import EmptyState from '@/components/ui/EmptyState';
-import { ErrorPanel, PageSkeleton } from '@/components/ui/QueryBoundary';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useCanonicalPositions, useLineageWalk } from '@/lib/api/ingestion';
-import { formatDate, formatDateTime } from '@/components/data-engine/shared';
-import { fmtInt, fmtLocale } from '@/lib/format';
+import PageContainer from "@/components/ui/PageContainer";
+import { useState } from "react";
+import { ChevronDown, ChevronRight, GitCommitHorizontal } from "lucide-react";
+import type { CanonicalPositionRead } from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
+import { ErrorPanel, PageSkeleton } from "@/components/ui/QueryBoundary";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useCanonicalPositions, useLineageWalk } from "@/lib/api/ingestion";
+import { formatDate, formatDateTime } from "@/components/data-engine/shared";
+import { fmtInt, fmtLocale } from "@/lib/format";
 
 function formatAmount(value: string | null): string {
-  if (value === null || value === undefined) return '—';
+  if (value === null || value === undefined) return "—";
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return value;
   return numeric.toLocaleString(fmtLocale(), { maximumFractionDigits: 2 });
@@ -29,7 +29,9 @@ function LineageChain({ lineageId }: { lineageId: string }) {
   const { bank } = useBankContext();
   const walk = useLineageWalk(bank?.id, lineageId);
   if (walk.isPending) {
-    return <p className="text-caption text-slate px-4 py-3">Walking lineage…</p>;
+    return (
+      <p className="text-caption text-slate px-4 py-3">Walking lineage…</p>
+    );
   }
   if (walk.isError) {
     return (
@@ -48,7 +50,7 @@ function LineageChain({ lineageId }: { lineageId: string }) {
           </span>
           <div className="min-w-0">
             <p className="text-body text-navy font-medium">
-              {node.operationType.replaceAll('_', ' ')}
+              {node.operationType.replaceAll("_", " ")}
             </p>
             <p className="text-caption font-mono text-slate truncate">
               {node.operationRef} · {formatDateTime(node.occurredAt)}
@@ -68,10 +70,7 @@ export default function CanonicalPositionsPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Data Engine"
-        title="Canonical positions"
-      />
+      <PageHeader eyebrow="Data Engine" title="Canonical positions" />
       <PageContainer className="py-6">
         {positionsQuery.isPending && <PageSkeleton contained />}
         {positionsQuery.isError && (
@@ -92,31 +91,45 @@ export default function CanonicalPositionsPage() {
                 <table className="w-full text-body border-collapse">
                   <thead>
                     <tr className="border-b border-border bg-surface">
-                      {['', 'Reference', 'Type', 'Ccy', 'Balance', 'Rate', 'Maturity', 'As of', 'Status'].map(
-                        (header, index) => (
-                          <th
-                            key={index}
-                            className={`py-2 px-4 text-micro font-medium uppercase tracking-wider text-slate ${
-                              header === 'Balance' || header === 'Rate' ? 'text-right' : 'text-left'
-                            }`}
-                          >
-                            {header}
-                          </th>
-                        ),
-                      )}
+                      {[
+                        "",
+                        "Reference",
+                        "Type",
+                        "Ccy",
+                        "Balance",
+                        "Rate",
+                        "Maturity",
+                        "As of",
+                        "Status",
+                      ].map((header, index) => (
+                        <th
+                          key={index}
+                          className={`py-2 px-4 text-micro font-medium uppercase tracking-wider text-slate ${
+                            header === "Balance" || header === "Rate"
+                              ? "text-right"
+                              : "text-left"
+                          }`}
+                        >
+                          {header}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {positionsQuery.data.positions.map((position: CanonicalPositionRead) => (
-                      <PositionRow
-                        key={position.id}
-                        position={position}
-                        expanded={expanded === position.id}
-                        onToggle={() =>
-                          setExpanded(expanded === position.id ? null : position.id)
-                        }
-                      />
-                    ))}
+                    {positionsQuery.data.positions.map(
+                      (position: CanonicalPositionRead) => (
+                        <PositionRow
+                          key={position.id}
+                          position={position}
+                          expanded={expanded === position.id}
+                          onToggle={() =>
+                            setExpanded(
+                              expanded === position.id ? null : position.id,
+                            )
+                          }
+                        />
+                      ),
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -124,8 +137,9 @@ export default function CanonicalPositionsPage() {
                 <p className="text-caption text-slate">
                   Showing {fmtInt(positionsQuery.data.offset + 1)}–
                   {fmtInt(
-                    positionsQuery.data.offset + positionsQuery.data.positions.length
-                  )}{' '}
+                    positionsQuery.data.offset +
+                      positionsQuery.data.positions.length,
+                  )}{" "}
                   of {fmtInt(positionsQuery.data.total)} canonical positions
                 </p>
                 <div className="flex items-center gap-2">
@@ -141,7 +155,9 @@ export default function CanonicalPositionsPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setOffset(offset + positionsQuery.data.limit)}
+                    onClick={() =>
+                      setOffset(offset + positionsQuery.data.limit)
+                    }
                     disabled={
                       positionsQuery.data.offset + positionsQuery.data.limit >=
                       positionsQuery.data.total
@@ -185,14 +201,16 @@ function PositionRow({
           {position.sourceReference}
         </td>
         <td className="py-2 px-4">{position.positionType}</td>
-        <td className="py-2 px-4 font-mono text-caption">{position.currency}</td>
+        <td className="py-2 px-4 font-mono text-caption">
+          {position.currency}
+        </td>
         <td className="py-2 px-4 text-right font-mono">
           {formatAmount(position.balance)}
         </td>
         <td className="py-2 px-4 text-right font-mono text-caption">
           {position.interestRate !== null && position.interestRate !== undefined
             ? `${(Number(position.interestRate) * 100).toFixed(2)}%`
-            : '—'}
+            : "—"}
         </td>
         <td className="py-2 px-4 font-mono text-caption">
           {formatDate(position.contractualMaturity)}

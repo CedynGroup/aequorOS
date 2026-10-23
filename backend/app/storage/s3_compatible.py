@@ -8,7 +8,7 @@ and never leak through the interface. GCS lands later as a true second
 implementation against the same contract suite.
 
 Objects of banks with connected keys use AWS Encryption SDK messages.
-Their object keys are wrapped by bank-held master keys in the key registry.
+Their key hierarchy follows ``backend/docs/bank_encryption.md``.
 During optional rollout, banks without keys retain platform storage encryption.
 Bucket SSE also protects platform audit logs.
 

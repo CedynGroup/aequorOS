@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Institution Profile — Related parties: directors, key management, external
@@ -8,13 +8,13 @@
  * mutation records a required audit reason.
  */
 
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   protectedDataState,
   subscribeProtectedData,
-} from '@/lib/api/protectedData';
-import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Users, Pencil, X } from 'lucide-react';
+} from "@/lib/api/protectedData";
+import { useQueryClient } from "@tanstack/react-query";
+import { Plus, Users, Pencil, X } from "lucide-react";
 import type {
   PartyStatus,
   PartyType,
@@ -25,28 +25,28 @@ import type {
   ShareholderRights,
   ShareholdingCreate,
   ShareholdingRead,
-} from '@aequoros/risk-service-api';
+} from "@aequoros/risk-service-api";
 import {
   PartyType as PartyTypeValues,
   RelatedPartyRoleCode as RoleCodeValues,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import PageContainer from '@/components/ui/PageContainer';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import SectionCard from '@/components/ui/SectionCard';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonTable } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import PageContainer from "@/components/ui/PageContainer";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import SectionCard from "@/components/ui/SectionCard";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useCreateRelatedParty,
   useCreateShareholding,
   useInstitutionProfile,
   useUpdateRelatedParty,
   useUpdateShareholding,
-} from '@/lib/api/hooks';
-import { labelize, num } from '@/lib/api/values';
-import { fmtCurrencyFull, fmtInt, fmtPct } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { labelize, num } from "@/lib/api/values";
+import { fmtCurrencyFull, fmtInt, fmtPct } from "@/lib/format";
 import {
   Field,
   FormActions,
@@ -58,12 +58,12 @@ import {
   inputCls,
   roleLabel,
   textOrNull,
-} from '@/components/institution/shared';
+} from "@/components/institution/shared";
 import CsvImport, {
   isIsoCsvDate,
   type CsvRowResult,
-} from '@/components/institution/CsvImport';
-import { RELATED_PARTIES_TEMPLATE } from '@/lib/templates';
+} from "@/components/institution/CsvImport";
+import { RELATED_PARTIES_TEMPLATE } from "@/lib/templates";
 
 // ---------------------------------------------------------------------------
 // Bulk CSV import (related_parties.csv) — client-side orchestration over the
@@ -72,7 +72,7 @@ import { RELATED_PARTIES_TEMPLATE } from '@/lib/templates';
 // values (PartyType / RelatedPartyRoleCode), one role per CSV row.
 // ---------------------------------------------------------------------------
 
-type PartyCsvPayload = Omit<RelatedPartyCreate, 'reason'>;
+type PartyCsvPayload = Omit<RelatedPartyCreate, "reason">;
 
 const PARTY_TYPE_VALUES = Object.values(PartyTypeValues);
 const ROLE_CODE_VALUES = Object.values(RoleCodeValues);
@@ -89,13 +89,13 @@ function parsePartyCsvRow(cells: string[]): CsvRowResult<PartyCsvPayload> {
   const errors: string[] = [];
   if (!PARTY_TYPE_VALUES.includes(partyType as PartyType)) {
     errors.push(
-      `party_type '${partyType}' must be one of: ${PARTY_TYPE_VALUES.join(', ')}`,
+      `party_type '${partyType}' must be one of: ${PARTY_TYPE_VALUES.join(", ")}`,
     );
   }
-  if (!fullName) errors.push('full_name is required');
+  if (!fullName) errors.push("full_name is required");
   if (role && !ROLE_CODE_VALUES.includes(role as RelatedPartyRoleCode)) {
     errors.push(
-      `role '${role}' must be blank or one of: ${ROLE_CODE_VALUES.join(', ')}`,
+      `role '${role}' must be blank or one of: ${ROLE_CODE_VALUES.join(", ")}`,
     );
   }
   if (appointedOn && !isIsoCsvDate(appointedOn)) {
@@ -103,16 +103,16 @@ function parsePartyCsvRow(cells: string[]): CsvRowResult<PartyCsvPayload> {
       `appointed_on '${appointedOn}' must be a valid YYYY-MM-DD date`,
     );
   }
-  if (appointedOn && !role) errors.push('appointed_on requires a role');
+  if (appointedOn && !role) errors.push("appointed_on requires a role");
   const regulatedFlag = regulatedElsewhere.toLowerCase();
-  if (regulatedFlag && regulatedFlag !== 'true' && regulatedFlag !== 'false') {
+  if (regulatedFlag && regulatedFlag !== "true" && regulatedFlag !== "false") {
     errors.push(
       `regulated_elsewhere '${regulatedElsewhere}' must be true or false (blank = false)`,
     );
   }
-  const isRegulated = regulatedFlag === 'true';
+  const isRegulated = regulatedFlag === "true";
   if (regulatedJurisdiction && !isRegulated) {
-    errors.push('regulated_jurisdiction requires regulated_elsewhere=true');
+    errors.push("regulated_jurisdiction requires regulated_elsewhere=true");
   }
   if (errors.length > 0) return { ok: false, errors };
   return {
@@ -120,7 +120,7 @@ function parsePartyCsvRow(cells: string[]): CsvRowResult<PartyCsvPayload> {
     payload: {
       fullName,
       partyType: partyType as PartyType,
-      status: 'active',
+      status: "active",
       regulatedElsewhere: isRegulated,
       regulatedJurisdiction:
         isRegulated && regulatedJurisdiction ? regulatedJurisdiction : null,
@@ -160,8 +160,8 @@ export default function RelatedPartiesPage() {
 
   const columns: Column<RelatedPartyRead>[] = [
     {
-      key: 'name',
-      header: 'Name',
+      key: "name",
+      header: "Name",
       render: (party) => (
         <span className="text-body font-medium text-navy">
           {party.fullName}
@@ -169,8 +169,8 @@ export default function RelatedPartiesPage() {
       ),
     },
     {
-      key: 'type',
-      header: 'Type',
+      key: "type",
+      header: "Type",
       render: (party) => (
         <span className="text-caption text-slate">
           {PARTY_TYPE_LABELS[party.partyType]}
@@ -178,13 +178,13 @@ export default function RelatedPartiesPage() {
       ),
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (party) => <PartyStatusPill status={party.status} />,
     },
     {
-      key: 'roles',
-      header: 'Roles',
+      key: "roles",
+      header: "Roles",
       render: (party) =>
         party.roles.length === 0 ? (
           <span className="text-caption text-slate">—</span>
@@ -207,15 +207,15 @@ export default function RelatedPartiesPage() {
         ),
     },
     {
-      key: 'shareholding',
-      header: 'Shareholding',
+      key: "shareholding",
+      header: "Shareholding",
       numeric: true,
       render: (party) => {
         const total = party.shareholdings.reduce(
           (sum, holding) => sum + num(holding.pctShareholding),
           0,
         );
-        return total > 0 ? fmtPct(total) : '—';
+        return total > 0 ? fmtPct(total) : "—";
       },
     },
   ];
@@ -251,7 +251,7 @@ export default function RelatedPartiesPage() {
           }
           onFinished={() =>
             void queryClient.invalidateQueries({
-              queryKey: ['institution-profile', bankId],
+              queryKey: ["institution-profile", bankId],
             })
           }
         />
@@ -278,7 +278,7 @@ export default function RelatedPartiesPage() {
           <SectionCard
             title="Register"
             subtitle={`${parties.length} related ${
-              parties.length === 1 ? 'party' : 'parties'
+              parties.length === 1 ? "party" : "parties"
             } — click a row for roles and shareholdings`}
             noPadding
           >
@@ -304,7 +304,7 @@ export default function RelatedPartiesPage() {
                   );
                 }}
                 rowClassName={(party) =>
-                  party.id === selected?.id ? 'bg-action-light/40' : ''
+                  party.id === selected?.id ? "bg-action-light/40" : ""
                 }
               />
             )}
@@ -346,7 +346,7 @@ function PartyDetail({
   } | null>(null);
 
   const uboName = (uboPartyId: string | null) => {
-    if (!uboPartyId) return '—';
+    if (!uboPartyId) return "—";
     const ubo = parties.find((candidate) => candidate.id === uboPartyId);
     return ubo?.fullName ?? uboPartyId.slice(0, 8);
   };
@@ -381,9 +381,9 @@ function PartyDetail({
               ? ` · regulated elsewhere${
                   party.regulatedJurisdiction
                     ? ` (${party.regulatedJurisdiction})`
-                    : ''
+                    : ""
                 }`
-              : ''
+              : ""
           }`}
           actions={
             <>
@@ -426,7 +426,7 @@ function PartyDetail({
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-caption text-navy/80">
                         <span>
-                          Appointed{' '}
+                          Appointed{" "}
                           <span className="font-mono tnum">
                             {fmtRegisterDate(role.appointedOn)}
                           </span>
@@ -436,7 +436,7 @@ function PartyDetail({
                         )}
                         {role.sittingAllowance != null && (
                           <span>
-                            Sitting allowance{' '}
+                            Sitting allowance{" "}
                             <span className="font-mono tnum">
                               {fmtCurrencyFull(num(role.sittingAllowance))}
                             </span>
@@ -444,7 +444,7 @@ function PartyDetail({
                         )}
                         {role.travelAllowance != null && (
                           <span>
-                            Travel allowance{' '}
+                            Travel allowance{" "}
                             <span className="font-mono tnum">
                               {fmtCurrencyFull(num(role.travelAllowance))}
                             </span>
@@ -452,7 +452,7 @@ function PartyDetail({
                         )}
                         {role.annualFees != null && (
                           <span>
-                            Annual fees{' '}
+                            Annual fees{" "}
                             <span className="font-mono tnum">
                               {fmtCurrencyFull(num(role.annualFees))}
                             </span>
@@ -494,12 +494,12 @@ function PartyDetail({
                           {labelize(holding.shareType)}
                           {holding.shareSubtype
                             ? ` · ${holding.shareSubtype}`
-                            : ''}
+                            : ""}
                         </span>
                         <span className="text-slate">
-                          {holding.shareholderRights === 'voting'
-                            ? 'Voting'
-                            : 'Non-voting'}
+                          {holding.shareholderRights === "voting"
+                            ? "Voting"
+                            : "Non-voting"}
                         </span>
                         <button
                           type="button"
@@ -561,14 +561,14 @@ type RoleDraft = {
 
 function emptyRole(): RoleDraft {
   return {
-    role: 'director',
-    appointedOn: '',
-    termOfAppointment: '',
-    sittingAllowance: '',
-    travelAllowance: '',
-    annualFees: '',
-    icagRegistration: '',
-    otherResponsibilities: '',
+    role: "director",
+    appointedOn: "",
+    termOfAppointment: "",
+    sittingAllowance: "",
+    travelAllowance: "",
+    annualFees: "",
+    icagRegistration: "",
+    otherResponsibilities: "",
   };
 }
 
@@ -585,36 +585,36 @@ function PartyForm({
   const update = useUpdateRelatedParty(bankId);
   const mutation = party ? update : create;
 
-  const [fullName, setFullName] = useState(party?.fullName ?? '');
+  const [fullName, setFullName] = useState(party?.fullName ?? "");
   const [partyType, setPartyType] = useState<PartyType>(
-    party?.partyType ?? 'individual'
+    party?.partyType ?? "individual",
   );
-  const [status, setStatus] = useState<PartyStatus>(party?.status ?? 'active');
+  const [status, setStatus] = useState<PartyStatus>(party?.status ?? "active");
   const [regulatedElsewhere, setRegulatedElsewhere] = useState(
-    party?.regulatedElsewhere ?? false
+    party?.regulatedElsewhere ?? false,
   );
   const [regulatedJurisdiction, setRegulatedJurisdiction] = useState(
-    party?.regulatedJurisdiction ?? ''
+    party?.regulatedJurisdiction ?? "",
   );
   const [roles, setRoles] = useState<RoleDraft[]>(
     party
       ? party.roles.map((role) => ({
           role: role.role,
-          appointedOn: role.appointedOn ?? '',
-          termOfAppointment: role.termOfAppointment ?? '',
-          sittingAllowance: role.sittingAllowance ?? '',
-          travelAllowance: role.travelAllowance ?? '',
-          annualFees: role.annualFees ?? '',
-          icagRegistration: role.icagRegistration ?? '',
-          otherResponsibilities: role.otherResponsibilities ?? '',
+          appointedOn: role.appointedOn ?? "",
+          termOfAppointment: role.termOfAppointment ?? "",
+          sittingAllowance: role.sittingAllowance ?? "",
+          travelAllowance: role.travelAllowance ?? "",
+          annualFees: role.annualFees ?? "",
+          icagRegistration: role.icagRegistration ?? "",
+          otherResponsibilities: role.otherResponsibilities ?? "",
         }))
-      : []
+      : [],
   );
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
 
   const setRole = (index: number, patch: Partial<RoleDraft>) => {
     setRoles((prev) =>
-      prev.map((draft, i) => (i === index ? { ...draft, ...patch } : draft))
+      prev.map((draft, i) => (i === index ? { ...draft, ...patch } : draft)),
     );
   };
 
@@ -647,10 +647,7 @@ function PartyForm({
       roles: rolePayloads,
     };
     if (party) {
-      update.mutate(
-        { partyId: party.id, payload },
-        { onSuccess: onClose }
-      );
+      update.mutate({ partyId: party.id, payload }, { onSuccess: onClose });
     } else {
       create.mutate(payload, { onSuccess: onClose });
     }
@@ -658,7 +655,7 @@ function PartyForm({
 
   return (
     <SectionCard
-      title={party ? `Edit ${party.fullName}` : 'Add related party'}
+      title={party ? `Edit ${party.fullName}` : "Add related party"}
       subtitle="Full replacement — the roles list below replaces the stored roles on save"
     >
       <form onSubmit={submit} className="space-y-4">
@@ -762,7 +759,10 @@ function PartyForm({
                         ))}
                       </select>
                     </Field>
-                    <Field label="Appointed on" htmlFor={`rp-appointed-${index}`}>
+                    <Field
+                      label="Appointed on"
+                      htmlFor={`rp-appointed-${index}`}
+                    >
                       <input
                         id={`rp-appointed-${index}`}
                         type="date"
@@ -784,7 +784,10 @@ function PartyForm({
                         className={inputCls}
                       />
                     </Field>
-                    <Field label="Sitting allowance" htmlFor={`rp-sitting-${index}`}>
+                    <Field
+                      label="Sitting allowance"
+                      htmlFor={`rp-sitting-${index}`}
+                    >
                       <input
                         id={`rp-sitting-${index}`}
                         type="number"
@@ -797,7 +800,10 @@ function PartyForm({
                         className={inputCls}
                       />
                     </Field>
-                    <Field label="Travel allowance" htmlFor={`rp-travel-${index}`}>
+                    <Field
+                      label="Travel allowance"
+                      htmlFor={`rp-travel-${index}`}
+                    >
                       <input
                         id={`rp-travel-${index}`}
                         type="number"
@@ -823,7 +829,7 @@ function PartyForm({
                         className={inputCls}
                       />
                     </Field>
-                    {draft.role === 'external_auditor' && (
+                    {draft.role === "external_auditor" && (
                       <Field
                         label="ICAG registration"
                         htmlFor={`rp-icag-${index}`}
@@ -878,12 +884,14 @@ function PartyForm({
         {mutation.error && (
           <ErrorPanel
             error={mutation.error}
-            title={party ? 'Could not update the party' : 'Could not add the party'}
+            title={
+              party ? "Could not update the party" : "Could not add the party"
+            }
           />
         )}
 
         <FormActions
-          submitLabel={party ? 'Save party' : 'Add party'}
+          submitLabel={party ? "Save party" : "Add party"}
           pending={mutation.isPending}
           disabled={!canSubmit}
           onCancel={onClose}
@@ -914,29 +922,29 @@ function ShareholdingForm({
     useSyncExternalStore(
       subscribeProtectedData,
       () => protectedDataState(bankId),
-      () => 'available',
-    ) !== 'available';
+      () => "available",
+    ) !== "available";
   const create = useCreateShareholding(bankId);
   const update = useUpdateShareholding(bankId);
   const mutation = holding ? update : create;
 
-  const [shareType, setShareType] = useState(holding?.shareType ?? 'ordinary');
-  const [shareSubtype, setShareSubtype] = useState(holding?.shareSubtype ?? '');
+  const [shareType, setShareType] = useState(holding?.shareType ?? "ordinary");
+  const [shareSubtype, setShareSubtype] = useState(holding?.shareSubtype ?? "");
   const [shareholderRights, setShareholderRights] = useState<ShareholderRights>(
-    holding?.shareholderRights ?? 'voting'
+    holding?.shareholderRights ?? "voting",
   );
   const [numberOfShares, setNumberOfShares] = useState(
-    holding != null ? String(holding.numberOfShares) : ''
+    holding != null ? String(holding.numberOfShares) : "",
   );
   const [pctShareholding, setPctShareholding] = useState(
-    holding != null ? String(holding.pctShareholding) : ''
+    holding != null ? String(holding.pctShareholding) : "",
   );
-  const [uboPartyId, setUboPartyId] = useState(holding?.uboPartyId ?? '');
-  const [reason, setReason] = useState('');
+  const [uboPartyId, setUboPartyId] = useState(holding?.uboPartyId ?? "");
+  const [reason, setReason] = useState("");
 
   // Ultimate beneficial owners are natural persons — individuals only.
   const uboOptions = parties.filter(
-    (candidate) => candidate.partyType === 'individual'
+    (candidate) => candidate.partyType === "individual",
   );
 
   const canSubmit =
@@ -960,7 +968,7 @@ function ShareholdingForm({
     if (holding) {
       update.mutate(
         { partyId, shareholdingId: holding.id, payload },
-        { onSuccess: onClose }
+        { onSuccess: onClose },
       );
     } else {
       create.mutate({ partyId, payload }, { onSuccess: onClose });
@@ -970,7 +978,7 @@ function ShareholdingForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <p className="text-micro font-medium text-slate uppercase tracking-wider">
-        {holding ? 'Edit shareholding' : 'Add shareholding'}
+        {holding ? "Edit shareholding" : "Add shareholding"}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Field label="Share type" htmlFor="sh-type" required>
@@ -1040,7 +1048,7 @@ function ShareholdingForm({
             <option value="">None</option>
             {uboOptions.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
-                {locked ? '🔒 Protected data' : candidate.fullName}
+                {locked ? "🔒 Protected data" : candidate.fullName}
               </option>
             ))}
           </select>
@@ -1059,7 +1067,7 @@ function ShareholdingForm({
       )}
 
       <FormActions
-        submitLabel={holding ? 'Save shareholding' : 'Add shareholding'}
+        submitLabel={holding ? "Save shareholding" : "Add shareholding"}
         pending={mutation.isPending}
         disabled={!canSubmit}
         onCancel={onClose}

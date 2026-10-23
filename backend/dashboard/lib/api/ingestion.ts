@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Data Engine API layer: generated IngestionApi client, TanStack Query hooks,
@@ -14,30 +14,29 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
-} from '@tanstack/react-query';
+} from "@tanstack/react-query";
 import {
   IngestionApi,
   type DataActivationRead,
   type IngestionBatchCreate,
   type ListIngestionBatchesSourceSystemEnum,
   type MappingConfig,
-} from '@aequoros/risk-service-api';
-import { apiCall, configuration } from './client';
+} from "@aequoros/risk-service-api";
+import { apiCall, configuration } from "./client";
 import {
   generationInvalidationPrefixes,
   invalidateScopedPrefixes,
   refreshLiveSummaryGenerationChanges,
   scopedBankPrefix,
   scopedQueryKey,
-} from './queryPolicy';
-import { useQueryAuthorityScope } from './useQueryScope';
+} from "./queryPolicy";
+import { useQueryAuthorityScope } from "./useQueryScope";
 
 export type IngestionSourceSystem = ListIngestionBatchesSourceSystemEnum;
 
 // Reuse the shared, token-bearing Configuration so Data Engine calls authenticate
 // with the same backend JWT as every other module (no separate unauthenticated client).
 export const ingestionApi = new IngestionApi(configuration);
-
 
 // ---------------------------------------------------------------------------
 // Starter mapping template for the Sample Bank demo dataset.
@@ -55,50 +54,50 @@ export const ingestionApi = new IngestionApi(configuration);
 // ---------------------------------------------------------------------------
 
 const glAccountMapping = {
-  sourceTable: '03_gl_accounts',
-  sourceTableAliases: ['General_Ledger'],
+  sourceTable: "03_gl_accounts",
+  sourceTableAliases: ["General_Ledger"],
   fields: {
-    source_reference: 'gl_code',
-    account_code: 'gl_code',
-    name: 'gl_name',
-    account_class: 'gl_side',
-    currency: 'currency',
-    balance: 'balance_ghs',
+    source_reference: "gl_code",
+    account_code: "gl_code",
+    name: "gl_name",
+    account_class: "gl_side",
+    currency: "currency",
+    balance: "balance_ghs",
   },
 };
 
 const productMapping = {
-  sourceTable: '04_products',
-  sourceTableAliases: ['Product_Catalog'],
+  sourceTable: "04_products",
+  sourceTableAliases: ["Product_Catalog"],
   fields: {
-    source_reference: 'product_code',
-    product_code: 'product_code',
-    name: 'product_name',
-    regulatory_category: 'regulatory_category',
-    risk_weight_code: 'risk_weight',
+    source_reference: "product_code",
+    product_code: "product_code",
+    name: "product_name",
+    regulatory_category: "regulatory_category",
+    risk_weight_code: "risk_weight",
   },
   attributeColumns: [
-    'product_type',
-    'rate_type',
-    'currency',
-    'min_tenor_months',
-    'max_tenor_months',
-    'typical_rate_low',
-    'typical_rate_high',
+    "product_type",
+    "rate_type",
+    "currency",
+    "min_tenor_months",
+    "max_tenor_months",
+    "typical_rate_low",
+    "typical_rate_high",
   ],
 };
 
 const counterpartyMapping = {
-  sourceTable: 'Counterparties_Sample',
-  sourceTableAliases: ['05_counterparties'],
+  sourceTable: "Counterparties_Sample",
+  sourceTableAliases: ["05_counterparties"],
   fields: {
-    source_reference: 'counterparty_id',
-    name: 'counterparty_name',
-    counterparty_type: 'counterparty_type',
-    country_code: 'country',
-    rating: 'credit_rating',
+    source_reference: "counterparty_id",
+    name: "counterparty_name",
+    counterparty_type: "counterparty_type",
+    country_code: "country",
+    rating: "credit_rating",
   },
-  attributeColumns: ['kyc_status', 'onboarded_date'],
+  attributeColumns: ["kyc_status", "onboarded_date"],
 };
 
 // One position mapping serves every position sheet/file: loans, deposits,
@@ -109,179 +108,183 @@ const counterpartyMapping = {
 // dates); columns the canonical schema has no dedicated home for ride along
 // in attributes (hedge pair/rate/MtM/effectiveness, swap legs, ...).
 const positionMapping = {
-  sourceTable: 'Loans',
+  sourceTable: "Loans",
   sourceTableAliases: [
-    '06_loans',
-    'Deposits',
-    '07_deposits',
-    'Government_Securities',
-    '08_securities',
-    'Interbank',
-    '09_interbank',
-    'LC_and_Guarantees',
-    '10_off_balance_sheet',
-    'FX_Hedges',
-    '18_fx_hedges',
-    'Interest_Rate_Swaps',
-    '19_interest_rate_swaps',
+    "06_loans",
+    "Deposits",
+    "07_deposits",
+    "Government_Securities",
+    "08_securities",
+    "Interbank",
+    "09_interbank",
+    "LC_and_Guarantees",
+    "10_off_balance_sheet",
+    "FX_Hedges",
+    "18_fx_hedges",
+    "Interest_Rate_Swaps",
+    "19_interest_rate_swaps",
   ],
   fields: {
-    source_reference: 'position_id',
-    position_type: 'position_type',
-    currency: 'currency',
-    balance: ['balance_ccy', 'notional_ccy'],
-    notional: 'notional_ccy',
-    counterparty_reference: 'counterparty_id',
-    product_code: 'product_code',
-    gl_account_code: 'gl_code',
-    origination_date: ['origination_date', 'issue_date', 'trade_date'],
-    contractual_maturity: ['contractual_maturity', 'expiry_date', 'maturity_date'],
-    next_repricing_date: 'next_repricing_date',
-    interest_rate: 'interest_rate',
-    rate_type: 'rate_type',
-    rate_index: 'rate_index',
-    rate_spread: 'rate_spread',
-    ifrs9_stage: 'ifrs9_stage',
+    source_reference: "position_id",
+    position_type: "position_type",
+    currency: "currency",
+    balance: ["balance_ccy", "notional_ccy"],
+    notional: "notional_ccy",
+    counterparty_reference: "counterparty_id",
+    product_code: "product_code",
+    gl_account_code: "gl_code",
+    origination_date: ["origination_date", "issue_date", "trade_date"],
+    contractual_maturity: [
+      "contractual_maturity",
+      "expiry_date",
+      "maturity_date",
+    ],
+    next_repricing_date: "next_repricing_date",
+    interest_rate: "interest_rate",
+    rate_type: "rate_type",
+    rate_index: "rate_index",
+    rate_spread: "rate_spread",
+    ifrs9_stage: "ifrs9_stage",
   },
   attributeColumns: [
-    'balance_ghs',
-    'notional_ghs',
-    'ecl_provision_ghs',
-    'branch_id',
-    'issuer',
-    'isin',
-    'credit_conversion_factor',
-    'credit_equivalent_ghs',
+    "balance_ghs",
+    "notional_ghs",
+    "ecl_provision_ghs",
+    "branch_id",
+    "issuer",
+    "isin",
+    "credit_conversion_factor",
+    "credit_equivalent_ghs",
     // FX hedge book (18_fx_hedges / FX_Hedges)
-    'hedge_id',
-    'instrument',
-    'currency_pair',
-    'buy_currency',
-    'sell_currency',
-    'notional_currency',
-    'contract_rate',
-    'mtm_ghs',
-    'prospective_r2',
-    'dollar_offset_ratio',
+    "hedge_id",
+    "instrument",
+    "currency_pair",
+    "buy_currency",
+    "sell_currency",
+    "notional_currency",
+    "contract_rate",
+    "mtm_ghs",
+    "prospective_r2",
+    "dollar_offset_ratio",
     // Interest-rate swaps (19_interest_rate_swaps / Interest_Rate_Swaps)
-    'swap_id',
-    'direction',
-    'pay_rate_pct',
-    'receive_index',
-    'tenor_years',
-    'counterparty_ref',
-    'source_system',
-    'source_reference',
+    "swap_id",
+    "direction",
+    "pay_rate_pct",
+    "receive_index",
+    "tenor_years",
+    "counterparty_ref",
+    "source_system",
+    "source_reference",
   ],
 };
 
 const referenceMappings = {
   institution: {
-    sourceTable: '01_institution',
-    sourceTableAliases: ['Institution'],
-    datasetKind: 'institution',
+    sourceTable: "01_institution",
+    sourceTableAliases: ["Institution"],
+    datasetKind: "institution",
   },
   business_units: {
-    sourceTable: '02_business_units',
-    sourceTableAliases: ['Branches'],
-    datasetKind: 'business_units',
+    sourceTable: "02_business_units",
+    sourceTableAliases: ["Branches"],
+    datasetKind: "business_units",
   },
   capital_structure: {
-    sourceTable: '11_capital_structure',
-    sourceTableAliases: ['Capital_Structure'],
-    datasetKind: 'capital_structure',
+    sourceTable: "11_capital_structure",
+    sourceTableAliases: ["Capital_Structure"],
+    datasetKind: "capital_structure",
   },
   behavioral_assumptions: {
-    sourceTable: '12_behavioral_assumptions',
-    sourceTableAliases: ['Behavioral_Assumptions'],
-    datasetKind: 'behavioral_assumptions',
+    sourceTable: "12_behavioral_assumptions",
+    sourceTableAliases: ["Behavioral_Assumptions"],
+    datasetKind: "behavioral_assumptions",
   },
   yield_curves: {
-    sourceTable: '13_yield_curves',
-    sourceTableAliases: ['Yield_Curves'],
-    datasetKind: 'yield_curve',
+    sourceTable: "13_yield_curves",
+    sourceTableAliases: ["Yield_Curves"],
+    datasetKind: "yield_curve",
   },
   fx_rates_current: {
-    sourceTable: '14_fx_rates_current',
-    sourceTableAliases: ['FX_Rates_Current'],
-    datasetKind: 'fx_rates_current',
+    sourceTable: "14_fx_rates_current",
+    sourceTableAliases: ["FX_Rates_Current"],
+    datasetKind: "fx_rates_current",
   },
   fx_rates_historical: {
-    sourceTable: '15_fx_rates_historical',
-    sourceTableAliases: ['FX_Rates_Historical'],
-    datasetKind: 'fx_rates_historical',
+    sourceTable: "15_fx_rates_historical",
+    sourceTableAliases: ["FX_Rates_Historical"],
+    datasetKind: "fx_rates_historical",
   },
   historical_cashflows: {
-    sourceTable: '16_historical_cashflows',
-    sourceTableAliases: ['Daily_Cashflows'],
-    datasetKind: 'historical_cashflows',
+    sourceTable: "16_historical_cashflows",
+    sourceTableAliases: ["Daily_Cashflows"],
+    datasetKind: "historical_cashflows",
   },
   historical_financials: {
-    sourceTable: '17_historical_financials',
-    sourceTableAliases: ['Monthly_Financials'],
-    datasetKind: 'historical_financials',
+    sourceTable: "17_historical_financials",
+    sourceTableAliases: ["Monthly_Financials"],
+    datasetKind: "historical_financials",
   },
-} satisfies MappingConfig['referenceMappings'];
+} satisfies MappingConfig["referenceMappings"];
 
 // Canonical passthrough: identity mapping for files whose headers already use
 // the AequorOS canonical field names — the format of the downloadable canonical
 // templates. Source table names match those template filenames.
 const canonicalGlMapping = {
-  sourceTable: 'gl_accounts',
+  sourceTable: "gl_accounts",
   fields: {
-    source_reference: 'source_reference',
-    account_code: 'account_code',
-    name: 'name',
-    account_class: 'account_class',
-    parent_account_code: 'parent_account_code',
-    currency: 'currency',
-    balance: 'balance',
+    source_reference: "source_reference",
+    account_code: "account_code",
+    name: "name",
+    account_class: "account_class",
+    parent_account_code: "parent_account_code",
+    currency: "currency",
+    balance: "balance",
   },
 };
 
 const canonicalCounterpartyMapping = {
-  sourceTable: 'counterparties',
+  sourceTable: "counterparties",
   fields: {
-    source_reference: 'source_reference',
-    name: 'name',
-    counterparty_type: 'counterparty_type',
-    country_code: 'country_code',
-    rating: 'rating',
-    rating_source: 'rating_source',
-    group_reference: 'group_reference',
+    source_reference: "source_reference",
+    name: "name",
+    counterparty_type: "counterparty_type",
+    country_code: "country_code",
+    rating: "rating",
+    rating_source: "rating_source",
+    group_reference: "group_reference",
   },
 };
 
 const canonicalProductMapping = {
-  sourceTable: 'products',
+  sourceTable: "products",
   fields: {
-    source_reference: 'source_reference',
-    product_code: 'product_code',
-    name: 'name',
-    regulatory_category: 'regulatory_category',
-    risk_weight_code: 'risk_weight_code',
+    source_reference: "source_reference",
+    product_code: "product_code",
+    name: "name",
+    regulatory_category: "regulatory_category",
+    risk_weight_code: "risk_weight_code",
   },
 };
 
 const canonicalPositionMapping = {
-  sourceTable: 'positions',
+  sourceTable: "positions",
   fields: {
-    source_reference: 'source_reference',
-    position_type: 'position_type',
-    currency: 'currency',
-    balance: 'balance',
-    notional: 'notional',
-    counterparty_reference: 'counterparty_reference',
-    product_code: 'product_code',
-    gl_account_code: 'gl_account_code',
-    origination_date: 'origination_date',
-    contractual_maturity: 'contractual_maturity',
-    next_repricing_date: 'next_repricing_date',
-    interest_rate: 'interest_rate',
-    rate_type: 'rate_type',
-    rate_index: 'rate_index',
-    rate_spread: 'rate_spread',
-    ifrs9_stage: 'ifrs9_stage',
+    source_reference: "source_reference",
+    position_type: "position_type",
+    currency: "currency",
+    balance: "balance",
+    notional: "notional",
+    counterparty_reference: "counterparty_reference",
+    product_code: "product_code",
+    gl_account_code: "gl_account_code",
+    origination_date: "origination_date",
+    contractual_maturity: "contractual_maturity",
+    next_repricing_date: "next_repricing_date",
+    interest_rate: "interest_rate",
+    rate_type: "rate_type",
+    rate_index: "rate_index",
+    rate_spread: "rate_spread",
+    ifrs9_stage: "ifrs9_stage",
   },
 };
 
@@ -295,18 +298,18 @@ export type StarterTemplate = {
 
 export const STARTER_TEMPLATES: StarterTemplate[] = [
   {
-    key: 'sample-bank-complete',
-    name: 'Sample Bank complete (CSV + Excel)',
+    key: "sample-bank-complete",
+    name: "Sample Bank complete (CSV + Excel)",
     description:
-      'One mapping for the whole Sample Bank dataset: GL, products, counterparties, and every position book — including the treasury FX hedge book and interest-rate swap blotter — plus the reference datasets (capital, behavioral, market data, history). Aliases cover both the CSV files and the workbook sheets — upload the files in any order. Re-activating creates a new mapping-config version.',
+      "One mapping for the whole Sample Bank dataset: GL, products, counterparties, and every position book — including the treasury FX hedge book and interest-rate swap blotter — plus the reference datasets (capital, behavioral, market data, history). Aliases cover both the CSV files and the workbook sheets — upload the files in any order. Re-activating creates a new mapping-config version.",
     ingests: [
-      '01_Balance_Sheet_Master.xlsx · 03_gl_accounts.csv · 04_products.csv',
-      '02_Customer_Positions.xlsx · 06_loans.csv · 07_deposits.csv',
-      '03_Securities_and_Interbank.xlsx',
-      '04_Capital_and_Behavioral.xlsx · 11/12_*.csv',
-      '05_Market_Data.xlsx · 13_yield_curves.csv',
-      '06_Historical_Data.xlsx · 16/17_*.csv',
-      '18_fx_hedges.csv · 19_interest_rate_swaps.csv',
+      "01_Balance_Sheet_Master.xlsx · 03_gl_accounts.csv · 04_products.csv",
+      "02_Customer_Positions.xlsx · 06_loans.csv · 07_deposits.csv",
+      "03_Securities_and_Interbank.xlsx",
+      "04_Capital_and_Behavioral.xlsx · 11/12_*.csv",
+      "05_Market_Data.xlsx · 13_yield_curves.csv",
+      "06_Historical_Data.xlsx · 16/17_*.csv",
+      "18_fx_hedges.csv · 19_interest_rate_swaps.csv",
     ],
     config: {
       fieldMappings: {
@@ -320,18 +323,23 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       // deposits' rate_type "NONE" is a recognized no-value placeholder and
       // needs no mapping.
       enumMappings: {
-        position_type: { LC: 'LC_GUARANTEE', GUARANTEE: 'LC_GUARANTEE' },
+        position_type: { LC: "LC_GUARANTEE", GUARANTEE: "LC_GUARANTEE" },
       },
       productMappings: {},
       options: {},
     },
   },
   {
-    key: 'canonical-passthrough',
-    name: 'Canonical passthrough (API field names)',
+    key: "canonical-passthrough",
+    name: "Canonical passthrough (API field names)",
     description:
-      'Identity mapping for files whose headers already use AequorOS canonical field names — the format of the downloadable canonical templates. Upload gl_accounts / counterparties / products / positions with canonical headers and they ingest with no column translation. Provider-neutral: map your core system to our spec once.',
-    ingests: ['gl_accounts.csv', 'counterparties.csv', 'products.csv', 'positions.csv'],
+      "Identity mapping for files whose headers already use AequorOS canonical field names — the format of the downloadable canonical templates. Upload gl_accounts / counterparties / products / positions with canonical headers and they ingest with no column translation. Provider-neutral: map your core system to our spec once.",
+    ingests: [
+      "gl_accounts.csv",
+      "counterparties.csv",
+      "products.csv",
+      "positions.csv",
+    ],
     config: {
       fieldMappings: {
         gl_account: canonicalGlMapping,
@@ -352,7 +360,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
 
 export function useMappingConfigs(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['de-mapping-configs', bankId],
+    queryKey: ["de-mapping-configs", bankId],
     queryFn: () =>
       apiCall(() => ingestionApi.listMappingConfigs({ bankId: bankId! })),
     enabled: Boolean(bankId),
@@ -366,10 +374,10 @@ export function useIngestionBatches(
   const scope = useQueryAuthorityScope();
   return useQuery({
     queryKey: scopedQueryKey(
-      'de-batches',
+      "de-batches",
       scope,
       bankId ?? null,
-      sourceSystem ?? 'all',
+      sourceSystem ?? "all",
     ),
     queryFn: () =>
       apiCall(() =>
@@ -383,7 +391,7 @@ export function useIngestionBatches(
 export function useIngestionSummary(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey('de-summary', scope, bankId ?? null),
+    queryKey: scopedQueryKey("de-summary", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => ingestionApi.getIngestionSummary({ bankId: bankId! })),
     enabled: Boolean(bankId),
@@ -395,7 +403,7 @@ export function useIngestionBatch(
   batchId: string | undefined,
 ) {
   return useQuery({
-    queryKey: ['de-batch', bankId, batchId],
+    queryKey: ["de-batch", bankId, batchId],
     queryFn: () =>
       apiCall(() =>
         ingestionApi.getIngestionBatch({ bankId: bankId!, batchId: batchId! }),
@@ -409,7 +417,7 @@ export function useTranslationFailures(
   batchId: string | undefined,
 ) {
   return useQuery({
-    queryKey: ['de-failures', bankId, batchId],
+    queryKey: ["de-failures", bankId, batchId],
     queryFn: () =>
       apiCall(() =>
         ingestionApi.listTranslationFailures({
@@ -427,7 +435,7 @@ export function useTranslationFailures(
  */
 export function useCanonicalPositions(bankId: string | undefined, offset = 0) {
   return useQuery({
-    queryKey: ['de-positions', bankId, offset],
+    queryKey: ["de-positions", bankId, offset],
     queryFn: () =>
       apiCall(() =>
         ingestionApi.listCanonicalPositions({ bankId: bankId!, offset }),
@@ -437,9 +445,12 @@ export function useCanonicalPositions(bankId: string | undefined, offset = 0) {
   });
 }
 
-export function useLineageWalk(bankId: string | undefined, lineageId: string | undefined) {
+export function useLineageWalk(
+  bankId: string | undefined,
+  lineageId: string | undefined,
+) {
   return useQuery({
-    queryKey: ['de-lineage', bankId, lineageId],
+    queryKey: ["de-lineage", bankId, lineageId],
     queryFn: () =>
       apiCall(() => ingestionApi.walkLineage({ lineageId: lineageId! })),
     enabled: Boolean(bankId && lineageId),
@@ -454,7 +465,7 @@ export function useActivateTemplate(bankId: string | undefined) {
         ingestionApi.createMappingConfig({
           bankId: bankId!,
           mappingConfigCreate: {
-            sourceSystem: 'EXCEL_CSV',
+            sourceSystem: "EXCEL_CSV",
             name: template.name,
             config: template.config,
             activate: true,
@@ -463,7 +474,9 @@ export function useActivateTemplate(bankId: string | undefined) {
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['de-mapping-configs', bankId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["de-mapping-configs", bankId],
+      });
     },
   });
 }
@@ -488,7 +501,7 @@ export function useActivateBankData(bankId: string | undefined) {
           bankId: bankId!,
           dataActivationCreate: {
             asOfDate: new Date(`${asOfDate}T00:00:00Z`),
-            reason: 'Activated uploaded data from the Data Engine console.',
+            reason: "Activated uploaded data from the Data Engine console.",
             runCalculations,
           },
         }),
@@ -504,26 +517,31 @@ export function useActivateBankData(bankId: string | undefined) {
       const generationOwned = new Set(
         generationInvalidationPrefixes(changedModules),
       );
-      await invalidateScopedPrefixes(queryClient, [
-        'periods',
-        'facts',
-        'liq-dashboard',
-        'cap-dashboard',
-        'irr-dashboard',
-        'fx-dashboard',
-        'ftp-dashboard',
-        'reg-runs',
-        'forecast-runs',
-        'cap-rwa',
-        'cap-structure',
-        'bsd3',
-        'bsd2',
-        'freshness',
-        'alerts',
-        'live-snapshots',
-        'de-activations',
-        'de-summary',
-      ].filter((prefix) => !generationOwned.has(prefix)), scope, bankId);
+      await invalidateScopedPrefixes(
+        queryClient,
+        [
+          "periods",
+          "facts",
+          "liq-dashboard",
+          "cap-dashboard",
+          "irr-dashboard",
+          "fx-dashboard",
+          "ftp-dashboard",
+          "reg-runs",
+          "forecast-runs",
+          "cap-rwa",
+          "cap-structure",
+          "bsd3",
+          "bsd2",
+          "freshness",
+          "alerts",
+          "live-snapshots",
+          "de-activations",
+          "de-summary",
+        ].filter((prefix) => !generationOwned.has(prefix)),
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -531,7 +549,7 @@ export function useActivateBankData(bankId: string | undefined) {
 export function useDataActivations(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey('de-activations', scope, bankId ?? null),
+    queryKey: scopedQueryKey("de-activations", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => ingestionApi.listBankDataActivations({ bankId: bankId! })),
     enabled: Boolean(bankId),
@@ -542,28 +560,39 @@ export function useUploadAndIngest(bankId: string | undefined) {
   const queryClient = useQueryClient();
   const scope = useQueryAuthorityScope();
   return useMutation({
-    mutationFn: async ({ file, asOfDate }: { file: File; asOfDate: string }) => {
+    mutationFn: async ({
+      file,
+      asOfDate,
+    }: {
+      file: File;
+      asOfDate: string;
+    }) => {
       const staged = await apiCall(() =>
         ingestionApi.uploadIngestionSource({ bankId: bankId!, file }),
       );
       const ingestionBatchCreate: IngestionBatchCreate = {
-        sourceSystem: 'EXCEL_CSV',
+        sourceSystem: "EXCEL_CSV",
         asOfDate: new Date(`${asOfDate}T00:00:00Z`),
         location: staged.location,
         reason: `Uploaded ${staged.filename} via the Data Engine console.`,
       };
       const started = await apiCall(() =>
-        ingestionApi.startIngestionBatch({ bankId: bankId!, ingestionBatchCreate }),
+        ingestionApi.startIngestionBatch({
+          bankId: bankId!,
+          ingestionBatchCreate,
+        }),
       );
       return { staged, started };
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: scopedBankPrefix('de-batches', scope, bankId),
+        queryKey: scopedBankPrefix("de-batches", scope, bankId),
       });
-      void queryClient.invalidateQueries({ queryKey: ['de-positions', bankId] });
       void queryClient.invalidateQueries({
-        queryKey: scopedBankPrefix('de-summary', scope, bankId),
+        queryKey: ["de-positions", bankId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: scopedBankPrefix("de-summary", scope, bankId),
       });
     },
   });

@@ -93,7 +93,7 @@ class ProtectedField(TypeDecorator[object]):
             raise KeyUnavailableError("Sensitive fields require a scoped ORM write.")
         return [str(value.envelope_id), base64.b64encode(value.message).decode("ascii")]
 
-    def _decode(self, value: object) -> SealedField:
+    def decode(self, value: object) -> SealedField:
         try:
             envelope, message = TypeAdapter(tuple[UUID, str]).validate_python(value)
             return SealedField(envelope, base64.b64decode(message, validate=True))
@@ -117,7 +117,7 @@ class ProtectedText(ProtectedField):
                 payload = _JSON.validate_json(value[len(FORMAT) + 1 :])
             except ValueError as exc:
                 raise KeyIntegrityError("Encrypted field format is invalid.") from exc
-            return self._decode(payload)
+            return self.decode(payload)
         return value
 
 
@@ -131,7 +131,7 @@ class ProtectedJSON(ProtectedField):
 
     def process_result_value(self, value: object, dialect: Dialect) -> object:
         if isinstance(value, dict) and FORMAT in value:
-            return self._decode(cast(dict[str, object], value)[FORMAT])
+            return self.decode(cast(dict[str, object], value)[FORMAT])
         return cast(object, value)
 
 
@@ -335,7 +335,7 @@ class _Restore:
 
 
 @event.listens_for(Session, "before_flush")
-def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
+def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
     db: Session, _flush_context: object, _instances: object
 ) -> None:
     restores: list[_Restore] = []
@@ -400,7 +400,15 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                     index_keys[scope] = _index_key(db, row)
                 _update_indexes(state, organization, row.bank_id, index_keys[scope])
 
-            def seal(value: object, field_name: str) -> SealedField:
+            def seal(  # noqa: PLR0913 - bind this iteration's authenticated context
+                value: object,
+                field_name: str,
+                *,
+                scope: tuple[str, str] = scope,
+                row: BankEncryptionKey = row,
+                organization: str = organization,
+                context: dict[str, str] = context,
+            ) -> SealedField:
                 if scope not in write_keys:
                     write_keys[scope] = registry.prepare_envelope(
                         db, row, _envelope_context(organization, row.bank_id), registry.provider_for
@@ -421,7 +429,7 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                     encrypted: object = seal(value, col.column)
                 else:
 
-                    def seal_values(item: object, path: str) -> object:
+                    def seal_values(item: object, path: str, col: FieldColumn = col) -> object:
                         sealed = seal(item, col.column + ":" + path)
                         return {
                             FORMAT: [
@@ -513,7 +521,9 @@ def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
     return secret
 
 
-def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
+def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
+    instance: Base, refreshed: set[str] | None = None
+) -> None:
     state = cast(InstanceState[object], inspect(instance))
     columns = field_columns(state)
     db = object_session(instance)
@@ -546,13 +556,13 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
             value = cast(object, state.dict[col.attribute])
             if col.kind.protected_members is not None and not isinstance(value, SealedField):
 
-                def open_values(item: object, path: str) -> object:
+                def open_values(item: object, path: str, col: FieldColumn = col) -> object:
                     leaf = replace(col, column=col.column + ":" + path)
                     if _presentation_locked(instance, leaf, presentation, bank):
                         return None
                     if not isinstance(item, dict) or FORMAT not in item:
-                        return item
-                    sealed = col.kind._decode(cast(dict[str, object], item)[FORMAT])
+                        return cast(object, item)
+                    sealed = col.kind.decode(cast(dict[str, object], item)[FORMAT])
                     if row is None:
                         raise KeyUnavailableError("The bank encryption key is not connected.")
                     secret = _field_secret(db, row, sealed, presentation, instance, leaf)

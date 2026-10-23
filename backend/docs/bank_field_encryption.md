@@ -2,7 +2,8 @@
 
 Covered fields written after a bank key is connected use that bank's encryption
 key. Existing rows are not migrated. Demo datasets are re-imported through the
-Data Engine after key connection.
+Data Engine after key connection, following the
+[deployment prerequisite](bank_encryption.md#onboarding-and-operator-api).
 
 ## Covered fields
 
@@ -54,7 +55,9 @@ external identifiers and related-party names. Names use Unicode normalization,
 case folding and collapsed whitespace; identifiers retain case and punctuation.
 Searches scope by organization and bank and confirm decrypted candidate values.
 A stable index-version pointer keeps exact matches working across payload-key
-rotation. Numeric concentration grouping uses opaque indexes.
+rotation. Numeric concentration grouping uses opaque indexes derived from the
+connected-group reference, falling back to the counterparty name. Positions
+without a counterparty retain literal `pos:<source_reference>` keys.
 
 Name index tokens are 64 characters for both connected and optional banks.
 Optional banks use unkeyed SHA-256 tokens and retain plaintext names.
@@ -99,12 +102,26 @@ filters. Dashboard layouts, numeric queries and numeric filter values remain
 readable without a key, as do numeric alert and subscription configurations.
 Session-bound staff downloads and download-link issuance return the named support
 refusal without decrypting object contents, including when presentation state is
-missing. Integrity consumers receive that refusal instead of placeholder bytes. An encrypted filing snapshot remains protected; its filing
-status and source-run references remain readable.
+missing. Integrity consumers receive that refusal instead of placeholder bytes.
+An encrypted filing snapshot remains protected; its filing status and source-run
+references remain readable.
 
-The bank UI distinguishes revocation from a service outage, offers Retry, and
-refetches active queries every five seconds while a bank is locked. Successful
-protected reads clear the notice and restore values. Unrelated numeric responses
-do not clear a notice. Mutation errors keep the editor mounted and its draft
-values intact. Protected report previews show a locked panel, never an empty or
-successful validation report.
+The bank UI displays separate messages:
+
+- Revoked: "Your bank has turned off aequorOS access to protected data. Contact your bank administrator."
+- Unreachable: "Can't reach your bank's key service. Retrying."
+
+Both states offer Retry and refetch active locked or failed protected queries
+every five seconds. Staff support placeholders do not poll for recovery.
+Successful protected reads clear the notice and restore values; cached locked or
+failed reads, including inactive screens, are invalidated so returning to a
+screen refreshes it immediately. Unrelated numeric responses and responses from
+requests started before the current lock cannot clear that lock. Mutation
+errors keep the editor mounted and its draft values intact. Protected report
+previews show a locked panel, never an empty or successful validation report.
+
+The concentration monitor continues computing numeric exposures, shares and HHI
+when labels are locked. Named single-name or connected-group limits that require
+the index key appear as locked and are not evaluated; they remain included in the
+registered limit count. Literal positional limits and limits that do not need
+identity matching remain evaluable.

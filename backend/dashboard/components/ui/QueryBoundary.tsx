@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Standard loading / error boundary for API-backed pages. Renders skeletons
@@ -6,17 +6,17 @@
  * data is available.
  */
 
-import { isProtectedDataError } from '@/lib/api/protectedData';
-import { Activity, useState, type ReactNode } from 'react';
-import { AlertCircle, Database, LockKeyhole, RotateCw } from 'lucide-react';
-import { isApiError, isModuleUnavailable } from '@/lib/api/client';
-import { SkeletonCard, SkeletonChart, SkeletonTable } from './Skeleton';
-import PageContainer from './PageContainer';
+import { isProtectedDataError } from "@/lib/api/protectedData";
+import { Activity, useState, type ReactNode } from "react";
+import { AlertCircle, Database, LockKeyhole, RotateCw } from "lucide-react";
+import { isApiError, isModuleUnavailable } from "@/lib/api/client";
+import { SkeletonCard, SkeletonChart, SkeletonTable } from "./Skeleton";
+import PageContainer from "./PageContainer";
 
 export function ErrorPanel({
   error,
   onRetry,
-  title = 'Could not load data',
+  title = "Could not load data",
 }: {
   error: unknown;
   onRetry?: () => void;
@@ -24,13 +24,24 @@ export function ErrorPanel({
 }) {
   if (isApiError(error) && isProtectedDataError(error)) {
     return (
-      <div role="status" className="card flex items-start gap-3 border border-border bg-surface p-5">
+      <div
+        role="status"
+        className="card flex items-start gap-3 border border-border bg-surface p-5"
+      >
         <LockKeyhole size={18} aria-hidden />
         <div className="flex-1">
           <p className="font-medium">Protected data locked</p>
           <p className="mt-1">{error.message}</p>
         </div>
-        {onRetry && <button type="button" onClick={onRetry} className="rounded border border-border px-3 py-1">Retry</button>}
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded border border-border px-3 py-1"
+          >
+            Retry
+          </button>
+        )}
       </div>
     );
   }
@@ -39,10 +50,16 @@ export function ErrorPanel({
   if (isModuleUnavailable(error)) {
     return (
       <div className="card border-l-4 border-l-border bg-surface/60 p-5 flex items-start gap-3">
-        <Database size={18} className="text-slate shrink-0 mt-0.5" aria-hidden />
+        <Database
+          size={18}
+          className="text-slate shrink-0 mt-0.5"
+          aria-hidden
+        />
         <div className="min-w-0 flex-1">
           <p className="text-body font-medium text-navy">Waiting for data</p>
-          <p className="mt-1 text-body text-navy/80 leading-relaxed">{error.reason}</p>
+          <p className="mt-1 text-body text-navy/80 leading-relaxed">
+            {error.reason}
+          </p>
         </div>
       </div>
     );
@@ -50,11 +67,15 @@ export function ErrorPanel({
   const message = isApiError(error)
     ? error.message
     : error instanceof Error
-    ? error.message
-    : 'An unexpected error occurred.';
+      ? error.message
+      : "An unexpected error occurred.";
   return (
     <div className="card border-l-4 border-l-critical bg-critical-light/40 p-5 flex items-start gap-3">
-      <AlertCircle size={18} className="text-critical shrink-0 mt-0.5" aria-hidden />
+      <AlertCircle
+        size={18}
+        className="text-critical shrink-0 mt-0.5"
+        aria-hidden
+      />
       <div className="min-w-0 flex-1">
         <p className="text-body font-medium text-navy">{title}</p>
         <p className="mt-1 text-body text-navy/80 leading-relaxed">{message}</p>
@@ -74,10 +95,10 @@ export function ErrorPanel({
 }
 
 export function PageSkeleton({ contained = false }: { contained?: boolean }) {
-  const Container = contained ? 'div' : PageContainer;
+  const Container = contained ? "div" : PageContainer;
   return (
     <Container
-      className={contained ? 'space-y-6' : 'py-6 space-y-6'}
+      className={contained ? "space-y-6" : "py-6 space-y-6"}
       aria-busy="true"
       aria-label="Loading"
     >
@@ -117,7 +138,7 @@ export default function QueryBoundary({
   return (
     <>
       {hasContent && (
-        <Activity mode={hidden ? 'hidden' : 'visible'}>{children}</Activity>
+        <Activity mode={hidden ? "hidden" : "visible"}>{children}</Activity>
       )}
       {isLoading ? (
         <>{skeleton ?? <PageSkeleton contained={contained} />}</>

@@ -106,8 +106,13 @@ that role.
 
 ## Onboarding and operator API
 
-Apply all migrations through the current head (including `202610100088` and
-`202610100089`), then set `ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` to the platform
+This rollout targets fresh or reset demo databases. Apply all migrations through
+the current head before provisioning banks and connecting their keys. Migrations
+`202610220101` and `202610220102` do not backfill existing field indexes, initialize
+versions for previously connected keys, or convert retained object envelopes;
+upgrading an existing bank-key catalogue is outside this rollout.
+
+Set `ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` to the platform
 workload account. Deployed environments require this setting when connecting or
 using bank keys and reject keys in the platform account. No-key platform storage
 does not require it. Use workload IAM credentials rather than bank access keys.
@@ -234,8 +239,10 @@ Object artifacts and their object backups use the bank-held hierarchy above.
 [Sensitive-field encryption](bank_field_encryption.md) reuses its `KeyProvider`
 and envelope catalogue for newly written borrower identities and operational
 payloads. That document lists the covered fields and numeric-only BI behavior.
-Existing rows are not converted; demo datasets are re-imported after connecting
-the bank key. Existing physical backups retain their original protection.
+For dataset preparation, follow the
+[field encryption contract](bank_field_encryption.md) and the
+[deployment prerequisite](#onboarding-and-operator-api). Existing physical backups
+retain their original protection.
 Signing keys and credential custody remain
 [issue 355](https://github.com/CedynGroup/aequorOS/issues/355). Scheduled
 key-health monitoring, alerting and support workflows remain

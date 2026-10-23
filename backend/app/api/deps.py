@@ -452,7 +452,7 @@ def get_tenant_db_session(
     refuse_impersonated_mutation(request, ctx)
     session = get_sessionmaker()()
     session.info["organization_id"] = ctx.organization_id
-    session.info[SESSION_SUPPORT] = ctx.impersonation_context is not None
+    cast(Session, session).info[SESSION_SUPPORT] = ctx.impersonation_context is not None
     if request.method in {"GET", "HEAD"}:
         presentation = getattr(request.state, SESSION_STATE, None)
         if not isinstance(presentation, PresentationState):
