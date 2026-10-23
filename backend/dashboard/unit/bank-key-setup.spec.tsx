@@ -96,7 +96,7 @@ function mount(element = <BankKeySetup bankId="BK-SYNTHETIC" />) {
   );
 }
 async function fill() {
-  await screen.findByText("Connect your bank key");
+  await screen.findByLabelText("Exact key ARN");
   fireEvent.change(screen.getByLabelText("Exact key ARN"), {
     target: { value: arn },
   });
@@ -111,6 +111,22 @@ it("keeps day-to-day users from seeing controls or requesting key metadata", () 
   mount(<BankKeyPanel />);
   expect(screen.queryByText("Bank encryption key")).toBeNull();
   expect(boundary.status).not.toHaveBeenCalled();
+});
+it("lets an authorized administrator load the bank's key settings", async () => {
+  boundary.authority = true;
+  mount(<BankKeyPanel />);
+  expect(await screen.findByText("Connect your bank key")).toBeVisible();
+  expect(boundary.status).toHaveBeenCalledWith({ bankId: "BK-SYNTHETIC" });
+});
+it("recovers from a status request failure through Retry status", async () => {
+  boundary.status.mockRejectedValueOnce(new Error("Key status unavailable."));
+  mount();
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Could not load key status: Key status unavailable.",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Retry status" }));
+  expect(await screen.findByText("Connect your bank key")).toBeVisible();
+  expect(screen.queryByRole("alert")).toBeNull();
 });
 it("requires a successful current probe and connects using only the key reference", async () => {
   mount();
@@ -147,6 +163,145 @@ it("reports actionable test failures without offering connect", async () => {
   expect(
     screen.getByRole("button", { name: "Connect bank key" }),
   ).toBeDisabled();
+});
+it("shows a connected-key probe refusal and refreshes the recorded state", async () => {
+  boundary.status.mockResolvedValue(connected);
+  boundary.probe.mockResolvedValue({
+    passed: false,
+    message: "Key disabled. Enable the key in AWS KMS.",
+  });
+  mount();
+  const button = await screen.findByRole("button", {
+    name: "Test connected key",
+  });
+  boundary.status.mockResolvedValue({
+    ...connected,
+    key: { ...connected.key, status: "disabled" },
+  });
+  fireEvent.click(button);
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Key disabled. Enable the key in AWS KMS.",
+  );
+  expect(await screen.findByText(/^disabled ·/)).toBeVisible();
+  expect(boundary.probe).toHaveBeenCalledWith({
+    bankId: "BK-SYNTHETIC",
+    bankKeyConnect: {
+      provider: "aws_kms",
+      keyId: arn,
+      ownerAccount: "123456789012",
+      region: "us-east-1",
+    },
+  });
+  expect(button).toBeEnabled();
+});
+it("rotates only after a successful probe and an adequate reason, then clears the form", async () => {
+  const replacement = {
+    ...connected,
+    currentVersion: "version-two",
+    key: { ...connected.key, keyId: `${arn}-replacement` },
+    lastRotatedAt: new Date("2026-10-23T12:00:00Z"),
+  };
+  boundary.status.mockResolvedValue(connected);
+  boundary.rotate.mockResolvedValue(replacement);
+  mount();
+  await fill();
+  fireEvent.change(screen.getByLabelText("Exact key ARN"), {
+    target: { value: replacement.key.keyId },
+  });
+  const button = screen.getByRole("button", { name: "Rotate bank key" });
+  expect(button).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+  await screen.findByText("Synthetic round trip passed.");
+  expect(button).toBeDisabled();
+  const reason = screen.getByLabelText("Reason for replacement-key rotation");
+  fireEvent.change(reason, { target: { value: "short" } });
+  expect(button).toBeDisabled();
+  fireEvent.change(reason, {
+    target: { value: "  Scheduled key replacement.  " },
+  });
+  expect(button).toBeEnabled();
+  fireEvent.click(button);
+  expect(
+    await screen.findByText(
+      "Replacement key connected. Rotation recorded in the audit log.",
+    ),
+  ).toBeVisible();
+  expect(boundary.rotate).toHaveBeenCalledWith({
+    bankId: "BK-SYNTHETIC",
+    bankKeyRotate: {
+      provider: "aws_kms",
+      keyId: replacement.key.keyId,
+      ownerAccount: "123456789012",
+      region: "us-east-1",
+      reason: "Scheduled key replacement.",
+    },
+  });
+  expect(screen.getByText("version-two")).toBeVisible();
+  expect(
+    screen.getByText(replacement.lastRotatedAt.toLocaleString()),
+  ).toBeVisible();
+  for (const label of ["Exact key ARN", "Bank AWS account ID", "AWS region"]) {
+    expect(screen.getByLabelText(label)).toHaveValue("");
+  }
+  expect(reason).toHaveValue("");
+  expect(button).toBeDisabled();
+  expect(boundary.connect).not.toHaveBeenCalled();
+});
+
+it.each([
+  "Test connection",
+  "Connect bank key",
+  "Rotate bank key",
+  "Test connected key",
+  "Record schedule confirmation",
+] as const)("reports request errors and releases controls for %s", async (action) => {
+  const connectedAction = !["Test connection", "Connect bank key"].includes(
+    action,
+  );
+  boundary.status.mockResolvedValue(connectedAction ? connected : disconnected);
+  mount();
+  await fill();
+  if (action === "Rotate bank key") {
+    fireEvent.change(
+      screen.getByLabelText("Reason for replacement-key rotation"),
+      { target: { value: "Scheduled key replacement." } },
+    );
+  }
+  if (action === "Connect bank key" || action === "Rotate bank key") {
+    fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+    await screen.findByText("Synthetic round trip passed.");
+  }
+  if (action === "Record schedule confirmation") {
+    fireEvent.click(screen.getByRole("checkbox"));
+  }
+  const request = {
+    "Test connection": boundary.probe,
+    "Connect bank key": boundary.connect,
+    "Rotate bank key": boundary.rotate,
+    "Test connected key": boundary.probe,
+    "Record schedule confirmation": boundary.confirm,
+  }[action];
+  request.mockRejectedValueOnce(
+    new Error("AWS request unavailable. Retry shortly."),
+  );
+  const button = screen.getByRole("button", { name: action });
+  expect(button).toBeEnabled();
+  fireEvent.click(button);
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "AWS request unavailable. Retry shortly.",
+  );
+  expect(button).toBeEnabled();
+});
+it("reports a retry instruction when a request rejects without an Error", async () => {
+  boundary.probe.mockRejectedValueOnce(null);
+  mount();
+  await fill();
+  const button = screen.getByRole("button", { name: "Test connection" });
+  fireEvent.click(button);
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The request failed. Retry the operation.",
+  );
+  expect(button).toBeEnabled();
 });
 it("shows exact policy with the configured workload role", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
