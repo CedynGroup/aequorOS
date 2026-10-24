@@ -75,7 +75,7 @@ test.describe("unbound Behavioral user", () => {
   }) => {
     const requests = recordBehavioralRequests(page);
 
-    await page.goto("/liquidity");
+    await page.goto("/liquidity?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Liquidity Cockpit" }),
     ).toBeVisible();

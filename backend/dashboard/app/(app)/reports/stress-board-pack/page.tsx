@@ -17,8 +17,12 @@
  * amber tile and a caption that names the reason.
  */
 
+import { useBankRules } from "@/lib/api/regulatoryRules";
+import SdiLiquidityBoardDisclosure from "@/components/reports/SdiLiquidityBoardDisclosure";
 import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
+import { preparationWarning } from "@/lib/regulatoryInstruments";
+import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
 import { Printer } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import SectionCard from "@/components/ui/SectionCard";
@@ -58,6 +62,7 @@ export default function StressBoardPack() {
   const bankId = bank?.id;
   const periodId = period?.id;
   const isSdi = moduleScope.institutionClass === "sdi";
+  const rules = useBankRules(bankId);
   const sdiLiquidity = useSdiLiquidityPosition(
     isSdi && moduleScope.liquidityConfidentialView ? bankId : undefined,
   );
@@ -108,27 +113,68 @@ export default function StressBoardPack() {
       ? `No ${what} floor configured`
       : `Floor ${fmtFloorPct(floor)}`;
 
+  const packCodes = isSdi
+    ? ["SDI-STRESS-ANNUAL"]
+    : ["ICAAP-STRESS", "STRESS-PACK"];
+  if (sections.appendix && !isSdi) packCodes.push("ICAAP-STRESS-APPENDIX2");
+  const packWarnings = new Map(
+    packCodes
+      .map((code) => {
+        const instrument = rules.query.error
+          ? undefined
+          : rules.instrument(code);
+        const warning = preparationWarning(
+          instrument?.instrumentStatus,
+          instrument?.effectiveFrom,
+          instrument?.regulator,
+        );
+        return [warning, instrument] as const;
+      })
+      .filter(([warning]) => Boolean(warning)),
+  );
+
   return (
     <>
       <PageHeader
         eyebrow="Reports"
         title="Stress Board-Pack Composer"
         action={
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            disabled={!run}
-            onClick={() => window.print()}
-          >
-            <Printer size={14} /> Print / export PDF
-          </button>
+          <div className="max-w-xl space-y-2">
+            {[...packWarnings].map(([warning, instrument]) => (
+              <RegulatoryExportWarning
+                key={warning}
+                status={instrument?.instrumentStatus}
+                effectiveFrom={instrument?.effectiveFrom}
+                regulator={instrument?.regulator}
+              />
+            ))}
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+              disabled={
+                !run ||
+                !rules.isReady ||
+                packCodes.some(
+                  (code) => !rules.instrument(code)?.instrumentStatus,
+                )
+              }
+              onClick={() => window.print()}
+            >
+              <Printer size={14} /> Print / export PDF
+            </button>
+          </div>
         }
       />
 
       <QueryBoundary
-        isLoading={registry.isLoading || approved.isLoading}
-        error={registry.error ?? approved.error}
-        onRetry={() => registry.refetch()}
+        isLoading={
+          registry.isLoading || approved.isLoading || (isSdi && rules.isLoading)
+        }
+        error={registry.error ?? approved.error ?? (isSdi ? rules.error : null)}
+        onRetry={() => {
+          void registry.refetch();
+          void rules.query.refetch();
+        }}
       >
         {/* `print:pt-12` keeps the printed report where it sat before Tailwind 4,
             whose `space-y` no longer leaves a gap after the print-hidden controls. */}
@@ -360,7 +406,7 @@ export default function StressBoardPack() {
                   </ChartFrame>
                   {run.summary.stressed_lcr_pct === null ? (
                     <ChartFrame
-                      title="Liquidity — SDI (LMTD)"
+                      title="SDI liquidity monitoring"
                       subtitle="Basel LCR/NSFR excluded (§4.6)"
                       height={240}
                     >
@@ -421,30 +467,5 @@ export default function StressBoardPack() {
         </PageContainer>
       </QueryBoundary>
     </>
-  );
-}
-
-function SdiLiquidityBoardDisclosure({
-  asOf,
-  table1Breaches,
-  reserveBreaches,
-}: {
-  asOf: string | undefined;
-  table1Breaches: number | undefined;
-  reserveBreaches: number | undefined;
-}) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center px-6 text-center text-caption text-slate">
-      <p>
-        SDI liquidity stress is not assessed because no BoG SDI liquidity-stress
-        methodology is configured. Basel LCR/NSFR are not substituted.
-      </p>
-      {asOf && (
-        <p className="mt-3 text-navy">
-          Baseline LMTD evidence as of {asOf}: {table1Breaches ?? 0} Table 1
-          breach(es), {reserveBreaches ?? 0} reserve breach(es).
-        </p>
-      )}
-    </div>
   );
 }

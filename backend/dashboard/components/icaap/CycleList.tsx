@@ -1,5 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
+
 /**
  * The institution's ICAAP cycles.
  *
@@ -14,7 +17,10 @@ import { regShort } from "@/lib/format";
 import EmptyState from "@/components/ui/EmptyState";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import StatusPill from "@/components/ui/StatusPill";
-import { useIcaapCycles, useIcaapFrameworks } from "@/lib/api/icaap";
+import {
+  useIcaapCycles,
+  type IcaapFrameworkSummaryRead,
+} from "@/lib/api/icaap";
 import { useModuleScope } from "@/components/shell/BankContext";
 import CreateCycleDialog from "./CreateCycleDialog";
 import { PrimaryButton } from "./Dialog";
@@ -44,13 +50,15 @@ function statusTone(status: string) {
 export default function CycleList({
   bankId,
   onCreated,
+  frameworks,
 }: {
   bankId: string;
   onCreated: (cycleId: string) => void;
+  frameworks: readonly IcaapFrameworkSummaryRead[];
 }) {
+  const preparing = useSearchParams().get("preparing") === "1";
   const scope = useModuleScope();
   const cyclesQuery = useIcaapCycles(bankId);
-  const frameworksQuery = useIcaapFrameworks(bankId);
   const [creating, setCreating] = useState(false);
   const canCreate = scope.capitalCreate === true;
 
@@ -65,7 +73,7 @@ export default function CycleList({
         <div className="flex items-center justify-end">
           <PrimaryButton
             onClick={() => setCreating(true)}
-            disabled={!canCreate || frameworksQuery.isLoading}
+            disabled={!canCreate || frameworks.length === 0}
           >
             <Plus size={14} aria-hidden />
             New cycle
@@ -73,8 +81,8 @@ export default function CycleList({
         </div>
         {!canCreate && (
           <p className="text-caption text-slate">
-            Creating a cycle requires Basel Capital &middot; Confidential &middot;
-            Create. Ask your organization owner or admin to grant it.
+            Creating a cycle requires Basel Capital &middot; Confidential
+            &middot; Create. Ask your organization owner or admin to grant it.
           </p>
         )}
 
@@ -106,7 +114,10 @@ export default function CycleList({
                   >
                     <td className="px-4 py-2.5">
                       <Link
-                        href={`/icaap/${cycle.id}/overview`}
+                        href={preparationHref(
+                          `/icaap/${cycle.id}/overview`,
+                          preparing,
+                        )}
                         className="font-medium text-action hover:underline"
                       >
                         {cycle.title}
@@ -150,7 +161,7 @@ export default function CycleList({
       {creating && (
         <CreateCycleDialog
           bankId={bankId}
-          frameworks={frameworksQuery.data?.frameworks ?? []}
+          frameworks={frameworks}
           onClose={() => setCreating(false)}
           onCreated={(cycleId) => {
             setCreating(false);

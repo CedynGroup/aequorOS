@@ -13,7 +13,7 @@ test.describe("default macro scenarios", () => {
   test("shows system defaults and runs one on a fresh scenario library", async ({
     page,
   }) => {
-    await page.goto("/irr/scenarios");
+    await page.goto("/irr/scenarios?preparing=1");
 
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
@@ -85,7 +85,7 @@ test.describe("default macro scenarios", () => {
       await route.fulfill({ response, json: profile });
     });
 
-    await page.goto("/irr/scenarios");
+    await page.goto("/irr/scenarios?preparing=1");
     const run = page.getByRole("button", {
       name: "Run enterprise stress",
       exact: true,

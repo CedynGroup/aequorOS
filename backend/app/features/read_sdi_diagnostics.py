@@ -476,6 +476,7 @@ def get_sdi_large_exposures(
                 pct_net_own_funds=row.pct_net_own_funds,
                 single_obligor_limit_pct=row.single_obligor_limit_pct,
                 large_exposure_limit_pct=row.large_exposure_limit_pct,
+                applicable_limit_pct=row.applicable_limit_pct,
                 status=row.status,
                 exempt=row.exempt,
             )

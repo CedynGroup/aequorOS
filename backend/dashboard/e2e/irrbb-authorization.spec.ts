@@ -26,7 +26,7 @@ test.describe("unbound IRRBB user", () => {
       }
     });
 
-    await page.goto("/irr");
+    await page.goto("/irr?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();
@@ -47,7 +47,7 @@ test.describe("IRRBB reader without run permission", () => {
   test("keeps run controls visible, disabled, and explained", async ({
     page,
   }) => {
-    await page.goto("/irr");
+    await page.goto("/irr?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Interest Rate Risk" }).first(),
     ).toBeVisible();
@@ -84,7 +84,7 @@ test.describe("IRRBB analyst", () => {
   test("executes scenarios with effective authority and reloads the persisted run", async ({
     page,
   }) => {
-    await page.goto("/irr");
+    await page.goto("/irr?preparing=1");
     const runButton = page.getByRole("button", {
       name: "Run IRRBB scenarios",
     });

@@ -920,9 +920,10 @@ def test_calendar_explains_missing_return_coverage(db_session: Session, jurisdic
     if jurisdiction == "GH":
         assert result.obligations
         assert all(row.instrument_status == "in_force" for row in result.obligations)
-        assert result.coverage_note is not None
-        assert "SDI-IRRBB-QUARTERLY (exposure draft)" in result.coverage_note
-        assert "SDI-STRESS-ANNUAL (exposure draft)" in result.coverage_note
+        assert result.coverage_note is None
+        assert not {"SDI-IRRBB-QUARTERLY", "SDI-STRESS-ANNUAL"} & {
+            row.return_code for row in result.obligations
+        }
     else:
         assert result.obligations == []
         assert result.coverage_note == (

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.regulatory_instruments import instrument_status_on
+from app.identity.public import require_institution_coverage
+from app.policy.public import regulatory_parameters
 from app.reporting.models.filing_workflow import PackageWorkflowStage
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import (
@@ -130,14 +133,49 @@ def list_return_templates(
     db: Session, ctx: TenantContext, bank_id: str | None = None, *, as_of: date | None = None
 ) -> ReturnTemplateListRead:
     today = as_of or date.today()
-    bank = get_bank_or_404(db, ctx, bank_id) if bank_id is not None else None
+    bank = require_institution_coverage(db, ctx, bank_id)[0] if bank_id is not None else None
     eligibility = resolve_eligibility(db, ctx, bank, as_of=today) if bank is not None else None
-    hidden: frozenset[str] = (
-        family_access.hidden_families(db, ctx, bank) if bank is not None else frozenset()
+    resolver = (
+        cast(regulatory_parameters.PrefetchedParameterResolver, eligibility.parameter_resolver)
+        if eligibility is not None
+        else None
     )
-    return ReturnTemplateListRead(
-        templates=[
+    templates: list[ReturnTemplateRead] = []
+    for definition in REGISTRY.values():
+        resolved = (
+            resolver.try_resolve(definition.effective_from_parameter, as_of=today)
+            if resolver is not None and definition.effective_from_parameter
+            else None
+        )
+        approval = (
+            next(
+                (
+                    row
+                    for row in resolver.rows
+                    if resolved is not None and str(row.id) == resolved.parameter_id
+                ),
+                None,
+            )
+            if resolver is not None
+            else None
+        )
+        default_date = definition.effective_from
+        for spec in regulatory_parameters.ICAAP_FILING_SEED_PARAMETERS:
+            if spec.param_code == definition.effective_from_parameter and spec.value_json:
+                raw_date: object = spec.value_json.get("date")
+                if isinstance(raw_date, str):
+                    default_date = date.fromisoformat(raw_date)
+        templates.append(
             ReturnTemplateRead(
+                source_url=definition.source_url,
+                default_effective_from=default_date,
+                commencement_parameter=definition.effective_from_parameter,
+                commencement_approved_by=approval.approved_by if approval is not None else None,
+                commencement_approved_at=approval.approved_at if approval is not None else None,
+                calculations=[
+                    f"{metric}: {method}" for metric, method in definition.declared_methodologies
+                ]
+                + [f"limit parameter: {code}" for code in definition.limit_parameters],
                 code=definition.code,
                 family=definition.family,
                 title=definition.title,
@@ -164,7 +202,5 @@ def list_return_templates(
                     definition.generator == "bog_form" or definition.supports_working_copy
                 ),
             )
-            for definition in REGISTRY.values()
-            if definition.family not in hidden
-        ]
-    )
+        )
+    return ReturnTemplateListRead(templates=templates)

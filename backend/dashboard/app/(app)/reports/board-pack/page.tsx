@@ -1,7 +1,10 @@
 "use client";
 
+import { useInForceLiveSummary } from "@/lib/api/regulatoryRules";
+
 /** All financial figures and evidence come from one live-summary response. */
 import "@/app/print.css";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import Link from "next/link";
 import { Printer } from "lucide-react";
 import type { LiveModule, LiveStatus } from "@aequoros/risk-service-api";
@@ -24,7 +27,6 @@ import {
   liveBoardHeadline,
   liveEvidenceProblem,
 } from "@/components/reports/liveBoardPack";
-import { useLiveSummary } from "@/lib/api/hooks";
 import { fmtDateUTC, labelize, statusTone } from "@/lib/api/values";
 
 const LIVE_KPI_STATUS: Record<LiveStatus, KpiStatus | undefined> = {
@@ -45,11 +47,14 @@ const BRIEF_MODULES: LiveModule[] = [
 export default function BoardPackPage() {
   const { bank } = useBankContext();
   const scope = useModuleScope();
-  const live = useLiveSummary(bank?.id);
-  const briefModules = BRIEF_MODULES.filter((module) =>
-    module === "liquidity"
-      ? scope.liquidityAggregatedView
-      : isHrefVisible(LIVE_MODULE_HREFS[module], scope),
+  const live = useInForceLiveSummary(bank?.id);
+  const rules = useBankRules(bank?.id);
+  const briefModules = BRIEF_MODULES.filter(
+    (module) =>
+      rules.isModuleInForce(module) &&
+      (module === "liquidity"
+        ? scope.liquidityAggregatedView
+        : isHrefVisible(LIVE_MODULE_HREFS[module], scope)),
   );
   const modulesWithBriefs = [
     ...new Set([
@@ -61,7 +66,10 @@ export default function BoardPackPage() {
     ? "Live evidence is stale after an input change or withdrawal — figures withheld until recomputation completes."
     : null;
   const canPrint =
-    Boolean(live.data?.modules.length) && !live.isLoading && !live.error;
+    rules.isReady &&
+    Boolean(live.data?.modules.length) &&
+    !live.isLoading &&
+    !live.error;
 
   return (
     <>
@@ -91,7 +99,10 @@ export default function BoardPackPage() {
         <QueryBoundary
           isLoading={live.isLoading}
           error={live.error}
-          onRetry={() => live.refetch()}
+          onRetry={() => {
+            void live.refetch();
+            void rules.query.refetch();
+          }}
         >
           <BoardPage>
             <div className="card px-8 py-12 space-y-6">

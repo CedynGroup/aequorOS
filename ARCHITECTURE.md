@@ -315,6 +315,11 @@ semantics follow the plane, never the other way round:
    Missing-source handling follows the
    [official BSD engine rules](docs/bog_returns/00_full_return_registry.md#6-as-built-engine-rules).
 
+The [reporting-date contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)
+also owns instrument applicability, commencement notifications and sealed export
+disclosures. For register navigation and deliberate preparation, see the
+[dashboard guide](backend/dashboard/README.md#regulatory-instruments-and-preparation).
+
 Growth path: denser ingestion (daily/streaming) makes plane 2 denser and the
 live edge fresher without any architectural change — QRM-cadence to
 MORS-cadence on the same model.

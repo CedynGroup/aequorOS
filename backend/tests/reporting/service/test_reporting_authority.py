@@ -794,8 +794,7 @@ def test_an_eligible_sdi_return_is_not_silently_excluded(db_session: Session) ->
 
     obligations = calendar.list_obligations(db_session, ctx, sdi.id, as_of=_AS_OF)
     assert {obligation.return_code for obligation in obligations.obligations} == {"NPL-MONTHLY"}
-    assert obligations.coverage_note is not None
-    assert "SDI-LMT-MONTHLY" in obligations.coverage_note
+    assert obligations.coverage_note is None
 
     bank = _make_bank(db_session, institution_type="universal_bank")
     bank_view = eligibility.resolve_eligibility(db_session, ctx, bank, as_of=_AS_OF)
@@ -838,7 +837,8 @@ def test_a_not_yet_effective_return_is_refused(db_session: Session) -> None:
     assert decision.eligible is False
     assert any(c.code == "effective_date" and not c.satisfied for c in decision.criteria)
     # ... and an unestablished effective date says so rather than passing mute.
-    live = resolved.decide(REGISTRY["CAR-RWA"], reporting_date=_AS_OF)
+    undated = replace(REGISTRY["CAR-RWA"], effective_from=None)
+    live = resolved.decide(undated, reporting_date=_AS_OF)
     effective = next(c for c in live.criteria if c.code == "effective_date")
     assert effective.satisfied is True
     assert eligibility.NOT_ESTABLISHED in effective.detail

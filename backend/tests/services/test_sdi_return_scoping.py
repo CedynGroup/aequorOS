@@ -82,8 +82,7 @@ def test_savings_and_loans_sees_only_its_sdi_return_calendar(db_session: Session
         "NPL-MONTHLY",
     }
     assert {obligation.return_family for obligation in result.obligations} == {"credit"}
-    assert result.coverage_note is not None
-    assert "SDI-LMT-MONTHLY" in result.coverage_note
+    assert result.coverage_note is None
 
 
 def test_finance_house_sees_the_same_sdi_return_calendar(db_session: Session) -> None:

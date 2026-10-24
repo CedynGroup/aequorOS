@@ -137,7 +137,7 @@ test.describe("Liquidity functional workflow", () => {
     expect([ASF_M, RSF_M]).toEqual([1961, 1294.5]);
 
     // ---- Cockpit: the ratios, then the outflow and inflow decomposition.
-    await page.goto("/liquidity");
+    await page.goto("/liquidity?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Liquidity Cockpit" }),
     ).toBeVisible();

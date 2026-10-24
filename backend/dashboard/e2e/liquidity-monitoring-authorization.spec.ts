@@ -41,7 +41,7 @@ test.describe("unbound Liquidity Monitoring user", () => {
         .getByRole("link", { name: "Liquidity", exact: true }),
     ).toHaveAttribute("aria-disabled", "true");
 
-    await page.goto("/liquidity");
+    await page.goto("/liquidity?preparing=1");
     // A member deep-linking to a module route of their own organization is
     // shown the access-denied page naming the grant to request, not a 404:
     // 404 is kept for routes whose existence is itself the secret (cross-tenant,
@@ -50,16 +50,16 @@ test.describe("unbound Liquidity Monitoring user", () => {
     await expect(
       page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();
-    await expect(page).toHaveURL(/\/liquidity$/);
+    await expect(page).toHaveURL(/\/liquidity\?preparing=1$/);
 
-    await page.goto("/liquidity/monitoring");
+    await page.goto("/liquidity/monitoring?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();
     await expect(
       page.getByText("Liquidity Monitoring · Confidential · View"),
     ).toBeVisible();
-    await expect(page).toHaveURL(/\/liquidity\/monitoring$/);
+    await expect(page).toHaveURL(/\/liquidity\/monitoring\?preparing=1$/);
     expect(productRequests).toEqual([]);
     if (evidenceDir) {
       await page.screenshot({
@@ -95,7 +95,7 @@ test.describe("exactly bound Liquidity user", () => {
         aggregateRequests.push(request.url());
       }
     });
-    await page.goto("/liquidity/monitoring");
+    await page.goto("/liquidity/monitoring?preparing=1");
     for (const label of ["FX funding gap", "FX share of liabilities"]) {
       const card = page.locator(".card").filter({
         has: page.getByText(label, { exact: true }),
@@ -122,7 +122,7 @@ test.describe("exactly bound Liquidity user", () => {
       page.getByRole("tooltip").filter({ hasText: reason }),
     ).toBeVisible();
     await liquidity.press("Enter");
-    await expect(page).toHaveURL(/\/liquidity\/monitoring$/);
+    await expect(page).toHaveURL(/\/liquidity\/monitoring\?preparing=1$/);
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "liquidity-confidential-monitoring.png"),
@@ -132,7 +132,7 @@ test.describe("exactly bound Liquidity user", () => {
   });
 
   test("shows only authorized Liquidity reads", async ({ page }) => {
-    await page.goto("/liquidity");
+    await page.goto("/liquidity?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Liquidity Cockpit" }),
     ).toBeVisible();
@@ -173,7 +173,7 @@ test.describe("exactly bound Liquidity user", () => {
     await expect(fx).toHaveAttribute("aria-disabled", "true");
     await expect(fx).not.toHaveAttribute("href", /.+/);
     await fx.click({ force: true });
-    await expect(page).toHaveURL(/\/liquidity$/);
+    await expect(page).toHaveURL(/\/liquidity\?preparing=1$/);
     const stress = page.getByRole("link", { name: "Stress" });
     await expect(stress).toHaveAttribute("aria-disabled", "true");
     await stress.hover();
@@ -184,7 +184,7 @@ test.describe("exactly bound Liquidity user", () => {
       }),
     ).toBeVisible();
     await link.click();
-    await expect(page).toHaveURL(/\/liquidity\/monitoring$/);
+    await expect(page).toHaveURL(/\/liquidity\/monitoring\?preparing=1$/);
     await expect(
       page.getByRole("heading", { name: "Liquidity Monitoring Tools" }).first(),
     ).toBeVisible();
@@ -220,7 +220,7 @@ test.describe("aggregated-only Liquidity user", () => {
         response.url().includes("/liquidity/dashboard") &&
         response.status() === 200,
     );
-    await page.goto("/liquidity");
+    await page.goto("/liquidity?preparing=1");
     await dashboardResponse;
     await expect(
       page.getByText("Largest HQLA concentration", { exact: true }),

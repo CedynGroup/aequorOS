@@ -1,5 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
+
 /**
  * The framework's sections, in the regulator's own order.
  *
@@ -23,6 +26,7 @@ export default function SectionList({
   bankId: string;
   cycleId: string;
 }) {
+  const preparing = useSearchParams().get("preparing") === "1";
   const cycleQuery = useIcaapCycle(bankId, cycleId);
   const sections = [...(cycleQuery.data?.sections ?? [])].sort(
     (a, b) => a.order - b.order,
@@ -43,7 +47,10 @@ export default function SectionList({
             return (
               <li key={section.key}>
                 <Link
-                  href={`/icaap/${cycleId}/sections/${section.key}`}
+                  href={preparationHref(
+                    `/icaap/${cycleId}/sections/${section.key}`,
+                    preparing,
+                  )}
                   className="flex items-start gap-3 border-b border-border-light px-5 py-3 last:border-0 hover:bg-surface/60"
                 >
                   <span className="mt-0.5 w-6 shrink-0 text-caption font-medium uppercase text-slate">

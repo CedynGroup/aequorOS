@@ -1,5 +1,7 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
 import PageContainer from "@/components/ui/PageContainer";
 import { ArrowUpRight } from "lucide-react";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
@@ -103,6 +105,7 @@ function escalationLabel(escalation: string | undefined): string {
 
 export default function LiquidityCockpit() {
   const { bank, moduleScope } = useBankContext();
+  const preparing = useSearchParams().get("preparing") === "1";
   const bankId = bank?.id;
   const isSdi = moduleScope.institutionClass === "sdi";
   const aggregatedBankId = moduleScope.liquidityAggregatedView
@@ -416,7 +419,7 @@ export default function LiquidityCockpit() {
                     return (
                       <PermissionLink
                         key={control.href}
-                        href={control.href}
+                        href={preparationHref(control.href, preparing)}
                         reason={
                           access.state === "disabled"
                             ? access.reason

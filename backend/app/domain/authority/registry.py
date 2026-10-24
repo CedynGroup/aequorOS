@@ -1105,7 +1105,7 @@ _NO_VAR_AUTHORITY = (
     "(verified negative, full-text search). Internal market-risk management measure."
 )
 _FTP_VERSION = "regulatory-ftp-v1.0.0"
-_FORECAST_VERSION = "regulatory-forecasting-v4.0.0"
+_FORECAST_VERSION = "regulatory-forecasting-v4.0.1"
 _STRESS_VERSION = "enterprise-stress-v5.0.0"
 _REVERSE_VERSION = "reverse-stress-v1.0.0"
 

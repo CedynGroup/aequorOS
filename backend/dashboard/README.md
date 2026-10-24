@@ -45,6 +45,28 @@ Capital navigation, planning, and ILAAP access requirements are documented in
 FX navigation, dashboard queries, run actions, and report projections are
 documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-access).
 
+### Regulatory instruments and preparation
+
+Open **Submissions → Instruments** (`/submissions/instruments`) to inspect every
+registered instrument's legal status, effective or conditional start date, source
+citation and link, and recorded calculation and limit dependencies. Governed
+commencement entries show the default and institution dates, plus the recorded
+approver and approval date. Missing dates, links or mappings are stated explicitly.
+Expand a status badge to read its shared plain-language disclosure and source
+details; legal status is separate from template fidelity and calculation readiness.
+
+**Upcoming rules** (`/submissions/upcoming`) lists exposure drafts and final rules
+awaiting commencement. Use **Return** to prepare a particular return or **Open
+preparation workspace** for an available module. Preparation links preserve
+`preparing=1` across module navigation; existing institution and module permissions
+still apply. Ordinary Returns and rule-governed module tabs show in-force material;
+the calendar's applicability and preparation-anchor rules are defined in the
+[reporting-date contract](../../docs/regulatory_reporting.md#5b-reporting-date-standing-rules).
+
+Preparation notices appear at generation, export and rehearsal-freeze decisions.
+An instrument notification opens the register for the institution named in the
+notice, which may differ from the active bank.
+
 ### Unavailable liquidity figures
 
 When LCR or NSFR cannot be computed, its figure and dependent totals show an
@@ -190,7 +212,9 @@ These are correctness rules, not style preferences. The evidence is
   [research dossier](../../docs/research/bog_returns_and_templates.md) owns publication
   status and conditional commencement; the reporting-date contract governs preparation.
 - Jurisdiction is data: use `lib/format.ts` (`fmtCurrency`, `regShort()`,
-  `centralBankName()`), never a `'GHS'` / `'BoG'` literal in display code.
+  `centralBankName()`) for bank-context formatting, never a `'GHS'` / `'BoG'`
+  literal in display code. Instrument and framework disclosures instead use
+  their own recorded regulator, including when it differs from the active bank.
 
 ### Client-side arithmetic
 
@@ -550,6 +574,16 @@ normal development cache. Because every journey shares the disposable database
 and session files, a worktree-local lock rejects a second concurrent E2E run.
 The stack never touches the primary database.
 
+Regulatory status and commencement journeys run separately from the default suite:
+
+```bash
+pnpm --filter @aequoros/dashboard e2e --config=playwright.regulatory.config.ts
+```
+
+This configuration rebuilds the same disposable stack with a file-controlled reporting
+clock and additional test ICAAP frameworks. Run it sequentially with the default suite;
+both configurations use the same worktree-local lock and fixture paths.
+
 The disposable Next.js server uses `NEXT_FONT_GOOGLE_MOCKED_RESPONSES` with
 fixed CSS for all layout and login font families. Journeys and the visual tour
 render with Next's generated fallback fonts and never fetch Google CSS or font files.
@@ -782,6 +816,11 @@ in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
 fail the gate even when the remaining reports pass. Raise the floor when adding
 coverage; reducing it requires a reviewed suite change.
+
+Runner 4 also runs the separate regulatory status suite after its default shard.
+Its CI reporter requires every discovered journey to execute and rejects skips or
+failures. That suite must pass for runner 4 to succeed; its separate report is not
+included in the four-report aggregate or its executed-journey floor.
 
 Screenshot diagnostics are separate from the required suite; see the visual-tour
 capture command and output under [End-to-end (Playwright)](#end-to-end-playwright).

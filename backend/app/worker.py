@@ -43,6 +43,7 @@ from app.db.session import assert_worker_database_access, get_worker_sessionmake
 from app.icaap.service import ai_jobs as icaap_ai_jobs
 from app.identity.public import run_session_purge
 from app.models import Job, WorkerHeartbeat
+from app.reporting.public import scan_instrument_statuses
 from app.services import (
     database_direct_jobs,
     documents,
@@ -61,6 +62,13 @@ logger = logging.getLogger(__name__)
 
 Handler = Callable[[Session, Job], None]
 
+
+def _run_reporting_scan(session: Session, job: Job) -> None:
+    reporting_deadline_scan.run_reporting_deadline_scan(
+        session, job, instrument_scan=scan_instrument_statuses
+    )
+
+
 # HAZARD: HANDLERS and job_queue.JOB_TYPES must cover each other exactly — a
 # JOB_TYPES entry with no handler here is enqueueable but never claimable, so
 # its jobs sit "queued" forever (how notification_email_mirror was orphaned
@@ -75,7 +83,7 @@ HANDLERS: dict[str, Handler] = {
     "market_data_pull": market_data_jobs.run_market_data_pull,
     "temenos_pull": temenos_jobs.run_temenos_pull,
     "etl_dedup": etl_dedup_jobs.run_etl_dedup,
-    "reporting_deadline_scan": reporting_deadline_scan.run_reporting_deadline_scan,
+    "reporting_deadline_scan": _run_reporting_scan,
     "notification_email_mirror": notification_email_mirror.run_notification_email_mirror,
     "database_direct_health": database_direct_jobs.run_database_direct_health,
     "desk_capture": desk_capture_job.run_desk_capture,

@@ -57,7 +57,13 @@ export default function CycleHeader({
           {deadline && <DeadlineBadge deadline={deadline} />}
         </span>
       }
-      action={<DraftExportMenu bankId={bankId} cycleId={cycle.id} />}
+      action={
+        <DraftExportMenu
+          bankId={bankId}
+          cycleId={cycle.id}
+          framework={cycle.framework}
+        />
+      }
     />
   );
 }

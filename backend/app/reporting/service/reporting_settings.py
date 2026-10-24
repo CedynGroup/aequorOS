@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.identity.public import Bank
 from app.reporting.models.packages import RegulatoryReportingSettings
 from app.reporting.schemas.packages import ReportingSettingsPut, ReportingSettingsRead
 from app.reporting.service.common import get_bank_or_404, require_actor
@@ -43,6 +44,28 @@ def _settings_row(
     )
 
 
+def get_or_create_reporting_settings(
+    db: Session, ctx: TenantContext, bank_id: str
+) -> tuple[RegulatoryReportingSettings, bool]:
+    db.execute(
+        select(Bank.id)
+        .where(Bank.organization_id == ctx.organization_id, Bank.id == bank_id)
+        .with_for_update()
+    ).scalar_one()
+    settings = _settings_row(db, ctx, bank_id)
+    created = settings is None
+    if settings is None:
+        settings = RegulatoryReportingSettings(
+            organization_id=ctx.organization_id,
+            bank_id=bank_id,
+            deadline_overrides={},
+            instrument_observations={},
+        )
+        db.add(settings)
+        db.flush()
+    return settings, created
+
+
 def get_reporting_settings(db: Session, ctx: TenantContext, bank_id: str) -> ReportingSettingsRead:
     bank = get_bank_or_404(db, ctx, bank_id)
     settings = _settings_row(db, ctx, bank.id)
@@ -61,15 +84,7 @@ def put_reporting_settings(
 ) -> ReportingSettingsRead:
     require_actor(ctx)
     bank = get_bank_or_404(db, ctx, bank_id)
-    settings = _settings_row(db, ctx, bank.id)
-    created = settings is None
-    if settings is None:
-        settings = RegulatoryReportingSettings(
-            organization_id=ctx.organization_id,
-            bank_id=bank.id,
-            deadline_overrides={},
-        )
-        db.add(settings)
+    settings, created = get_or_create_reporting_settings(db, ctx, bank.id)
     settings.deadline_overrides = dict(payload.deadline_overrides)
     db.flush()
     record_event(
