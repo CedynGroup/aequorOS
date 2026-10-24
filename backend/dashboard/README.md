@@ -574,6 +574,16 @@ normal development cache. Because every journey shares the disposable database
 and session files, a worktree-local lock rejects a second concurrent E2E run.
 The stack never touches the primary database.
 
+Regulatory status and commencement journeys run separately from the default suite:
+
+```bash
+pnpm --filter @aequoros/dashboard e2e --config=playwright.regulatory.config.ts
+```
+
+This configuration rebuilds the same disposable stack with a file-controlled reporting
+clock and additional test ICAAP frameworks. Run it sequentially with the default suite;
+both configurations use the same worktree-local lock and fixture paths.
+
 The disposable Next.js server uses `NEXT_FONT_GOOGLE_MOCKED_RESPONSES` with
 fixed CSS for all layout and login font families. Journeys and the visual tour
 render with Next's generated fallback fonts and never fetch Google CSS or font files.
@@ -806,6 +816,11 @@ in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
 fail the gate even when the remaining reports pass. Raise the floor when adding
 coverage; reducing it requires a reviewed suite change.
+
+Runner 4 also runs the separate regulatory status suite after its default shard.
+Its CI reporter requires every discovered journey to execute and rejects skips or
+failures. That suite must pass for runner 4 to succeed; its separate report is not
+included in the four-report aggregate or its executed-journey floor.
 
 Screenshot diagnostics are separate from the required suite; see the visual-tour
 capture command and output under [End-to-end (Playwright)](#end-to-end-playwright).

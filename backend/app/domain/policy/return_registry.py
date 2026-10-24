@@ -74,10 +74,6 @@ REGULATOR_BOG = "BOG"
 ACCRA_TZ = "Africa/Accra"
 
 
-def _month_end(year: int, month: int) -> date:
-    return date(year, month, monthrange(year, month)[1])
-
-
 def _add_months(anchor: date, months: int) -> tuple[int, int]:
     total = anchor.year * 12 + (anchor.month - 1) + months
     return total // 12, total % 12 + 1

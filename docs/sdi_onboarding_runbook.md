@@ -131,15 +131,17 @@ Feed what each BLOCKED/PARTIAL line names, re-ingest, re-check.
 
 ## 6. What computes for the SDI (all against SDI parameters)
 
-- **Liquidity** — LMTD Table-1 prudential ratios bind against the SDI floors;
-  primary/secondary liquidity-reserve check (cash+BoG / eligible securities vs
-  10%/15% of deposits); maturity ladder; funding concentration. LCR/NSFR are
-  excluded.
+- **Liquidity** — primary/secondary liquidity-reserve check (cash+BoG / eligible
+  securities vs 10%/15% of deposits); maturity ladder; funding concentration.
+  Access to LMTD Table-1 preparation follows the
+  [dashboard guide](../backend/dashboard/README.md#regulatory-instruments-and-preparation).
+  LCR/NSFR are excluded.
 - **Capital (simplified s.29)** — CAR against the 10% floor over the credit-risk
   base (market/operational RWA excluded); minimum paid-up-capital check;
   statutory-reserve-fund adequacy. No CET1/AT1/Tier2/leverage.
-- **Exposures** — single-obligor (25%) + large-exposure (15%) limits at the
-  connected-group level, findings on breach; aggregate cap dormant until confirmed.
+- **Exposures** — connected-group breach findings; applicable limits follow the
+  [reporting-date contract](regulatory_reporting.md#5b-reporting-date-standing-rules).
+  The aggregate cap remains dormant until confirmed.
 - **Loan classification / provisioning** — NBFI 4-grade, rates 20/50/100, NPL@90d.
 
 ## 7. Regulatory returns
