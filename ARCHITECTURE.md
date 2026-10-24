@@ -1200,6 +1200,44 @@ The combined SQLite compatibility run remains available as `mise run risk-servic
 The [backend test guide](backend/README.md#run-tests) owns unit/integration/e2e
 classification, census regeneration, service prerequisites and CI execution ownership.
 
+### Public ECR pulls in CI
+
+The production backend build in `risk-service.yml` and image publisher in
+`release.yml` authenticate to `public.ecr.aws` with GitHub OIDC when the repository
+variable `AWS_ECR_PULL_ROLE_ARN` is set. Both AWS steps skip when it is empty or
+the event is a fork pull request, retaining anonymous pulls and their rate limits.
+The static job authenticates only on pushes, when its Docker build runs.
+An invalid configured role fails the job; clear the variable to disable login.
+
+To enable authentication (requires AWS IAM administration permissions):
+
+1. In AWS IAM, add an OpenID Connect identity provider with URL
+   `https://token.actions.githubusercontent.com` and audience `sts.amazonaws.com`,
+   or reuse the existing provider.
+2. Create a role for that web identity provider, with trust action
+   `sts:AssumeRoleWithWebIdentity`. Require `StringEquals` on
+   `token.actions.githubusercontent.com:aud` = `sts.amazonaws.com` and
+   `StringLike` on `token.actions.githubusercontent.com:sub` matching only
+   `repo:CedynGroup/aequorOS:ref:refs/heads/main`,
+   `repo:CedynGroup/aequorOS:ref:refs/heads/release`,
+   `repo:CedynGroup/aequorOS:ref:refs/heads/release/*`, and
+   `repo:CedynGroup/aequorOS:ref:refs/tags/v*` (an array of allowed subjects).
+3. Attach AWS managed policy `AmazonElasticContainerRegistryPublicReadOnly`.
+   It includes `ecr-public:GetAuthorizationToken` and `sts:GetServiceBearerToken`;
+   no push permissions or long-lived access keys are needed.
+4. Copy the role ARN into **Settings → Secrets and variables → Actions → Variables**
+   as repository variable `AWS_ECR_PULL_ROLE_ARN`. No further code change is needed.
+   Check the AWS configuration and ECR login steps on the next main/release push
+   or version-tag build; public ECR authentication uses `us-east-1`.
+
+There are currently no public ECR job service containers. GitHub pulls
+`jobs.<id>.services` images before steps, so step-based login cannot authenticate
+those pulls if service containers are added later.
+
+References: [GitHub OIDC trust setup](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws),
+[AWS read-only policy](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonElasticContainerRegistryPublicReadOnly.html),
+and [public ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/public/public-registry-auth.html).
+
 ### CI enforcement
 
 - **Merge-queue checks focus on integration risk.** The backend, dashboard,
