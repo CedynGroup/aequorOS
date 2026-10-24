@@ -96,7 +96,10 @@ def visibility_conditions(db: Session, ctx: TenantContext) -> tuple[ColumnElemen
             Notification.recipient_user_id.is_(None),
             Notification.recipient_user_id == ctx.actor_user_id,
         )
-    deadline = Notification.type.startswith("reporting.deadline.")
+    deadline = or_(
+        Notification.type.startswith("reporting.deadline."),
+        Notification.type.startswith("reporting.instrument."),
+    )
     package_scopes: list[ColumnElement[bool]] = []
     deadline_scopes: list[ColumnElement[bool]] = []
     banks = db.scalars(select(Bank).where(Bank.organization_id == ctx.organization_id))

@@ -156,6 +156,8 @@ _PUBLIC_ACCESS_REQUEST_ROUTES = frozenset(
         "/submissions/settings",
         "/submissions/signatures",
         "/submissions/templates",
+        "/submissions/instruments",
+        "/submissions/upcoming",
     }
 )
 

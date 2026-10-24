@@ -1319,6 +1319,8 @@ export const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
   "/submissions/settings",
   "/submissions/signatures",
   "/submissions/templates",
+  "/submissions/instruments",
+  "/submissions/upcoming",
 ]);
 
 /**

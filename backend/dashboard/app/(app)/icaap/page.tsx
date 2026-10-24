@@ -10,6 +10,7 @@
 
 import { useRouter } from "next/navigation";
 import PageContainer from "@/components/ui/PageContainer";
+import RegulatoryRuleStatus from "@/components/submissions/RegulatoryRuleStatus";
 import PageHeader from "@/components/ui/PageHeader";
 import { useBankContext } from "@/components/shell/BankContext";
 import CycleList from "@/components/icaap/CycleList";
@@ -24,6 +25,7 @@ export default function IcaapPage() {
       <PageHeader
         eyebrow="ICAAP"
         title="Internal Capital Adequacy Assessment"
+        action={<RegulatoryRuleStatus code="ICAAP-REPORT" />}
         subtitle={`The institution's own assessment of the capital it needs, and the evidence behind it, as filed with ${regShort()}.`}
       />
       <PageContainer className="py-6">

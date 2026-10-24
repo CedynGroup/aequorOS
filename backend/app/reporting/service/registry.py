@@ -206,6 +206,8 @@ class ReturnDefinition:
     # are the only source registered), so ``("GH",)`` states a fact rather than
     # standing in for an unmade decision. An empty tuple = unrestricted.
     jurisdictions: tuple[str, ...] = ("GH",)
+    limit_parameters: tuple[str, ...] = ()
+    source_url: str | None = None
     # Literal commencement, or a conditional date for an exposure draft.
     # ``None`` defers to effective_from_parameter if declared; otherwise status
     # remains the explicit instrument_status. Commencement cannot finalise a
@@ -326,6 +328,17 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="LMT",
+            limit_parameters=(
+                "narrow_to_volatile",
+                "broad_to_volatile",
+                "narrow_to_short_term",
+                "broad_to_short_term",
+                "narrow_to_total_deposits",
+                "broad_to_total_deposits",
+                "narrow_to_total_assets",
+                "broad_to_total_assets",
+            ),
+            source_url="https://www.bog.gov.gh/reg_directives/liquidity-monitoring-tools-directive-exposure-draft/",
             instrument_status="exposure_draft",
             effective_from=date(2027, 1, 1),
             family="liquidity",
@@ -360,6 +373,17 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="SDI-LMT-MONTHLY",
+            limit_parameters=(
+                "narrow_to_volatile",
+                "broad_to_volatile",
+                "narrow_to_short_term",
+                "broad_to_short_term",
+                "narrow_to_total_deposits",
+                "broad_to_total_deposits",
+                "narrow_to_total_assets",
+                "broad_to_total_assets",
+            ),
+            source_url="https://www.bog.gov.gh/reg_directives/liquidity-monitoring-tools-directive-exposure-draft/",
             instrument_status="exposure_draft",
             effective_from=date(2027, 1, 1),
             family="sdi",
@@ -403,6 +427,9 @@ REGISTRY: dict[str, ReturnDefinition] = {
         # capital engine). Stored return_code values migrated (202608150013).
         ReturnDefinition(
             code="CAR-RWA",
+            limit_parameters=("car_min", "cet1_min", "tier1_min", "leverage_min"),
+            effective_from=date(2019, 1, 1),
+            source_url="https://www.bog.gov.gh/reg_directives/capital-requirement-directive/",
             family="capital",
             title="Capital Adequacy Return (CAR & RWA)",
             directive_citation=(
@@ -426,6 +453,11 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="IRRBB-PILOT",
+            limit_parameters=(
+                "irrbb_outlier_threshold_pct_tier1",
+                "irrbb_sf_major_currency_threshold_pct",
+            ),
+            source_url="https://www.bog.gov.gh/reg_directives/guidelines-on-management-and-measurement-of-interest-rate-risk-in-the-banking-book-irrbb/",
             instrument_status="exposure_draft",
             effective_from=date(2027, 1, 1),
             family="irrbb",
@@ -448,6 +480,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="SDI-IRRBB-QUARTERLY",
+            source_url="https://www.bog.gov.gh/reg_directives/guidelines-on-management-and-measurement-of-interest-rate-risk-in-the-banking-book-irrbb/",
             instrument_status="exposure_draft",
             effective_from=date(2027, 1, 1),
             family="sdi",
@@ -484,6 +517,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="FX-NOP",
+            source_url="https://www.bog.gov.gh/wp-content/uploads/2026/02/BG-FMD-2026-07-Revised-Directive-on-Foreign-Exchange-FX-PositionLimits-1.pdf",
             family="fx",
             title="Net Open Position Return (Monthly Summary)",
             directive_citation=(
@@ -529,6 +563,12 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="LE-MONTHLY",
+            limit_parameters=(
+                "large_exposure_limit_pct",
+                "large_exposure_id_threshold_pct",
+                "aggregate_large_exposure_cap",
+            ),
+            source_url="https://www.bog.gov.gh/wp-content/uploads/2025/09/Large-Exposures-Directive-September-2025.pdf",
             instrument_status="final_not_in_force",
             effective_from=date(2027, 1, 1),
             family="large_exposures",
@@ -556,6 +596,12 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="SDI-LE-MONTHLY",
+            limit_parameters=(
+                "large_exposure_limit_pct",
+                "large_exposure_id_threshold_pct",
+                "aggregate_large_exposure_cap",
+            ),
+            source_url="https://www.bog.gov.gh/wp-content/uploads/2025/09/Large-Exposures-Directive-September-2025.pdf",
             instrument_status="final_not_in_force",
             effective_from=date(2027, 1, 1),
             family="sdi",
@@ -626,6 +672,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         # refuses them by name (``icaap_generated_by_freeze``).
         ReturnDefinition(
             code="ICAAP-REPORT",
+            source_url="https://www.bog.gov.gh/reg_directives/guideline-on-internal-capital-adequacy-assessment-process-icaap-exposure-draft/",
             instrument_status="exposure_draft",
             family="icaap",
             title="Internal Capital Adequacy Assessment Process (ICAAP) Report",
@@ -691,6 +738,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="ICAAP-UPDATE",
+            source_url="https://www.bog.gov.gh/reg_directives/guideline-on-internal-capital-adequacy-assessment-process-icaap-exposure-draft/",
             instrument_status="exposure_draft",
             family="icaap",
             title="ICAAP Update (material change)",
@@ -740,6 +788,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="ICAAP-DISCLOSURE",
+            source_url="https://www.bog.gov.gh/reg_directives/guideline-on-internal-capital-adequacy-assessment-process-icaap-exposure-draft/",
             instrument_status="exposure_draft",
             family="icaap",
             title="ICAAP Public Disclosure",
@@ -775,6 +824,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="ICAAP-STRESS",
+            source_url="https://www.bog.gov.gh/reg_directives/guidelines-on-stress-testing-exposure-draft/",
             instrument_status="exposure_draft",
             effective_from=date(2027, 1, 1),
             family="icaap_stress",
@@ -803,6 +853,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="ICAAP-STRESS-APPENDIX2",
+            source_url="https://www.bog.gov.gh/reg_directives/guidelines-on-stress-testing-exposure-draft/",
             instrument_status="exposure_draft",
             effective_from=date(2027, 1, 1),
             family="icaap_stress",
@@ -842,6 +893,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="SDI-STRESS-ANNUAL",
+            source_url="https://www.bog.gov.gh/reg_directives/guidelines-on-stress-testing-exposure-draft/",
             instrument_status="exposure_draft",
             effective_from=date(2027, 1, 1),
             family="sdi",
@@ -882,6 +934,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         # gated: its official layout is still unpublished.
         ReturnDefinition(
             code="LAS-QUARTERLY",
+            source_url="https://www.bog.gov.gh/wp-content/uploads/2026/02/Liquidity-Risk-Management-Directive-Cleaned-11.12.25.pdf",
             instrument_status="exposure_draft",
             effective_from=date(2027, 1, 1),
             family="liquidity",
@@ -909,6 +962,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="STRESS-PACK",
+            source_url="https://www.bog.gov.gh/reg_directives/guidelines-on-stress-testing-exposure-draft/",
             instrument_status="exposure_draft",
             family="stress",
             title="Stress Test Output Report pack",

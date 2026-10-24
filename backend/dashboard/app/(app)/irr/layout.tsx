@@ -1,4 +1,4 @@
-import ModuleTabs from "@/components/shell/ModuleTabs";
+import RegulatoryModuleTabs from "@/components/shell/RegulatoryModuleTabs";
 
 const tabs = [
   { href: "/irr", label: "Overview" },
@@ -10,14 +10,19 @@ const tabs = [
   // The prescribed standardised framework. A separate tab, not a mode of the
   // others: it is a different scenario set with its own outlier test, and the
   // legacy engine behind the tabs above is untouched by it.
-  { href: "/irr/standardised", label: "Standardised Framework" },
+  {
+    href: "/irr/standardised",
+    ruleCode: "IRRBB-PILOT",
+    label: "Standardised Framework",
+  },
 ];
 
 export default function IrrLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <ModuleTabs tabs={tabs} />
-      {children}
+      <RegulatoryModuleTabs tabs={tabs} contextRule="IRRBB-PILOT">
+        {children}
+      </RegulatoryModuleTabs>
     </>
   );
 }

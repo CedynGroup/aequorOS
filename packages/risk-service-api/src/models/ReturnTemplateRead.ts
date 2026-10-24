@@ -11,6 +11,20 @@
  */
 
 import { mapValues } from "../runtime";
+import type { CommencementParameter } from "./CommencementParameter";
+import {
+  CommencementParameterFromJSON,
+  CommencementParameterFromJSONTyped,
+  CommencementParameterToJSON,
+  CommencementParameterToJSONTyped,
+} from "./CommencementParameter";
+import type { SourceUrl } from "./SourceUrl";
+import {
+  SourceUrlFromJSON,
+  SourceUrlFromJSONTyped,
+  SourceUrlToJSON,
+  SourceUrlToJSONTyped,
+} from "./SourceUrl";
 import type { FidelityGrade } from "./FidelityGrade";
 import {
   FidelityGradeFromJSON,
@@ -32,6 +46,13 @@ import {
   ReturnFamilyToJSON,
   ReturnFamilyToJSONTyped,
 } from "./ReturnFamily";
+import type { CommencementApprovedAt } from "./CommencementApprovedAt";
+import {
+  CommencementApprovedAtFromJSON,
+  CommencementApprovedAtFromJSONTyped,
+  CommencementApprovedAtToJSON,
+  CommencementApprovedAtToJSONTyped,
+} from "./CommencementApprovedAt";
 import type { ChannelCode } from "./ChannelCode";
 import {
   ChannelCodeFromJSON,
@@ -39,6 +60,20 @@ import {
   ChannelCodeToJSON,
   ChannelCodeToJSONTyped,
 } from "./ChannelCode";
+import type { CommencementApprovedBy } from "./CommencementApprovedBy";
+import {
+  CommencementApprovedByFromJSON,
+  CommencementApprovedByFromJSONTyped,
+  CommencementApprovedByToJSON,
+  CommencementApprovedByToJSONTyped,
+} from "./CommencementApprovedBy";
+import type { DefaultEffectiveFrom } from "./DefaultEffectiveFrom";
+import {
+  DefaultEffectiveFromFromJSON,
+  DefaultEffectiveFromFromJSONTyped,
+  DefaultEffectiveFromToJSON,
+  DefaultEffectiveFromToJSONTyped,
+} from "./DefaultEffectiveFrom";
 import type { EffectiveFrom } from "./EffectiveFrom";
 import {
   EffectiveFromFromJSON,
@@ -62,16 +97,46 @@ import {
 export interface ReturnTemplateRead {
   /**
    *
+   * @type {Array<string>}
+   * @memberof ReturnTemplateRead
+   */
+  calculations?: Array<string>;
+  /**
+   *
    * @type {string}
    * @memberof ReturnTemplateRead
    */
   code: string;
   /**
    *
+   * @type {CommencementApprovedAt}
+   * @memberof ReturnTemplateRead
+   */
+  commencementApprovedAt?: CommencementApprovedAt;
+  /**
+   *
+   * @type {CommencementApprovedBy}
+   * @memberof ReturnTemplateRead
+   */
+  commencementApprovedBy?: CommencementApprovedBy;
+  /**
+   *
+   * @type {CommencementParameter}
+   * @memberof ReturnTemplateRead
+   */
+  commencementParameter?: CommencementParameter;
+  /**
+   *
    * @type {ChannelCode}
    * @memberof ReturnTemplateRead
    */
   defaultChannel: ChannelCode;
+  /**
+   *
+   * @type {DefaultEffectiveFrom}
+   * @memberof ReturnTemplateRead
+   */
+  defaultEffectiveFrom?: DefaultEffectiveFrom;
   /**
    *
    * @type {string}
@@ -120,6 +185,18 @@ export interface ReturnTemplateRead {
    * @memberof ReturnTemplateRead
    */
   regulator: string;
+  /**
+   *
+   * @type {Array<string>}
+   * @memberof ReturnTemplateRead
+   */
+  requiredData?: Array<string>;
+  /**
+   *
+   * @type {SourceUrl}
+   * @memberof ReturnTemplateRead
+   */
+  sourceUrl?: SourceUrl;
   /**
    *
    * @type {boolean}
@@ -183,8 +260,26 @@ export function ReturnTemplateReadFromJSONTyped(
   }
   return {
     ...json,
+    calculations:
+      json["calculations"] == null ? undefined : json["calculations"],
     code: json["code"],
+    commencementApprovedAt:
+      json["commencement_approved_at"] == null
+        ? undefined
+        : CommencementApprovedAtFromJSON(json["commencement_approved_at"]),
+    commencementApprovedBy:
+      json["commencement_approved_by"] == null
+        ? undefined
+        : CommencementApprovedByFromJSON(json["commencement_approved_by"]),
+    commencementParameter:
+      json["commencement_parameter"] == null
+        ? undefined
+        : CommencementParameterFromJSON(json["commencement_parameter"]),
     defaultChannel: ChannelCodeFromJSON(json["default_channel"]),
+    defaultEffectiveFrom:
+      json["default_effective_from"] == null
+        ? undefined
+        : DefaultEffectiveFromFromJSON(json["default_effective_from"]),
     directiveCitation: json["directive_citation"],
     effectiveFrom:
       json["effective_from"] == null
@@ -199,6 +294,12 @@ export function ReturnTemplateReadFromJSONTyped(
         ? undefined
         : InstrumentStatusFromJSON(json["instrument_status"]),
     regulator: json["regulator"],
+    requiredData:
+      json["required_data"] == null ? undefined : json["required_data"],
+    sourceUrl:
+      json["source_url"] == null
+        ? undefined
+        : SourceUrlFromJSON(json["source_url"]),
     supportsWorkingCopy: json["supports_working_copy"],
     templateId: json["template_id"],
     title: json["title"],
@@ -218,8 +319,21 @@ export function ReturnTemplateReadToJSONTyped(
   }
 
   return {
+    calculations: value["calculations"],
     code: value["code"],
+    commencement_approved_at: CommencementApprovedAtToJSON(
+      value["commencementApprovedAt"],
+    ),
+    commencement_approved_by: CommencementApprovedByToJSON(
+      value["commencementApprovedBy"],
+    ),
+    commencement_parameter: CommencementParameterToJSON(
+      value["commencementParameter"],
+    ),
     default_channel: ChannelCodeToJSON(value["defaultChannel"]),
+    default_effective_from: DefaultEffectiveFromToJSON(
+      value["defaultEffectiveFrom"],
+    ),
     directive_citation: value["directiveCitation"],
     effective_from: EffectiveFromToJSON(value["effectiveFrom"]),
     family: ReturnFamilyToJSON(value["family"]),
@@ -228,6 +342,8 @@ export function ReturnTemplateReadToJSONTyped(
     generator: value["generator"],
     instrument_status: InstrumentStatusToJSON(value["instrumentStatus"]),
     regulator: value["regulator"],
+    required_data: value["requiredData"],
+    source_url: SourceUrlToJSON(value["sourceUrl"]),
     supports_working_copy: value["supportsWorkingCopy"],
     template_id: value["templateId"],
     title: value["title"],

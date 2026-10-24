@@ -17,6 +17,7 @@ from app.reporting.service.exports.xlsx import normalize_zip
 from app.reporting.service.family_hooks import FamilyHooks
 from app.reporting.service.filing_workflow import engine
 from app.reporting.service.filing_workflow.errors import conflict, not_found, unprocessable
+from app.reporting.service.instrument_notifications import scan_instrument_statuses
 from app.reporting.service.registry import REGISTRY
 from app.reporting.service.report_comparison import favorability_for_disposition
 from app.reporting.service.workflow import granted_unconsumed_resubmission
@@ -25,6 +26,7 @@ __all__ = [
     "FamilyHooks",
     "NAVY",
     "REGISTRY",
+    "scan_instrument_statuses",
     "RegulatoryPackage",
     "WATERMARK_GREY",
     "attachments",
