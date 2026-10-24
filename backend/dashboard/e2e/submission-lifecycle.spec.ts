@@ -266,7 +266,9 @@ test.describe("submission pipeline", () => {
       // version. Sign in again so both denials exercise current authority.
       await viewer.clearCookies();
       const viewerPage = await viewer.newPage();
-      await viewerPage.goto(`/login?callbackUrl=${encodeURIComponent(RETURNS)}`);
+      await viewerPage.goto(
+        `/login?callbackUrl=${encodeURIComponent(RETURNS)}`,
+      );
       await viewerPage.getByLabel("Email").fill("e2e.viewer@aequoros.example");
       await viewerPage.getByLabel("Password").fill(E2E_PASSWORD);
       await viewerPage

@@ -346,3 +346,60 @@ def test_an_sdi_register_resolves_no_governed_capital_code(db_session: Session) 
     register never carries a copy of it."""
     _seed(db_session, "sdi")
     assert not set(_GOVERNED_BANK_CODES) & set(_register(db_session))
+
+
+def _bank_shocks(db: Session) -> dict[tuple[str, str, str], Decimal]:
+    return {
+        (row.module, row.scenario_code, row.shock_key): row.shock_value
+        for row in db.scalars(
+            select(ParamStressShock).where(
+                ParamStressShock.organization_id == ORG,
+                ParamStressShock.module.in_(("fx", "ftp")),
+            )
+        )
+    }
+
+
+def test_bank_stress_defaults_are_complete(db_session: Session) -> None:
+    _seed(db_session, "bank")
+    assert _bank_shocks(db_session) == {
+        ("fx", "mild_depreciation", "ghs_usd_shock_pct"): Decimal("10"),
+        ("fx", "severe_depreciation", "ghs_usd_shock_pct"): Decimal("20"),
+        ("fx", "cedi_crisis", "ghs_usd_shock_pct"): Decimal("30"),
+        ("fx", "cedi_crisis", "correlation_uplift"): Decimal("0.2"),
+        ("fx", "cedi_crisis", "crisis_window_start"): Decimal("60"),
+        ("fx", "cedi_crisis", "crisis_window_end"): Decimal("110"),
+        ("ftp", "rates_up_200", "curve_shift_bp"): Decimal("200"),
+        ("ftp", "funding_stress", "funding_spread_add_bps"): Decimal("100"),
+    }
+
+
+def test_reprovisioning_fills_missing_shocks_without_overriding_a_board_key(
+    db_session: Session,
+) -> None:
+    bank = _bank(db_session, "bank", ORG)
+    revised = ParamStressShock(
+        organization_id=ORG,
+        jurisdiction_code=bank.jurisdiction_code,
+        module="fx",
+        scenario_code="severe_depreciation",
+        shock_key="ghs_usd_shock_pct",
+        shock_value=Decimal("27"),
+        effective_from=APPROVED_AT.date(),
+        approved_by="board",
+        approval_timestamp=APPROVED_AT,
+    )
+    db_session.add(revised)
+    db_session.flush()
+    _seed(db_session, "bank")
+    shocks = _bank_shocks(db_session)
+    assert len(shocks) == 8
+    assert shocks[("fx", "severe_depreciation", "ghs_usd_shock_pct")] == Decimal("27")
+    assert revised.approved_by == "board"
+    assert _seed(db_session, "bank").total_created == 0
+    assert _bank_shocks(db_session) == shocks
+
+
+def test_sdi_does_not_receive_bank_fx_ftp_shocks(db_session: Session) -> None:
+    _seed(db_session, "sdi")
+    assert _bank_shocks(db_session) == {}
