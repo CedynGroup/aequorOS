@@ -32,7 +32,7 @@ from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.data_engine.service.field_search import find_counterparties
-from app.db.base import utc_now
+from app.db.base import Base, utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
 from app.identity.public import Bank, User
@@ -1118,3 +1118,92 @@ def test_key_connection_encrypts_new_writes_without_rewriting_existing_records(
     db_session.expunge_all()
     restored = db_session.get(CanonicalCounterparty, current_id)
     assert restored is not None and restored.name == NAME
+
+
+@pytest.mark.parametrize("refresh", [False, True])
+def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    refresh: bool,
+) -> None:
+    counterparty(db_session)
+    party = RelatedParty(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        party_type="individual",
+        full_name=NAME,
+        contact={"national_id": IDENTIFIER},
+    )
+    db_session.add(party)
+    db_session.flush()
+    db_session.add(
+        RelatedPartyRole(
+            organization_id=ORG_1,
+            party_id=party.id,
+            role="director",
+            other_responsibilities=NAME,
+        )
+    )
+    db_session.add(saved_version(db_session, {"borrower": NAME}))
+    db_session.add(
+        BiSubscription(
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            name="Synthetic legacy subscription",
+            owner_user_id=USER_1,
+            query={"borrower": NAME},
+            artifact_format="csv",
+            cadence="daily",
+            hour=7,
+            minute=30,
+            recipient_user_ids=[],
+        )
+    )
+    db_session.add(
+        BiAlert(
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            owner_user_id=USER_1,
+            name="Synthetic legacy alert",
+            measure_id="loans.balance_rc",
+            filters=[{"borrower": NAME}],
+            direction="above",
+            threshold_basis="stated",
+            threshold=Decimal(100),
+            notify_user_ids=[],
+        )
+    )
+    db_session.commit()
+    models: tuple[type[Base], ...] = (
+        CanonicalCounterparty,
+        RelatedParty,
+        RelatedPartyRole,
+        IngestionBatch,
+        LineageRecord,
+        TranslationFailure,
+        RegulatoryPackage,
+        BiDashboardVersion,
+        BiSubscription,
+        BiAlert,
+    )
+    connect(db_session, provider)
+    stored = raw_fields(db_session)
+    immutable = db_session.execute(text("SELECT spec FROM bi_dashboard_versions")).scalar_one()
+    for model in models:
+        db_session.expunge_all()
+        provider.set_status(KEY_A, KeyStatus.ACTIVE)
+        entity: Base | None = None
+        if refresh:
+            entity = db_session.scalar(select(model))
+            assert entity is not None
+        db_session.commit()
+        provider.set_status(KEY_A, KeyStatus.DISABLED)
+        with pytest.raises(KeyUnavailableError):
+            if refresh:
+                assert entity is not None
+                db_session.refresh(entity)
+            else:
+                db_session.scalar(select(model))
+        db_session.rollback()
+    assert raw_fields(db_session) == stored
+    assert db_session.execute(text("SELECT spec FROM bi_dashboard_versions")).scalar_one() == immutable

@@ -150,7 +150,13 @@ object-version inventory. With retained records, the summary is exactly
 `complete except N retained immutable records`, with counts by type. It never
 reports plain `complete` while any such records remain outside the target
 version. This is completion of editable-data migration, not removal of every
-old-key dependency. Retirement authorization continues to refuse while retained
-envelopes or backup holds require the key; the job does not destroy keys or
-remove wrapped versions. Guard changes and audit-chain migrations are outside
-this workflow.
+old-key dependency. Under the final writer barrier, aequorOS removes catalogue
+envelopes that no protected field or stored object version references, preserving
+the current and blind-index versions. Retained immutable fields and historical,
+pinned or locked object versions keep their envelopes. Retirement authorization
+continues to refuse while any catalogue reference or backup hold requires the
+key, and permits retirement of an unreferenced version after backup retention
+expires. The job does not destroy keys. The worker can update only the key-version
+pointers and timestamp; operator audit retention is counted through a read-only
+audit-owner function without direct worker access to operator audit rows.
+Guard changes and audit-chain migrations are outside this workflow.

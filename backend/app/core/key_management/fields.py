@@ -441,6 +441,10 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
         row = registry.bank_key(db, organization, bank) if bank is not None else None
         if bank is not None and row is None and get_key_settings().bank_key_required:
             raise KeyUnavailableError("The bank encryption key is not connected.")
+        if row is not None:
+            _ = registry.prepare_envelope(
+                db, row, _envelope_context(organization, row.bank_id), registry.provider_for
+            )
         for col in present:
             value = cast(object, state.dict[col.attribute])
             if not isinstance(value, SealedField):

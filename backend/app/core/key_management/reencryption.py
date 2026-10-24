@@ -7,11 +7,12 @@ from typing import cast
 from uuid import UUID
 
 from pydantic import BaseModel, Field, TypeAdapter
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.key_management import maintenance, registry
 from app.core.key_management.fields import ProtectedField, SealedField
+from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyUnavailableError
 from app.db.base import Base
 from app.models.job import Job
@@ -207,16 +208,19 @@ def run(db: Session, job: Job, storage: StorageClient | None = None) -> None:  #
             db.commit()
             continue
         pending = next(maintenance.bi_identity_updates(db, key), None) is not None
+        referenced = {key.current_version_id, key.index_version_id}
         for table in tables:
             for row in db.execute(
                 select(table).where(*maintenance.scope(table, organization, bank))
             ).mappings():
                 for col in table.c:
-                    if not isinstance(
-                        col.type, ProtectedField
-                    ) or col.name in maintenance.IMMUTABLE_FIELDS.get(table.name, set()):
+                    if not isinstance(col.type, ProtectedField):
                         continue
                     value = cast(object, row[col.name])
+                    if isinstance(value, SealedField):
+                        referenced.add(value.envelope_id)
+                    if col.name in maintenance.IMMUTABLE_FIELDS.get(table.name, set()):
+                        continue
                     if value is not None and (
                         not isinstance(value, SealedField)
                         or value.envelope_id != key.current_version_id
@@ -225,6 +229,8 @@ def run(db: Session, job: Job, storage: StorageClient | None = None) -> None:  #
         retained = maintenance.retained_fields(db, key)
         pinned = _pinned_versions(db, organization, bank, key.storage_slug)
         for item in client.encryption_inventory(key.storage_slug):
+            if item.envelope_id is not None:
+                referenced.add(item.envelope_id)
             if item.envelope_id == key.current_version_id:
                 continue
             if _retained(item, pinned):
@@ -236,6 +242,15 @@ def run(db: Session, job: Job, storage: StorageClient | None = None) -> None:  #
             progress.table, progress.after = 0, None
             _save(db, job, progress)
             continue
+        _ = db.execute(
+            delete(ObjectKeyEnvelope).where(
+                ObjectKeyEnvelope.organization_id == organization,
+                ObjectKeyEnvelope.bank_id == bank,
+                ObjectKeyEnvelope.id.not_in(
+                    {version for version in referenced if version is not None}
+                ),
+            )
+        )
         progress.retained = retained
         count = sum(retained.values())
         progress.summary = (

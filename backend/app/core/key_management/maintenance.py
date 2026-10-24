@@ -7,7 +7,7 @@ from collections.abc import Iterator, Mapping
 from typing import cast
 
 from pydantic import TypeAdapter
-from sqlalchemy import ColumnElement, Table, select, text
+from sqlalchemy import ColumnElement, Table, func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.key_management import fields, registry, sdk
@@ -257,8 +257,12 @@ def retained_fields(db: Session, key: BankEncryptionKey) -> dict[str, int]:
         column = "organization_id" if "organization_id" in table.c else "target_org"
         if column not in table.c:
             raise KeyIntegrityError("Audit retention scope is unavailable.")
-        count = len(
-            db.execute(select(table.c.id).where(table.c[column] == key.organization_id)).all()
+        count = (
+            cast(int, db.scalar(text("SELECT aequoros_retained_operator_audit_count()")))
+            if name == "operator_audit_log" and db.get_bind().dialect.name == "postgresql"
+            else db.scalar(
+                select(func.count()).select_from(table).where(table.c[column] == key.organization_id)
+            )
         )
         if count:
             retained[name + " (organization scope)"] = count

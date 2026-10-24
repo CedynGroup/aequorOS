@@ -16,7 +16,7 @@ from app.bi.service.compiler import compile_query
 from app.core.key_management import maintenance, reencryption, registry
 from app.core.key_management.fields import SealedField, blind_index
 from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.models import BankEncryptionKey, RetainedBankKey
+from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyUnavailableError
 from app.core.tenancy import TenantContext
@@ -230,6 +230,42 @@ def test_retired_version_referenced_by_locked_snapshot_remains_required(
         select(RegulatoryPackage.snapshot).where(RegulatoryPackage.bank_id == BANK_A)
     )
     assert isinstance(snapshot, SealedField) and snapshot.envelope_id != key.current_version_id
+
+
+def test_editable_only_migration_releases_unused_versions_but_keeps_backup_hold(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", "1")
+    get_key_settings.cache_clear()
+    connect(db_session, provider)
+    party = counterparty(db_session, include_package=False)
+    party_id = party.id
+    db_session.commit()
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    original, old_version = registry.reference(key), key.current_version_id
+    registry.rotate(db_session, key, NEXT, lambda _: provider)
+    db_session.commit()
+    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    db_session.commit()
+    reencryption.run(db_session, job, EmptyStorage())
+    assert reencryption.Progress.model_validate(job.progress).summary == "complete"
+    assert db_session.get(ObjectKeyEnvelope, old_version) is None
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    assert db_session.get(ObjectKeyEnvelope, key.current_version_id) is not None
+    assert db_session.get(ObjectKeyEnvelope, key.index_version_id) is not None
+    with pytest.raises(KeyUnavailableError, match="backup retention expires"):
+        registry.authorize_retirement(db_session, key, original)
+    hold = db_session.scalar(select(RetainedBankKey).where(RetainedBankKey.bank_id == BANK_A))
+    assert hold is not None
+    hold.rotated_at = utc_now() - timedelta(days=3)
+    hold.decrypt_until = utc_now() - timedelta(days=2)
+    db_session.flush()
+    registry.authorize_retirement(db_session, key, original)
+    db_session.expunge_all()
+    loaded = db_session.get(CanonicalCounterparty, party_id)
+    assert loaded is not None and loaded.name == NAME
 
 
 def test_child_fields_are_scoped_and_audit_history_is_retained(

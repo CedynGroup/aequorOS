@@ -456,6 +456,20 @@ def build_test_database(
         _enable_sqlite_foreign_keys(engine)
     try:
         Base.metadata.create_all(engine)
+        if engine.dialect.name == "postgresql":
+            with engine.begin() as connection:
+                schema = cast(str, connection.scalar(text("SELECT current_schema()")))
+                quoted = connection.dialect.identifier_preparer.quote_identifier(schema)
+                connection.execute(
+                    text(f"""
+                        CREATE FUNCTION aequoros_retained_operator_audit_count()
+                        RETURNS bigint LANGUAGE sql STABLE
+                        SET search_path = pg_catalog, pg_temp AS $$
+                            SELECT count(*) FROM {quoted}.operator_audit_log
+                            WHERE target_org = current_setting('app.organization_id', true)
+                        $$
+                    """)
+                )
         seed(engine)
         yield _TestDatabase(database_url=database_url, engine=engine, seed=seed)
     finally:
