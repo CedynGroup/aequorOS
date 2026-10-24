@@ -83,11 +83,7 @@ def inventory(
             for page in client.get_paginator("list_object_versions").paginate(Bucket=bucket):
                 for entry in _Page.model_validate(page).Versions:
                     location = StorageLocation(slug, tier, entry.Key)
-                    stat = stat_object(
-                        bucket,
-                        entry.Key,
-                        version_id=entry.VersionId if entry.VersionId != "null" else None,
-                    )
+                    stat = stat_object(bucket, entry.Key, version_id=entry.VersionId)
                     headers = _HEADERS.validate_python(stat.get("Metadata", {}))
                     envelope = headers.get("key-envelope-id")
                     format_id = headers.get("encryption-format")
@@ -170,7 +166,7 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
             source = client.get_object(
                 Bucket=bucket,
                 Key=location.object_path,
-                **({"VersionId": item.version_id} if item.version_id != "null" else {}),
+                VersionId=item.version_id,
             )
             body = cast(BinaryIO, source["Body"])
             headers = _HEADERS.validate_python(source.get("Metadata", {}))

@@ -270,7 +270,7 @@ class S3CompatibleStorageClient(StorageClient):
         )
         body = cast(BinaryIO, response["Body"])
         try:
-            descriptor = self._to_storage_object(location, response)
+            descriptor = self._to_storage_object(location, response, version_id=version_id)
             headers = {
                 key.lower(): value
                 for key, value in _OBJECT_HEADERS.validate_python(

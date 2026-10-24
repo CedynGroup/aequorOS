@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.key_management import reencryption, registry, sdk
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
+from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.identity.public import Bank
 from app.models.risk import StoredObject
@@ -86,7 +87,6 @@ def test_reencryption_uses_head_denied_fallback_and_closes_metadata_streams(
         Metadata=metadata_for(SLUG, tier, content).to_object_metadata(),
     )
     version_id = str(stored.get("VersionId", "null"))
-    stat_version = version_id if version_id != "null" else None
     client = cast(objects.S3MaintenanceClient, bank_storage.s3)
     get_object = client.get_object
 
@@ -121,9 +121,9 @@ def test_reencryption_uses_head_denied_fallback_and_closes_metadata_streams(
     monkeypatch.setattr(client, "get_object", tracked_get)
     [item] = list(bank_storage.storage.encryption_inventory(SLUG))
     assert item.version_id == version_id and item.envelope_id is None and not item.retained
-    assert denied == [stat_version]
+    assert denied == [version_id]
     assert len(responses) == 1
-    assert responses[0][0] == stat_version
+    assert responses[0][0] == version_id
     assert responses[0][1].closed and responses[0][1].bytes_read == 0
     responses.clear()
     denied.clear()
@@ -131,6 +131,7 @@ def test_reencryption_uses_head_denied_fallback_and_closes_metadata_streams(
     assert denied == [None]
     assert responses[0][0] is None
     assert responses[0][1].closed and responses[0][1].bytes_read == 0
+    assert responses[1][0] == version_id
     assert all(body.closed for _, body in responses)
     descriptor, body = bank_storage.storage.read(location)
     try:
@@ -573,6 +574,100 @@ def test_database_pin_retains_only_its_location_with_a_null_version(
     }
     assert inventory["pinned.csv"].envelope_id is None
     assert inventory["editable.csv"].envelope_id is not None
+
+
+@pytest.mark.parametrize("head_denied", [False, True])
+def test_versioning_transition_keeps_null_version_envelope_and_blocks_retirement(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    head_denied: bool,
+) -> None:
+    monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", "1")
+    get_key_settings.cache_clear()
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    location = StorageLocation(SLUG, "temp", "synthetic/versioning-transition.csv")
+    original_content = b"synthetic protected unversioned predecessor"
+    bank_storage.storage.write(
+        location,
+        io.BytesIO(original_content),
+        metadata_for(SLUG, "temp", original_content),
+    )
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
+    original_envelope = key.current_version_id
+    assert original_envelope is not None
+    original = bank_storage.s3.get_object(
+        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId="null"
+    )
+    original_body = cast(BinaryIO, original["Body"])
+    try:
+        original_ciphertext = original_body.read()
+    finally:
+        original_body.close()
+    bank_storage.s3.put_bucket_versioning(
+        Bucket=location.bucket_name("dev"), VersioningConfiguration={"Status": "Enabled"}
+    )
+    rotated_at = datetime.now(UTC)
+    registry.rotate(db_session, key, NEXT_KEY, providers)
+    db_session.commit()
+    latest_content = b"synthetic protected current version"
+    latest = bank_storage.storage.write(
+        location, io.BytesIO(latest_content), metadata_for(SLUG, "temp", latest_content)
+    )
+    assert latest.version_id is not None and latest.version_id != "null"
+    denied_versions: list[str | None] = []
+
+    def denied_head(**kwargs: object) -> dict[str, object]:
+        denied_versions.append(cast(str | None, kwargs.get("VersionId")))
+        raise ClientError({"Error": {"Code": "403"}}, "HeadObject")
+
+    if head_denied:
+        monkeypatch.setattr(bank_storage.s3, "head_object", denied_head)
+    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    db_session.commit()
+    reencryption.run(db_session, job, bank_storage.storage)
+    progress = reencryption.Progress.model_validate(job.progress)
+    assert progress.summary == "complete except 1 retained immutable records"
+    assert progress.retained == {"stored_object_versions:temp": 1}
+    assert progress.objects_rewritten == 0
+    assert db_session.get(ObjectKeyEnvelope, original_envelope) is not None
+    versions = list(bank_storage.storage.encryption_inventory(SLUG))
+    assert len(versions) == 2
+    predecessor = next(item for item in versions if item.version_id == "null")
+    assert predecessor.retained and predecessor.envelope_id == original_envelope
+    current = next(item for item in versions if not item.retained)
+    assert current.version_id == latest.version_id
+    assert current.envelope_id == progress.target_version
+    descriptor, historical = bank_storage.storage.read(location, version_id="null")
+    try:
+        assert historical.read() == original_content
+    finally:
+        historical.close()
+    assert descriptor.version_id == "null"
+    retained = bank_storage.s3.get_object(
+        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId="null"
+    )
+    retained_body = cast(BinaryIO, retained["Body"])
+    try:
+        assert retained_body.read() == original_ciphertext
+    finally:
+        retained_body.close()
+    _, current_body = bank_storage.storage.read(location)
+    try:
+        assert current_body.read() == latest_content
+    finally:
+        current_body.close()
+    if head_denied:
+        assert "null" in denied_versions and latest.version_id in denied_versions
+    monkeypatch.setattr(registry, "utc_now", lambda: rotated_at + timedelta(days=3))
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
+    assert key.index_version_id == progress.target_version
+    with pytest.raises(KeyUnavailableError, match="retained encryption versions"):
+        registry.authorize_retirement(db_session, key, KEY)
 
 
 def test_versioned_pin_keeps_original_while_current_object_moves(

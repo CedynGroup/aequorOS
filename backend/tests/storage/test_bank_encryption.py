@@ -15,6 +15,7 @@ from botocore.exceptions import ClientError, EndpointConnectionError
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from moto import mock_aws
+from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -69,7 +70,7 @@ class _Body(Protocol):
 class _S3(ProvisioningClient, Protocol):
     def list_buckets(self) -> dict[str, object]: ...
 
-    def get_object(self, *, Bucket: str, Key: str, VersionId: str = ...) -> dict[str, object]: ...
+    def get_object(self, **kwargs: object) -> dict[str, object]: ...
 
     # Returns the store's response, because a restore reads the `VersionId` it
     # minted to reconcile the database's pinned references (#501).
@@ -88,8 +89,26 @@ class BankStorage:
     log: HashChainedAccessLog
 
 
+def _moto_null_version_heads(client: _S3, monkeypatch: pytest.MonkeyPatch) -> None:
+    head_object = client.head_object
+
+    def head(**kwargs: object) -> dict[str, object]:
+        try:
+            return head_object(**kwargs)
+        except ClientError as exc:
+            response = TypeAdapter(dict[str, object]).validate_python(exc.response)
+            error = TypeAdapter(dict[str, object]).validate_python(response.get("Error", {}))
+            if kwargs.get("VersionId") != "null" or error.get("Code") != "400":
+                raise
+        result = client.get_object(**kwargs)
+        cast(BinaryIO, result["Body"]).close()
+        return result
+
+    monkeypatch.setattr(client, "head_object", head)
+
+
 @pytest.fixture
-def bank_storage(db_session: Session) -> Iterator[BankStorage]:
+def bank_storage(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[BankStorage]:
     db_session.add(
         Bank(
             id="BK-SAMP0001",
@@ -119,6 +138,7 @@ def bank_storage(db_session: Session) -> Iterator[BankStorage]:
     with mock_aws():
         factory = cast(Callable[..., BaseClient], boto3.client)
         s3 = factory("s3", region_name="us-east-1")
+        _moto_null_version_heads(cast(_S3, cast(object, s3)), monkeypatch)
         store = registry.DatabaseEnvelopeStore(
             lambda: Session(db_session.get_bind(), join_transaction_mode="create_savepoint"),
             lambda _name: provider,
