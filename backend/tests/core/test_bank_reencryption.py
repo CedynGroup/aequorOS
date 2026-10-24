@@ -33,6 +33,7 @@ from app.storage.client import (
     EncryptionCursor,
     EncryptionInventoryItem,
     EncryptionPage,
+    ReencryptionIsolation,
     StorageBackendError,
     StorageLocation,
 )
@@ -73,6 +74,125 @@ class UnavailableStorage(EmptyStorage):
         self, institution_slug: str, cursor: EncryptionCursor, limit: int
     ) -> EncryptionPage:
         raise StorageBackendError("Synthetic interruption after committed field batches.")
+
+
+@pytest.mark.parametrize("crash", ["handoff", "completion"])
+@pytest.mark.parametrize("reclaimed", [False, True])
+def test_interrupted_terminal_parent_cannot_swallow_a_new_target_request(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    crash: str,
+    reclaimed: bool,
+) -> None:
+    party_id = counterparty(db_session, include_package=False).id
+    connect(db_session, provider)
+    root = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    db_session.commit()
+    claimed = job_queue.claim_next(db_session, utc_now(), (reencryption.JOB_TYPE,))
+    assert claimed is not None and claimed.id == root.id
+    reencryption.run(db_session, claimed, EmptyStorage())
+    successor_id = reencryption.Progress.model_validate(claimed.progress).next_job_id
+    assert successor_id is not None
+    successor = db_session.get(Job, successor_id)
+    assert successor is not None
+    last = drain(db_session, successor, EmptyStorage())
+    parent = claimed if crash == "handoff" else last
+    parent.status = "queued" if reclaimed else "running"
+    parent.completed_at = None
+    parent.started_at = None if reclaimed else utc_now()
+    parent.coalesce_key = f"bank-reencrypt:{BANK_A}"
+    db_session.commit()
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    old_target = key.current_version_id
+    registry.rotate(db_session, key, NEXT, lambda _: provider)
+    target = key.current_version_id
+    assert target != old_target
+    db_session.commit()
+    fresh = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    assert fresh.id not in {parent.id, root.id, last.id}
+    assert reencryption.enqueue(db_session, ORG_1, BANK_A).id == fresh.id
+    db_session.commit()
+    completed = drain(db_session, fresh, EmptyStorage())
+    result = reencryption.Progress.model_validate(completed.progress)
+    assert result.target_version == target and result.phase == "done"
+    value = db_session.scalar(
+        select(CanonicalCounterparty.name).where(CanonicalCounterparty.id == party_id)
+    )
+    assert isinstance(value, SealedField) and value.envelope_id == target
+
+
+def test_large_object_claim_scales_with_size_and_recovers_an_interruption(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connect(db_session, provider)
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    target = key.current_version_id
+    assert target is not None
+    now = utc_now()
+    monkeypatch.setattr(job_queue, "utc_now", lambda: now)
+
+    class LargeStorage(EmptyStorage):
+        version: UUID | None = None
+        copies = 0
+
+        def encryption_page(
+            self, institution_slug: str, cursor: EncryptionCursor, limit: int
+        ) -> EncryptionPage:
+            assert limit == 1
+            return EncryptionPage(
+                [
+                    EncryptionInventoryItem(
+                        StorageLocation(institution_slug, "temp", "large.csv"),
+                        "null",
+                        self.version,
+                        False,
+                        500 * 1024 * 1024,
+                    )
+                ],
+                None,
+            )
+
+        def reencrypt(self, item: EncryptionInventoryItem) -> bool:
+            pytest.fail("A large object must have a dedicated dispatch")
+
+        def reencrypt_isolated(
+            self, item: EncryptionInventoryItem, isolation: ReencryptionIsolation
+        ) -> bool:
+            nonlocal now
+            isolation.release()
+            now += timedelta(seconds=1200)
+            assert job_queue.reclaim_stale(db_session, now, stale_after=timedelta(seconds=900)) == 0
+            db_session.rollback()
+            with isolation.publication(target) as allowed:
+                assert allowed
+                self.version = target
+                self.copies += 1
+            return True
+
+    storage = LargeStorage()
+    _ = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    db_session.commit()
+    while True:
+        claimed = job_queue.claim_next(db_session, now, (reencryption.JOB_TYPE,))
+        assert claimed is not None
+        progress = reencryption.Progress.model_validate(claimed.progress)
+        if progress.phase == "large_object":
+            break
+        reencryption.run(db_session, claimed, storage)
+        job_queue.complete(db_session, claimed)
+    assert claimed.payload == {"reencryption_bytes": 500 * 1024 * 1024}
+    now += timedelta(seconds=4901)
+    assert job_queue.reclaim_stale(db_session, now, stale_after=timedelta(seconds=900)) == 1
+    resumed = job_queue.claim_next(db_session, now, (reencryption.JOB_TYPE,))
+    assert resumed is not None and resumed.id == claimed.id
+    reencryption.run(db_session, resumed, storage)
+    result = reencryption.Progress.model_validate(resumed.progress)
+    assert result.phase == "objects" and result.objects_rewritten == storage.copies == 1
+    job_queue.complete(db_session, resumed)
+    completed = drain(db_session, resumed, storage)
+    assert reencryption.Progress.model_validate(completed.progress).summary == "complete"
 
 
 def test_field_migration_and_verification_resume_across_bounded_dispatches(

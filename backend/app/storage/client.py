@@ -10,7 +10,8 @@ bug in the backend, not a caller concern.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import BinaryIO, Literal, Self
@@ -154,6 +155,7 @@ class EncryptionInventoryItem:
     version_id: str
     envelope_id: UUID | None
     retained: bool
+    size_bytes: int = 0
 
 
 @dataclass(frozen=True)
@@ -167,6 +169,12 @@ class EncryptionCursor:
 class EncryptionPage:
     items: list[EncryptionInventoryItem]
     cursor: EncryptionCursor | None
+
+
+@dataclass(frozen=True)
+class ReencryptionIsolation:
+    release: Callable[[], None]
+    publication: Callable[[UUID], AbstractContextManager[bool]]
 
 
 class StorageClient(ABC):
@@ -248,6 +256,11 @@ class StorageClient(ABC):
 
     def reencrypt(self, item: EncryptionInventoryItem) -> bool:
         raise StorageBackendError("This storage backend cannot migrate encryption versions.")
+
+    def reencrypt_isolated(
+        self, item: EncryptionInventoryItem, isolation: ReencryptionIsolation
+    ) -> bool:
+        raise StorageBackendError("This storage backend cannot isolate object migration.")
 
     def retain(self, location: StorageLocation, version_id: str, until: datetime) -> None:
         raise StorageBackendError("This storage backend cannot confirm compliance retention.")

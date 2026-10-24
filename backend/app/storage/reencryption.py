@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterator
-from contextlib import suppress
+from collections.abc import Callable, Generator, Iterator
+from contextlib import AbstractContextManager, contextmanager, nullcontext, suppress
 from datetime import UTC, datetime
 from tempfile import SpooledTemporaryFile
 from typing import BinaryIO, Protocol, cast
@@ -20,6 +20,7 @@ from app.storage.client import (
     EncryptionInventoryItem,
     EncryptionPage,
     ObjectMetadata,
+    ReencryptionIsolation,
     StorageAccessError,
     StorageBackendError,
     StorageLocation,
@@ -124,6 +125,7 @@ def inventory_page(  # noqa: PLR0913
                     entry.VersionId,
                     UUID(envelope) if envelope else None,
                     not entry.IsLatest or _locked(stat),
+                    TypeAdapter(int).validate_python(stat["ContentLength"]),
                 )
             )
         if page.IsTruncated:
@@ -155,12 +157,17 @@ def _legacy_plaintext(body: BinaryIO, checksum: str) -> BinaryIO:
         body.close()
 
 
-def _publish(client: S3MaintenanceClient, data: BinaryIO, arguments: dict[str, object]) -> None:
+def _publish(
+    client: S3MaintenanceClient,
+    data: BinaryIO,
+    arguments: dict[str, object],
+    publication: Callable[[], AbstractContextManager[bool]] | None = None,
+) -> bool:
     size = data.seek(0, 2)
     _ = data.seek(0)
-    if size < MULTIPART_SIZE:
+    if size < MULTIPART_SIZE and publication is None:
         _ = client.put_object(**arguments, Body=data)
-        return
+        return True
     options = {key: value for key, value in arguments.items() if key != "IfMatch"}
     upload = client.create_multipart_upload(**options)
     location = {key: arguments[key] for key in ("Bucket", "Key")}
@@ -170,9 +177,14 @@ def _publish(client: S3MaintenanceClient, data: BinaryIO, arguments: dict[str, o
         for number, body in enumerate(iter(lambda: data.read(MULTIPART_SIZE), b""), start=1):
             response = client.upload_part(**location, PartNumber=number, Body=body)
             parts.append({"ETag": response["ETag"], "PartNumber": number})
-        _ = client.complete_multipart_upload(
-            **location, MultipartUpload={"Parts": parts}, IfMatch=arguments["IfMatch"]
-        )
+        with publication() if publication else nullcontext(True) as allowed:
+            if not allowed:
+                _ = client.abort_multipart_upload(**location)
+                return False
+            _ = client.complete_multipart_upload(
+                **location, MultipartUpload={"Parts": parts}, IfMatch=arguments["IfMatch"]
+            )
+        return True
     except BaseException:
         with suppress(ClientError, BotoCoreError):
             _ = client.abort_multipart_upload(**location)
@@ -186,12 +198,15 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
     item: EncryptionInventoryItem,
     sse_key: str | None,
     stat_object: ObjectStat,
+    *,
+    isolation: ReencryptionIsolation | None = None,
 ) -> bool:
     if item.retained:
         raise StorageValidationError("Retained object versions cannot be rewritten.")
     location = item.location
     with encryption.publication(location) as unit:
         bucket = location.bucket_name(env)
+        body: BinaryIO | None = None
         try:
             stat = stat_object(bucket, location.object_path)
             if str(stat.get("VersionId", "null")) != item.version_id or _locked(stat):
@@ -206,9 +221,14 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
             if headers.get("key-envelope-id") != (
                 str(item.envelope_id) if item.envelope_id is not None else None
             ):
-                body.close()
                 return False
             metadata = ObjectMetadata.from_object_metadata(headers)
+            source_headers = dict(headers)
+            if isolation is not None:
+                if cast(int, source["ContentLength"]) != item.size_bytes:
+                    return False
+                unit = unit.detached(location, metadata, item.envelope_id)
+                isolation.release()
             plaintext = (
                 unit.decrypt(location, body, metadata, headers)
                 if headers.get("encryption-format")
@@ -221,6 +241,7 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
             try:
                 if envelope is None:
                     raise StorageAccessError("Re-encryption requires a connected bank key.")
+                target_version = UUID(envelope)
                 headers.update(
                     {
                         "encryption-format": ENCRYPTION_FORMAT,
@@ -237,15 +258,39 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
                 }
                 if sse_key:
                     arguments.update(ServerSideEncryption="aws:kms", SSEKMSKeyId=sse_key)
-                _publish(client, encrypted, arguments)
+
+                @contextmanager
+                def publication() -> Generator[bool]:
+                    assert isolation is not None
+                    with isolation.publication(target_version) as allowed:
+                        if not allowed:
+                            yield False
+                            return
+                        latest = stat_object(bucket, location.object_path)
+                        yield (
+                            str(latest.get("VersionId", "null")) == item.version_id
+                            and latest.get("ETag") == source["ETag"]
+                            and _metadata(latest) == source_headers
+                            and not _locked(latest)
+                        )
+
+                return _publish(client, encrypted, arguments, publication if isolation else None)
             finally:
                 encrypted.close()
-            return True
         except ClientError as exc:
             response = TypeAdapter(dict[str, object]).validate_python(exc.response)
             error = TypeAdapter(dict[str, object]).validate_python(response.get("Error", {}))
-            if error.get("Code") in {"PreconditionFailed", "ConditionalRequestConflict"}:
+            if error.get("Code") in {
+                "PreconditionFailed",
+                "ConditionalRequestConflict",
+                "NoSuchKey",
+                "NoSuchVersion",
+                "404",
+            }:
                 return False
             raise StorageBackendError("Object re-encryption could not be completed.") from exc
         except BotoCoreError as exc:
             raise StorageBackendError("Object re-encryption could not be completed.") from exc
+        finally:
+            if body is not None:
+                body.close()

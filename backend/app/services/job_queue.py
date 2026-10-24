@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -470,6 +470,10 @@ def reclaim_stale(
     reclaimed = 0
     for job in running:
         window = stale_after_for(job.job_type, stale_after)
+        if job.job_type == "bank_reencrypt":
+            size = cast(object, job.payload.get("reencryption_bytes"))
+            if isinstance(size, int) and size > 0:
+                window += timedelta(seconds=8 * size / (1024 * 1024))
         started = _as_aware(job.started_at)
         if started is None or started >= now - window:
             continue

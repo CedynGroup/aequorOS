@@ -18,8 +18,10 @@ from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
+from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models.risk import StoredObject
+from app.services import job_queue
 from app.storage import reencryption as objects
 from app.storage.client import (
     EncryptionCursor,
@@ -44,6 +46,133 @@ from tests.support.helpers import ORG_1
 from tests.support.reencryption import drain
 
 __all__ = ["bank_storage"]
+
+
+@pytest.mark.committing_db
+@pytest.mark.parametrize("concurrent_write", [False, True])
+def test_large_object_copy_runs_alone_and_rechecks_at_atomic_publication(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    concurrent_write: bool,
+) -> None:
+    monkeypatch.setattr(reencryption, "LARGE_OBJECT_BYTES", 1024 * 1024)
+    monkeypatch.setattr(registry, "provider_for", lambda _: bank_storage.provider)
+    large = StorageLocation(SLUG, "temp", "a-large.csv")
+    small = StorageLocation(SLUG, "temp", "z-small.csv")
+    content = b"synthetic large content\n" * 60000
+    replacement = b"synthetic concurrent writer"
+    for location, data in ((large, content), (small, b"synthetic small")):
+        bank_storage.storage.write(location, io.BytesIO(data), metadata_for(SLUG, "temp", data))
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
+    registry.rotate(db_session, key, NEXT_KEY, lambda _: bank_storage.provider)
+    db_session.commit()
+    _ = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    db_session.commit()
+    while True:
+        job = job_queue.claim_next(db_session, utc_now(), (reencryption.JOB_TYPE,))
+        assert job is not None
+        progress = reencryption.Progress.model_validate(job.progress)
+        if progress.phase == "large_object":
+            break
+        reencryption.run(db_session, job, bank_storage.storage)
+        job_queue.complete(db_session, job)
+    assert progress.large_object is not None and progress.large_object.location == large
+    assert progress.objects_rewritten == 0
+    assert job.payload["reencryption_bytes"] == progress.large_object.size_bytes
+    client = cast(objects.S3MaintenanceClient, bank_storage.s3)
+    upload_part, get_object = client.upload_part, client.get_object
+    copies: list[str] = []
+    reads: list[str] = []
+
+    def get(**kwargs: object) -> dict[str, object]:
+        reads.append(str(kwargs["Key"]))
+        return get_object(**kwargs)
+
+    def part(**kwargs: object) -> dict[str, object]:
+        assert not db_session.in_transaction()
+        assert kwargs["Key"] == large.object_path
+        if not copies:
+            copies.append(str(kwargs["Key"]))
+            assert small.object_path not in reads
+            if concurrent_write:
+                bank_storage.storage.write(
+                    large, io.BytesIO(replacement), metadata_for(SLUG, "temp", replacement)
+                )
+        return upload_part(**kwargs)
+
+    monkeypatch.setattr(client, "get_object", get)
+    monkeypatch.setattr(client, "upload_part", part)
+    reencryption.run(db_session, job, bank_storage.storage)
+    result = reencryption.Progress.model_validate(job.progress)
+    assert copies == [large.object_path]
+    assert result.objects_rewritten == (0 if concurrent_write else 1)
+    assert result.phase == "objects" and result.next_job_id is not None
+    assert small.object_path not in reads
+    job_queue.complete(db_session, job)
+    monkeypatch.setattr(client, "upload_part", upload_part)
+    last = drain(db_session, job, bank_storage.storage)
+    final = reencryption.Progress.model_validate(last.progress)
+    assert final.summary == "complete"
+    assert final.objects_rewritten == (1 if concurrent_write else 2)
+    _, stream = bank_storage.storage.read(large)
+    try:
+        assert stream.read() == (replacement if concurrent_write else content)
+    finally:
+        stream.close()
+    [current] = [
+        item for item in bank_storage.storage.encryption_inventory(SLUG) if item.location == large
+    ]
+    assert current.envelope_id == final.target_version
+
+
+def test_inventory_metadata_budget_persists_each_exact_version_cursor(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for number in range(3):
+        location = StorageLocation(SLUG, "temp", f"{number}.csv")
+        bank_storage.s3.put_object(
+            Bucket=location.bucket_name("dev"),
+            Key=location.object_path,
+            Body=b"synthetic",
+            Metadata=metadata_for(SLUG, "temp", b"synthetic").to_object_metadata(),
+        )
+    monkeypatch.setattr(registry, "provider_for", lambda _: bank_storage.provider)
+    client = cast(objects.S3MaintenanceClient, bank_storage.s3)
+    list_versions = client.list_object_versions
+    calls: list[dict[str, object]] = []
+    elapsed = 0.0
+    monkeypatch.setattr(reencryption.time, "monotonic", lambda: elapsed)
+
+    def page(**kwargs: object) -> dict[str, object]:
+        nonlocal elapsed
+        assert kwargs["MaxKeys"] == 1
+        calls.append(kwargs)
+        elapsed += reencryption.HOP_SECONDS + 1
+        return list_versions(**kwargs)
+
+    monkeypatch.setattr(client, "list_object_versions", page)
+    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    db_session.commit()
+    object_cursors: list[EncryptionCursor] = []
+    while True:
+        claimed = job_queue.claim_next(db_session, utc_now(), (reencryption.JOB_TYPE,))
+        if claimed is None:
+            break
+        before = len(calls)
+        reencryption.run(db_session, claimed, bank_storage.storage)
+        assert len(calls) - before <= 1
+        progress = reencryption.Progress.model_validate(claimed.progress)
+        if progress.phase == "objects" and progress.object_cursor.key is not None:
+            object_cursors.append(progress.object_cursor)
+        job_queue.complete(db_session, claimed)
+        job = claimed
+    assert [cursor.key for cursor in object_cursors] == ["0.csv", "1.csv"]
+    assert all(cursor.version == "null" for cursor in object_cursors)
+    assert any(call.get("VersionIdMarker") == "null" for call in calls)
+    assert reencryption.Progress.model_validate(job.progress).objects_rewritten == 3
 
 
 def minio_metadata(
@@ -543,7 +672,7 @@ def test_object_job_uses_bounded_inventory_pages(
         limit: int,
     ) -> EncryptionPage:
         page = real_inventory_page(client, env, slug, stat_object, cursor, limit)
-        assert len(page.items) <= limit == reencryption.OBJECT_BATCH_SIZE
+        assert len(page.items) <= limit == 1
         pages.append(len(page.items))
         return page
 
@@ -555,7 +684,7 @@ def test_object_job_uses_bounded_inventory_pages(
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.objects_rewritten >= 12
     assert progress.retained == {"stored_object_versions:raw": progress.objects_rewritten}
-    assert 0 < len(pages) <= 30
+    assert 0 < len(pages) <= 100
     assert sum(pages) <= 100
     monkeypatch.setattr(objects, "inventory_page", real_inventory_page)
     assert all(

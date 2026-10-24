@@ -41,6 +41,7 @@ from app.storage.client import (
     EncryptionCursor,
     EncryptionInventoryItem,
     EncryptionPage,
+    ReencryptionIsolation,
     ObjectMetadata,
     StorageAccessError,
     StorageBackendError,
@@ -255,6 +256,22 @@ class S3CompatibleStorageClient(StorageClient):
             cursor,
             limit,
         )
+
+    def reencrypt_isolated(
+        self, item: EncryptionInventoryItem, isolation: ReencryptionIsolation
+    ) -> bool:
+        result = reencryption.reencrypt(
+            cast(reencryption.S3MaintenanceClient, cast(object, self._s3)),
+            self._env,
+            self._encryption,
+            item,
+            self._settings.kms_key_id,
+            self._stat_object,
+            isolation=isolation,
+        )
+        if result:
+            self._log("reencrypt", item.location, version_id=item.version_id)
+        return result
 
     def retain(self, location: StorageLocation, version_id: str, until: datetime) -> None:
         self._require_output_retention_policy(location)

@@ -118,11 +118,13 @@ between atomic operations, then commits its checkpoint and queues its successor
 in the same transaction. BI identity cleanup and catalogue cleanup also use
 bounded batches. Verification uses the same persisted cursors rather than a
 full-bank pass in one dispatch. The queue's ordinary 900-second reclaim window
-applies. Interrupted batches resume their committed checkpoint; duplicate runs
+applies to normal batches. Interrupted batches resume their committed checkpoint; duplicate runs
 of a batch publish only one continuation. Object retries discover already
 published current-version ciphertext. A failed or exhausted job can be requested
 again safely. If rotation changes the current version mid-run, the job restarts
 its scan for that version. Old keys must remain decrypt-capable throughout migration.
+Handed-off parents and completed progress cannot absorb a later request, even
+when a worker died before recording their final queue status.
 
 At rotation, the job wraps the existing, domain-separated blind-index secret in
 a new envelope under the current bank key. Search and uniqueness tokens remain
@@ -146,8 +148,26 @@ checks these copies alongside protected fields. Numeric mart values remain intac
 Current editable stored objects are authenticated and conditionally replaced
 using their ETag, including conditional multipart completion for large objects.
 Uploads use bounded parts under the same size policy as ordinary storage writes.
-Each dispatch handles one bounded inventory page with exact version markers,
-including the literal `null` version of an unversioned predecessor.
+Inventory requests examine one exact object version at a time, checking the
+dispatch budget before requesting another. Their saved markers preserve the
+literal `null` version of an unversioned predecessor.
+
+Objects of at least 16 MiB run alone in a dedicated dispatch. Its persisted
+payload records the source size before claim: the queue adds eight seconds per
+MiB to the deployment's normal reclaim window, budgeting transfer and transform
+work at 1 MiB/s with margin. An interrupted large dispatch remains reclaimable
+after that finite window and retries the object from the beginning; there is
+no resumable state inside an object.
+
+The large dispatch captures authenticated source/current keys in a short
+transaction, then releases the bank writer barrier for the download, transforms,
+and multipart upload. The uploaded parts form an unpublished new object copy.
+At publication it briefly reacquires the barrier, validates the current key and
+database pins, and rechecks exact source version, ETag, metadata, retention and
+legal hold. Conditional multipart completion atomically swaps the logical
+object's pointer to the new version. A concurrent write or rotation aborts the
+copy; the next batch inventories the source again. Historical versions retain
+their exact identities. No bank-wide barrier spans the large transfer.
 Legacy platform-protected content is accepted only by this
 maintenance path after checksum verification; normal connected-bank reads keep
 refusing it. A concurrent changed object defeats the conditional replacement and

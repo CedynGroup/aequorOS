@@ -4,6 +4,7 @@ import hashlib
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from copy import copy
+from dataclasses import dataclass
 from typing import BinaryIO, cast
 from uuid import UUID
 
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.key_management import sdk
 from app.core.key_management.models import BankEncryptionKey
-from app.core.key_management.registry import DatabaseEnvelopeStore, EnvelopeStore
+from app.core.key_management.registry import DatabaseEnvelopeStore, EnvelopeStore, ObjectKey
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyUnavailableError
 from app.db import session as database
@@ -30,6 +31,28 @@ def object_context(location: StorageLocation, checksum: str) -> dict[str, str]:
         "checksum_sha256": checksum,
         "purpose": "bank-object",
     }
+
+
+@dataclass(frozen=True, repr=False)
+class _DetachedEnvelopes:
+    slug: str
+    context: dict[str, str]
+    target: ObjectKey
+    source: ObjectKey | None
+
+    def for_session(self, db: Session) -> _DetachedEnvelopes:
+        return self
+
+    def prepare(self, slug: str, context: dict[str, str]) -> ObjectKey:
+        if slug != self.slug or context != self.context:
+            raise KeyUnavailableError("Object copy context changed.")
+        return self.target
+
+    def open(self, slug: str, envelope_id: UUID, context: dict[str, str]) -> ObjectKey:
+        _ = self.prepare(slug, context)
+        if self.source is None or self.source.envelope_id != envelope_id:
+            raise KeyUnavailableError("Object copy source changed.")
+        return self.source
 
 
 class ObjectEncryption:
@@ -62,6 +85,19 @@ class ObjectEncryption:
             sessions = cast(Callable[[], Callable[[], Session]], database.get_sessionmaker)()
             self._store = DatabaseEnvelopeStore(sessions)
         return self._store.for_session(self._session) if self._session is not None else self._store
+
+    def detached(
+        self, location: StorageLocation, metadata: ObjectMetadata, envelope_id: UUID | None
+    ) -> ObjectEncryption:
+        context = object_context(location, metadata.checksum_sha256)
+        store = self._envelopes()
+        source = (
+            store.open(location.institution_slug, envelope_id, context) if envelope_id else None
+        )
+        target = store.prepare(location.institution_slug, context)
+        return ObjectEncryption(
+            _DetachedEnvelopes(location.institution_slug, context, target, source)
+        )
 
     @contextmanager
     def publication(self, location: StorageLocation) -> Generator[ObjectEncryption]:
