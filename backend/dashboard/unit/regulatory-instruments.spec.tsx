@@ -89,5 +89,7 @@ it("keeps an archived draft pack's warning after the live instrument commences",
     "2027-01-01",
   );
   expect(warning).toContain("not law yet");
-  expect(packagePreparationWarning({}, "in_force")).toBeNull();
+  expect(packagePreparationWarning({}, "in_force")).toContain(
+    "has not been established",
+  );
 });

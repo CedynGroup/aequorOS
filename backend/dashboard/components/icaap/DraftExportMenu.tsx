@@ -11,17 +11,23 @@
 import { useState } from "react";
 import { Download, FileText } from "lucide-react";
 import { isApiError } from "@/lib/api/client";
-import { downloadIcaapDraft } from "@/lib/api/icaap";
+import {
+  downloadIcaapDraft,
+  type IcaapFrameworkSummaryRead,
+} from "@/lib/api/icaap";
+import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { SecondaryButton } from "./Dialog";
 
 export default function DraftExportMenu({
   bankId,
   cycleId,
+  framework,
   content = "working",
 }: {
   bankId: string;
   cycleId: string;
+  framework: Pick<IcaapFrameworkSummaryRead, "status" | "effectiveFrom">;
   content?: "working" | "committed";
 }) {
   const scope = useModuleScope();
@@ -46,7 +52,11 @@ export default function DraftExportMenu({
   };
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex max-w-xl flex-col items-end gap-1">
+      <RegulatoryExportWarning
+        status={framework.status}
+        effectiveFrom={framework.effectiveFrom}
+      />
       <div className="flex items-center gap-2">
         <SecondaryButton
           onClick={() => void download("pdf")}

@@ -91,6 +91,8 @@ function cycle() {
       code: "synthetic",
       version: "1",
       short_title: "ICAAP framework",
+      status: "exposure_draft",
+      effective_from: "2027-01-01",
     },
     fiscal_year: 2026,
     cycle_kind: "rehearsal",

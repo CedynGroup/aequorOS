@@ -41,10 +41,10 @@
  */
 
 import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadge";
+import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
 import {
   preparationWarning,
   preparationHref,
-  packagePreparationWarning,
   isRuleInForce,
 } from "@/lib/regulatoryInstruments";
 import PageContainer from "@/components/ui/PageContainer";
@@ -963,19 +963,11 @@ function PackageWorkspace({
 
   return (
     <div className="space-y-4">
-      {packagePreparationWarning(
-        pkg?.snapshot,
-        template?.instrumentStatus,
-        template?.effectiveFrom,
-      ) && (
-        <p role="note" className="text-caption text-warning">
-          {packagePreparationWarning(
-            pkg?.snapshot,
-            template?.instrumentStatus,
-            template?.effectiveFrom,
-          )}
-        </p>
-      )}
+      <RegulatoryExportWarning
+        snapshot={pkg?.snapshot}
+        status={pkg ? undefined : template?.instrumentStatus}
+        effectiveFrom={pkg ? undefined : template?.effectiveFrom}
+      />
       <ReturnCommandBarBlock
         summary={summary}
         template={template}

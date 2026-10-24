@@ -22,6 +22,7 @@ import SdiLiquidityBoardDisclosure from "@/components/reports/SdiLiquidityBoardD
 import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
 import { preparationWarning } from "@/lib/regulatoryInstruments";
+import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
 import { Printer } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import SectionCard from "@/components/ui/SectionCard";
@@ -116,21 +117,20 @@ export default function StressBoardPack() {
     ? ["SDI-STRESS-ANNUAL"]
     : ["ICAAP-STRESS", "STRESS-PACK"];
   if (sections.appendix && !isSdi) packCodes.push("ICAAP-STRESS-APPENDIX2");
-  const packWarnings = [
-    ...new Set(
-      packCodes
-        .map((code) => {
-          const instrument = rules.query.error
-            ? undefined
-            : rules.instrument(code);
-          return preparationWarning(
-            instrument?.instrumentStatus,
-            instrument?.effectiveFrom,
-          );
-        })
-        .filter((warning): warning is string => Boolean(warning)),
-    ),
-  ];
+  const packWarnings = new Map(
+    packCodes
+      .map((code) => {
+        const instrument = rules.query.error
+          ? undefined
+          : rules.instrument(code);
+        const warning = preparationWarning(
+          instrument?.instrumentStatus,
+          instrument?.effectiveFrom,
+        );
+        return [warning, instrument] as const;
+      })
+      .filter(([warning]) => Boolean(warning)),
+  );
 
   return (
     <>
@@ -139,14 +139,12 @@ export default function StressBoardPack() {
         title="Stress Board-Pack Composer"
         action={
           <div className="max-w-xl space-y-2">
-            {packWarnings.map((warning) => (
-              <p
+            {[...packWarnings].map(([warning, instrument]) => (
+              <RegulatoryExportWarning
                 key={warning}
-                role="note"
-                className="text-caption text-warning"
-              >
-                {warning}
-              </p>
+                status={instrument?.instrumentStatus}
+                effectiveFrom={instrument?.effectiveFrom}
+              />
             ))}
             <button
               type="button"
