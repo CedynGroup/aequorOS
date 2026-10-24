@@ -187,18 +187,27 @@ test.describe("Explore", () => {
       ),
     ).toBeVisible();
 
+    // Wait for the lazy grid and its opening answer before asking for another
+    // shape; each change fetches and authorizes a new page.
+    const grid = page.locator(".ag-root-wrapper");
+    await expect(
+      grid.getByText(FIXTURE_FIGURES.standardGradeOnScreen, { exact: true }),
+    ).toBeVisible();
+
     const shape = page.locator("section.card").filter({
       has: page.getByRole("heading", { name: "Shape the grid", level: 3 }),
     });
     await shape
       .getByText("Show subtotals for each group", { exact: true })
       .click();
+    await expect(
+      grid.getByText("Total for the institution", { exact: true }),
+    ).toBeVisible();
     await shape.locator("#bi-grid-pivot").selectOption({ label: "IFRS 9 stage" });
 
     // The grid is paged by the server, and the columns it returns are the
     // pivoted ones — a measure per value of the spread field, each naming the
     // unit so the reader does not infer it from the first cell.
-    const grid = page.locator(".ag-root-wrapper");
     await expect(grid).toBeVisible();
     await expect(
       grid.getByText("Gross loans · 1 (GHS)", { exact: true }),
