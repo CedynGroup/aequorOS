@@ -20,8 +20,10 @@ import path from "path";
 import { E2E_TMP } from "../playwright.config";
 import { requireObjectStorage } from "./support/object-storage";
 import { generateCurrentVersion } from "./support/generate";
+import { biApi, fixtureAsOf, SAMPLE_BANK_ID } from "./support/bi";
 
-const RETURNS = "/submissions/returns?code=BSD3";
+const RETURN_CODE = "BSD2";
+const RETURNS = `/submissions/returns?code=${RETURN_CODE}`;
 const analystState = path.join(E2E_TMP, "analyst.json");
 const viewerState = path.join(E2E_TMP, "viewer.json");
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
@@ -145,14 +147,37 @@ test.describe("submission pipeline", () => {
   }) => {
     // Generate at least one package first so history is non-empty.
     await page.goto(RETURNS);
-    await generateCurrentVersion(page);
-    await expect(page.getByText("Checks passed").first()).toBeVisible({
-      timeout: 60_000,
-    });
+    const minted = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/regulatory-packages") &&
+        response.ok(),
+    );
+    const version = await generateCurrentVersion(page);
+    const { id, return_code: returnCode } = (await (await minted).json()) as {
+      id: string;
+      return_code: string;
+    };
+    expect(returnCode).toBe(RETURN_CODE);
 
     await page.goto("/submissions/history");
     await expect(page).toHaveURL(/\/submissions\/history/);
-    await expect(page.getByText("LCR-NSFR").first()).toBeVisible();
+    const row = page
+      .getByRole("row")
+      .filter({
+        has: page.getByRole("cell", { name: RETURN_CODE, exact: true }),
+      })
+      .filter({
+        has: page.getByRole("cell", { name: `v${version}`, exact: true }),
+      });
+    await expect(row).toHaveCount(1);
+    await expect(
+      row.getByRole("cell", { name: "Passed", exact: true }),
+    ).toBeVisible();
+    await row.click();
+    await expect(
+      page.getByText(`Package ${id.slice(0, 8)} ·`, { exact: false }),
+    ).toBeVisible();
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "history-ledger.png"),
@@ -213,28 +238,64 @@ test.describe("submission pipeline", () => {
     browser,
   }) => {
     const analyst = await browser.newContext({ storageState: analystState });
-    const analystPage = await analyst.newPage();
-    await analystPage.goto("/submissions/approvals");
-    await expect(analystPage).toHaveURL(/\/submissions\/approvals/);
-    await analyst.close();
-
     const viewer = await browser.newContext({ storageState: viewerState });
-    const viewerPage = await viewer.newPage();
-    await viewerPage.goto(RETURNS);
-    // Viewer reaches the workspace (read) but generation is refused (403);
-    // the error surfaces rather than a package appearing.
-    const gen = viewerPage
-      .getByRole("button", { name: /generate the return/i })
-      .first();
-    if (await gen.isVisible().catch(() => false)) {
-      await gen.click();
+    try {
+      const analystPage = await analyst.newPage();
+      await analystPage.goto(RETURNS);
+      const minted = analystPage.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname.endsWith("/regulatory-packages") &&
+          response.ok(),
+      );
+      await generateCurrentVersion(analystPage);
+      const { id } = (await (await minted).json()) as { id: string };
+      const decision = await biApi(
+        analyst.request,
+        "analyst",
+        `/banks/${SAMPLE_BANK_ID}/regulatory-packages/${id}/decide-approval`,
+        {
+          method: "POST",
+          data: { action: "approved", reason: "Not my authority" },
+        },
+      );
+      expect(decision.status).toBe(403);
+
+      const viewerPage = await viewer.newPage();
+      await viewerPage.goto(RETURNS);
       await expect(
-        viewerPage
-          .getByText(/analyst role|forbidden|not permitted|required/i)
-          .first(),
+        viewerPage.getByRole("heading", {
+          name: "Access required",
+          exact: true,
+        }),
       ).toBeVisible();
+      await expect(
+        viewerPage.getByText(
+          "You can see that this page exists, but your current access does not include it.",
+        ),
+      ).toBeVisible();
+      await expect(
+        viewerPage.getByRole("button", {
+          name: /generate the return|^regenerate$/i,
+        }),
+      ).toHaveCount(0);
+      const generation = await biApi(
+        viewer.request,
+        "viewer",
+        `/banks/${SAMPLE_BANK_ID}/regulatory-packages`,
+        {
+          method: "POST",
+          data: {
+            return_code: RETURN_CODE,
+            reporting_date: await fixtureAsOf(analyst.request),
+          },
+        },
+      );
+      expect(generation.status).toBe(403);
+    } finally {
+      await analyst.close();
+      await viewer.close();
     }
-    await viewer.close();
   });
 });
 
