@@ -10,11 +10,11 @@ checksum before releasing bytes. Unavailable connected keys, legacy plaintext
 for a connected bank, and corrupt objects refuse access without a platform-key
 fallback. Bank keys are optional during rollout: `BANK_KEY_REQUIRED=false`
 preserves the existing platform storage path for tenants without keys in every
-environment. Enable it once the key-management UI ships; then onboarding and
-storage require a bank key. Encrypted objects also refuse reads when their
-bank-key record is missing. Missing bank keys alone never prevent startup. Local
-evaluation uses the existing platform/MinIO path without an AWS KMS account. No
-persistent local provider mode is introduced.
+environment. Set `BANK_KEY_REQUIRED=true` at the deployment's enforcement cutover;
+then onboarding, covered field access and storage require a bank key. Encrypted
+objects also refuse reads when their bank-key record is missing. Missing bank
+keys alone never prevent startup. Local evaluation uses the existing platform/MinIO
+path without an AWS KMS account. No persistent local provider mode is introduced.
 
 The bank creates and administers a customer-managed symmetric KMS key in its own
 AWS account. AequorOS uses its workload role to request cryptographic
@@ -37,13 +37,8 @@ owns the encryption format and integrity checks. Only the wrapped version and
 its exact KMS reference are persisted in `object_key_envelopes`; S3 metadata
 holds the version UUID.
 
-Each database unit of work unwraps each required version once, sharing it
-between field loads and session-bound storage. Plaintext version material is
-session-local and excluded from logs; commit, rollback and close discard it.
-Standalone operations own short-lived units. Revocation refuses the next unit
-once KMS enforces the permission change; an already admitted unit may complete.
-No persistent or process-wide plaintext cache is permitted. See the
-[field design](bank_field_encryption.md#keys-and-storage).
+Field and object operations share the
+[unit-of-work key lifetime and revocation boundary](bank_field_encryption.md#keys-and-storage).
 
 ## Bank-side AWS setup
 
@@ -149,8 +144,10 @@ active inspector session uses these routes on the separate operator API:
 Rotation accepts the same key fields plus a meaningful `reason` and must retain
 the bank's ownership account. Changing providers requires an explicit migration.
 Routes verify the bank belongs to the organization, require staff inspection
-authority and write operator audit events in their transaction. The tenant API
-mounts none of these routes. Status observations do not authorize access; provider
+authority and write operator audit events in their transaction. Bank administrators
+use separate Account-administration endpoints and the guided Settings flow in
+[bank key setup](bank_key_setup.md#bank-administrator-self-service); retirement
+remains a staff operation. Status observations do not authorize access; provider
 checks and key reuse follow the
 [unit-of-work boundary](bank_field_encryption.md#keys-and-storage).
 
@@ -180,8 +177,8 @@ reference committed versions, so business rollback cannot orphan published
 ciphertext. See [the field design](bank_field_encryption.md#keys-and-storage)
 for bounded key-cache lifetime and versioned encryption.
 
-Keep the old key decrypt-capable until every backup with its old wrappers has
-aged out, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
+Keep the old key decrypt-capable while retained data or any backup requires its
+versions, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
 Set `ENCRYPTION_BACKUP_RETENTION_DAYS` to at least the longest database
 or object backup retention window before rotation. Rotation records a per-bank
 retention hold; an unset setting keeps that hold indefinitely. Reusing a key
@@ -239,10 +236,11 @@ the bank key. Existing physical backups retain their original protection.
 Signing keys and credential custody remain
 [issue 355](https://github.com/CedynGroup/aequorOS/issues/355). Scheduled
 key-health monitoring, alerting and support workflows remain
-[issue 354](https://github.com/CedynGroup/aequorOS/issues/354); this change
-supplies the provider `describe` contract, onboarding probe results and checked
-timestamps. No standalone health-probe endpoint is exposed. These follow-ups are
-required before claiming regulatory approval of the complete service.
+[issue 354](https://github.com/CedynGroup/aequorOS/issues/354). The provider
+`describe` contract, onboarding probes, and administrator-triggered
+`POST /api/v1/banks/{bank_id}/encryption-key/test` supply explicit observations,
+not scheduled monitoring. These follow-ups are required before claiming
+regulatory approval of the complete service.
 
 `LocalKeyProvider` supports injected hermetic tests and the provider conformance
 suite. Local evaluation without an AWS KMS account uses the existing platform

@@ -668,18 +668,39 @@ def withdraw_counterparties(db: Session) -> CanonicalWithdrawal:
     return applied
 
 
-@pytest.mark.parametrize("connected", [False, True])
-@pytest.mark.parametrize("withdraw", [False, True])
+def write_counterparty_workbook(path: Path, name: str) -> None:
+    workbook = Workbook()
+    customers = workbook.active
+    assert customers is not None
+    customers.title = "Customers"
+    customers.append(["CustomerId", "CustomerName", "Type"])
+    customers.append([IDENTIFIER, name, "RETAIL_INDIVIDUAL"])
+    loans = cast(Worksheet, workbook.create_sheet("Loans"))
+    loans.append(["Reference", "Type", "Currency", "Balance", "CustomerId"])
+    loans.append(["synthetic-loan-1", "LOAN", "GHS", 123, IDENTIFIER])
+    workbook.save(path)
+
+
+@pytest.mark.parametrize(
+    "connection_timing,withdraw",
+    [
+        ("none", False),
+        ("none", True),
+        ("before", False),
+        ("before", True),
+        ("after_withdrawal", True),
+    ],
+)
 @pytest.mark.parametrize("initial_name", [NAME, EXPANDING_NAME])
 def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(  # noqa: PLR0913
     db_session: Session,
     provider: LocalKeyProvider,
     tmp_path: Path,
-    connected: bool,
+    connection_timing: str,
     withdraw: bool,
     initial_name: str,
 ) -> None:
-    if connected:
+    if connection_timing == "before":
         connect(db_session, provider)
     withdrawal: CanonicalWithdrawal | None = None
     mapping = MappingConfig(
@@ -718,17 +739,8 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
     )
     storage = InMemoryStorageClient()
     for name in (initial_name, "Synthetic replacement borrower"):
-        workbook = Workbook()
-        customers = workbook.active
-        assert customers is not None
-        customers.title = "Customers"
-        customers.append(["CustomerId", "CustomerName", "Type"])
-        customers.append([IDENTIFIER, name, "RETAIL_INDIVIDUAL"])
-        loans = cast(Worksheet, workbook.create_sheet("Loans"))
-        loans.append(["Reference", "Type", "Currency", "Balance", "CustomerId"])
-        loans.append(["synthetic-loan-1", "LOAN", "GHS", 123, IDENTIFIER])
         path = tmp_path / "synthetic.xlsx"
-        workbook.save(path)
+        write_counterparty_workbook(path, name)
         result = ingestion.start_ingestion(
             db_session,
             CTX,
@@ -767,12 +779,18 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
                 )
             ).scalar_one(),
         )
-        if connected:
+        if connection_timing == "before" or (
+            connection_timing == "after_withdrawal" and name != initial_name
+        ):
             assert name not in str(raw) and str(raw).startswith("aqs-bank-field-v1:")
         else:
             assert raw == name
         if withdraw and name == initial_name:
             withdrawal = withdraw_counterparties(db_session)
+            if connection_timing == "after_withdrawal":
+                stored = raw_fields(db_session)
+                connect(db_session, provider)
+                assert raw_fields(db_session) == stored
     assert (
         db_session.execute(
             text("SELECT balance FROM canonical_position_snapshots WHERE superseded_by IS NULL")
@@ -782,6 +800,7 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
     if withdrawal is not None:
         bank = db_session.get(Bank, BANK_A)
         assert bank is not None
+        before_reversal = raw_fields(db_session)
         with pytest.raises(WithdrawalError, match="same natural key") as refused:
             canonical_withdrawal.reverse_withdrawal(
                 db_session,
@@ -794,32 +813,53 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
         assert refused.value.status_code == 409
         db_session.flush()
         assert withdrawal.status == "applied"
+        assert raw_fields(db_session) == before_reversal
         withdraw_counterparties(db_session)
         restored = canonical_withdrawal.reverse_withdrawal(
             db_session, CTX, bank, withdrawal.id, reversed_by="Synthetic checker", reason="Restore"
         )
         db_session.commit()
         assert restored.status == "reversed" and restored.rows_restored == 1
-        matches = find_counterparties(
-            db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER
+        matches = list(
+            db_session.scalars(
+                select(CanonicalCounterparty).where(
+                    CanonicalCounterparty.organization_id == ORG_1,
+                    CanonicalCounterparty.bank_id == BANK_A,
+                    CanonicalCounterparty.source_system == "EXCEL_CSV",
+                    CanonicalCounterparty.as_of_date == AS_OF,
+                    CanonicalCounterparty.withdrawn_at.is_(None),
+                    CanonicalCounterparty.superseded_by.is_(None),
+                )
+            )
         )
         assert len(matches) == 1 and matches[0].name == initial_name
+        assert matches[0].source_reference == IDENTIFIER
+        if connection_timing != "after_withdrawal":
+            assert (
+                find_counterparties(
+                    db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER
+                )
+                == matches
+            )
 
 
-@pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("connection_timing", ["none", "before", "after_withdrawal"])
 @pytest.mark.parametrize("axis", ["none", "reference", "source", "date", "bank"])
 def test_counterparty_reversal_preserves_natural_key_scope(
     db_session: Session,
     provider: LocalKeyProvider,
-    connected: bool,
+    connection_timing: str,
     axis: str,
 ) -> None:
-    if connected:
+    if connection_timing == "before":
         connect(db_session, provider)
         connect(db_session, provider, BANK_B)
     original = counterparty(db_session, include_package=False)
     original_id = original.id
     withdrawal = withdraw_counterparties(db_session)
+    if connection_timing == "after_withdrawal":
+        connect(db_session, provider)
+        connect(db_session, provider, BANK_B)
     replacement = None
     if axis != "none":
         replacement = counterparty(

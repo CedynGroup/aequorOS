@@ -43,13 +43,17 @@ schema; migrations grant execution explicitly.
 The foundation provisions dormant roles; it does not authorize switching worker
 or operator credentials. The worker PR adds tenant context to every job and
 narrowly granted platform functions/views. The operator PR adds metadata views.
-Both require the product owner's review. A fourth, captain-reviewed PR follows
-operator access: two narrow SECURITY DEFINER functions owned by `aqs_owner`, with
-a pinned search_path and EXECUTE granted only to `aqs_api`. One accepts a
-presented key hash and returns only its organization, bank, scopes and status;
-the other accepts a bank id and returns only that bank's key reference. That
-follow-up must prove the API still cannot SELECT either underlying table or
-enumerate other banks. Direct table grants remain absent.
+Both require the product owner's review. Bank-held encryption migrations
+`202610220101` and `202610230103` now grant runtime bank-key registry access for
+field/storage operations and administrator key setup. The exact privileges are
+owned by the executable [grant manifest](../../backend/tests/db/database_role_grants.json);
+the pre-tenant registry relies on explicit application scoping rather than RLS.
+The separate, captain-reviewed pre-authentication follow-up remains required for
+integration keys: a narrow SECURITY DEFINER function owned by `aqs_owner`, with a
+pinned search_path and EXECUTE granted only to `aqs_api`, accepting a presented
+key hash and returning only its organization, bank, scopes and status. That
+follow-up must prove refusal of direct `integration_keys` access and other-bank
+enumeration.
 
 ## Session timeout budgets
 
@@ -135,8 +139,8 @@ concurrency and role-timeout coverage is linked from the backend API guide above
    credential switches. They support both existing and least-privilege roles.
 6. Deploy the captain-reviewed API pre-authentication follow-up after the
    operator PR. **The API credential switch is blocked until that PR is live.**
-   The foundation's `aqs_api` cannot yet authenticate integration keys or look
-   up bank encryption keys.
+   `aqs_api` cannot yet authenticate integration keys; bank-key registry grants
+   follow the [current matrix and prerequisites](#target-matrix).
 
 Native development uses `backend/scripts/local_services.py` to prepare the roles
 on its owned PostgreSQL 17 cluster. Docker's `risk-migrate` runs
@@ -225,11 +229,10 @@ WHERE rolname IN ('aqs_worker', 'aqs_operator');
 After the new connections are healthy and old pools drained, Eric removes
 BYPASSRLS from the old deployment roles or retires their credentials. No
 engineering migration alters those existing role attributes. **Do not switch the
-API credential yet:** `aqs_api` cannot authenticate integration keys or look up
-bank encryption keys. Its switch waits for the separate captain-reviewed
-pre-authentication PR after the operator PR, followed by verification of both
-lookup paths, refusal of direct table access and refusal of other-bank
-enumeration. Keep the existing API URL secret until that gate passes.
+API credential yet:** its switch remains subject to the
+[API pre-authentication prerequisite](#target-matrix). Verify bank-key lookup
+under the current grant manifest as well. Keep the existing API URL secret until
+that gate passes.
 
 ### Break-glass and rollback
 
