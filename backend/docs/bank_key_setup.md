@@ -60,7 +60,8 @@ on the same encryption-key resource.
 Before rotating or retiring a key, follow the
 [backup retention and recovery contract](bank_encryption.md#rotation-backups-and-recovery).
 
-After the window expires, an operator admin in an active tenant inspection can call
+Once the retention contract permits retirement, an operator admin in an active
+tenant inspection can call
 `POST /operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key/retire` with the source
 ARN, account, region and reason. The application authorizes retirement and records
 an audit event; the bank then administers its key in AWS under the retention
@@ -82,6 +83,6 @@ rollout. The provisioning API remains authoritative: when enforcement is enabled
 a keyless submission fails the `kms` step, and the console displays that refusal
 in the provisioning result.
 
-For connected-key failures, existing-file migration and enforcement cutover, follow
+For connected-key failures and optional-key enforcement settings, follow
 [the bank encryption contract](bank_encryption.md#standing-contract) and its
 [scope and follow-ups](bank_encryption.md#scope-and-executable-evidence).

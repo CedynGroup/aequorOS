@@ -184,6 +184,7 @@ def download_icaap_supervisory_addon_letter(
     access: IcaapView,
     storage: IcaapStorage,
 ) -> StreamingResponse:
+    storage = storage.for_session(db)
     _ = bank_id
     row, slug = supervisory_addons.prepare_letter_download(db, access, addon_id)
     _object, stream = storage.read(

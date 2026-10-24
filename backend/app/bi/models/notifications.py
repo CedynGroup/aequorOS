@@ -80,6 +80,7 @@ from sqlalchemy import (
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.key_management.fields import ProtectedJSON
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
 
 # --- vocabularies (the CHECK constraints derive from these) -------------------
@@ -112,6 +113,7 @@ ALERT_EVENT_STATES: tuple[str, ...] = ("breached", "cleared", "not_evaluated")
 ALERT_NOT_EVALUATED_REASONS: tuple[str, ...] = (
     # The owner's authority no longer admits the measure (or they are inactive).
     "authorization_revoked",
+    "bank_key_identity_bi_unavailable",
     # ``threshold_basis='governed_limit'`` and the resolver refused: no register
     # row, a unit it will not convert, a scope it cannot resolve.
     "no_governed_limit",
@@ -228,7 +230,10 @@ class BiAlert(UuidV4PrimaryKeyMixin, _TenantKeys, TimestampMixin, Base):
     #: (``MEMBER_ID_MAX_LENGTH``).
     measure_id: Mapped[str] = mapped_column(String(120), nullable=False)
     filters: Mapped[list[dict[str, object]]] = mapped_column(
-        JSON, default=list, server_default=sql_text("'[]'"), nullable=False
+        ProtectedJSON(empty_list=True),
+        default=list,
+        server_default=sql_text("'[]'"),
+        nullable=False,
     )
     direction: Mapped[str] = mapped_column(String(8), nullable=False)
     threshold_basis: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -383,7 +388,7 @@ class BiSubscription(UuidV4PrimaryKeyMixin, _TenantKeys, TimestampMixin, Base):
     #: A ``BiQuery`` payload as authored. The reporting date is REBOUND at
     #: delivery time (D-179): a date frozen at authoring would mail the same
     #: month for ever.
-    query: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    query: Mapped[dict[str, object]] = mapped_column(ProtectedJSON(), nullable=False)
     artifact_format: Mapped[str] = mapped_column(String(8), nullable=False)
     cadence: Mapped[str] = mapped_column(String(16), nullable=False)
     hour: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)

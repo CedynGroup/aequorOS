@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.key_management.aws import AwsKmsKeyProvider
-from app.core.key_management.models import BankEncryptionKey
+from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
 from app.core.key_management.settings import get_key_settings
-from app.core.key_management.types import DataKey, KeyReference, KeyUnavailableError
+from app.core.key_management.types import KeyReference, KeyUnavailableError
 from app.db import session as database
 from app.storage.client import StorageAccessError, StorageLocation
 from app.storage.config import StorageEngineSettings
@@ -64,6 +64,7 @@ def test_optional_key_keeps_platform_storage_and_required_key_refuses_it(
 ) -> None:
     monkeypatch.setenv("APP_ENV", environment)
     get_settings.cache_clear()
+    _ = db_session.execute(delete(ObjectKeyEnvelope))
     _ = db_session.execute(delete(BankEncryptionKey))
     db_session.commit()
     storage = _storage(bank_storage, db_session, monkeypatch)
@@ -113,11 +114,13 @@ def test_connected_key_never_falls_back_when_enforcement_is_off(
     storage = _storage(bank_storage, db_session, monkeypatch)
     calls: list[KeyReference] = []
 
-    def refused(_self: AwsKmsKeyProvider, key: KeyReference, _context: dict[str, str]) -> DataKey:
+    def refused(
+        _self: AwsKmsKeyProvider, key: KeyReference, _wrapped: bytes, _context: dict[str, str]
+    ) -> bytes:
         calls.append(key)
         raise KeyUnavailableError("The bank revoked access.")
 
-    monkeypatch.setattr(AwsKmsKeyProvider, "generate_data_key", refused)
+    monkeypatch.setattr(AwsKmsKeyProvider, "unwrap", refused)
     location = StorageLocation(SLUG, "outputs", "rollout/connected.bin")
     with pytest.raises(StorageAccessError):
         storage.write(

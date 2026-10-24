@@ -13,6 +13,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.data_engine.service.field_search import find_counterparties
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.domain.forecasting.engine import ForecastFact
 from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
@@ -25,7 +26,6 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
-    CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     RegulatoryRun,
@@ -396,11 +396,13 @@ def _change_credit_source(db_session: Session, bank_id: str, change: str) -> Non
             CanonicalPositionSnapshot.source_reference == "LOAN/CORP1",
         )
     )
-    bank_counterparty = db_session.scalar(
-        select(CanonicalCounterparty).where(
-            CanonicalCounterparty.bank_id == bank_id,
-            CanonicalCounterparty.source_reference == "CP/PEERBANK",
-        )
+    bank_counterparty = next(
+        iter(
+            find_counterparties(
+                db_session, MAKER, bank_id, field="source_reference", value="CP/PEERBANK"
+            )
+        ),
+        None,
     )
     assert snapshot is not None and bank_counterparty is not None
     if change == "counterparty":

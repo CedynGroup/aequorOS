@@ -93,6 +93,7 @@ from app.bi.service.authorization import BiDataScope, authorize_query
 from app.bi.service.compiler import compile_query
 from app.bi.service.errors import BiQueryError
 from app.bi.service.execution import execute
+from app.bi.service.identity_policy import IDENTITY_REASON
 from app.bi.service.insights.statements import render_value
 from app.bi.service.versions import BUILDER_VERSION
 from app.core.authorization import Permission
@@ -426,7 +427,10 @@ def _evaluate_one(  # noqa: PLR0913, PLR0911 - one alert, and every way its verd
     except BiQueryError:
         return _record_not_evaluated(db, alert, as_of, fingerprint, REASON_UNKNOWN_MEMBER)
     if not decision.allowed:
-        return _record_not_evaluated(db, alert, as_of, fingerprint, REASON_AUTHORIZATION_REVOKED)
+        reason = (
+            IDENTITY_REASON if decision.reason == IDENTITY_REASON else REASON_AUTHORIZATION_REVOKED
+        )
+        return _record_not_evaluated(db, alert, as_of, fingerprint, reason)
     # The owner's slice, resolved against this institution's branches. An
     # institution-grain measure never reaches here under a scoped grant —
     # ``authorize_query`` denies it — so what this filter narrows is a portfolio

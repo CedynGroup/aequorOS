@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import BinaryIO, Literal, Protocol, cast
+from typing import BinaryIO, Literal, Never, Protocol, cast
 
 import boto3
 import pytest
@@ -15,7 +15,7 @@ from botocore.exceptions import ClientError, EndpointConnectionError
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from moto import mock_aws
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -76,6 +76,8 @@ class _S3(ProvisioningClient, Protocol):
     def put_object(self, **kwargs: object) -> dict[str, object]: ...
 
     def delete_object(self, *, Bucket: str, Key: str) -> object: ...
+
+    def head_object(self, **kwargs: object) -> dict[str, object]: ...
 
 
 @dataclass
@@ -162,7 +164,7 @@ def test_all_bank_object_tiers_encrypt_at_rest_and_refuse_revocation(
         bank_storage.storage.write(location, io.BytesIO(content), metadata_for(SLUG, tier, content))
 
 
-def test_rotation_changes_only_wrappers_and_keeps_old_versions_readable(
+def test_rotation_adds_version_and_keeps_old_ciphertext_readable(
     bank_storage: BankStorage,
     db_session: Session,
 ) -> None:
@@ -182,10 +184,10 @@ def test_rotation_changes_only_wrappers_and_keeps_old_versions_readable(
     wrappers = list(db_session.scalars(select(ObjectKeyEnvelope)))
     old_wrappers = [row.wrapped_key for row in wrappers]
     row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
-    assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 2
+    assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 0
     db_session.commit()
     db_session.expire_all()
-    assert [row.wrapped_key for row in wrappers] != old_wrappers
+    assert [row.wrapped_key for row in wrappers] == old_wrappers
     after = cast(
         _Body,
         bank_storage.s3.get_object(Bucket=location.bucket_name("dev"), Key=location.object_path)[
@@ -193,13 +195,22 @@ def test_rotation_changes_only_wrappers_and_keeps_old_versions_readable(
         ],
     ).read()
     assert after == before
-    bank_storage.provider.set_status(KEY, KeyStatus.DISABLED)
     _, current = bank_storage.storage.read(location)
     assert current.read() == b"second"
     current.close()
     _, historical = bank_storage.storage.read(location, original.version_id)
     assert historical.read() == b"first"
     historical.close()
+
+    bank_storage.storage.write(
+        location, io.BytesIO(b"third"), metadata_for(SLUG, "outputs", b"third")
+    )
+    bank_storage.provider.set_status(KEY, KeyStatus.DISABLED)
+    _, latest = bank_storage.storage.read(location)
+    assert latest.read() == b"third"
+    latest.close()
+    with pytest.raises(StorageAccessError):
+        bank_storage.storage.read(location, original.version_id)
 
 
 def test_object_substitution_and_legacy_plaintext_are_refused(bank_storage: BankStorage) -> None:
@@ -340,7 +351,7 @@ def test_sibling_banks_have_independent_keys_and_cannot_substitute_envelopes(
         bank_storage.storage.read(second)
 
 
-@pytest.mark.parametrize("failure", ["replacement-decrypt", "second-wrapper"])
+@pytest.mark.parametrize("failure", ["replacement-decrypt", "version-generation"])
 def test_failed_rotation_rolls_back_every_wrapper_and_keeps_reads_available(
     bank_storage: BankStorage,
     db_session: Session,
@@ -356,27 +367,19 @@ def test_failed_rotation_rolls_back_every_wrapper_and_keeps_reads_available(
     )
     wrappers = {row.id: row.wrapped_key for row in db_session.scalars(select(ObjectKeyEnvelope))}
     unwrap = bank_storage.provider.unwrap
-    rotate = bank_storage.provider.rotate
-    rotated = 0
 
     def refuse_target(key: KeyReference, wrapped: bytes, context: dict[str, str]) -> bytes:
         if key == NEXT_KEY:
             raise KeyUnavailableError("Synthetic target decrypt grant was denied.")
         return unwrap(key, wrapped, context)
 
-    def refuse_second(
-        source: KeyReference, target: KeyReference, wrapped: bytes, context: dict[str, str]
-    ) -> bytes:
-        nonlocal rotated
-        rotated += 1
-        if rotated == 2:
-            raise KeyUnavailableError("Synthetic mid-rotation outage.")
-        return rotate(source, target, wrapped, context)
+    def refuse_generation(key: KeyReference, context: dict[str, str]) -> Never:
+        raise KeyUnavailableError("Synthetic version generation outage.")
 
     if failure == "replacement-decrypt":
         monkeypatch.setattr(bank_storage.provider, "unwrap", refuse_target)
     else:
-        monkeypatch.setattr(bank_storage.provider, "rotate", refuse_second)
+        monkeypatch.setattr(bank_storage.provider, "generate_data_key", refuse_generation)
     with pytest.raises(HTTPException) as denied:
         rotate_key(
             db_session,
@@ -429,19 +432,12 @@ def test_backup_wipe_restore_reapplies_encryption_headers_and_reads(
     # puts the bytes back under a fresh id, and every pinned download 404s.
     backed_up_version = record.keys[0].version_id
     assert backed_up_version, "the backup recorded no version identity to restore under"
-    archived = {row.id: row.wrapped_key for row in db_session.scalars(select(ObjectKeyEnvelope))}
     row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
     registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider)
     db_session.commit()
     _ = bank_storage.s3.delete_object(Bucket=bucket, Key=location.object_path)
     with pytest.raises(StorageNotFoundError):
         bank_storage.storage.read(location)
-    row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
-    row.key_id = KEY.key_id
-    for envelope in db_session.scalars(select(ObjectKeyEnvelope)):
-        envelope.wrapped_key = archived[envelope.id]
-    _ = db_session.execute(delete(RetainedBankKey))
-    db_session.commit()
     restored = restore_storage_backup(bank_storage.s3, manifest, out_dir=tmp_path)
     assert restored.objects == 1
     _, body = bank_storage.storage.read(location)
@@ -481,19 +477,12 @@ def test_rotation_preserves_archived_envelopes_until_retention_expires(
         assert envelope is not None
         archived_wrapper = envelope.wrapped_key
         row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
-        assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 1
+        assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 0
         db_session.commit()
         row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
         with pytest.raises(KeyUnavailableError, match="retention expires"):
             registry.authorize_retirement(db_session, row, KEY)
-        assert (
-            bank_storage.provider.unwrap(
-                KEY,
-                archived_wrapper,
-                registry.wrapping_context(row.bank_id, registry.context_digest(context)),
-            )
-            == original.plaintext
-        )
+        assert envelope.wrapped_key == archived_wrapper
         assert store.open(SLUG, original.envelope_id, context).plaintext == original.plaintext
         held = db_session.scalar(select(RetainedBankKey))
         assert held is not None and held.decrypt_until is not None
@@ -506,9 +495,8 @@ def test_rotation_preserves_archived_envelopes_until_retention_expires(
         with pytest.raises(KeyUnavailableError, match="retention expires"):
             registry.authorize_retirement(db_session, row, KEY)
         monkeypatch.setattr(registry, "utc_now", lambda: now + timedelta(days=15))
-        registry.authorize_retirement(db_session, row, KEY)
-        bank_storage.provider.set_status(KEY, KeyStatus.DISABLED)
-        assert bank_storage.provider.describe(KEY).status == KeyStatus.DISABLED
+        with pytest.raises(KeyUnavailableError, match="retained encryption versions"):
+            registry.authorize_retirement(db_session, row, KEY)
         assert store.open(SLUG, original.envelope_id, context).plaintext == original.plaintext
     finally:
         get_key_settings.cache_clear()
@@ -550,11 +538,11 @@ def test_reusing_rotation_destinations_preserves_per_bank_backup_holds(
             location, io.BytesIO(content), metadata_for(SLUG, "outputs", content)
         )
         row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
-        assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 1
+        assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 0
         db_session.commit()
         monkeypatch.setattr(registry, "utc_now", lambda: now + timedelta(days=1))
         row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
-        assert registry.rotate(db_session, row, KEY, lambda _name: bank_storage.provider) == 1
+        assert registry.rotate(db_session, row, KEY, lambda _name: bank_storage.provider) == 0
         db_session.commit()
         row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
         with pytest.raises(KeyUnavailableError, match="still connected"):
@@ -570,7 +558,7 @@ def test_reusing_rotation_destinations_preserves_per_bank_backup_holds(
             monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", str(repeat_retention))
         get_key_settings.cache_clear()
         monkeypatch.setattr(registry, "utc_now", lambda: now + timedelta(days=3))
-        assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 2
+        assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 0
         db_session.commit()
         holds = list(db_session.scalars(select(RetainedBankKey)))
         assert len(holds) == 2
@@ -589,7 +577,8 @@ def test_reusing_rotation_destinations_preserves_per_bank_backup_holds(
             with pytest.raises(KeyUnavailableError, match="indefinite"):
                 registry.authorize_retirement(db_session, row, KEY)
         else:
-            registry.authorize_retirement(db_session, row, KEY)
+            with pytest.raises(KeyUnavailableError, match="retained encryption versions"):
+                registry.authorize_retirement(db_session, row, KEY)
     finally:
         get_key_settings.cache_clear()
 
@@ -636,6 +625,7 @@ def test_shared_source_retirement_waits_for_last_bank_and_its_backups(
             lambda: Session(db_session.get_bind(), join_transaction_mode="create_savepoint"),
             lambda _name: bank_storage.provider,
         )
+        db_session.commit()
         context = {"purpose": "shared-key-fixture"}
         archived = store.prepare("bk-samp0002", context)
         if register_before_rotation:
@@ -669,9 +659,8 @@ def test_shared_source_retirement_waits_for_last_bank_and_its_backups(
             registry.authorize_retirement(db_session, first, KEY)
         assert bank_storage.provider.describe(KEY).status == KeyStatus.ACTIVE
         monkeypatch.setattr(registry, "utc_now", lambda: now + timedelta(days=16))
-        registry.authorize_retirement(db_session, first, KEY)
-        bank_storage.provider.set_status(KEY, KeyStatus.DISABLED)
-        assert bank_storage.provider.describe(KEY).status == KeyStatus.DISABLED
+        with pytest.raises(KeyUnavailableError, match="retained encryption versions"):
+            registry.authorize_retirement(db_session, first, KEY)
     finally:
         get_key_settings.cache_clear()
 

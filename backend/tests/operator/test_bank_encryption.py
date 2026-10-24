@@ -159,7 +159,7 @@ def test_bank_key_routes_require_an_active_inspection(operator_client: TestClien
     assert response.status_code == 403
 
 
-def test_retirement_http_refuses_retained_backups_then_authorizes_and_audits(
+def test_retirement_http_refuses_retained_versions_after_backup_expiry(
     operator_client: TestClient,
     operator_db: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -207,10 +207,10 @@ def test_retirement_http_refuses_retained_backups_then_authorizes_and_audits(
             operator_client.post(
                 base + "/retire", json=payload, headers=operator_headers()
             ).status_code
-            == 204
+            == 409
         )
         assert keys.describe(BANK_KEY).status == KeyStatus.ACTIVE
-        assert "bank_key.retirement_authorized" in set(
+        assert "bank_key.retirement_authorized" not in set(
             operator_db.scalars(select(OperatorAuditLog.action))
         )
     finally:

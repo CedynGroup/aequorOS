@@ -144,9 +144,10 @@ def _load_parties(rc: ResolveContext) -> list[_Party]:
                 RelatedParty.bank_id == rc.bank.id,
                 RelatedParty.status == "active",
             )
-            .order_by(RelatedParty.full_name, RelatedParty.id)
+            .order_by(RelatedParty.id)
         )
     ]
+    parties.sort(key=lambda party: (party.name, str(party.id)))
     by_id = {p.id: p for p in parties}
     if by_id:
         for role in rc.db.scalars(

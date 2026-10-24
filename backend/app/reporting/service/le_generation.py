@@ -1716,12 +1716,12 @@ def _normalized_name(name: str) -> str:
 
 def _related_party_names(db: Session, ctx: TenantContext, bank: Bank) -> frozenset[str]:
     names = db.scalars(
-        select(RelatedParty.full_name).where(
+        select(RelatedParty).where(
             RelatedParty.organization_id == ctx.organization_id,
             RelatedParty.bank_id == bank.id,
         )
     ).all()
-    return frozenset(_normalized_name(name) for name in names)
+    return frozenset(_normalized_name(party.full_name) for party in names)
 
 
 def _funding_entities(

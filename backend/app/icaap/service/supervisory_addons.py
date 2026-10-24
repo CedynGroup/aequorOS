@@ -242,6 +242,7 @@ def create_addon(  # noqa: PLR0913 - a recorded letter is its named parts
     supersedes_addon_id: UUID | None,
 ) -> IcaapSupervisoryAddonRead:
     """Record a supervisory letter as a DRAFT. A second person confirms it."""
+    storage = storage.for_session(db)
     media_type = attachments_service.sniff_media_type(content)
     if media_type is None:
         from fastapi import HTTPException, status  # noqa: PLC0415

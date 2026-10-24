@@ -18,9 +18,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterator
+from copy import copy
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any, BinaryIO, Literal, Protocol, cast
+from typing import Any, BinaryIO, Literal, Protocol, Self, cast
 
 import boto3
 from boto3.exceptions import S3UploadFailedError
@@ -29,6 +30,7 @@ from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.tls import require_boto_tls, require_https
@@ -129,6 +131,11 @@ class S3CompatibleStorageClient(StorageClient):
 
         if client_factory is None:
             require_boto_tls(cast(object, self._s3))
+
+    def for_session(self, db: Session) -> Self:
+        bound = copy(self)
+        bound._encryption = self._encryption.for_session(db)
+        return bound
 
     # -- contract operations ------------------------------------------------
 

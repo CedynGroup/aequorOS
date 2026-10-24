@@ -29,24 +29,21 @@ Storage and operator callers depend on this contract, not boto3 KMS operations.
 Runtime configuration currently accepts only `aws_kms`. Azure, Google, Vault
 and HSM adapters can implement the same conformance suite.
 
-Each object has a random wrapping secret, itself protected in a small Encryption
-SDK message using the bank's KMS keyring. The object SDK message uses that
-secret with an SDK raw AES keyring; the SDK generates and wraps its payload data
-key and owns all encryption formats and integrity checks. AequorOS persists only
-the wrapped secret in `object_key_envelopes`; S3 metadata holds its UUID. This
-extra indirection allows rotation without modifying large object ciphertext,
-locked objects or historical versions. Plaintext secrets live only during one
-operation.
+A bank data-key version is a random secret wrapped in a small Encryption SDK
+message using the bank's KMS keyring. Each object's authenticated context derives
+a distinct wrapping secret from that version; the object SDK message uses it
+with a raw AES keyring. The SDK generates and wraps the actual payload key and
+owns the encryption format and integrity checks. Only the wrapped version and
+its exact KMS reference are persisted in `object_key_envelopes`; S3 metadata
+holds the version UUID.
 
-There is no plaintext data-key cache across operations. Every bank-encrypted
-read, including a previously issued application download link, unwraps through
-the provider again. SDK caching would retain plaintext key material and extend
-access after the bank removes its grant, so immediate refusal takes precedence
-over the optional cache. See
-[AWS Encryption SDK data-key caching](https://docs.aws.amazon.com/encryption-sdk/latest/developer-guide/data-key-caching.html).
-Revocation blocks subsequent unwraps once KMS enforces the permission change; it
-cannot recall plaintext already delivered or stop an operation that already
-obtained its data key.
+Each database unit of work unwraps each required version once, sharing it
+between field loads and session-bound storage. Plaintext version material is
+session-local and excluded from logs; commit, rollback and close discard it.
+Standalone operations own short-lived units. Revocation refuses the next unit
+once KMS enforces the permission change; an already admitted unit may complete.
+No persistent or process-wide plaintext cache is permitted. See the
+[field design](bank_field_encryption.md#keys-and-storage).
 
 ## Bank-side AWS setup
 
@@ -146,15 +143,16 @@ active inspector session uses these routes on the separate operator API:
 | ------ | -------------------------------------------------- | ------------------------------------------------------------------------- |
 | GET    | `/tenants/{org_id}/banks/{bank_id}/encryption-key` | Read custody reference and last checked status                            |
 | PUT    | same                                               | Connect a bank key once; reject replacement without rotation              |
-| POST   | same + `/rotate`                                   | Re-wrap all bank envelopes and atomically switch the key                  |
+| POST   | same + `/rotate`                                   | Publish a new data-key version; see rotation below                        |
 | POST   | same + `/retire`                                   | Authorize retirement only after current references and backup holds clear |
 
 Rotation accepts the same key fields plus a meaningful `reason` and must retain
 the bank's ownership account. Changing providers requires an explicit migration.
 Routes verify the bank belongs to the organization, require staff inspection
 authority and write operator audit events in their transaction. The tenant API
-mounts none of these routes. Status observations do not authorize access: storage contacts the
-provider on every operation, and recovers after the bank restores permission.
+mounts none of these routes. Status observations do not authorize access; provider
+checks and key reuse follow the
+[unit-of-work boundary](bank_field_encryption.md#keys-and-storage).
 
 ## Downloads
 
@@ -172,14 +170,15 @@ S3 URLs; document transfer under bank keys remains follow-up work.
 ## Rotation, backups and recovery
 
 The bank grants access to its replacement key while retaining the old grant.
-Rotation verifies the replacement can encrypt and decrypt, locks the bank key
-record, re-wraps every envelope and commits all wrappers and the reference
-together. Readers hold a shared bank-key lock through unwrap; rotation takes an
-exclusive lock. Readers and uploads arriving during rotation wait and use the
-replacement after commit. Existing operations complete before rotation takes its
-lock. Failed rotation rolls back the transaction. S3 bytes and version IDs do
-not change. KMS automatic material rotation within the same key ARN needs no
-application re-wrap.
+Rotation verifies the replacement and publishes a new immutable data-key
+version in the existing envelope catalogue. Only rotation bookkeeping locks the
+registry. Encryption and downloads use lock-free version lookups; an admitted
+unit of work may finish with its previous version while later work uses the new
+one. Ciphertext records its version UUID, and old versions keep their exact KMS
+references. Failed rotation rolls back the new pointer/version. Object writes
+reference committed versions, so business rollback cannot orphan published
+ciphertext. See [the field design](bank_field_encryption.md#keys-and-storage)
+for bounded key-cache lifetime and versioned encryption.
 
 Keep the old key decrypt-capable until every backup with its old wrappers has
 aged out, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
@@ -187,7 +186,7 @@ Set `ENCRYPTION_BACKUP_RETENTION_DAYS` to at least the longest database
 or object backup retention window before rotation. Rotation records a per-bank
 retention hold; an unset setting keeps that hold indefinitely. Reusing a key
 extends rather than shortens its hold, and a sibling bank still using it remains
-available. Retirement refuses while any bank currently references the key or a
+available. Retirement refuses while any bank or retained envelope references the key or a
 backup hold remains, including holds for other banks sharing the key. It checks
 both the recorded deadline and the current retention setting; lowering the
 setting cannot shorten the recorded hold. The bank administers the actual grant
@@ -217,32 +216,33 @@ the database backup. Use the restore command documented in
 metadata unchanged, then read through `StorageClient`. Restore verifies
 ciphertext checksums before uploading. Without the bank key, even restored
 ciphertext and wrapped keys cannot be read. A copied object can use a newly
-rotated live catalogue because its envelope UUID is stable. An old database
-snapshot, however, contains old wrappers: restore and re-wrap that catalogue
-under bank-approved access before retiring its old key, or retain the old key
-for the snapshot's recovery lifetime. Physical historical database backups are
-immutable and are not rewritten by live rotation.
+rotated live catalogue because its envelope UUID is stable, provided its recorded
+KMS key remains decrypt-capable. An old database snapshot also requires its
+recorded keys for its recovery lifetime; live rotation does not migrate those
+wrappers. Physical historical database backups are immutable and are not
+rewritten by live rotation.
 
-Existing platform-only/plaintext objects need an explicitly planned migration
-before connecting a bank key or enabling mandatory enforcement; the new reader
-refuses them. Do not turn the legacy reader back on to complete onboarding.
+Existing platform-only/plaintext objects are not converted; connected-key reads
+refuse them.
 Exported plaintext that a user already downloaded is outside object-storage
 revocation.
 
 ## Scope and executable evidence
 
-The shared database and its storage encryption remain on the platform key. This
-change protects object artifacts and their object backups, not sensitive columns
-in physical database backups. Field-level encryption is
-[issue 353](https://github.com/CedynGroup/aequorOS/issues/353); its provider
-seam is `KeyProvider`. Signing keys and credential custody remain
+The shared database and its storage encryption remain on the platform key.
+Object artifacts and their object backups use the bank-held hierarchy above.
+[Sensitive-field encryption](bank_field_encryption.md) reuses its `KeyProvider`
+and envelope catalogue for newly written borrower identities and operational
+payloads. That document lists the covered fields and numeric-only BI behavior.
+Existing rows are not converted; demo datasets are re-imported after connecting
+the bank key. Existing physical backups retain their original protection.
+Signing keys and credential custody remain
 [issue 355](https://github.com/CedynGroup/aequorOS/issues/355). Scheduled
 key-health monitoring, alerting and support workflows remain
 [issue 354](https://github.com/CedynGroup/aequorOS/issues/354); this change
 supplies the provider `describe` contract, onboarding probe results and checked
 timestamps. No standalone health-probe endpoint is exposed. These follow-ups are
-required before claiming sensitive database backup protection or regulatory
-approval of the complete service.
+required before claiming regulatory approval of the complete service.
 
 `LocalKeyProvider` supports injected hermetic tests and the provider conformance
 suite. Local evaluation without an AWS KMS account uses the existing platform

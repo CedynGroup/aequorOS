@@ -144,7 +144,10 @@
       "aqs_api": ["INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
     },
-    "bank_encryption_keys": {},
+    "bank_encryption_keys": {
+      "aqs_api": ["SELECT"],
+      "aqs_worker": ["SELECT"]
+    },
     "bank_financial_facts": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]

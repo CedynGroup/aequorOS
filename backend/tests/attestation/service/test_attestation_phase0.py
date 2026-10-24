@@ -497,7 +497,15 @@ def test_projection_covers_every_business_column_of_every_register_table(
     for row in register_state.register_state_rows(db_session, MAKER, SAMPLE_BANK_ID):
         projected.setdefault(str(row["table"]), set()).update(row["values"])
 
-    bookkeeping = {"id", "organization_id", "bank_id", "created_at", "updated_at"}
+    # Blind indexes depend on key material, not reportable register values.
+    bookkeeping = {
+        "id",
+        "organization_id",
+        "bank_id",
+        "created_at",
+        "updated_at",
+        "full_name_blind_index",
+    }
     for model in (
         InstitutionProfile,
         RelatedParty,

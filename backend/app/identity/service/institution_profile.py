@@ -25,6 +25,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.key_management.fields import blind_index, normalize
 from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.models.bank import Bank
@@ -499,7 +500,6 @@ def create_related_party(
             "bank_id": str(bank.id),
             "reason": payload.reason,
             "party_type": payload.party_type,
-            "full_name": payload.full_name,
             "roles": [role.role for role in payload.roles],
         },
     )
@@ -526,7 +526,6 @@ def update_related_party(
             "bank_id": str(bank.id),
             "reason": payload.reason,
             "party_type": payload.party_type,
-            "full_name": payload.full_name,
             "roles": [role.role for role in payload.roles],
         },
     )
@@ -884,3 +883,29 @@ def profile_exists(db: Session, ctx: TenantContext, bank_id: str) -> bool:
         )
         is not None
     )
+
+
+def find_related_parties_by_name(
+    db: Session, ctx: TenantContext, bank_id: str, name: str
+) -> list[RelatedPartyRead]:
+    """Bank-scoped exact name lookup with decrypted candidate confirmation."""
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    token = blind_index(
+        db,
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        domain="related_party.full_name",
+        value=name,
+        normalization="name",
+    )
+    return [
+        _read_party(db, party)
+        for party in db.scalars(
+            select(RelatedParty).where(
+                RelatedParty.organization_id == ctx.organization_id,
+                RelatedParty.bank_id == bank.id,
+                RelatedParty.full_name_blind_index == token,
+            )
+        )
+        if normalize(party.full_name, "name") == normalize(name, "name")
+    ]
