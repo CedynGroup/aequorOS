@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, cast
 
 from sqlalchemy.orm import Session
 
@@ -27,7 +27,8 @@ def rule_in_force(
             db, bank, as_of_dates=(when,), record=False
         )
         resolved = resolver.try_resolve(definition.effective_from_parameter, as_of=when)
-        raw = resolved.value_json.get("date") if resolved and resolved.value_json else None
+        body = cast("Mapping[str, object] | None", resolved.value_json) if resolved else None
+        raw = body.get("date") if body else None
         try:
             effective = date.fromisoformat(raw) if isinstance(raw, str) else None
         except ValueError:
