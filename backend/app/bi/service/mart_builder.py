@@ -120,6 +120,7 @@ from app.bi.service.compiler import compile_query
 from app.bi.service.errors import BiQueryError
 from app.bi.service.identity_policy import connected
 from app.bi.service.versions import BUILDER_VERSION
+from app.core.key_management.maintenance import lock_bank
 from app.credit.public import loan_classification
 from app.data_engine.public import (
     CanonicalCounterparty,
@@ -2075,6 +2076,7 @@ def _build_scopes(  # noqa: PLR0913 - one build carries its whole identity
 ) -> None:
     """Every scope in order, inside the caller's savepoint."""
     organization_id, bank_id = ctx.organization_id, bank.id
+    lock_bank(db, organization_id, bank_id)
     base_currency = jurisdictions.base_currency(bank)
     regime = institution_types.capital_regime(db, bank)
     institution_class = institution_types.institution_class(db, bank)

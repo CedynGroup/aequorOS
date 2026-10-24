@@ -54,7 +54,7 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     key: KeyReference,
     providers: ProviderFactory = provider_for,
 ) -> BankEncryptionKey:
-    from app.core.key_management.maintenance import lock_bank, reindex_bank  # noqa: PLC0415 - cycle
+    from app.core.key_management.maintenance import lock_bank  # noqa: PLC0415 - cycle
 
     lock_bank(db, organization_id, bank_id, exclusive=True)
     _lock_keys(db, key)
@@ -72,9 +72,8 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     )
     db.add(row)
     db.flush()
-    _new_version(db, row, resolved, providers)
+    initialize_version(db, row, providers)
     _unit(db).banks.pop((organization_id, bank_id), None)
-    reindex_bank(db, row)
     return row
 
 
@@ -260,6 +259,15 @@ def current_version(db: Session, row: BankEncryptionKey) -> UUID:
     return unit.current[scope]
 
 
+def initialize_version(
+    db: Session, row: BankEncryptionKey, providers: ProviderFactory = provider_for
+) -> None:
+    from app.core.key_management.maintenance import reindex_bank  # noqa: PLC0415 - cycle
+
+    _new_version(db, row, reference(row), providers)
+    reindex_bank(db, row)
+
+
 def prepare_envelope(
     db: Session,
     row: BankEncryptionKey,
@@ -289,11 +297,11 @@ def open_envelope(
         if envelope is None:
             raise KeyIntegrityError("The data key does not belong to this bank and record.")
         unit.envelopes[envelope_id] = envelope
+    bank_version = context_digest(version_context(row.organization_id, row.bank_id))
     if (
         envelope.bank_id != row.bank_id
         or envelope.organization_id != row.organization_id
-        or envelope.context_digest
-        != context_digest(version_context(row.organization_id, row.bank_id))
+        or envelope.context_digest not in {bank_version, context_digest(context)}
     ):
         raise KeyIntegrityError("The data key does not belong to this bank and record.")
     plaintext = unit.material.get(envelope_id)
@@ -304,9 +312,10 @@ def open_envelope(
             wrapping_context(row.bank_id, envelope.context_digest),
         )
         unit.material[envelope_id] = plaintext
-    plaintext = hmac.new(
-        plaintext, ("bank-payload:" + context_digest(context)).encode(), hashlib.sha256
-    ).digest()
+    if envelope.context_digest == bank_version:
+        plaintext = hmac.new(
+            plaintext, ("bank-payload:" + context_digest(context)).encode(), hashlib.sha256
+        ).digest()
     return ObjectKey(envelope_id, envelope.key_id, plaintext)
 
 

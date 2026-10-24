@@ -101,6 +101,15 @@ the latest job's status and progress. Connection of an existing bank enqueues th
 job automatically; ordinary key rotation does not. No bank financial data is
 created by key connection or migration.
 
+For an existing aequorOS deployment, the schema upgrade backfills all five
+identity indexes before switching their consumers. It records the current KMS
+reference on each legacy object envelope, creates current/index data-key versions
+for every connected bank (including empty banks), and reindexes connected banks
+under their index key. The upgrade requires access to those bank KMS keys; a
+provider refusal rolls back the upgrade. Legacy object envelopes continue to
+authenticate their original per-object context and unwrap the original secret
+until editable objects move; retained versions keep that decryption path.
+
 The core worker runs `bank_reencrypt`. Progress records the target version,
 field-table/row checkpoint, rewritten field and object counts, retained counts
 by type, and a human-readable summary. Each field batch commits its checkpoint
@@ -118,8 +127,17 @@ unchanged, including its chain and captured columns. Audit records lack a
 universal bank ID, so retained audit counts conservatively include the entire
 organization's tenant and operator audit history, labelled as organization scope.
 
+Editable BI identity copies are included bank-wide, across all historical dates:
+counterparty dimension names and source references become UUID aliases, dimension
+group references are cleared, and daily/EOM position group copies are cleared.
+The builder participates in the same writer barrier, and final verification
+checks these copies alongside protected fields. Numeric mart values remain intact.
+
 Current editable stored objects are authenticated and conditionally replaced
-using their ETag. Legacy platform-protected content is accepted only by this
+using their ETag, including conditional multipart completion for large objects.
+Uploads use bounded parts under the same size policy as ordinary storage writes.
+Each inventory pass handles multiple objects, refreshing key state after commits.
+Legacy platform-protected content is accepted only by this
 maintenance path after checksum verification; normal connected-bank reads keep
 refusing it. A concurrent changed object defeats the conditional replacement and
 is checked again. Historical versions, compliance/legal-hold versions, and any

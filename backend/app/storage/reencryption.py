@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Iterable, Iterator
+from contextlib import suppress
 from datetime import UTC, datetime
 from tempfile import SpooledTemporaryFile
 from typing import BinaryIO, Protocol, cast
@@ -24,6 +25,8 @@ from app.storage.client import (
 )
 from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption
 
+MULTIPART_SIZE = 16 * 1024 * 1024
+
 
 class MaintenancePaginator(Protocol):
     def paginate(self, **kwargs: object) -> Iterable[object]: ...
@@ -34,6 +37,10 @@ class S3MaintenanceClient(Protocol):
     def head_object(self, **kwargs: object) -> dict[str, object]: ...
     def get_object(self, **kwargs: object) -> dict[str, object]: ...
     def put_object(self, **kwargs: object) -> dict[str, object]: ...
+    def create_multipart_upload(self, **kwargs: object) -> dict[str, object]: ...
+    def upload_part(self, **kwargs: object) -> dict[str, object]: ...
+    def complete_multipart_upload(self, **kwargs: object) -> dict[str, object]: ...
+    def abort_multipart_upload(self, **kwargs: object) -> dict[str, object]: ...
 
 
 class _Version(BaseModel):
@@ -114,6 +121,30 @@ def _legacy_plaintext(body: BinaryIO, checksum: str) -> BinaryIO:
         body.close()
 
 
+def _publish(client: S3MaintenanceClient, data: BinaryIO, arguments: dict[str, object]) -> None:
+    size = data.seek(0, 2)
+    _ = data.seek(0)
+    if size < MULTIPART_SIZE:
+        _ = client.put_object(**arguments, Body=data)
+        return
+    options = {key: value for key, value in arguments.items() if key != "IfMatch"}
+    upload = client.create_multipart_upload(**options)
+    location = {key: arguments[key] for key in ("Bucket", "Key")}
+    location["UploadId"] = upload["UploadId"]
+    parts: list[dict[str, object]] = []
+    try:
+        for number, body in enumerate(iter(lambda: data.read(MULTIPART_SIZE), b""), start=1):
+            response = client.upload_part(**location, PartNumber=number, Body=body)
+            parts.append({"ETag": response["ETag"], "PartNumber": number})
+        _ = client.complete_multipart_upload(
+            **location, MultipartUpload={"Parts": parts}, IfMatch=arguments["IfMatch"]
+        )
+    except BaseException:
+        with suppress(ClientError, BotoCoreError):
+            _ = client.abort_multipart_upload(**location)
+        raise
+
+
 def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
     client: S3MaintenanceClient,
     env: str,
@@ -160,14 +191,13 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
                 arguments: dict[str, object] = {
                     "Bucket": bucket,
                     "Key": location.object_path,
-                    "Body": encrypted,
                     "Metadata": headers,
                     "ContentType": source.get("ContentType", "application/octet-stream"),
                     "IfMatch": source["ETag"],
                 }
                 if sse_key:
                     arguments.update(ServerSideEncryption="aws:kms", SSEKMSKeyId=sse_key)
-                _ = client.put_object(**arguments)
+                _publish(client, encrypted, arguments)
             finally:
                 encrypted.close()
             return True

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import cast
 
 from pydantic import TypeAdapter
@@ -193,6 +193,40 @@ def rewrite_row(
             .values(**changes)
         )
     return len(changes) - int("updated_at" in changes)
+
+
+def bi_identity_updates(
+    db: Session, key: BankEncryptionKey
+) -> Iterator[tuple[Table, list[ColumnElement[bool]], dict[str, object]]]:
+    for name in ("bi_dim_counterparty", "bi_fact_position_daily", "bi_fact_position_eom"):
+        table = Base.metadata.tables[name]
+        predicates = [
+            table.c.organization_id == key.organization_id,
+            table.c.bank_id == key.bank_id,
+        ]
+        if name == "bi_dim_counterparty":
+            for result in db.execute(select(table).where(*predicates)).mappings():
+                row = cast(Mapping[str, object], result)
+                alias = str(row["counterparty_id"])
+                if (
+                    row["name"] != alias
+                    or row["source_reference"] != alias
+                    or row["group_reference"] is not None
+                ):
+                    yield (
+                        table,
+                        [*predicates, table.c.counterparty_id == row["counterparty_id"]],
+                        {"name": alias, "source_reference": alias, "group_reference": None},
+                    )
+        else:
+            predicates.append(table.c.counterparty_group.is_not(None))
+            if db.execute(select(table.c.bank_id).where(*predicates).limit(1)).first() is not None:
+                yield table, predicates, {"counterparty_group": None}
+
+
+def rewrite_bi_identities(db: Session, key: BankEncryptionKey) -> None:
+    for table, predicates, values in bi_identity_updates(db, key):
+        _ = db.execute(table.update().where(*predicates).values(**values))
 
 
 def retained_fields(db: Session, key: BankEncryptionKey) -> dict[str, int]:

@@ -82,11 +82,9 @@ _NOT_FOUND_CODES = {"NoSuchKey", "NoSuchBucket", "NoSuchVersion", "404", "NotFou
 # every part except the last to be >= 5 MiB, so the chunk size stays comfortably
 # above that. This makes writes size-independent — the correct fix, not a cap on
 # how much data a bank can load.
-_MULTIPART_THRESHOLD_BYTES = 16 * 1024 * 1024
-_MULTIPART_CHUNKSIZE_BYTES = 16 * 1024 * 1024
 _UPLOAD_TRANSFER_CONFIG = TransferConfig(
-    multipart_threshold=_MULTIPART_THRESHOLD_BYTES,
-    multipart_chunksize=_MULTIPART_CHUNKSIZE_BYTES,
+    multipart_threshold=reencryption.MULTIPART_SIZE,
+    multipart_chunksize=reencryption.MULTIPART_SIZE,
     use_threads=True,
 )
 

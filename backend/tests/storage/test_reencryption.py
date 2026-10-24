@@ -1,19 +1,32 @@
 from __future__ import annotations
 
 import io
-from typing import cast
-from uuid import UUID
+from collections.abc import Iterator
+from typing import Protocol, cast
+from uuid import UUID, uuid4
 
 import pytest
+from alembic.script import ScriptDirectory
+from botocore.exceptions import ClientError
+from sqlalchemy import delete
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
-from app.core.key_management import reencryption, registry
+from app.core.key_management import reencryption, registry, sdk
 from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.types import KeyUnavailableError
+from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
+from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
+from app.identity.public import Bank
 from app.models.risk import StoredObject
 from app.storage import reencryption as objects
-from app.storage.client import StorageAccessError, StorageBackendError, StorageLocation
-from app.storage.encryption import ObjectEncryption
+from app.storage.client import (
+    EncryptionInventoryItem,
+    StorageAccessError,
+    StorageBackendError,
+    StorageLocation,
+)
+from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption, object_context
+from tests.db.test_postgres_migrations import alembic_config_for_app
 from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption import (
     KEY,
@@ -115,19 +128,26 @@ def test_object_resume_after_publication_keeps_retained_version_and_retirement_b
         registry.authorize_retirement(db_session, key, KEY)
 
 
+@pytest.mark.parametrize("multipart", [False, True])
 def test_conditional_publication_preserves_concurrent_new_content(
     bank_storage: BankStorage,
     db_session: Session,
+    multipart: bool,
 ) -> None:
     location = StorageLocation(SLUG, "temp", "synthetic/race.csv")
+    original = b"old" * (objects.MULTIPART_SIZE // 3 + 1) if multipart else b"old"
     _ = bank_storage.s3.put_object(
         Bucket=location.bucket_name("dev"),
         Key=location.object_path,
-        Body=b"old",
-        Metadata=metadata_for(SLUG, "temp", b"old").to_object_metadata(),
+        Body=original,
+        Metadata=metadata_for(SLUG, "temp", original).to_object_metadata(),
     )
     [item] = list(bank_storage.storage.encryption_inventory(SLUG))
     client = cast(objects.S3MaintenanceClient, bank_storage.s3)
+    aborted: list[object] = []
+    original_etag = client.head_object(
+        Bucket=location.bucket_name("dev"), Key=location.object_path
+    )["ETag"]
 
     class RacingClient:
         def head_object(self, **kwargs: object) -> dict[str, object]:
@@ -145,6 +165,25 @@ def test_conditional_publication_preserves_concurrent_new_content(
             )
             return client.put_object(**kwargs)
 
+        def create_multipart_upload(self, **kwargs: object) -> dict[str, object]:
+            return client.create_multipart_upload(**kwargs)
+
+        def upload_part(self, **kwargs: object) -> dict[str, object]:
+            return client.upload_part(**kwargs)
+
+        def complete_multipart_upload(self, **kwargs: object) -> dict[str, object]:
+            assert kwargs["IfMatch"] == original_etag
+            bank_storage.storage.write(
+                location, io.BytesIO(b"new"), metadata_for(SLUG, "temp", b"new")
+            )
+            current = client.head_object(Bucket=kwargs["Bucket"], Key=kwargs["Key"])
+            assert current["ETag"] != kwargs["IfMatch"]
+            raise ClientError({"Error": {"Code": "PreconditionFailed"}}, "CompleteMultipartUpload")
+
+        def abort_multipart_upload(self, **kwargs: object) -> dict[str, object]:
+            aborted.append(kwargs["UploadId"])
+            return client.abort_multipart_upload(**kwargs)
+
     assert not objects.reencrypt(
         RacingClient(),
         "dev",
@@ -159,6 +198,249 @@ def test_conditional_publication_preserves_concurrent_new_content(
     )
     _, body = bank_storage.storage.read(location)
     assert body.read() == b"new"
+    body.close()
+    assert len(aborted) == int(multipart)
+
+
+def test_large_object_reencryption_publishes_bounded_parts(
+    bank_storage: BankStorage, db_session: Session
+) -> None:
+    location = StorageLocation(SLUG, "temp", "synthetic/large.csv")
+    content = b"x" * (objects.MULTIPART_SIZE + 1024)
+    _ = bank_storage.s3.put_object(
+        Bucket=location.bucket_name("dev"),
+        Key=location.object_path,
+        Body=content,
+        Metadata=metadata_for(SLUG, "temp", content).to_object_metadata(),
+    )
+    [item] = list(bank_storage.storage.encryption_inventory(SLUG))
+    client = cast(objects.S3MaintenanceClient, bank_storage.s3)
+    parts: list[int] = []
+
+    class BoundedClient:
+        def head_object(self, **kwargs: object) -> dict[str, object]:
+            return client.head_object(**kwargs)
+
+        def get_object(self, **kwargs: object) -> dict[str, object]:
+            return client.get_object(**kwargs)
+
+        def get_paginator(self, operation: str) -> objects.MaintenancePaginator:
+            return client.get_paginator(operation)
+
+        def put_object(self, **kwargs: object) -> dict[str, object]:
+            pytest.fail("Large objects must use bounded multipart publication")
+
+        def create_multipart_upload(self, **kwargs: object) -> dict[str, object]:
+            return client.create_multipart_upload(**kwargs)
+
+        def upload_part(self, **kwargs: object) -> dict[str, object]:
+            body = kwargs["Body"]
+            assert isinstance(body, bytes) and len(body) <= objects.MULTIPART_SIZE
+            parts.append(len(body))
+            return client.upload_part(**kwargs)
+
+        def complete_multipart_upload(self, **kwargs: object) -> dict[str, object]:
+            assert kwargs["IfMatch"]
+            return client.complete_multipart_upload(**kwargs)
+
+        def abort_multipart_upload(self, **kwargs: object) -> dict[str, object]:
+            return client.abort_multipart_upload(**kwargs)
+
+    assert objects.reencrypt(
+        BoundedClient(),
+        "dev",
+        ObjectEncryption(
+            registry.DatabaseEnvelopeStore(
+                lambda: Session(db_session.get_bind(), join_transaction_mode="create_savepoint"),
+                lambda _: bank_storage.provider,
+            )
+        ),
+        item,
+        None,
+    )
+    assert len(parts) == 2
+    _, body = bank_storage.storage.read(location)
+    assert body.read() == content
+    body.close()
+
+
+@pytest.mark.parametrize("rotate_during_pass", [False, True])
+def test_object_job_scans_inventory_a_constant_number_of_times(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    rotate_during_pass: bool,
+) -> None:
+    for index in range(12):
+        location = StorageLocation(SLUG, "raw", f"synthetic/{index}.csv")
+        _ = bank_storage.s3.put_object(
+            Bucket=location.bucket_name("dev"),
+            Key=location.object_path,
+            Body=b"synthetic",
+            Metadata=metadata_for(SLUG, "raw", b"synthetic").to_object_metadata(),
+        )
+    monkeypatch.setattr(registry, "provider_for", lambda _: bank_storage.provider)
+    real_inventory = objects.inventory
+    real_reencrypt = objects.reencrypt
+    scans = 0
+    rotated = False
+
+    def migrate_object(
+        client: objects.S3MaintenanceClient,
+        env: str,
+        encryption: ObjectEncryption,
+        item: EncryptionInventoryItem,
+        sse_key: str | None,
+    ) -> bool:
+        nonlocal rotated
+        result = real_reencrypt(client, env, encryption, item, sse_key)
+        if result and rotate_during_pass and not rotated:
+            rotated = True
+            key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
+            registry.rotate(db_session, key, NEXT_KEY, lambda _: bank_storage.provider)
+        return result
+
+    def inventory(
+        client: objects.S3MaintenanceClient, env: str, slug: str
+    ) -> Iterator[EncryptionInventoryItem]:
+        nonlocal scans
+        scans += 1
+        yield from real_inventory(client, env, slug)
+
+    monkeypatch.setattr(objects, "inventory", inventory)
+    monkeypatch.setattr(objects, "reencrypt", migrate_object)
+    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    db_session.commit()
+    reencryption.run(db_session, job, bank_storage.storage)
+    progress = reencryption.Progress.model_validate(job.progress)
+    expected = 12 + int(rotate_during_pass)
+    assert progress.objects_rewritten == expected
+    assert progress.retained == {"stored_object_versions:raw": expected}
+    assert scans <= 3 + int(rotate_during_pass)
+    assert all(
+        item.envelope_id == progress.target_version
+        for item in bank_storage.storage.encryption_inventory(SLUG)
+        if not item.retained
+    )
+
+
+class VersionMigration(Protocol):
+    def _backfill_references(self, connection: Connection) -> None: ...
+    def _backfill_versions(self, connection: Connection) -> None: ...
+
+
+def test_existing_bank_upgrade_preserves_legacy_objects_and_initializes_empty_banks(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
+    key.current_version_id = key.index_version_id = None
+    db_session.flush()
+    _ = db_session.execute(delete(ObjectKeyEnvelope))
+    location = StorageLocation(SLUG, "raw", "synthetic/old-envelope.csv")
+    content = b"synthetic legacy encrypted object"
+    metadata = metadata_for(SLUG, "raw", content)
+    context = object_context(location, metadata.checksum_sha256)
+    digest = registry.context_digest(context)
+    secret = bank_storage.provider.generate_data_key(
+        KEY, registry.wrapping_context(key.bank_id, digest)
+    )
+    envelope_id = uuid4()
+    db_session.add(
+        ObjectKeyEnvelope(
+            id=envelope_id,
+            bank_id=key.bank_id,
+            organization_id=ORG_1,
+            context_digest=digest,
+            wrapped_key=secret.wrapped,
+            provider="",
+            key_id="",
+            region="",
+            owner_account="",
+        )
+    )
+    db_session.add(
+        Bank(
+            id="BK-EMPTY001",
+            organization_id=ORG_1,
+            name="Synthetic empty bank",
+            short_name="Empty",
+            jurisdiction_code="GH",
+            currency="GHS",
+            institution_type="universal_bank",
+            license_type="universal_bank",
+            storage_slug="synthetic-empty",
+        )
+    )
+    db_session.flush()
+    db_session.add(
+        BankEncryptionKey(
+            bank_id="BK-EMPTY001",
+            organization_id=ORG_1,
+            storage_slug="synthetic-empty",
+            provider=KEY.provider,
+            key_id=KEY.key_id,
+            region=KEY.region,
+            owner_account=KEY.owner_account,
+            status="active",
+        )
+    )
+    db_session.commit()
+    encrypted = sdk.transform_file(io.BytesIO(content), secret.plaintext, context)
+    try:
+        _ = bank_storage.s3.put_object(
+            Bucket=location.bucket_name("dev"),
+            Key=location.object_path,
+            Body=encrypted,
+            Metadata={
+                **metadata.to_object_metadata(),
+                "encryption-format": ENCRYPTION_FORMAT,
+                "key-envelope-id": str(envelope_id),
+                "kms-key-id": KEY.key_id,
+            },
+        )
+    finally:
+        encrypted.close()
+    monkeypatch.setattr(registry, "provider_for", lambda _: bank_storage.provider)
+    revision = ScriptDirectory.from_config(alembic_config_for_app()).get_revision("202610220102")
+    assert revision is not None
+    migration = cast(VersionMigration, cast(object, revision.module))
+    migration._backfill_references(db_session.connection())
+    migration._backfill_versions(db_session.connection())
+    db_session.commit()
+    db_session.expunge_all()
+    for bank in ("BK-SAMP0001", "BK-EMPTY001"):
+        config = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=bank)
+        assert config.current_version_id is not None
+        assert config.current_version_id == config.index_version_id
+        assert registry.prepare_envelope(
+            db_session, config, {"purpose": "synthetic"}, lambda _: bank_storage.provider
+        ).plaintext
+    envelope = db_session.get(ObjectKeyEnvelope, envelope_id)
+    assert envelope is not None and registry.reference(envelope) == KEY
+    _, body = bank_storage.storage.read(location)
+    assert body.read() == content
+    body.close()
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
+    with pytest.raises(KeyIntegrityError):
+        registry.open_envelope(
+            db_session,
+            key,
+            envelope_id,
+            {**context, "object_path": "other"},
+            lambda _: bank_storage.provider,
+        )
+    registry.rotate(db_session, key, NEXT_KEY, lambda _: bank_storage.provider)
+    db_session.commit()
+    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    db_session.commit()
+    reencryption.run(db_session, job, bank_storage.storage)
+    progress = reencryption.Progress.model_validate(job.progress)
+    assert progress.objects_rewritten == 1
+    assert progress.retained == {"stored_object_versions:raw": 1}
+    _, body = bank_storage.storage.read(location)
+    assert body.read() == content
     body.close()
 
 

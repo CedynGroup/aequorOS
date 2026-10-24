@@ -6,8 +6,13 @@ Revises: 202610220101
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session
 
 from alembic import op
+from app.core.key_management import registry
+from app.core.key_management.models import BankEncryptionKey
+from app.db.session import force_rls_suspended
 
 revision = "202610220102"
 down_revision = "202610220101"
@@ -15,9 +20,43 @@ branch_labels = None
 depends_on = None
 
 
+def _backfill_references(connection: Connection) -> None:
+    metadata = sa.MetaData()
+    envelopes = sa.Table("object_key_envelopes", metadata, autoload_with=connection)
+    keys = sa.Table("bank_encryption_keys", metadata, autoload_with=connection)
+    _ = connection.execute(
+        envelopes.update()
+        .where(
+            envelopes.c.bank_id == keys.c.bank_id,
+            envelopes.c.organization_id == keys.c.organization_id,
+        )
+        .values(
+            **{name: keys.c[name] for name in ("provider", "key_id", "region", "owner_account")}
+        )
+    )
+
+
+def _backfill_versions(connection: Connection) -> None:
+    with Session(bind=connection) as db:
+        for key in db.scalars(sa.select(BankEncryptionKey)).all():
+            db.info["organization_id"] = key.organization_id
+            if connection.dialect.name == "postgresql":
+                _ = db.execute(
+                    sa.text("SELECT set_config('app.organization_id', :organization, true)"),
+                    {"organization": key.organization_id},
+                )
+            registry.initialize_version(db, key, registry.provider_for)
+        db.commit()
+
+
 def upgrade() -> None:
     for name, size in (("provider", 32), ("key_id", 2048), ("region", 64), ("owner_account", 12)):
-        op.add_column("object_key_envelopes", sa.Column(name, sa.String(size), nullable=False))
+        op.add_column("object_key_envelopes", sa.Column(name, sa.String(size), nullable=True))
+    connection = op.get_bind()
+    with force_rls_suspended(connection, "object_key_envelopes"):
+        _backfill_references(connection)
+    for name in ("provider", "key_id", "region", "owner_account"):
+        op.alter_column("object_key_envelopes", name, nullable=False)
     op.create_unique_constraint(
         "uq_object_envelope_scope", "object_key_envelopes", ["id", "bank_id", "organization_id"]
     )
@@ -34,6 +73,7 @@ def upgrade() -> None:
             deferrable=True,
             initially="DEFERRED",
         )
+    _backfill_versions(connection)
 
 
 def downgrade() -> None:

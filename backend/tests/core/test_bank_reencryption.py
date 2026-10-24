@@ -1,30 +1,36 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import cast
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
-from app.core.key_management import reencryption, registry
+from app.bi.domain.catalogue import catalogue
+from app.bi.models.marts import BiDimCounterparty, BiFactPositionDaily, BiFactPositionEom
+from app.bi.schemas.query import BiQuery
+from app.bi.service.compiler import compile_query
+from app.core.key_management import maintenance, reencryption, registry
 from app.core.key_management.fields import SealedField, blind_index
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, RetainedBankKey
 from app.core.key_management.settings import get_key_settings
-from app.core.key_management.types import KeyUnavailableError
+from app.core.key_management.types import KeyReference, KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
 from app.identity.public import Bank
 from app.models.audit_event import AuditEvent
-from app.models.canonical import CanonicalCounterparty
+from app.models.canonical import CanonicalCounterparty, CanonicalPositionSnapshot
 from app.models.job import Job
 from app.reporting.models.packages import RegulatoryPackage
 from app.services import canonical_withdrawal
 from app.services.canonical_withdrawal import WithdrawalError
 from app.storage.client import EncryptionInventoryItem, StorageBackendError
+from tests.bi.service.test_mart_builder import AS_OF, build, resnapshot_loan_1, seed_book
 from tests.core.test_bank_field_encryption import (
     BANK_A,
     BANK_B,
@@ -275,3 +281,118 @@ def test_child_fields_are_scoped_and_audit_history_is_retained(
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.retained == {"audit_events (organization scope)": 1}
     assert progress.summary == "complete except 1 retained immutable records"
+
+
+def test_job_clears_historical_bi_identity_copies_and_keeps_numeric_queries(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bank = seed_book(db_session, live=False)
+    party = db_session.scalar(
+        select(CanonicalCounterparty).where(CanonicalCounterparty.bank_id == bank.id).limit(1)
+    )
+    assert party is not None
+    party.group_reference = "synthetic-historical-group"
+    db_session.commit()
+    _ = build(db_session)
+    historical = date(2026, 5, 31)
+    resnapshot_loan_1(db_session, historical, balance="100")
+    snapshot = db_session.scalar(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPositionSnapshot.as_of_date == historical,
+        )
+    )
+    assert snapshot is not None
+    snapshot.counterparty_id = party.id
+    db_session.flush()
+    _ = build(db_session, historical)
+    orphan_id = uuid4()
+    db_session.add(
+        BiDimCounterparty(
+            organization_id=ORG_1,
+            bank_id=bank.id,
+            counterparty_id=orphan_id,
+            name="Synthetic historical identity",
+            source_reference="synthetic-history",
+            group_reference="synthetic-history-group",
+            counterparty_type="RETAIL_INDIVIDUAL",
+            builder_version=1,
+            built_at=utc_now(),
+        )
+    )
+    db_session.commit()
+    query = BiQuery.model_validate(
+        {"measures": ["loans.balance_rc"], "time": {"as_of": AS_OF.isoformat()}}
+    )
+
+    def numeric_rows() -> list[object]:
+        compiled = compile_query(
+            db_session, catalogue(), query, organization_id=ORG_1, bank_id=bank.id
+        )
+        return list(db_session.execute(compiled.select).all())
+
+    before = numeric_rows()
+    assert before
+    for model in (BiFactPositionDaily, BiFactPositionEom):
+        assert (
+            db_session.scalar(
+                select(model.counterparty_group)
+                .where(model.bank_id == bank.id, model.counterparty_group.is_not(None))
+                .limit(1)
+            )
+            is not None
+        )
+    provider = LocalKeyProvider()
+    reference = KeyReference("aws_kms", "synthetic-bi-upgrade", "us-east-1", "111122223333")
+    provider.add_key(reference)
+    monkeypatch.setattr(registry, "provider_for", lambda _: provider)
+    registry.register(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=bank.id,
+        storage_slug="synthetic-bi-upgrade",
+        key=reference,
+        providers=lambda _: provider,
+    )
+    db_session.commit()
+
+    class LateIdentityStorage(EmptyStorage):
+        dirty = True
+
+        def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
+            if self.dirty:
+                self.dirty = False
+                _ = db_session.execute(
+                    update(BiDimCounterparty)
+                    .where(
+                        BiDimCounterparty.bank_id == bank.id,
+                        BiDimCounterparty.counterparty_id == orphan_id,
+                    )
+                    .values(name="Synthetic late identity")
+                )
+                for model in (BiFactPositionDaily, BiFactPositionEom):
+                    _ = db_session.execute(
+                        update(model)
+                        .where(model.bank_id == bank.id)
+                        .values(counterparty_group="synthetic-late-group")
+                    )
+            return super().encryption_inventory(institution_slug)
+
+    job = reencryption.enqueue(db_session, ORG_1, bank.id)
+    db_session.commit()
+    reencryption.run(db_session, job, LateIdentityStorage())
+    key = registry.bank_key(db_session, ORG_1, bank.id)
+    assert key is not None
+    assert list(maintenance.bi_identity_updates(db_session, key)) == []
+    for row in db_session.execute(
+        select(BiDimCounterparty.__table__).where(BiDimCounterparty.bank_id == bank.id)
+    ).mappings():
+        assert row["name"] == row["source_reference"] == str(cast(object, row["counterparty_id"]))
+        assert row["group_reference"] is None
+    for model in (BiFactPositionDaily, BiFactPositionEom):
+        rows = db_session.execute(
+            select(model.as_of_date, model.counterparty_group).where(model.bank_id == bank.id)
+        ).all()
+        assert {row.as_of_date for row in rows} == {historical, AS_OF}
+        assert all(row.counterparty_group is None for row in rows)
+    assert numeric_rows() == before

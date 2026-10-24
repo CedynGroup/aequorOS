@@ -172,18 +172,29 @@ def run(db: Session, job: Job, storage: StorageClient | None = None) -> None:  #
             _save(db, job, progress)
             continue
 
+        maintenance.rewrite_bi_identities(db, key)
+        _save(db, job, progress)
+        key = registry.bank_key(db, organization, bank)
+        if key is None:
+            raise KeyUnavailableError("The bank encryption key is not connected.")
+        if key.current_version_id != progress.target_version:
+            continue
         client = (storage or get_storage_client()).for_session(db)
         pinned = _pinned_versions(db, organization, bank, key.storage_slug)
         moved = False
         for item in client.encryption_inventory(key.storage_slug):
+            key = registry.bank_key(db, organization, bank)
+            if key is None:
+                raise KeyUnavailableError("The bank encryption key is not connected.")
+            if key.current_version_id != progress.target_version:
+                moved = True
+                break
             if item.envelope_id == key.current_version_id or _retained(item, pinned):
                 continue
             if client.reencrypt(item):
                 progress.objects_rewritten += 1
             moved = True
             _save(db, job, progress)
-            # Refresh the transaction-local version before any further writes.
-            break
         if moved:
             continue
 
@@ -195,7 +206,7 @@ def run(db: Session, job: Job, storage: StorageClient | None = None) -> None:  #
         if key.current_version_id != progress.target_version:
             db.commit()
             continue
-        pending = False
+        pending = next(maintenance.bi_identity_updates(db, key), None) is not None
         for table in tables:
             for row in db.execute(
                 select(table).where(*maintenance.scope(table, organization, bank))
