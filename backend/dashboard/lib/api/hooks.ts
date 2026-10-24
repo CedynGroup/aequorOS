@@ -21,6 +21,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type {
   LiveModule,
   NotificationListRead,
+  ReturnTemplateListRead,
   AnalysisRunCreate,
   SavedAnalysisCreate,
   StressScenarioCreate,
@@ -3105,10 +3106,36 @@ export function useReturnAnchors(
 }
 
 export function useReturnTemplates(bankId?: string) {
+  const queryClient = useQueryClient();
+  const queryKey = ["rr-templates", bankId];
   return useQuery({
-    queryKey: ["rr-templates", bankId],
-    queryFn: () =>
-      apiCall(() => regulatoryReportingApi.listReturnTemplates({ bankId })),
+    queryKey,
+    queryFn: async () => {
+      const previous =
+        queryClient.getQueryData<ReturnTemplateListRead>(queryKey);
+      const current = await apiCall(() =>
+        regulatoryReportingApi.listReturnTemplates({ bankId }),
+      );
+      if (
+        previous &&
+        (previous.templates.length !== current.templates.length ||
+          current.templates.some((item) => {
+            const before = previous.templates.find(
+              (entry) => entry.code === item.code,
+            );
+            return (
+              !before ||
+              before.instrumentStatus !== item.instrumentStatus ||
+              before.effectiveFrom !== item.effectiveFrom
+            );
+          }))
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: ["rr-obligations", bankId],
+        });
+      }
+      return current;
+    },
     staleTime: 60_000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: "always",
@@ -3469,9 +3496,9 @@ export function useNotifications(unreadOnly = false) {
           .map((notice) => notice.entityId),
       );
       for (const bankId of changedBanks) {
-        void queryClient.invalidateQueries({
-          queryKey: ["rr-templates", bankId],
-        });
+        for (const prefix of ["rr-templates", "rr-obligations"]) {
+          void queryClient.invalidateQueries({ queryKey: [prefix, bankId] });
+        }
       }
       return feed;
     },
