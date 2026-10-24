@@ -631,6 +631,9 @@ class RegulatoryReportingSettings(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    instrument_observations: Mapped[dict[str, str]] = mapped_column(
+        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
     deadline_overrides: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )

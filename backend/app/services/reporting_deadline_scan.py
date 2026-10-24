@@ -20,6 +20,7 @@ day. The worker handler is ``run_reporting_deadline_scan``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
 
@@ -34,6 +35,8 @@ from app.reporting.schemas.packages import ReportingObligationRead
 from app.reporting.service import calendar
 from app.reporting.service.workflow import has_pending_orass_reupload
 from app.services import job_queue, notifications
+
+type InstrumentScan = Callable[[Session, TenantContext, Bank, date], int]
 
 DEADLINE_SCAN = "reporting_deadline_scan"
 _HORIZON_MONTHS = 2
@@ -51,7 +54,11 @@ _DUE_SOON_THRESHOLDS = (1, 3, 7)
 
 
 def scan_reporting_deadlines(
-    db: Session, organization_id: str, *, as_of: date | None = None
+    db: Session,
+    organization_id: str,
+    *,
+    as_of: date | None = None,
+    instrument_scan: InstrumentScan | None = None,
 ) -> dict[str, Any]:
     """Scan one org's banks and emit deadline notifications (no commit)."""
     ctx = TenantContext(organization_id=organization_id)
@@ -59,6 +66,8 @@ def scan_reporting_deadlines(
     banks = list(db.scalars(select(Bank).where(Bank.organization_id == organization_id)))
     emitted = 0
     for bank in banks:
+        if instrument_scan is not None:
+            emitted += instrument_scan(db, ctx, bank, today)
         obligations = calendar.deadline_scan_obligations(
             db,
             organization_id,
@@ -199,8 +208,12 @@ def enqueue_due_deadline_scan(
     return True
 
 
-def run_reporting_deadline_scan(session: Session, job: Job) -> None:
+def run_reporting_deadline_scan(
+    session: Session, job: Job, *, instrument_scan: InstrumentScan | None = None
+) -> None:
     """Worker handler: scan one org's reporting deadlines and commit."""
-    summary = scan_reporting_deadlines(session, job.organization_id)
+    summary = scan_reporting_deadlines(
+        session, job.organization_id, instrument_scan=instrument_scan
+    )
     session.commit()
     job.progress = summary

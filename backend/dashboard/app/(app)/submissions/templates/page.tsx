@@ -8,6 +8,7 @@
  * invented is passed off as official.
  */
 
+import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadge";
 import PageContainer from "@/components/ui/PageContainer";
 import { BookOpenCheck, CalendarDays, Send } from "lucide-react";
 import type { ReturnTemplateRead } from "@aequoros/risk-service-api";
@@ -114,9 +115,8 @@ function TemplateCard({ template }: { template: ReturnTemplateRead }) {
         action={<FidelityPill fidelity={template.fidelity} />}
       />
       <CardBody className="space-y-4">
-        <p className="text-caption text-navy/80 leading-relaxed">
-          {template.directiveCitation}
-        </p>
+        <InstrumentStatusBadge status={template.instrumentStatus} effectiveFrom={template.effectiveFrom}
+          citation={template.directiveCitation} sourceUrl={template.sourceUrl} code={template.code} />
 
         <div className="flex items-start gap-2 text-caption text-navy/85">
           <CalendarDays
@@ -126,7 +126,7 @@ function TemplateCard({ template }: { template: ReturnTemplateRead }) {
           />
           <span className="leading-relaxed">
             <span className="capitalize font-medium">{template.frequency}</span>
-            {deadline ? ` — ${deadline}` : ""}
+            {deadline && template.instrumentStatus === "in_force" ? `, ${deadline}` : ""}
           </span>
         </div>
 

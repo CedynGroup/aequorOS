@@ -340,18 +340,6 @@ def _coverage_note(
     return " ".join(parts) if parts else None
 
 
-def _instrument_coverage_note(base: str | None, inactive: list[str]) -> str | None:
-    """Keep omitted draft/reference packs visible as preparation, without a filing duty."""
-    if not inactive:
-        return base
-    note = (
-        "Preparation only; no filing obligation or statutory penalty estimate: "
-        + ", ".join(sorted(inactive))
-        + ". Draft commencement dates apply only if made final."
-    )
-    return " ".join(part for part in (base, note) if part)
-
-
 def list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page controls
     db: Session,
     ctx: TenantContext,
@@ -465,13 +453,11 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
     nested: dict[tuple[str, date], list[ObligationAnnexRead]] = {}
     effective_gaps: set[str] = set()
     definitions = eligibility.eligible_definitions()
-    inactive_instruments = [
-        f"{definition.code} ({definition.instrument_status.replace('_', ' ')})"
-        for definition in definitions
-        if definition.instrument_status in ("exposure_draft", "unpublished")
-    ]
     for definition in definitions:
-        if definition.instrument_status in ("exposure_draft", "unpublished"):
+        if definition.instrument_status in ("exposure_draft", "unpublished") or (
+            eligibility.instrument_status(definition, today) != "in_force"
+            and eligibility.missing_effective_parameter(definition) is None
+        ):
             continue
         effective_from = eligibility.effective_from(definition)
         missing_effective = eligibility.missing_effective_parameter(definition)
@@ -601,12 +587,8 @@ def _list_obligations(  # noqa: PLR0913 - tenant scope + window bounds + page co
         limit=page_limit,
         offset=offset,
         has_more=offset + len(page) < total,
-        # Explain both missing coverage and omitted preparation packs so a
-        # reader cannot mistake the absence of obligations for missing returns.
-        coverage_note=_instrument_coverage_note(
-            _coverage_note(eligibility.coverage_note(), deadline_gaps, effective_gaps),
-            inactive_instruments,
-        ),
+        # Missing authority remains visible; preparation lives in its own register.
+        coverage_note=_coverage_note(eligibility.coverage_note(), deadline_gaps, effective_gaps),
     )
 
 

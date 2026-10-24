@@ -355,7 +355,7 @@ export default function SdiLiquidityMonitoringView({
                 {isSdi ? (
                   <SectionCard
                     title="LMTD compliance"
-                    subtitle="Table 1 liquidity ratios and buffers for this SDI, against the Liquidity Monitoring Tools Directive exposure draft (not yet in force)."
+                    subtitle="Table 1 liquidity ratios and buffers for this institution."
                     noPadding
                   >
                     <DataTable

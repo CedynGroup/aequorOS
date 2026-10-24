@@ -11,6 +11,8 @@ const tabs = [
   { href: '/submissions/approvals', label: 'Approvals' },
   { href: '/submissions/compare', label: 'Compare' },
   { href: '/submissions/history', label: 'History' },
+  { href: '/submissions/instruments', label: 'Instruments' },
+  { href: '/submissions/upcoming', label: 'Upcoming rules' },
   { href: '/submissions/templates', label: 'Templates' },
   { href: '/submissions/calendar', label: 'Calendar' },
   { href: '/submissions/settings', label: 'Settings' },
