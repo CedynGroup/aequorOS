@@ -42,13 +42,13 @@ test("partial Credit grants expose exact missing requirements and approval unloc
   });
   expect(created.status()).toBe(201);
   const member = {
-    Authorization: `Bearer ${await mintBackendToken("viewer", 3)}`,
+    Authorization: `Bearer ${await mintBackendToken("viewer")}`,
   };
   const context = await browser.newContext();
   await context.addCookies([
     {
       name: "authjs.session-token",
-      value: await mintSessionCookie("viewer", 3),
+      value: await mintSessionCookie("viewer"),
       url: E2E_BASE_URL,
     },
   ]);
@@ -125,7 +125,7 @@ test("partial Credit grants expose exact missing requirements and approval unloc
   await context.addCookies([
     {
       name: "authjs.session-token",
-      value: await mintSessionCookie("viewer", 4),
+      value: await mintSessionCookie("viewer"),
       url: E2E_BASE_URL,
     },
   ]);

@@ -264,8 +264,8 @@ test.describe("fresh active member baseline", () => {
     await ownerContext.close();
 
     // Later journeys sign in as this member expecting baseline-only authority:
-    // revoke the approved grant and re-mint the stored session past the two
-    // authority changes (grant, revocation) this journey made.
+    // revoke the approved grant and re-mint the stored session at its current
+    // persisted generation after the authority changes.
     const api = `${E2E_API_ORIGIN}/api/v1`;
     const owner = {
       Authorization: `Bearer ${await mintBackendToken("admin")}`,
@@ -293,12 +293,7 @@ test.describe("fresh active member baseline", () => {
       },
     );
     expect(revoked.status(), await revoked.text()).toBe(200);
-    await writeStorageState(
-      "invite_fresh",
-      E2E_BASE_URL,
-      E2E_TMP,
-      E2E_USERS.invite_fresh.authv + 2,
-    );
+    await writeStorageState("invite_fresh", E2E_BASE_URL, E2E_TMP);
   });
 
   test("password sign-in grants self-service but no institution or directory authority", async ({

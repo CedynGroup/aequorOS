@@ -1,7 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
+import { decode } from "@auth/core/jwt";
+import { decodeJwt } from "jose";
 import path from "path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
-import { E2E_USERS, mintBackendToken } from "./support/mint";
+import {
+  E2E_AUTH_SECRET,
+  E2E_USERS,
+  mintBackendToken,
+  mintSessionCookie,
+} from "./support/mint";
 
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
@@ -149,12 +156,8 @@ test.describe("scoped grant administration", () => {
       ]),
     );
 
-    // Both grants have advanced the baseline member from authv 2 to authv 4. This
-    // represents their current signed-in session immediately before revoke.
-    const currentMemberToken = await mintBackendToken(
-      "grant_member",
-      member.authv + 2,
-    );
+    // Capture the actual current session before revocation invalidates it.
+    const currentMemberToken = await mintBackendToken("grant_member");
     const beforeRevoke = await page.request.get(`${API}/auth/me`, {
       headers: { Authorization: `Bearer ${currentMemberToken}` },
     });
@@ -194,6 +197,32 @@ test.describe("scoped grant administration", () => {
     await expect(nextAction.json()).resolves.toMatchObject({
       error: { message: expect.stringMatching(/sign in again/i) },
     });
+
+    const freshToken = await mintBackendToken("grant_member");
+    const signedInAgain = await page.request.get(`${API}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${freshToken}`,
+      },
+    });
+    expect(signedInAgain.status()).toBe(200);
+    const previousVersion = decodeJwt(currentMemberToken).authv;
+    expect(typeof previousVersion).toBe("number");
+    const explicitlyStale = await page.request.get(`${API}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${await mintBackendToken("grant_member", previousVersion as number)}`,
+      },
+    });
+    expect(explicitlyStale.status()).toBe(401);
+    const session = await decode({
+      token: await mintSessionCookie("grant_member"),
+      secret: E2E_AUTH_SECRET,
+      salt: "authjs.session-token",
+    });
+    expect(session).not.toBeNull();
+    expect(session?.authorizationVersion).toBe(decodeJwt(freshToken).authv);
+    expect(decodeJwt(String(session?.accessToken)).authv).toBe(
+      session?.authorizationVersion,
+    );
 
     const listedAfterRevoke = await page.request.get(
       `${API}/authorization/bindings?principal_user_id=${member.id}`,

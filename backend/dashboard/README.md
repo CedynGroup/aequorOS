@@ -576,6 +576,14 @@ assertions prove the cookie is cleared and a subsequent real login succeeds.
 The server configuration imports the minting helper's test secret constants, and
 `session-lifecycle.spec.ts` decrypts a real login cookie and verifies rotation.
 
+The credential helpers in `e2e/support/mint.ts` read the principal's current
+authorization version from the disposable SQLite fixture on each default mint.
+After a real grant, revocation or status change, mint a new token or storage
+state instead of counting version increments. A session cookie and its embedded
+access token share one captured version. Pass an explicit version only when a
+journey deliberately needs a captured or invalid authorization generation;
+minting a token does not alter the principal's persisted bindings or status.
+
 Three prerequisites are not obvious, and each one has already cost a long
 diagnosis:
 

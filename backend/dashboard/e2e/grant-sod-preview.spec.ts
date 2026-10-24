@@ -746,7 +746,7 @@ test("a self-revocation draft survives reauthentication and clears on submit or 
     await expect(composer).toHaveCount(0);
   } finally {
     const currentHeaders = {
-      Authorization: `Bearer ${await mintBackendToken("sod_owner", revoked ? (analystId ? 7 : 6) : 5)}`,
+      Authorization: `Bearer ${await mintBackendToken("sod_owner")}`,
     };
     for (const id of [analystId, revoked ? undefined : adminId]) {
       if (id) {
