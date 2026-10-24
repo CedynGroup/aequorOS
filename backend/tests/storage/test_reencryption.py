@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 import pytest
 from alembic.script import ScriptDirectory
 from botocore.exceptions import ClientError
+from pydantic import TypeAdapter
 from sqlalchemy import delete
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
@@ -41,6 +42,148 @@ from tests.storage.test_bank_encryption import (
 from tests.support.helpers import ORG_1
 
 __all__ = ["bank_storage"]
+
+
+def minio_metadata(
+    bank: BankStorage, monkeypatch: pytest.MonkeyPatch, *, head_denied: bool
+) -> list[io.BytesIO]:
+    client = cast(objects.S3MaintenanceClient, bank.s3)
+    head_object, get_object = bank.s3.head_object, client.get_object
+    bodies: list[io.BytesIO] = []
+
+    def title_case(response: dict[str, object]) -> dict[str, object]:
+        metadata = TypeAdapter(dict[str, str]).validate_python(response.get("Metadata", {}))
+        response["Metadata"] = {key.title(): value for key, value in metadata.items()}
+        return response
+
+    def head(**kwargs: object) -> dict[str, object]:
+        if head_denied:
+            raise ClientError({"Error": {"Code": "403"}}, "HeadObject")
+        return title_case(head_object(**kwargs))
+
+    def get(**kwargs: object) -> dict[str, object]:
+        response = get_object(**kwargs)
+        source = cast(BinaryIO, response["Body"])
+        try:
+            body = io.BytesIO(source.read())
+        finally:
+            source.close()
+        response["Body"] = body
+        bodies.append(body)
+        return title_case(response)
+
+    monkeypatch.setattr(bank.s3, "head_object", head)
+    monkeypatch.setattr(client, "get_object", get)
+    return bodies
+
+
+@pytest.mark.parametrize("head_denied", [False, True])
+def test_title_cased_metadata_migrates_editable_ciphertext(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    head_denied: bool,
+) -> None:
+    location = StorageLocation(SLUG, "temp", "synthetic/editable.csv")
+    content = b"synthetic encrypted editable content"
+    bank_storage.storage.write(
+        location, io.BytesIO(content), metadata_for(SLUG, "temp", content)
+    )
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
+    original_envelope = key.current_version_id
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    registry.rotate(db_session, key, NEXT_KEY, providers)
+    db_session.commit()
+    bodies = minio_metadata(bank_storage, monkeypatch, head_denied=head_denied)
+    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    db_session.commit()
+    reencryption.run(db_session, job, bank_storage.storage)
+    progress = reencryption.Progress.model_validate(job.progress)
+    assert progress.summary == "complete" and progress.objects_rewritten == 1
+    [current] = list(bank_storage.storage.encryption_inventory(SLUG))
+    assert current.envelope_id == progress.target_version
+    assert current.envelope_id != original_envelope and not current.retained
+    descriptor, plaintext = bank_storage.storage.read(location)
+    try:
+        assert plaintext.read() == content
+    finally:
+        plaintext.close()
+    assert descriptor.metadata.checksum_sha256 == metadata_for(SLUG, "temp", content).checksum_sha256
+    assert bodies and all(body.closed for body in bodies)
+
+
+@pytest.mark.parametrize("head_denied", [False, True])
+def test_title_cased_deleted_history_keeps_its_envelope_and_retirement_hold(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    head_denied: bool,
+) -> None:
+    monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", "1")
+    get_key_settings.cache_clear()
+    location = StorageLocation(SLUG, "raw", "synthetic/deleted.csv")
+    content = b"synthetic protected deleted history"
+    stored = bank_storage.storage.write(
+        location, io.BytesIO(content), metadata_for(SLUG, "raw", content)
+    )
+    assert stored.version_id is not None
+    response = bank_storage.s3.get_object(
+        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId=stored.version_id
+    )
+    source = cast(BinaryIO, response["Body"])
+    try:
+        ciphertext = source.read()
+    finally:
+        source.close()
+    bank_storage.storage.delete(location)
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
+    original_envelope = key.current_version_id
+    assert original_envelope is not None
+    rotated_at = datetime.now(UTC)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    registry.rotate(db_session, key, NEXT_KEY, providers)
+    db_session.commit()
+    bodies = minio_metadata(bank_storage, monkeypatch, head_denied=head_denied)
+    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    db_session.commit()
+    reencryption.run(db_session, job, bank_storage.storage)
+    progress = reencryption.Progress.model_validate(job.progress)
+    assert progress.summary == "complete except 1 retained immutable records"
+    assert progress.retained == {"stored_object_versions:raw": 1}
+    assert progress.objects_rewritten == 0
+    assert db_session.get(ObjectKeyEnvelope, original_envelope) is not None
+    [retained] = list(bank_storage.storage.encryption_inventory(SLUG))
+    assert retained.retained and retained.envelope_id == original_envelope
+    assert retained.version_id == stored.version_id
+    assert not bank_storage.storage.exists(location)
+    descriptor, historical = bank_storage.storage.read(location, version_id=stored.version_id)
+    try:
+        assert historical.read() == content
+    finally:
+        historical.close()
+    assert descriptor.version_id == stored.version_id
+    response = bank_storage.s3.get_object(
+        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId=stored.version_id
+    )
+    retained_body = cast(BinaryIO, response["Body"])
+    try:
+        assert retained_body.read() == ciphertext
+    finally:
+        retained_body.close()
+    assert bodies and all(body.closed for body in bodies)
+    monkeypatch.setattr(registry, "utc_now", lambda: rotated_at + timedelta(days=3))
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
+    assert key.index_version_id == progress.target_version
+    with pytest.raises(KeyUnavailableError, match="retained encryption versions"):
+        registry.authorize_retirement(db_session, key, KEY)
 
 
 def test_legacy_object_conversion_authenticates_checksum_and_retains_source(

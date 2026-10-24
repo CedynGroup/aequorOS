@@ -61,6 +61,13 @@ class _Page(BaseModel):
 _HEADERS = TypeAdapter(dict[str, str])
 
 
+def _metadata(response: dict[str, object]) -> dict[str, str]:
+    return {
+        key.lower(): value
+        for key, value in _HEADERS.validate_python(response.get("Metadata", {})).items()
+    }
+
+
 def _locked(stat: dict[str, object]) -> bool:
     if stat.get("ObjectLockLegalHoldStatus") == "ON":
         return True
@@ -84,7 +91,7 @@ def inventory(
                 for entry in _Page.model_validate(page).Versions:
                     location = StorageLocation(slug, tier, entry.Key)
                     stat = stat_object(bucket, entry.Key, version_id=entry.VersionId)
-                    headers = _HEADERS.validate_python(stat.get("Metadata", {}))
+                    headers = _metadata(stat)
                     envelope = headers.get("key-envelope-id")
                     format_id = headers.get("encryption-format")
                     if (
@@ -169,7 +176,7 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
                 VersionId=item.version_id,
             )
             body = cast(BinaryIO, source["Body"])
-            headers = _HEADERS.validate_python(source.get("Metadata", {}))
+            headers = _metadata(source)
             metadata = ObjectMetadata.from_object_metadata(headers)
             plaintext = (
                 unit.decrypt(location, body, metadata, headers)
