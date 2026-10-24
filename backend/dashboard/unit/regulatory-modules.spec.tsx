@@ -145,3 +145,20 @@ it("keeps reference monitoring accessible without preparation mode", () => {
   expect(screen.getByText("Monitoring workspace")).toBeVisible();
   expect(screen.getByText("Reference")).toBeVisible();
 });
+
+it("uses SDI evidence for supported IRRBB tabs while keeping the framework bank-only", () => {
+  state.sdi = true;
+  state.code = "SDI-IRRBB-QUARTERLY";
+  state.preparing = true;
+  state.pathname = "/irr";
+  render(
+    <RegulatoryModuleTabs tabs={tabs} contextRule="IRRBB-PILOT">
+      <p>SDI overview workspace</p>
+    </RegulatoryModuleTabs>,
+  );
+  expect(screen.getByText("SDI overview workspace")).toBeVisible();
+  expect(screen.getByText("Draft")).toBeVisible();
+  expect(
+    screen.queryByRole("link", { name: "Standardised Framework" }),
+  ).toBeNull();
+});

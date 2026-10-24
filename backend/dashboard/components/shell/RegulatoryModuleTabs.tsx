@@ -35,6 +35,10 @@ function ModulePreparationSurface({ tabs, children, contextRule }: Props) {
     scope.institutionClass === "sdi" && code === "LMT"
       ? "SDI-LMT-MONTHLY"
       : code;
+  const moduleRule =
+    scope.institutionClass === "sdi" && contextRule === "IRRBB-PILOT"
+      ? "SDI-IRRBB-QUARTERLY"
+      : contextRule;
   const instrumentFor = (code: string | undefined) =>
     query.data?.templates.find((item) => item.code === ruleFor(code));
   const available = (code: string | undefined) => {
@@ -48,13 +52,13 @@ function ModulePreparationSurface({ tabs, children, contextRule }: Props) {
     );
   };
   const visible = tabs
-    .filter((tab) => available(tab.ruleCode ?? contextRule))
+    .filter((tab) => available(tab.ruleCode ?? moduleRule))
     .map((tab) => ({
       ...tab,
       href: preparing ? `${tab.href}?preparing=1` : tab.href,
     }));
   const selected = tabs.find((tab) => tab.href === pathname);
-  const selectedRule = selected?.ruleCode ?? contextRule;
+  const selectedRule = selected?.ruleCode ?? moduleRule;
   const instrument = instrumentFor(selectedRule);
   return (
     <>
