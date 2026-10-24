@@ -584,11 +584,11 @@ access token share one captured version. Pass an explicit version only when a
 journey deliberately needs a captured or invalid authorization generation;
 minting a token does not alter the principal's persisted bindings or status.
 
-Access-request, baseline-membership, live-grant, macro-contract and full-filing
-stories use `e2e/support/story-identities.ts` to provision fresh tested actors.
-Declare the required profiles with `storyConfig`; owner stories also request an
-isolated setup tenant. Shared-bank stories keep the bootstrap owner only for
-fixture administration. The fixture installs each actor's real scoped bindings
+Access-request, baseline-membership, live-grant, grant-administration,
+macro-contract and full-filing stories use `e2e/support/story-identities.ts` to
+provision fresh tested actors. Declare the required profiles with `storyConfig`;
+owner stories also request an isolated setup tenant. Shared-bank stories keep
+the bootstrap owner only for fixture administration. The fixture installs each actor's real scoped bindings
 and current session before browser creation. Its `finally` cleanup closes story
 contexts, rejects their pending requests, archives governed clones and deactivates
 the actors, revoking refresh families while retaining audit and signed evidence.
@@ -606,7 +606,7 @@ diagnosis:
    auto mode; `AQS_LOCAL_SERVICES=external` also permits the backend to read its
    untracked `.env` without starting a service. The `attestation`, `full-lifecycle`,
    `submission-lifecycle`, `data-engine-ingestion`, `integration-key-use`,
-   `00-ingestion-worker`, and opt-in `visual-tour`
+   `grant-administration`, `00-ingestion-worker`, and opt-in `visual-tour`
    specs, plus the SSO attestation journey, refuse immediately without it rather
    than letting storage-dependent assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The

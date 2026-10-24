@@ -271,9 +271,6 @@ test.describe("fresh active member baseline", () => {
     }
     await ownerContext.close();
 
-    // Later journeys sign in as this member expecting baseline-only authority:
-    // revoke the approved grant and re-mint the stored session at its current
-    // persisted generation after the authority changes.
     const api = `${E2E_API_ORIGIN}/api/v1`;
     const owner = {
       Authorization: `Bearer ${await mintBackendToken("admin")}`,
