@@ -9,6 +9,7 @@
  * ladder per module over the same window.
  */
 
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import { useState } from "react";
 import type { LiveModule, WindowRatio } from "@aequoros/risk-service-api";
 import SectionCard from "@/components/ui/SectionCard";
@@ -96,7 +97,16 @@ export default function WindowAnalysis({
     Boolean(applied),
   );
 
-  const data = query.data;
+  const rules = useBankRules(bankId);
+  const data = query.data && {
+    ...query.data,
+    ratios: query.data.ratios.filter(
+      (row) =>
+        (row.ratio !== "lcr_pct" && row.ratio !== "nsfr_pct") ||
+        rules.isInForce("LCR-NSFR"),
+    ),
+    daily: query.data.daily.filter((row) => rules.isModuleInForce(row.module)),
+  };
   const storedPoints = (data?.ratios ?? []).reduce(
     (count, stat) => count + stat.points.filter((p) => p.stored).length,
     0,

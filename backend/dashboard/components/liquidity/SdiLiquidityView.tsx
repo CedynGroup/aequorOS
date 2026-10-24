@@ -2,7 +2,7 @@
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { useReturnTemplates } from "@/lib/api/hooks";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import RegulatoryRuleStatus from "@/components/submissions/RegulatoryRuleStatus";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
@@ -131,13 +131,8 @@ export default function SdiLiquidityView({
 
 function LiquidityPosition({ bankId }: { bankId: string | undefined }) {
   const preparing = useSearchParams().get("preparing") === "1";
-  const templates = useReturnTemplates(bankId);
-  const showRatios =
-    preparing ||
-    templates.data?.templates.some(
-      (item) =>
-        item.code === "SDI-LMT-MONTHLY" && item.instrumentStatus === "in_force",
-    );
+  const rules = useBankRules(bankId);
+  const showRatios = preparing || rules.isInForce("SDI-LMT-MONTHLY");
   const position = useSdiLiquidityPosition(bankId);
   const ratios = showRatios ? (position.data?.ratios ?? []) : [];
   const reserves = position.data?.reserves ?? [];

@@ -6,7 +6,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useBankContext, useModuleScope } from "./BankContext";
 import ModuleTabs, { type Tab } from "./ModuleTabs";
-import { useReturnTemplates } from "@/lib/api/hooks";
+import { useBankRules } from "@/lib/api/regulatoryRules";
+import { isRuleInForce, preparationHref } from "@/lib/regulatoryInstruments";
 import { hrefAccess } from "@/lib/modules";
 import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadge";
 
@@ -27,38 +28,38 @@ export default function RegulatoryModuleTabs(props: Props) {
 
 function ModulePreparationSurface({ tabs, children, contextRule }: Props) {
   const { bank } = useBankContext();
-  const query = useReturnTemplates(bank?.id);
+  const rules = useBankRules(bank?.id);
+  const query = rules.query;
   const scope = useModuleScope();
   const pathname = usePathname();
   const preparing = useSearchParams().get("preparing") === "1";
   const ruleFor = (code: string | undefined) =>
-    scope.institutionClass === "sdi" && code === "LMT"
-      ? "SDI-LMT-MONTHLY"
+    scope.institutionClass === "sdi"
+      ? code === "LMT"
+        ? "SDI-LMT-MONTHLY"
+        : code === "LCR-NSFR"
+          ? undefined
+          : code
       : code;
   const moduleRule =
     scope.institutionClass === "sdi" && contextRule === "IRRBB-PILOT"
       ? "SDI-IRRBB-QUARTERLY"
       : contextRule;
   const instrumentFor = (code: string | undefined) =>
-    query.data?.templates.find((item) => item.code === ruleFor(code));
+    rules.instrument(ruleFor(code));
   const available = (code: string | undefined) => {
-    if (!code) return true;
+    if (!ruleFor(code)) return true;
     const instrument = instrumentFor(code);
-    return Boolean(
-      instrument &&
-      (instrument.instrumentStatus === "in_force" ||
-        instrument.instrumentStatus === "unpublished" ||
-        preparing),
-    );
+    return Boolean(instrument && (isRuleInForce(instrument) || preparing));
   };
   const visible = tabs
     .filter((tab) => available(tab.ruleCode ?? moduleRule))
     .map((tab) => ({
       ...tab,
-      href: preparing ? `${tab.href}?preparing=1` : tab.href,
+      href: preparationHref(tab.href, preparing),
     }));
   const selected = tabs.find((tab) => tab.href === pathname);
-  const selectedRule = selected?.ruleCode ?? moduleRule;
+  const selectedRule = ruleFor(selected?.ruleCode ?? moduleRule);
   const instrument = instrumentFor(selectedRule);
   return (
     <>

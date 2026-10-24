@@ -17,6 +17,7 @@
  * amber tile and a caption that names the reason.
  */
 
+import SdiLiquidityBoardDisclosure from "@/components/reports/SdiLiquidityBoardDisclosure";
 import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
 import { Printer } from "lucide-react";
@@ -360,7 +361,7 @@ export default function StressBoardPack() {
                   </ChartFrame>
                   {run.summary.stressed_lcr_pct === null ? (
                     <ChartFrame
-                      title="Liquidity — SDI (LMTD)"
+                      title="SDI liquidity monitoring"
                       subtitle="Basel LCR/NSFR excluded (§4.6)"
                       height={240}
                     >
@@ -421,30 +422,5 @@ export default function StressBoardPack() {
         </PageContainer>
       </QueryBoundary>
     </>
-  );
-}
-
-function SdiLiquidityBoardDisclosure({
-  asOf,
-  table1Breaches,
-  reserveBreaches,
-}: {
-  asOf: string | undefined;
-  table1Breaches: number | undefined;
-  reserveBreaches: number | undefined;
-}) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center px-6 text-center text-caption text-slate">
-      <p>
-        SDI liquidity stress is not assessed because no BoG SDI liquidity-stress
-        methodology is configured. Basel LCR/NSFR are not substituted.
-      </p>
-      {asOf && (
-        <p className="mt-3 text-navy">
-          Baseline LMTD evidence as of {asOf}: {table1Breaches ?? 0} Table 1
-          breach(es), {reserveBreaches ?? 0} reserve breach(es).
-        </p>
-      )}
-    </div>
   );
 }

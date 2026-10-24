@@ -28,6 +28,7 @@ import RangeTabs, {
 } from "@/components/ui/RangeTabs";
 import ChartFrame from "@/components/ui/ChartFrame";
 import { num, numOrNull } from "@/lib/api/values";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { useEffectiveRatioDashboards } from "@/lib/api/hooks";
 
@@ -51,17 +52,19 @@ export default function RatioTrendChart({
   // An SDI does not file Basel LCR/NSFR (docs/sdi.md §4.6) — its capital headline
   // is the s.29 CAR; liquidity is supervised via LMTD on the Liquidity page.
   const moduleScope = useModuleScope();
-  const isSdi = moduleScope.institutionClass === "sdi";
+  const rules = useBankRules(bankId);
+  const showLiquidity =
+    moduleScope.institutionClass !== "sdi" && rules.isInForce("LCR-NSFR");
   const { liquidity: liq, capital: cap } = useEffectiveRatioDashboards(
     bankId,
     periodId,
     moduleScope.capitalAggregatedView === true,
-    moduleScope.liquidityAggregatedView === true,
+    moduleScope.liquidityAggregatedView === true && showLiquidity,
   );
 
   const rows = useMemo<TrendRow[]>(() => {
     const byPeriod = new Map<string, TrendRow>();
-    for (const p of liq.data?.trend ?? []) {
+    for (const p of showLiquidity ? (liq.data?.trend ?? []) : []) {
       byPeriod.set(p.reportingPeriodId, {
         t: p.periodEnd.getTime(),
         label: p.label,
@@ -84,7 +87,7 @@ export default function RatioTrendChart({
     const all = [...byPeriod.values()].sort((a, b) => a.t - b.t);
     const months = RANGE_MONTHS[range];
     return months === null ? all : all.slice(-months);
-  }, [liq.data, cap.data, range]);
+  }, [liq.data, cap.data, range, showLiquidity]);
 
   const isLoading = liq.isLoading || cap.isLoading;
   const windowMove = (() => {
@@ -98,11 +101,13 @@ export default function RatioTrendChart({
     if (withLcr.length < 2) return null;
     return withLcr[withLcr.length - 1] - withLcr[0];
   })();
-  const storedCount = (liq.data?.trend ?? []).filter((p) => p.stored).length;
+  const storedCount = (
+    showLiquidity ? (liq.data?.trend ?? []) : (cap.data?.trend ?? [])
+  ).filter((p) => p.stored).length;
 
   // The capital axis stays on the right even when it is the only axis, so that
   // an SDI's CAR sits where a bank's CAR sits.
-  const capitalAxisIndex = isSdi ? 0 : 1;
+  const capitalAxisIndex = !showLiquidity ? 0 : 1;
   const pctAxisLabel = {
     formatter: (value: number) => `${Math.round(value)}%`,
   };
@@ -115,7 +120,7 @@ export default function RatioTrendChart({
       data: rows.map((row) => row.label),
       axisLabel: { hideOverlap: true },
     },
-    yAxis: isSdi
+    yAxis: !showLiquidity
       ? [{ type: "value", position: "right", axisLabel: pctAxisLabel }]
       : [
           { type: "value", axisLabel: pctAxisLabel },
@@ -149,7 +154,7 @@ export default function RatioTrendChart({
       },
     },
     series: [
-      ...(isSdi
+      ...(!showLiquidity
         ? []
         : (
             [
@@ -181,8 +186,8 @@ export default function RatioTrendChart({
     <ChartFrame
       title="Ratio trend"
       subtitle={
-        isSdi
-          ? "CAR (s.29) per reporting period"
+        !showLiquidity
+          ? "CAR per reporting period"
           : "LCR & NSFR (left axis) · CAR (right axis) per reporting period"
       }
       height={280}
@@ -192,7 +197,7 @@ export default function RatioTrendChart({
         <>
           <span>
             {rows.length} periods
-            {!isSdi &&
+            {showLiquidity &&
               windowMove !== null &&
               ` · LCR ${windowMove >= 0 ? "+" : ""}${windowMove.toFixed(1)}pp over the window`}
             {" · "}
@@ -213,7 +218,7 @@ export default function RatioTrendChart({
           option={option}
           height={280}
           ariaLabel={`${
-            isSdi ? "CAR" : "LCR, NSFR and CAR"
+            !showLiquidity ? "CAR" : "LCR, NSFR and CAR"
           } across ${rows.length} reporting periods, ${storedCount} of them from stored results`}
         />
       )}

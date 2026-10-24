@@ -1,5 +1,7 @@
 "use client";
 
+import { useBankRules, useInForceAlerts } from "@/lib/api/regulatoryRules";
+
 /**
  * Risk & Limit Monitor — the cross-module limit wall. Pulls every module
  * dashboard, extracts each limit whose numeric threshold exists in the
@@ -29,7 +31,6 @@ import {
 } from "@/components/basel/sdiHooks";
 import { isHrefVisible } from "@/lib/modules";
 import {
-  useBankAlerts,
   useCapitalDashboard,
   useFtpDashboard,
   useFxDashboard,
@@ -66,14 +67,18 @@ export default function RiskLimitMonitorPage() {
   // every institution's set.
   const scope = useModuleScope();
   const isSdi = scope.institutionClass === "sdi";
-  const irrScoped = isHrefVisible("/irr/limits", scope);
+  const rules = useBankRules(bankId);
+  const lmtdInForce = rules.isInForce("SDI-LMT-MONTHLY");
+  const liquidityInForce = rules.isModuleInForce("liquidity");
+  const irrInForce = rules.isModuleInForce("irr");
+  const irrScoped = isHrefVisible("/irr/limits", scope) && irrInForce;
   const fxScoped = isHrefVisible("/fx/limits", scope);
   const ftpScoped = isHrefVisible("/ftp/products", scope);
   const liquidityAggregated = scope.liquidityAggregatedView === true;
   const liquidityConfidential = scope.liquidityConfidentialView === true;
 
   const liquidity = useLiquidityDashboard(
-    !isSdi && liquidityAggregated ? bankId : undefined,
+    !isSdi && liquidityAggregated && liquidityInForce ? bankId : undefined,
   );
   const capital = useCapitalDashboard(
     !isSdi && scope.capitalAggregatedView ? bankId : undefined,
@@ -82,7 +87,7 @@ export default function RiskLimitMonitorPage() {
   const fx = useFxDashboard(fxScoped ? bankId : undefined);
   const ftp = useFtpDashboard(ftpScoped ? bankId : undefined);
   const liveSummary = useLiveSummary(bankId);
-  const alerts = useBankAlerts(bankId, 200);
+  const alerts = useInForceAlerts(bankId, 200);
   const liquidityRun = useRegulatoryRun(
     liquidityConfidential ? bankId : undefined,
     liquidity.data?.latestRunId ?? undefined,
@@ -102,9 +107,9 @@ export default function RiskLimitMonitorPage() {
   const [tab, setTab] = useState("wall");
 
   const moduleQueries = [
-    ["liquidity", liquidity],
+    ...(liquidityInForce ? [["liquidity", liquidity] as const] : []),
     ["capital", capital],
-    ["irr", irr],
+    ...(irrInForce ? [["irr", irr] as const] : []),
     ["fx", fx],
     ["ftp", ftp],
   ] as const;
@@ -118,7 +123,9 @@ export default function RiskLimitMonitorPage() {
             ? "warn"
             : "ok";
       const result: LimitRow[] = [];
-      for (const ratio of sdiLiquidity.data?.ratios ?? []) {
+      for (const ratio of lmtdInForce
+        ? (sdiLiquidity.data?.ratios ?? [])
+        : []) {
         if (ratio.value_pct !== null) {
           result.push({
             module: "liquidity",
@@ -203,12 +210,18 @@ export default function RiskLimitMonitorPage() {
     return extractAllLimits({
       liquidity: liquidity.data,
       liquidityRun: liquidityRun.data,
+      liquidityRule: rules.instrument("LCR-NSFR"),
+      irrRule: rules.instrument("IRRBB-PILOT", "SDI-IRRBB-QUARTERLY"),
       capital: capital.data,
       irr: irr.data,
       fx: fx.data,
       ftp: ftp.data,
     });
   }, [
+    lmtdInForce,
+    liquidityInForce,
+    irrInForce,
+    rules,
     capital.data,
     ftp.data,
     fx.data,
@@ -240,7 +253,9 @@ export default function RiskLimitMonitorPage() {
   const filteredRows: LimitRow[] =
     filter === "breach" ? breaches : filter === "amber" ? ambers : rows;
 
-  const liveModules = liveSummary.data?.modules ?? [];
+  const liveModules = (liveSummary.data?.modules ?? []).filter((item) =>
+    rules.isModuleInForce(item.module),
+  );
 
   return (
     <>
@@ -375,13 +390,14 @@ export default function RiskLimitMonitorPage() {
             <div className="space-y-6">
               <SectionCard
                 title="SDI control coverage"
-                subtitle="The limit wall uses the binding SDI measures available from the current canonical book."
+                subtitle="In-force SDI controls available from the current canonical book."
               >
                 <p className="text-body text-navy/85 leading-relaxed">
-                  Liquidity controls cover LMTD Table 1 and reserve ratios.
-                  Capital controls cover Section 29 CAR, paid-up capital,
-                  statutory reserve fund, and connected-group exposures. Open
-                  pipeline findings continue to appear in the Alert Center.
+                  Liquidity controls cover reserve ratios
+                  {lmtdInForce ? " and LMTD Table 1 ratios" : ""}. Capital
+                  controls cover Section 29 CAR, paid-up capital, statutory
+                  reserve fund, and connected-group exposures. Open pipeline
+                  findings continue to appear in the Alert Center.
                 </p>
               </SectionCard>
             </div>

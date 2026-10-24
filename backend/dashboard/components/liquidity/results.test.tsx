@@ -40,11 +40,19 @@ loader._load = (request, parent, isMain) => {
       {},
       {
         get: (_target, name) => () =>
-          name === "useLiquidityDashboard"
-            ? { data: dashboard }
-            : name === "useBankAlerts"
-              ? { data: { items: [], bySeverity: {} } }
-              : {},
+          name === "useReturnTemplates"
+            ? {
+                data: {
+                  templates: [
+                    { code: "LCR-NSFR", instrumentStatus: "in_force" },
+                  ],
+                },
+              }
+            : name === "useLiquidityDashboard"
+              ? { data: dashboard }
+              : name === "useBankAlerts"
+                ? { data: { items: [], bySeverity: {} } }
+                : {},
       },
     );
   if (request === "@/components/shell/BankContext")
@@ -166,7 +174,9 @@ try {
   const refusedPage = renderToStaticMarkup(<Page />);
   assert.match(refusedPage, /Funding surplus Unavailable/);
   assert.doesNotMatch(refusedPage, /0\.00%|GHS 0|Over by/);
-  const refusedLimits = liquidityLimits(dashboard, run);
+  const refusedLimits = liquidityLimits(dashboard, run, {
+    instrumentStatus: "in_force",
+  });
   assert.deepEqual(
     refusedLimits.map((row) => [row.value, row.status]),
     [
@@ -185,7 +195,9 @@ try {
   dashboard = fixture("0");
   assert.match(renderToStaticMarkup(<Page />), /0\.00%/);
   assert.deepEqual(
-    liquidityLimits(dashboard, run).map((row) => [row.value, row.status]),
+    liquidityLimits(dashboard, run, { instrumentStatus: "in_force" }).map(
+      (row) => [row.value, row.status],
+    ),
     [
       [0, "crit"],
       [0, "crit"],

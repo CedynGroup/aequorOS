@@ -1,4 +1,6 @@
-'use client';
+"use client";
+
+import { useInForceAlerts } from "@/lib/api/regulatoryRules";
 
 /**
  * Breach banner — the first thing a demo audience reads.
@@ -24,20 +26,23 @@
  * model (deduped with the pulse wall's own dashboard queries).
  */
 
-import Link from 'next/link';
-import { ArrowRight, CheckCircle2, HelpCircle, ShieldAlert } from 'lucide-react';
-import type { LiveModule } from '@aequoros/risk-service-api';
-import StatusPill from '@/components/ui/StatusPill';
-import { SkeletonLine } from '@/components/ui/Skeleton';
-import { useBankAlerts, useLiveSummary } from '@/lib/api/hooks';
-import { fmtRelative, moduleComplianceVerdict } from '@/lib/api/values';
+import Link from "next/link";
+import {
+  ArrowRight,
+  CheckCircle2,
+  HelpCircle,
+  ShieldAlert,
+} from "lucide-react";
+import type { LiveModule } from "@aequoros/risk-service-api";
+import StatusPill from "@/components/ui/StatusPill";
+import { SkeletonLine } from "@/components/ui/Skeleton";
+import { useLiveSummary } from "@/lib/api/hooks";
+import { fmtRelative, moduleComplianceVerdict } from "@/lib/api/values";
 import {
   LIVE_MODULE_HREFS,
   LIVE_MODULE_LABELS,
-} from '@/components/live/moduleDisplay';
-import { useModuleScope } from '@/components/shell/BankContext';
-import { isHrefVisible } from '@/lib/modules';
-import { DEFAULT_MODULE_ORDER, usePulseCards } from './pulse';
+} from "@/components/live/moduleDisplay";
+import { usePulseCards } from "./pulse";
 
 export default function BreachBanner({
   bankId,
@@ -48,16 +53,13 @@ export default function BreachBanner({
    * behind the pulse model that would 409 on a fresh tenant. */
   hasData?: boolean;
 }) {
-  const alerts = useBankAlerts(bankId);
+  const alerts = useInForceAlerts(bankId);
   const live = useLiveSummary(bankId);
   const pulse = usePulseCards(bankId, hasData);
   // Scope the census exactly as the pulse wall does (docs/sdi.md §3.2): an SDI
   // does not run the FX/FTP engines, so those cards are 'na' BY DESIGN and must
   // not be counted as "not computable" — that would cry wolf on every SDI.
-  const scope = useModuleScope();
-  const inScope = DEFAULT_MODULE_ORDER.filter((module) =>
-    isHrefVisible(LIVE_MODULE_HREFS[module], scope)
-  );
+  const inScope = pulse.modules;
 
   if (alerts.isLoading || pulse.isLoading) {
     return (
@@ -70,12 +72,10 @@ export default function BreachBanner({
 
   // 1. Open critical/high breach alerts from the live findings store.
   const openAlerts = alerts.data.items.filter(
-    (item) => item.severity === 'critical' || item.severity === 'high'
+    (item) => item.severity === "critical" || item.severity === "high",
   );
   if (openAlerts.length > 0) {
-    const openCount =
-      (alerts.data.bySeverity['critical'] ?? 0) +
-      (alerts.data.bySeverity['high'] ?? 0);
+    const openCount = openAlerts.length;
     return (
       <div className="card border-l-4 border-l-critical bg-critical-light/40 px-5 py-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -87,7 +87,7 @@ export default function BreachBanner({
             />
             <div className="min-w-0">
               <p className="text-body font-semibold text-navy">
-                {openCount} open limit breach{openCount === 1 ? '' : 'es'}{' '}
+                {openCount} open limit breach{openCount === 1 ? "" : "es"}{" "}
                 requiring attention
               </p>
               <ul className="mt-2 space-y-1.5">
@@ -97,7 +97,7 @@ export default function BreachBanner({
                     className="flex items-start gap-2 min-w-0"
                   >
                     <StatusPill
-                      tone={item.severity === 'critical' ? 'critical' : 'amber'}
+                      tone={item.severity === "critical" ? "critical" : "amber"}
                       className="shrink-0 mt-px"
                     >
                       {LIVE_MODULE_LABELS[item.module]}
@@ -105,7 +105,7 @@ export default function BreachBanner({
                     <span className="text-body text-navy/85 leading-snug min-w-0">
                       {item.message}
                       <span className="text-caption text-slate whitespace-nowrap">
-                        {' '}
+                        {" "}
                         · open since {fmtRelative(item.createdAt)}
                       </span>
                     </span>
@@ -128,7 +128,7 @@ export default function BreachBanner({
 
   // 2. No alert findings yet, but the wall shows breach-status modules for
   //    this period (inline computations ahead of the live pipeline).
-  const breached = inScope.filter((m) => pulse.cards[m].status === 'red');
+  const breached = inScope.filter((m) => pulse.cards[m].status === "red");
   if (breached.length > 0) {
     return (
       <div className="card border-l-4 border-l-critical bg-critical-light/40 px-5 py-4">
@@ -141,7 +141,7 @@ export default function BreachBanner({
             />
             <div className="min-w-0">
               <p className="text-body font-semibold text-navy">
-                {breached.length} module{breached.length === 1 ? '' : 's'}{' '}
+                {breached.length} module{breached.length === 1 ? "" : "s"}{" "}
                 breaching live limits
               </p>
               <ul className="mt-2 space-y-1.5">
@@ -172,26 +172,29 @@ export default function BreachBanner({
   // 3./4. No breach found — but "no breach found" only means something for the
   //       modules that were actually measured.
   const liveModules = (live.data?.modules ?? []).filter(
-    (m) => m.status !== 'na'
+    (m) => inScope.includes(m.module) && m.status !== "na",
   ).length;
-  const computed = inScope.filter((m) => pulse.cards[m].status !== 'na');
-  const notComputable = inScope.filter((m) => pulse.cards[m].status === 'na');
+  const computed = inScope.filter((m) => pulse.cards[m].status !== "na");
+  const notComputable = inScope.filter((m) => pulse.cards[m].status === "na");
   const approaching = inScope.filter(
-    (m) => pulse.cards[m].status === 'amber'
+    (m) => pulse.cards[m].status === "amber",
   ).length;
   // The single fail-closed rule, shared with its unit test
   // (lib/api/values.ts::moduleComplianceVerdict). Branch 2 above has already
   // returned on 'breach'; what remains is compliant / partial / not_assessed.
   const verdict = moduleComplianceVerdict(
-    inScope.map((m) => pulse.cards[m].status)
+    inScope.map((m) => pulse.cards[m].status),
   );
   const updatedAt = live.data?.computedAt ? (
-    <span className="text-slate"> · updated {fmtRelative(live.data.computedAt)}</span>
+    <span className="text-slate">
+      {" "}
+      · updated {fmtRelative(live.data.computedAt)}
+    </span>
   ) : null;
 
   // 3. Nothing is computable: no limit was evaluated, so no compliance claim
   //    can be made. Neutral strip, never the green one.
-  if (verdict === 'not_assessed') {
+  if (verdict === "not_assessed") {
     return (
       <div className="card border-l-4 border-l-warning bg-warning-light/30 px-5 py-3 flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-start gap-3 min-w-0">
@@ -206,7 +209,7 @@ export default function BreachBanner({
             </p>
             <p className="mt-1 text-caption text-slate leading-snug">
               {inScope.length === 0
-                ? 'No regulatory module is in scope for this institution yet.'
+                ? "No regulatory module is in scope for this institution yet."
                 : `None of the ${inScope.length} in-scope modules returned a computable position for this period, so nothing has been checked against a limit — this is not a clean result.`}
             </p>
           </div>
@@ -223,7 +226,7 @@ export default function BreachBanner({
 
   // 4. Partial coverage: affirm compliance ONLY over what was measured, and
   //    name what was not.
-  if (verdict === 'partial') {
+  if (verdict === "partial") {
     return (
       <div className="card border-l-4 border-l-warning bg-warning-light/30 px-5 py-3 flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-start gap-3 min-w-0">
@@ -234,14 +237,16 @@ export default function BreachBanner({
           />
           <div className="min-w-0">
             <p className="text-body font-semibold text-navy">
-              No breach in {computed.length} of {inScope.length} modules ·{' '}
+              No breach in {computed.length} of {inScope.length} modules ·{" "}
               {notComputable.length} not assessed
             </p>
             <p className="mt-1 text-caption text-slate leading-snug">
-              Not computable:{' '}
-              {notComputable.map((m) => LIVE_MODULE_LABELS[m]).join(', ')}. Their limits
-              have not been checked for this period.
-              {approaching > 0 ? ` ${approaching} of the measured modules ${approaching === 1 ? 'is' : 'are'} approaching a threshold.` : ''}
+              Not computable:{" "}
+              {notComputable.map((m) => LIVE_MODULE_LABELS[m]).join(", ")}.
+              Their limits have not been checked for this period.
+              {approaching > 0
+                ? ` ${approaching} of the measured modules ${approaching === 1 ? "is" : "are"} approaching a threshold.`
+                : ""}
             </p>
           </div>
         </div>
@@ -249,7 +254,8 @@ export default function BreachBanner({
           href={LIVE_MODULE_HREFS[notComputable[0]]}
           className="shrink-0 text-caption font-medium text-action hover:text-action-hover inline-flex items-center gap-1"
         >
-          Open {LIVE_MODULE_LABELS[notComputable[0]]} <ArrowRight size={12} aria-hidden />
+          Open {LIVE_MODULE_LABELS[notComputable[0]]}{" "}
+          <ArrowRight size={12} aria-hidden />
         </Link>
       </div>
     );
@@ -265,11 +271,14 @@ export default function BreachBanner({
           {liveModules > 0 ? (
             <span className="text-slate"> · {liveModules} modules live</span>
           ) : (
-            <span className="text-slate"> · {computed.length} modules computed</span>
+            <span className="text-slate">
+              {" "}
+              · {computed.length} modules computed
+            </span>
           )}
           {approaching > 0 && (
             <span className="text-slate">
-              {' '}
+              {" "}
               · {approaching} approaching threshold
             </span>
           )}
@@ -306,13 +315,13 @@ function BreachedModuleRow({
         href={LIVE_MODULE_HREFS[module]}
         className="text-body text-navy/85 leading-snug min-w-0 hover:text-action"
       >
-        {metricLabel ?? 'Headline metric'}{' '}
+        {metricLabel ?? "Headline metric"}{" "}
         {value !== undefined && (
           <span className="font-mono tnum font-medium text-navy">
             {value}
-            {unit ?? ''}
+            {unit ?? ""}
           </span>
-        )}{' '}
+        )}{" "}
         — breach status for this period
       </Link>
     </li>

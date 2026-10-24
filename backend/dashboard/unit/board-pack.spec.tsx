@@ -136,6 +136,26 @@ beforeAll(() => {
 });
 afterAll(() => server.close());
 beforeEach(() => {
+  server.use(
+    http.get(`${apiBaseUrl}/regulatory-reporting/templates`, () =>
+      HttpResponse.json({
+        templates: ["LCR-NSFR", "IRRBB-PILOT"].map((code) => ({
+          code,
+          instrument_status: "in_force",
+          title: code,
+          family: "liquidity",
+          frequency: "monthly",
+          regulator: "Synthetic",
+          generator: "synthetic",
+          directive_citation: "Synthetic evidence",
+          fidelity: "PARTIAL",
+          template_id: code,
+          default_channel: "manual",
+          supports_working_copy: false,
+        })),
+      }),
+    ),
+  );
   requests = [];
   selection.period = "Period A";
   setAccessToken("synthetic-test-token");
@@ -156,18 +176,23 @@ it("labels the library card with its live basis regardless of the selected perio
     view(<PackCards bankId={undefined} periodId={selection.period} />);
   const rendered = render(card());
   const boardPack = within(
-    screen.getByRole("heading", { name: "Board Pack" }).closest<HTMLElement>(".card")!,
+    screen
+      .getByRole("heading", { name: "Board Pack" })
+      .closest<HTMLElement>(".card")!,
   );
-  expect(boardPack.getByText("Current live generations · Baseline")).toBeVisible();
+  expect(
+    boardPack.getByText("Current live generations · Baseline"),
+  ).toBeVisible();
   expect(boardPack.queryByText(/Period A/)).not.toBeInTheDocument();
   expect(screen.getByText("Period Period A")).toBeVisible();
-  expect(boardPack.getByRole("link", { name: "Open board pack" })).toHaveAttribute(
-    "href",
-    "/reports/board-pack",
-  );
+  expect(
+    boardPack.getByRole("link", { name: "Open board pack" }),
+  ).toHaveAttribute("href", "/reports/board-pack");
   selection.period = "Period B";
   rendered.rerender(card());
-  expect(boardPack.getByText("Current live generations · Baseline")).toBeVisible();
+  expect(
+    boardPack.getByText("Current live generations · Baseline"),
+  ).toBeVisible();
   expect(boardPack.queryByText(/Period B/)).not.toBeInTheDocument();
   expect(screen.getByText("Period Period B")).toBeVisible();
 });
@@ -233,7 +258,13 @@ it("prints current baseline figures with their producing generation despite hist
       /Official run provenance|Synthetic demonstration dataset/,
     ),
   ).not.toBeInTheDocument();
-  expect(requests.every((path) => path.endsWith("/live-summary"))).toBe(true);
+  expect(
+    requests.every(
+      (path) =>
+        path.endsWith("/live-summary") ||
+        path.endsWith("/regulatory-reporting/templates"),
+    ),
+  ).toBe(true);
   const print = vi.spyOn(window, "print").mockImplementation(() => {});
   fireEvent.click(screen.getByRole("button", { name: /Print \/ Save as PDF/ }));
   expect(print).toHaveBeenCalledOnce();

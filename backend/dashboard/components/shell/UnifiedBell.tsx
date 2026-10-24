@@ -1,5 +1,7 @@
 "use client";
 
+import { useInForceAlerts } from "@/lib/api/regulatoryRules";
+
 /**
  * The ONE header bell: limit breaches and workflow notifications in a single
  * popover with two tabs, per the approved design (consolidated notification
@@ -18,11 +20,7 @@ import { useBankContext } from "@/components/shell/BankContext";
 import NotificationDrawer, {
   notificationHref,
 } from "@/components/shell/NotificationDrawer";
-import {
-  useBankAlerts,
-  useMarkNotificationRead,
-  useNotifications,
-} from "@/lib/api/hooks";
+import { useMarkNotificationRead, useNotifications } from "@/lib/api/hooks";
 import { fmtRelative, labelize } from "@/lib/api/values";
 import {
   LIVE_MODULE_HREFS,
@@ -44,7 +42,7 @@ function severityTone(severity: AlertSeverity): StatusTone {
 export default function UnifiedBell() {
   const { bank } = useBankContext();
   const router = useRouter();
-  const alertsQuery = useBankAlerts(bank?.id);
+  const alertsQuery = useInForceAlerts(bank?.id);
   const feed = useNotifications();
   const markRead = useMarkNotificationRead();
 
@@ -144,8 +142,7 @@ export default function UnifiedBell() {
                   <div className="px-4 py-8 text-center">
                     <p className="text-body text-slate">No active breaches</p>
                     <p className="mt-1 text-caption text-slate">
-                      Live limits are within tolerance for{" "}
-                      {bank?.name ?? "this bank"}.
+                      No in-force breach alerts in this feed.
                     </p>
                   </div>
                 ) : (

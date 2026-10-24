@@ -32,6 +32,7 @@ import {
   useLiveSummary,
 } from "@/lib/api/hooks";
 import { num, numOrNull, formatFigure, fmtPctOrNull } from "@/lib/api/values";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { isHrefVisible } from "@/lib/modules";
 
@@ -141,6 +142,7 @@ function trendSpark<T extends TrendPoint>(
 // --- hook --------------------------------------------------------------------
 
 export type PulseCards = {
+  modules: LiveModule[];
   cards: Record<LiveModule, PulseCardModel>;
   /** True while any module card is still fetching. */
   isLoading: boolean;
@@ -158,11 +160,15 @@ export function usePulseCards(
   //     redden the console for an expected pre-ingestion state. The Command
   //     Center's "No computed data yet" panel explains it instead.
   const scope = useModuleScope();
+  const rules = useBankRules(bankId);
   const scoped = (module: LiveModule) =>
-    isHrefVisible(LIVE_MODULE_HREFS[module], scope);
+    isHrefVisible(LIVE_MODULE_HREFS[module], scope) &&
+    rules.isModuleInForce(module);
   const dataBankId = hasData ? bankId : undefined;
   const liq = useLiquidityDashboard(
-    scope.liquidityAggregatedView ? dataBankId : undefined,
+    scope.liquidityAggregatedView && scoped("liquidity")
+      ? dataBankId
+      : undefined,
   );
   const cap = useCapitalDashboard(scoped("capital") ? dataBankId : undefined);
   const irr = useIrrDashboard(scoped("irr") ? dataBankId : undefined);
@@ -401,6 +407,8 @@ export function usePulseCards(
   const cards = Object.fromEntries(
     DEFAULT_MODULE_ORDER.map((module) => {
       const card = baseCards[module];
+      if (!scoped(module))
+        return [module, { module, isLoading: false, status: "na" }];
       const overlay = ladderOverlay(ladders[module].data?.snapshots, module);
       return [
         module,
@@ -418,6 +426,7 @@ export function usePulseCards(
 
   return {
     cards,
+    modules: DEFAULT_MODULE_ORDER.filter(scoped),
     isLoading: DEFAULT_MODULE_ORDER.some((m) => cards[m].isLoading),
   };
 }
