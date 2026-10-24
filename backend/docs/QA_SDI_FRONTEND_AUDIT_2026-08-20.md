@@ -26,7 +26,7 @@ That is necessary control, but it is not the SDI experience promised by `docs/sd
 
 ### Simplified capital is a proper SDI replacement
 
-[backend/dashboard/app/(app)/basel/page.tsx](backend/dashboard/app/(app)/basel/page.tsx) switches an SDI from the Basel page to [backend/dashboard/components/basel/SdiCapitalView.tsx](backend/dashboard/components/basel/SdiCapitalView.tsx). The replacement wires dedicated SDI API hooks and presents:
+[backend/dashboard/app/(app)/basel/page.tsx](<backend/dashboard/app/(app)/basel/page.tsx>) switches an SDI from the Basel page to [backend/dashboard/components/basel/SdiCapitalView.tsx](backend/dashboard/components/basel/SdiCapitalView.tsx). The replacement wires dedicated SDI API hooks and presents:
 
 - Section 29 CAR with Net Own Funds and simplified RWA bands.
 - Paid-up-capital and statutory-reserve-fund checks.
@@ -37,27 +37,27 @@ The capital subtab layout also correctly leaves the SDI with only the overview; 
 
 ## SDI Route and Subtab Matrix
 
-| Area | SDI scope result | UI readiness | Audit result |
-|---|---|---|---|
-| Shell navigation | Bank-only modules are hidden and guarded | Scoped | Pass |
-| Regulatory Capital `/basel` | Basel-only subtabs removed | Dedicated `SdiCapitalView` | Pass, with follow-up integration gaps |
-| Liquidity Cockpit `/liquidity` | Buffer and NSFR hidden | Still Basel LCR/NSFR dashboard | **P0 fail** |
-| Liquidity Forecast `/liquidity/forecast` | Kept | No SDI-specific evidence found | P1 gap |
-| Liquidity Stress `/liquidity/stress` | Kept | Header and journey remain LCR/NSFR-oriented | **P0 fail** |
-| Liquidity Monitoring `/liquidity/monitoring` | Kept | Governance tables, not an SDI liquidity cockpit | P1 gap |
-| Liquidity CFP `/liquidity/cfp` | Kept | Reusable governance surface | Needs SDI workflow validation |
-| Risk & Limits `/risk` | FX/FTP fetches are scoped off | Still extracts bank capital and Basel LCR/NSFR limits | **P0 fail** |
-| Enterprise Stress workbench | Basel liquidity KPI is suppressed for SDI | SDI liquidity is explanatory placeholder; Basel capital charts remain | **P0 fail** |
-| Stress board pack | Labels LMTD when LCR is null | Placeholder, and cover still says ICAAP | **P0 fail** |
-| Regulatory Reporting `/submissions` | Backend filters return family | Generic workspace gives no visible SDI family/track context | P1 gap |
-| Reports and home | Some LCR/NSFR visuals are suppressed | No Table-1 / reserve / SDI exposure equivalent | P1 gap |
-| IRRBB, Behavioural, Forecasting, Markets | Included by default SDI module set | Generic shared screens | P2: needs an explicit SDI relevance review, not a separate UI by default |
+| Area                                         | SDI scope result                                                                                                                    | UI readiness                                                          | Audit result                                                             |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Shell navigation                             | Bank-only modules are hidden and guarded                                                                                            | Scoped                                                                | Pass                                                                     |
+| Regulatory Capital `/basel`                  | Basel-only subtabs removed                                                                                                          | Dedicated `SdiCapitalView`                                            | Pass, with follow-up integration gaps                                    |
+| Liquidity Cockpit `/liquidity`               | Buffer and NSFR hidden                                                                                                              | Still Basel LCR/NSFR dashboard                                        | **P0 fail**                                                              |
+| Liquidity Forecast `/liquidity/forecast`     | Kept                                                                                                                                | No SDI-specific evidence found                                        | P1 gap                                                                   |
+| Liquidity Stress `/liquidity/stress`         | Kept                                                                                                                                | Header and journey remain LCR/NSFR-oriented                           | **P0 fail**                                                              |
+| Liquidity Monitoring `/liquidity/monitoring` | Kept                                                                                                                                | Governance tables, not an SDI liquidity cockpit                       | P1 gap                                                                   |
+| Liquidity CFP `/liquidity/cfp`               | Kept                                                                                                                                | Reusable governance surface                                           | Needs SDI workflow validation                                            |
+| Risk & Limits `/risk`                        | FX/FTP fetches are scoped off                                                                                                       | Still extracts bank capital and Basel LCR/NSFR limits                 | **P0 fail**                                                              |
+| Enterprise Stress workbench                  | Basel liquidity KPI is suppressed for SDI                                                                                           | SDI liquidity is explanatory placeholder; Basel capital charts remain | **P0 fail**                                                              |
+| Stress board pack                            | Labels LMTD when LCR is null                                                                                                        | Placeholder, and cover still says ICAAP                               | **P0 fail**                                                              |
+| Regulatory Reporting `/submissions`          | Historical filtering; see [current contract](../../docs/regulatory_reporting.md#6-api-appreportingapimanage_regulatory_reportingpy) | Generic workspace gives no visible SDI family/track context           | P1 gap                                                                   |
+| Reports and home                             | Some LCR/NSFR visuals are suppressed                                                                                                | No Table-1 / reserve / SDI exposure equivalent                        | P1 gap                                                                   |
+| IRRBB, Behavioural, Forecasting, Markets     | Included by default SDI module set                                                                                                  | Generic shared screens                                                | P2: needs an explicit SDI relevance review, not a separate UI by default |
 
 ## Findings
 
 ### P0 - SDI Liquidity Cockpit is still a Basel LCR/NSFR page
 
-**Evidence:** [backend/dashboard/app/(app)/liquidity/page.tsx](backend/dashboard/app/(app)/liquidity/page.tsx) renders a `Liquidity Coverage Ratio` gauge, `Net Stable Funding Ratio` gauge, HQLA, ASF, RSF, Basel 30-day outflows, Basel inflow cap, and Basel regulatory floors. It has no `institutionClass === 'sdi'` branch.
+**Evidence:** [backend/dashboard/app/(app)/liquidity/page.tsx](<backend/dashboard/app/(app)/liquidity/page.tsx>) renders a `Liquidity Coverage Ratio` gauge, `Net Stable Funding Ratio` gauge, HQLA, ASF, RSF, Basel 30-day outflows, Basel inflow cap, and Basel regulatory floors. It has no `institutionClass === 'sdi'` branch.
 
 **Impact:** An SDI user lands on a primary in-scope module and is presented with the two measures that the SDI specification says are bank-only. Hiding the Buffer and NSFR tabs does not make the remaining Cockpit compliant, because the Cockpit itself leads with LCR and NSFR.
 
@@ -91,7 +91,7 @@ Do **not** fabricate stressed Table-1 paths, a run-off ladder, survival horizon,
 
 ### P0 - The liquidity stress route and board-pack preserve bank framing
 
-**Evidence:** [backend/dashboard/app/(app)/liquidity/stress/page.tsx](backend/dashboard/app/(app)/liquidity/stress/page.tsx) says the route couples an `LCR/NSFR path` to the solvency outcome. [backend/dashboard/app/(app)/reports/stress-board-pack/page.tsx](backend/dashboard/app/(app)/reports/stress-board-pack/page.tsx) changes the liquidity KPI text to `LMTD` for SDI runs, but its liquidity chart is only explanatory text and its cover is headed `ICAAP Stress Test`.
+**Evidence:** [backend/dashboard/app/(app)/liquidity/stress/page.tsx](<backend/dashboard/app/(app)/liquidity/stress/page.tsx>) says the route couples an `LCR/NSFR path` to the solvency outcome. [backend/dashboard/app/(app)/reports/stress-board-pack/page.tsx](<backend/dashboard/app/(app)/reports/stress-board-pack/page.tsx>) changes the liquidity KPI text to `LMTD` for SDI runs, but its liquidity chart is only explanatory text and its cover is headed `ICAAP Stress Test`.
 
 **Impact:** The primary journey and board artifact use a bank/ICAAP framing for a proportionate SDI stress exercise, while omitting the actual SDI liquidity evidence the board needs to review.
 
@@ -99,7 +99,7 @@ Do **not** fabricate stressed Table-1 paths, a run-off ladder, survival horizon,
 
 ### P0 - Risk & Limits is not fed by the SDI control surfaces
 
-**Evidence:** [backend/dashboard/app/(app)/risk/page.tsx](backend/dashboard/app/(app)/risk/page.tsx) scopes FX and FTP requests, but always calls the generic bank `useLiquidityDashboard` and `useCapitalDashboard`. [backend/dashboard/components/risk/limits.ts](backend/dashboard/components/risk/limits.ts) extracts only Basel LCR/NSFR from liquidity and generic bank CAR from capital. It does not call the SDI capital hooks, SDI liquidity views, paid-up capital checks, statutory reserve checks, loan-classification results, or SDI large-exposure checks.
+**Evidence:** [backend/dashboard/app/(app)/risk/page.tsx](<backend/dashboard/app/(app)/risk/page.tsx>) scopes FX and FTP requests, but always calls the generic bank `useLiquidityDashboard` and `useCapitalDashboard`. [backend/dashboard/components/risk/limits.ts](backend/dashboard/components/risk/limits.ts) extracts only Basel LCR/NSFR from liquidity and generic bank CAR from capital. It does not call the SDI capital hooks, SDI liquidity views, paid-up capital checks, statutory reserve checks, loan-classification results, or SDI large-exposure checks.
 
 **Impact:** The platform's command-center risk surface can show no SDI control breaches even when the SDI Capital page shows an adverse outcome. Its liquidity wall is based on inapplicable LCR/NSFR measures.
 
@@ -111,7 +111,7 @@ Do **not** fabricate stressed Table-1 paths, a run-off ladder, survival horizon,
 
 ### P1 - Liquidity Monitoring is a register page, not the required SDI supervisory workspace
 
-**Evidence:** [backend/dashboard/app/(app)/liquidity/monitoring/page.tsx](backend/dashboard/app/(app)/liquidity/monitoring/page.tsx) identifies SDI threshold rows as binding and includes cash-flow and stressed-ladder panels. Its main content remains the threshold register, haircut schedule, FX funding gap, and a narrative link to the LMT return. It does not display the eight Table-1 ratio values, their individual thresholds, maturity ladder, funding concentration, Top-20/100 depositors, or counterbalancing-capacity calculation.
+**Evidence:** [backend/dashboard/app/(app)/liquidity/monitoring/page.tsx](<backend/dashboard/app/(app)/liquidity/monitoring/page.tsx>) identifies SDI threshold rows as binding and includes cash-flow and stressed-ladder panels. Its main content remains the threshold register, haircut schedule, FX funding gap, and a narrative link to the LMT return. It does not display the eight Table-1 ratio values, their individual thresholds, maturity ladder, funding concentration, Top-20/100 depositors, or counterbalancing-capacity calculation.
 
 **Impact:** The most SDI-aware liquidity page makes the binding measures discoverable only indirectly through a regulatory return; a treasurer cannot operate from it.
 
@@ -119,7 +119,7 @@ Do **not** fabricate stressed Table-1 paths, a run-off ladder, survival horizon,
 
 ### P1 - Regulatory Reporting is functionally filtered but does not communicate the SDI filing context
 
-**Evidence:** [backend/dashboard/app/(app)/submissions/returns/page.tsx](backend/dashboard/app/(app)/submissions/returns/page.tsx) selects from the templates returned by the API and therefore benefits from backend return-family filtering. The UI itself labels neither the active institution type nor its return track/family, and does not explain why a return is present or unavailable.
+**Historical evidence:** This audit described API-side return-family filtering. The current catalogue disclosure contract is owned by [Regulatory Reporting §6](../../docs/regulatory_reporting.md#6-api-appreportingapimanage_regulatory_reportingpy); the Returns workspace now filters its selector. The audit's institution-context recommendations below remain the original assessment.
 
 **Impact:** The user cannot verify from the frontend that the return selector is SDI/BSD-track scoped rather than merely a smaller list. This matters especially while the exact SDI return pack remains a regulator-provided artifact.
 
@@ -164,15 +164,15 @@ These exclusions are present in [backend/dashboard/lib/modules.ts](backend/dashb
 
 ### Retained but requiring SDI-specific redesign or validation
 
-| Subtab | Current role | SDI decision |
-|---|---|---|
-| Liquidity Cockpit | Basel LCR/NSFR and HQLA | Replace with SDI live liquidity cockpit |
-| Liquidity Forecast | Shared cash-flow forecast | Retain; validate an SDI maturity/survival-horizon branch |
-| Liquidity Stress | Enterprise workbench with Basel framing | Retain; replace with SDI stress outcomes |
-| Liquidity Monitoring | Threshold/haircut governance | Retain as policy/assumptions, not the main cockpit |
-| Liquidity CFP | Shared contingency-funding governance | Retain; add SDI activation / reserve / funding-concentration context |
-| Capital Overview | Simplified Section 29 | Retain; add governance drill-through |
-| Reporting sections | Shared lifecycle | Retain; expose SDI return-family context |
+| Subtab               | Current role                            | SDI decision                                                         |
+| -------------------- | --------------------------------------- | -------------------------------------------------------------------- |
+| Liquidity Cockpit    | Basel LCR/NSFR and HQLA                 | Replace with SDI live liquidity cockpit                              |
+| Liquidity Forecast   | Shared cash-flow forecast               | Retain; validate an SDI maturity/survival-horizon branch             |
+| Liquidity Stress     | Enterprise workbench with Basel framing | Retain; replace with SDI stress outcomes                             |
+| Liquidity Monitoring | Threshold/haircut governance            | Retain as policy/assumptions, not the main cockpit                   |
+| Liquidity CFP        | Shared contingency-funding governance   | Retain; add SDI activation / reserve / funding-concentration context |
+| Capital Overview     | Simplified Section 29                   | Retain; add governance drill-through                                 |
+| Reporting sections   | Shared lifecycle                        | Retain; expose SDI return-family context                             |
 
 ## Recommended Frontend Delivery Order
 

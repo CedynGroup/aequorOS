@@ -315,23 +315,10 @@ semantics follow the plane, never the other way round:
    Missing-source handling follows the
    [official BSD engine rules](docs/bog_returns/00_full_return_registry.md#6-as-built-engine-rules).
 
-The regulatory instruments register (`/submissions/instruments`) and preparation
-view (`/submissions/upcoming`) use the return registry and the same eligibility
-resolver as the filing calendar. The calendar shows only instruments in force
-at the observation date; future final rules and exposure drafts remain available
-for deliberate preparation. The shared `InstrumentStatusBadge` owns the dashboard
-status disclosure, including citation and source details. Template fidelity and
-calculation readiness are separate from legal status.
-
-The existing daily reporting-deadline scan also observes each bank's instrument
-status and governed commencement date. Its first observation establishes a
-baseline; subsequent status or date changes generate a notification. Final rules
-receive reminders within 90, 30, 7 and 1 days of commencement. Drafts never acquire
-a filing deadline from an expected date. Observations and notification deduplication
-keys persist in `regulatory_reporting_settings.instrument_observations` in the same
-transaction as the notifications, with the bank row locked against concurrent scans.
-Instrument notifications use the same bank and return-family disclosure boundaries
-as deadline notifications.
+The [reporting-date contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)
+also owns instrument applicability, commencement notifications and sealed export
+disclosures. For register navigation and deliberate preparation, see the
+[dashboard guide](backend/dashboard/README.md#regulatory-instruments-and-preparation).
 
 Growth path: denser ingestion (daily/streaming) makes plane 2 denser and the
 live edge fresher without any architectural change — QRM-cadence to

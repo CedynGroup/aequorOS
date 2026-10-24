@@ -222,8 +222,6 @@ export default function RiskLimitMonitorPage() {
     });
   }, [
     lmtdInForce,
-    liquidityInForce,
-    irrInForce,
     rules,
     capital.data,
     ftp.data,
