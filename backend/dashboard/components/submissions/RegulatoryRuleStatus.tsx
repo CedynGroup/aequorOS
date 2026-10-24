@@ -1,7 +1,7 @@
 "use client";
 
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
-import { useReturnTemplates } from "@/lib/api/hooks";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import InstrumentStatusBadge from "./InstrumentStatusBadge";
 
 /** Resolve the badge's evidence from the same register used by preparation. */
@@ -14,11 +14,9 @@ export default function RegulatoryRuleStatus({
 }) {
   const { bank } = useBankContext();
   const scope = useModuleScope();
-  const query = useReturnTemplates(bank?.id);
+  const rules = useBankRules(bank?.id);
   const selected = scope.institutionClass === "sdi" && sdiCode ? sdiCode : code;
-  const instrument = query.data?.templates.find(
-    (item) => item.code === selected,
-  );
+  const instrument = rules.instrument(selected);
   return (
     <InstrumentStatusBadge
       status={instrument?.instrumentStatus}

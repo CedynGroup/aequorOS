@@ -44,6 +44,7 @@ import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadg
 import {
   preparationWarning,
   packagePreparationWarning,
+  isRuleInForce,
 } from "@/lib/regulatoryInstruments";
 import PageContainer from "@/components/ui/PageContainer";
 import {
@@ -224,7 +225,7 @@ function ReturnsWorkspace() {
       (templatesQuery.data?.templates ?? []).filter(
         (template) =>
           (isSdi ? template.family === "sdi" : template.family !== "sdi") &&
-          (template.instrumentStatus === "in_force" ||
+          (isRuleInForce(template) ||
             template.code === searchParams.get("code")),
       ),
     [isSdi, templatesQuery.data, searchParams],

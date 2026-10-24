@@ -1,6 +1,8 @@
 "use client";
 
 import CfpLifecycle from "@/components/liquidity/CfpLifecycle";
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
 import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
 import PageHeader from "@/components/ui/PageHeader";
@@ -137,6 +139,7 @@ const indicatorColumns: Column<EwiEvaluationRead>[] = [
 
 export default function ContingencyFundingPlan() {
   const { bank, period, moduleScope } = useBankContext();
+  const preparing = useSearchParams().get("preparing") === "1";
   const bankId = bank?.id;
 
   const ewis = useEwiDashboard(bankId, period?.id);
@@ -414,7 +417,7 @@ export default function ContingencyFundingPlan() {
                   invented classification.{" "}
                   {isHrefVisible("/liquidity/monitoring", moduleScope) ? (
                     <Link
-                      href="/liquidity/monitoring"
+                      href={preparationHref("/liquidity/monitoring", preparing)}
                       className="text-action hover:underline"
                     >
                       Monitoring tools & threshold register

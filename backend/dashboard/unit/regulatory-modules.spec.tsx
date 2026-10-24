@@ -135,14 +135,14 @@ it("gates untagged draft tabs and preserves preparation when navigating", () => 
   );
 });
 
-it("keeps reference monitoring accessible without preparation mode", () => {
+it("requires deliberate preparation for reference monitoring", () => {
   state.status = "unpublished";
   render(
     <RegulatoryModuleTabs tabs={tabs}>
       <p>Monitoring workspace</p>
     </RegulatoryModuleTabs>,
   );
-  expect(screen.getByText("Monitoring workspace")).toBeVisible();
+  expect(screen.queryByText("Monitoring workspace")).toBeNull();
   expect(screen.getByText("Reference")).toBeVisible();
 });
 
@@ -161,4 +161,18 @@ it("uses SDI evidence for supported IRRBB tabs while keeping the framework bank-
   expect(
     screen.queryByRole("link", { name: "Standardised Framework" }),
   ).toBeNull();
+});
+
+it("omits bank-only Basel evidence from an SDI reserve cockpit", () => {
+  state.sdi = true;
+  state.pathname = "/liquidity";
+  state.code = "LCR-NSFR";
+  state.status = "unpublished";
+  render(
+    <RegulatoryModuleTabs tabs={[]} contextRule="LCR-NSFR">
+      <p>Reserve checks</p>
+    </RegulatoryModuleTabs>,
+  );
+  expect(screen.getByText("Reserve checks")).toBeVisible();
+  expect(screen.queryByText("Reference")).toBeNull();
 });

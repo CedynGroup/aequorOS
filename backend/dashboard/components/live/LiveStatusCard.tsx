@@ -1,5 +1,7 @@
 "use client";
 
+import { useBankRules, useInForceAlerts } from "@/lib/api/regulatoryRules";
+
 /**
  * Cross-module live status card. Reads the polled live-summary + alerts views
  * and shows, per module, the current headline metric, traffic-light status, and
@@ -12,7 +14,7 @@ import type { LiveModuleView } from "@aequoros/risk-service-api";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import StatusPill from "@/components/ui/StatusPill";
 import { useBankContext } from "@/components/shell/BankContext";
-import { useBankAlerts, useLiveSummary } from "@/lib/api/hooks";
+import { useLiveSummary } from "@/lib/api/hooks";
 import { fmtRelative, statusTone } from "@/lib/api/values";
 import { LIVE_MODULE_LABELS, livePrimaryMetric } from "./moduleDisplay";
 
@@ -30,9 +32,12 @@ const MODULE_ORDER: LiveModuleView["module"][] = [
 export default function LiveStatusCard() {
   const { bank } = useBankContext();
   const summary = useLiveSummary(bank?.id);
-  const alerts = useBankAlerts(bank?.id);
+  const alerts = useInForceAlerts(bank?.id);
 
-  const modules = summary.data?.modules ?? [];
+  const rules = useBankRules(bank?.id);
+  const modules = (summary.data?.modules ?? []).filter((item) =>
+    rules.isModuleInForce(item.module),
+  );
   const byModule = new Map(modules.map((m) => [m.module, m]));
   const total = alerts.data?.total ?? 0;
   const computedAt = summary.data?.computedAt ?? null;
@@ -57,7 +62,7 @@ export default function LiveStatusCard() {
               {total} breach{total === 1 ? "" : "es"}
             </StatusPill>
           ) : (
-            <StatusPill tone="compliant">No breaches</StatusPill>
+            <StatusPill tone="slate">0 in-force alerts</StatusPill>
           )
         }
       />
@@ -71,7 +76,7 @@ export default function LiveStatusCard() {
           </p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-border-light rounded-sm overflow-hidden border border-border-light">
-            {MODULE_ORDER.map((module) => {
+            {MODULE_ORDER.filter(rules.isModuleInForce).map((module) => {
               const view = byModule.get(module);
               const primary = view
                 ? livePrimaryMetric(module, view.metrics)

@@ -24,8 +24,6 @@ import {
   LIVE_MODULE_LABELS,
   liveMetricChangeText,
 } from "@/components/live/moduleDisplay";
-import { useModuleScope } from "@/components/shell/BankContext";
-import { isHrefVisible } from "@/lib/modules";
 import type { ModuleOrder } from "./RoleLens";
 import {
   DEFAULT_MODULE_ORDER,
@@ -59,12 +57,11 @@ export default function PulseWall({
    * per-module fetches that would 409 on a fresh, un-ingested tenant. */
   hasData?: boolean;
 }) {
-  const { cards } = usePulseCards(bankId, hasData);
-  const scope = useModuleScope();
+  const { cards, modules } = usePulseCards(bankId, hasData);
   // Scope the pulse wall to the tenant's module set (docs/sdi.md §3.2): an SDI
   // drops the FX / FTP engines it does not run, so no irrelevant tile appears.
   const order = resolveOrder(moduleOrder, cards).filter((module) =>
-    isHrefVisible(LIVE_MODULE_HREFS[module], scope),
+    modules.includes(module),
   );
 
   return (

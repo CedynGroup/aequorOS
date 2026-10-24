@@ -2,6 +2,7 @@
 
 /** All financial figures and evidence come from one live-summary response. */
 import "@/app/print.css";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import Link from "next/link";
 import { Printer } from "lucide-react";
 import type { LiveModule, LiveStatus } from "@aequoros/risk-service-api";
@@ -45,11 +46,23 @@ const BRIEF_MODULES: LiveModule[] = [
 export default function BoardPackPage() {
   const { bank } = useBankContext();
   const scope = useModuleScope();
-  const live = useLiveSummary(bank?.id);
-  const briefModules = BRIEF_MODULES.filter((module) =>
-    module === "liquidity"
-      ? scope.liquidityAggregatedView
-      : isHrefVisible(LIVE_MODULE_HREFS[module], scope),
+  const source = useLiveSummary(bank?.id);
+  const rules = useBankRules(bank?.id);
+  const live = {
+    ...source,
+    data: source.data && {
+      ...source.data,
+      modules: source.data.modules.filter((row) =>
+        rules.isModuleInForce(row.module),
+      ),
+    },
+  };
+  const briefModules = BRIEF_MODULES.filter(
+    (module) =>
+      rules.isModuleInForce(module) &&
+      (module === "liquidity"
+        ? scope.liquidityAggregatedView
+        : isHrefVisible(LIVE_MODULE_HREFS[module], scope)),
   );
   const modulesWithBriefs = [
     ...new Set([

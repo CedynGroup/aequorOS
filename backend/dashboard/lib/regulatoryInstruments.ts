@@ -56,6 +56,12 @@ export function instrumentDisclosure(
   }
 }
 
+export type RuleEvidence = { instrumentStatus?: InstrumentStatus };
+
+export function isRuleInForce(instrument: RuleEvidence | undefined): boolean {
+  return instrument?.instrumentStatus === "in_force";
+}
+
 export function isUpcomingRule(status: InstrumentStatus | undefined): boolean {
   return status === "exposure_draft" || status === "final_not_in_force";
 }
@@ -96,4 +102,10 @@ export function packagePreparationWarning(
     }
   }
   return preparationWarning(fallbackStatus, fallbackDate);
+}
+
+export function preparationHref(href: string, preparing: boolean): string {
+  return preparing
+    ? `${href}${href.includes("?") ? "&" : "?"}preparing=1`
+    : href;
 }

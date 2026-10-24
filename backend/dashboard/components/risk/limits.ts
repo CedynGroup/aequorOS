@@ -17,6 +17,7 @@ import type {
   IrrDashboardRead,
   LiquidityDashboardRead,
 } from "@aequoros/risk-service-api";
+import { isRuleInForce, type RuleEvidence } from "@/lib/regulatoryInstruments";
 import { labelize, num, numOrNull } from "@/lib/api/values";
 import { runThresholds } from "@/components/liquidity/runData";
 import { fmtCurrencySigned } from "@/lib/format";
@@ -98,8 +99,11 @@ export function capitalLimits(
   ];
 }
 
-export function irrLimits(data: IrrDashboardRead | undefined): LimitRow[] {
-  if (!data) return [];
+export function irrLimits(
+  data: IrrDashboardRead | undefined,
+  rule?: RuleEvidence,
+): LimitRow[] {
+  if (!data || !isRuleInForce(rule)) return [];
   const metrics = data.metrics;
   return [
     {
@@ -221,8 +225,9 @@ const RATIO_STATUS: Record<string, LimitStatus> = {
 export function liquidityLimits(
   data: LiquidityDashboardRead | undefined,
   run?: RegulatoryRunRead,
+  rule?: RuleEvidence,
 ): LimitRow[] {
-  if (!data) return [];
+  if (!data || !isRuleInForce(rule)) return [];
   const thresholds = runThresholds(run);
   const computedAt = data.live?.computedAt;
   const rows: LimitRow[] = [];
@@ -268,15 +273,21 @@ export function liquidityLimits(
 export function extractAllLimits(dashboards: {
   liquidity?: LiquidityDashboardRead;
   liquidityRun?: RegulatoryRunRead;
+  liquidityRule?: RuleEvidence;
+  irrRule?: RuleEvidence;
   capital?: CapitalDashboardRead;
   irr?: IrrDashboardRead;
   fx?: FxDashboardRead;
   ftp?: FtpDashboardRead;
 }): LimitRow[] {
   return [
-    ...liquidityLimits(dashboards.liquidity, dashboards.liquidityRun),
+    ...liquidityLimits(
+      dashboards.liquidity,
+      dashboards.liquidityRun,
+      dashboards.liquidityRule,
+    ),
     ...capitalLimits(dashboards.capital),
-    ...irrLimits(dashboards.irr),
+    ...irrLimits(dashboards.irr, dashboards.irrRule),
     ...fxLimits(dashboards.fx),
     ...ftpLimits(dashboards.ftp),
   ];

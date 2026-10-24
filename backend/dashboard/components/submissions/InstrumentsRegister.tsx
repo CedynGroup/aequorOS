@@ -9,7 +9,11 @@ import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import { useReturnTemplates } from "@/lib/api/hooks";
-import { instrumentDate, isUpcomingRule } from "@/lib/regulatoryInstruments";
+import {
+  instrumentDate,
+  isUpcomingRule,
+  isRuleInForce,
+} from "@/lib/regulatoryInstruments";
 import InstrumentStatusBadge from "./InstrumentStatusBadge";
 
 export default function InstrumentsRegister(props: { upcoming?: boolean }) {
@@ -74,15 +78,17 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
             const differs =
               effective !== defaultDate && Boolean(item.commencementParameter);
             const capability =
-              item.code === "LMT" || item.code === "SDI-LMT-MONTHLY"
-                ? "/liquidity/monitoring"
-                : item.code === "SDI-IRRBB-QUARTERLY"
-                  ? "/irr"
-                  : item.code === "IRRBB-PILOT"
-                    ? "/irr/standardised"
-                    : item.code === "ICAAP-REPORT"
-                      ? "/icaap"
-                      : null;
+              item.code === "LCR-NSFR" && scope.institutionClass !== "sdi"
+                ? "/liquidity"
+                : item.code === "LMT" || item.code === "SDI-LMT-MONTHLY"
+                  ? "/liquidity/monitoring"
+                  : item.code === "SDI-IRRBB-QUARTERLY"
+                    ? "/irr"
+                    : item.code === "IRRBB-PILOT"
+                      ? "/irr/standardised"
+                      : item.code === "ICAAP-REPORT"
+                        ? "/icaap"
+                        : null;
             return (
               <section
                 id={item.code}
@@ -144,7 +150,7 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
                     </p>
                   </div>
                 )}
-                {upcoming &&
+                {!isRuleInForce(item) &&
                   capability &&
                   bankId === bank?.id &&
                   isHrefVisible(capability, scope) && (
