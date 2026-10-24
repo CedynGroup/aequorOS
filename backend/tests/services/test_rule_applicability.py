@@ -34,7 +34,7 @@ from app.services import (
 from app.services.fact_derivation import derive_current_facts, derive_facts
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, set_board_threshold
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
-from tests.services.test_sdi_capital_summary import _bank, _seed_capital, _seed_positions
+from tests.fixtures.sdi_capital import create_sdi_bank, seed_sdi_capital, seed_sdi_positions
 
 
 @pytest.mark.usefixtures("forecasting_run_authority")
@@ -174,9 +174,9 @@ def test_saved_forecast_assessments_preserve_immutable_evidence(
 def test_sdi_exposure_status_and_threshold_change_only_on_directive_commencement(
     db_session: Session,
 ) -> None:
-    bank = _bank(db_session)
-    _seed_capital(db_session, bank, [("paid_up_capital", "1000", "CET1")])
-    _seed_positions(db_session, bank, [("LOAN/1", "LOAN", "160")])
+    bank = create_sdi_bank(db_session)
+    seed_sdi_capital(db_session, bank, [("paid_up_capital", "1000", "CET1")])
+    seed_sdi_positions(db_session, bank, [("LOAN/1", "LOAN", "160")])
     snapshot = db_session.scalars(
         select(CanonicalPositionSnapshot).where(CanonicalPositionSnapshot.bank_id == bank.id)
     ).one()
@@ -297,7 +297,7 @@ def test_forecast_history_reuses_legacy_thresholds_only_within_bank_and_source_d
     set_board_threshold(db_session, "car_min", "13")
     bank = db_session.get(Bank, SAMPLE_BANK_ID)
     assert bank is not None
-    other_bank = _bank(db_session)
+    other_bank = create_sdi_bank(db_session)
     first_date = db_session.scalars(
         select(BankReportingPeriod.period_end)
         .where(BankReportingPeriod.bank_id == bank.id)
