@@ -1,4 +1,4 @@
-import { preparationHref } from "@/lib/regulatoryInstruments";
+import { preparationHref } from "../../lib/regulatoryInstruments";
 
 /**
  * The ICAAP cycle's workspace tabs.

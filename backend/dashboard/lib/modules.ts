@@ -1327,8 +1327,6 @@ export const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
   "/submissions/settings",
   "/submissions/signatures",
   "/submissions/templates",
-  "/submissions/instruments",
-  "/submissions/upcoming",
 ]);
 
 /**
@@ -1397,12 +1395,7 @@ export function accessDeniedForPath(
   scope: ModuleScope,
 ): AccessDeniedRoute | null {
   const path = normalize(pathname);
-  if (
-    !scope.isResolved ||
-    !PUBLIC_MODULE_ROUTES.has(path) ||
-    isInstrumentRegister(path)
-  )
-    return null;
+  if (!scope.isResolved || !PUBLIC_MODULE_ROUTES.has(path)) return null;
   const moduleKey = moduleForPath(path);
   // Transitional exception: BI routes are gated by BI_ENABLED; access-denied
   // pages and request-access support are deferred until BI is reviewed.
