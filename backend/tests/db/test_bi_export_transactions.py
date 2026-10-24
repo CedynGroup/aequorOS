@@ -123,7 +123,7 @@ class ExportScenario:
                     assert time.monotonic() < deadline, "BI read did not wait on the mart lock"
                     time.sleep(0.05)
                 self.idle_observations.append(self._api_state(observer))
-                time.sleep(3)  # Three times the real API role connection's idle budget.
+                time.sleep(3)  # Keep BI blocked while verifying the API stays outside a transaction.
                 self.idle_observations.append(self._api_state(observer))
             finally:
                 blocker.rollback()
@@ -167,11 +167,7 @@ def export_scenario(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[ExportScenario]:
     url = role_engines["aqs_api"].url
-    options = " ".join(url.normalized_query.get("options", ()))
-    api_engine = create_engine(
-        url,
-        connect_args={"options": options + " -c idle_in_transaction_session_timeout=1000"},
-    )
+    api_engine = create_engine(url)
     bi_url = role_engines["aqs_bi"].url.render_as_string(hide_password=False)
     monkeypatch.setenv("BI_ENABLED", "1")
     monkeypatch.setenv("BI_DATABASE_URL", bi_url)
