@@ -34,7 +34,14 @@ export const E2E_PASSWORD = "e2e-step-up-password-not-production-000";
 /** Bootstrap versions describe initial state; default minting reads current persisted authority. */
 export const E2E_USERS: Record<
   string,
-  { id: string; roles: string[]; authv: number; organizationId?: string }
+  {
+    id: string;
+    roles: string[];
+    authv: number;
+    organizationId?: string;
+    email?: string;
+    displayName?: string;
+  }
 > = {
   // Bootstrap gives every human baseline membership. Admin then receives two
   // initial-ownership grants (owner and read access) and an organization-wide
@@ -194,6 +201,9 @@ export const E2E_STORAGE_ROLES = [
   "validator",
 ] as const satisfies readonly (keyof typeof E2E_USERS)[];
 
+export const e2eEmail = (role: string): string =>
+  E2E_USERS[role].email ?? `e2e.${role}@aequoros.example`;
+
 export async function mintBackendToken(
   role: keyof typeof E2E_USERS,
   authorizationVersion?: number,
@@ -207,8 +217,8 @@ export async function mintBackendToken(
     authv:
       authorizationVersion ??
       currentAuthorizationVersion(user.id, user.organizationId ?? E2E_ORG_ID),
-    email: `e2e.${String(role)}@aequoros.example`,
-    name: `E2E ${String(role)}`,
+    email: e2eEmail(role),
+    name: user.displayName ?? `E2E ${String(role)}`,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
@@ -233,8 +243,8 @@ export async function mintSessionCookie(
   return encode({
     token: {
       sub: user.id,
-      name: `E2E ${String(role)}`,
-      email: `e2e.${String(role)}@aequoros.example`,
+      name: user.displayName ?? `E2E ${String(role)}`,
+      email: e2eEmail(role),
       accessToken,
       refreshToken: accessToken,
       accessTokenExpires: Date.now() + 2 * 60 * 60 * 1000,

@@ -1,60 +1,29 @@
 /**
- * Full-lifecycle submission journeys — the complete regulator conversation
- * driven through the real hermetic stack (no mocking):
+ * Filing journeys drive real certification, checker signatures and independent
+ * transmission through the ORASS sandbox, including downtime, rejection and
+ * send-back correction. Earlier snapshots, signatures and receipts remain
+ * inspectable after corrected versions are signed and filed.
  *
- *  1. certify → approve and sign → submit (ORASS sandbox, ack) → poll →
- *     Acknowledged + Rev 1.0
- *  2. downtime 409 → guided email fallback → pending re-upload → re-upload
- *     via ORASS once restored → poll → Acknowledged (BG/FMD/2026/07 flow)
- *  3. sandbox rejection → supervisor comments → corrected version → renewed
- *     signatures → acknowledged refile, preserving the rejected evidence
- *  4. checker send-back → withdrawn certification → corrected version → fresh
- *     signatures → acknowledged filing, preserving the withdrawn signature
- *  5. institution register (seeded ORASS code) → LRT corporate pack generates
- *  6. a signed official BoG form (BSD2) hands over every artifact the command
- *     bar offers — Signed PDF, official XLSX, formula copy, CSV bundle — and
- *     each downloaded file is opened and checked against the figures on screen
+ * Each story receives fresh officers, password proofs and software test keys.
+ * The four filing stories claim reporting periods 1..4; the preparer-only story
+ * uses index 5 and the signed BoG form uses index 6. Index 0 belongs to the
+ * submission-lifecycle spec. Separate periods keep package chains independent.
+ * A fixture operator prepares liquidity baselines and sandbox configuration;
+ * finally-based fixtures restore sandbox behavior and retire story authority.
  *
- * Every LCR-NSFR journey now passes through the SIGNING CEREMONY for real, because
- * signing is required for every return by default and an unsigned return must
- * never be submittable. Relaxing the policy would have turned these three
- * journeys green while deleting coverage of that gate, so instead the fixture
- * users carry password hashes (scripts/e2e_bootstrap.py) and the journeys sign:
- * the preparer places the fields, adopts a mark and certifies, and a separate
- * approver session approves-and-signs in one act from the checker queue. That
- * makes these the only tests in the suite covering the whole chain end to end.
- *
- * Note there is no "Request approval" step any more: for a return that requires
- * signatures the preparer's certification IS the request — it freezes the figures
- * and routes the return to the approver they name.
- *
- * And there is no "Validate" step any more either. Machine validation is not a
- * human act, so it stopped being a button: the checks run with generation and
- * the result is a panel the preparer CLEARS
- * (docs/filing_workflow_redesign.md §4b.2). These journeys assert that rule —
- * that the button is gone and the checks ran anyway — rather than being relaxed
- * around it. The three sessions are three ROLES: the preparer prepares, a
- * separate approver approves and signs, and a third officer holding the
- * transmission authority files. Nothing that reaches a regulator is offered to
- * the first two, and journey 0 asserts that on the preparer's own screen.
- *
- * Independence: each LCR-NSFR journey claims its OWN reporting period (indices
- * 1..4 — index 0 stays with the pre-existing submission-lifecycle spec) and
- * mints the liquidity baseline run LCR-NSFR draws on, so no journey shares a
- * package version chain with another. The BoG form journey claims index 5; an
- * official form reads the canonical book directly, so it needs no run. Sandbox
- * behavior is configured through the API with the minted admin token (PUT
- * channel-configs/orass_sandbox).
+ * Official BoG artifacts are downloaded, opened and compared with the figures
+ * displayed in the browser, including signed PDF, XLSX, formula copy and CSV.
  */
 
 import {
-  test,
   expect,
   type APIRequestContext,
   type Browser,
   type Locator,
   type Page,
 } from "@playwright/test";
+import { test as identityTest } from "./support/story-identities";
+import { ChannelConfigReadFromJSON } from "@aequoros/risk-service-api";
 import type {
   PackageChainRead,
   RegulatoryPackageRead,
@@ -98,6 +67,30 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const adminState = path.join(E2E_TMP, "admin.json");
 const approverState = path.join(E2E_TMP, "approver.json");
 const validatorState = path.join(E2E_TMP, "validator.json");
+const test = identityTest.extend<{ sandboxConfig: void }>({
+  sandboxConfig: [
+    async ({}, provide) => {
+      const response = await fetch(
+        `${E2E_API_ORIGIN}/api/v1/banks/${SAMPLE_BANK_ID}/regulatory-reporting/channel-configs/orass_sandbox`,
+        { headers: { Authorization: `Bearer ${fixtureOperatorToken}` } },
+      );
+      expect([200, 404]).toContain(response.status);
+      const original =
+        response.status === 200
+          ? ChannelConfigReadFromJSON(await response.json()).config
+          : {};
+      try {
+        await provide();
+      } finally {
+        await setSandboxConfig(original);
+      }
+    },
+    { auto: true },
+  ],
+});
+test.use({
+  storyConfig: { roles: ["admin", "approver", "validator"], signing: true },
+});
 /** The committed official layouts — the sheet structure BoG published. */
 const bogLayoutsDir = path.join(
   __dirname,
@@ -136,10 +129,12 @@ async function api(
   return response.json();
 }
 
-let adminToken: string;
+// Administrative fixture preparation is separate from the fresh tested officers.
+let fixtureOperatorToken: string;
 
 /** One reporting date (ISO) per journey that mints a package — never the latest period. */
 const journeyDates = {
+  preparer: "",
   ack: "",
   downtime: "",
   reject: "",
@@ -149,9 +144,9 @@ const journeyDates = {
 
 test.beforeAll(async () => {
   requireObjectStorage();
-  adminToken = await mintBackendToken("admin");
+  fixtureOperatorToken = await mintBackendToken("admin");
   const listing = await api(
-    adminToken,
+    fixtureOperatorToken,
     "GET",
     `/banks/${SAMPLE_BANK_ID}/reporting-periods`,
   );
@@ -162,17 +157,23 @@ test.beforeAll(async () => {
     "downtime",
     "reject",
     "sendBack",
+    "preparer",
   ];
   for (const [index, key] of claims.entries()) {
     const period = periods[index + 1];
     journeyDates[key] = String(period.period_end).slice(0, 10);
     // LCR-NSFR generation pulls from the latest succeeded liquidity baseline run
     // of its reporting period — mint one for each claimed period.
-    await api(adminToken, "POST", `/banks/${SAMPLE_BANK_ID}/regulatory-runs`, {
-      module: "liquidity",
-      reporting_period_id: period.id,
-      scenario_code: "baseline",
-    });
+    await api(
+      fixtureOperatorToken,
+      "POST",
+      `/banks/${SAMPLE_BANK_ID}/regulatory-runs`,
+      {
+        module: "liquidity",
+        reporting_period_id: period.id,
+        scenario_code: "baseline",
+      },
+    );
   }
   journeyDates.bogForm = String(periods[claims.length + 1].period_end).slice(
     0,
@@ -183,7 +184,7 @@ test.beforeAll(async () => {
 /** Replace the ORASS sandbox channel config (behavior + downtime switch). */
 function setSandboxConfig(config: Record<string, unknown>): Promise<unknown> {
   return api(
-    adminToken,
+    fixtureOperatorToken,
     "PUT",
     `/banks/${SAMPLE_BANK_ID}/regulatory-reporting/channel-configs/orass_sandbox`,
     { config },
@@ -452,7 +453,7 @@ async function takeArtifact(
   // independently: the page consumed this response into a blob, so the
   // browser no longer holds its body.
   const independent = await fetch(response.url(), {
-    headers: { Authorization: `Bearer ${adminToken}` },
+    headers: { Authorization: `Bearer ${await mintBackendToken("admin")}` },
   });
   expect(independent.ok).toBeTruthy();
   expect(bytes.equals(Buffer.from(await independent.arrayBuffer()))).toBe(true);
@@ -526,7 +527,7 @@ test.describe("full lifecycle", () => {
     // greyed out with a blocked reason, and asked a preparer to work out from
     // four dead controls that none of it was theirs. Absent, not disabled
     // (docs/filing_workflow_redesign.md §4b.1, §4b.6).
-    await generateAndClearChecks(page, LIQUIDITY_RETURN, journeyDates.ack);
+    await generateAndClearChecks(page, LIQUIDITY_RETURN, journeyDates.preparer);
 
     for (const forbidden of [/ORASS/i, /downtime/i, /re-upload/i]) {
       await expect(page.getByText(forbidden)).toHaveCount(0);
@@ -825,12 +826,12 @@ test.describe("full lifecycle", () => {
     // snapshot: the preview deliberately hides each line's workbook cell, so
     // the snapshot is what says where that figure must sit in the files.
     const listing = await api(
-      adminToken,
+      await mintBackendToken("admin"),
       "GET",
       `/banks/${SAMPLE_BANK_ID}/regulatory-packages?return_code=${BOG_FORM}&reporting_date=${date}&include_superseded=false&limit=1`,
     );
     const packagePath = `/banks/${SAMPLE_BANK_ID}/regulatory-packages/${listing.packages[0].id}`;
-    const pkg = await api(adminToken, "GET", packagePath);
+    const pkg = await api(await mintBackendToken("admin"), "GET", packagePath);
     type Line = {
       code: string;
       value: string | null;
@@ -871,7 +872,7 @@ test.describe("full lifecycle", () => {
 
     // The Signed PDF is the revision both officers signed, not a fresh render.
     const chain = await api(
-      adminToken,
+      await mintBackendToken("admin"),
       "GET",
       `${packagePath}/artifact-versions`,
     );

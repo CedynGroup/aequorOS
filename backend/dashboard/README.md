@@ -584,6 +584,18 @@ access token share one captured version. Pass an explicit version only when a
 journey deliberately needs a captured or invalid authorization generation;
 minting a token does not alter the principal's persisted bindings or status.
 
+Access-request, baseline-membership, live-grant, macro-contract and full-filing
+stories use `e2e/support/story-identities.ts` to provision fresh tested actors.
+Declare the required profiles with `storyConfig`; owner stories also request an
+isolated setup tenant. Shared-bank stories keep the bootstrap owner only for
+fixture administration. The fixture installs each actor's real scoped bindings
+and current session before browser creation. Its `finally` cleanup closes story
+contexts, rejects their pending requests, archives governed clones and deactivates
+the actors, revoking refresh families while retaining audit and signed evidence.
+Selected identity aliases and storage-state files are restored even after failure.
+The Python helper refuses any database except this worktree's disposable fixture
+and provisions no financial facts.
+
 Three prerequisites are not obvious, and each one has already cost a long
 diagnosis:
 

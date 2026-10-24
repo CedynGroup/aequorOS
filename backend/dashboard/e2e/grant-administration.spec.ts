@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { test } from "./support/story-identities";
 import { decode } from "@auth/core/jwt";
 import { decodeJwt } from "jose";
 import path from "path";
@@ -15,6 +16,17 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const API = `${E2E_API_ORIGIN}/api/v1`;
 const ownerState = path.join(E2E_TMP, "admin.json");
 const member = E2E_USERS.grant_member;
+let storyBank: string;
+test.use({
+  storyConfig: {
+    roles: ["admin", "analyst", "approver", "grant_member"],
+    ownedTenant: true,
+    branchRegister: true,
+  },
+});
+test.beforeEach(({ storyIdentity }) => {
+  storyBank = storyIdentity.bankId;
+});
 /** The active-grant count the Members row renders for one member. */
 async function activeGrantCount(
   memberRow: ReturnType<Page["locator"]>,
@@ -41,7 +53,7 @@ test.describe("scoped grant administration", () => {
       principal_user_id: member.id,
       role_bundle: "viewer",
       institution_scope: "institution",
-      institution_id: "BK-SAMP0001",
+      institution_id: storyBank,
       module_scope: "reg",
       sensitivity_scope: "restricted",
       reason_category: "other",
@@ -96,9 +108,7 @@ test.describe("scoped grant administration", () => {
       "Every institution in the organization",
       "Sample Bank Ltd",
     ]);
-    await composer
-      .getByLabel("Institution coverage")
-      .selectOption("BK-SAMP0001");
+    await composer.getByLabel("Institution coverage").selectOption(storyBank);
     await composer.getByLabel("Module").selectOption("liq");
     await composer.getByLabel("Sensitivity").selectOption("confidential");
     await composer.getByLabel("Reason category").selectOption("other");
@@ -140,7 +150,7 @@ test.describe("scoped grant administration", () => {
         expect.objectContaining({
           role_bundle: "analyst",
           institution_scope: "institution",
-          institution_id: "BK-SAMP0001",
+          institution_id: storyBank,
           module_scope: "liq",
           sensitivity_scope: "confidential",
           status: "active",
@@ -148,7 +158,7 @@ test.describe("scoped grant administration", () => {
         expect.objectContaining({
           role_bundle: "viewer",
           institution_scope: "institution",
-          institution_id: "BK-SAMP0001",
+          institution_id: storyBank,
           module_scope: "reg",
           sensitivity_scope: "restricted",
           status: "active",
@@ -302,9 +312,7 @@ test.describe("scoped grant administration", () => {
         "Institution Profile",
       ]);
       await composer.getByLabel("Role bundle").selectOption("viewer");
-      await composer
-        .getByLabel("Institution coverage")
-        .selectOption("BK-SAMP0001");
+      await composer.getByLabel("Institution coverage").selectOption(storyBank);
       await moduleSelect.selectOption(entry.module);
       await expect(moduleSelect).toHaveValue(entry.module);
       await composer.getByLabel("Sensitivity").selectOption(entry.sensitivity);
@@ -489,9 +497,7 @@ test.describe("Credit-only book coverage", () => {
       .click();
     const composer = page.getByRole("dialog");
     await composer.getByLabel("Role bundle").selectOption("viewer");
-    await composer
-      .getByLabel("Institution coverage")
-      .selectOption("BK-SAMP0001");
+    await composer.getByLabel("Institution coverage").selectOption(storyBank);
     await composer.getByLabel("Module").selectOption("credit");
     await composer.getByLabel("Sensitivity").selectOption("restricted");
     await composer.getByLabel("Only the branches I choose").check();

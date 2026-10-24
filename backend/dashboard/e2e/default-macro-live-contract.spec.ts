@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/story-identities";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { E2E_API_ORIGIN } from "../playwright.config";
@@ -6,6 +7,7 @@ import { E2E_USERS, mintBackendToken, mintSessionCookie } from "./support/mint";
 
 const evidence = process.env.E2E_EVIDENCE_DIR;
 const bank = "/banks/BK-SAMP0001";
+test.use({ storyConfig: { roles: ["analyst", "approver", "macro_viewer"] } });
 
 test("system contracts, governed clones, and real denied authority", async ({
   request,

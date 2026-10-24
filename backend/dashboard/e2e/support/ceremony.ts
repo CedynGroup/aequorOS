@@ -24,7 +24,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
-import { E2E_PASSWORD } from "./mint";
+import { E2E_PASSWORD, E2E_USERS } from "./mint";
 
 /** How long a ceremony may take: pyHanko signs and re-renders the document. */
 const CEREMONY_TIMEOUT = 120_000;
@@ -120,7 +120,7 @@ export async function certifyAsPreparer(
   page: Page,
   code: string,
   date: string,
-  approverLabel = "E2E Approver (approver)",
+  approverLabel = `${E2E_USERS.approver.displayName ?? "E2E Approver"} (approver)`,
 ): Promise<void> {
   await page.goto(returnsUrl(code, date));
   const certify = page.getByRole("button", { name: "Certify and freeze" });

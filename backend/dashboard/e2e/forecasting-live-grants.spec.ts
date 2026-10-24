@@ -1,5 +1,6 @@
 /** Real grant lifecycle against the disposable backend; no response interception. */
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/story-identities";
 import path from "node:path";
 import { writeFile } from "node:fs/promises";
 import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../playwright.config";
@@ -11,6 +12,16 @@ const moduleRequest = /\/banks\/[^/]+\/(?:forecast|reverse-stress)(?:\/|$)/;
 // Revoke every grant this journey creates. Revoked rows stay in a member's history,
 // so both Forecasting members are identities no other journey grants or counts.
 const createdBindings: string[] = [];
+test.use({
+  storyConfig: {
+    roles: [
+      "account_admin",
+      "invite_fresh",
+      "forecast_member",
+      "forecast_summary_member",
+    ],
+  },
+});
 
 test.afterEach(async ({ request }) => {
   const token = await mintBackendToken("admin");

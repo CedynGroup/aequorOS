@@ -1,15 +1,23 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/story-identities";
 import path from "path";
 import { writeFileSync } from "fs";
 import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../playwright.config";
 import {
   E2E_PASSWORD,
   E2E_USERS,
+  e2eEmail,
   mintBackendToken,
   writeStorageState,
 } from "./support/mint";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+test.use({
+  storyConfig: {
+    roles: ["admin", "invite_fresh", "viewer"],
+    ownedTenant: true,
+  },
+});
 
 test.describe("fresh active member baseline", () => {
   test.use({ storageState: path.join(E2E_TMP, "invite_fresh.json") });
@@ -298,11 +306,12 @@ test.describe("fresh active member baseline", () => {
 
   test("password sign-in grants self-service but no institution or directory authority", async ({
     request,
+    storyIdentity,
   }) => {
     const api = `${E2E_API_ORIGIN}/api/v1`;
     const login = await request.post(`${api}/auth/login`, {
       data: {
-        email: "e2e.viewer@aequoros.example",
+        email: e2eEmail("viewer"),
         password: E2E_PASSWORD,
       },
     });
@@ -313,7 +322,7 @@ test.describe("fresh active member baseline", () => {
     const me = await request.get(`${api}/auth/me`, { headers });
     expect(me.status()).toBe(200);
     const profile = await me.json();
-    expect(profile.organization_id).toBe("OR-DEM00001");
+    expect(profile.organization_id).toBe(storyIdentity.organizationId);
     expect(profile.effective_authority.organization_capabilities).toEqual([]);
     expect(profile.effective_authority.institution_capabilities).toEqual([]);
     const evidence: unknown[] = [
@@ -327,7 +336,7 @@ test.describe("fresh active member baseline", () => {
     expect((await update.json()).theme).toBe("system");
     for (const [route, status] of [
       ["/banks", 200],
-      ["/banks/BK-SAMP0001", 404],
+      [`/banks/${storyIdentity.bankId}`, 404],
       ["/banks/BK-NONE0001", 404],
       ["/organization/users", 403],
     ] as const) {
