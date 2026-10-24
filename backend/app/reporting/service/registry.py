@@ -1,9 +1,10 @@
 """Reporting registry: shared policy definitions plus official form templates."""
 
+from typing import cast
+
 from app.domain.policy.return_registry import (
     ACCRA_TZ,
     REGISTRY,
-    REGULATOR_BOG,
     ChannelCode,
     FidelityGrade,
     FilingFormat,
@@ -11,9 +12,6 @@ from app.domain.policy.return_registry import (
     ReturnDefinition,
     ReturnFamily,
     ReturnFrequency,
-    _add_months,
-    _deadline_is_governed,
-    _month_end,
     annual_month_day,
     daily_next_business_day,
     monthly_day,
@@ -21,7 +19,12 @@ from app.domain.policy.return_registry import (
 )
 from app.reporting.service.bog_forms.registry_entries import build_definitions
 
-REGISTRY.update({definition.code: definition for definition in build_definitions(ReturnDefinition)})
+REGISTRY.update(
+    {
+        definition.code: definition
+        for definition in cast("list[ReturnDefinition]", build_definitions(ReturnDefinition))
+    }
+)
 
 
 def get_definition(return_code: str) -> ReturnDefinition | None:
@@ -31,7 +34,6 @@ def get_definition(return_code: str) -> ReturnDefinition | None:
 __all__ = [
     "ACCRA_TZ",
     "REGISTRY",
-    "REGULATOR_BOG",
     "ChannelCode",
     "FidelityGrade",
     "FilingFormat",
@@ -39,9 +41,6 @@ __all__ = [
     "ReturnDefinition",
     "ReturnFamily",
     "ReturnFrequency",
-    "_add_months",
-    "_deadline_is_governed",
-    "_month_end",
     "annual_month_day",
     "daily_next_business_day",
     "monthly_day",
