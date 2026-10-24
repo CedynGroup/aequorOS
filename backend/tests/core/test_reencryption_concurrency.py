@@ -1,21 +1,34 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier, Event
+from datetime import timedelta
+from threading import Barrier, Event, local
+from time import monotonic, sleep
+from typing import cast
+from uuid import UUID
 
 import pytest
-from sqlalchemy import Engine, event, select
+from sqlalchemy import Engine, event, select, text
 from sqlalchemy.orm import Session
 
+from app import worker
 from app.core.key_management import maintenance, reencryption, registry
 from app.core.key_management.fields import SealedField, blind_index
 from app.core.key_management.local import LocalKeyProvider
 from app.core.tenancy import TenantContext
+from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models.canonical import CanonicalCounterparty
 from app.models.job import Job
 from app.services import canonical_withdrawal, job_queue
 from app.services.canonical_withdrawal import WithdrawalError
+from app.storage.client import (
+    EncryptionCursor,
+    EncryptionInventoryItem,
+    EncryptionPage,
+    ReencryptionIsolation,
+    StorageLocation,
+)
 from tests.core.test_bank_field_encryption import (
     BANK_A,
     BANK_B,
@@ -39,6 +52,149 @@ def engine(db: Session) -> Engine:
     if not isinstance(bind, Engine) or bind.dialect.name != "postgresql":
         pytest.skip("PostgreSQL independent transactions are required.")
     return bind
+
+
+@pytest.mark.parametrize("rollback_publication", [False, True])
+def test_duplicate_worker_waits_for_publication_commit_or_rollback(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    rollback_publication: bool,
+) -> None:
+    database = engine(db_session)
+    party_id = counterparty(db_session, include_package=False).id
+    connect(db_session, provider)
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    target = key.current_version_id
+    assert target is not None
+    item = EncryptionInventoryItem(
+        StorageLocation(BANK_A.lower(), "temp", "synthetic-large.csv"),
+        "null",
+        None,
+        False,
+        500 * 1024 * 1024,
+    )
+    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job.progress = reencryption.Progress(
+        target_version=target, phase="large_object", large_object=item
+    ).model_dump(mode="json")
+    job.payload = {"reencryption_bytes": item.size_bytes}
+    job_id = job.id
+    db_session.commit()
+    now = utc_now()
+    monkeypatch.setattr(worker, "utc_now", lambda: now)
+    runner = local()
+    copied_a, copied_b, publish_a, publish_b, locked_a, release_a = (Event() for _ in range(6))
+    backend_b: list[int] = []
+
+    class PublicationCrash(BaseException):
+        pass
+
+    class Storage(EmptyStorage):
+        version: UUID | None = None
+
+        def encryption_page(
+            self, institution_slug: str, cursor: EncryptionCursor, limit: int
+        ) -> EncryptionPage:
+            return EncryptionPage(
+                [
+                    EncryptionInventoryItem(
+                        item.location, "null", self.version, False, item.size_bytes
+                    )
+                ],
+                None,
+            )
+
+        def reencrypt_isolated(
+            self, item: EncryptionInventoryItem, isolation: ReencryptionIsolation
+        ) -> bool:
+            isolation.release()
+            name = cast(str, runner.name)
+            (copied_a if name == "A" else copied_b).set()
+            assert (publish_a if name == "A" else publish_b).wait(15)
+            with isolation.publication(target) as allowed:
+                if name == "A":
+                    assert allowed
+                    locked_a.set()
+                    assert release_a.wait(15)
+                    if rollback_publication:
+                        raise PublicationCrash()
+                if allowed:
+                    self.version = target
+            return allowed
+
+    storage = Storage()
+    monkeypatch.setattr(reencryption, "get_storage_client", lambda: storage)
+
+    def session(organization_id: str | None = None) -> Session:
+        db = Session(database)
+        if organization_id is not None:
+            db.info["organization_id"] = organization_id
+            if getattr(runner, "name", "") == "B":
+                backend_b.append(cast(int, db.scalar(text("SELECT pg_backend_pid()"))))
+        return db
+
+    monkeypatch.setattr(worker, "_new_session", session)
+
+    def execute(name: str) -> bool:
+        runner.name = name
+        return worker.run_once((reencryption.JOB_TYPE,), worker_id=name)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(execute, "A")
+        second = None
+        try:
+            assert copied_a.wait(10)
+            now += timedelta(days=1)
+            assert job_queue.reclaim_stale(db_session, now, stale_after=timedelta(seconds=900)) == 1
+            second = pool.submit(execute, "B")
+            assert copied_b.wait(10)
+            publish_a.set()
+            assert locked_a.wait(10)
+            publish_b.set()
+            deadline = monotonic() + 10
+            blocked = False
+            while monotonic() < deadline:
+                blocked = bool(
+                    db_session.scalar(
+                        text("SELECT cardinality(pg_blocking_pids(:pid))"), {"pid": backend_b[0]}
+                    )
+                )
+                if blocked:
+                    break
+                sleep(0.01)
+            assert blocked and not second.done()
+        finally:
+            publish_a.set()
+            publish_b.set()
+            release_a.set()
+        if rollback_publication:
+            with pytest.raises(PublicationCrash):
+                first.result(timeout=15)
+        else:
+            assert first.result(timeout=15)
+        assert second is not None and second.result(timeout=15)
+    db_session.expire_all()
+    parent = db_session.get(Job, job_id)
+    assert parent is not None and parent.status == "succeeded"
+    progress = reencryption.Progress.model_validate(parent.progress)
+    assert progress.next_job_id is not None
+    db_session.commit()
+    runner.name = "C"
+    for _ in range(200):
+        if not worker.run_once((reencryption.JOB_TYPE,), worker_id="C"):
+            break
+    db_session.expire_all()
+    latest = db_session.scalar(
+        select(Job).where(Job.bank_id == BANK_A).order_by(Job.queued_at.desc()).limit(1)
+    )
+    assert (
+        latest is not None and reencryption.Progress.model_validate(latest.progress).phase == "done"
+    )
+    value = db_session.scalar(
+        select(CanonicalCounterparty.name).where(CanonicalCounterparty.id == party_id)
+    )
+    assert isinstance(value, SealedField) and value.envelope_id == target
 
 
 def test_duplicate_concurrent_batch_publishes_one_continuation(

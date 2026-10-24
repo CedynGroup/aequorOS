@@ -243,6 +243,8 @@ def index_values(
 ) -> dict[str, object]:
     if table == "canonical_counterparties":
         name = cast(str, values["name"])
+        if len(name) > 255:
+            raise ValueError("Counterparty name must contain at most 255 characters.")
         source = cast(str, values["source_reference"])
         group = cast(str | None, values.get("group_reference"))
         result: dict[str, object] = {

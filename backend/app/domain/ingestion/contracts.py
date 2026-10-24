@@ -229,7 +229,7 @@ class GlAccountData(BaseModel):
 class CounterpartyData(BaseModel):
     source_reference: str
     source_locator: str
-    name: str
+    name: str = Field(max_length=255)
     counterparty_type: CounterpartyType
     country_code: str | None = None
     rating: str | None = None

@@ -77,7 +77,7 @@ def _owned_job(db: Session, job: Job) -> Job | None:
             Job.bank_id == job.bank_id,
             *_unfinished(),
         )
-        .with_for_update(skip_locked=True)
+        .with_for_update()
         .execution_options(populate_existing=True)
     )
 

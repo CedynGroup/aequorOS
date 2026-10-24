@@ -16,7 +16,7 @@ from app.attestation.service import register_state
 from app.attestation.service.digests import register_state_digest
 from app.bi.domain.catalogue import catalogue
 from app.bi.models.content import BiDashboard, BiDashboardVersion
-from app.bi.models.marts import BiFactPositionDaily, BiFactPositionEom
+from app.bi.models.marts import BiDimCounterparty, BiFactPositionDaily, BiFactPositionEom
 from app.bi.models.notifications import BiAlert, BiSubscription
 from app.bi.schemas.content import BiDashboardSpec
 from app.bi.schemas.query import BiFilter, BiPackQuery, BiQuery, BiTime
@@ -669,6 +669,123 @@ def withdraw_counterparties(db: Session) -> CanonicalWithdrawal:
 
 
 @pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("mutation", ["insert", "update"])
+def test_plaintext_counterparty_name_bound_applies_before_orm_persistence(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    connected: bool,
+    mutation: str,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    party = counterparty(db_session, name="A" * 255, include_package=False)
+    party.group_reference = "G"
+    party_id = party.id
+    db_session.commit()
+    for invalid in ("A" * 256, "A" * 300):
+        with pytest.raises(ValueError, match="255"), db_session.begin_nested():
+            if mutation == "insert":
+                counterparty(db_session, reference="CP2", name=invalid, include_package=False)
+            else:
+                party.name = invalid
+                db_session.flush()
+        db_session.expire_all()
+        loaded = db_session.get(CanonicalCounterparty, party_id)
+        assert loaded is not None and loaded.name == "A" * 255
+    assert (
+        len(
+            list(
+                db_session.scalars(
+                    select(CanonicalCounterparty).where(CanonicalCounterparty.bank_id == BANK_A)
+                )
+            )
+        )
+        == 1
+    )
+
+
+@pytest.mark.parametrize("connected", [False, True])
+def test_ingested_counterparty_name_bound_preserves_bi_copy_width(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    tmp_path: Path,
+    connected: bool,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    mapping = MappingConfig(
+        field_mappings={
+            "counterparty": EntityMapping(
+                source_table="Customers",
+                fields={
+                    "source_reference": "CustomerId",
+                    "name": "CustomerName",
+                    "counterparty_type": "Type",
+                    "group_reference": "Group",
+                },
+            )
+        }
+    )
+    ingestion.create_mapping_config(
+        db_session,
+        CTX,
+        BANK_A,
+        MappingConfigCreate(
+            source_system="EXCEL_CSV",
+            name="Synthetic bounded name",
+            config=mapping,
+            activate=True,
+            reason="Synthetic boundary regression",
+        ),
+    )
+    for length in (300, 255):
+        workbook = Workbook()
+        sheet = workbook.active
+        assert sheet is not None
+        sheet.title = "Customers"
+        sheet.append(["CustomerId", "CustomerName", "Type", "Group"])
+        sheet.append(["CP1", "A" * length, "RETAIL_INDIVIDUAL", "G"])
+        path = tmp_path / f"synthetic-name-{length}.xlsx"
+        workbook.save(path)
+        result = ingestion.start_ingestion(
+            db_session,
+            CTX,
+            BANK_A,
+            IngestionBatchCreate(
+                source_system="EXCEL_CSV",
+                as_of_date=AS_OF,
+                location=str(path),
+                reason="Synthetic bounded name",
+            ),
+            InMemoryStorageClient(),
+        )
+        parties = list(
+            db_session.scalars(
+                select(CanonicalCounterparty).where(CanonicalCounterparty.bank_id == BANK_A)
+            )
+        )
+        if length > 255:
+            assert result.batch.records_translated == 0 and not parties
+            failures = list(
+                db_session.scalars(
+                    select(TranslationFailure).where(
+                        TranslationFailure.ingestion_batch_id == result.batch.id
+                    )
+                )
+            )
+            assert len(failures) == 1 and "255" in failures[0].error_message
+        else:
+            assert result.batch.status in {"accepted", "accepted_with_warnings"}
+            assert len(parties) == 1 and parties[0].name == "A" * 255
+    outcome = materialize_bi_plane(db_session, organization_id=ORG_1, bank_id=BANK_A, as_of=AS_OF)
+    assert outcome is not None and outcome.status == "succeeded"
+    identity = db_session.scalar(
+        select(BiDimCounterparty.name).where(BiDimCounterparty.counterparty_id == parties[0].id)
+    )
+    assert identity == (str(parties[0].id) if connected else "A" * 255)
+
+
+@pytest.mark.parametrize("connected", [False, True])
 @pytest.mark.parametrize("withdraw", [False, True])
 @pytest.mark.parametrize("initial_name", [NAME, EXPANDING_NAME])
 def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(  # noqa: PLR0913
@@ -1206,4 +1323,6 @@ def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
                 db_session.scalar(select(model))
         db_session.rollback()
     assert raw_fields(db_session) == stored
-    assert db_session.execute(text("SELECT spec FROM bi_dashboard_versions")).scalar_one() == immutable
+    assert (
+        db_session.execute(text("SELECT spec FROM bi_dashboard_versions")).scalar_one() == immutable
+    )
