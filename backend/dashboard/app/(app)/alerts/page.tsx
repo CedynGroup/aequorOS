@@ -191,7 +191,7 @@ export default function AlertCenterPage() {
               <EmptyState
                 Icon={BellRing}
                 title="No open alerts"
-                description="Every live module is inside its limits for the current period. New breaches appear here automatically as the pipeline recomputes on ingestion."
+                description="No in-force breach alerts in this feed."
                 action={
                   <Link
                     href="/risk"
