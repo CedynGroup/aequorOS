@@ -374,7 +374,7 @@ test("SDI liquidity header and card grid share both edges at wide viewports", as
   });
   await page.goto("/liquidity?preparing=1");
   await expect(
-    page.getByRole("heading", { name: "LMTD Table 1 prudential ratios" }),
+    page.getByRole("heading", { name: "LMTD Table 1 preparation assessment" }),
   ).toBeVisible();
   await expectAlignedHeaderAndCards(page);
 });
@@ -545,7 +545,7 @@ with sqlite3.connect(sys.argv[1]) as db:
     await page.goto("/liquidity?preparing=1");
     expect((await response).status()).toBe(200);
     await expect(
-      page.getByRole("heading", { name: "LMTD Table 1 prudential ratios" }),
+      page.getByRole("heading", { name: "LMTD Table 1 preparation assessment" }),
     ).toBeVisible();
     await expectAlignedHeaderAndCards(page);
     if (evidenceDir) {
