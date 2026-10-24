@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import fc from "fast-check";
 import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadge";
@@ -26,6 +26,33 @@ const statuses = [
   "in_force",
   "unpublished",
 ] as const;
+
+it("keeps opened source details inside the viewport after opening and resizing", () => {
+  render(<InstrumentStatusBadge status="exposure_draft" code="SYNTHETIC" />);
+  const badge = screen.getByText("Draft");
+  const details = badge.closest("details")!;
+  const tooltip = screen.getByRole("tooltip", { hidden: true });
+  // jsdom has no layout; supply the browser's measured tooltip geometry.
+  let bounds = { left: -12, right: 276 } as DOMRect;
+  vi.spyOn(tooltip, "getClientRects").mockImplementation(
+    () => [bounds] as unknown as DOMRectList,
+  );
+  vi.spyOn(tooltip, "getBoundingClientRect").mockImplementation(() => bounds);
+  fireEvent.click(badge);
+  fireEvent(details, new Event("toggle"));
+  expect(tooltip.style.transform).toBe("translateX(20px)");
+  expect(
+    screen.getByRole("link", {
+      name: "Source details in the instruments register",
+    }),
+  ).toHaveAttribute("href", "/submissions/instruments#SYNTHETIC");
+  bounds = { left: 800, right: window.innerWidth + 32 } as DOMRect;
+  fireEvent(window, new Event("resize"));
+  expect(tooltip.style.transform).toBe("translateX(-40px)");
+  bounds = { left: 12, right: 300 } as DOMRect;
+  fireEvent(window, new Event("resize"));
+  expect(tooltip.style.transform).toBe("translateX(0px)");
+});
 
 describe("regulatory status", () => {
   it("keeps publication status separate from dates", () => {
