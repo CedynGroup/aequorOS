@@ -285,16 +285,7 @@ _FX_CRISIS_END = 110
 # FX position sums are checked against their scaled canonical totals within this
 # tolerance to absorb 4-dp rounding of the individually scaled per-currency rows.
 _FX_TIE_TOLERANCE = Decimal("1")
-_FX_STRESS: dict[str, dict[str, str]] = {
-    "mild_depreciation": {"ghs_usd_shock_pct": "10"},
-    "severe_depreciation": {"ghs_usd_shock_pct": "20"},
-    "cedi_crisis": {
-        "ghs_usd_shock_pct": "30",
-        "correlation_uplift": "0.2",
-        "crisis_window_start": str(_FX_CRISIS_START),
-        "crisis_window_end": str(_FX_CRISIS_END),
-    },
-}
+_FX_STRESS = parameter_register.BANK_FX_SHOCKS
 
 # FTP matched-maturity transfer curve (rates, period-invariant — no scaling).
 # (tenor_label, tenor_years, base_yield_pct, liquidity_premium_bps,
@@ -364,10 +355,7 @@ _FTP_SOURCE_FACTOR: dict[str, str] = {
 # FTP balances are checked against their scaled canonical totals within this
 # tolerance to absorb 4-dp rounding of the individually scaled rows.
 _FTP_TIE_TOLERANCE = Decimal("1")
-_FTP_STRESS: dict[str, dict[str, str]] = {
-    "rates_up_200": {"curve_shift_bp": "200"},
-    "funding_stress": {"funding_spread_add_bps": "100"},
-}
+_FTP_STRESS = parameter_register.BANK_FTP_SHOCKS
 
 _LIQUIDITY_IDIOSYNCRATIC: dict[str, str] = {
     "runoff:retail_deposits_stable": "15",

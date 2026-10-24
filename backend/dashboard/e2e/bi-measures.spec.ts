@@ -616,21 +616,54 @@ test.describe.serial("writing and certifying a formula on screen", () => {
       // immediate — the destructive act asks twice.
       await expect(card.getByRole("button", { name: "Delete" })).toBeVisible();
       await expect(card.getByRole("button", { name: "Change" })).toBeVisible();
-      // And it is NOT offered for certification by anyone but its author, which is
-      // asserted from the other side in the checker's journeys below.
+      // Only the author can send a draft for certification; the next journey
+      // checks privacy from the reviewer's session while a draft still exists.
       await expect(
         card.getByRole("heading", { name: "Send this for certification" }),
       ).toBeVisible();
     });
 
-    test("deleting a draft asks twice, and both answers are honoured", async ({
+    test("a draft is private while it exists, and deletion honours both answers", async ({
       page,
+      browser,
     }) => {
       // A SECOND draft, so the deletion journey destroys something the rest of the
       // file does not need. It is written through the same composer gate, which is
       // the only way this surface makes one.
       await writeDraft(page, SENT_BACK_KEY, SENT_BACK_LABEL);
       const card = measureCard(page, SENT_BACK_LABEL);
+
+      // Check privacy while the same draft still exists for its author.
+      const reviewer = await browser.newContext({
+        storageState: path.join(E2E_TMP, "approver.json"),
+      });
+      try {
+        const reviewerPage = await reviewer.newPage();
+        const listed = reviewerPage.waitForResponse(
+          (response) =>
+            new URL(response.url()).pathname.endsWith("/bi/measures") &&
+            response.ok(),
+        );
+        await reviewerPage.goto("/explore/measures");
+        const { measures } = (await (await listed).json()) as {
+          measures: { measure_key: string }[];
+        };
+        expect(measures.map((measure) => measure.measure_key)).not.toContain(
+          SENT_BACK_KEY,
+        );
+        await expect(
+          reviewerPage.getByRole("heading", {
+            name: "Calculated measures",
+            exact: true,
+          }),
+        ).toBeVisible();
+        await expect(measureHeading(reviewerPage, SENT_BACK_LABEL)).toHaveCount(
+          0,
+        );
+        await expect(measureHeading(page, SENT_BACK_LABEL)).toBeVisible();
+      } finally {
+        await reviewer.close();
+      }
 
       // Armed rather than immediate, and the safe answer is offered beside the
       // destructive one. Answering "Keep it" leaves the draft alone.
@@ -703,7 +736,7 @@ test.describe.serial("writing and certifying a formula on screen", () => {
   test.describe("as the reviewer", () => {
     test.use({ storageState: path.join(E2E_TMP, "approver.json") });
 
-    test("the reviewer is shown the exact text, and a draft they were never asked about is invisible", async ({
+    test("the reviewer is shown the exact proposed text and no deleted draft", async ({
       page,
     }) => {
       await page.goto("/explore/measures");
@@ -716,9 +749,7 @@ test.describe.serial("writing and certifying a formula on screen", () => {
       ).toBeVisible();
       await expect(card.getByText(/^Proposed by /)).toBeVisible();
 
-      // A DRAFT IS ITS AUTHOR'S ALONE — and a deleted one is nobody's. Neither
-      // name has ever been on this reader's page, and there is nothing here for
-      // them to certify by mistake.
+      // The deleted draft stays absent; privacy was checked before deletion above.
       await expect(measureHeading(page, SENT_BACK_LABEL)).toHaveCount(0);
     });
 

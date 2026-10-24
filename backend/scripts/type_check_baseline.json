@@ -1874,7 +1874,7 @@
   "reportUnusedFunction": 8
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd1": {
-  "reportAny": 30,
+  "reportAny": 26,
   "reportUnknownArgumentType": 2,
   "reportUnknownVariableType": 5,
   "reportUnusedFunction": 2
@@ -2689,10 +2689,10 @@
  "tests.api.test_fx_authorization": {
   "reportAny": 24,
   "reportPrivateUsage": 1,
-  "reportUnknownArgumentType": 11,
+  "reportUnknownArgumentType": 6,
   "reportUnknownLambdaType": 2,
-  "reportUnknownMemberType": 49,
-  "reportUnknownVariableType": 30,
+  "reportUnknownMemberType": 41,
+  "reportUnknownVariableType": 23,
   "reportUnusedFunction": 1
  },
  "tests.api.test_grant_administration": {
@@ -4059,13 +4059,13 @@
   "reportUnknownVariableType": 8
  },
  "tests.services.bog_forms.test_bsd2_annexes": {
-  "reportAny": 61,
-  "reportUnknownMemberType": 22,
+  "reportAny": 59,
+  "reportUnknownMemberType": 21,
   "reportUnknownVariableType": 4
  },
  "tests.services.bog_forms.test_bsd2a": {
-  "reportAny": 55,
-  "reportUnknownMemberType": 16,
+  "reportAny": 51,
+  "reportUnknownMemberType": 15,
   "reportUnknownVariableType": 4
  },
  "tests.services.bog_forms.test_bsd3": {
@@ -4087,7 +4087,7 @@
  "tests.services.bog_forms.test_bsd6": {
   "reportAny": 73,
   "reportPrivateUsage": 1,
-  "reportUnknownArgumentType": 3,
+  "reportUnknownArgumentType": 2,
   "reportUnknownMemberType": 7,
   "reportUnknownVariableType": 7
  },
