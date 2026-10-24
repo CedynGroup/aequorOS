@@ -123,7 +123,8 @@ class ExportScenario:
                     assert time.monotonic() < deadline, "BI read did not wait on the mart lock"
                     time.sleep(0.05)
                 self.idle_observations.append(self._api_state(observer))
-                time.sleep(3)  # Keep BI blocked while verifying the API stays outside a transaction.
+                # Keep BI blocked while verifying the API stays outside a transaction.
+                time.sleep(3)
                 self.idle_observations.append(self._api_state(observer))
             finally:
                 blocker.rollback()
