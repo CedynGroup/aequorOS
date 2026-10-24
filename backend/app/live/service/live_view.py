@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
-from app.domain.regulatory_instruments import forecast_status
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.live.models.live import CurrentFinancialFact, LiveMetric, LiveMetricSnapshot
@@ -36,7 +35,7 @@ from app.models import IngestionBatch
 from app.policy.public import module_scope
 from app.services import job_queue
 from app.services.audit import record_event
-from app.services.regulatory_applicability import rule_in_force
+from app.services.regulatory_applicability import forecast_view_status, rule_in_force
 
 _MODULE_ORDER = {
     module: index
@@ -119,7 +118,13 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         LiveModuleView(
             module=row.module,  # type: ignore[arg-type]
             status=(
-                forecast_status(row.metrics, liquidity_in_force)
+                forecast_view_status(
+                    db,
+                    bank,
+                    row.metrics,
+                    row.source_as_of_date,
+                    liquidity_in_force=liquidity_in_force,
+                )
                 if row.module == "forecast"
                 else row.status
             ),  # type: ignore[arg-type]
@@ -377,6 +382,25 @@ def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved b
         )
     )
     rows.reverse()
+    legacy_period_ids = {
+        row.reporting_period_id
+        for row in rows
+        if module == "forecast" and "year5_car_status" not in row.metrics
+    }
+    period_dates = (
+        {
+            period.id: period.period_end
+            for period in db.scalars(
+                select(BankReportingPeriod).where(
+                    BankReportingPeriod.organization_id == ctx.organization_id,
+                    BankReportingPeriod.bank_id == bank.id,
+                    BankReportingPeriod.id.in_(legacy_period_ids),
+                )
+            )
+        }
+        if legacy_period_ids
+        else {}
+    )
     liquidity_in_force = rule_in_force(db, ctx, bank, "LCR-NSFR") if module == "forecast" else False
     return LiveSnapshotListRead(
         bank_id=bank.id,
@@ -392,7 +416,13 @@ def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved b
                     if isinstance(value, (str, int, float, bool))
                 },
                 status=(
-                    forecast_status(row.metrics, liquidity_in_force)
+                    forecast_view_status(
+                        db,
+                        bank,
+                        row.metrics,
+                        period_dates.get(row.reporting_period_id),
+                        liquidity_in_force=liquidity_in_force,
+                    )
                     if module == "forecast"
                     else row.status
                 ),

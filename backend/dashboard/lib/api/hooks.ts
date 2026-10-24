@@ -25,6 +25,7 @@ import type {
   CfpApprove,
   CfpActivationCreate,
   LiveModule,
+  NotificationListRead,
   AnalysisRunCreate,
   SavedAnalysisCreate,
   SavedAnalysisSummaryRead,
@@ -3137,7 +3138,10 @@ export function useReturnTemplates(bankId?: string) {
     queryKey: ["rr-templates", bankId],
     queryFn: () =>
       apiCall(() => regulatoryReportingApi.listReturnTemplates({ bankId })),
-    staleTime: 10 * 60_000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: "always",
+    refetchOnMount: "always",
   });
 }
 
@@ -3475,12 +3479,33 @@ export function useOfficerNames(enabled = true): (userId: string) => string {
 /** The actor-visible notification feed (user-directed + org-wide rows). */
 export function useNotifications(unreadOnly = false) {
   const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
+  const queryKey = scopedQueryKey("notifications", scope, unreadOnly);
   return useQuery({
-    queryKey: scopedQueryKey("notifications", scope, unreadOnly),
-    queryFn: () =>
-      apiCall(() =>
+    queryKey,
+    queryFn: async () => {
+      const previous = queryClient.getQueryData<NotificationListRead>(queryKey);
+      const feed = await apiCall(() =>
         notificationsApi.listNotifications({ unreadOnly, limit: 50 }),
-      ),
+      );
+      const changedBanks = new Set(
+        feed.notifications
+          .filter(
+            (notice) =>
+              notice.type.startsWith("reporting.instrument.changed:") &&
+              notice.entityType === "bank" &&
+              notice.entityId &&
+              !previous?.notifications.some((old) => old.id === notice.id),
+          )
+          .map((notice) => notice.entityId),
+      );
+      for (const bankId of changedBanks) {
+        void queryClient.invalidateQueries({
+          queryKey: ["rr-templates", bankId],
+        });
+      }
+      return feed;
+    },
     refetchInterval: jitteredPollInterval(60_000, "notifications", scope),
   });
 }

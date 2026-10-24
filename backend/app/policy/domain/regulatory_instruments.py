@@ -2,7 +2,11 @@
 
 from collections.abc import Mapping
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from typing import Literal
+
+from app.domain.capital.engine import classify_capital_ratio
+from app.domain.liquidity.engine import classify_ratio
 
 type InstrumentStatus = Literal["in_force", "final_not_in_force", "exposure_draft", "unpublished"]
 
@@ -46,12 +50,32 @@ def forecast_rule_applicable(rule_id: str, liquidity_in_force: bool) -> bool:
 
 
 def forecast_status(
-    metrics: Mapping[str, object], liquidity_in_force: bool
+    metrics: Mapping[str, object],
+    liquidity_in_force: bool,
+    legacy_thresholds: Mapping[str, Decimal] | None = None,
 ) -> Literal["green", "amber", "red", "na"]:
-    keys = ("year5_car_status",) + (
-        ("year5_lcr_status", "year5_nsfr_status") if liquidity_in_force else ()
-    )
-    statuses = [metrics.get(key) for key in keys]
+    ratios = ("car", "lcr", "nsfr") if liquidity_in_force else ("car",)
+    statuses: list[object] = []
+    for ratio in ratios:
+        recorded = metrics.get(f"year5_{ratio}_status")
+        if recorded is None and legacy_thresholds is not None:
+            raw = metrics.get(f"year5_{ratio}_pct")
+            minimum = legacy_thresholds.get(f"{ratio}_min")
+            if (
+                isinstance(raw, (str, int, float, Decimal))
+                and not isinstance(raw, bool)
+                and minimum is not None
+            ):
+                try:
+                    value = Decimal(str(raw))
+                except InvalidOperation:
+                    value = Decimal("NaN")
+                if value.is_finite():
+                    if ratio == "car":
+                        recorded = classify_capital_ratio(value, minimum)
+                    elif (amber := legacy_thresholds.get("lcr_amber_floor")) is not None:
+                        recorded = classify_ratio(value, minimum, amber)
+        statuses.append(recorded)
     if "red" in statuses:
         return "red"
     if "amber" in statuses:
