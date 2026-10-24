@@ -47,7 +47,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.live.public import BankFinancialFact, RegulatoryLineItem, RegulatoryRun
 
@@ -110,7 +110,7 @@ def _run_lines(rc: ResolveContext, run: RegulatoryRun, section: str) -> list[Reg
 
 
 @resolver("bsd5.capital_facts")
-def _capital_facts(rc: ResolveContext, params: dict[str, Any]) -> Decimal:
+def _capital_facts(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
     """Σ ``capital_component`` facts for the period.
 
     Selection: ``categories`` (names) and/or ``tiers`` (CET1/AT1/T2) minus
@@ -143,18 +143,19 @@ def _capital_facts(rc: ResolveContext, params: dict[str, Any]) -> Decimal:
         stmt = stmt.where(BankFinancialFact.category.in_(categories))
     elif tiers:
         stmt = stmt.where(BankFinancialFact.capital_tier.in_(tiers))
-    total = _ZERO
+    total: Decimal | None = None
     for category, is_deduction, amount in rc.db.execute(stmt):
         if category in exclude:
             continue
         value = Decimal(str(amount))
         if deduction:
-            if is_deduction:
-                total += value
-        elif not is_deduction:
-            total += value
-        elif category in include_deductions:
-            total -= value
+            if not is_deduction:
+                continue
+        elif is_deduction:
+            if category not in include_deductions:
+                continue
+            value = -value
+        total = value if total is None else total + value
     return total
 
 
@@ -164,18 +165,19 @@ def _capital_facts(rc: ResolveContext, params: dict[str, Any]) -> Decimal:
 
 
 @resolver("bsd5.balance_sheet_side")
-def _balance_sheet_side(rc: ResolveContext, params: dict[str, Any]) -> Decimal:
+def _balance_sheet_side(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
     """Σ ``balance_sheet`` facts with ``attributes.side == side`` (default
     ``asset``) — the platform's on-balance-sheet total for the period."""
     side = str(params.get("side", "asset"))
-    stmt = select(BankFinancialFact.amount).where(
+    stmt = select(func.sum(BankFinancialFact.amount)).where(
         BankFinancialFact.organization_id == rc.ctx.organization_id,
         BankFinancialFact.bank_id == rc.bank.id,
         BankFinancialFact.reporting_period_id == rc.period.id,
         BankFinancialFact.fact_group == "balance_sheet",
         BankFinancialFact.attributes["side"].as_string() == side,
     )
-    return sum((Decimal(str(amount)) for amount in rc.db.scalars(stmt)), _ZERO)
+    value = rc.db.scalar(stmt)
+    return None if value is None else Decimal(str(value))
 
 
 # ---------------------------------------------------------------------------

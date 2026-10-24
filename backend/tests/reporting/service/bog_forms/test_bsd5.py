@@ -76,6 +76,7 @@ PROV = "PROVISION"
 
 # BSD5A CAR FORMAT amount rows the platform cannot feed honestly (doc §Residual)
 CAR_INPUT_REQUIRED_ROWS = {30, 33, 40, 48, 49, 50, 52, 57, 58, 59, 60, 61, 63, 64}
+ABSENT_CAPITAL_ROWS = {13, 14, 15, 16, 20, 21, 23, 43, 44, 45}
 # every category name with its own BSD5A row (Tier 1 residual + AT1 handled by tier)
 NAMED = frozenset(
     (
@@ -263,12 +264,13 @@ def test_bsd5a_reconciles_to_the_capital_run_and_bog_arithmetic(  # noqa: PLR091
     assert not payload["errors"], payload["errors"]
     counts = payload["status_counts"]
     assert counts["unmapped"] == 0
-    assert counts["input_required"] == len(CAR_INPUT_REQUIRED_ROWS)
-    assert counts["mapped"] == 96 + 139 + 10 - len(CAR_INPUT_REQUIRED_ROWS)
+    missing_rows = CAR_INPUT_REQUIRED_ROWS | ABSENT_CAPITAL_ROWS
+    assert counts["input_required"] == len(missing_rows)
+    assert counts["mapped"] == 96 + 139 + 10 - len(missing_rows)
     assert snapshot["metadata"]["missing_dependencies"] == []
     e = _cells(snapshot, CAR)
     statuses = _statuses(snapshot, CAR)
-    for row in CAR_INPUT_REQUIRED_ROWS:
+    for row in missing_rows:
         assert statuses[f"E{row}"] == "input_required", row
         assert f"E{row}" not in e
 
@@ -278,11 +280,9 @@ def test_bsd5a_reconciles_to_the_capital_run_and_bog_arithmetic(  # noqa: PLR091
     assert e["E9"] == 20 * M  # AT1 perpetual instruments
     assert e["E10"] == e["E7"] + e["E8"] + e["E9"] == 320 * M  # BoG: Tier 1 = Σ lines 1–3
     assert e["E12"] == 25 * M and e["E42"] == e["E12"]  # goodwill/intangibles, both sides
-    assert e["E13"] == 0 and e["E14"] == 0 and e["E15"] == 0 and e["E16"] == 0
-    assert e["E17"] == e["E10"] - sum(e[f"E{r}"] for r in (12, 13, 14, 15, 16)) == 295 * M
-    assert e["E20"] == 0 and e["E21"] == 0 and e["E23"] == 0
+    assert e["E17"] == e["E10"] - e["E12"] == 295 * M
     assert e["E22"] == 45 * M  # subordinated_debt
-    assert e["E24"] == sum(e[f"E{r}"] for r in (20, 21, 22, 23)) == 45 * M
+    assert e["E24"] == e["E22"] == 45 * M
     assert e["E25"] == e["E17"] + e["E24"] == 340 * M
     # ADJUSTED CAPITAL BASE == the signed sum of the run's capital-component
     # lines that have a BSD5A row (== the run's total capital less the components
@@ -435,11 +435,9 @@ def test_bsd5b_group_return_links_to_bsd5a_and_reproduces_bogs_group_formulas(
     payload = snapshot["bog_form"]
     assert not payload["errors"], payload["errors"]
     assert payload["missing_dependencies"] == []
-    # 98 declared (94 captured + 4 blank data cells): 2 group-only rows + 12 links to
-    # BSD5A input_required cells are blank; 14 BoG formulas evaluated
     assert payload["status_counts"] == {
-        "mapped": 84,
-        "input_required": 14,
+        "mapped": 73,
+        "input_required": 25,
         "unmapped": 0,
         "derived": 14,
     }
@@ -448,7 +446,18 @@ def test_bsd5b_group_return_links_to_bsd5a_and_reproduces_bogs_group_formulas(
     # consolidation-only lines and the solo input_required lines stay blank
     for ref in (
         "D10",
+        "D15",
+        "D16",
+        "D17",
+        "D18",
+        "D19",
+        "D21",
+        "D22",
+        "D23",
+        "D24",
+        "D25",
         "D26",
+        "D27",
         "D35",
         "D38",
         "D44",
@@ -463,9 +472,10 @@ def test_bsd5b_group_return_links_to_bsd5a_and_reproduces_bogs_group_formulas(
         "D68",
     ):
         assert statuses[ref] == "input_required", ref
+        assert ref not in d
     # group = solo, cell for cell (form.cell links), incl. the blank data cells
     for group_ref, solo_ref in (
-        ("D8", "E7"), ("D9", "E8"), ("D11", "E9"), ("D14", "E12"), ("D16", "E14"),
+        ("D8", "E7"), ("D9", "E8"), ("D11", "E9"), ("D14", "E12"),
         ("D28", "E22"), ("D32", "E27"), ("D34", "E29"), ("D37", "E32"), ("D40", "E35"),
         ("D43", "E39"), ("D45", "E41"), ("D51", "E47"), ("D52", "E51"), ("D58", "E55"),
         ("D59", "E56"), ("D71", "E67"), ("D72", "E68"),
@@ -480,8 +490,8 @@ def test_bsd5b_group_return_links_to_bsd5a_and_reproduces_bogs_group_formulas(
     assert d["D29"] == sum(d.get(f"D{r}", Decimal(0)) for r in range(21, 29)) == solo["E24"]
     assert d["D30"] == d["D20"] + d["D29"] == solo["E25"] == 340 * M
     # the template's copies (D46=D14 … D49=D19) and the D50 "=D20" quirk, verbatim
-    assert d["D46"] == d["D14"] and d["D47"] == d["D16"] and d["D48"] == d["D17"]
-    assert d["D49"] == d["D19"] and d["D50"] == d["D20"]
+    assert d["D46"] == d["D14"] and d["D47"] == 0 and d["D48"] == 0
+    assert d["D49"] == 0 and d["D50"] == d["D20"]
     assert d["D55"] == d["D32"] - sum(d.get(f"D{r}", Decimal(0)) for r in range(34, 55))
     assert d["D65"] == sum(d.get(f"D{r}", Decimal(0)) for r in range(58, 65)) == solo["E54"]
     # D73 does not add rows 50–51 (BoG's formula); D74 is the percent form
@@ -680,7 +690,7 @@ def test_bsd5_resolvers_against_inserted_rows(db_client: TestClient) -> None:  #
         assert value(21) == 6 * M  # latent revaluation joins BSD5A's single revaluation row
         # explicit resolver semantics
         assert capital(rc, {"categories": ["goodwill"], "deduction": True}) == 3 * M
-        assert capital(rc, {"categories": ["goodwill"]}) == 0  # positive mode ignores deductions
+        assert capital(rc, {"categories": ["goodwill"]}) is None
         assert (
             capital(
                 rc, {"categories": ["income_surplus"], "include_deductions": ["income_surplus"]}
@@ -761,7 +771,7 @@ def test_bsd5_resolvers_against_inserted_rows(db_client: TestClient) -> None:  #
     assert e["E65"] == 320 * M
     d = _cells(_generate(db_client, "BSD5B"), GROUP)
     assert d["D23"] == 6 * M and d["D25"] == 4 * M and d["D27"] == 9 * M  # the group split
-    assert d["D22"] == 0 and d["D21"] == 0 and d["D18"] == 0
+    assert all(ref not in d for ref in ("D22", "D21", "D18"))
     assert d["D29"] == solo_tier2(d) == e["E24"]  # same Tier 2 total, finer rows
 
 

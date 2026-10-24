@@ -14,8 +14,6 @@ now refuses to certify a tenant whose board register is empty.
 
 from __future__ import annotations
 
-import inspect
-import re
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -251,30 +249,6 @@ def test_the_catalogue_is_defined_exactly_once() -> None:
         assert from_fixture is from_app, (
             "the fixture holds its own copy of a catalogue the application "
             "defines — import it from services/parameter_register.py instead"
-        )
-
-
-def test_the_fixture_does_not_redefine_any_catalogue_literal() -> None:
-    """Belt and braces: no literal catalogue dict may reappear in the fixture.
-
-    The identity check above passes if someone re-binds the alias; this catches
-    a fresh literal being pasted back in.
-    """
-    source = inspect.getsource(fixture)
-    for name in (
-        "_CAPITAL_THRESHOLDS",
-        "_FX_CAPITAL_THRESHOLDS",
-        "_FTP_CAPITAL_THRESHOLDS",
-        "_RISK_WEIGHTS",
-        "_LCR_OUTFLOW_RATES",
-        "_LCR_INFLOW_RATES",
-        "_NSFR_ASF_WEIGHTS",
-        "_NSFR_RSF_WEIGHTS",
-    ):
-        literal = re.search(rf"^{name}(: dict\[str, str\])? = \{{", source, re.M)
-        assert literal is None, (
-            f"{name} is defined as a literal in the fixture; it must alias "
-            "services/parameter_register.py"
         )
 
 

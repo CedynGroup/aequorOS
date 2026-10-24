@@ -48,10 +48,9 @@ from app.data_engine.public import (
     CanonicalProduct,
 )
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.live.public import BankFinancialFact
 from app.market_data.public import market_data_sources
 
-from ..sources import ResolveContext, reporting_currency_value, resolver
+from ..sources import ResolveContext, get_resolver, reporting_currency_value, resolver
 
 #: Column key → days BEFORE the week's Wednesday (the PERIOD / reporting date).
 #: The template's own header formulas fix this: ``B28 = B3-6`` (THURS) … ``H28 = B3``.
@@ -208,24 +207,6 @@ def _ladder_sum(rc: ResolveContext, params: dict[str, Any], day: date) -> Decima
     )
 
 
-def _facts_sum(rc: ResolveContext, spec: dict[str, Any]) -> Decimal:
-    stmt = select(func.coalesce(func.sum(BankFinancialFact.amount), 0)).where(
-        BankFinancialFact.organization_id == rc.ctx.organization_id,
-        BankFinancialFact.bank_id == rc.bank.id,
-        BankFinancialFact.reporting_period_id == rc.period.id,
-        BankFinancialFact.fact_group == spec["group"],
-    )
-    if categories := spec.get("categories"):
-        stmt = stmt.where(BankFinancialFact.category.in_(list(categories)))
-    currency = spec.get("currency", "all")
-    if currency == "GHS":
-        stmt = stmt.where(BankFinancialFact.currency == rc.bank.currency)
-    elif currency == "FX":
-        stmt = stmt.where(BankFinancialFact.currency != rc.bank.currency)
-    value = rc.db.scalar(stmt)
-    return Decimal(str(value or 0))
-
-
 @resolver("bsd1.daily")
 def _daily(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
     """Σ balance (base units) of the canonical positions matching the filters
@@ -259,7 +240,8 @@ def _daily(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
         return value * sign
     facts_spec = params.get("facts")
     if facts_spec and day == rc.period.period_end and not params.get("week_change"):
-        return _facts_sum(rc, facts_spec) * sign
+        value = get_resolver("facts.sum")(rc, {"currency": "all", **facts_spec})
+        return None if value is None else Decimal(str(value)) * sign
     return None
 
 

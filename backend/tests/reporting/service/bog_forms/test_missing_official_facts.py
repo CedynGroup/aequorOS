@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.models import Bank, BankFinancialFact, BankReportingPeriod, CurrentFinancialFact
 from app.reporting.service.bog_forms.catalog import form_spec
-from app.reporting.service.bog_forms.engine import compute_form
+from app.reporting.service.bog_forms.engine import FormResult, compute_form
 from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
 from tests.support.helpers import ORG_1, USER_1
 
@@ -184,15 +184,151 @@ def test_maturity_total_does_not_hide_a_missing_fact_with_a_partial_sum(
         ("BSD2", "BSD2", "B14"),
         ("BSD5A", "CAR FORMAT", "E29"),
         ("BSD5A", "CAR FORMAT", "E56"),
+        ("BSD5A", "CAR FORMAT", "E7"),
+        ("BSD5A", "CAR FORMAT", "E27"),
+        ("BSD5B", "CAR FORMAT-GROUP", "D8"),
+        ("BSD5B", "CAR FORMAT-GROUP", "D32"),
         ("BSD6", "BSD6A", "C7"),
     ],
 )
 def test_return_cells_preserve_missing_official_sources(
     live_book: ResolveContext, code: str, sheet: str, cell: str
 ) -> None:
+    dependencies: dict[str, FormResult] = {}
+    if code == "BSD5B":
+        dependencies["BSD5A"] = compute_form(
+            live_book.db, live_book.ctx, live_book.bank, live_book.period, form_spec("BSD5A")
+        )
     result = compute_form(
-        live_book.db, live_book.ctx, live_book.bank, live_book.period, form_spec(code)
+        live_book.db,
+        live_book.ctx,
+        live_book.bank,
+        live_book.period,
+        form_spec(code),
+        dependencies=dependencies,
     )
     value = next(line for line in result.lines if line.sheet == sheet and line.cell == cell)
     assert value.status == "input_required"
     assert value.value is None
+
+
+@pytest.mark.parametrize(
+    ("category", "cell"),
+    [
+        ("cash_vault", "H32"),
+        ("bog_required_reserves", "H33"),
+        ("retail_deposits_stable", "H94"),
+    ],
+)
+@pytest.mark.parametrize("amount", [None, "0", "2000000"])
+def test_bsd1_reporting_date_fallback_preserves_missing_and_stated_amounts(
+    live_book: ResolveContext, category: str, cell: str, amount: str | None
+) -> None:
+    if amount is not None:
+        live_book.db.add(
+            BankFinancialFact(
+                organization_id=live_book.ctx.organization_id,
+                bank_id=live_book.bank.id,
+                reporting_period_id=live_book.period.id,
+                fact_group="balance_sheet",
+                category=category,
+                currency=live_book.bank.currency,
+                amount=Decimal(amount),
+            )
+        )
+        live_book.db.flush()
+    result = compute_form(
+        live_book.db, live_book.ctx, live_book.bank, live_book.period, form_spec("BSD1")
+    )
+    value = next(line for line in result.lines if line.sheet == "BSD1 " and line.cell == cell)
+    assert value.status == ("input_required" if amount is None else "mapped")
+    assert value.value == (None if amount is None else float(amount))
+
+
+@pytest.mark.parametrize("amount", ["0", "2000000"])
+@pytest.mark.parametrize("currency", ["GHS", "FX", "all"])
+def test_bsd1_fallback_keeps_currency_sign_and_reporting_date_selection(
+    live_book: ResolveContext, amount: str, currency: str
+) -> None:
+    _official_cash(live_book, amount)
+    params = {
+        "days_before": 0,
+        "sign": -1,
+        "facts": {"group": "balance_sheet", "categories": ["cash_vault"], "currency": currency},
+    }
+    daily = get_resolver("bsd1.daily")
+    expected = None if currency == "FX" else -Decimal(amount)
+    assert daily(live_book, params) == expected
+    assert daily(live_book, {**params, "days_before": 1}) is None
+    assert daily(live_book, {**params, "week_change": True}) is None
+
+
+@pytest.mark.parametrize("side", ["asset", "liability", "equity"])
+@pytest.mark.parametrize("amount", [None, "0", "2000000"])
+def test_balance_sheet_sides_preserve_missing_and_stated_amounts(
+    live_book: ResolveContext, side: str, amount: str | None
+) -> None:
+    _official_cash(live_book, "9000000")
+    if amount is not None:
+        live_book.db.add(
+            BankFinancialFact(
+                organization_id=live_book.ctx.organization_id,
+                bank_id=live_book.bank.id,
+                reporting_period_id=live_book.period.id,
+                fact_group="balance_sheet",
+                category="synthetic_balance",
+                currency=live_book.bank.currency,
+                amount=Decimal(amount),
+                attributes={"side": side},
+            )
+        )
+        live_book.db.flush()
+    for selected_side in ("asset", "liability", "equity"):
+        value = get_resolver("bsd5.balance_sheet_side")(live_book, {"side": selected_side})
+        expected = Decimal(amount) if selected_side == side and amount is not None else None
+        assert value == expected
+
+
+@pytest.mark.parametrize(
+    ("params", "deduction", "sign"),
+    [
+        ({"categories": ["paid_up_capital"]}, False, 1),
+        ({"tiers": ["CET1"]}, False, 1),
+        ({"categories": ["other"], "tiers": ["CET1"]}, False, 1),
+        ({"categories": ["paid_up_capital"], "exclude": ["paid_up_capital"]}, False, None),
+        ({"categories": ["paid_up_capital"], "deduction": True}, True, 1),
+        ({"categories": ["paid_up_capital"], "deduction": True}, False, None),
+        ({"categories": ["paid_up_capital"]}, True, None),
+        (
+            {"categories": ["paid_up_capital"], "include_deductions": ["paid_up_capital"]},
+            True,
+            -1,
+        ),
+    ],
+)
+@pytest.mark.parametrize("amount", [None, "0", "2000000"])
+def test_capital_selection_preserves_missing_and_stated_amounts(
+    live_book: ResolveContext,
+    params: dict[str, object],
+    deduction: bool,
+    sign: int | None,
+    amount: str | None,
+) -> None:
+    _official_cash(live_book, "9000000")
+    if amount is not None:
+        live_book.db.add(
+            BankFinancialFact(
+                organization_id=live_book.ctx.organization_id,
+                bank_id=live_book.bank.id,
+                reporting_period_id=live_book.period.id,
+                fact_group="capital_component",
+                category="paid_up_capital",
+                currency=live_book.bank.currency,
+                capital_tier="CET1",
+                is_deduction=deduction,
+                amount=Decimal(amount),
+            )
+        )
+        live_book.db.flush()
+    expected = None if amount is None or sign is None else Decimal(amount) * sign
+    assert get_resolver("bsd5.capital_facts")(live_book, params) == expected
