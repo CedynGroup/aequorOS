@@ -1,5 +1,9 @@
 "use client";
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
+
 /**
  * The ICAAP workspace: the institution's assessment cycles.
  *
@@ -17,6 +21,15 @@ import CycleList from "@/components/icaap/CycleList";
 import { regShort } from "@/lib/format";
 
 export default function IcaapPage() {
+  return (
+    <Suspense>
+      <IcaapWorkspace />
+    </Suspense>
+  );
+}
+
+function IcaapWorkspace() {
+  const preparing = useSearchParams().get("preparing") === "1";
   const { bank } = useBankContext();
   const router = useRouter();
 
@@ -32,7 +45,11 @@ export default function IcaapPage() {
           {bank && (
             <CycleList
               bankId={bank.id}
-              onCreated={(cycleId) => router.push(`/icaap/${cycleId}/overview`)}
+              onCreated={(cycleId) =>
+                router.push(
+                  preparationHref(`/icaap/${cycleId}/overview`, preparing),
+                )
+              }
             />
           )}
         </PageContainer>

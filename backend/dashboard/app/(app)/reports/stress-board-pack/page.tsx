@@ -21,6 +21,7 @@ import { useBankRules } from "@/lib/api/regulatoryRules";
 import SdiLiquidityBoardDisclosure from "@/components/reports/SdiLiquidityBoardDisclosure";
 import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
+import { preparationWarning } from "@/lib/regulatoryInstruments";
 import { Printer } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import SectionCard from "@/components/ui/SectionCard";
@@ -111,20 +112,57 @@ export default function StressBoardPack() {
       ? `No ${what} floor configured`
       : `Floor ${fmtFloorPct(floor)}`;
 
+  const packCodes = isSdi
+    ? ["SDI-STRESS-ANNUAL"]
+    : ["ICAAP-STRESS", "STRESS-PACK"];
+  if (sections.appendix && !isSdi) packCodes.push("ICAAP-STRESS-APPENDIX2");
+  const packWarnings = [
+    ...new Set(
+      packCodes
+        .map((code) => {
+          const instrument = rules.query.error
+            ? undefined
+            : rules.instrument(code);
+          return preparationWarning(
+            instrument?.instrumentStatus,
+            instrument?.effectiveFrom,
+          );
+        })
+        .filter((warning): warning is string => Boolean(warning)),
+    ),
+  ];
+
   return (
     <>
       <PageHeader
         eyebrow="Reports"
         title="Stress Board-Pack Composer"
         action={
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            disabled={!run || (isSdi && !rules.isReady)}
-            onClick={() => window.print()}
-          >
-            <Printer size={14} /> Print / export PDF
-          </button>
+          <div className="max-w-xl space-y-2">
+            {packWarnings.map((warning) => (
+              <p
+                key={warning}
+                role="note"
+                className="text-caption text-warning"
+              >
+                {warning}
+              </p>
+            ))}
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+              disabled={
+                !run ||
+                !rules.isReady ||
+                packCodes.some(
+                  (code) => !rules.instrument(code)?.instrumentStatus,
+                )
+              }
+              onClick={() => window.print()}
+            >
+              <Printer size={14} /> Print / export PDF
+            </button>
+          </div>
         }
       />
 

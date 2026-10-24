@@ -1,6 +1,10 @@
 "use client";
 
-import { useBankRules, useInForceAlerts } from "@/lib/api/regulatoryRules";
+import {
+  useBankRules,
+  useInForceAlerts,
+  useInForceLiveSummary,
+} from "@/lib/api/regulatoryRules";
 
 /**
  * Cross-module live status card. Reads the polled live-summary + alerts views
@@ -15,7 +19,6 @@ import type { LiveModuleView } from "@aequoros/risk-service-api";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import StatusPill from "@/components/ui/StatusPill";
 import { useBankContext } from "@/components/shell/BankContext";
-import { useLiveSummary } from "@/lib/api/hooks";
 import { fmtRelative, statusTone } from "@/lib/api/values";
 import { LIVE_MODULE_LABELS, livePrimaryMetric } from "./moduleDisplay";
 
@@ -32,13 +35,11 @@ const MODULE_ORDER: LiveModuleView["module"][] = [
 
 export default function LiveStatusCard() {
   const { bank } = useBankContext();
-  const summary = useLiveSummary(bank?.id);
+  const summary = useInForceLiveSummary(bank?.id);
   const alerts = useInForceAlerts(bank?.id);
 
   const rules = useBankRules(bank?.id);
-  const modules = (summary.data?.modules ?? []).filter((item) =>
-    rules.isModuleInForce(item.module),
-  );
+  const modules = summary.data?.modules ?? [];
   const byModule = new Map(modules.map((m) => [m.module, m]));
   const total = alerts.data?.total ?? 0;
   const computedAt = summary.data?.computedAt ?? null;

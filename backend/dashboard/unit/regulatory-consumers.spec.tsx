@@ -63,12 +63,16 @@ const state = vi.hoisted(() => ({
   sourceBank: "",
   breached: true,
   irrLoading: false,
+  forecast: "",
+  exposure: false,
 }));
 function scope() {
   return {
     institutionClass: state.sdi ? "sdi" : "bank",
     modules: new Set(
-      state.onlyIrr ? ["irrbb"] : ["liquidity", "capital", "irrbb"],
+      state.onlyIrr
+        ? ["irrbb"]
+        : ["liquidity", "capital", "irrbb", "forecasting"],
     ),
     organizationModules: new Set(),
     hasInstitutionAuthority: true,
@@ -79,6 +83,7 @@ function scope() {
     irrbbAggregatedView: true,
     irrbbConfidentialView: true,
     riskConfidentialView: true,
+    forecastingAggregatedView: true,
     institutionCapabilities: state.onlyIrr
       ? []
       : [
@@ -290,6 +295,32 @@ function alerts() {
       ruleId: "lcr",
       metric: null,
     },
+    ...(state.forecast
+      ? [
+          ...["lcr", "nsfr"].map((ratio) => ({
+            module: "forecast",
+            message: `Synthetic forecast ${ratio} alert`,
+            findingId: `forecast-${ratio}`,
+            severity: "critical",
+            createdAt: new Date(),
+            ruleId: `year5_${ratio}_above_minimum`,
+            metric: null,
+          })),
+          ...(state.forecast === "red"
+            ? [
+                {
+                  module: "forecast",
+                  message: "Synthetic forecast capital alert",
+                  findingId: "forecast-car",
+                  severity: "critical",
+                  createdAt: new Date(),
+                  ruleId: "year5_car_above_minimum",
+                  metric: null,
+                },
+              ]
+            : []),
+        ]
+      : []),
     ...(state.capitalAlert
       ? [
           {
@@ -321,14 +352,25 @@ function summary() {
     computedAt: new Date(),
     sourceAsOfDate: new Date("2026-01-31T00:00:00Z"),
     isStale: false,
-    modules: ["liquidity", "irr", "capital"].map((module) => ({
+    modules: [
+      "liquidity",
+      "irr",
+      "capital",
+      ...(state.forecast ? ["forecast"] : []),
+    ].map((module) => ({
       module,
-      status: "green",
+      status: module === "forecast" ? "red" : "green",
       computedAt: new Date(),
       metrics: {
         lcr_pct: "105",
         worst_eve_change_pct_tier1: "5",
         car_pct: "14",
+        year5_car_pct: state.forecast === "red" ? "8" : "20",
+        year5_lcr_pct: "80",
+        year5_nsfr_pct: "90",
+        year5_car_status: state.forecast || "green",
+        year5_lcr_status: "red",
+        year5_nsfr_status: "red",
       },
       computedFromInputHash: "a".repeat(64),
       calculationGeneration: 1,
@@ -366,6 +408,10 @@ vi.mock("@/lib/api/hooks", () => ({
         "IRRBB-PILOT",
         "SDI-IRRBB-QUARTERLY",
         "LCR-NSFR",
+        "ICAAP-STRESS",
+        "STRESS-PACK",
+        "ICAAP-STRESS-APPENDIX2",
+        "SDI-STRESS-ANNUAL",
       ].map((code) =>
         ReturnTemplateReadFromJSON({
           code,
@@ -452,7 +498,23 @@ vi.mock("@/components/stress/hooks", () => ({
       {
         run_id: "synthetic-stress",
         input_hash: "b".repeat(64),
+        created_at: "2026-01-31T00:00:00Z",
+        scenario_code: "synthetic",
         outcome: { coupling: null },
+        projection: { current: {}, base: [], stress: [] },
+        appendix_ii: {
+          table1_summary: {
+            current: { label: "current" },
+            pre_adverse: [],
+            post_adverse: [],
+            impact_of_adverse: [],
+          },
+          table2_capital: [],
+          table3_profit_and_loss: [],
+          table4_financial_position: [],
+          table5_rwa: { rows: [] },
+          table6_risk_drivers: { rows: [] },
+        },
         summary: { stressed_car_end_pct: null, stressed_lcr_pct: null },
       },
     ]),
@@ -461,7 +523,24 @@ vi.mock("@/components/basel/sdiHooks", () => ({
   useSdiLiquidityPosition: () => query(sdiPosition()),
   useSdiCapitalSummary: () => query(undefined),
   useSdiCapitalChecks: () => query({ checks: [] }),
-  useSdiLargeExposures: () => query({ exposures: [] }),
+  useSdiLargeExposures: () =>
+    query({
+      exposures: state.exposure
+        ? [
+            {
+              counterparty_name: "Synthetic 16% obligor",
+              connection: "single",
+              exposure_ghs: "160",
+              pct_net_own_funds: "16",
+              single_obligor_limit_pct: "25",
+              large_exposure_limit_pct: "15",
+              applicable_limit_pct: "25",
+              status: "ok",
+              exempt: false,
+            },
+          ]
+        : [],
+    }),
   useLiquidityMonitoring: () =>
     query({
       funding_concentration: sdiPosition().funding_concentration,
@@ -481,6 +560,8 @@ afterEach(() => {
   state.path = "/liquidity";
   state.breached = true;
   state.irrLoading = false;
+  state.forecast = "";
+  state.exposure = false;
 });
 
 it.each([
@@ -987,3 +1068,84 @@ it("keeps loaded pulse cards visible while another module's metrics load", () =>
   expect(screen.getByText("14.00")).toBeVisible();
   expect(screen.queryByLabelText("Loading")).toBeNull();
 });
+
+it.each(["unpublished", "exposure_draft", "final_not_in_force"])(
+  "excludes %s forecast liquidity checks from every alert consumer",
+  (status) => {
+    state.sdi = false;
+    state.status = status;
+    state.forecast = "green";
+    for (const component of [
+      <RuleQueryProbe key="query" />,
+      <AlertsPage key="alerts" />,
+      <LiveStatusCard key="live" />,
+      <RiskPage key="risk" />,
+      <BreachBanner key="banner" bankId="BK-SYNTH001" />,
+      <BoardPackPage key="board" />,
+    ]) {
+      const view = render(component);
+      expect(screen.queryByText(/Synthetic forecast lcr alert/)).toBeNull();
+      expect(screen.queryByText(/Synthetic forecast nsfr alert/)).toBeNull();
+      expect(screen.queryByText(/module.*breaching live limits/)).toBeNull();
+      view.unmount();
+    }
+    const view = render(<UnifiedBell />);
+    fireEvent.click(screen.getByRole("button", { name: "Notifications" }));
+    fireEvent.click(screen.getByRole("button", { name: /Breaches/ }));
+    expect(screen.getByText("No active breaches")).toBeVisible();
+    view.unmount();
+    render(<PulseWall bankId="BK-SYNTH001" moduleOrder="severity" />);
+    const card = screen.getByRole("link", { name: /Balance Sheet Forecast/ });
+    expect(card).toHaveTextContent("Compliant");
+    expect(card).not.toHaveTextContent("minimum LCR");
+  },
+);
+
+it("retains forecast capital breaches and restores liquidity checks only on commencement", () => {
+  state.sdi = false;
+  state.forecast = "red";
+  const view = render(<AlertsPage />);
+  expect(screen.getByText("Synthetic forecast capital alert")).toBeVisible();
+  expect(screen.queryByText("Synthetic forecast lcr alert")).toBeNull();
+  state.status = "in_force";
+  view.rerender(<AlertsPage />);
+  expect(screen.getByText("Synthetic forecast lcr alert")).toBeVisible();
+  expect(screen.getByText("Synthetic forecast nsfr alert")).toBeVisible();
+});
+
+it("shows the statutory SDI exposure ceiling on the in-force risk wall", () => {
+  state.exposure = true;
+  render(<RiskPage />);
+  const exposure = screen.getByText("Synthetic 16% obligor").closest("li")!;
+  expect(exposure).toHaveTextContent("25");
+  expect(exposure).not.toHaveTextContent("15.00");
+  expect(screen.getByText("Large Exposures").parentElement).toHaveTextContent(
+    "Compliant",
+  );
+});
+
+it.each([false, true])(
+  "warns at the stress PDF decision for SDI=%s and blocks unresolved evidence",
+  (sdi) => {
+    state.sdi = sdi;
+    state.metadata = "loading";
+    const view = render(<StressBoardPack />);
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "legal status has not been established",
+    );
+    expect(
+      screen.getByRole("button", { name: "Print / export PDF" }),
+    ).toBeDisabled();
+    state.metadata = "error";
+    view.rerender(<StressBoardPack />);
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "legal status has not been established",
+    );
+    state.metadata = "ready";
+    view.rerender(<StressBoardPack />);
+    expect(screen.getByRole("note")).toHaveTextContent("not law yet");
+    expect(
+      screen.getByRole("button", { name: "Print / export PDF" }),
+    ).toBeEnabled();
+  },
+);

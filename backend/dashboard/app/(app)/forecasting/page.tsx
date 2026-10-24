@@ -1,5 +1,7 @@
 "use client";
 
+import { useInForceLiveSummary } from "@/lib/api/regulatoryRules";
+
 /**
  * Balance Sheet Forecasting — projection workspace for the persisted forecast
  * run (user-selectable 3–10 year horizon, 5-year regulatory default):
@@ -59,7 +61,6 @@ import {
   useCreateForecastRun,
   useForecastRun,
   useForecastRuns,
-  useLiveSummary,
 } from "@/lib/api/hooks";
 import { isoDate, labelize, num, statusTone } from "@/lib/api/values";
 import {
@@ -138,7 +139,7 @@ function BalanceSheetWorkspace() {
 
   const runsQuery = useForecastRuns(forecastingBankId, { limit: 50 });
   const runs = runsQuery.data?.runs ?? [];
-  const liveSummary = useLiveSummary(bankId);
+  const liveSummary = useInForceLiveSummary(bankId);
   const liveForecast = liveSummary.data?.modules.find(
     (module) => module.module === "forecast",
   );

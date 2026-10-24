@@ -3,6 +3,7 @@
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.service import attachments, filing_reconciliation, generation
 from app.reporting.service.common import get_snapshot_for_reporting_date
+from app.reporting.service.eligibility import resolve_eligibility
 from app.reporting.service.exports import pdf_parts
 from app.reporting.service.exports.pdf_parts import (
     NAVY,
@@ -26,6 +27,7 @@ __all__ = [
     "FamilyHooks",
     "NAVY",
     "REGISTRY",
+    "resolve_eligibility",
     "scan_instrument_statuses",
     "RegulatoryPackage",
     "WATERMARK_GREY",

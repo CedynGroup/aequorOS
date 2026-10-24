@@ -1,5 +1,7 @@
 "use client";
 
+import { useInForceLiveSummary } from "@/lib/api/regulatoryRules";
+
 import { useInForceAlerts } from "@/lib/api/regulatoryRules";
 
 /**
@@ -37,7 +39,6 @@ import {
 import type { LiveModule } from "@aequoros/risk-service-api";
 import StatusPill from "@/components/ui/StatusPill";
 import { SkeletonLine } from "@/components/ui/Skeleton";
-import { useLiveSummary } from "@/lib/api/hooks";
 import { fmtRelative, moduleComplianceVerdict } from "@/lib/api/values";
 import {
   LIVE_MODULE_HREFS,
@@ -55,7 +56,7 @@ export default function BreachBanner({
   hasData?: boolean;
 }) {
   const alerts = useInForceAlerts(bankId);
-  const live = useLiveSummary(bankId);
+  const live = useInForceLiveSummary(bankId);
   const pulse = usePulseCards(bankId, hasData);
   // Scope the census exactly as the pulse wall does (docs/sdi.md §3.2): an SDI
   // does not run the FX/FTP engines, so those cards are 'na' BY DESIGN and must

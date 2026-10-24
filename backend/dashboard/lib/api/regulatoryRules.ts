@@ -1,8 +1,12 @@
 "use client";
 
 import { useModuleScope } from "@/components/shell/BankContext";
-import { isRuleInForce } from "@/lib/regulatoryInstruments";
-import { useBankAlerts, useReturnTemplates } from "./hooks";
+import {
+  isRuleInForce,
+  forecastRuleApplicable,
+  forecastStatus,
+} from "@/lib/regulatoryInstruments";
+import { useBankAlerts, useReturnTemplates, useLiveSummary } from "./hooks";
 
 export function useBankRules(bankId: string | undefined) {
   const scope = useModuleScope();
@@ -53,7 +57,15 @@ export function useInForceAlerts(bankId: string | undefined, limit = 200) {
   const rules = useBankRules(bankId);
   const data = rules.isReady && !query.error ? query.data : undefined;
   const items =
-    data?.items.filter((item) => rules.isModuleInForce(item.module)) ?? [];
+    data?.items.filter(
+      (item) =>
+        rules.isModuleInForce(item.module) &&
+        (item.module !== "forecast" ||
+          forecastRuleApplicable(
+            item.ruleId,
+            rules.isModuleInForce("liquidity") === true,
+          )),
+    ) ?? [];
   const bySeverity: Record<string, number> = {};
   const byModule: Record<string, number> = {};
   for (const item of items) {
@@ -66,5 +78,35 @@ export function useInForceAlerts(bankId: string | undefined, limit = 200) {
     error,
     isLoading: !error && (query.isLoading || rules.isLoading),
     refetch: () => Promise.all([query.refetch(), rules.query.refetch()]),
+  };
+}
+
+export function useInForceLiveSummary(bankId: string | undefined) {
+  const query = useLiveSummary(bankId);
+  const rules = useBankRules(bankId);
+  const error = query.error ?? rules.error;
+  return {
+    refetch: () => Promise.all([query.refetch(), rules.query.refetch()]),
+    error,
+    isLoading: !error && (query.isLoading || rules.isLoading),
+    data:
+      rules.isReady && !query.error && query.data
+        ? {
+            ...query.data,
+            modules: query.data.modules
+              .filter((view) => rules.isModuleInForce(view.module))
+              .map((view) =>
+                view.module === "forecast"
+                  ? {
+                      ...view,
+                      status: forecastStatus(
+                        view.metrics,
+                        rules.isModuleInForce("liquidity") === true,
+                      ),
+                    }
+                  : view,
+              ),
+          }
+        : undefined,
   };
 }

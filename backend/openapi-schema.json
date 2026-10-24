@@ -56231,6 +56231,11 @@
       "SdiExposureRead": {
         "additionalProperties": false,
         "properties": {
+          "applicable_limit_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Applicable Limit Pct",
+            "type": "string"
+          },
           "connection": {
             "title": "Connection",
             "type": "string"
@@ -56282,6 +56287,7 @@
           "pct_net_own_funds",
           "single_obligor_limit_pct",
           "large_exposure_limit_pct",
+          "applicable_limit_pct",
           "status",
           "exempt"
         ],

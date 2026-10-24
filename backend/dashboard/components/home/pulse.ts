@@ -1,5 +1,7 @@
 "use client";
 
+import { useInForceLiveSummary } from "@/lib/api/regulatoryRules";
+
 /**
  * Shared pulse-card model for the Command Center: one headline card per
  * regulatory module, built from current module dashboards and the live
@@ -29,7 +31,6 @@ import {
   useFxDashboard,
   useIrrDashboard,
   useLiquidityDashboard,
-  useLiveSummary,
 } from "@/lib/api/hooks";
 import { num, numOrNull, formatFigure, fmtPctOrNull } from "@/lib/api/values";
 import { useBankRules } from "@/lib/api/regulatoryRules";
@@ -175,7 +176,7 @@ export function usePulseCards(
   const irr = useIrrDashboard(scoped("irr") ? dataBankId : undefined);
   const fx = useFxDashboard(scoped("fx") ? dataBankId : undefined);
   const ftp = useFtpDashboard(scoped("ftp") ? dataBankId : undefined);
-  const liveSummary = useLiveSummary(bankId);
+  const liveSummary = useInForceLiveSummary(bankId);
   const creditLive = liveSummary.data?.modules.find(
     (module) => module.module === "credit",
   );
@@ -402,6 +403,7 @@ export function usePulseCards(
       forecastLive,
       liveSummary.isLoading,
       liveSummary.error,
+      rules.isModuleInForce("liquidity") === true,
     ),
   };
 
@@ -444,6 +446,7 @@ function buildForecastCard(
     | undefined,
   isLoading: boolean,
   error: unknown,
+  liquidityInForce: boolean,
 ): PulseCardModel {
   const base: PulseCardModel = {
     module: "forecast",
@@ -466,7 +469,9 @@ function buildForecastCard(
     value: fixed(num(metric("year5_car_pct")), 2),
     unit: "%",
     status: forecast.status,
-    hint: `Current base assumptions · minimum LCR ${fixed(num(metric("min_lcr_pct")), 2)}%`,
+    hint: liquidityInForce
+      ? `Current base assumptions · minimum LCR ${fixed(num(metric("min_lcr_pct")), 2)}%`
+      : "Current base assumptions · in-force capital assessment",
     computedAt: forecast.computedAt,
     basisNote: "current live forecast baseline",
   };

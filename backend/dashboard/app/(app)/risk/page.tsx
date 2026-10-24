@@ -1,6 +1,10 @@
 "use client";
 
-import { useBankRules, useInForceAlerts } from "@/lib/api/regulatoryRules";
+import {
+  useBankRules,
+  useInForceAlerts,
+  useInForceLiveSummary,
+} from "@/lib/api/regulatoryRules";
 
 /**
  * Risk & Limit Monitor — the cross-module limit wall. Pulls every module
@@ -36,7 +40,6 @@ import {
   useFxDashboard,
   useIrrDashboard,
   useLiquidityDashboard,
-  useLiveSummary,
   useRegulatoryRun,
 } from "@/lib/api/hooks";
 import { fmtRelative, statusTone } from "@/lib/api/values";
@@ -86,7 +89,7 @@ export default function RiskLimitMonitorPage() {
   const irr = useIrrDashboard(irrScoped ? bankId : undefined);
   const fx = useFxDashboard(fxScoped ? bankId : undefined);
   const ftp = useFtpDashboard(ftpScoped ? bankId : undefined);
-  const liveSummary = useLiveSummary(bankId);
+  const liveSummary = useInForceLiveSummary(bankId);
   const alerts = useInForceAlerts(bankId, 200);
   const liquidityRun = useRegulatoryRun(
     liquidityConfidential ? bankId : undefined,
@@ -194,7 +197,7 @@ export default function RiskLimitMonitorPage() {
             module: "exposures",
             limit: exposure.counterparty_name,
             value: Number(exposure.pct_net_own_funds),
-            threshold: Number(exposure.large_exposure_limit_pct),
+            threshold: Number(exposure.applicable_limit_pct),
             direction: "below",
             status: status(exposure.status),
             unit: "%",
@@ -253,9 +256,7 @@ export default function RiskLimitMonitorPage() {
   const filteredRows: LimitRow[] =
     filter === "breach" ? breaches : filter === "amber" ? ambers : rows;
 
-  const liveModules = (liveSummary.data?.modules ?? []).filter((item) =>
-    rules.isModuleInForce(item.module),
-  );
+  const liveModules = liveSummary.data?.modules ?? [];
 
   return (
     <>

@@ -1,5 +1,7 @@
 "use client";
 
+import { useInForceLiveSummary } from "@/lib/api/regulatoryRules";
+
 /** All financial figures and evidence come from one live-summary response. */
 import "@/app/print.css";
 import { useBankRules } from "@/lib/api/regulatoryRules";
@@ -25,7 +27,6 @@ import {
   liveBoardHeadline,
   liveEvidenceProblem,
 } from "@/components/reports/liveBoardPack";
-import { useLiveSummary } from "@/lib/api/hooks";
 import { fmtDateUTC, labelize, statusTone } from "@/lib/api/values";
 
 const LIVE_KPI_STATUS: Record<LiveStatus, KpiStatus | undefined> = {
@@ -46,19 +47,8 @@ const BRIEF_MODULES: LiveModule[] = [
 export default function BoardPackPage() {
   const { bank } = useBankContext();
   const scope = useModuleScope();
-  const source = useLiveSummary(bank?.id);
+  const live = useInForceLiveSummary(bank?.id);
   const rules = useBankRules(bank?.id);
-  const live = {
-    ...source,
-    isLoading: source.isLoading || rules.isLoading,
-    error: source.error ?? rules.error,
-    data: source.data && {
-      ...source.data,
-      modules: source.data.modules.filter((row) =>
-        rules.isModuleInForce(row.module),
-      ),
-    },
-  };
   const briefModules = BRIEF_MODULES.filter(
     (module) =>
       rules.isModuleInForce(module) &&

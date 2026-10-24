@@ -70,7 +70,7 @@ export function preparationWarning(
   status: InstrumentStatus | undefined,
   date?: InstrumentDate,
 ): string | null {
-  if (!status || status === "in_force") return null;
+  if (status === "in_force") return null;
   return `${instrumentDisclosure(status, date).tooltip} This pack is for preparation or monitoring. It does not establish compliance or readiness for live filing.`;
 }
 
@@ -108,4 +108,28 @@ export function preparationHref(href: string, preparing: boolean): string {
   return preparing
     ? `${href}${href.includes("?") ? "&" : "?"}preparing=1`
     : href;
+}
+
+export function forecastRuleApplicable(
+  ruleId: string,
+  liquidityInForce: boolean,
+): boolean {
+  return (
+    liquidityInForce ||
+    !["year5_lcr_above_minimum", "year5_nsfr_above_minimum"].includes(ruleId)
+  );
+}
+
+export function forecastStatus(
+  metrics: Record<string, unknown>,
+  liquidityInForce: boolean,
+): "red" | "amber" | "green" | "na" {
+  const keys = [
+    "year5_car_status",
+    ...(liquidityInForce ? ["year5_lcr_status", "year5_nsfr_status"] : []),
+  ];
+  const statuses = keys.map((key) => metrics[key]);
+  if (statuses.includes("red")) return "red";
+  if (statuses.includes("amber")) return "amber";
+  return statuses.every((status) => status === "green") ? "green" : "na";
 }
