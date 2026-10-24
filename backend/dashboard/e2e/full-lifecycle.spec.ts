@@ -6,10 +6,10 @@
  *     Acknowledged + Rev 1.0
  *  2. downtime 409 → guided email fallback → pending re-upload → re-upload
  *     via ORASS once restored → poll → Acknowledged (BG/FMD/2026/07 flow)
- *  3. sandbox reject → poll → Rejected + supervisor comments (SIM-LQ-104)
- *     with the package reopened for regeneration
- *  4. the reviewer's other exit — send back for corrections with a note, and the
- *     return is unfrozen, unsigned and unsubmittable again
+ *  3. sandbox rejection → supervisor comments → corrected version → renewed
+ *     signatures → acknowledged refile, preserving the rejected evidence
+ *  4. checker send-back → withdrawn certification → corrected version → fresh
+ *     signatures → acknowledged filing, preserving the withdrawn signature
  *  5. institution register (seeded ORASS code) → LRT corporate pack generates
  *  6. a signed official BoG form (BSD2) hands over every artifact the command
  *     bar offers — Signed PDF, official XLSX, formula copy, CSV bundle — and
@@ -47,7 +47,18 @@
  * channel-configs/orass_sandbox).
  */
 
-import { test, expect, type Browser, type Page } from "@playwright/test";
+import {
+  test,
+  expect,
+  type APIRequestContext,
+  type Browser,
+  type Locator,
+  type Page,
+} from "@playwright/test";
+import type {
+  PackageChainRead,
+  RegulatoryPackageRead,
+} from "@aequoros/risk-service-api";
 import { readFile } from "fs/promises";
 import path from "path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
@@ -55,6 +66,20 @@ import { readPdf, readWorkbook, readZip } from "./support/artifacts";
 import { mintBackendToken } from "./support/mint";
 import { requireObjectStorage } from "./support/object-storage";
 import { generateCurrentVersion } from "./support/generate";
+import {
+  currentFilingPackage,
+  expectFreshFilingSignatures,
+  expectPriorFilingFrozen,
+  expectRepeatedApprovalSafe,
+  expectRepeatedSubmissionRefused,
+  expectStaleReviewRefused,
+  filingAttestation,
+  filingChain,
+  filingEvents,
+  filingPackage,
+  filingSignatures,
+  generateCorrectedFiling,
+} from "./support/filing-correction";
 import {
   approveAndSignAsChecker,
   certifyAsPreparer,
@@ -240,22 +265,92 @@ async function openFilingSession(
   date: string,
 ): Promise<FilingSession> {
   const context = await browser.newContext({ storageState: validatorState });
-  const page = await context.newPage();
-  await page.goto("/submissions/approvals");
-  await page
-    .getByRole("row", { name: new RegExp(fmtDateGB(date)) })
-    .first()
-    .click();
-  await expect(page.getByTestId("validator-surface")).toBeVisible({
-    timeout: 30_000,
-  });
-  await page.getByTestId("validator-approve").click();
-  // Approved, not yet filed: the release is now offered, and the approval
-  // cannot be given twice.
-  await expect(page.getByTestId("open-transmit")).toBeEnabled();
-  await expect(page.getByTestId("validator-approve")).toBeDisabled();
-  await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
-  return { page, close: () => context.close() };
+  try {
+    const page = await context.newPage();
+    await page.goto("/submissions/approvals");
+    await page
+      .getByRole("row", { name: new RegExp(fmtDateGB(date)) })
+      .first()
+      .click();
+    await expect(page.getByTestId("validator-surface")).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByTestId("validator-approve").click();
+    // Approved, not yet filed: the release is now offered, and the approval
+    // cannot be given twice.
+    await expect(page.getByTestId("open-transmit")).toBeEnabled();
+    await expect(page.getByTestId("validator-approve")).toBeDisabled();
+    await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
+    return { page, close: () => context.close() };
+  } catch (error) {
+    await context.close();
+    throw error;
+  }
+}
+
+/** Correct one exact package, obtain new signatures and follow its own receipt. */
+async function correctAndRefile(
+  page: Page,
+  browser: Browser,
+  request: APIRequestContext,
+  date: string,
+  prior: RegulatoryPackageRead,
+  signatures: ReturnType<typeof filingSignatures>,
+  staleReview: PackageChainRead,
+  control: Locator,
+): Promise<void> {
+  const priorEvents = await filingEvents(request, prior.id);
+  const corrected = await generateCorrectedFiling(
+    page,
+    request,
+    prior,
+    control,
+  );
+  await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
+  await expectStaleReviewRefused(request, corrected.id, staleReview);
+  await approveAndSignAsChecker(browser, approverState, date);
+  await expectFreshFilingSignatures(request, corrected.id, signatures);
+
+  const filing = await openFilingSession(browser, date);
+  try {
+    await expectRepeatedApprovalSafe(request, corrected.id);
+    await fileViaSandbox(filing.page);
+    // ORASS revision counts granted resubmissions; these corrections have no grant.
+    await expect(filing.page.getByText("Rev 1.0")).toBeVisible();
+    await expectRepeatedSubmissionRefused(request, corrected.id);
+    const poll = filing.page.getByTestId("primary-filing-action");
+    await expect(poll).toHaveText(/check for .* decision/i);
+    await expect(poll).toBeEnabled();
+    await poll.click();
+    await expect(
+      filing.page.getByText("Acknowledged", { exact: true }).first(),
+    ).toBeVisible();
+    expect(await filingPackage(request, corrected.id)).toMatchObject({
+      id: corrected.id,
+      version: prior.version + 1,
+      supersedesId: prior.id,
+      status: "acknowledged",
+      submissionRevision: "1.0",
+    });
+    const events = (await filingEvents(request, corrected.id)).events;
+    expect(events.filter((event) => event.event === "submitted")).toHaveLength(
+      1,
+    );
+    expect(
+      events.filter((event) => event.event === "acknowledged"),
+    ).toHaveLength(1);
+    expect(events.every((event) => event.packageId === corrected.id)).toBe(
+      true,
+    );
+    await test.info().attach("Corrected filing acknowledged", {
+      body: await filing.page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+  } finally {
+    await filing.close();
+  }
+  await expectPriorFilingFrozen(request, prior, signatures);
+  expect(await filingEvents(request, prior.id)).toEqual(priorEvents);
 }
 
 /**
@@ -534,94 +629,129 @@ test.describe("full lifecycle", () => {
     }
   });
 
-  test("journey 3: rejection carries supervisor comments and reopens rework", async ({
+  test("a rejected filing is corrected, re-signed and acknowledged without reusing stale approval", async ({
     page,
     browser,
+    request,
   }) => {
     const date = journeyDates.reject;
     await setSandboxConfig({ sandbox_behavior: "reject" });
-
-    await certifyAndApprove(page, browser, LIQUIDITY_RETURN, date);
-    const filing = await openFilingSession(browser, date);
     try {
-      await fileViaSandbox(filing.page);
+      await certifyAndApprove(page, browser, LIQUIDITY_RETURN, date);
+      const original = await currentFilingPackage(request, date);
+      const filing = await openFilingSession(browser, date);
+      try {
+        await fileViaSandbox(filing.page);
+        const decision = filing.page.getByTestId("primary-filing-action");
+        await expect(decision).toHaveText(/check for .* decision/i);
+        await expect(decision).toBeEnabled();
+        await decision.click();
+        await expect(
+          filing.page.getByText("Rejected", { exact: true }).first(),
+        ).toBeVisible();
+        await expect(
+          filing.page.getByText("What the supervisor said about this return"),
+        ).toBeVisible();
+        await expect(filing.page.getByText(/SIM-LQ-104/).first()).toBeVisible();
+      } finally {
+        await filing.close();
+      }
+      const prior = await filingPackage(request, original.id);
+      expect(prior).toMatchObject({
+        status: "rejected",
+        submissionRevision: "1.0",
+      });
+      const signatures = filingSignatures(prior.id);
+      expect(signatures).toHaveLength(2);
+      const staleReview = await filingChain(request, prior.id);
 
-      const decision = filing.page.getByTestId("primary-filing-action");
-      await expect(decision).toHaveText(/check for .* decision/i);
-      await expect(decision).toBeEnabled();
-      await decision.click();
+      await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
+      const rework = page.getByTestId("primary-filing-action");
+      await expect(rework).toHaveText(/generate a corrected version/i);
+      await expect(rework).toBeEnabled();
+      await expect(
+        page.getByText("What the supervisor said about this return"),
+      ).toBeVisible();
+      await expect(page.getByTestId("transmission-row")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /ORASS/i })).toHaveCount(0);
+      await expect(page.getByLabel("Channel")).toHaveCount(0);
 
-      // Terminal Rejected state + ORASS "View Comments" parity panel carrying
-      // the simulated server-side check.
-      await expect(
-        filing.page.getByText("Rejected", { exact: true }).first(),
-      ).toBeVisible();
-      await expect(
-        filing.page.getByText("What the supervisor said about this return"),
-      ).toBeVisible();
-      // The simulated rule id also appears in the events feed / poll detail —
-      // the panel copy is one of the matches.
-      await expect(filing.page.getByText(/SIM-LQ-104/).first()).toBeVisible();
+      await setSandboxConfig({ sandbox_behavior: "ack" });
+      await correctAndRefile(
+        page,
+        browser,
+        request,
+        date,
+        prior,
+        signatures,
+        staleReview,
+        rework,
+      );
     } finally {
-      await filing.close();
+      await setSandboxConfig({ sandbox_behavior: "ack" });
     }
-
-    // Rejected = returned for correction, and the rework is the PREPARER's.
-    // Their screen offers exactly one act, and it is the correction — not a
-    // greyed-out row of everyone else's controls.
-    await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
-    const rework = page.getByTestId("primary-filing-action");
-    await expect(rework).toHaveText(/generate a corrected version/i);
-    await expect(rework).toBeEnabled();
-    await expect(
-      page.getByText("What the supervisor said about this return"),
-    ).toBeVisible();
-    // And nothing on the preparer's screen reaches the regulator. The
-    // supervisor's own comment, quoted above, may name the portal, so this is
-    // asserted on the controls rather than on every word of text.
-    await expect(page.getByTestId("transmission-row")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /ORASS/i })).toHaveCount(0);
-    await expect(page.getByLabel("Channel")).toHaveCount(0);
-
-    // Hygiene: leave the sandbox on its happy-path default for later specs.
-    await setSandboxConfig({ sandbox_behavior: "ack" });
   });
 
-  test("journey 4: the reviewer sends it back with a note, and it is unsubmittable again", async ({
+  test("a sent-back filing retains its withdrawn signature and reaches acknowledgement with fresh signatures", async ({
     page,
     browser,
+    request,
   }) => {
     const date = journeyDates.sendBack;
     const note = "Line 12 double-counts the placement maturing 2 April.";
+    await setSandboxConfig({ sandbox_behavior: "ack" });
+    try {
+      await generateAndClearChecks(page, LIQUIDITY_RETURN, date);
+      await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
+      const original = await currentFilingPackage(request, date);
+      const certified = await filingAttestation(request, original.id);
+      const signatures = filingSignatures(original.id);
+      expect(signatures).toHaveLength(1);
+      const staleReview = await filingChain(request, original.id);
+      await sendBackAsChecker(browser, approverState, date, note);
 
-    await generateAndClearChecks(page, LIQUIDITY_RETURN, date);
-    await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
-    await sendBackAsChecker(browser, approverState, date, note);
-
-    // Back with the preparer, and genuinely correctable: the certification that
-    // froze the figures is withdrawn, the note is on the record, and nothing on
-    // the screen claims the return may be filed.
-    await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
-    await expect(page.getByText("Unsigned").first()).toBeVisible();
-    await expect(page.getByTestId("attestation-clearance").first()).toHaveText(
-      /^Not cleared to submit/i,
-    );
-    // The filing control is ABSENT on the preparer's screen, not greyed out —
-    // it was never theirs (docs/filing_workflow_redesign.md §4b.1). What they
-    // get instead is the note that sent it back, stated before the figures.
-    await expect(page.getByTestId("transmission-row")).toHaveCount(0);
-    await expect(page.getByTestId("sent-back-notice")).toContainText(note);
-    // The preparer's signature is history, not deleted — the withdrawn cycle is
-    // named rather than silently dropped. It is stated inside the Certification
-    // row, which the workspace keeps collapsed until it is opened.
-    const certification = page.getByTestId("certification-row");
-    await certification.getByRole("button", { expanded: false }).click();
-    await expect(
-      certification.getByRole("button", { expanded: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByText(/retained in the append-only trail/i),
-    ).toBeVisible();
+      await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
+      await expect(page.getByText("Unsigned").first()).toBeVisible();
+      await expect(
+        page.getByTestId("attestation-clearance").first(),
+      ).toHaveText(/^Not cleared to submit/i);
+      await expect(page.getByTestId("transmission-row")).toHaveCount(0);
+      await expect(page.getByTestId("sent-back-notice")).toContainText(note);
+      const certification = page.getByTestId("certification-row");
+      await certification.getByRole("button", { expanded: false }).click();
+      await expect(
+        certification.getByRole("button", { expanded: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText(/retained in the append-only trail/i),
+      ).toBeVisible();
+      const withdrawn = await filingAttestation(request, original.id);
+      expect(withdrawn).toMatchObject({
+        attestationCycle: certified.attestationCycle + 1,
+        attestationState: "unsigned",
+        canSubmit: false,
+        signatures: [],
+      });
+      expect(filingSignatures(original.id)).toEqual(signatures);
+      const prior = await filingPackage(request, original.id);
+      expect(prior.workflowRound).toBe(staleReview.round + 1);
+      const regenerate = page
+        .getByRole("button", { name: /^regenerate$/i })
+        .first();
+      await expect(regenerate).toBeEnabled();
+      await correctAndRefile(
+        page,
+        browser,
+        request,
+        date,
+        prior,
+        signatures,
+        staleReview,
+        regenerate,
+      );
+    } finally {
+      await setSandboxConfig({ sandbox_behavior: "ack" });
+    }
   });
 
   test("journey 5: institution register drives the LRT corporate pack", async ({
