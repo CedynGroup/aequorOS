@@ -3,6 +3,15 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   ...base,
+  reporter: process.env.CI
+    ? [
+        [
+          "./e2e/support/quarantine-reporter.ts",
+          { requireCompleteExecution: true },
+        ],
+        ["list"],
+      ]
+    : base.reporter,
   testMatch: "regulatory-rule-status.spec.ts",
   testIgnore: [],
   webServer: (Array.isArray(base.webServer) ? base.webServer : []).map(
