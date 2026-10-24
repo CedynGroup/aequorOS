@@ -1,7 +1,8 @@
 import { test as base, expect } from "@playwright/test";
 import { decode } from "@auth/core/jwt";
 import { AccessRequestListReadFromJSON } from "@aequoros/risk-service-api";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -42,9 +43,14 @@ type Story = { organizationId: string; bankId: string; actors: Actor[] };
 const BACKEND = path.resolve(__dirname, "../../..");
 const PYTHON = path.join(BACKEND, ".venv/bin/python");
 const DATABASE = path.join(E2E_TMP, "e2e.db");
+const execute = promisify(execFile);
 
-function fixture(action: "provision" | "retire", request: object): string {
-  return execFileSync(
+async function fixture(
+  action: "provision" | "retire",
+  request: object,
+): Promise<string> {
+  // Keep HTTP socket-close events flowing while Python works on the fixture.
+  const { stdout } = await execute(
     PYTHON,
     [
       "scripts/e2e_story_identities.py",
@@ -72,6 +78,7 @@ function fixture(action: "provision" | "retire", request: object): string {
       },
     },
   );
+  return stdout;
 }
 
 async function post(bank: string, route: string, data: object | FormData) {
@@ -101,7 +108,7 @@ async function prepareBranches(bank: string): Promise<void> {
   );
   const file = path.join(directory, "business-units.xlsx");
   try {
-    execFileSync(PYTHON, [
+    await execute(PYTHON, [
       "-c",
       `
 import sys
@@ -227,7 +234,7 @@ export const test = base.extend<{
         );
       }
       try {
-        const { actors } = JSON.parse(fixture("provision", request)) as {
+        const { actors } = JSON.parse(await fixture("provision", request)) as {
           actors: Actor[];
         };
         for (const actor of actors) {
@@ -270,7 +277,7 @@ export const test = base.extend<{
                 request.actors.map((actor) => actor.user_id),
               );
             } finally {
-              fixture("retire", request);
+              await fixture("retire", request);
             }
             for (const token of tokens) {
               const me = await fetch(`${E2E_API_ORIGIN}/api/v1/auth/me`, {
