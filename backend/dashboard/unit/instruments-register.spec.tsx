@@ -120,12 +120,12 @@ describe("instruments register", () => {
   });
 });
 
-it("does not offer the bank-only framework for the SDI IRRBB rule", () => {
+it("offers the supported SDI IRRBB preparation workspace", () => {
   fixture.templates = [rule("SDI-IRRBB-QUARTERLY", "exposure_draft")];
   render(<InstrumentsRegister upcoming />);
   expect(
-    screen.queryByRole("link", { name: "Open preparation workspace" }),
-  ).toBeNull();
+    screen.getByRole("link", { name: "Open preparation workspace" }),
+  ).toHaveAttribute("href", "/irr?preparing=1");
 });
 
 it("loads the institution named by a notification rather than the active bank", () => {

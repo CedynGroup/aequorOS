@@ -76,11 +76,13 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
             const capability =
               item.code === "LMT" || item.code === "SDI-LMT-MONTHLY"
                 ? "/liquidity/monitoring"
-                : item.code === "IRRBB-PILOT"
-                  ? "/irr/standardised"
-                  : item.code === "ICAAP-REPORT"
-                    ? "/icaap"
-                    : null;
+                : item.code === "SDI-IRRBB-QUARTERLY"
+                  ? "/irr"
+                  : item.code === "IRRBB-PILOT"
+                    ? "/irr/standardised"
+                    : item.code === "ICAAP-REPORT"
+                      ? "/icaap"
+                      : null;
             return (
               <section
                 id={item.code}

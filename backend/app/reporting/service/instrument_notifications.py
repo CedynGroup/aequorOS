@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.identity.public import Bank
 from app.notifications.public import notifications
-from app.reporting.models.packages import RegulatoryReportingSettings
 from app.reporting.service.eligibility import resolve_eligibility
 from app.reporting.service.registry import REGISTRY
+from app.reporting.service.reporting_settings import get_or_create_reporting_settings
 
 REMINDER_DAYS = (1, 7, 30, 90)
 
@@ -35,26 +34,7 @@ def instrument_events(
 
 def scan_instrument_statuses(db: Session, ctx: TenantContext, bank: Bank, today: date) -> int:
     """Persist the observation and notifications together in the scan transaction."""
-    # Serialize initialization as well as subsequent scans for this bank.
-    db.execute(
-        select(Bank.id)
-        .where(Bank.organization_id == ctx.organization_id, Bank.id == bank.id)
-        .with_for_update()
-    ).scalar_one()
-    settings = db.scalar(
-        select(RegulatoryReportingSettings).where(
-            RegulatoryReportingSettings.organization_id == ctx.organization_id,
-            RegulatoryReportingSettings.bank_id == bank.id,
-        )
-    )
-    if settings is None:
-        settings = RegulatoryReportingSettings(
-            organization_id=ctx.organization_id,
-            bank_id=bank.id,
-            deadline_overrides={},
-            instrument_observations={},
-        )
-        db.add(settings)
+    settings, _ = get_or_create_reporting_settings(db, ctx, bank.id)
     observations = dict(settings.instrument_observations)
     eligibility = resolve_eligibility(db, ctx, bank, as_of=today)
     emitted = 0
