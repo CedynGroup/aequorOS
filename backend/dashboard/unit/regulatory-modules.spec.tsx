@@ -9,9 +9,10 @@ const state = vi.hoisted(() => ({
   status: "exposure_draft",
   code: "IRRBB-PILOT",
   sdi: false,
+  pathname: "/irr/standardised",
 }));
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/irr/standardised",
+  usePathname: () => state.pathname,
   useSearchParams: () =>
     new URLSearchParams(state.preparing ? "preparing=1" : ""),
 }));
@@ -22,6 +23,7 @@ vi.mock("@/components/shell/BankContext", () => ({
     organizationModules: new Set(),
     institutionClass: state.sdi ? "sdi" : "bank",
     hasInstitutionAuthority: true,
+    irrbbAggregatedView: true,
     isResolved: true,
   }),
 }));
@@ -48,6 +50,7 @@ afterEach(() => {
   state.status = "exposure_draft";
   state.sdi = false;
   state.code = "IRRBB-PILOT";
+  state.pathname = "/irr/standardised";
 });
 const tabs = [
   { href: "/irr", label: "Overview" },
@@ -96,15 +99,49 @@ it("opens the ordinary workspace once the rule is in force", () => {
   expect(screen.getByText("In force")).toBeVisible();
 });
 
-it("uses the SDI instrument for an SDI preparation workspace", () => {
+it("does not open the bank-only framework for an SDI in preparation mode", () => {
   state.sdi = true;
-  state.code = "SDI-IRRBB-QUARTERLY";
   state.preparing = true;
   render(
     <RegulatoryModuleTabs tabs={tabs}>
       <p>SDI workspace</p>
     </RegulatoryModuleTabs>,
   );
-  expect(screen.getByText("SDI workspace")).toBeVisible();
-  expect(screen.getByText("Draft")).toBeVisible();
+  expect(screen.queryByText("SDI workspace")).toBeNull();
+  expect(
+    screen.queryByRole("link", { name: "Standardised Framework" }),
+  ).toBeNull();
+});
+
+it("gates untagged draft tabs and preserves preparation when navigating", () => {
+  state.pathname = "/irr";
+  const { rerender } = render(
+    <RegulatoryModuleTabs tabs={tabs} contextRule="IRRBB-PILOT">
+      <p>Overview workspace</p>
+    </RegulatoryModuleTabs>,
+  );
+  expect(screen.queryByText("Overview workspace")).toBeNull();
+  expect(screen.queryByRole("link", { name: "Overview" })).toBeNull();
+  state.preparing = true;
+  rerender(
+    <RegulatoryModuleTabs tabs={tabs} contextRule="IRRBB-PILOT">
+      <p>Overview workspace</p>
+    </RegulatoryModuleTabs>,
+  );
+  expect(screen.getByText("Overview workspace")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute(
+    "href",
+    "/irr?preparing=1",
+  );
+});
+
+it("keeps reference monitoring accessible without preparation mode", () => {
+  state.status = "unpublished";
+  render(
+    <RegulatoryModuleTabs tabs={tabs}>
+      <p>Monitoring workspace</p>
+    </RegulatoryModuleTabs>,
+  );
+  expect(screen.getByText("Monitoring workspace")).toBeVisible();
+  expect(screen.getByText("Reference")).toBeVisible();
 });

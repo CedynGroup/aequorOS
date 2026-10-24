@@ -20,22 +20,20 @@ import {
   type IcaapReadinessItemRead,
   type IcaapSeverity,
 } from "@/lib/api/icaap";
+import RegulatoryRuleStatus from "@/components/submissions/RegulatoryRuleStatus";
 import DeadlineBadge from "./DeadlineBadge";
-import {
-  ExposureDraftBanner,
-  FrameworkDigestNotice,
-  RehearsalBanner,
-} from "./Notices";
+import { FrameworkDigestNotice, RehearsalBanner } from "./Notices";
 
-const SEVERITY_ORDER: IcaapSeverity[] = [
-  "blocking",
-  "warning",
-  "info",
-];
+const SEVERITY_ORDER: IcaapSeverity[] = ["blocking", "warning", "info"];
 
 const SEVERITY_COPY: Record<
   IcaapSeverity,
-  { title: string; description: string; icon: typeof AlertOctagon; tone: string }
+  {
+    title: string;
+    description: string;
+    icon: typeof AlertOctagon;
+    tone: string;
+  }
 > = {
   blocking: {
     title: "Must be resolved",
@@ -45,7 +43,8 @@ const SEVERITY_COPY: Record<
   },
   warning: {
     title: "Worth attention",
-    description: "None of these stops a freeze, but each one is a judgement a reviewer will ask about.",
+    description:
+      "None of these stops a freeze, but each one is a judgement a reviewer will ask about.",
     icon: AlertTriangle,
     tone: "text-warning",
   },
@@ -96,7 +95,9 @@ export default function OverviewReadiness({
       {cycle && readiness && (
         <div className="space-y-4">
           {cycle.cycleKind === "rehearsal" && <RehearsalBanner />}
-          <ExposureDraftBanner framework={cycle.framework} />
+          <RegulatoryRuleStatus
+            code={cycle.framework.filingReturnCode ?? "ICAAP-REPORT"}
+          />
           {!cycle.frameworkDigestMatches && <FrameworkDigestNotice />}
 
           <SectionCard
@@ -128,9 +129,15 @@ export default function OverviewReadiness({
               )}
               <div className="min-w-0 text-body text-navy/80">
                 <p>
-                  {readiness.items.filter((i) => i.severity === "blocking").length}{" "}
+                  {
+                    readiness.items.filter((i) => i.severity === "blocking")
+                      .length
+                  }{" "}
                   blocking,{" "}
-                  {readiness.items.filter((i) => i.severity === "warning").length}{" "}
+                  {
+                    readiness.items.filter((i) => i.severity === "warning")
+                      .length
+                  }{" "}
                   to review.
                 </p>
                 {readiness.pendingPrimaryTextSections.length > 0 && (

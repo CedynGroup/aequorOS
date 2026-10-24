@@ -187,12 +187,6 @@ export interface ReturnTemplateRead {
   regulator: string;
   /**
    *
-   * @type {Array<string>}
-   * @memberof ReturnTemplateRead
-   */
-  requiredData?: Array<string>;
-  /**
-   *
    * @type {SourceUrl}
    * @memberof ReturnTemplateRead
    */
@@ -294,8 +288,6 @@ export function ReturnTemplateReadFromJSONTyped(
         ? undefined
         : InstrumentStatusFromJSON(json["instrument_status"]),
     regulator: json["regulator"],
-    requiredData:
-      json["required_data"] == null ? undefined : json["required_data"],
     sourceUrl:
       json["source_url"] == null
         ? undefined
@@ -342,7 +334,6 @@ export function ReturnTemplateReadToJSONTyped(
     generator: value["generator"],
     instrument_status: InstrumentStatusToJSON(value["instrumentStatus"]),
     regulator: value["regulator"],
-    required_data: value["requiredData"],
     source_url: SourceUrlToJSON(value["sourceUrl"]),
     supports_working_copy: value["supportsWorkingCopy"],
     template_id: value["templateId"],

@@ -10,9 +10,9 @@
 
 import { useRouter } from "next/navigation";
 import PageContainer from "@/components/ui/PageContainer";
-import RegulatoryRuleStatus from "@/components/submissions/RegulatoryRuleStatus";
 import PageHeader from "@/components/ui/PageHeader";
 import { useBankContext } from "@/components/shell/BankContext";
+import RegulatoryModuleTabs from "@/components/shell/RegulatoryModuleTabs";
 import CycleList from "@/components/icaap/CycleList";
 import { regShort } from "@/lib/format";
 
@@ -25,17 +25,18 @@ export default function IcaapPage() {
       <PageHeader
         eyebrow="ICAAP"
         title="Internal Capital Adequacy Assessment"
-        action={<RegulatoryRuleStatus code="ICAAP-REPORT" />}
         subtitle={`The institution's own assessment of the capital it needs, and the evidence behind it, as filed with ${regShort()}.`}
       />
-      <PageContainer className="py-6">
-        {bank && (
-          <CycleList
-            bankId={bank.id}
-            onCreated={(cycleId) => router.push(`/icaap/${cycleId}/overview`)}
-          />
-        )}
-      </PageContainer>
+      <RegulatoryModuleTabs tabs={[]} contextRule="ICAAP-REPORT">
+        <PageContainer className="py-6">
+          {bank && (
+            <CycleList
+              bankId={bank.id}
+              onCreated={(cycleId) => router.push(`/icaap/${cycleId}/overview`)}
+            />
+          )}
+        </PageContainer>
+      </RegulatoryModuleTabs>
     </>
   );
 }

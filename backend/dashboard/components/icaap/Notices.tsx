@@ -9,10 +9,8 @@
  */
 
 import type { ReactNode } from "react";
-import { AlertTriangle, FlaskConical, Info, Lock, Database } from "lucide-react";
-import { regShort } from "@/lib/format";
+import { FlaskConical, Info, Lock, Database } from "lucide-react";
 import { REHEARSAL_NOTICE } from "./format";
-import type { IcaapFrameworkSummaryRead } from "@/lib/api/icaap";
 
 function Notice({
   tone,
@@ -45,32 +43,6 @@ function Notice({
         )}
       </div>
     </div>
-  );
-}
-
-/**
- * The GH framework is an exposure draft: the regulator may still change the
- * text this checklist is built from. Saying so is the difference between a
- * working paper and a claim about the law.
- */
-export function ExposureDraftBanner({
-  framework,
-}: {
-  framework: IcaapFrameworkSummaryRead;
-}) {
-  if (framework.status !== "exposure_draft") return null;
-  return (
-    <Notice
-      tone="warn"
-      icon={<AlertTriangle size={16} />}
-      title="This framework is an exposure draft"
-    >
-      <p>
-        {regShort()} may change the text before it is final. {framework.title} (
-        {framework.version}) is used here as published; requirements and
-        headings can still move.
-      </p>
-    </Notice>
   );
 }
 

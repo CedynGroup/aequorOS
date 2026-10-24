@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useBankContext } from "@/components/shell/BankContext";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
+import { isHrefVisible } from "@/lib/modules";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import QueryBoundary from "@/components/ui/QueryBoundary";
@@ -9,13 +12,20 @@ import { useReturnTemplates } from "@/lib/api/hooks";
 import { instrumentDate, isUpcomingRule } from "@/lib/regulatoryInstruments";
 import InstrumentStatusBadge from "./InstrumentStatusBadge";
 
-export default function InstrumentsRegister({
-  upcoming = false,
-}: {
-  upcoming?: boolean;
-}) {
+export default function InstrumentsRegister(props: { upcoming?: boolean }) {
+  return (
+    <Suspense>
+      <RegisterContents {...props} />
+    </Suspense>
+  );
+}
+
+function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
   const { bank } = useBankContext();
-  const query = useReturnTemplates(bank?.id);
+  const requestedBankId = useSearchParams().get("bankId");
+  const bankId = requestedBankId ?? bank?.id;
+  const scope = useModuleScope();
+  const query = useReturnTemplates(bankId);
 
   const templates = (query.data?.templates ?? []).filter(
     (item) => !upcoming || isUpcomingRule(item.instrumentStatus),
@@ -29,6 +39,9 @@ export default function InstrumentsRegister({
         }
       />
       <PageContainer className="py-6 space-y-4">
+        {bankId && (
+          <p className="text-caption text-slate">Institution: {bankId}</p>
+        )}
         <p className="text-body text-slate">
           {upcoming
             ? "Prepare for proposed and forthcoming rules. Draft dates are conditional on final publication. Preparation does not establish compliance or readiness for live filing."
@@ -36,7 +49,7 @@ export default function InstrumentsRegister({
         </p>
         <Link
           className="text-action underline"
-          href={upcoming ? "/submissions/instruments" : "/submissions/upcoming"}
+          href={`${upcoming ? "/submissions/instruments" : "/submissions/upcoming"}${requestedBankId ? `?bankId=${encodeURIComponent(requestedBankId)}` : ""}`}
         >
           {upcoming
             ? "All regulatory instruments"
@@ -63,8 +76,7 @@ export default function InstrumentsRegister({
             const capability =
               item.code === "LMT" || item.code === "SDI-LMT-MONTHLY"
                 ? "/liquidity/monitoring"
-                : item.code === "IRRBB-PILOT" ||
-                    item.code === "SDI-IRRBB-QUARTERLY"
+                : item.code === "IRRBB-PILOT"
                   ? "/irr/standardised"
                   : item.code === "ICAAP-REPORT"
                     ? "/icaap"
@@ -130,24 +142,31 @@ export default function InstrumentsRegister({
                     </p>
                   </div>
                 )}
-                {upcoming && capability && (
-                  <Link
-                    className="text-action underline text-caption"
-                    href={`${capability}?preparing=1`}
-                  >
-                    Open preparation workspace
-                  </Link>
-                )}
+                {upcoming &&
+                  capability &&
+                  bankId === bank?.id &&
+                  isHrefVisible(capability, scope) && (
+                    <Link
+                      className="text-action underline text-caption"
+                      href={`${capability}?preparing=1`}
+                    >
+                      Open preparation workspace
+                    </Link>
+                  )}
                 <dl className="text-caption text-navy space-y-1">
                   <div>
                     <dt className="inline font-medium">Return: </dt>
                     <dd className="inline">
-                      <Link
-                        className="text-action underline"
-                        href={`/submissions/returns?code=${encodeURIComponent(item.code)}`}
-                      >
-                        {item.code}
-                      </Link>
+                      {bankId === bank?.id ? (
+                        <Link
+                          className="text-action underline"
+                          href={`/submissions/returns?code=${encodeURIComponent(item.code)}`}
+                        >
+                          {item.code}
+                        </Link>
+                      ) : (
+                        item.code
+                      )}
                     </dd>
                   </div>
                   <div>
@@ -164,14 +183,6 @@ export default function InstrumentsRegister({
                     <dt className="inline font-medium">Calculation engine: </dt>
                     <dd className="inline">
                       {item.generator} ({item.code})
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="inline font-medium">Required data: </dt>
-                    <dd className="inline">
-                      {item.requiredData?.length
-                        ? item.requiredData.join(", ")
-                        : "No data dependency mapping recorded"}
                     </dd>
                   </div>
                 </dl>

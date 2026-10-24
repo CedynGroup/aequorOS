@@ -354,7 +354,7 @@ export default function SdiLiquidityMonitoringView({
                 </SectionCard>
                 {isSdi ? (
                   <SectionCard
-                    title="LMTD compliance"
+                    title="LMTD preparation assessment"
                     subtitle="Table 1 liquidity ratios and buffers for this institution."
                     noPadding
                   >
@@ -368,7 +368,7 @@ export default function SdiLiquidityMonitoringView({
                   </SectionCard>
                 ) : (
                   <SectionCard
-                    title="Basel liquidity compliance"
+                    title="Basel liquidity monitoring assessment"
                     subtitle="LCR/NSFR inputs and named validation exceptions from the active Basel calculation."
                   >
                     <dl className="grid grid-cols-2 gap-x-5 gap-y-4 text-caption">
