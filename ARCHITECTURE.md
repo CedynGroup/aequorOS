@@ -309,6 +309,12 @@ semantics follow the plane, never the other way round:
    (`no_computed_position`, 409) with the nearest earlier date named for the
    message only.
 
+   Official form fact inputs read `BankFinancialFact` for that exact snapshot.
+   Live refresh publishes `CurrentFinancialFact`; the Data Engine's **Mint
+   official run** action queues the worker to prepare the official fact set.
+   Missing-source handling follows the
+   [official BSD engine rules](docs/bog_returns/00_full_return_registry.md#6-as-built-engine-rules).
+
 Growth path: denser ingestion (daily/streaming) makes plane 2 denser and the
 live edge fresher without any architectural change — QRM-cadence to
 MORS-cadence on the same model.
@@ -1260,7 +1266,8 @@ remains architectural debt; the Command Center contract and polling policy are u
 | 7   | FTP            | matched-maturity curve / product & branch P&L / NMD  | `/banks/{id}/ftp/*`                            |
 
 The shared migration `202607170001_irr_fx_ftp_foundation` widened the run-module, fact-group,
-and line-section CHECK constraints for IRR/FX/FTP; those modules add no further migrations.
+and line-section CHECK constraints for IRR/FX/FTP. Bank stress-default provisioning and
+backfill are described in the [quick start](README.md#quick-start).
 
 ### Liquidity, stress and capital extensions
 
