@@ -646,7 +646,14 @@ root; the tour writes full-page screenshots of every route to
 The Data Engine journeys (`e2e/data-engine-ingestion.spec.ts`) use the fixtures in
 `e2e/fixtures/data-engine/` to cover Excel/CSV upload, legacy `.xls` refusal,
 batch findings, correction by re-upload, downstream positions, and manual market
-data upload. The T24 journey configures a core in the browser, stages and ingests
+data upload. The machine-key journey (`e2e/integration-key-use.spec.ts`)
+provisions its own two-bank tenant with real scoped bindings. A key issued in the browser pushes a
+balanced synthetic book through the Data Engine, is refused by the existing
+sibling bank, and loses push and batch-read access after browser revocation.
+Canonical balances, batch lineage and absence of sibling writes are checked
+before finally-based credential and tenant cleanup.
+
+The T24 journey configures a core in the browser, stages and ingests
 a recorded OFS extract through the API, then checks its batch and positions in
 the browser; live transport remains unavailable. Set `E2E_EVIDENCE_DIR` to retain
 their screenshots.
@@ -776,7 +783,7 @@ installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
 counts. The aggregate requires all four reports, unique journey identities,
-and at least **244 executed journeys**, with zero skips. It verifies the
+and at least **245 executed journeys**, with zero skips. It verifies the
 reported counters against the named results and prints every skipped journey
 in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
