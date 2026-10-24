@@ -243,7 +243,7 @@ def _avg_gross_income(rc: ResolveContext, params: dict[str, Any]) -> Decimal | N
 
 
 @resolver("bsd5.off_balance_residual")
-def _off_balance_residual(rc: ResolveContext, params: dict[str, Any]) -> Decimal:
+def _off_balance_residual(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
     """Σ ``off_balance`` facts (all categories, base currency — the platform's
     LC/guarantee book, which its liquidity return classifies as guarantees /
     indemnities by default) less ``positions.sum`` over the ``less`` list of
@@ -256,7 +256,9 @@ def _off_balance_residual(rc: ResolveContext, params: dict[str, Any]) -> Decimal
             "currency": "all",
         },
     )
-    total = Decimal(str(facts_total or 0))
+    if facts_total is None:
+        return None
+    total = Decimal(str(facts_total))
     for filters in params.get("less") or ():
         part = get_resolver("positions.sum")(rc, dict(filters))
         total -= Decimal(str(part or 0))

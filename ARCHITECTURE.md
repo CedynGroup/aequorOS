@@ -309,6 +309,13 @@ semantics follow the plane, never the other way round:
    (`no_computed_position`, 409) with the nearest earlier date named for the
    message only.
 
+   Official form fact inputs read `BankFinancialFact` for that exact snapshot.
+   Live refresh publishes `CurrentFinancialFact`; the Data Engine's **Mint
+   official run** action queues the worker to prepare the official fact set.
+   An empty `facts.sum` selection is missing input (`input_required`), never a
+   mapped zero. BSD5 residuals and BSD6 maturity totals preserve that absence;
+   an explicitly stated zero remains a mapped value.
+
 Growth path: denser ingestion (daily/streaming) makes plane 2 denser and the
 live edge fresher without any architectural change — QRM-cadence to
 MORS-cadence on the same model.

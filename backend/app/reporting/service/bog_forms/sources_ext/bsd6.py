@@ -302,9 +302,8 @@ class _RowValues:
     #: True when a fact-sourced component has no Guide placement — the band
     #: cells stay blank for the bank to allocate.
     unallocated: bool
-    #: False when every component resolved to None (its BSD2 line is
-    #: input_required — e.g. a reference dataset never ingested): the BSD6 row
-    #: stays input_required too, never a silent 0.
+    #: False when an official fact component is missing, or every component
+    #: resolved to None: the BSD6 row stays input_required too.
     resolved: bool = True
 
 
@@ -341,6 +340,9 @@ def _compute_row(rc: ResolveContext, params: dict[str, Any]) -> _RowValues:
             continue
         raw = get_resolver(source)(_bsd2_context(rc, bsd2_column), cparams)
         if raw is None:
+            if source == "facts.sum":
+                # A known position slice cannot fill a missing official fact.
+                return _RowValues(total=_ZERO, buckets=buckets, unallocated=False, resolved=False)
             continue  # the BSD2 leaf is input_required: nothing to place, nothing to blank
         resolved = True
         amount = Decimal(str(raw))
@@ -383,9 +385,8 @@ def _bsd6_bucket(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
         values = _compute_row(rc, params)
         rc.cache[key] = values
     if not values.resolved:
-        # every BSD2 leaf behind the row is input_required (e.g. the accruals
-        # sub-ledger not ingested): the whole BSD6 row stays input_required — the
-        # FROM BSD2 subtotal would only echo BSD2's formula over blanks
+        # An official fact is missing or all leaves are input_required: the
+        # FROM BSD2 subtotal would only echo BSD2's formula over blanks.
         return None
     if rc.column == FROM_BSD2:
         return _from_bsd2(rc, params)

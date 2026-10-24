@@ -733,7 +733,7 @@ def test_synthetic_ecl_charge_does_not_clear_the_refusal_marker(
         tier1_capital(facts)
 
 
-def test_books_without_a_register_keep_their_existing_zero_capital_behavior(
+def test_books_without_a_register_keep_engine_zero_and_missing_return_input(
     db_session: Session,
 ) -> None:
     """BoG CRD 2018 ¶32: refusal markers distinguish invalid registers from unsupplied ones."""
@@ -754,7 +754,7 @@ def test_books_without_a_register_keep_their_existing_zero_capital_behavior(
     assert ratios.car_pct == 0
     assert tier1_capital(facts) == 0
     rc = ResolveContext(db_session, MAKER, bank, period, "total")
-    assert get_resolver("facts.sum")(rc, {"group": "capital_component"}) == 0
+    assert get_resolver("facts.sum")(rc, {"group": "capital_component"}) is None
     assert get_resolver("bsd5.capital_facts")(rc, {"categories": ["paid_up_capital"]}) == 0
 
 
