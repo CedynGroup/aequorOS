@@ -45,8 +45,13 @@ export function notificationHref(
   // The calendar, explicitly: /submissions now redirects to the Returns
   // workspace, and a deadline notification is asking the reader to look at
   // the deadline board.
-  if (notification.type.startsWith("reporting.instrument.")) return "/submissions/instruments";
-  if (notification.type.startsWith("reporting.deadline.")) return "/submissions/calendar";
+  if (notification.type.startsWith("reporting.instrument.")) {
+    return notification.entityType === "bank" && notification.entityId
+      ? `/submissions/instruments?bankId=${encodeURIComponent(notification.entityId)}`
+      : null;
+  }
+  if (notification.type.startsWith("reporting.deadline."))
+    return "/submissions/calendar";
   if (notification.entityType === "regulatory_package") {
     return "/submissions/history";
   }

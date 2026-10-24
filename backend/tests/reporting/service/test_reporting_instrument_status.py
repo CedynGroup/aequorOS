@@ -388,3 +388,19 @@ def test_fixture_calendar_original_initial_and_final_counters(
     assert original["affected_overdue"] > 0
     assert final["affected_overdue"] == 0
     print({"original": original, "initial": initial, "final": final})
+
+
+def test_legal_metadata_does_not_require_a_filing_family_grant(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    reader = replace(CTX, actor_user_id=None)
+    templates = {
+        item.code: item
+        for item in packages.list_return_templates(
+            db_session, reader, SAMPLE_BANK_ID, as_of=date(2026, 10, 9)
+        ).templates
+    }
+    assert set(templates) == set(REGISTRY)
+    assert templates["LMT"].instrument_status == "exposure_draft"
+    assert templates["IRRBB-PILOT"].instrument_status == "exposure_draft"
+    assert templates["ICAAP-REPORT"].commencement_parameter == "icaap_report_first_as_of_date"
+    assert packages.list_packages(db_session, reader, SAMPLE_BANK_ID).packages == []

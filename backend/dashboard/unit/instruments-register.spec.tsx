@@ -5,19 +5,42 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import InstrumentsRegister from "@/components/submissions/InstrumentsRegister";
 import { ReturnTemplateReadFromJSON } from "@aequoros/risk-service-api";
 
-const fixture = vi.hoisted(() => ({ templates: [] as unknown[] }));
+const fixture = vi.hoisted(() => ({
+  templates: [] as unknown[],
+  bankId: "",
+  queriedBankId: "",
+}));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () =>
+    new URLSearchParams(fixture.bankId ? `bankId=${fixture.bankId}` : ""),
+}));
 vi.mock("@/components/shell/BankContext", () => ({
   useBankContext: () => ({ bank: { id: "BK-SYNTH001" } }),
-}));
-vi.mock("@/lib/api/hooks", () => ({
-  useReturnTemplates: () => ({
-    data: { templates: fixture.templates },
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
+  useModuleScope: () => ({
+    modules: new Set(["liquidity", "irrbb"]),
+    organizationModules: new Set(),
+    institutionClass: "sdi",
+    hasInstitutionAuthority: true,
+    isResolved: true,
+    liquidityAggregatedView: true,
+    irrbbAggregatedView: true,
   }),
 }));
-afterEach(cleanup);
+vi.mock("@/lib/api/hooks", () => ({
+  useReturnTemplates: (bankId: string) => {
+    fixture.queriedBankId = bankId;
+    return {
+      data: { templates: fixture.templates },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    };
+  },
+}));
+afterEach(() => {
+  cleanup();
+  fixture.bankId = "";
+});
 
 function rule(code: string, status: string) {
   return ReturnTemplateReadFromJSON({
@@ -39,7 +62,6 @@ function rule(code: string, status: string) {
     commencement_parameter: "synthetic_commencement",
     commencement_approved_by: "Synthetic checker",
     calculations: ["synthetic_ratio: synthetic_method"],
-    required_data: ["synthetic_book"],
   });
 }
 
@@ -96,4 +118,26 @@ describe("instruments register", () => {
     expect(screen.queryByRole("heading", { name: "Synthetic REF" })).toBeNull();
     expect(screen.getByText(/Expected start if made final/)).toBeVisible();
   });
+});
+
+it("does not offer the bank-only framework for the SDI IRRBB rule", () => {
+  fixture.templates = [rule("SDI-IRRBB-QUARTERLY", "exposure_draft")];
+  render(<InstrumentsRegister upcoming />);
+  expect(
+    screen.queryByRole("link", { name: "Open preparation workspace" }),
+  ).toBeNull();
+});
+
+it("loads the institution named by a notification rather than the active bank", () => {
+  fixture.bankId = "BK-SYNTH002";
+  fixture.templates = [rule("SDI-LMT-MONTHLY", "exposure_draft")];
+  render(<InstrumentsRegister upcoming />);
+  expect(fixture.queriedBankId).toBe("BK-SYNTH002");
+  expect(screen.getByText("Institution: BK-SYNTH002")).toBeVisible();
+  expect(
+    screen.queryByRole("link", { name: "Open preparation workspace" }),
+  ).toBeNull();
+  expect(
+    screen.getByRole("link", { name: "All regulatory instruments" }),
+  ).toHaveAttribute("href", "/submissions/instruments?bankId=BK-SYNTH002");
 });

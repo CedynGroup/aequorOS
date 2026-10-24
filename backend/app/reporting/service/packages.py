@@ -134,9 +134,6 @@ def list_return_templates(
     today = as_of or date.today()
     bank = get_bank_or_404(db, ctx, bank_id) if bank_id is not None else None
     eligibility = resolve_eligibility(db, ctx, bank, as_of=today) if bank is not None else None
-    hidden: frozenset[str] = (
-        family_access.hidden_families(db, ctx, bank) if bank is not None else frozenset()
-    )
     resolver = (
         cast(regulatory_parameters.PrefetchedParameterResolver, eligibility.parameter_resolver)
         if eligibility is not None
@@ -144,8 +141,6 @@ def list_return_templates(
     )
     templates: list[ReturnTemplateRead] = []
     for definition in REGISTRY.values():
-        if definition.family in hidden:
-            continue
         resolved = (
             resolver.try_resolve(definition.effective_from_parameter, as_of=today)
             if resolver is not None and definition.effective_from_parameter
@@ -180,7 +175,6 @@ def list_return_templates(
                     f"{metric}: {method}" for metric, method in definition.declared_methodologies
                 ]
                 + [f"limit parameter: {code}" for code in definition.limit_parameters],
-                required_data=list(definition.required_data),
                 code=definition.code,
                 family=definition.family,
                 title=definition.title,

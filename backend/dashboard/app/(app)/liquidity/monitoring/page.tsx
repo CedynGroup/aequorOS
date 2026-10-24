@@ -43,7 +43,7 @@ const thresholdColumns: Column<LiquidityThresholdRead>[] = [
         <p className="font-medium text-navy">{r.thresholdCode}</p>
         <p className="text-caption text-slate">
           {r.institutionClass === "sdi"
-            ? "Binding for SDIs (¶9)"
+            ? "SDI monitoring threshold"
             : "Monitoring tool for banks"}
         </p>
       </div>

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useBankContext, useModuleScope } from "./BankContext";
 import ModuleTabs, { type Tab } from "./ModuleTabs";
 import { useReturnTemplates } from "@/lib/api/hooks";
+import { hrefAccess } from "@/lib/modules";
 import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadge";
 
 /** Draft capabilities are reached deliberately from the preparation workspace. */
@@ -28,30 +29,33 @@ function ModulePreparationSurface({ tabs, children, contextRule }: Props) {
   const { bank } = useBankContext();
   const query = useReturnTemplates(bank?.id);
   const scope = useModuleScope();
-  const ruleFor = (code: string | undefined) =>
-    scope.institutionClass === "sdi"
-      ? code === "LMT" || code === "LCR-NSFR"
-        ? "SDI-LMT-MONTHLY"
-        : code === "IRRBB-PILOT"
-          ? "SDI-IRRBB-QUARTERLY"
-          : code
-      : code;
   const pathname = usePathname();
   const preparing = useSearchParams().get("preparing") === "1";
-  const visible = tabs.filter(
-    (tab) =>
-      !tab.ruleCode ||
-      query.data?.templates.some(
-        (item) =>
-          item.code === ruleFor(tab.ruleCode) &&
-          item.instrumentStatus === "in_force",
-      ) ||
-      (preparing && pathname === tab.href),
-  );
-  const selected = tabs.find((tab) => tab.href === pathname && tab.ruleCode);
-  const instrument = query.data?.templates.find(
-    (item) => item.code === ruleFor(selected?.ruleCode ?? contextRule),
-  );
+  const ruleFor = (code: string | undefined) =>
+    scope.institutionClass === "sdi" && code === "LMT"
+      ? "SDI-LMT-MONTHLY"
+      : code;
+  const instrumentFor = (code: string | undefined) =>
+    query.data?.templates.find((item) => item.code === ruleFor(code));
+  const available = (code: string | undefined) => {
+    if (!code) return true;
+    const instrument = instrumentFor(code);
+    return Boolean(
+      instrument &&
+      (instrument.instrumentStatus === "in_force" ||
+        instrument.instrumentStatus === "unpublished" ||
+        preparing),
+    );
+  };
+  const visible = tabs
+    .filter((tab) => available(tab.ruleCode ?? contextRule))
+    .map((tab) => ({
+      ...tab,
+      href: preparing ? `${tab.href}?preparing=1` : tab.href,
+    }));
+  const selected = tabs.find((tab) => tab.href === pathname);
+  const selectedRule = selected?.ruleCode ?? contextRule;
+  const instrument = instrumentFor(selectedRule);
   return (
     <>
       <ModuleTabs tabs={visible} />
@@ -69,15 +73,15 @@ function ModulePreparationSurface({ tabs, children, contextRule }: Props) {
           Preparing for upcoming rules
         </Link>
       </div>
-      {selected ? (
+      {selectedRule ? (
         <QueryBoundary
           contained
           isLoading={query.isLoading}
           error={query.error}
           onRetry={() => void query.refetch()}
         >
-          {instrument?.instrumentStatus === "in_force" ||
-          (preparing && instrument) ? (
+          {available(selectedRule) &&
+          hrefAccess(pathname, scope).state === "enabled" ? (
             children
           ) : (
             <p className="px-8 py-6 text-body text-slate">

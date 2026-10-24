@@ -398,7 +398,6 @@ class ReturnTemplateRead(ClosedModel):
     commencement_approved_by: str | None = None
     commencement_approved_at: datetime | None = None
     calculations: list[str] = Field(default_factory=list)
-    required_data: list[str] = Field(default_factory=list)
     instrument_status: InstrumentStatus = "in_force"
     effective_from: date | None = None
     code: str

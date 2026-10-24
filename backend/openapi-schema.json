@@ -54217,13 +54217,6 @@
             "title": "Regulator",
             "type": "string"
           },
-          "required_data": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Required Data",
-            "type": "array"
-          },
           "source_url": {
             "anyOf": [
               {
