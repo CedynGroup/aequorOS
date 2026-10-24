@@ -4,6 +4,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   ...base,
   testMatch: "regulatory-rule-status.spec.ts",
+  testIgnore: [],
   webServer: (Array.isArray(base.webServer) ? base.webServer : []).map(
     (server, index) =>
       index === 1

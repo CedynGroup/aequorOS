@@ -52,7 +52,7 @@ test.describe("unbound Behavioral user", () => {
     await expectBankStatus("/behavioral/nmd-duration", 403);
     const requests = recordBehavioralRequests(page);
 
-    await page.goto("/liquidity");
+    await page.goto("/liquidity?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Liquidity Cockpit" }),
     ).toBeVisible();

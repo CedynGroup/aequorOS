@@ -22,12 +22,12 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.policy import applicability as regulatory_applicability
 from app.reporting.service.registry import REGISTRY
 from app.schemas.forecasting import ForecastRunCreate
 from app.services import (
     alerts,
     live_view,
-    regulatory_applicability,
     regulatory_forecasting,
     sdi_views,
 )

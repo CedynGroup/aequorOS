@@ -641,25 +641,36 @@ def test_an_unconfirmed_capital_floor_makes_the_ratio_provisional(
     )
 
 
-def test_an_unconfirmed_exposure_limit_is_flagged_on_the_exposure_view(
+@pytest.mark.parametrize(
+    ("parameter_code", "as_of", "flagged"),
+    [
+        ("single_obligor_limit_pct", _AS_OF, True),
+        ("large_exposure_limit_pct", _AS_OF, False),
+        ("large_exposure_limit_pct", date(2027, 1, 31), True),
+    ],
+)
+def test_an_unconfirmed_exposure_limit_is_flagged_only_when_applicable(
     db_session: Session,
+    parameter_code: str,
+    as_of: date,
+    flagged: bool,
 ) -> None:
     sdi = _sdi(db_session)
     _seed_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
     _seed_positions(db_session, sdi, [("LN/1", "LOAN", "GHS", "100000000", "100000000")])
     for row in db_session.scalars(
         select(RegulatoryParameter).where(
-            RegulatoryParameter.param_code == "large_exposure_limit_pct",
+            RegulatoryParameter.param_code == parameter_code,
             RegulatoryParameter.scope_key == "sdi",
         )
     ):
         row.confirmation_status = "pending"
     db_session.flush()
 
-    report = sdi_views.get_sdi_large_exposures(db_session, _CTX, sdi, _AS_OF)
-    assert any(
-        "large_exposure_limit_pct" in finding and "provisional" in finding
-        for finding in report.findings
+    report = sdi_views.get_sdi_large_exposures(db_session, _CTX, sdi, as_of)
+    assert (
+        any(parameter_code in finding and "provisional" in finding for finding in report.findings)
+        is flagged
     )
 
 

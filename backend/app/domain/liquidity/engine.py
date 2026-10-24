@@ -17,6 +17,7 @@ from typing import Literal
 
 from app.domain.authority.outcomes import OutcomeState, outcome
 from app.domain.authority.results import Computed, FigureResult, Refused
+from app.domain.policy.ratios import classify_ratio
 
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
@@ -345,17 +346,6 @@ def money(value: Decimal) -> Decimal:
 
 def ratio_pct(value: Decimal) -> Decimal:
     return value.quantize(RATIO_PCT, rounding=ROUND_HALF_UP)
-
-
-def classify_ratio(
-    value_pct: Decimal, minimum_pct: Decimal, amber_floor_pct: Decimal
-) -> LiquidityStatus:
-    """Classify an already-quantized ratio percentage against its thresholds."""
-    if value_pct >= minimum_pct:
-        return "green"
-    if value_pct >= amber_floor_pct:
-        return "amber"
-    return "red"
 
 
 def _require_threshold(value: Decimal | None, code: str) -> Decimal:
@@ -957,3 +947,6 @@ def compute_stressed_ladder(
             )
         )
     return tuple(results)
+
+
+__all__ = ["classify_ratio"]

@@ -79,7 +79,6 @@ from app.forecasting.domain.engine import (
     run_optimizer,
     run_whatif,
 )
-from app.domain.regulatory_instruments import forecast_rule_applicable
 from app.forecasting.schemas.forecasting import (
     ForecastAssumptionDefaultsRead,
     ForecastAssumptionsRead,
@@ -118,6 +117,7 @@ from app.live.public import (
     load_current_facts,
     worst_status,
 )
+from app.policy.domain.regulatory_instruments import forecast_rule_applicable
 from app.policy.public import (
     ParamCapitalThreshold,
     ParamCrmHaircut,
@@ -126,6 +126,7 @@ from app.policy.public import (
     ParamRiskWeight,
     get_active_params,
     regulatory_parameters,
+    rule_in_force,
     sdi_regime,
 )
 from app.schemas.regulatory_liquidity import (
@@ -134,7 +135,6 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryValidationRead,
 )
 from app.services.audit import record_event
-from app.services.regulatory_applicability import rule_in_force
 from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
 ENGINE_VERSION = "regulatory-forecasting-v4.0.1"
@@ -414,7 +414,9 @@ def compute_live(
     return LiveModuleResult(
         metrics={
             **{field: str(getattr(summary, field)) for field in _SUMMARY_FIELDS},
-            **statuses,
+            "year5_car_status": statuses["year5_car_status"],
+            "year5_lcr_status": statuses["year5_lcr_status"],
+            "year5_nsfr_status": statuses["year5_nsfr_status"],
             "assumptions": _assumptions_payload(projection.assumptions),
             "path": [_year_payload(row) for row in projection.years],
         },

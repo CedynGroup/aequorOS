@@ -164,7 +164,7 @@ test.describe("IRRBB repricing, scenario and regulatory evidence outcomes", () =
 
   test.describe.configure({ timeout: 120_000 });
   test.beforeEach(async ({ page }) => {
-    await page.goto("/irr");
+    await page.goto("/irr?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Interest Rate Risk" }).first(),
     ).toBeVisible();
@@ -464,7 +464,7 @@ test.describe("IRRBB repricing, scenario and regulatory evidence outcomes", () =
       .getByRole("combobox", { name: "Run", exact: true })
       .selectOption(run.run_id);
     await expect(
-      section(page, `ICAAP Stress Test — ${run.scenario_code}`),
+      section(page, `ICAAP Stress Test: ${run.scenario_code}`),
     ).toContainText(`input hash ${run.input_hash.slice(0, 12)}`);
     const table5 = section(
       page,

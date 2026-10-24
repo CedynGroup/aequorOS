@@ -50,6 +50,7 @@ const kmsProxy = `http://127.0.0.1:${runtimePorts.kms}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "regulatory-rule-status.spec.ts",
   outputDir: path.join(E2E_TMP, "test-results"),
   globalSetup: "./e2e/global-setup.ts",
   timeout: 60_000,
