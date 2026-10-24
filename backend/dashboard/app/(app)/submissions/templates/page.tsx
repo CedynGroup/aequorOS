@@ -118,6 +118,7 @@ function TemplateCard({ template }: { template: ReturnTemplateRead }) {
       <CardBody className="space-y-4">
         <InstrumentStatusBadge
           status={template.instrumentStatus}
+          regulator={template.regulator}
           effectiveFrom={template.effectiveFrom}
           citation={template.directiveCitation}
           sourceUrl={template.sourceUrl}

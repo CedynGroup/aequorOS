@@ -116,7 +116,11 @@ assert.equal(
   "2026-09-30 — preparation only",
 );
 assert.equal(
-  instrumentStatusLabel("exposure_draft", new Date("2027-01-01T00:00:00Z")),
+  instrumentStatusLabel(
+    "exposure_draft",
+    new Date("2027-01-01T00:00:00Z"),
+    "BoG",
+  ),
   "Proposed by BoG, not law yet. Prepare if useful, no deadline or penalty. Expected from 2027-01-01 if made final.",
 );
 assert.equal(
@@ -124,12 +128,12 @@ assert.equal(
   "Final rule. Filing becomes required from 2027-01-01.",
 );
 assert.equal(
-  instrumentStatusLabel("unpublished"),
+  instrumentStatusLabel("unpublished", undefined, "BoG"),
   "International standard used for monitoring only. No BoG filing duty.",
 );
 
 // Generated nullable date aliases can arrive as ISO strings.
 assert.equal(
-  instrumentStatusLabel("exposure_draft", "2027-01-01"),
+  instrumentStatusLabel("exposure_draft", "2027-01-01", "BoG"),
   "Proposed by BoG, not law yet. Prepare if useful, no deadline or penalty. Expected from 2027-01-01 if made final.",
 );

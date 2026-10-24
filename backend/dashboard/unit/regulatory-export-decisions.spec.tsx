@@ -14,6 +14,7 @@ import PriorVersionsCard from "@/components/submissions/PriorVersionsCard";
 import HistoryPage from "@/app/(app)/submissions/history/page";
 import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
 import { frameworkInstrumentStatus } from "@/lib/regulatoryInstruments";
+import { setActiveJurisdiction } from "@/lib/format";
 
 const state = vi.hoisted(() => ({
   snapshots: {} as Record<string, Record<string, unknown> | undefined>,
@@ -178,7 +179,10 @@ beforeEach(() => {
     current: snapshot("in_force"),
   };
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  setActiveJurisdiction({});
+});
 
 it.each([
   ["final", "2000-01-01", "in_force"],
@@ -236,6 +240,7 @@ it.each(["final", "exposure_draft"])(
 );
 
 it("discloses the cycle's own framework beside both header draft downloads", async () => {
+  setActiveJurisdiction({ regulatorShort: "CBK" });
   const user = userEvent.setup();
   const cycle = IcaapCycleReadFromJSON({
     id: "cycle",
@@ -250,10 +255,14 @@ it("discloses the cycle's own framework beside both header draft downloads", asy
       code: "own-framework",
       status: "exposure_draft",
       effective_from: "2027-01-01",
+      regulator: "Recorded issuer",
     },
   });
   const { rerender } = render(<CycleHeader bankId={bankId} cycle={cycle} />);
   expect(screen.getByRole("note")).toHaveTextContent("not law yet");
+  expect(screen.getByRole("note")).toHaveTextContent(
+    "Proposed by Recorded issuer",
+  );
   expect(screen.getByRole("note")).toHaveTextContent("2027-01-01");
   await user.click(screen.getByRole("button", { name: "Draft PDF" }));
   await user.click(

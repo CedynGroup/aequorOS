@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import InstrumentsRegister from "@/components/submissions/InstrumentsRegister";
 import { ReturnTemplateReadFromJSON } from "@aequoros/risk-service-api";
+import userEvent from "@testing-library/user-event";
+import { setActiveJurisdiction } from "@/lib/format";
 
 const fixture = vi.hoisted(() => ({
   templates: [] as unknown[],
@@ -40,6 +42,7 @@ vi.mock("@/lib/api/hooks", () => ({
 afterEach(() => {
   cleanup();
   fixture.bankId = "";
+  setActiveJurisdiction({});
 });
 
 function rule(code: string, status: string) {
@@ -141,6 +144,31 @@ it("loads the institution named by a notification rather than the active bank", 
     screen.getByRole("link", { name: "All regulatory instruments" }),
   ).toHaveAttribute("href", "/submissions/instruments?bankId=BK-SYNTH002");
 });
+
+it.each([
+  ["", "exposure_draft", "Draft", "Proposed by BoG"],
+  ["BK-SYNTH002", "exposure_draft", "Draft", "Proposed by BoG"],
+  ["", "unpublished", "Reference", "No BoG filing duty"],
+  ["BK-SYNTH002", "unpublished", "Reference", "No BoG filing duty"],
+])(
+  "attributes %s %s to the recorded issuer",
+  async (bankId, status, label, wording) => {
+    setActiveJurisdiction({ regulatorShort: "CBK" });
+    fixture.bankId = bankId;
+    fixture.templates = [{ ...rule("ISSUER", status), regulator: "BoG" }];
+    render(<InstrumentsRegister />);
+    expect(fixture.queriedBankId).toBe(bankId || "BK-SYNTH001");
+    const badge = screen.getByText(label);
+    expect(badge).toHaveAttribute("title", expect.stringContaining(wording));
+    expect(badge.getAttribute("title")).not.toContain("CBK");
+    await userEvent.setup().click(badge);
+    const tooltip = within(screen.getByRole("tooltip"));
+    expect(tooltip.getByText("Synthetic citation")).toBeVisible();
+    expect(
+      tooltip.getByRole("link", { name: "Read the source" }),
+    ).toHaveAttribute("href", "https://example.test/instrument");
+  },
+);
 
 it.each([
   ["FX-NOP", ["fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct"]],

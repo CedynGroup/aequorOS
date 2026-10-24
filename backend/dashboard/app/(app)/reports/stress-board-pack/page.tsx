@@ -126,6 +126,7 @@ export default function StressBoardPack() {
         const warning = preparationWarning(
           instrument?.instrumentStatus,
           instrument?.effectiveFrom,
+          instrument?.regulator,
         );
         return [warning, instrument] as const;
       })
@@ -144,6 +145,7 @@ export default function StressBoardPack() {
                 key={warning}
                 status={instrument?.instrumentStatus}
                 effectiveFrom={instrument?.effectiveFrom}
+                regulator={instrument?.regulator}
               />
             ))}
             <button

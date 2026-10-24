@@ -1,4 +1,3 @@
-import { regShort } from "./format";
 import { isoDate } from "./api/values";
 
 import type { InstrumentStatus } from "@aequoros/risk-service-api";
@@ -13,7 +12,7 @@ export function instrumentDate(value: InstrumentDate): string | null {
 export function instrumentDisclosure(
   status: string | undefined,
   date?: InstrumentDate,
-  regulator = regShort(),
+  regulator = "the regulator",
 ) {
   const effective = instrumentDate(date);
   switch (status) {
@@ -70,9 +69,10 @@ export function isUpcomingRule(status: InstrumentStatus | undefined): boolean {
 export function preparationWarning(
   status: string | undefined,
   date?: InstrumentDate,
+  regulator?: string,
 ): string | null {
   if (status === "in_force") return null;
-  return `${instrumentDisclosure(status, date).tooltip} This pack is for preparation or monitoring. It does not establish compliance or readiness for live filing.`;
+  return `${instrumentDisclosure(status, date, regulator).tooltip} This pack is for preparation or monitoring. It does not establish compliance or readiness for live filing.`;
 }
 
 export function frameworkInstrumentStatus(
@@ -95,6 +95,7 @@ export function packagePreparationWarning(
   snapshot: Record<string, unknown> | undefined,
   fallbackStatus?: string,
   fallbackDate?: InstrumentDate,
+  fallbackRegulator?: string,
 ): string | null {
   const metadata = snapshot?.metadata;
   const icaap =
@@ -118,6 +119,12 @@ export function packagePreparationWarning(
         typeof framework.effective_from === "string"
         ? framework.effective_from
         : null,
+      icaap &&
+        typeof icaap === "object" &&
+        "regulator_short" in icaap &&
+        typeof icaap.regulator_short === "string"
+        ? icaap.regulator_short
+        : undefined,
     );
   }
   const provenance = snapshot?.provenance;
@@ -138,12 +145,16 @@ export function packagePreparationWarning(
         typeof basis.instrument_effective_from === "string"
           ? basis.instrument_effective_from
           : null;
-      return preparationWarning(status, date);
+      return preparationWarning(
+        status,
+        date,
+        typeof basis.regulator === "string" ? basis.regulator : undefined,
+      );
     }
   }
   return snapshot
     ? preparationWarning(undefined)
-    : preparationWarning(fallbackStatus, fallbackDate);
+    : preparationWarning(fallbackStatus, fallbackDate, fallbackRegulator);
 }
 
 export function preparationHref(href: string, preparing: boolean): string {
