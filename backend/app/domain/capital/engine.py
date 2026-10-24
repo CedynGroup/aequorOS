@@ -70,6 +70,7 @@ from app.domain.ingestion.capital_tiers import (
     TIER_T2,
 )
 from app.domain.policy.ratios import (
+    GREEN_BUFFER_PP,
     classify_capital_ratio,
 )
 
@@ -1196,4 +1197,4 @@ def _describe(category: str) -> str:
     return category.replace("_", " ").title().replace("Bog", "BoG").replace("Gog", "GoG")
 
 
-__all__ = ["classify_capital_ratio"]
+__all__ = ["GREEN_BUFFER_PP", "classify_capital_ratio"]
