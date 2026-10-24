@@ -26,6 +26,11 @@ from app.models import (
     LiveMetric,
     LiveMetricSnapshot,
 )
+from app.policy.public import (
+    forecast_legacy_thresholds,
+    forecast_view_status,
+    rule_in_force,
+)
 from app.schemas.live import (
     JobEnqueuedRead,
     LiveModuleView,
@@ -38,11 +43,6 @@ from app.schemas.live import (
 )
 from app.services import fact_derivation, job_queue, module_scope
 from app.services.audit import record_event
-from app.services.regulatory_applicability import (
-    forecast_legacy_thresholds,
-    forecast_view_status,
-    rule_in_force,
-)
 
 _MODULE_ORDER = {
     module: index

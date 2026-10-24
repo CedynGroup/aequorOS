@@ -69,6 +69,10 @@ from app.domain.ingestion.capital_tiers import (
     TIER_CET1,
     TIER_T2,
 )
+from app.domain.policy.ratios import (
+    GREEN_BUFFER_PP,
+    classify_capital_ratio,
+)
 
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
@@ -77,8 +81,6 @@ _HUNDRED = Decimal("100")
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
 
-# A ratio is green only when it clears the regulatory minimum by this buffer.
-GREEN_BUFFER_PP = Decimal("0.5")
 STRESS_QUARTERS = 4
 
 type CapitalStatus = Literal["green", "amber", "red"]
@@ -481,19 +483,6 @@ def money(value: Decimal) -> Decimal:
 
 def ratio_pct(value: Decimal) -> Decimal:
     return value.quantize(RATIO_PCT, rounding=ROUND_HALF_UP)
-
-
-def classify_capital_ratio(value_pct: Decimal, minimum_pct: Decimal) -> CapitalStatus:
-    """Classify an already-quantized ratio percentage against its minimum.
-
-    Green requires clearing the minimum by ``GREEN_BUFFER_PP`` (0.5pp), which
-    makes the CAR green floor exactly the ``car_early_warning`` threshold.
-    """
-    if value_pct >= minimum_pct + GREEN_BUFFER_PP:
-        return "green"
-    if value_pct >= minimum_pct:
-        return "amber"
-    return "red"
 
 
 def tier1_capital(facts: Sequence[CapitalFact]) -> Decimal:
@@ -1206,3 +1195,6 @@ def _pct_text(value: Decimal) -> str:
 
 def _describe(category: str) -> str:
     return category.replace("_", " ").title().replace("Bog", "BoG").replace("Gog", "GoG")
+
+
+__all__ = ["GREEN_BUFFER_PP", "classify_capital_ratio"]

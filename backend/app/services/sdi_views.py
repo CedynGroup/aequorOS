@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.identity.public import Bank
+from app.policy.public import rule_in_force
 from app.reporting.service.le_generation import (
     _BUCKET_CODES,
     _LE_POSITION_TYPES,
@@ -36,7 +37,6 @@ from app.reporting.service.le_generation import (
     _unencumbered,
 )
 from app.services import regulatory_parameters, sdi_capital
-from app.services.regulatory_applicability import rule_in_force
 
 _ZERO = Decimal("0")
 

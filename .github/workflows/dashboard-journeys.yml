@@ -94,7 +94,12 @@ jobs:
           STORAGE_KMS_KEY_ID: aequoros-key
           PLAYWRIGHT_QUARANTINE_REPORT: ${{ runner.temp }}/journeys.json
           E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
-        run: mise exec -- pnpm --filter @aequoros/dashboard e2e --shard=${{ matrix.shard }}/4
+        run: |
+          mise exec -- pnpm --filter @aequoros/dashboard e2e --shard=${{ matrix.shard }}/4
+          if [ "${{ matrix.shard }}" = "4" ]; then
+            PLAYWRIGHT_QUARANTINE_REPORT="$RUNNER_TEMP/regulatory-journeys.json" \
+              mise exec -- pnpm --filter @aequoros/dashboard e2e --config=playwright.regulatory.config.ts
+          fi
       # Reviewer-visible screenshots the authorization and SSO journeys write
       # (the issuer's form, the signed-in shell, the refusals, the step-up
       # return). Uploaded even on failure: that is when they matter most.

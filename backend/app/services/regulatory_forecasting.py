@@ -95,6 +95,7 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.policy.public import rule_in_force
 from app.schemas.forecasting import (
     ForecastAssumptionDefaultsRead,
     ForecastAssumptionsRead,
@@ -128,7 +129,6 @@ from app.services.audit import record_event
 from app.services.live_state import current_snapshot, load_current_facts
 from app.services.live_types import LiveModuleResult, findings_from_validations, worst_status
 from app.services.params import get_active_params
-from app.services.regulatory_applicability import rule_in_force
 from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
 ENGINE_VERSION = "regulatory-forecasting-v4.0.1"
@@ -408,7 +408,9 @@ def compute_live(
     return LiveModuleResult(
         metrics={
             **{field: str(getattr(summary, field)) for field in _SUMMARY_FIELDS},
-            **statuses,
+            "year5_car_status": statuses["year5_car_status"],
+            "year5_lcr_status": statuses["year5_lcr_status"],
+            "year5_nsfr_status": statuses["year5_nsfr_status"],
             "assumptions": _assumptions_payload(projection.assumptions),
             "path": [_year_payload(row) for row in projection.years],
         },

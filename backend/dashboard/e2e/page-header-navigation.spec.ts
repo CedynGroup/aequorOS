@@ -270,7 +270,9 @@ test("IRRBB tabs keep the module eyebrow without breadcrumbs", async ({
     "/irr/sensitivity",
     "/irr/limits",
   ]) {
-    await page.goto(route);
+    await page.goto(
+      /^(\/irr|\/liquidity)(\/|$)/.test(route) ? `${route}?preparing=1` : route,
+    );
     const heading = page.getByRole("heading", {
       name: "Interest Rate Risk",
       exact: true,
@@ -307,7 +309,9 @@ for (const [route, eyebrow] of [
   test(`module header at ${route} exposes only ${eyebrow} and its title`, async ({
     page,
   }) => {
-    await page.goto(route);
+    await page.goto(
+      /^(\/irr|\/liquidity)(\/|$)/.test(route) ? `${route}?preparing=1` : route,
+    );
     const heading = page.getByRole("heading", { level: 1 });
     await expect(heading).toBeVisible();
     const header = heading.locator("..");
@@ -338,7 +342,9 @@ for (const route of ["/irr", "/fx"]) {
   test(`${route} header and card grid share both edges at wide viewports`, async ({
     page,
   }) => {
-    await page.goto(route);
+    await page.goto(
+      /^(\/irr|\/liquidity)(\/|$)/.test(route) ? `${route}?preparing=1` : route,
+    );
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expectAlignedHeaderAndCards(page);
   });
@@ -366,7 +372,7 @@ test("SDI liquidity header and card grid share both edges at wide viewports", as
       },
     });
   });
-  await page.goto("/liquidity");
+  await page.goto("/liquidity?preparing=1");
   await expect(
     page.getByRole("heading", { name: "LMTD Table 1 prudential ratios" }),
   ).toBeVisible();
@@ -384,7 +390,9 @@ for (const [route, title] of [
   test(`Institution tab at ${route} keeps the header hierarchy and alignment`, async ({
     page,
   }) => {
-    await page.goto(route);
+    await page.goto(
+      /^(\/irr|\/liquidity)(\/|$)/.test(route) ? `${route}?preparing=1` : route,
+    );
     const heading = page.getByRole("heading", {
       level: 1,
       name: title,
@@ -447,7 +455,15 @@ for (const [source, links] of [
       }
       await link.click();
       await expect(page).toHaveURL(new RegExp(`${destination}$`));
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      if (destination === "/irr" || destination === "/liquidity") {
+        await expect(
+          page.getByText(
+            "This capability is available from Preparing for upcoming rules.",
+          ),
+        ).toBeVisible();
+      } else {
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      }
     }
   });
 }
@@ -486,7 +502,7 @@ test("Markets network failure keeps the error card aligned and retry recovers", 
 test("module tabs render on page ground with a hairline and active underline", async ({
   page,
 }) => {
-  await page.goto("/irr/gaps");
+  await page.goto("/irr/gaps?preparing=1");
   const tabs = page.getByRole("navigation", { name: "Module sections" });
   await expect(tabs).toBeVisible();
   await expect(tabs.locator("..")).toHaveCSS(
@@ -494,7 +510,7 @@ test("module tabs render on page ground with a hairline and active underline", a
     "rgba(0, 0, 0, 0)",
   );
   await expect(tabs.locator("..")).toHaveCSS("border-bottom-width", "1px");
-  const active = tabs.locator('a[href="/irr/gaps"]');
+  const active = tabs.locator('a[href="/irr/gaps?preparing=1"]');
   await expect(active).toHaveCSS("border-bottom-width", "2px");
   await expect(active).not.toHaveCSS("border-bottom-color", "rgba(0, 0, 0, 0)");
   await expectAlignedHeaderAndCards(page);
@@ -526,7 +542,7 @@ with sqlite3.connect(sys.argv[1]) as db:
     const response = page.waitForResponse((r) =>
       r.url().includes("/sdi/liquidity-position"),
     );
-    await page.goto("/liquidity");
+    await page.goto("/liquidity?preparing=1");
     expect((await response).status()).toBe(200);
     await expect(
       page.getByRole("heading", { name: "LMTD Table 1 prudential ratios" }),

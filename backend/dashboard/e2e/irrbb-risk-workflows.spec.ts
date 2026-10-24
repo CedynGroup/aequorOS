@@ -172,7 +172,7 @@ test.describe("IRRBB functional workflow", () => {
     expect(ear12).toBeCloseTo(-7.4506, 6);
     expect(gapInside(12)).toBe(-370);
 
-    await page.goto("/irr");
+    await page.goto("/irr?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Interest Rate Risk" }).first(),
     ).toBeVisible();
@@ -394,7 +394,7 @@ test.describe("IRRBB functional workflow", () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    await page.goto("/irr");
+    await page.goto("/irr?preparing=1");
     await openTab(page, "Scenarios");
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),

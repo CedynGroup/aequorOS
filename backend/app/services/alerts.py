@@ -17,8 +17,8 @@ from app.domain.regulatory_instruments import forecast_rule_applicable
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.models import LiveFinding
+from app.policy.public import rule_in_force
 from app.schemas.live import AlertItemRead, BankAlertsRead
-from app.services.regulatory_applicability import rule_in_force
 
 _ALERT_SEVERITIES = ("critical", "high")
 _SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}

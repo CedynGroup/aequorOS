@@ -45,6 +45,7 @@ const E2E_DB = path.join(E2E_TMP, "e2e.db");
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "regulatory-rule-status.spec.ts",
   globalSetup: "./e2e/global-setup.ts",
   timeout: 60_000,
   expect: { timeout: 15_000 },

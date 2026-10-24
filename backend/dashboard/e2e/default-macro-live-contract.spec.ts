@@ -277,7 +277,7 @@ test("system contracts, governed clones, and real denied authority", async ({
       path: "/",
     },
   ]);
-  await page.goto("/irr/scenarios");
+  await page.goto("/irr/scenarios?preparing=1");
   const control = page.getByRole("button", {
     name: "Run enterprise stress",
     exact: true,
@@ -312,7 +312,9 @@ test("system contracts, governed clones, and real denied authority", async ({
       "Requires FX run permission at confidential sensitivity. An organization owner can grant it.",
     ],
   ]) {
-    await page.goto(`/${lens}/scenarios`);
+    await page.goto(
+      `/${lens}/scenarios${lens === "irr" ? "?preparing=1" : ""}`,
+    );
     await expect(control).toBeVisible();
     await expect(control).toBeDisabled();
     await control.hover({ force: true });

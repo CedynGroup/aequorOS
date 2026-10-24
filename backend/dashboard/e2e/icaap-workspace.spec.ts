@@ -84,7 +84,7 @@ test.describe("ICAAP workspace", () => {
   test("creates a rehearsal cycle, writes a section and commits a version", async ({
     page,
   }) => {
-    await page.goto("/icaap");
+    await page.goto("/icaap?preparing=1");
     await expect(
       page.getByRole("heading", {
         name: /Internal Capital Adequacy Assessment/i,
@@ -100,17 +100,19 @@ test.describe("ICAAP workspace", () => {
     await dialog
       .getByLabel("Financial year", { exact: true })
       .selectOption(String(fixtureFiscalYear));
-    await dialog.getByLabel("Reason", { exact: true }).fill("P1 acceptance walk-through");
+    await dialog
+      .getByLabel("Reason", { exact: true })
+      .fill("P1 acceptance walk-through");
     await dialog.getByRole("button", { name: "Create cycle" }).click();
 
-    await expect(page).toHaveURL(/\/icaap\/[0-9a-f-]+\/overview$/);
+    await expect(page).toHaveURL(/\/icaap\/[0-9a-f-]+\/overview\?preparing=1$/);
     await expect(page.getByText(/Rehearsal cycle/i).first()).toBeVisible();
 
     // Sections: open the first one and write in it.
     await page.getByRole("link", { name: "Sections", exact: true }).click();
-    await expect(page).toHaveURL(/\/icaap\/[0-9a-f-]+\/sections$/);
+    await expect(page).toHaveURL(/\/icaap\/[0-9a-f-]+\/sections\?preparing=1$/);
     await page.getByRole("link").filter({ hasText: /\(a\)/ }).first().click();
-    await expect(page).toHaveURL(/\/sections\/[a-z0-9_]+$/);
+    await expect(page).toHaveURL(/\/sections\/[a-z0-9_]+\?preparing=1$/);
 
     const editor = page.getByLabel("Section narrative");
     await expect(editor).toBeVisible({ timeout: 30_000 });
@@ -154,8 +156,10 @@ test.describe("ICAAP workspace", () => {
     await expect(page.getByText(/Version 1/)).toBeVisible({ timeout: 15_000 });
   });
 
-  test("downloads the draft PDF and the Word working copy", async ({ page }) => {
-    await page.goto("/icaap");
+  test("downloads the draft PDF and the Word working copy", async ({
+    page,
+  }) => {
+    await page.goto("/icaap?preparing=1");
     // The cycle's title is the framework's own wording, so the row is reached
     // by position rather than by a title this test would have to duplicate.
     await page.locator("table a").first().click();
@@ -177,14 +181,16 @@ test.describe("ICAAP workspace", () => {
     // never succeed, so refuse immediately rather than burning the timeout.
     requireObjectStorage();
 
-    await page.goto("/icaap");
+    await page.goto("/icaap?preparing=1");
     await page.locator("table a").first().click();
     await page.getByRole("link", { name: "Attachments", exact: true }).click();
-    await expect(page).toHaveURL(/\/attachments$/);
+    await expect(page).toHaveURL(/\/attachments\?preparing=1$/);
 
     await page.getByRole("button", { name: "Attach" }).click();
     const dialog = page.getByRole("dialog", { name: "Attach a document" });
-    await dialog.getByLabel("Title", { exact: true }).fill("Senior management report");
+    await dialog
+      .getByLabel("Title", { exact: true })
+      .fill("Senior management report");
     await dialog.getByLabel("File", { exact: true }).setInputFiles({
       name: "senior-management-report.pdf",
       mimeType: "application/pdf",
@@ -216,12 +222,10 @@ test.describe("a user without Capital confidential authority", () => {
     await page.goto("/");
     await expect(page.getByRole("link", { name: "ICAAP" })).toHaveCount(0);
 
-    await page.goto("/icaap");
+    await page.goto("/icaap?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();
-    expect(
-      icaapRequests.filter((url) => url.includes("/api/v1/")),
-    ).toEqual([]);
+    expect(icaapRequests.filter((url) => url.includes("/api/v1/"))).toEqual([]);
   });
 });
