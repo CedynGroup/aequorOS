@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
 from typing import Protocol, cast
@@ -14,9 +16,13 @@ from alembic.operations import Operations
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from app.models import Bank, Organization
+from alembic import command
+from app.db.session import force_rls_suspended
+from app.models import Bank, Organization, ParamStressShock
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
+    alembic_config_for_app,
+    clear_database_caches,
     forward_migrated_postgres_schema,
 )
 
@@ -138,10 +144,26 @@ def test_backfill_sees_all_tenants_and_restores_forced_rls(
                 )
             )
             session.flush()
+            session.add_all(
+                ParamStressShock(
+                    organization_id=org,
+                    jurisdiction_code="GH",
+                    module=module,
+                    scenario_code="existing",
+                    shock_key="existing",
+                    shock_value=Decimal("1"),
+                    effective_from=date(2000, 1, 1),
+                    approved_by="board",
+                    approval_timestamp=datetime.now(UTC),
+                )
+                for module in ("irr", "liquidity")
+            )
+            session.flush()
         connection.execute(text("SELECT set_config('app.organization_id', '', true)"))
         with Operations.context(MigrationContext.configure(connection)):
             migration.upgrade()
             migration.upgrade()
+            migration.downgrade()
         for org in ("OR-SHK00001", "OR-SHK00002"):
             connection.execute(
                 text("SELECT set_config('app.organization_id', :org, true)"), {"org": org}
@@ -151,7 +173,7 @@ def test_backfill_sees_all_tenants_and_restores_forced_rls(
                     text("SELECT COUNT(*) FROM param_stress_shock WHERE organization_id=:org"),
                     {"org": org},
                 )
-                == 8
+                == 10
             )
         forced = connection.execute(
             text(
@@ -161,3 +183,31 @@ def test_backfill_sees_all_tenants_and_restores_forced_rls(
             )
         ).all()
         assert {tuple(row) for row in forced} == {("banks", True), ("param_stress_shock", True)}
+
+    # The data-only revision retains evidence, but crossing the historical
+    # IRR/FX/FTP foundation must remove unsupported modules before narrowing.
+    command.downgrade(alembic_config_for_app(), "202607160003")
+    clear_database_caches()
+    with schema.app_engine.begin() as connection:
+        with force_rls_suspended(connection, "param_stress_shock"):
+            assert connection.execute(
+                text("SELECT module, COUNT(*) FROM param_stress_shock GROUP BY module")
+            ).all() == [("liquidity", 2)]
+        forced = connection.execute(
+            text(
+                "SELECT relname, relforcerowsecurity FROM pg_class "
+                "WHERE relnamespace = current_schema()::regnamespace "
+                "AND relname IN ('regulatory_runs', 'bank_financial_facts', "
+                "'regulatory_line_items', 'param_stress_shock', 'regulatory_metric_results')"
+            )
+        ).all()
+        assert {tuple(row) for row in forced} == {
+            (table, True)
+            for table in (
+                "regulatory_runs",
+                "bank_financial_facts",
+                "regulatory_line_items",
+                "param_stress_shock",
+                "regulatory_metric_results",
+            )
+        }
