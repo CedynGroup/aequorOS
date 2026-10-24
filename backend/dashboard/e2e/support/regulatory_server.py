@@ -19,7 +19,11 @@ CLOCK = Path(__file__).parents[1] / ".tmp" / "regulatory-clock.json"
 class ReportingDate(date):
     @classmethod
     def today(cls):
-        return date.fromisoformat(json.loads(CLOCK.read_text())["today"]) if CLOCK.exists() else date.today()
+        return (
+            date.fromisoformat(json.loads(CLOCK.read_text())["today"])
+            if CLOCK.exists()
+            else date.today()
+        )
 
 
 calendar.date = ReportingDate

@@ -237,6 +237,10 @@ def test_concurrent_settings_initialization_preserves_scan_and_overrides(
             release.set()
         first.result(timeout=10)
         second.result(timeout=10)
+    _assert_settings_and_observations(db_session, ctx)
+
+
+def _assert_settings_and_observations(db_session: Session, ctx: TenantContext) -> None:
     rows = list(
         db_session.scalars(
             select(RegulatoryReportingSettings).where(
