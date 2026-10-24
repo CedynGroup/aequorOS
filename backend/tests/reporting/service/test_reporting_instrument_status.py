@@ -404,3 +404,21 @@ def test_legal_metadata_does_not_require_a_filing_family_grant(db_session: Sessi
     assert templates["IRRBB-PILOT"].instrument_status == "exposure_draft"
     assert templates["ICAAP-REPORT"].commencement_parameter == "icaap_report_first_as_of_date"
     assert packages.list_packages(db_session, reader, SAMPLE_BANK_ID).packages == []
+
+
+@pytest.mark.parametrize(
+    ("code", "limits"),
+    [
+        ("FX-NOP", ("fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct")),
+        ("DBK-DAILY", ("fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct")),
+        ("NPL-MONTHLY", ("npl_limit_pct", "npl_dividend_restriction_pct")),
+    ],
+)
+def test_instrument_register_exposes_source_backed_limits(
+    db_session: Session, code: str, limits: tuple[str, str]
+) -> None:
+    templates = {
+        item.code: item
+        for item in packages.list_return_templates(db_session, CTX).templates
+    }
+    assert templates[code].calculations == [f"limit parameter: {limit}" for limit in limits]

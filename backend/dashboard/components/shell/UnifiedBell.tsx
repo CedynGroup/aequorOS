@@ -79,12 +79,16 @@ export default function UnifiedBell() {
     <div className="relative" ref={ref}>
       <button
         type="button"
-        aria-label={`Notifications${badge > 0 ? ` (${badge})` : ""}`}
+        aria-label={`Notifications${badge > 0 ? ` (${badge})` : ""}${alertsQuery.isLoading ? " — breach status loading" : alertsQuery.error ? " — breach status unavailable" : ""}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => {
           setOpen((v) => !v);
-          setTab(breachTotal > 0 ? "breaches" : "inbox");
+          setTab(
+            breachTotal > 0 || alertsQuery.isLoading || alertsQuery.error
+              ? "breaches"
+              : "inbox",
+          );
         }}
         className="relative w-9 h-9 inline-flex items-center justify-center rounded-sm text-slate hover:bg-surface"
       >
@@ -138,7 +142,16 @@ export default function UnifiedBell() {
           {tab === "breaches" ? (
             <>
               <div className="max-h-88 overflow-y-auto">
-                {breaches.length === 0 ? (
+                {alertsQuery.isLoading ? (
+                  <p className="px-4 py-8 text-body text-slate" role="status">
+                    Loading breach status…
+                  </p>
+                ) : alertsQuery.error ? (
+                  <p className="px-4 py-8 text-body text-slate" role="alert">
+                    Breach status unavailable. Regulatory rule status could not
+                    be resolved.
+                  </p>
+                ) : breaches.length === 0 ? (
                   <div className="px-4 py-8 text-center">
                     <p className="text-body text-slate">No active breaches</p>
                     <p className="mt-1 text-caption text-slate">

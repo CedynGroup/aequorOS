@@ -38,6 +38,7 @@ import {
   IRRBB_CONFIDENTIAL_RUN_REASON,
 } from "@/lib/modules";
 import { currencyCode, fmtInt } from "@/lib/format";
+import QueryBoundary from "@/components/ui/QueryBoundary";
 import { useBankRules } from "@/lib/api/regulatoryRules";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
@@ -860,22 +861,29 @@ export function SdiLiquidityNotAssessed({
     position?.reserves.filter((reserve) => reserve.status === "below_minimum")
       .length ?? 0;
   return (
-    <div className="flex h-full flex-col justify-center px-6 text-center text-caption text-slate">
-      <p>
-        Liquidity stress is not assessed because no BoG SDI liquidity-stress
-        methodology is configured. Basel LCR/NSFR and a synthetic
-        survival-horizon result are intentionally not substituted.
-      </p>
-      {position && (
-        <p className="mt-3 text-navy">
-          Reserve evidence as of {position.as_of}: {reserveBreaches} reserve
-          breach(es).
-          {lmtdInForce && (
-            <> LMTD Table 1 assessment: {breached} below-floor ratio(s).</>
-          )}
+    <QueryBoundary
+      contained
+      isLoading={rules.isLoading}
+      error={rules.error}
+      onRetry={() => void rules.query.refetch()}
+    >
+      <div className="flex h-full flex-col justify-center px-6 text-center text-caption text-slate">
+        <p>
+          Liquidity stress is not assessed because no BoG SDI liquidity-stress
+          methodology is configured. Basel LCR/NSFR and a synthetic
+          survival-horizon result are intentionally not substituted.
         </p>
-      )}
-    </div>
+        {position && (
+          <p className="mt-3 text-navy">
+            Reserve evidence as of {position.as_of}: {reserveBreaches} reserve
+            breach(es).
+            {lmtdInForce && (
+              <> LMTD Table 1 assessment: {breached} below-floor ratio(s).</>
+            )}
+          </p>
+        )}
+      </div>
+    </QueryBoundary>
   );
 }
 

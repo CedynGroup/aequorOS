@@ -27,6 +27,7 @@ import { useInForceAlerts } from "@/lib/api/regulatoryRules";
  */
 
 import Link from "next/link";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import {
   ArrowRight,
   CheckCircle2,
@@ -63,9 +64,22 @@ export default function BreachBanner({
 
   if (alerts.isLoading || pulse.isLoading) {
     return (
-      <div className="card px-5 py-3">
+      <div
+        className="card px-5 py-3"
+        aria-busy="true"
+        aria-label="Loading limit compliance"
+      >
         <SkeletonLine width="40%" height={12} />
       </div>
+    );
+  }
+  if (alerts.error || pulse.error) {
+    return (
+      <ErrorPanel
+        title="Limit compliance not assessed"
+        error={alerts.error ?? pulse.error}
+        onRetry={() => void alerts.refetch()}
+      />
     );
   }
   if (!alerts.data) return null;

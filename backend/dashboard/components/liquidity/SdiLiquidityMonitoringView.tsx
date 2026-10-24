@@ -216,12 +216,19 @@ export default function SdiLiquidityMonitoringView({
       <PageHeader eyebrow="Liquidity" title="Liquidity Monitoring Tools" />
       <QueryBoundary
         isLoading={
+          rules.isLoading ||
           monitoring.isLoading ||
           sdiLiquidity.isLoading ||
           baselLiquidity.isLoading
         }
-        error={monitoring.error ?? sdiLiquidity.error ?? baselLiquidity.error}
+        error={
+          rules.error ??
+          monitoring.error ??
+          sdiLiquidity.error ??
+          baselLiquidity.error
+        }
         onRetry={() => {
+          void rules.query.refetch();
           void monitoring.refetch();
           void sdiLiquidity.refetch();
           void baselLiquidity.refetch();

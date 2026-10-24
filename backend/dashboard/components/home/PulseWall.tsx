@@ -12,6 +12,8 @@
  */
 
 import Link from "next/link";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import type { LiveModule } from "@aequoros/risk-service-api";
 import StatusPill from "@/components/ui/StatusPill";
 import { SemanticDelta } from "@/components/ui/DeltaBadge";
@@ -58,6 +60,7 @@ export default function PulseWall({
   hasData?: boolean;
 }) {
   const { cards, modules } = usePulseCards(bankId, hasData);
+  const rules = useBankRules(bankId);
   // Scope the pulse wall to the tenant's module set (docs/sdi.md §3.2): an SDI
   // drops the FX / FTP engines it does not run, so no irrelevant tile appears.
   const order = resolveOrder(moduleOrder, cards).filter((module) =>
@@ -65,20 +68,27 @@ export default function PulseWall({
   );
 
   return (
-    <div>
-      <div className="flex items-baseline justify-between gap-3 mb-3">
-        <h2 className="text-h3 text-navy">Module pulse</h2>
-        <p className="text-caption text-slate">
-          {order.length} regulatory {order.length === 1 ? "engine" : "engines"}{" "}
-          · live positions
-        </p>
+    <QueryBoundary
+      contained
+      isLoading={rules.isLoading}
+      error={rules.error}
+      onRetry={() => void rules.query.refetch()}
+    >
+      <div>
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <h2 className="text-h3 text-navy">Module pulse</h2>
+          <p className="text-caption text-slate">
+            {order.length} regulatory{" "}
+            {order.length === 1 ? "engine" : "engines"} · live positions
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {order.map((module) => (
+            <PulseCard key={module} card={cards[module]} />
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        {order.map((module) => (
-          <PulseCard key={module} card={cards[module]} />
-        ))}
-      </div>
-    </div>
+    </QueryBoundary>
   );
 }
 

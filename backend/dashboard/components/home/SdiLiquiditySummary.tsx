@@ -28,9 +28,12 @@ export default function SdiLiquiditySummary({
   const ready = readiness.filter((row) => row.status === "ready").length;
   return (
     <QueryBoundary
-      isLoading={liquidity.isLoading}
-      error={liquidity.error}
-      onRetry={() => liquidity.refetch()}
+      isLoading={liquidity.isLoading || rules.isLoading}
+      error={liquidity.error ?? rules.error}
+      onRetry={() => {
+        void liquidity.refetch();
+        void rules.query.refetch();
+      }}
     >
       {data ? (
         <SectionCard

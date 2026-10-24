@@ -141,3 +141,29 @@ it("loads the institution named by a notification rather than the active bank", 
     screen.getByRole("link", { name: "All regulatory instruments" }),
   ).toHaveAttribute("href", "/submissions/instruments?bankId=BK-SYNTH002");
 });
+
+it.each([
+  ["FX-NOP", ["fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct"]],
+  ["DBK-DAILY", ["fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct"]],
+  ["NPL-MONTHLY", ["npl_limit_pct", "npl_dividend_restriction_pct"]],
+] as const)("shows the source-backed limits for %s", (code, limits) => {
+  fixture.templates = [
+    {
+      ...rule(code, "in_force"),
+      calculations: limits.map((limit) => `limit parameter: ${limit}`),
+    },
+  ];
+  render(<InstrumentsRegister />);
+  const instrument = screen
+    .getByRole("heading", { name: `Synthetic ${code}` })
+    .closest("section")!;
+  for (const limit of limits)
+    expect(
+      within(instrument).getByText(`limit parameter: ${limit}`, {
+        exact: false,
+      }),
+    ).toBeVisible();
+  expect(
+    within(instrument).queryByText("No calculation or limit mapping recorded"),
+  ).toBeNull();
+});

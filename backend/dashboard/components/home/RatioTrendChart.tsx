@@ -28,6 +28,7 @@ import RangeTabs, {
 } from "@/components/ui/RangeTabs";
 import ChartFrame from "@/components/ui/ChartFrame";
 import { num, numOrNull } from "@/lib/api/values";
+import QueryBoundary from "@/components/ui/QueryBoundary";
 import { useBankRules } from "@/lib/api/regulatoryRules";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { useEffectiveRatioDashboards } from "@/lib/api/hooks";
@@ -54,7 +55,8 @@ export default function RatioTrendChart({
   const moduleScope = useModuleScope();
   const rules = useBankRules(bankId);
   const showLiquidity =
-    moduleScope.institutionClass !== "sdi" && rules.isInForce("LCR-NSFR");
+    moduleScope.institutionClass !== "sdi" &&
+    rules.isInForce("LCR-NSFR") === true;
   const { liquidity: liq, capital: cap } = useEffectiveRatioDashboards(
     bankId,
     periodId,
@@ -183,45 +185,52 @@ export default function RatioTrendChart({
   } as BiEChartsOption;
 
   return (
-    <ChartFrame
-      title="Ratio trend"
-      subtitle={
-        !showLiquidity
-          ? "CAR per reporting period"
-          : "LCR & NSFR (left axis) · CAR (right axis) per reporting period"
-      }
-      height={280}
-      loading={isLoading}
-      actions={<RangeTabs value={range} onChange={setRange} />}
-      footer={
-        <>
-          <span>
-            {rows.length} periods
-            {showLiquidity &&
-              windowMove !== null &&
-              ` · LCR ${windowMove >= 0 ? "+" : ""}${windowMove.toFixed(1)}pp over the window`}
-            {" · "}
-            {storedCount} with stored results
-          </span>
-        </>
-      }
+    <QueryBoundary
+      contained
+      isLoading={rules.isLoading}
+      error={rules.error}
+      onRetry={() => void rules.query.refetch()}
     >
-      {rows.length === 0 ? (
-        <div className="h-full flex items-center justify-center">
-          <p className="text-body text-slate">
-            No computed periods yet — activate data in the Data Engine to build
-            the history.
-          </p>
-        </div>
-      ) : (
-        <EChart
-          option={option}
-          height={280}
-          ariaLabel={`${
-            !showLiquidity ? "CAR" : "LCR, NSFR and CAR"
-          } across ${rows.length} reporting periods, ${storedCount} of them from stored results`}
-        />
-      )}
-    </ChartFrame>
+      <ChartFrame
+        title="Ratio trend"
+        subtitle={
+          !showLiquidity
+            ? "CAR per reporting period"
+            : "LCR & NSFR (left axis) · CAR (right axis) per reporting period"
+        }
+        height={280}
+        loading={isLoading}
+        actions={<RangeTabs value={range} onChange={setRange} />}
+        footer={
+          <>
+            <span>
+              {rows.length} periods
+              {showLiquidity &&
+                windowMove !== null &&
+                ` · LCR ${windowMove >= 0 ? "+" : ""}${windowMove.toFixed(1)}pp over the window`}
+              {" · "}
+              {storedCount} with stored results
+            </span>
+          </>
+        }
+      >
+        {rows.length === 0 ? (
+          <div className="h-full flex items-center justify-center">
+            <p className="text-body text-slate">
+              No computed periods yet — activate data in the Data Engine to
+              build the history.
+            </p>
+          </div>
+        ) : (
+          <EChart
+            option={option}
+            height={280}
+            ariaLabel={`${
+              !showLiquidity ? "CAR" : "LCR, NSFR and CAR"
+            } across ${rows.length} reporting periods, ${storedCount} of them from stored results`}
+          />
+        )}
+      </ChartFrame>
+    </QueryBoundary>
   );
 }

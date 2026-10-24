@@ -29,6 +29,7 @@ import LiveStatusCard from "@/components/live/LiveStatusCard";
 import UnifiedBell from "@/components/shell/UnifiedBell";
 import RatioTrendChart from "@/components/home/RatioTrendChart";
 import WindowAnalysis from "@/components/home/WindowAnalysis";
+import StressBoardPack from "@/app/(app)/reports/stress-board-pack/page";
 import BoardPackPage from "@/app/(app)/reports/board-pack/page";
 import { SdiLiquidityNotAssessed } from "@/components/stress/EnterpriseStressWorkbench";
 import SdiLiquidityBoardDisclosure from "@/components/reports/SdiLiquidityBoardDisclosure";
@@ -38,6 +39,7 @@ import CfpPage from "@/app/(app)/liquidity/cfp/page";
 import MonitoringPage from "@/app/(app)/liquidity/monitoring/page";
 import { irrLimits, liquidityLimits } from "@/components/risk/limits";
 import { isRuleInForce } from "@/lib/regulatoryInstruments";
+import { useBankRules, useInForceAlerts } from "@/lib/api/regulatoryRules";
 import type { BiEChartsOption } from "@/components/bi/EChart";
 
 beforeAll(() =>
@@ -51,6 +53,8 @@ afterAll(() => vi.unstubAllGlobals());
 
 const state = vi.hoisted(() => ({
   status: "exposure_draft",
+  metadata: "ready",
+  liquidityEnabled: undefined as boolean | undefined,
   sdi: true,
   preparing: false,
   onlyIrr: false,
@@ -58,6 +62,7 @@ const state = vi.hoisted(() => ({
   path: "/liquidity",
   sourceBank: "",
   breached: true,
+  irrLoading: false,
 }));
 function scope() {
   return {
@@ -125,6 +130,9 @@ const query = <T,>(data: T) => ({
   isLoading: false,
   isFetching: false,
   isError: false,
+  isPending: false,
+  isSuccess: true,
+  status: "success",
   error: null,
   refetch: vi.fn(),
 });
@@ -334,6 +342,23 @@ function summary() {
 vi.mock("@/lib/api/hooks", () => ({
   useReturnTemplates: (bankId: string) => {
     state.sourceBank = bankId;
+    if (state.metadata === "loading")
+      return {
+        ...query(undefined),
+        isLoading: true,
+        isPending: true,
+        isSuccess: false,
+        status: "pending",
+      };
+    if (state.metadata === "error")
+      return {
+        ...query(undefined),
+        error: new Error("Synthetic metadata failure"),
+        isError: true,
+        isSuccess: false,
+        status: "error",
+      };
+    if (state.metadata === "missing") return query({ templates: [] });
     return query({
       templates: [
         "LMT",
@@ -352,7 +377,10 @@ vi.mock("@/lib/api/hooks", () => ({
   },
   useBankAlerts: () => query(alerts()),
   useLiveSummary: () => query(summary()),
-  useIrrDashboard: () => query(irrDashboard()),
+  useIrrDashboard: () =>
+    state.irrLoading
+      ? { ...query(undefined), isLoading: true }
+      : query(irrDashboard()),
   useLiquidityDashboard: () => query(liquidityDashboard()),
   useCapitalDashboard: () =>
     query(state.sdi || state.onlyIrr ? undefined : capitalDashboard()),
@@ -360,10 +388,18 @@ vi.mock("@/lib/api/hooks", () => ({
   useFtpDashboard: () => query(undefined),
   useRegulatoryRun: () => query(run()),
   useLiveSnapshots: () => query({ snapshots: [] }),
-  useEffectiveRatioDashboards: () => ({
-    liquidity: query(liquidityDashboard()),
-    capital: query(capitalDashboard()),
-  }),
+  useEffectiveRatioDashboards: (
+    _bankId: string,
+    _periodId: string,
+    _capital: boolean,
+    liquidityEnabled?: boolean,
+  ) => {
+    state.liquidityEnabled = liquidityEnabled;
+    return {
+      liquidity: query(liquidityDashboard()),
+      capital: query(capitalDashboard()),
+    };
+  },
   useCashflowWindow: () => query(undefined),
   useWindowAnalytics: () =>
     query({
@@ -409,6 +445,18 @@ vi.mock("@/lib/api/hooks", () => ({
   useLiquidityThresholdRegister: () => query({ thresholds: [] }),
   useLiquidityHaircutSchedule: () => query({ haircuts: [] }),
 }));
+vi.mock("@/components/stress/hooks", () => ({
+  useMacroScenarios: () => query({ scenarios: [] }),
+  useEnterpriseStressRegistry: () =>
+    query([
+      {
+        run_id: "synthetic-stress",
+        input_hash: "b".repeat(64),
+        outcome: { coupling: null },
+        summary: { stressed_car_end_pct: null, stressed_lcr_pct: null },
+      },
+    ]),
+}));
 vi.mock("@/components/basel/sdiHooks", () => ({
   useSdiLiquidityPosition: () => query(sdiPosition()),
   useSdiCapitalSummary: () => query(undefined),
@@ -425,12 +473,14 @@ vi.mock("@/components/basel/sdiHooks", () => ({
 afterEach(() => {
   cleanup();
   state.status = "exposure_draft";
+  state.metadata = "ready";
   state.sdi = true;
   state.preparing = false;
   state.onlyIrr = false;
   state.capitalAlert = false;
   state.path = "/liquidity";
   state.breached = true;
+  state.irrLoading = false;
 });
 
 it.each([
@@ -727,4 +777,213 @@ it("keeps the SDI reserve cockpit accessible without bank-only evidence", () => 
   expect(screen.getByText("Synthetic reserve")).toBeVisible();
   expect(screen.queryByText("Reference")).toBeNull();
   expect(screen.queryByText("Synthetic LMTD ratio")).toBeNull();
+});
+
+function RuleQueryProbe() {
+  const rules = useBankRules("BK-SYNTH001");
+  const alerts = useInForceAlerts("BK-SYNTH001");
+  return (
+    <div>
+      <p>IRR rule: {String(rules.isModuleInForce("irr"))}</p>
+      <p>
+        Alerts:{" "}
+        {alerts.error
+          ? "error"
+          : alerts.isLoading || !alerts.data
+            ? "pending"
+            : "success"}
+      </p>
+      <p>
+        Successful:{" "}
+        {String(Boolean(alerts.data) && !alerts.isLoading && !alerts.error)}
+      </p>
+      {alerts.data?.items.map((item) => (
+        <p key={item.findingId}>{item.message}</p>
+      ))}
+    </div>
+  );
+}
+
+it("preserves unknown, failed, draft and commenced rule states across alert reads", () => {
+  state.status = "in_force";
+  state.metadata = "loading";
+  const view = render(<RuleQueryProbe />);
+  expect(screen.getByText("IRR rule: undefined")).toBeVisible();
+  expect(screen.getByText("Alerts: pending")).toBeVisible();
+  expect(screen.getByText("Successful: false")).toBeVisible();
+  expect(screen.queryByText("Synthetic IRR alert")).toBeNull();
+  state.metadata = "error";
+  view.rerender(<RuleQueryProbe />);
+  expect(screen.getByText("Alerts: error")).toBeVisible();
+  expect(screen.getByText("Successful: false")).toBeVisible();
+  expect(screen.getByText("IRR rule: undefined")).toBeVisible();
+  state.metadata = "ready";
+  state.status = "exposure_draft";
+  view.rerender(<RuleQueryProbe />);
+  expect(screen.getByText("IRR rule: false")).toBeVisible();
+  expect(screen.getByText("Alerts: success")).toBeVisible();
+  expect(screen.queryByText("Synthetic IRR alert")).toBeNull();
+  state.status = "in_force";
+  view.rerender(<RuleQueryProbe />);
+  expect(screen.getByText("IRR rule: true")).toBeVisible();
+  expect(screen.getByText("Synthetic IRR alert")).toBeVisible();
+  state.metadata = "missing";
+  view.rerender(<RuleQueryProbe />);
+  expect(screen.getByText("IRR rule: undefined")).toBeVisible();
+  expect(screen.getByText("Alerts: error")).toBeVisible();
+  expect(screen.getByText("Successful: false")).toBeVisible();
+});
+
+const consumers = [
+  ["Home summary", () => <SdiLiquiditySummary bankId="BK-SYNTH001" />],
+  ["Risk", () => <RiskPage />],
+  ["Alerts", () => <AlertsPage />],
+  ["Home verdict", () => <BreachBanner bankId="BK-SYNTH001" />],
+  [
+    "Home pulse",
+    () => <PulseWall bankId="BK-SYNTH001" moduleOrder="severity" />,
+  ],
+  ["Live status", () => <LiveStatusCard />],
+  [
+    "Ratio trend",
+    () => <RatioTrendChart bankId="BK-SYNTH001" periodId="period" />,
+  ],
+  ["Liquidity cockpit", () => <SdiLiquidityView bankId="BK-SYNTH001" />],
+  [
+    "Liquidity monitoring",
+    () => (
+      <SdiLiquidityMonitoringView bankId="BK-SYNTH001" institutionClass="sdi" />
+    ),
+  ],
+  [
+    "Stress evidence",
+    () => <SdiLiquidityNotAssessed position={sdiPosition()} />,
+  ],
+  [
+    "Stress pack evidence",
+    () => (
+      <SdiLiquidityBoardDisclosure
+        asOf="2026-01-31"
+        table1Breaches={1}
+        reserveBreaches={0}
+      />
+    ),
+  ],
+] as const;
+it.each(consumers)(
+  "%s withholds conclusions while metadata loads or fails",
+  (_name, component) => {
+    state.status = "in_force";
+    state.metadata = "loading";
+    state.breached = false;
+    const view = render(component());
+    expect(screen.getAllByLabelText(/^Loading/)[0]).toBeVisible();
+    expect(screen.queryByText("All limits compliant")).toBeNull();
+    expect(screen.queryByText("Compliant", { selector: "p" })).toBeNull();
+    state.metadata = "error";
+    view.rerender(component());
+    expect(screen.getByText("Synthetic metadata failure")).toBeVisible();
+    expect(screen.queryByText("All limits compliant")).toBeNull();
+    expect(screen.queryByText("Compliant", { selector: "p" })).toBeNull();
+  },
+);
+
+it("withholds header breach counts and the empty verdict until metadata resolves", () => {
+  state.status = "in_force";
+  state.metadata = "loading";
+  const view = render(<UnifiedBell />);
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: /Notifications.*breach status loading/,
+    }),
+  );
+  expect(screen.getByText("Loading breach status…")).toBeVisible();
+  expect(screen.queryByText("No active breaches")).toBeNull();
+  state.metadata = "error";
+  view.rerender(<UnifiedBell />);
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Breach status unavailable",
+  );
+  expect(screen.queryByText("No active breaches")).toBeNull();
+  state.metadata = "ready";
+  view.rerender(<UnifiedBell />);
+  expect(screen.getByText("Synthetic IRR alert")).toBeVisible();
+});
+
+it("withholds window statistics while rule metadata loads or fails", () => {
+  state.sdi = false;
+  state.metadata = "loading";
+  const view = render(<WindowAnalysis bankId="BK-SYNTH001" />);
+  fireEvent.change(screen.getByLabelText("Window start date"), {
+    target: { value: "2026-01-01" },
+  });
+  fireEvent.change(screen.getByLabelText("Window end date"), {
+    target: { value: "2026-01-31" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Compute" }));
+  expect(screen.getByLabelText("Computing")).toBeVisible();
+  expect(screen.queryByText("CAR")).toBeNull();
+  state.metadata = "error";
+  view.rerender(<WindowAnalysis bankId="BK-SYNTH001" />);
+  expect(screen.getByText("Synthetic metadata failure")).toBeVisible();
+  expect(screen.queryByText(/stored run points/)).toBeNull();
+});
+
+it("disables board-pack printing while rule metadata loads or fails", () => {
+  state.sdi = false;
+  state.metadata = "loading";
+  const view = render(<BoardPackPage />);
+  expect(
+    screen.getByRole("button", { name: "Print / Save as PDF" }),
+  ).toBeDisabled();
+  expect(screen.getAllByLabelText("Loading")[0]).toBeVisible();
+  state.metadata = "error";
+  view.rerender(<BoardPackPage />);
+  expect(screen.getByText("Synthetic metadata failure")).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Print / Save as PDF" }),
+  ).toBeDisabled();
+  state.metadata = "ready";
+  view.rerender(<BoardPackPage />);
+  expect(
+    screen.getByRole("button", { name: "Print / Save as PDF" }),
+  ).toBeEnabled();
+});
+
+it("withholds an available SDI stress run from printing when rule status is unresolved", () => {
+  state.metadata = "loading";
+  const view = render(<StressBoardPack />);
+  expect(
+    screen.getByRole("button", { name: "Print / export PDF" }),
+  ).toBeDisabled();
+  expect(screen.getAllByLabelText("Loading")[0]).toBeVisible();
+  state.metadata = "error";
+  view.rerender(<StressBoardPack />);
+  expect(screen.getByText("Synthetic metadata failure")).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Print / export PDF" }),
+  ).toBeDisabled();
+});
+
+it("requests liquidity trend data only with affirmative rule evidence", () => {
+  state.sdi = false;
+  state.metadata = "loading";
+  const view = render(
+    <RatioTrendChart bankId="BK-SYNTH001" periodId="period" />,
+  );
+  expect(state.liquidityEnabled).toBe(false);
+  state.metadata = "ready";
+  state.status = "in_force";
+  view.rerender(<RatioTrendChart bankId="BK-SYNTH001" periodId="period" />);
+  expect(state.liquidityEnabled).toBe(true);
+});
+
+it("keeps loaded pulse cards visible while another module's metrics load", () => {
+  state.sdi = false;
+  state.status = "in_force";
+  state.irrLoading = true;
+  render(<PulseWall bankId="BK-SYNTH001" moduleOrder={["capital", "irr"]} />);
+  expect(screen.getByText("Capital Adequacy Ratio")).toBeVisible();
+  expect(screen.getByText("14.00")).toBeVisible();
+  expect(screen.queryByLabelText("Loading")).toBeNull();
 });

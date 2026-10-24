@@ -22,6 +22,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { useBankAlerts } from "../lib/api/hooks";
+import { useInForceAlerts } from "../lib/api/regulatoryRules";
 import BoardPackPage from "../app/(app)/reports/board-pack/page";
 import PackCards from "../components/reports/PackCards";
 import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
@@ -573,3 +575,89 @@ it("qualifies legacy live VaR without sample evidence as unavailable for review"
   render(view());
   await screen.findByText(/Sample qualification unavailable — recompute/);
 });
+
+function LegalAlertsProbe() {
+  const raw = useBankAlerts("BK-SAMP0001");
+  const alerts = useInForceAlerts("BK-SAMP0001");
+  return (
+    <div>
+      <p>Raw alerts: {raw.status}</p>
+      <p>
+        Legal alerts:{" "}
+        {alerts.error
+          ? "error"
+          : alerts.isLoading || !alerts.data
+            ? "pending"
+            : "success"}
+      </p>
+      <p>
+        Successful assessment:{" "}
+        {String(Boolean(alerts.data) && !alerts.isLoading && !alerts.error)}
+      </p>
+      {alerts.data?.items.map((item) => (
+        <p key={item.findingId}>{item.message}</p>
+      ))}
+    </div>
+  );
+}
+
+it.each(["in_force", "exposure_draft", "failure"])(
+  "retains metadata uncertainty before a successful IRR breach read resolves to %s",
+  async (outcome) => {
+    let release!: () => void;
+    const metadata = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.get(`${apiBaseUrl}/banks/:bankId/alerts`, () =>
+        HttpResponse.json({
+          bank_id: "BK-SAMP0001",
+          total: 1,
+          by_module: { irr: 1 },
+          by_severity: { high: 1 },
+          items: [
+            {
+              finding_id: "synthetic-irr",
+              module: "irr",
+              message: "In-force synthetic IRR breach",
+              severity: "high",
+              created_at: "2027-01-01T00:00:00Z",
+              rule_id: "irr",
+              metric: null,
+            },
+          ],
+        }),
+      ),
+      http.get(`${apiBaseUrl}/regulatory-reporting/templates`, async () => {
+        await metadata;
+        if (outcome === "failure")
+          return HttpResponse.json(
+            { detail: "Synthetic status service unavailable" },
+            { status: 503 },
+          );
+        return HttpResponse.json({
+          templates: ["LCR-NSFR", "IRRBB-PILOT"].map((code) => ({
+            code,
+            instrument_status: outcome,
+          })),
+        });
+      }),
+    );
+    render(view(<LegalAlertsProbe />));
+    await screen.findByText("Raw alerts: success");
+    expect(screen.getByText("Legal alerts: pending")).toBeVisible();
+    expect(screen.getByText("Successful assessment: false")).toBeVisible();
+    release();
+    await screen.findByText(
+      `Legal alerts: ${outcome === "failure" ? "error" : "success"}`,
+    );
+    if (outcome === "in_force")
+      expect(screen.getByText("In-force synthetic IRR breach")).toBeVisible();
+    else expect(screen.queryByText("In-force synthetic IRR breach")).toBeNull();
+    expect(
+      screen.getByText(
+        `Successful assessment: ${outcome === "failure" ? "false" : "true"}`,
+      ),
+    ).toBeVisible();
+  },
+);
