@@ -1,5 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
+
 /**
  * The institution's ICAAP cycles.
  *
@@ -48,6 +51,7 @@ export default function CycleList({
   bankId: string;
   onCreated: (cycleId: string) => void;
 }) {
+  const preparing = useSearchParams().get("preparing") === "1";
   const scope = useModuleScope();
   const cyclesQuery = useIcaapCycles(bankId);
   const frameworksQuery = useIcaapFrameworks(bankId);
@@ -73,8 +77,8 @@ export default function CycleList({
         </div>
         {!canCreate && (
           <p className="text-caption text-slate">
-            Creating a cycle requires Basel Capital &middot; Confidential &middot;
-            Create. Ask your organization owner or admin to grant it.
+            Creating a cycle requires Basel Capital &middot; Confidential
+            &middot; Create. Ask your organization owner or admin to grant it.
           </p>
         )}
 
@@ -106,7 +110,10 @@ export default function CycleList({
                   >
                     <td className="px-4 py-2.5">
                       <Link
-                        href={`/icaap/${cycle.id}/overview`}
+                        href={preparationHref(
+                          `/icaap/${cycle.id}/overview`,
+                          preparing,
+                        )}
                         className="font-medium text-action hover:underline"
                       >
                         {cycle.title}

@@ -13,10 +13,12 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
+from app.domain.regulatory_instruments import forecast_rule_applicable
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.models import LiveFinding
 from app.schemas.live import AlertItemRead, BankAlertsRead
+from app.services.regulatory_applicability import rule_in_force
 
 _ALERT_SEVERITIES = ("critical", "high")
 _SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -61,6 +63,14 @@ def get_bank_alerts(
         if decision is None or not decision.allowed:
             query = query.where(LiveFinding.module != engine)
     findings = list(db.scalars(query))
+    if any(finding.module == "forecast" for finding in findings):
+        liquidity_in_force = rule_in_force(db, ctx, bank, "LCR-NSFR")
+        findings = [
+            finding
+            for finding in findings
+            if finding.module != "forecast"
+            or forecast_rule_applicable(finding.rule_id, liquidity_in_force)
+        ]
     findings.sort(
         key=lambda finding: (
             _SEVERITY_RANK.get(finding.severity, 99),

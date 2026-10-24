@@ -43,6 +43,7 @@
 import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadge";
 import {
   preparationWarning,
+  preparationHref,
   packagePreparationWarning,
   isRuleInForce,
 } from "@/lib/regulatoryInstruments";
@@ -543,6 +544,8 @@ function FirstVersionCard({
   pending: boolean;
   error: unknown;
 }) {
+  const preparing =
+    useSearchParams().get("preparing") === "1" || Boolean(warning);
   return (
     <SectionCard
       title={`${code} · ${date}`}
@@ -566,7 +569,7 @@ function FirstVersionCard({
               filing and the assessment behind it are the same document.
             </p>
             <Link
-              href="/icaap"
+              href={preparationHref("/icaap", preparing)}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
             >
               Open ICAAP

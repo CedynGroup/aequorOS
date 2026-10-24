@@ -1,5 +1,6 @@
 """Publication status and commencement of a regulatory instrument."""
 
+from collections.abc import Mapping
 from datetime import date
 from typing import Literal
 
@@ -35,3 +36,24 @@ def instrument_status_label(status: InstrumentStatus, effective_from: date | Non
             else "Final, not yet in force"
         )
     return f"In force from {effective}" if effective else "In force"
+
+
+def forecast_rule_applicable(rule_id: str, liquidity_in_force: bool) -> bool:
+    return liquidity_in_force or rule_id not in (
+        "year5_lcr_above_minimum",
+        "year5_nsfr_above_minimum",
+    )
+
+
+def forecast_status(
+    metrics: Mapping[str, object], liquidity_in_force: bool
+) -> Literal["green", "amber", "red", "na"]:
+    keys = ("year5_car_status",) + (
+        ("year5_lcr_status", "year5_nsfr_status") if liquidity_in_force else ()
+    )
+    statuses = [metrics.get(key) for key in keys]
+    if "red" in statuses:
+        return "red"
+    if "amber" in statuses:
+        return "amber"
+    return "green" if all(value == "green" for value in statuses) else "na"

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
+from app.domain.regulatory_instruments import forecast_status
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.models import (
@@ -37,6 +38,7 @@ from app.schemas.live import (
 )
 from app.services import fact_derivation, job_queue, module_scope
 from app.services.audit import record_event
+from app.services.regulatory_applicability import rule_in_force
 
 _MODULE_ORDER = {
     module: index
@@ -110,10 +112,19 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
     rows = list(db.scalars(query))
     is_stale = _cache_is_behind_the_book(db, ctx, bank, {row.module: row for row in rows})
     rows.sort(key=lambda row: _MODULE_ORDER.get(row.module, 99))
+    liquidity_in_force = (
+        rule_in_force(db, ctx, bank, "LCR-NSFR")
+        if any(row.module == "forecast" for row in rows)
+        else False
+    )
     modules = [
         LiveModuleView(
             module=row.module,  # type: ignore[arg-type]
-            status=row.status,  # type: ignore[arg-type]
+            status=(
+                forecast_status(row.metrics, liquidity_in_force)
+                if row.module == "forecast"
+                else row.status
+            ),  # type: ignore[arg-type]
             metrics=row.metrics,
             computed_at=row.computed_at,
             computed_from_input_hash=row.computed_from_input_hash,
@@ -368,6 +379,7 @@ def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved b
         )
     )
     rows.reverse()
+    liquidity_in_force = rule_in_force(db, ctx, bank, "LCR-NSFR") if module == "forecast" else False
     return LiveSnapshotListRead(
         bank_id=bank.id,
         module=module,
@@ -381,7 +393,11 @@ def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved b
                     for key, value in row.metrics.items()
                     if isinstance(value, (str, int, float, bool))
                 },
-                status=row.status,
+                status=(
+                    forecast_status(row.metrics, liquidity_in_force)
+                    if module == "forecast"
+                    else row.status
+                ),
                 computed_at=row.computed_at,
             )
             for row in rows

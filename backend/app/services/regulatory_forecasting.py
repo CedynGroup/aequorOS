@@ -77,6 +77,7 @@ from app.domain.liquidity.engine import (
 from app.domain.liquidity.engine import (
     MissingParameterError as LiquidityMissingParameterError,
 )
+from app.domain.regulatory_instruments import forecast_rule_applicable
 from app.forecasting import service as assumption_register
 from app.forecasting.domain.assumptions import ASSUMPTION_KEYS, PRESET_CODES
 from app.identity import public as scoped_authorization
@@ -127,9 +128,10 @@ from app.services.audit import record_event
 from app.services.live_state import current_snapshot, load_current_facts
 from app.services.live_types import LiveModuleResult, findings_from_validations, worst_status
 from app.services.params import get_active_params
+from app.services.regulatory_applicability import rule_in_force
 from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
-ENGINE_VERSION = "regulatory-forecasting-v4.0.0"
+ENGINE_VERSION = "regulatory-forecasting-v4.0.1"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "forecast-projection-v1"
 MODULE_FORECAST = "forecast"
@@ -331,7 +333,16 @@ def create_forecast_run(
                 payload.horizon_years,
                 period_labels=_period_labels(period, payload.horizon_years),
             )
-            _persist_forecast_success(db, ctx, run, projection, params)
+            _persist_forecast_success(
+                db,
+                ctx,
+                run,
+                projection,
+                params,
+                liquidity_in_force=rule_in_force(
+                    db, ctx, bank, "LCR-NSFR", as_of=period.period_end
+                ),
+            )
         except HTTPException:
             raise
         except Exception as exc:
@@ -370,21 +381,12 @@ def compute_live(
         period_labels=_live_period_labels(current.source_as_of_date, 5),
     )
     summary = projection.summary
-    validations = _validation_rows(summary, params, projection.years)
-    statuses = (
-        classify_capital_ratio(summary.year5_car_pct, params.capital.car_min_pct),
-        classify_ratio(
-            summary.year5_lcr_pct,
-            params.liquidity.lcr_min_pct,
-            params.liquidity.lcr_amber_floor_pct,
-        ),
-        classify_ratio(
-            summary.year5_nsfr_pct,
-            params.liquidity.nsfr_min_pct,
-            params.liquidity.nsfr_amber_floor_pct,
-        ),
+    liquidity_in_force = rule_in_force(db, ctx, bank, "LCR-NSFR")
+    validations = _validation_rows(
+        summary, params, projection.years, liquidity_in_force=liquidity_in_force
     )
-    module_status = worst_status(*statuses)
+    statuses = _forecast_statuses(summary, params, liquidity_in_force)
+    module_status = worst_status(*statuses.values())
     snapshot = current_snapshot(
         _build_snapshot(
             bank,
@@ -402,6 +404,7 @@ def compute_live(
     return LiveModuleResult(
         metrics={
             **{field: str(getattr(summary, field)) for field in _SUMMARY_FIELDS},
+            **statuses,
             "assumptions": _assumptions_payload(projection.assumptions),
             "path": [_year_payload(row) for row in projection.years],
         },
@@ -411,6 +414,30 @@ def compute_live(
         findings=findings_from_validations(validations, module_status),
         source_as_of_date=current.source_as_of_date,
     )
+
+
+def _forecast_statuses(
+    summary: ProjectionSummary, params: ForecastParams, liquidity_in_force: bool
+) -> dict[str, str]:
+    return {
+        "year5_car_status": classify_capital_ratio(
+            summary.year5_car_pct, params.capital.car_min_pct
+        ),
+        "year5_lcr_status": classify_ratio(
+            summary.year5_lcr_pct,
+            params.liquidity.lcr_min_pct,
+            params.liquidity.lcr_amber_floor_pct,
+        )
+        if liquidity_in_force
+        else "na",
+        "year5_nsfr_status": classify_ratio(
+            summary.year5_nsfr_pct,
+            params.liquidity.nsfr_min_pct,
+            params.liquidity.nsfr_amber_floor_pct,
+        )
+        if liquidity_in_force
+        else "na",
+    }
 
 
 def list_forecast_runs(
@@ -666,10 +693,14 @@ def _persist_forecast_success(
     run: RegulatoryRun,
     projection: ProjectionResult,
     params: ForecastParams,
+    *,
+    liquidity_in_force: bool,
 ) -> None:
     summary = projection.summary
+    statuses = _forecast_statuses(summary, params, liquidity_in_force)
     run.metrics = {
         **{field: str(getattr(summary, field)) for field in _SUMMARY_FIELDS},
+        **statuses,
         "assumptions": _assumptions_payload(projection.assumptions),
         "path": [_year_payload(row) for row in projection.years],
     }
@@ -679,27 +710,19 @@ def _persist_forecast_success(
             "year5_car_pct",
             summary.year5_car_pct,
             params.capital.car_min_pct,
-            classify_capital_ratio(summary.year5_car_pct, params.capital.car_min_pct),
+            statuses["year5_car_status"],
         ),
         (
             "year5_lcr_pct",
             summary.year5_lcr_pct,
             params.liquidity.lcr_min_pct,
-            classify_ratio(
-                summary.year5_lcr_pct,
-                params.liquidity.lcr_min_pct,
-                params.liquidity.lcr_amber_floor_pct,
-            ),
+            statuses["year5_lcr_status"],
         ),
         (
             "year5_nsfr_pct",
             summary.year5_nsfr_pct,
             params.liquidity.nsfr_min_pct,
-            classify_ratio(
-                summary.year5_nsfr_pct,
-                params.liquidity.nsfr_min_pct,
-                params.liquidity.nsfr_amber_floor_pct,
-            ),
+            statuses["year5_nsfr_status"],
         ),
     )
     for position, (code, value, threshold_min, metric_status) in enumerate(metric_rows, start=1):
@@ -717,7 +740,8 @@ def _persist_forecast_success(
             )
         )
     for position, (rule_code, passed, severity, message) in enumerate(
-        _validation_rows(summary, params, projection.years), start=1
+        _validation_rows(summary, params, projection.years, liquidity_in_force=liquidity_in_force),
+        start=1,
     ):
         db.add(
             RegulatoryValidation(
@@ -936,6 +960,8 @@ def _validation_rows(
     summary: ProjectionSummary,
     params: ForecastParams,
     years: Sequence[ProjectionYear] = (),
+    *,
+    liquidity_in_force: bool,
 ) -> tuple[tuple[str, bool, str, str], ...]:
     checks = (
         ("year5_car_above_minimum", "CAR", summary.year5_car_pct, params.capital.car_min_pct),
@@ -949,6 +975,8 @@ def _validation_rows(
     )
     rows: list[tuple[str, bool, str, str]] = [_balance_ties_row(years)]
     for rule_code, label, value, minimum in checks:
+        if not forecast_rule_applicable(rule_code, liquidity_in_force):
+            continue
         passed = value >= minimum
         rows.append(
             (

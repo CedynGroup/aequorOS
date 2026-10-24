@@ -1,5 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
+
 /**
  * What still stands between this cycle and a freeze.
  *
@@ -77,6 +80,7 @@ export default function OverviewReadiness({
   bankId: string;
   cycleId: string;
 }) {
+  const preparing = useSearchParams().get("preparing") === "1";
   const cycleQuery = useIcaapCycle(bankId, cycleId);
   const readinessQuery = useIcaapReadiness(bankId, cycleId);
   const cycle = cycleQuery.data;
@@ -185,7 +189,7 @@ export default function OverviewReadiness({
                         </div>
                         {href && (
                           <Link
-                            href={href}
+                            href={preparationHref(href, preparing)}
                             className="shrink-0 text-caption font-medium text-action hover:underline"
                           >
                             Open

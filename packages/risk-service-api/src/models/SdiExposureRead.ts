@@ -30,6 +30,12 @@ export interface SdiExposureRead {
    * @type {string}
    * @memberof SdiExposureRead
    */
+  applicableLimitPct: string;
+  /**
+   *
+   * @type {string}
+   * @memberof SdiExposureRead
+   */
   connection: string;
   /**
    *
@@ -81,6 +87,11 @@ export interface SdiExposureRead {
 export function instanceOfSdiExposureRead(
   value: object,
 ): value is SdiExposureRead {
+  if (
+    !("applicableLimitPct" in value) ||
+    value["applicableLimitPct"] === undefined
+  )
+    return false;
   if (!("connection" in value) || value["connection"] === undefined)
     return false;
   if (!("counterpartyName" in value) || value["counterpartyName"] === undefined)
@@ -117,6 +128,7 @@ export function SdiExposureReadFromJSONTyped(
   }
   return {
     ...json,
+    applicableLimitPct: json["applicable_limit_pct"],
     connection: json["connection"],
     counterpartyName: json["counterparty_name"],
     exempt: json["exempt"],
@@ -141,6 +153,7 @@ export function SdiExposureReadToJSONTyped(
   }
 
   return {
+    applicable_limit_pct: value["applicableLimitPct"],
     connection: value["connection"],
     counterparty_name: value["counterpartyName"],
     exempt: value["exempt"],
