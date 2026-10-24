@@ -37,6 +37,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import Settings, get_settings
+from app.core.key_management.settings import get_key_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
 from app.features.ingest_data import get_ingestion_storage
@@ -236,6 +237,14 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     yield
     get_settings.cache_clear()
     get_engine.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_key_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setenv("BANK_KMS_ENDPOINT_URL", "")
+    get_key_settings.cache_clear()
+    yield
+    get_key_settings.cache_clear()
 
 
 @pytest.fixture(autouse=True)

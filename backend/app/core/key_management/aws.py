@@ -134,12 +134,31 @@ def validate_reference(key: KeyReference) -> None:
 
 def kms_client(region: str) -> BaseClient:
     factory = cast(Callable[..., BaseClient], boto3.client)
+    endpoint = get_key_settings().kms_endpoint_url
+    # Ignore SDK-wide endpoint overrides in every environment. Only the guarded
+    # bank-key setting may select an emulator; it never uses ambient credentials.
+    options: dict[str, object] = {}
+    if endpoint is not None:
+        if not is_undeployed_environment():
+            raise KeyUnavailableError("The local KMS endpoint is permitted only in local/test.")
+        options = {
+            "endpoint_url": endpoint,
+            "aws_access_key_id": "local-kms-synthetic",
+            "aws_secret_access_key": "local-kms-synthetic-not-production",
+            "aws_session_token": "",
+        }
     client = factory(
         "kms",
         region_name=region,
         verify=get_settings().tls.ca_bundle or True,
-        use_ssl=True,
-        config=Config(connect_timeout=5, read_timeout=10, retries={"max_attempts": 2}),
+        use_ssl=endpoint is None or endpoint.startswith("https://"),
+        config=Config(
+            connect_timeout=1 if endpoint else 5,
+            read_timeout=1 if endpoint else 10,
+            retries={"max_attempts": 0 if endpoint else 2},
+            ignore_configured_endpoint_urls=True,
+        ),
+        **options,
     )
     require_boto_tls(client)
     return client
