@@ -156,6 +156,19 @@ class EncryptionInventoryItem:
     retained: bool
 
 
+@dataclass(frozen=True)
+class EncryptionCursor:
+    tier: int = 0
+    key: str | None = None
+    version: str | None = None
+
+
+@dataclass(frozen=True)
+class EncryptionPage:
+    items: list[EncryptionInventoryItem]
+    cursor: EncryptionCursor | None
+
+
 class StorageClient(ABC):
     """The single sanctioned interface for AequorOS object storage.
 
@@ -227,6 +240,11 @@ class StorageClient(ABC):
 
     def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
         raise StorageBackendError("This storage backend cannot inventory encryption versions.")
+
+    def encryption_page(
+        self, institution_slug: str, cursor: EncryptionCursor, limit: int
+    ) -> EncryptionPage:
+        raise StorageBackendError("This storage backend cannot page encryption versions.")
 
     def reencrypt(self, item: EncryptionInventoryItem) -> bool:
         raise StorageBackendError("This storage backend cannot migrate encryption versions.")

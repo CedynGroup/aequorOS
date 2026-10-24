@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import date, timedelta
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select, text, update
@@ -18,7 +18,7 @@ from app.core.key_management.fields import SealedField, blind_index
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
 from app.core.key_management.settings import get_key_settings
-from app.core.key_management.types import KeyReference, KeyUnavailableError
+from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
@@ -29,7 +29,13 @@ from app.models.job import Job
 from app.reporting.models.packages import RegulatoryPackage
 from app.services import canonical_withdrawal, job_queue
 from app.services.canonical_withdrawal import WithdrawalError
-from app.storage.client import EncryptionInventoryItem, StorageBackendError
+from app.storage.client import (
+    EncryptionCursor,
+    EncryptionInventoryItem,
+    EncryptionPage,
+    StorageBackendError,
+    StorageLocation,
+)
 from tests.bi.service.test_mart_builder import AS_OF, build, resnapshot_loan_1, seed_book
 from tests.core.test_bank_field_encryption import (
     BANK_A,
@@ -45,6 +51,7 @@ from tests.core.test_bank_field_encryption import (
 )
 from tests.support.helpers import ORG_1
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.reencryption import drain
 
 __all__ = ["provider"]
 
@@ -54,54 +61,139 @@ class EmptyStorage(InMemoryStorageClient):
         assert not self._objects
         return iter(())
 
+    def encryption_page(
+        self, institution_slug: str, cursor: EncryptionCursor, limit: int
+    ) -> EncryptionPage:
+        assert not self._objects
+        return EncryptionPage([], None)
+
 
 class UnavailableStorage(EmptyStorage):
-    def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
+    def encryption_page(
+        self, institution_slug: str, cursor: EncryptionCursor, limit: int
+    ) -> EncryptionPage:
         raise StorageBackendError("Synthetic interruption after committed field batches.")
 
 
-def test_progressing_reencryption_is_not_reclaimed_at_the_fleet_window(
+def test_field_migration_and_verification_resume_across_bounded_dispatches(
     db_session: Session,
     provider: LocalKeyProvider,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    counterparty(db_session, include_package=False)
-    db_session.commit()
+    for number in range(5):
+        counterparty(db_session, reference=f"Synthetic-{number}", include_package=False)
     connect(db_session, provider)
-    now = utc_now()
-    monkeypatch.setattr(job_queue, "utc_now", lambda: now)
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    monkeypatch.setattr(reencryption, "BATCH_SIZE", 2)
+    root = reencryption.enqueue(db_session, ORG_1, BANK_A)
     db_session.commit()
-    claimed = job_queue.claim_next(
-        db_session, now, (reencryption.JOB_TYPE,), claimed_by="synthetic-healthy-worker"
+    checkpoints: dict[str, list[UUID | None]] = {"fields": [], "verify_fields": []}
+    while True:
+        claimed = job_queue.claim_next(db_session, utc_now(), (reencryption.JOB_TYPE,))
+        if claimed is None:
+            break
+        before = reencryption.Progress.model_validate(claimed.progress)
+        reencryption.run(db_session, claimed, EmptyStorage())
+        after = reencryption.Progress.model_validate(claimed.progress)
+        tables = maintenance.protected_tables()
+        if (
+            before.phase in checkpoints
+            and before.table < len(tables)
+            and tables[before.table].name == "canonical_counterparties"
+        ):
+            checkpoints[before.phase].append(after.after)
+        job_queue.complete(db_session, claimed)
+    for cursors in checkpoints.values():
+        assert len(cursors) == 3
+        assert cursors[0] is not None and cursors[1] is not None
+        assert cursors[0] < cursors[1] and cursors[2] is None
+    stored = list(
+        db_session.scalars(
+            select(CanonicalCounterparty.name).where(CanonicalCounterparty.bank_id == BANK_A)
+        )
     )
-    assert claimed is not None and claimed.id == job.id
-    scans = 0
-
-    class ProgressingStorage(EmptyStorage):
-        def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
-            nonlocal now, scans
-            scans += 1
-            now += timedelta(minutes=20)
-            progress = reencryption.Progress.model_validate(job.progress)
-            assert progress.fields_rewritten > 0
-            assert job_queue.reclaim_stale(
-                db_session,
-                now,
-                stale_after=timedelta(seconds=900),
-                job_types=(reencryption.JOB_TYPE,),
-            ) == 0
-            assert job.status == "running" and job.attempts == 0
-            return super().encryption_inventory(institution_slug)
-
-    reencryption.run(db_session, claimed, ProgressingStorage())
-    assert scans == 2
-    job_queue.complete(db_session, claimed)
-    assert claimed.status == "succeeded" and claimed.attempts == 0
-    assert reencryption.Progress.model_validate(claimed.progress).summary == "complete"
+    assert len(stored) == 5 and all(isinstance(value, SealedField) for value in stored)
+    db_session.expunge_all()
+    assert {
+        party.name
+        for party in db_session.scalars(
+            select(CanonicalCounterparty).where(CanonicalCounterparty.bank_id == BANK_A)
+        )
+    } == {NAME}
 
 
-def test_interrupted_reencryption_is_reclaimed_and_resumes_committed_progress(
+def test_bounded_dispatches_outlive_the_old_six_hour_window_without_reclaim(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connect(db_session, provider)
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    target = key.current_version_id
+    assert target is not None
+    now = utc_now()
+    beginning = now
+    monkeypatch.setattr(job_queue, "utc_now", lambda: now)
+    monkeypatch.setattr(reencryption.time, "monotonic", lambda: (now - beginning).total_seconds())
+
+    class SlowStorage(EmptyStorage):
+        versions: dict[int, UUID | None] = dict.fromkeys(range(100))
+
+        def encryption_page(
+            self, institution_slug: str, cursor: EncryptionCursor, limit: int
+        ) -> EncryptionPage:
+            nonlocal now
+            offset = int(cursor.key) + 1 if cursor.key is not None else 0
+            numbers = list(range(offset, min(offset + limit, len(self.versions))))
+            now += timedelta(seconds=3 * len(numbers))
+            items = [
+                EncryptionInventoryItem(
+                    StorageLocation(institution_slug, "temp", str(number)),
+                    "null",
+                    self.versions[number],
+                    False,
+                )
+                for number in numbers
+            ]
+            following = (
+                EncryptionCursor(0, str(numbers[-1]), "null")
+                if numbers and numbers[-1] + 1 < len(self.versions)
+                else None
+            )
+            return EncryptionPage(items, following)
+
+        def reencrypt(self, item: EncryptionInventoryItem) -> bool:
+            nonlocal now
+            now += timedelta(seconds=300)
+            self.versions[int(item.location.object_path)] = target
+            return True
+
+    storage = SlowStorage()
+    root = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    db_session.commit()
+    jobs = 0
+    last = root
+    while True:
+        claimed = job_queue.claim_next(db_session, now, (reencryption.JOB_TYPE,))
+        if claimed is None:
+            break
+        started = now
+        reencryption.run(db_session, claimed, storage)
+        assert now - started < timedelta(seconds=900)
+        assert job_queue.reclaim_stale(db_session, now, stale_after=timedelta(seconds=900)) == 0
+        job_queue.complete(db_session, claimed)
+        jobs += 1
+        last = claimed
+    assert now - beginning > timedelta(hours=6)
+    assert jobs > 100
+    assert reencryption.Progress.model_validate(last.progress).summary == "complete"
+    assert reencryption.Progress.model_validate(last.progress).objects_rewritten == 100
+    assert set(storage.versions.values()) == {target}
+    assert job_queue.stale_after_for(reencryption.JOB_TYPE, timedelta(seconds=900)) == timedelta(
+        seconds=900
+    )
+
+
+def test_interrupted_batch_reclaims_at_default_window_and_resumes(
     db_session: Session,
     provider: LocalKeyProvider,
     monkeypatch: pytest.MonkeyPatch,
@@ -112,39 +204,29 @@ def test_interrupted_reencryption_is_reclaimed_and_resumes_committed_progress(
     connect(db_session, provider)
     now = utc_now()
     monkeypatch.setattr(job_queue, "utc_now", lambda: now)
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    root = reencryption.enqueue(db_session, ORG_1, BANK_A)
     db_session.commit()
-    claimed = job_queue.claim_next(
-        db_session, now, (reencryption.JOB_TYPE,), claimed_by="synthetic-interrupted-worker"
-    )
-    assert claimed is not None and claimed.id == job.id
     with pytest.raises(StorageBackendError, match="Synthetic interruption"):
-        reencryption.run(db_session, claimed, UnavailableStorage())
+        drain(db_session, root, UnavailableStorage())
     db_session.rollback()
-    progress = reencryption.Progress.model_validate(claimed.progress)
-    assert progress.fields_rewritten > 0
-    now += timedelta(hours=6, seconds=1)
-    assert job_queue.reclaim_stale(
-        db_session,
-        now,
-        stale_after=timedelta(seconds=900),
-        job_types=(reencryption.JOB_TYPE,),
-    ) == 1
-    db_session.refresh(claimed)
-    assert claimed.status == "queued" and claimed.attempts == 1
-    assert reencryption.Progress.model_validate(claimed.progress) == progress
-    resumed = job_queue.claim_next(
-        db_session, now, (reencryption.JOB_TYPE,), claimed_by="synthetic-resuming-worker"
+    orphan = db_session.scalar(
+        select(Job).where(Job.job_type == reencryption.JOB_TYPE, Job.status == "running")
     )
-    assert resumed is not None and resumed.id == job.id
-    assert resumed.claimed_by == "synthetic-resuming-worker"
-    reencryption.run(db_session, resumed, EmptyStorage())
-    job_queue.complete(db_session, resumed)
-    completed = reencryption.Progress.model_validate(resumed.progress)
-    assert resumed.status == "succeeded" and resumed.attempts == 1
-    assert completed.fields_rewritten == progress.fields_rewritten
-    assert completed.retained == {"regulatory_packages": 1}
-    assert completed.summary == "complete except 1 retained immutable records"
+    assert orphan is not None
+    progress = reencryption.Progress.model_validate(orphan.progress)
+    assert progress.fields_rewritten > 0
+    now += timedelta(seconds=901)
+    assert job_queue.reclaim_stale(db_session, now, stale_after=timedelta(seconds=900)) == 1
+    db_session.refresh(orphan)
+    assert orphan.status == "queued" and orphan.attempts == 1
+    assert reencryption.Progress.model_validate(orphan.progress) == progress
+    resumed = job_queue.claim_next(db_session, now, (reencryption.JOB_TYPE,))
+    assert resumed is not None and resumed.id == orphan.id
+    completed = drain(db_session, resumed, EmptyStorage())
+    result = reencryption.Progress.model_validate(completed.progress)
+    assert result.fields_rewritten == progress.fields_rewritten
+    assert result.retained == {"regulatory_packages": 1}
+    assert result.summary == "complete except 1 retained immutable records"
     db_session.expunge_all()
     loaded = db_session.get(CanonicalCounterparty, party_id)
     assert loaded is not None and loaded.name == NAME
@@ -231,7 +313,7 @@ def test_resume_moves_fields_preserves_immutable_bytes_and_is_idempotent(
     db_session.commit()
     job_id = job.id
     with pytest.raises(StorageBackendError, match="Synthetic interruption"):
-        reencryption.run(db_session, job, UnavailableStorage())
+        job = drain(db_session, job, UnavailableStorage())
     db_session.rollback()
     db_session.expunge_all()
     key = registry.bank_key(db_session, ORG_1, BANK_A)
@@ -247,7 +329,7 @@ def test_resume_moves_fields_preserves_immutable_bytes_and_is_idempotent(
     db_session.commit()
     job = db_session.get(Job, job_id)
     assert job is not None
-    reencryption.run(db_session, job, EmptyStorage())
+    job = drain(db_session, job, EmptyStorage())
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.summary == "complete except 2 retained immutable records"
     assert progress.retained == {"bi_dashboard_versions": 1, "regulatory_packages": 1}
@@ -279,7 +361,7 @@ def test_resume_moves_fields_preserves_immutable_bytes_and_is_idempotent(
         text("SELECT name FROM canonical_counterparties WHERE bank_id=:bank ORDER BY id"),
         {"bank": BANK_A},
     ).all()
-    reencryption.run(db_session, job, EmptyStorage())
+    job = drain(db_session, job, EmptyStorage())
     after = db_session.execute(
         text("SELECT name FROM canonical_counterparties WHERE bank_id=:bank ORDER BY id"),
         {"bank": BANK_A},
@@ -306,7 +388,7 @@ def test_retired_version_referenced_by_locked_snapshot_remains_required(
     db_session.commit()
     job = reencryption.enqueue(db_session, ORG_1, BANK_A)
     db_session.commit()
-    reencryption.run(db_session, job, EmptyStorage())
+    job = drain(db_session, job, EmptyStorage())
     assert reencryption.Progress.model_validate(job.progress).retained["regulatory_packages"] == 1
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
     hold = db_session.scalar(select(RetainedBankKey).where(RetainedBankKey.bank_id == BANK_A))
@@ -335,16 +417,42 @@ def test_editable_only_migration_releases_unused_versions_but_keeps_backup_hold(
     db_session.commit()
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
     original, old_version = registry.reference(key), key.current_version_id
+    token = blind_index(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        domain="counterparty.source_reference",
+        value=IDENTIFIER,
+    )
     registry.rotate(db_session, key, NEXT, lambda _: provider)
     db_session.commit()
     job = reencryption.enqueue(db_session, ORG_1, BANK_A)
     db_session.commit()
-    reencryption.run(db_session, job, EmptyStorage())
+    job = drain(db_session, job, EmptyStorage())
     assert reencryption.Progress.model_validate(job.progress).summary == "complete"
     assert db_session.get(ObjectKeyEnvelope, old_version) is None
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
     assert db_session.get(ObjectKeyEnvelope, key.current_version_id) is not None
-    assert db_session.get(ObjectKeyEnvelope, key.index_version_id) is not None
+    index = db_session.get(ObjectKeyEnvelope, key.index_version_id)
+    assert index is not None and registry.reference(index) == registry.reference(key)
+    assert (
+        blind_index(
+            db_session,
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            domain="counterparty.source_reference",
+            value=IDENTIFIER,
+        )
+        == token
+    )
+    assert (
+        db_session.scalar(
+            select(CanonicalCounterparty.source_reference_blind_index).where(
+                CanonicalCounterparty.id == party_id,
+            )
+        )
+        == token
+    )
     with pytest.raises(KeyUnavailableError, match="backup retention expires"):
         registry.authorize_retirement(db_session, key, original)
     hold = db_session.scalar(select(RetainedBankKey).where(RetainedBankKey.bank_id == BANK_A))
@@ -353,9 +461,21 @@ def test_editable_only_migration_releases_unused_versions_but_keeps_backup_hold(
     hold.decrypt_until = utc_now() - timedelta(days=2)
     db_session.flush()
     registry.authorize_retirement(db_session, key, original)
+    provider.set_status(original, KeyStatus.DISABLED)
+    db_session.commit()
     db_session.expunge_all()
     loaded = db_session.get(CanonicalCounterparty, party_id)
     assert loaded is not None and loaded.name == NAME
+    assert (
+        blind_index(
+            db_session,
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            domain="counterparty.source_reference",
+            value=IDENTIFIER,
+        )
+        == token
+    )
 
 
 def test_child_fields_are_scoped_and_audit_history_is_retained(
@@ -392,7 +512,7 @@ def test_child_fields_are_scoped_and_audit_history_is_retained(
     connect(db_session, provider)
     job = reencryption.enqueue(db_session, ORG_1, BANK_A)
     db_session.commit()
-    reencryption.run(db_session, job, EmptyStorage())
+    job = drain(db_session, job, EmptyStorage())
     first = db_session.scalar(
         select(RelatedPartyRole.icag_registration).where(RelatedPartyRole.id == role_ids[0])
     )
@@ -485,7 +605,9 @@ def test_job_clears_historical_bi_identity_copies_and_keeps_numeric_queries(
     class LateIdentityStorage(EmptyStorage):
         dirty = True
 
-        def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
+        def encryption_page(
+            self, institution_slug: str, cursor: EncryptionCursor, limit: int
+        ) -> EncryptionPage:
             if self.dirty:
                 self.dirty = False
                 _ = db_session.execute(
@@ -502,11 +624,11 @@ def test_job_clears_historical_bi_identity_copies_and_keeps_numeric_queries(
                         .where(model.bank_id == bank.id)
                         .values(counterparty_group="synthetic-late-group")
                     )
-            return super().encryption_inventory(institution_slug)
+            return super().encryption_page(institution_slug, cursor, limit)
 
     job = reencryption.enqueue(db_session, ORG_1, bank.id)
     db_session.commit()
-    reencryption.run(db_session, job, LateIdentityStorage())
+    job = drain(db_session, job, LateIdentityStorage())
     key = registry.bank_key(db_session, ORG_1, bank.id)
     assert key is not None
     assert list(maintenance.bi_identity_updates(db_session, key)) == []

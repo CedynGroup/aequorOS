@@ -38,7 +38,9 @@ from app.storage import reencryption
 from app.storage.access_log import AccessLogHook, HashChainedAccessLog, null_access_log
 from app.storage.client import (
     RETAINED_TIERS,
+    EncryptionCursor,
     EncryptionInventoryItem,
+    EncryptionPage,
     ObjectMetadata,
     StorageAccessError,
     StorageBackendError,
@@ -241,6 +243,18 @@ class S3CompatibleStorageClient(StorageClient):
         if result:
             self._log("reencrypt", item.location, version_id=item.version_id)
         return result
+
+    def encryption_page(
+        self, institution_slug: str, cursor: EncryptionCursor, limit: int
+    ) -> EncryptionPage:
+        return reencryption.inventory_page(
+            cast(reencryption.S3MaintenanceClient, cast(object, self._s3)),
+            self._env,
+            institution_slug,
+            self._stat_object,
+            cursor,
+            limit,
+        )
 
     def retain(self, location: StorageLocation, version_id: str, until: datetime) -> None:
         self._require_output_retention_policy(location)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from threading import Event
+from threading import Barrier, Event
 
 import pytest
 from sqlalchemy import Engine, event, select
@@ -14,10 +14,11 @@ from app.core.tenancy import TenantContext
 from app.identity.public import Bank
 from app.models.canonical import CanonicalCounterparty
 from app.models.job import Job
-from app.services import canonical_withdrawal
+from app.services import canonical_withdrawal, job_queue
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.core.test_bank_field_encryption import (
     BANK_A,
+    BANK_B,
     CTX,
     IDENTIFIER,
     NEXT,
@@ -27,6 +28,7 @@ from tests.core.test_bank_field_encryption import (
 )
 from tests.core.test_bank_reencryption import EmptyStorage
 from tests.support.helpers import ORG_1
+from tests.support.reencryption import drain
 
 __all__ = ["provider"]
 pytestmark = pytest.mark.committing_db
@@ -37,6 +39,80 @@ def engine(db: Session) -> Engine:
     if not isinstance(bind, Engine) or bind.dialect.name != "postgresql":
         pytest.skip("PostgreSQL independent transactions are required.")
     return bind
+
+
+def test_duplicate_concurrent_batch_publishes_one_continuation(
+    db_session: Session,
+    provider: LocalKeyProvider,
+) -> None:
+    database = db_session.get_bind()
+    assert isinstance(database, Engine)
+    party = counterparty(db_session, include_package=False)
+    sibling = counterparty(db_session, bank_id=BANK_B, include_package=False)
+    party_id, sibling_id = party.id, sibling.id
+    connect(db_session, provider)
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    target = key.current_version_id
+    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job.status = "running"
+    job.progress = reencryption.Progress(
+        target_version=target,
+        phase="fields",
+        table=next(
+            i
+            for i, table in enumerate(maintenance.protected_tables())
+            if table.name == "canonical_counterparties"
+        ),
+    ).model_dump(mode="json")
+    job_id = job.id
+    db_session.commit()
+    ready = Barrier(2)
+
+    def dispatch() -> None:
+        with Session(database) as peer:
+            peer.info["organization_id"] = ORG_1
+            ready.wait(timeout=10)
+            if database.dialect.name == "sqlite":
+                _ = peer.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            claimed = peer.get(Job, job_id)
+            assert claimed is not None
+            reencryption.run(peer, claimed, EmptyStorage())
+            peer.commit()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(dispatch) for _ in range(2)]
+        for future in futures:
+            future.result(timeout=30)
+    db_session.expire_all()
+    root = db_session.get(Job, job_id)
+    assert root is not None
+    progress = reencryption.Progress.model_validate(root.progress)
+    assert progress.next_job_id is not None
+    assert progress.fields_rewritten > 0
+    jobs = list(db_session.scalars(select(Job).where(Job.bank_id == BANK_A)))
+    assert len(jobs) == 2
+    sealed = db_session.scalar(
+        select(CanonicalCounterparty.name).where(CanonicalCounterparty.id == party_id)
+    )
+    assert isinstance(sealed, SealedField) and sealed.envelope_id == target
+    assert (
+        db_session.scalar(
+            select(CanonicalCounterparty.name).where(CanonicalCounterparty.id == sibling_id)
+        )
+        == sibling.name
+    )
+    following = db_session.get(Job, progress.next_job_id)
+    assert following is not None
+    assert (
+        reencryption.Progress.model_validate(following.progress).fields_rewritten
+        == progress.fields_rewritten
+    )
+    job_queue.complete(db_session, root)
+    last = drain(db_session, following, EmptyStorage())
+    assert reencryption.Progress.model_validate(last.progress).summary == "complete"
+    db_session.expunge_all()
+    loaded = db_session.get(CanonicalCounterparty, party_id)
+    assert loaded is not None and loaded.source_reference == IDENTIFIER
 
 
 def test_first_connection_waits_for_earlier_plaintext_writer_and_indexes_it(
@@ -119,7 +195,7 @@ def test_job_drains_writer_admitted_before_rotation_and_migrates_its_commit(
         with Session(database) as peer:
             job = peer.get(Job, job_id)
             assert job is not None
-            reencryption.run(peer, job, EmptyStorage())
+            job = drain(peer, job, EmptyStorage())
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(migrate)

@@ -147,7 +147,6 @@ _BACKOFF_BASE_SECONDS = 5
 #: Everything NOT listed here is on the deployment default and therefore asserts
 #: that it completes well inside it — see ``WorkerSettings.worker_stale_job_seconds``.
 STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
-    "bank_reencrypt": 6 * 60 * 60,
     "etl_dedup": 4 * 60 * 60,
     # ``desk_capture`` walks the Bank of Ghana's published tables over HTTP, so
     # its runtime is set by a THIRD PARTY's site and cannot be asserted to fit

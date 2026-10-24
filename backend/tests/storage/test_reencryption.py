@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from typing import BinaryIO, Protocol, cast
 from uuid import UUID, uuid4
@@ -23,7 +22,9 @@ from app.identity.public import Bank
 from app.models.risk import StoredObject
 from app.storage import reencryption as objects
 from app.storage.client import (
+    EncryptionCursor,
     EncryptionInventoryItem,
+    EncryptionPage,
     StorageAccessError,
     StorageBackendError,
     StorageLocation,
@@ -40,6 +41,7 @@ from tests.storage.test_bank_encryption import (
     bank_storage,
 )
 from tests.support.helpers import ORG_1
+from tests.support.reencryption import drain
 
 __all__ = ["bank_storage"]
 
@@ -86,9 +88,7 @@ def test_title_cased_metadata_migrates_editable_ciphertext(
 ) -> None:
     location = StorageLocation(SLUG, "temp", "synthetic/editable.csv")
     content = b"synthetic encrypted editable content"
-    bank_storage.storage.write(
-        location, io.BytesIO(content), metadata_for(SLUG, "temp", content)
-    )
+    bank_storage.storage.write(location, io.BytesIO(content), metadata_for(SLUG, "temp", content))
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
     original_envelope = key.current_version_id
 
@@ -101,7 +101,7 @@ def test_title_cased_metadata_migrates_editable_ciphertext(
     bodies = minio_metadata(bank_storage, monkeypatch, head_denied=head_denied)
     job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
     db_session.commit()
-    reencryption.run(db_session, job, bank_storage.storage)
+    job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.summary == "complete" and progress.objects_rewritten == 1
     [current] = list(bank_storage.storage.encryption_inventory(SLUG))
@@ -112,7 +112,9 @@ def test_title_cased_metadata_migrates_editable_ciphertext(
         assert plaintext.read() == content
     finally:
         plaintext.close()
-    assert descriptor.metadata.checksum_sha256 == metadata_for(SLUG, "temp", content).checksum_sha256
+    assert (
+        descriptor.metadata.checksum_sha256 == metadata_for(SLUG, "temp", content).checksum_sha256
+    )
     assert bodies and all(body.closed for body in bodies)
 
 
@@ -154,7 +156,7 @@ def test_title_cased_deleted_history_keeps_its_envelope_and_retirement_hold(
     bodies = minio_metadata(bank_storage, monkeypatch, head_denied=head_denied)
     job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
     db_session.commit()
-    reencryption.run(db_session, job, bank_storage.storage)
+    job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.summary == "complete except 1 retained immutable records"
     assert progress.retained == {"stored_object_versions:raw": 1}
@@ -181,7 +183,8 @@ def test_title_cased_deleted_history_keeps_its_envelope_and_retirement_hold(
     assert bodies and all(body.closed for body in bodies)
     monkeypatch.setattr(registry, "utc_now", lambda: rotated_at + timedelta(days=3))
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
-    assert key.index_version_id == progress.target_version
+    index = db_session.get(ObjectKeyEnvelope, key.index_version_id)
+    assert index is not None and registry.reference(index) == registry.reference(key)
     with pytest.raises(KeyUnavailableError, match="retained encryption versions"):
         registry.authorize_retirement(db_session, key, KEY)
 
@@ -384,10 +387,10 @@ def test_object_resume_after_publication_keeps_retained_version_and_retirement_b
     db_session.commit()
     monkeypatch.setattr(objects, "reencrypt", crash_after_publication)
     with pytest.raises(StorageBackendError, match="Synthetic interruption"):
-        reencryption.run(db_session, job, bank_storage.storage)
+        job = drain(db_session, job, bank_storage.storage)
     db_session.rollback()
     monkeypatch.setattr(objects, "reencrypt", real_reencrypt)
-    reencryption.run(db_session, job, bank_storage.storage)
+    job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.summary == "complete except 1 retained immutable records"
     assert progress.retained == {"stored_object_versions:canonical": 1}
@@ -432,9 +435,7 @@ def test_conditional_publication_preserves_concurrent_new_content(
 
     def complete_with_concurrent_write(**kwargs: object) -> dict[str, object]:
         assert kwargs["IfMatch"] == original_etag
-        bank_storage.storage.write(
-            location, io.BytesIO(b"new"), metadata_for(SLUG, "temp", b"new")
-        )
+        bank_storage.storage.write(location, io.BytesIO(b"new"), metadata_for(SLUG, "temp", b"new"))
         current = bank_storage.s3.head_object(Bucket=kwargs["Bucket"], Key=kwargs["Key"])
         assert current["ETag"] != kwargs["IfMatch"]
         raise ClientError({"Error": {"Code": "PreconditionFailed"}}, "CompleteMultipartUpload")
@@ -497,7 +498,7 @@ def test_large_object_reencryption_publishes_bounded_parts(
 
 
 @pytest.mark.parametrize("rotate_during_pass", [False, True])
-def test_object_job_scans_inventory_a_constant_number_of_times(
+def test_object_job_uses_bounded_inventory_pages(
     bank_storage: BankStorage,
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -512,9 +513,9 @@ def test_object_job_scans_inventory_a_constant_number_of_times(
             Metadata=metadata_for(SLUG, "raw", b"synthetic").to_object_metadata(),
         )
     monkeypatch.setattr(registry, "provider_for", lambda _: bank_storage.provider)
-    real_inventory = objects.inventory
+    real_inventory_page = objects.inventory_page
     real_reencrypt = objects.reencrypt
-    scans = 0
+    pages: list[int] = []
     rotated = False
 
     def migrate_object(
@@ -533,23 +534,30 @@ def test_object_job_scans_inventory_a_constant_number_of_times(
             registry.rotate(db_session, key, NEXT_KEY, lambda _: bank_storage.provider)
         return result
 
-    def inventory(
-        client: objects.S3MaintenanceClient, env: str, slug: str, stat_object: objects.ObjectStat
-    ) -> Iterator[EncryptionInventoryItem]:
-        nonlocal scans
-        scans += 1
-        yield from real_inventory(client, env, slug, stat_object)
+    def inventory_page(
+        client: objects.S3MaintenanceClient,
+        env: str,
+        slug: str,
+        stat_object: objects.ObjectStat,
+        cursor: EncryptionCursor,
+        limit: int,
+    ) -> EncryptionPage:
+        page = real_inventory_page(client, env, slug, stat_object, cursor, limit)
+        assert len(page.items) <= limit == reencryption.OBJECT_BATCH_SIZE
+        pages.append(len(page.items))
+        return page
 
-    monkeypatch.setattr(objects, "inventory", inventory)
+    monkeypatch.setattr(objects, "inventory_page", inventory_page)
     monkeypatch.setattr(objects, "reencrypt", migrate_object)
     job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
     db_session.commit()
-    reencryption.run(db_session, job, bank_storage.storage)
+    job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
-    expected = 12 + int(rotate_during_pass)
-    assert progress.objects_rewritten == expected
-    assert progress.retained == {"stored_object_versions:raw": expected}
-    assert scans <= 3 + int(rotate_during_pass)
+    assert progress.objects_rewritten >= 12
+    assert progress.retained == {"stored_object_versions:raw": progress.objects_rewritten}
+    assert 0 < len(pages) <= 30
+    assert sum(pages) <= 100
+    monkeypatch.setattr(objects, "inventory_page", real_inventory_page)
     assert all(
         item.envelope_id == progress.target_version
         for item in bank_storage.storage.encryption_inventory(SLUG)
@@ -668,7 +676,7 @@ def test_existing_bank_upgrade_preserves_legacy_objects_and_initializes_empty_ba
     db_session.commit()
     job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
     db_session.commit()
-    reencryption.run(db_session, job, bank_storage.storage)
+    job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.objects_rewritten == 1
     assert progress.retained == {"stored_object_versions:raw": 1}
@@ -708,7 +716,7 @@ def test_database_pin_retains_only_its_location_with_a_null_version(
     monkeypatch.setattr(registry, "provider_for", providers)
     job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
     db_session.commit()
-    reencryption.run(db_session, job, bank_storage.storage)
+    job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.retained == {"stored_object_versions:temp": 1}
     assert progress.objects_rewritten == 1
@@ -772,7 +780,7 @@ def test_versioning_transition_keeps_null_version_envelope_and_blocks_retirement
         monkeypatch.setattr(bank_storage.s3, "head_object", denied_head)
     job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
     db_session.commit()
-    reencryption.run(db_session, job, bank_storage.storage)
+    job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.summary == "complete except 1 retained immutable records"
     assert progress.retained == {"stored_object_versions:temp": 1}
@@ -808,7 +816,8 @@ def test_versioning_transition_keeps_null_version_envelope_and_blocks_retirement
         assert "null" in denied_versions and latest.version_id in denied_versions
     monkeypatch.setattr(registry, "utc_now", lambda: rotated_at + timedelta(days=3))
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
-    assert key.index_version_id == progress.target_version
+    index = db_session.get(ObjectKeyEnvelope, key.index_version_id)
+    assert index is not None and registry.reference(index) == registry.reference(key)
     with pytest.raises(KeyUnavailableError, match="retained encryption versions"):
         registry.authorize_retirement(db_session, key, KEY)
 
@@ -843,7 +852,7 @@ def test_versioned_pin_keeps_original_while_current_object_moves(
     monkeypatch.setattr(registry, "provider_for", providers)
     job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
     db_session.commit()
-    reencryption.run(db_session, job, bank_storage.storage)
+    job = drain(db_session, job, bank_storage.storage)
     versions = list(bank_storage.storage.encryption_inventory(SLUG))
     assert len(versions) == 2
     assert any(v.envelope_id == original and v.retained for v in versions)

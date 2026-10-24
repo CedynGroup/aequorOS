@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.key_management import reencryption, registry
 from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference
 from app.core.tenancy import TenantContext
 from app.db.session import get_engine
@@ -35,6 +36,7 @@ from tests.db import test_postgres_migrations as migrations
 from tests.services.factories import ServiceFactories
 from tests.support.helpers import ORG_1, ORG_2
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.reencryption import drain
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
 ROLES = ("aqs_api", "aqs_worker", "aqs_bi", "aqs_operator", "aqs_audit_verifier")
@@ -224,9 +226,7 @@ def test_worker_reencrypts_with_scoped_audit_counts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     provider = LocalKeyProvider()
-    keys = [
-        KeyReference("aws_kms", name, "us-east-1", "111122223333") for name in ("old", "new")
-    ]
+    keys = [KeyReference("aws_kms", name, "us-east-1", "111122223333") for name in ("old", "new")]
     for key in keys:
         provider.add_key(key)
 
@@ -288,14 +288,17 @@ def test_worker_reencrypts_with_scoped_audit_counts(
         db.info["organization_id"] = ORG_1
         job = db.get(Job, job_id)
         assert job is not None
-        reencryption.run(db, job, EmptyStorage())
+        job = drain(db, job, EmptyStorage())
         progress = reencryption.Progress.model_validate(job.progress)
         assert progress.fields_rewritten == 2
-        assert progress.retained == {"operator_audit_log (organization scope)": expected_audit_count}
+        assert progress.retained == {
+            "operator_audit_log (organization scope)": expected_audit_count
+        }
         party = db.get(RelatedParty, party_id)
         assert party is not None and party.full_name == "Synthetic retained name"
         key = registry.scoped_key(db, organization_id=ORG_1, bank_id=bank_id)
-        assert key.index_version_id == key.current_version_id
+        index = db.get(ObjectKeyEnvelope, key.index_version_id)
+        assert index is not None and registry.reference(index) == registry.reference(key)
         db.commit()
 
 

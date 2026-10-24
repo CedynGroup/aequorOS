@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from contextlib import suppress
 from datetime import UTC, datetime
 from tempfile import SpooledTemporaryFile
@@ -16,7 +16,9 @@ from pydantic import BaseModel, Field, TypeAdapter
 
 from app.storage.client import (
     TIERS,
+    EncryptionCursor,
     EncryptionInventoryItem,
+    EncryptionPage,
     ObjectMetadata,
     StorageAccessError,
     StorageBackendError,
@@ -28,12 +30,8 @@ from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption
 MULTIPART_SIZE = 16 * 1024 * 1024
 
 
-class MaintenancePaginator(Protocol):
-    def paginate(self, **kwargs: object) -> Iterable[object]: ...
-
-
 class S3MaintenanceClient(Protocol):
-    def get_paginator(self, operation: str) -> MaintenancePaginator: ...
+    def list_object_versions(self, **kwargs: object) -> dict[str, object]: ...
     def get_object(self, **kwargs: object) -> dict[str, object]: ...
     def put_object(self, **kwargs: object) -> dict[str, object]: ...
     def create_multipart_upload(self, **kwargs: object) -> dict[str, object]: ...
@@ -56,6 +54,9 @@ class _Version(BaseModel):
 
 class _Page(BaseModel):
     Versions: list[_Version] = Field(default_factory=list)
+    IsTruncated: bool = False
+    NextKeyMarker: str | None = None
+    NextVersionIdMarker: str | None = None
 
 
 _HEADERS = TypeAdapter(dict[str, str])
@@ -84,29 +85,54 @@ def _locked(stat: dict[str, object]) -> bool:
 def inventory(
     client: S3MaintenanceClient, env: str, slug: str, stat_object: ObjectStat
 ) -> Iterator[EncryptionInventoryItem]:
+    cursor: EncryptionCursor | None = EncryptionCursor()
+    while cursor is not None:
+        result = inventory_page(client, env, slug, stat_object, cursor, 100)
+        yield from result.items
+        cursor = result.cursor
+
+
+def inventory_page(  # noqa: PLR0913
+    client: S3MaintenanceClient,
+    env: str,
+    slug: str,
+    stat_object: ObjectStat,
+    cursor: EncryptionCursor,
+    limit: int,
+) -> EncryptionPage:
     try:
-        for tier in TIERS:
-            bucket = StorageLocation(slug, tier, "").bucket_name(env)
-            for page in client.get_paginator("list_object_versions").paginate(Bucket=bucket):
-                for entry in _Page.model_validate(page).Versions:
-                    location = StorageLocation(slug, tier, entry.Key)
-                    stat = stat_object(bucket, entry.Key, version_id=entry.VersionId)
-                    headers = _metadata(stat)
-                    envelope = headers.get("key-envelope-id")
-                    format_id = headers.get("encryption-format")
-                    if (
-                        bool(format_id) != bool(envelope)
-                        or format_id
-                        and format_id != ENCRYPTION_FORMAT
-                    ):
-                        raise StorageAccessError("Object encryption metadata is invalid.")
-                    retained = not entry.IsLatest or _locked(stat)
-                    yield EncryptionInventoryItem(
-                        location,
-                        entry.VersionId,
-                        UUID(envelope) if envelope else None,
-                        retained,
-                    )
+        tier = TIERS[cursor.tier]
+        bucket = StorageLocation(slug, tier, "").bucket_name(env)
+        arguments: dict[str, object] = {"Bucket": bucket, "MaxKeys": limit}
+        if cursor.key is not None:
+            arguments["KeyMarker"] = cursor.key
+        if cursor.version is not None:
+            arguments["VersionIdMarker"] = cursor.version
+        page = _Page.model_validate(client.list_object_versions(**arguments))
+        items: list[EncryptionInventoryItem] = []
+        for entry in page.Versions:
+            location = StorageLocation(slug, tier, entry.Key)
+            stat = stat_object(bucket, entry.Key, version_id=entry.VersionId)
+            headers = _metadata(stat)
+            envelope = headers.get("key-envelope-id")
+            format_id = headers.get("encryption-format")
+            if bool(format_id) != bool(envelope) or format_id and format_id != ENCRYPTION_FORMAT:
+                raise StorageAccessError("Object encryption metadata is invalid.")
+            items.append(
+                EncryptionInventoryItem(
+                    location,
+                    entry.VersionId,
+                    UUID(envelope) if envelope else None,
+                    not entry.IsLatest or _locked(stat),
+                )
+            )
+        if page.IsTruncated:
+            if page.NextKeyMarker is None:
+                raise StorageBackendError("Object inventory cursor is unavailable.")
+            following = EncryptionCursor(cursor.tier, page.NextKeyMarker, page.NextVersionIdMarker)
+        else:
+            following = EncryptionCursor(cursor.tier + 1) if cursor.tier + 1 < len(TIERS) else None
+        return EncryptionPage(items, following)
     except (ClientError, BotoCoreError, ValueError) as exc:
         raise StorageBackendError("Object encryption inventory could not be verified.") from exc
 
@@ -177,6 +203,11 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
             )
             body = cast(BinaryIO, source["Body"])
             headers = _metadata(source)
+            if headers.get("key-envelope-id") != (
+                str(item.envelope_id) if item.envelope_id is not None else None
+            ):
+                body.close()
+                return False
             metadata = ObjectMetadata.from_object_metadata(headers)
             plaintext = (
                 unit.decrypt(location, body, metadata, headers)

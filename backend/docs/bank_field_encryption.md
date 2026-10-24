@@ -60,7 +60,7 @@ Searches scope by organization and bank and confirm decrypted candidate values.
 A stable index-version pointer keeps exact matches working across routine
 payload-key rotation. First connection re-indexes every generation, including withdrawn rows,
 atomically before publishing the connection. Explicit re-encryption moves the
-index pointer to the current version and re-indexes under the same cutover lock.
+index secret to an independent envelope under the current key without changing tokens.
 This prevents mixed raw/HMAC natural keys during re-import and withdrawal
 reversal. The current-generation unique index also arbitrates concurrent
 re-import/reversal; a losing reversal returns 409. Numeric concentration grouping uses opaque indexes.
@@ -111,13 +111,23 @@ authenticate their original per-object context and unwrap the original secret
 until editable objects move; retained versions keep that decryption path.
 
 The core worker runs `bank_reencrypt`. Progress records the target version,
-field-table/row checkpoint, rewritten field and object counts, retained counts
-by type, and a human-readable summary. Each field batch commits its checkpoint
-with the ciphertext changes. A restart resumes from that checkpoint; object
-retries discover already-published current-version ciphertext. A failed or
-exhausted job can be requested again safely. If rotation changes the current
-version mid-run, the job restarts its scan for that version. Old keys must remain
-decrypt-capable throughout migration.
+phase, field-table/row checkpoint, exact object-version cursor, rewritten counts,
+retained counts by type, and a human-readable summary. Each dispatch processes
+at most 100 field rows or 10 object versions, checking a 30-second work budget
+between atomic operations, then commits its checkpoint and queues its successor
+in the same transaction. BI identity cleanup and catalogue cleanup also use
+bounded batches. Verification uses the same persisted cursors rather than a
+full-bank pass in one dispatch. The queue's ordinary 900-second reclaim window
+applies. Interrupted batches resume their committed checkpoint; duplicate runs
+of a batch publish only one continuation. Object retries discover already
+published current-version ciphertext. A failed or exhausted job can be requested
+again safely. If rotation changes the current version mid-run, the job restarts
+its scan for that version. Old keys must remain decrypt-capable throughout migration.
+
+At rotation, the job wraps the existing, domain-separated blind-index secret in
+a new envelope under the current bank key. Search and uniqueness tokens remain
+stable while their secret's envelope moves off the old key. First connection
+still converts legacy raw references atomically before admitting keyed writers.
 
 The job locks each editable row before replacing only its protected columns,
 preserving logical values and timestamps. It updates neither saved BI version
@@ -136,11 +146,8 @@ checks these copies alongside protected fields. Numeric mart values remain intac
 Current editable stored objects are authenticated and conditionally replaced
 using their ETag, including conditional multipart completion for large objects.
 Uploads use bounded parts under the same size policy as ordinary storage writes.
-Each inventory pass handles multiple objects, refreshing key state after commits.
-aequorOS gives `bank_reencrypt` a six-hour stale-job window measured from claim,
-instead of the fleet's 900-second default. Progress commits preserve the resume
-cursor without resetting that window. An interrupted run is reclaimable after
-six hours and resumes its committed progress through the existing queue retry path.
+Each dispatch handles one bounded inventory page with exact version markers,
+including the literal `null` version of an unversioned predecessor.
 Legacy platform-protected content is accepted only by this
 maintenance path after checksum verification; normal connected-bank reads keep
 refusing it. A concurrent changed object defeats the conditional replacement and
@@ -149,13 +156,18 @@ version pinned by a database record remain intact and are reported by storage
 tier. Creating a new current object version therefore retains the original when
 the bucket is versioned. Physical historical backups are not rewritten.
 
-Final verification drains admitted writers and checks both fields and the full
-object-version inventory. With retained records, the summary is exactly
+Each verification batch drains admitted writers through the bank's writer
+barrier. Writers admitted afterward use the current version and clear derived BI
+identity copies, so older-key references cannot appear behind the saved cursor.
+A target-version change restarts verification. Across these bounded batches,
+verification checks both fields and the full object-version inventory.
+With retained records, the summary is exactly
 `complete except N retained immutable records`, with counts by type. It never
 reports plain `complete` while any such records remain outside the target
 version. This is completion of editable-data migration, not removal of every
-old-key dependency. Under the final writer barrier, aequorOS removes catalogue
-envelopes that no protected field or stored object version references, preserving
+old-key dependency. After verification, aequorOS removes catalogue envelopes in
+bounded batches under the same writer barrier, retaining all collected references.
+It removes only envelopes that no protected field or stored object version references, preserving
 the current and blind-index versions. Retained immutable fields and historical,
 pinned or locked object versions keep their envelopes. Retirement authorization
 continues to refuse while any catalogue reference or backup hold requires the
