@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import {
   instrumentDisclosure,
   type InstrumentDate,
@@ -23,10 +24,27 @@ export default function InstrumentStatusBadge({
   regulator?: string;
 }) {
   const disclosure = instrumentDisclosure(status, effectiveFrom, regulator);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const positionTooltip = useCallback(() => {
+    const tooltip = tooltipRef.current;
+    if (!tooltip || tooltip.getClientRects().length === 0) return;
+    tooltip.style.transform = "";
+    const bounds = tooltip.getBoundingClientRect();
+    const offset = Math.max(
+      8 - bounds.left,
+      Math.min(0, window.innerWidth - 8 - bounds.right),
+    );
+    tooltip.style.transform = `translateX(${offset}px)`;
+  }, []);
+  useEffect(() => {
+    window.addEventListener("resize", positionTooltip);
+    return () => window.removeEventListener("resize", positionTooltip);
+  }, [positionTooltip]);
   return (
     <details
       className="relative inline-block text-caption"
       onClick={(event) => event.stopPropagation()}
+      onToggle={positionTooltip}
     >
       <summary
         title={disclosure.tooltip}
@@ -35,6 +53,7 @@ export default function InstrumentStatusBadge({
         {disclosure.label}
       </summary>
       <div
+        ref={tooltipRef}
         role="tooltip"
         className="absolute z-30 mt-1 w-72 max-w-[80vw] rounded-sm border border-border bg-surface p-3 shadow-lg text-navy"
       >
