@@ -53,13 +53,16 @@ Open **Submissions → Instruments** (`/submissions/instruments`) to inspect eve
 registered instrument's legal status, effective or conditional start date, source
 citation and link, and recorded calculation and limit dependencies. Governed
 commencement entries show the default and institution dates, plus the recorded
-approver and approval date. Missing dates, links or mappings are stated explicitly.
+approver and approval date. Missing dates and mappings are stated explicitly;
+source links appear when recorded.
 Expand a status badge to read its shared plain-language disclosure and source
 details; legal status is separate from template fidelity and calculation readiness.
+Use **Search instruments** to filter by title, and **Status** to narrow the results
+by legal status.
 
 **Upcoming rules** (`/submissions/upcoming`) lists exposure drafts and final rules
-awaiting commencement. Use **Return** to prepare a particular return or **Open
-preparation workspace** for an available module. Preparation links preserve
+awaiting commencement. Select a linked return title to prepare that return or
+**Open preparation workspace** for an available module. Preparation links preserve
 `preparing=1` across module navigation; existing institution and module permissions
 still apply. Ordinary Returns and rule-governed module tabs show in-force material;
 the calendar's applicability and preparation-anchor rules are defined in the
@@ -352,8 +355,9 @@ relevant accepted mutation or completed pipeline job, and when the cheap
 live-summary generation or freshness official-run signal changes for that
 module. Live summary, freshness, and alerts retain a 20-second cadence with
 stable ±10% cache-scope jitter; notifications retain 60 seconds with the same
-jitter. A failed initial signal
-does not block an otherwise available detail response. These signal requests are
+jitter. A failed signal does not block an independently available detail response.
+Consumers of the live summary itself show loading or retryable errors before
+treating missing data as an empty result. These signal requests are
 observational: in particular, an unchanged live-summary poll performs no enqueue
 and no commit. Recalculation comes from accepted input/governance mutations, a
 requested refresh, or the worker's due retry of a genuine module exception.
@@ -577,6 +581,16 @@ cookies. The Next.js server uses `.next-e2e`, so it cannot contaminate the
 normal development cache. Both browser suites use the worktree's disposable
 database and session files, so a worktree-local lock rejects concurrent E2E runs.
 The stack never touches the primary database.
+
+Regulatory status and commencement journeys run separately from the default suite:
+
+```bash
+pnpm --filter @aequoros/dashboard e2e --config=playwright.regulatory.config.ts
+```
+
+This configuration rebuilds the same disposable stack with a file-controlled reporting
+clock and additional test ICAAP frameworks. Run it sequentially with the default suite;
+both configurations use the same worktree-local lock and fixture paths.
 
 The layout and login fonts are bundled as Latin-only WOFF2 files in
 `app/fonts` (sources and OFL licenses live alongside them). Production builds,
@@ -908,6 +922,11 @@ in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
 fail the gate even when the remaining reports pass. Raise the floor when adding
 coverage; reducing it requires a reviewed suite change.
+
+Runner 4 also runs the separate regulatory status suite after its default shard.
+Its CI reporter requires every discovered journey to execute and rejects skips or
+failures. That suite must pass for runner 4 to succeed; its separate report is not
+included in the four-report aggregate or its executed-journey floor.
 
 The [critical-outcome catalogue](../../.github/scripts/dashboard_critical_outcomes.json)
 beside the numeric gate names a small set of required business outcomes. Each
