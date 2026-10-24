@@ -17,10 +17,11 @@
 
 import { test, expect } from "@playwright/test";
 import path from "path";
-import { E2E_TMP } from "../playwright.config";
+import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { requireObjectStorage } from "./support/object-storage";
 import { generateCurrentVersion } from "./support/generate";
 import { biApi, fixtureAsOf, SAMPLE_BANK_ID } from "./support/bi";
+import { E2E_PASSWORD } from "./support/mint";
 
 const RETURN_CODE = "BSD2";
 const RETURNS = `/submissions/returns?code=${RETURN_CODE}`;
@@ -261,8 +262,17 @@ test.describe("submission pipeline", () => {
       );
       expect(decision.status).toBe(403);
 
+      // Credit access journeys advance this shared viewer's authorization
+      // version. Sign in again so both denials exercise current authority.
+      await viewer.clearCookies();
       const viewerPage = await viewer.newPage();
-      await viewerPage.goto(RETURNS);
+      await viewerPage.goto(`/login?callbackUrl=${encodeURIComponent(RETURNS)}`);
+      await viewerPage.getByLabel("Email").fill("e2e.viewer@aequoros.example");
+      await viewerPage.getByLabel("Password").fill(E2E_PASSWORD);
+      await viewerPage
+        .getByRole("button", { name: "Sign in", exact: true })
+        .click();
+      await expect(viewerPage).toHaveURL(/\/submissions\/returns/);
       await expect(
         viewerPage.getByRole("heading", {
           name: "Access required",
@@ -279,19 +289,20 @@ test.describe("submission pipeline", () => {
           name: /generate the return|^regenerate$/i,
         }),
       ).toHaveCount(0);
-      const generation = await biApi(
-        viewer.request,
-        "viewer",
-        `/banks/${SAMPLE_BANK_ID}/regulatory-packages`,
+      const { accessToken } = (await (
+        await viewer.request.get("/api/auth/session")
+      ).json()) as { accessToken: string };
+      const generation = await viewer.request.post(
+        `${E2E_API_ORIGIN}/api/v1/banks/${SAMPLE_BANK_ID}/regulatory-packages`,
         {
-          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
           data: {
             return_code: RETURN_CODE,
             reporting_date: await fixtureAsOf(analyst.request),
           },
         },
       );
-      expect(generation.status).toBe(403);
+      expect(generation.status()).toBe(403);
     } finally {
       await analyst.close();
       await viewer.close();
