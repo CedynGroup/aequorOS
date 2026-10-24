@@ -297,15 +297,42 @@ the calendar still never lists event-driven packs as obligations.
   `domain/regulatory_instruments.py` resolves a final instrument against the reporting
   date; an `exposure_draft` or `unpublished` instrument never becomes in force merely
   because a proposed date arrives. `eligibility.py` resolves literal or bank-governed
-  commencement. The calendar omits drafts, unpublished instruments and reporting dates
-  before final commencement from obligations and Act 930 s.93(3) indicative estimates.
-  The Returns workspace retains preparation anchors and package history, with
+  commencement. The calendar excludes instruments not yet in force at its observation
+  date, even when commencement falls inside the requested horizon; it also omits drafts,
+  unpublished instruments and reporting dates before final commencement from obligations
+  and Act 930 s.93(3) indicative estimates. Missing governed commencement authority remains
+  visible as a coverage gap. Ordinary Returns lists in-force instruments; an explicit
+  `code` link retains access to preparation anchors and package history, with
   `in_force=false`, no deadline and no RAG. Preparation and rehearsal remain available
   subject to the existing generation prerequisites; preparation establishes no filing duty.
   Template metadata resolves status as of today, while sealed package provenance records
   status at the reporting date, the resolved commencement and the registry citation.
-  Exports consume that sealed disclosure. The contract is pinned by
+  Exports consume that sealed disclosure, including historical packages whose legal basis
+  differs from today's register. ICAAP workspace badges and gates use the selected or
+  pinned framework's own status, date and regulator; framework `final` status is resolved
+  against commencement, never replaced by an unrelated return's evidence. Shared dashboard
+  wording lives in `lib/regulatoryInstruments.ts`, rendered by `InstrumentStatusBadge`;
+  `RegulatoryExportWarning` applies it at export decisions. Legal status does not establish
+  calculation or filing readiness. The contract is pinned by
   `backend/tests/reporting/service/test_reporting_instrument_status.py`.
+
+Dashboard rule metadata refreshes every minute and on mount or window focus. Status or
+commencement changes invalidate the bank's obligation lists and calendar summaries;
+status-change notifications also invalidate these queries and template metadata.
+Unresolved or failed metadata reads withhold affirmative compliance summaries and exports
+that require that evidence. Reference liquidity forecast checks do not contribute breaches,
+alerts or aggregate risk status; capital assessments remain applicable. Saved-run reads
+apply this applicability at presentation without rewriting stored validations or metrics.
+SDI exposure assessments use the statutory single-obligor limit before the large-exposures
+directive commences; its deferred limit is included only once applicable to the source date.
+
+The daily reporting-deadline scan observes each bank's instrument status and governed
+commencement date. Its first observation establishes a baseline; subsequent status or date
+changes generate a notification. Final rules receive reminders within 90, 30, 7 and 1 days
+of commencement; expected draft dates create no filing deadline. Observations and reminder
+deduplication keys persist in `regulatory_reporting_settings.instrument_observations` in the
+notification transaction, with the bank row locked against concurrent scans. Instrument
+notifications follow the bank and return-family disclosure boundaries described below.
 
 ### Filing-state disclosure
 
@@ -338,11 +365,15 @@ createRegulatoryPackage (generate),
 getRegulatoryPackage, validateRegulatoryPackage, requestPackageApproval, decidePackageApproval,
 exportRegulatoryPackage (kind → artifact download), submitRegulatoryPackage (channel),
 listSubmissionEvents, listReturnTemplates (registry + fidelity + instrument disclosure;
-optional `bank_id` resolves governed commencement and filters hidden return families), get/putChannelConfig
+optional `bank_id` resolves governed commencement after institution-coverage authorization), get/putChannelConfig
 (credentials write-only). Conventions: manage_live_engine.py patterns, tenant 404s, audit events.
 
 Omitting `bank_id` from `listReturnTemplates` returns the registry-only catalogue:
 status uses registry commencement literals and cannot resolve a bank-governed date.
+The catalogue includes all registered return families independently of return-family
+permissions; this public legal metadata grants no access to bank figures or filing actions.
+Supplying `bank_id` requires the principal's coverage of that institution before any
+bank-specific commencement or approval provenance is resolved.
 
 ## 7. UI (Governance → Regulatory Reporting, route `/submissions` retained)
 
@@ -351,6 +382,8 @@ labelled keyboard-operable pager; KPI counts remain whole-horizon, while overdue
 names and covers the current page) · **Returns** (family workspaces:
 generate → preview vs prior period → validate → approvals → export xlsx/csv/pdf → submit) ·
 **Approvals** (checker queue) · **History** (packages + submission events, filters, downloads) ·
+**Instruments** and **Upcoming rules** (see the
+[dashboard usage guide](../backend/dashboard/README.md#regulatory-instruments-and-preparation)) ·
 **Templates** (registry with fidelity grades + preview) · **Channel settings** (ORASS sandbox
 config, institution codes, contacts). Liquidity/Basel submission tabs removed → module pages
 link "Official returns →". Sidebar Governance: Reports · Regulatory Reporting · Settings.

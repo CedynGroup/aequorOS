@@ -695,7 +695,7 @@ def _create_run_row(  # noqa: PLR0913
     return run
 
 
-def _persist_forecast_success(
+def _persist_forecast_success(  # noqa: PLR0913 - scoped persistence plus explicit applicability
     db: Session,
     ctx: TenantContext,
     run: RegulatoryRun,
