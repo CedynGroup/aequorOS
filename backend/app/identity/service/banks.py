@@ -149,7 +149,7 @@ def _liquidity_monitoring_access(
     )
 
 
-def _require_institution_coverage(
+def require_institution_coverage(
     db: Session, ctx: TenantContext, bank_reference: str
 ) -> tuple[Bank, list[EffectiveCapabilityRead]]:
     bank = get_bank_or_404(db, ctx, normalize_public_id(bank_reference))
@@ -199,7 +199,7 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
 
 
 def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
-    bank, capabilities = _require_institution_coverage(db, ctx, bank_reference)
+    bank, capabilities = require_institution_coverage(db, ctx, bank_reference)
     jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code})
     institution_types = _institution_types_by_code(
         db, {(bank.institution_type, bank.jurisdiction_code)}
@@ -216,7 +216,7 @@ def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
 def list_reporting_periods(
     db: Session, ctx: TenantContext, bank_reference: str
 ) -> BankReportingPeriodListRead:
-    bank, _ = _require_institution_coverage(db, ctx, bank_reference)
+    bank, _ = require_institution_coverage(db, ctx, bank_reference)
     periods = list(
         db.scalars(
             select(BankReportingPeriod)
@@ -239,7 +239,7 @@ def list_reporting_periods(
 def get_period_facts(
     db: Session, ctx: TenantContext, bank_reference: str, period_id: UUID
 ) -> BankFactsRead:
-    bank, _ = _require_institution_coverage(db, ctx, bank_reference)
+    bank, _ = require_institution_coverage(db, ctx, bank_reference)
     period = db.scalar(
         select(BankReportingPeriod).where(
             BankReportingPeriod.id == period_id,

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.regulatory_instruments import instrument_status_on
+from app.identity.public import require_institution_coverage
 from app.policy.public import regulatory_parameters
 from app.reporting.models.filing_workflow import PackageWorkflowStage
 from app.reporting.models.packages import RegulatoryPackage
@@ -132,7 +133,7 @@ def list_return_templates(
     db: Session, ctx: TenantContext, bank_id: str | None = None, *, as_of: date | None = None
 ) -> ReturnTemplateListRead:
     today = as_of or date.today()
-    bank = get_bank_or_404(db, ctx, bank_id) if bank_id is not None else None
+    bank = require_institution_coverage(db, ctx, bank_id)[0] if bank_id is not None else None
     eligibility = resolve_eligibility(db, ctx, bank, as_of=today) if bank is not None else None
     resolver = (
         cast(regulatory_parameters.PrefetchedParameterResolver, eligibility.parameter_resolver)

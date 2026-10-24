@@ -74,6 +74,21 @@ export function preparationWarning(
   return `${instrumentDisclosure(status, date).tooltip} This pack is for preparation or monitoring. It does not establish compliance or readiness for live filing.`;
 }
 
+export function frameworkInstrumentStatus(
+  status: string | undefined,
+  effectiveFrom: InstrumentDate,
+  asOf = isoDate(new Date()),
+): InstrumentStatus | undefined {
+  if (status === "exposure_draft") return "exposure_draft";
+  if (status !== "final") return undefined;
+  const effective = instrumentDate(effectiveFrom);
+  return effective
+    ? effective <= asOf
+      ? "in_force"
+      : "final_not_in_force"
+    : undefined;
+}
+
 /** A pack keeps its sealed legal basis after the live register changes. */
 export function packagePreparationWarning(
   snapshot: Record<string, unknown> | undefined,
@@ -91,7 +106,13 @@ export function packagePreparationWarning(
       : undefined;
   if (framework && typeof framework === "object" && "status" in framework) {
     return preparationWarning(
-      typeof framework.status === "string" ? framework.status : undefined,
+      frameworkInstrumentStatus(
+        typeof framework.status === "string" ? framework.status : undefined,
+        "effective_from" in framework &&
+          typeof framework.effective_from === "string"
+          ? framework.effective_from
+          : null,
+      ),
       "effective_from" in framework &&
         typeof framework.effective_from === "string"
         ? framework.effective_from

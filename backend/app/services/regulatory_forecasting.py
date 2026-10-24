@@ -348,7 +348,11 @@ def create_forecast_run(
         except Exception as exc:
             _persist_failure(db, ctx, run_id, _run_error(exc))
     db.expire_all()
-    return _read_forecast_run(db, _run_or_404(db, ctx, bank.id, run_id, module=MODULE_FORECAST))
+    return _read_forecast_run(
+        db,
+        _run_or_404(db, ctx, bank.id, run_id, module=MODULE_FORECAST),
+        liquidity_in_force=rule_in_force(db, ctx, bank, "LCR-NSFR"),
+    )
 
 
 def compute_live(
@@ -486,7 +490,11 @@ def get_forecast_run(
     db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
 ) -> ForecastRunRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    return _read_forecast_run(db, _run_or_404(db, ctx, bank.id, run_id, module=MODULE_FORECAST))
+    return _read_forecast_run(
+        db,
+        _run_or_404(db, ctx, bank.id, run_id, module=MODULE_FORECAST),
+        liquidity_in_force=rule_in_force(db, ctx, bank, "LCR-NSFR"),
+    )
 
 
 def run_strategic_optimizer(
@@ -1349,7 +1357,9 @@ def _comparison_payload(comparison: WhatIfMetricComparison) -> dict[str, str]:
     }
 
 
-def _read_forecast_run(db: Session, run: RegulatoryRun) -> ForecastRunRead:
+def _read_forecast_run(
+    db: Session, run: RegulatoryRun, *, liquidity_in_force: bool
+) -> ForecastRunRead:
     metric_results = list(
         db.scalars(
             select(RegulatoryMetricResult)
@@ -1389,8 +1399,17 @@ def _read_forecast_run(db: Session, run: RegulatoryRun) -> ForecastRunRead:
         assumption_version=assumption_register.provenance_read(run.assumption_provenance),
         path=_path_read(run.metrics.get("path")),
         summary=_summary_read(run.metrics),
-        metric_results=[RegulatoryMetricResultRead.model_validate(item) for item in metric_results],
-        validations=[RegulatoryValidationRead.model_validate(item) for item in validations],
+        metric_results=[
+            RegulatoryMetricResultRead.model_validate(item).model_copy(update={"status": "na"})
+            if not liquidity_in_force and item.metric_code in ("year5_lcr_pct", "year5_nsfr_pct")
+            else RegulatoryMetricResultRead.model_validate(item)
+            for item in metric_results
+        ],
+        validations=[
+            RegulatoryValidationRead.model_validate(item)
+            for item in validations
+            if forecast_rule_applicable(item.rule_code, liquidity_in_force)
+        ],
         error=_error_read(run),
         started_at=run.started_at,
         completed_at=run.completed_at,

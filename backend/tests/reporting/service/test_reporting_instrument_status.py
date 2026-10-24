@@ -10,6 +10,7 @@ from collections import Counter
 from dataclasses import replace
 from datetime import date
 from typing import TypedDict, cast
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -21,7 +22,7 @@ from app.bi.domain.catalogue import catalogue
 from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.domain.authority.registry import REGISTRY as AUTHORITY_REGISTRY
 from app.domain.regulatory_instruments import InstrumentStatus, instrument_status_on
-from app.models import Bank, RegulatoryParameter
+from app.models import Bank, RegulatoryParameter, User
 from app.reporting.service import calendar, generation, packages
 from app.reporting.service.eligibility import resolve_eligibility
 from app.reporting.service.provenance import build_template_provenance
@@ -392,7 +393,7 @@ def test_fixture_calendar_original_initial_and_final_counters(
 
 def test_legal_metadata_does_not_require_a_filing_family_grant(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
-    reader = replace(CTX, actor_user_id=None)
+    reader = _covered_legal_reader(db_session)
     templates = {
         item.code: item
         for item in packages.list_return_templates(
@@ -404,6 +405,61 @@ def test_legal_metadata_does_not_require_a_filing_family_grant(db_session: Sessi
     assert templates["IRRBB-PILOT"].instrument_status == "exposure_draft"
     assert templates["ICAAP-REPORT"].commencement_parameter == "icaap_report_first_as_of_date"
     assert packages.list_packages(db_session, reader, SAMPLE_BANK_ID).packages == []
+
+
+def _covered_legal_reader(db: Session) -> TenantContext:
+    user = User(
+        id=uuid4(),
+        organization_id=DEMO_ORG_ID,
+        email="legal-reader@example.test",
+        display_name="Synthetic legal reader",
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()
+    grant_institution_authority(
+        db,
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=user.id,
+        bundle=RoleBundle.ANALYST,
+        module=ModuleScope.CAPITAL,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+    return replace(CTX, actor_user_id=user.id)
+
+
+def test_bank_specific_legal_metadata_requires_institution_coverage(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    reader = _covered_legal_reader(db_session)
+    other = Bank(
+        organization_id=DEMO_ORG_ID,
+        name="Other institution",
+        short_name="OTHER",
+        currency="GHS",
+        jurisdiction_code="GH",
+        license_type="universal",
+        institution_type="universal_bank",
+    )
+    db_session.add(other)
+    for parameter in db_session.scalars(
+        select(RegulatoryParameter).where(
+            RegulatoryParameter.param_code == "icaap_report_first_as_of_date"
+        )
+    ):
+        parameter.value_json = {"schema": "icaap-effective-date-v1", "date": "2028-12-31"}
+        parameter.approved_by = "Synthetic commencement checker"
+    db_session.flush()
+    visible = packages.list_return_templates(db_session, reader, SAMPLE_BANK_ID)
+    icaap = next(item for item in visible.templates if item.code == "ICAAP-REPORT")
+    assert icaap.effective_from == date(2028, 12, 31)
+    assert icaap.commencement_approved_by == "Synthetic commencement checker"
+    with pytest.raises(HTTPException) as exc:
+        packages.list_return_templates(db_session, reader, other.id)
+    assert exc.value.status_code == 404
+    defaults = packages.list_return_templates(db_session, replace(reader, actor_user_id=None))
+    assert all(item.commencement_approved_by is None for item in defaults.templates)
+    assert all(item.commencement_approved_at is None for item in defaults.templates)
 
 
 @pytest.mark.parametrize(
@@ -418,7 +474,6 @@ def test_instrument_register_exposes_source_backed_limits(
     db_session: Session, code: str, limits: tuple[str, str]
 ) -> None:
     templates = {
-        item.code: item
-        for item in packages.list_return_templates(db_session, CTX).templates
+        item.code: item for item in packages.list_return_templates(db_session, CTX).templates
     }
     assert templates[code].calculations == [f"limit parameter: {limit}" for limit in limits]

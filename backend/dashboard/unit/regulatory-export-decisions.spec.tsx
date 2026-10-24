@@ -13,6 +13,7 @@ import FilingDownloads from "@/components/icaap/p3/FilingDownloads";
 import PriorVersionsCard from "@/components/submissions/PriorVersionsCard";
 import HistoryPage from "@/app/(app)/submissions/history/page";
 import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
+import { frameworkInstrumentStatus } from "@/lib/regulatoryInstruments";
 
 const state = vi.hoisted(() => ({
   snapshots: {} as Record<string, Record<string, unknown> | undefined>,
@@ -178,6 +179,61 @@ beforeEach(() => {
   };
 });
 afterEach(cleanup);
+
+it.each([
+  ["final", "2000-01-01", "in_force"],
+  ["final", "2099-01-01", "final_not_in_force"],
+  ["exposure_draft", "2000-01-01", "exposure_draft"],
+  ["final", null, undefined],
+] as const)(
+  "normalizes framework %s effective %s",
+  (status, effective, expected) => {
+    expect(frameworkInstrumentStatus(status, effective, "2026-10-24")).toBe(
+      expected,
+    );
+  },
+);
+
+it.each(["final", "exposure_draft"])(
+  "uses the recorded %s framework on cycle and package exports",
+  (status) => {
+    const cycle = IcaapCycleReadFromJSON({
+      id: "cycle",
+      title: "Synthetic final framework",
+      fiscal_year: 2026,
+      basis: "solo",
+      cycle_kind: "annual",
+      status: "draft",
+      sections: [],
+      framework: {
+        code: "own-framework",
+        status,
+        effective_from: "2000-01-01",
+      },
+    });
+    state.canExport = false;
+    const view = render(<CycleHeader bankId={bankId} cycle={cycle} />);
+    expect(Boolean(screen.queryByRole("note"))).toBe(
+      status === "exposure_draft",
+    );
+    expect(screen.getByRole("button", { name: "Draft PDF" })).toBeDisabled();
+    view.rerender(
+      <RegulatoryExportWarning
+        snapshot={{
+          ...snapshot(status === "final" ? "exposure_draft" : "in_force"),
+          metadata: {
+            icaap: { framework: { status, effective_from: "2000-01-01" } },
+          },
+        }}
+      />,
+    );
+    expect(Boolean(screen.queryByRole("note"))).toBe(
+      status === "exposure_draft",
+    );
+    if (status === "exposure_draft")
+      expect(screen.getByRole("note")).toHaveTextContent("not law yet");
+  },
+);
 
 it("discloses the cycle's own framework beside both header draft downloads", async () => {
   const user = userEvent.setup();
