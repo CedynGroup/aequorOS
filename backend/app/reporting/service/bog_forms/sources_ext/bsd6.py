@@ -43,7 +43,7 @@ Placement rules — all from the Guide's BSD6 notes, none invented here:
 * other undated positions follow the platform's ladder convention
   (``regulatory_liquidity._ladder_bucket_index``): demand-natured (cash; call
   money) → shortest band, everything else → longest band;
-* a fact-sourced component with no Guide placement (e.g. Other assets) leaves
+* a nonzero fact-sourced component with no Guide placement (e.g. Other assets) leaves
   the row's band cells blank (``input_required``) — the Total and FROM BSD2
   cells still fill; the bank allocates.
 

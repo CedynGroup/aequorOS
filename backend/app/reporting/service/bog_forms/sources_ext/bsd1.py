@@ -221,9 +221,9 @@ def _daily(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
     ``week_change`` (Σ day − Σ day−7), ``facts`` (period-end fallback spec for
     the reporting date: ``{"group", "categories", "currency"}``), ``sign``.
 
-    Returns ``None`` (⇒ ``input_required``) when the ladder holds NO snapshot for
-    that date in the line's population (``position_types``) — the balance is
-    unknown, not zero.
+    Returns ``None`` (⇒ ``input_required``) when neither a ladder snapshot for
+    that date in the line's population (``position_types``) nor an applicable
+    official fact fallback is available — the balance is unknown, not zero.
     """
     day = target_date(rc, params)
     if day is None:

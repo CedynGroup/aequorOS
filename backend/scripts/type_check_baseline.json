@@ -1874,7 +1874,7 @@
   "reportUnusedFunction": 8
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd1": {
-  "reportAny": 30,
+  "reportAny": 26,
   "reportUnknownArgumentType": 2,
   "reportUnknownVariableType": 5,
   "reportUnusedFunction": 2
