@@ -68,6 +68,7 @@ function ModulePreparationSurface({ tabs, children, contextRule }: Props) {
         {instrument && (
           <InstrumentStatusBadge
             status={instrument.instrumentStatus}
+            regulator={instrument.regulator}
             effectiveFrom={instrument.effectiveFrom}
             citation={instrument.directiveCitation}
             sourceUrl={instrument.sourceUrl}

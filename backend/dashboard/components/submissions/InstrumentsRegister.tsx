@@ -99,6 +99,7 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
                   <h2 className="text-h3 text-navy">{item.title}</h2>
                   <InstrumentStatusBadge
                     status={item.instrumentStatus}
+                    regulator={item.regulator}
                     effectiveFrom={item.effectiveFrom}
                     citation={item.directiveCitation}
                     sourceUrl={item.sourceUrl}

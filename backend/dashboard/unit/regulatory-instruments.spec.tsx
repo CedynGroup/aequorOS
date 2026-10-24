@@ -5,6 +5,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import fc from "fast-check";
 import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadge";
+import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
+import { setActiveJurisdiction } from "@/lib/format";
+import { instrumentStatusLabel } from "@/lib/api/returnAnchors";
 import {
   instrumentDisclosure,
   isUpcomingRule,
@@ -12,7 +15,10 @@ import {
   packagePreparationWarning,
 } from "@/lib/regulatoryInstruments";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  setActiveJurisdiction({});
+});
 
 const statuses = [
   "exposure_draft",
@@ -92,4 +98,73 @@ it("keeps an archived draft pack's warning after the live instrument commences",
   expect(packagePreparationWarning({}, "in_force")).toContain(
     "has not been established",
   );
+});
+
+it.each([
+  {
+    provenance: {
+      instrument_status: "exposure_draft",
+      regulator: "Recorded issuer",
+    },
+  },
+  {
+    metadata: {
+      icaap: {
+        regulator_short: "Recorded issuer",
+        framework: { status: "exposure_draft", effective_from: "2027-01-01" },
+      },
+    },
+  },
+])(
+  "uses the sealed package issuer despite current bank context",
+  (snapshot) => {
+    setActiveJurisdiction({ regulatorShort: "CBK" });
+    render(
+      <RegulatoryExportWarning
+        snapshot={snapshot}
+        status="exposure_draft"
+        regulator="Current issuer"
+      />,
+    );
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "Proposed by Recorded issuer",
+    );
+    expect(screen.getByRole("note")).not.toHaveTextContent(
+      /CBK|Current issuer/,
+    );
+  },
+);
+
+it("passes recorded issuers through generation warnings and legacy labels", () => {
+  setActiveJurisdiction({ regulatorShort: "CBK" });
+  render(
+    <RegulatoryExportWarning
+      status="exposure_draft"
+      regulator="Recorded issuer"
+    />,
+  );
+  expect(screen.getByRole("note")).toHaveTextContent(
+    "Proposed by Recorded issuer",
+  );
+  expect(
+    preparationWarning("exposure_draft", undefined, "Recorded issuer"),
+  ).toContain("Proposed by Recorded issuer");
+  expect(
+    instrumentStatusLabel("unpublished", undefined, "Recorded issuer"),
+  ).toContain("No Recorded issuer filing duty");
+});
+
+it("does not infer an issuer when recorded evidence is missing", () => {
+  setActiveJurisdiction({ regulatorShort: "CBK" });
+  expect(instrumentDisclosure("exposure_draft").tooltip).toContain(
+    "Proposed by the regulator",
+  );
+  expect(
+    packagePreparationWarning(
+      { provenance: { instrument_status: "exposure_draft" } },
+      "exposure_draft",
+      undefined,
+      "Current issuer",
+    ),
+  ).toContain("Proposed by the regulator");
 });

@@ -29,6 +29,7 @@ import { setupServer } from "msw/node";
 import InstrumentsRegister from "@/components/submissions/InstrumentsRegister";
 import ReturnsPage from "@/app/(app)/submissions/returns/page";
 import CalendarPage from "@/app/(app)/submissions/calendar/page";
+import TemplatesPage from "@/app/(app)/submissions/templates/page";
 import RegulatoryRuleStatus from "@/components/submissions/RegulatoryRuleStatus";
 import { useNotifications, useReturnTemplates } from "@/lib/api/hooks";
 import { useBankRules } from "@/lib/api/regulatoryRules";
@@ -36,6 +37,9 @@ import { QueryAuthorityScopeProvider } from "@/lib/api/useQueryScope";
 import { queryAuthorityScope } from "@/lib/api/queryPolicy";
 import { apiBaseUrl } from "@/lib/api/client";
 import { setAccessToken } from "@/lib/api/token";
+import { setActiveJurisdiction } from "@/lib/format";
+
+const navigation = vi.hoisted(() => ({ search: "" }));
 
 vi.mock("next/font/local", () => ({
   default: () => ({
@@ -44,7 +48,7 @@ vi.mock("next/font/local", () => ({
   }),
 }));
 vi.mock("next/navigation", () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(navigation.search),
   usePathname: () => "/submissions/returns",
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
@@ -97,6 +101,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
   vi.setSystemTime(new Date("2026-12-31T23:59:30Z"));
   fail = false;
+  navigation.search = "";
   irrStatus = "exposure_draft";
   noticeId = null;
   calls.clear();
@@ -184,6 +189,7 @@ afterEach(() => {
   setAccessToken(null);
   focusManager.setFocused(undefined);
   vi.useRealTimers();
+  setActiveJurisdiction({});
 });
 function view(children: React.ReactNode) {
   return (
@@ -228,6 +234,26 @@ function Feed() {
     </>
   );
 }
+
+it.each(["Returns", "Templates"])(
+  "uses the returned instrument issuer on %s",
+  async (surface) => {
+    setActiveJurisdiction({ regulatorShort: "CBK" });
+    navigation.search = "code=IRRBB-PILOT&preparing=1";
+    render(view(surface === "Returns" ? <ReturnsPage /> : <TemplatesPage />));
+    const badge = await screen.findByText("Draft", { selector: "summary" });
+    expect(badge).toHaveAttribute(
+      "title",
+      expect.stringContaining("Proposed by Synthetic"),
+    );
+    expect(badge.getAttribute("title")).not.toContain("CBK");
+    fireEvent.click(badge);
+    expect(within(badge.parentElement!).getByRole("tooltip")).toHaveTextContent(
+      "Synthetic source",
+    );
+  },
+);
+
 it.each(["poll", "notification"])(
   "refreshes mounted calendar rows and counts across commencement via %s",
   async (trigger) => {

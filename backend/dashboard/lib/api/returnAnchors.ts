@@ -95,6 +95,7 @@ export function instrumentStatusLabel(
     | "unpublished"
     | undefined,
   effectiveFrom?: Date | string | null,
+  regulator?: string,
 ): string {
-  return instrumentDisclosure(status, effectiveFrom).tooltip;
+  return instrumentDisclosure(status, effectiveFrom, regulator).tooltip;
 }

@@ -3,6 +3,8 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import RegulatoryModuleTabs from "@/components/shell/RegulatoryModuleTabs";
+import RegulatoryRuleStatus from "@/components/submissions/RegulatoryRuleStatus";
+import { setActiveJurisdiction } from "@/lib/format";
 
 const state = vi.hoisted(() => ({
   preparing: false,
@@ -36,6 +38,7 @@ vi.mock("@/lib/api/hooks", () => ({
           instrumentStatus: state.status,
           effectiveFrom: "2027-01-01",
           directiveCitation: "Synthetic citation",
+          regulator: "Recorded issuer",
         },
       ],
     },
@@ -51,6 +54,7 @@ afterEach(() => {
   state.sdi = false;
   state.code = "IRRBB-PILOT";
   state.pathname = "/irr/standardised";
+  setActiveJurisdiction({});
 });
 const tabs = [
   { href: "/irr", label: "Overview" },
@@ -60,6 +64,26 @@ const tabs = [
     ruleCode: "IRRBB-PILOT",
   },
 ];
+
+it.each(["module", "rule"])(
+  "uses recorded issuer evidence on the %s badge",
+  (surface) => {
+    setActiveJurisdiction({ regulatorShort: "CBK" });
+    render(
+      surface === "module" ? (
+        <RegulatoryModuleTabs tabs={tabs}>
+          <p>Workspace</p>
+        </RegulatoryModuleTabs>
+      ) : (
+        <RegulatoryRuleStatus code="IRRBB-PILOT" />
+      ),
+    );
+    expect(screen.getByText("Draft")).toHaveAttribute(
+      "title",
+      expect.stringContaining("Proposed by Recorded issuer"),
+    );
+  },
+);
 
 it("keeps draft capabilities out of the ordinary module surface", () => {
   render(

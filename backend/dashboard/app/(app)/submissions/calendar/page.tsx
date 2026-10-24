@@ -98,9 +98,26 @@ export default function RegulatoryCalendarPage() {
             <p className="text-caption text-slate truncate max-w-[320px]">
               {o.title}
             </p>
-            <InstrumentStatusBadge status={o.instrumentStatus} effectiveFrom={o.effectiveFrom} code={o.returnCode}
-              citation={templatesQuery.data?.templates.find((item) => item.code === o.returnCode)?.directiveCitation}
-              sourceUrl={templatesQuery.data?.templates.find((item) => item.code === o.returnCode)?.sourceUrl} />
+            <InstrumentStatusBadge
+              status={o.instrumentStatus}
+              regulator={
+                templatesQuery.data?.templates.find(
+                  (item) => item.code === o.returnCode,
+                )?.regulator
+              }
+              effectiveFrom={o.effectiveFrom}
+              code={o.returnCode}
+              citation={
+                templatesQuery.data?.templates.find(
+                  (item) => item.code === o.returnCode,
+                )?.directiveCitation
+              }
+              sourceUrl={
+                templatesQuery.data?.templates.find(
+                  (item) => item.code === o.returnCode,
+                )?.sourceUrl
+              }
+            />
             {/*
             An annex is filed INSIDE its parent return, so it is not a separate
             obligation with a separate deadline. Listing one as its own row told
@@ -238,7 +255,12 @@ export default function RegulatoryCalendarPage() {
           error={query.error}
           onRetry={() => query.refetch()}
         >
-          <Link className="text-action underline text-caption" href="/submissions/upcoming">Preparing for upcoming rules</Link>
+          <Link
+            className="text-action underline text-caption"
+            href="/submissions/upcoming"
+          >
+            Preparing for upcoming rules
+          </Link>
           {query.data?.coverageNote && (
             <p className="rounded border border-border bg-surface-raised px-4 py-3 text-body text-slate">
               {query.data.coverageNote}

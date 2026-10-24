@@ -28,7 +28,10 @@ export default function DraftExportMenu({
 }: {
   bankId: string;
   cycleId: string;
-  framework: Pick<IcaapFrameworkSummaryRead, "status" | "effectiveFrom">;
+  framework: Pick<
+    IcaapFrameworkSummaryRead,
+    "status" | "effectiveFrom" | "regulator"
+  >;
   content?: "working" | "committed";
 }) {
   const scope = useModuleScope();
@@ -60,6 +63,7 @@ export default function DraftExportMenu({
           framework.effectiveFrom,
         )}
         effectiveFrom={framework.effectiveFrom}
+        regulator={framework.regulator}
       />
       <div className="flex items-center gap-2">
         <SecondaryButton

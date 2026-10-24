@@ -486,6 +486,7 @@ function ReturnsWorkspace() {
               warning={preparationWarning(
                 template?.instrumentStatus,
                 template?.effectiveFrom,
+                template?.regulator,
               )}
               authority={authority}
               onGenerate={() => code && date && generateAndCheck(code, date)}
@@ -632,6 +633,7 @@ function FidelityBanner({ template }: { template: ReturnTemplateRead }) {
         <FidelityPill fidelity={template.fidelity} />
         <InstrumentStatusBadge
           status={template.instrumentStatus}
+          regulator={template.regulator}
           effectiveFrom={template.effectiveFrom}
           citation={template.directiveCitation}
           sourceUrl={template.sourceUrl}
@@ -967,6 +969,7 @@ function PackageWorkspace({
         snapshot={pkg?.snapshot}
         status={pkg ? undefined : template?.instrumentStatus}
         effectiveFrom={pkg ? undefined : template?.effectiveFrom}
+        regulator={pkg ? undefined : template?.regulator}
       />
       <ReturnCommandBarBlock
         summary={summary}
