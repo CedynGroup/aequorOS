@@ -792,7 +792,8 @@ installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
 counts. The aggregate requires all four reports, unique journey identities,
-and at least **245 executed journeys**, with zero skips. It verifies the
+and the executed-journey floor defined in the
+[gate script](../../.github/scripts/assert_dashboard_journeys.mjs), with zero skips. It verifies the
 reported counters against the named results and prints every skipped journey
 in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
