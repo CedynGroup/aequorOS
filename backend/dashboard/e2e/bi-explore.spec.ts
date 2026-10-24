@@ -114,7 +114,9 @@ test.describe("Explore", () => {
     await expect(
       answer.getByText(FIXTURE_FIGURES.standardGradeOnScreen, { exact: true }),
     ).toBeVisible();
-    await expect(answer.getByText("substandard", { exact: true })).toBeVisible();
+    await expect(
+      answer.getByText("substandard", { exact: true }),
+    ).toBeVisible();
     await expect(
       answer.getByText(FIXTURE_FIGURES.substandardGradeOnScreen, {
         exact: true,
@@ -187,18 +189,29 @@ test.describe("Explore", () => {
       ),
     ).toBeVisible();
 
+    // Wait for the lazy grid and its opening answer before asking for another
+    // shape; each change fetches and authorizes a new page.
+    const grid = page.locator(".ag-root-wrapper");
+    await expect(
+      grid.getByText(FIXTURE_FIGURES.standardGradeOnScreen, { exact: true }),
+    ).toBeVisible();
+
     const shape = page.locator("section.card").filter({
       has: page.getByRole("heading", { name: "Shape the grid", level: 3 }),
     });
     await shape
       .getByText("Show subtotals for each group", { exact: true })
       .click();
-    await shape.locator("#bi-grid-pivot").selectOption({ label: "IFRS 9 stage" });
+    await expect(
+      grid.getByText("Total for the institution", { exact: true }),
+    ).toBeVisible();
+    await shape
+      .locator("#bi-grid-pivot")
+      .selectOption({ label: "IFRS 9 stage" });
 
     // The grid is paged by the server, and the columns it returns are the
     // pivoted ones — a measure per value of the spread field, each naming the
     // unit so the reader does not infer it from the first cell.
-    const grid = page.locator(".ag-root-wrapper");
     await expect(grid).toBeVisible();
     await expect(
       grid.getByText("Gross loans · 1 (GHS)", { exact: true }),
@@ -263,9 +276,7 @@ test.describe("Explore", () => {
     // the control, the hook, the bearer, the route's decision, the artifact.
     const [download] = await Promise.all([
       page.waitForEvent("download"),
-      menu
-        .getByRole("menuitem", { name: /^Comma-separated values\b/ })
-        .click(),
+      menu.getByRole("menuitem", { name: /^Comma-separated values\b/ }).click(),
     ]);
     // The file is named for the institution and the reporting date, so three
     // exports of three dates are three distinguishable files.
@@ -309,7 +320,11 @@ test.describe("Explore", () => {
         .click();
       const [file] = await Promise.all([
         page.waitForEvent("download"),
-        page.getByRole("menu").first().getByRole("menuitem", { name: item }).click(),
+        page
+          .getByRole("menu")
+          .first()
+          .getByRole("menuitem", { name: item })
+          .click(),
       ]);
       const artifact = await file.createReadStream();
       const head: Buffer[] = [];
@@ -471,7 +486,10 @@ test.describe("Explore", () => {
     // no destination has an is-absent filter and carrying it would silently
     // widen the page to every group. The fixture has exactly such a row.
     const notStatedRow = wire.rows.find((row) => row[0] === null);
-    expect(notStatedRow, "the fixture must have a not-stated group").toBeDefined();
+    expect(
+      notStatedRow,
+      "the fixture must have a not-stated group",
+    ).toBeDefined();
     expect(drillDestinations(result, notStatedRow!, asked)).toHaveLength(0);
 
     // FOLLOWED AS A READER FOLLOWS IT: the action on the Standard row, clicked.
@@ -483,13 +501,15 @@ test.describe("Explore", () => {
     await expect(page).toHaveURL(
       new RegExp(`/credit/book\\?grade=standard&as_of=${asOf}$`),
     );
-    await expect(page.getByRole("heading", { name: "Loan Book" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Loan Book" }),
+    ).toBeVisible();
 
     // The destination is genuinely narrowed to the figure's own rows: the grade
     // control arrives set, and the book shows the loans behind GHS 81.8M.
-    await expect(
-      page.getByLabel("Filter by classification grade"),
-    ).toHaveValue("standard");
+    await expect(page.getByLabel("Filter by classification grade")).toHaveValue(
+      "standard",
+    );
     await expect(page.getByText("LOAN/1", { exact: true })).toBeVisible();
     // Two of the standard-graded loans are this borrower's, so the name is not
     // unique on the page.
