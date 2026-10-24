@@ -12,11 +12,13 @@ from copy import deepcopy
 from datetime import UTC, date
 from decimal import Decimal
 from io import BytesIO
-from typing import Any
+from typing import Any, TypedDict
 from uuid import uuid4
 
 import openpyxl
 import pytest
+from openpyxl.worksheet.worksheet import Worksheet
+from pydantic import InstanceOf, TypeAdapter
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -511,6 +513,33 @@ def test_run_official_mints_immutable_reproducible_runs(db_session: Session) -> 
     assert baseline_after_second == baseline_after_first
 
 
+class _Bsd2Row(TypedDict):
+    code: str
+    status: str
+    value: str | None
+
+
+class _Bsd2Section(TypedDict):
+    rows: list[_Bsd2Row]
+
+
+class _Bsd2Snapshot(TypedDict):
+    sections: list[_Bsd2Section]
+
+
+def _cash_correction_workbook(cash: int) -> bytes:
+    workbook = openpyxl.Workbook()
+    sheet = TypeAdapter(InstanceOf[Worksheet]).validate_python(workbook.create_sheet("GL"))
+    sheet.append(
+        ["source_reference", "account_code", "name", "account_class", "currency", "balance"]
+    )
+    sheet.append(["GL/1001", "1001", "Cash on Hand", "ASSET", "GHS", cash])
+    sheet.append(["GL/3001", "3001", "Paid-in Share Capital", "EQUITY", "GHS", cash + 55_280_000])
+    content = BytesIO()
+    workbook.save(content)
+    return content.getvalue()
+
+
 def test_official_remint_reports_same_date_cash_correction_in_bsd2(db_session: Session) -> None:
     _seed(db_session)
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
@@ -548,19 +577,8 @@ def test_official_remint_reports_same_date_cash_correction_in_bsd2(db_session: S
     assert bank is not None
 
     def upload_book(cash: int) -> None:
-        workbook = openpyxl.Workbook()
-        sheet = workbook.create_sheet("GL")
-        sheet.append(
-            ["source_reference", "account_code", "name", "account_class", "currency", "balance"]
-        )
-        sheet.append(["GL/1001", "1001", "Cash on Hand", "ASSET", "GHS", cash])
-        sheet.append(
-            ["GL/3001", "3001", "Paid-in Share Capital", "EQUITY", "GHS", cash + 55_280_000]
-        )
-        content = BytesIO()
-        workbook.save(content)
         uploaded = ingestion.upload_source(
-            db_session, ctx, bank.id, storage, "correction.xlsx", content.getvalue()
+            db_session, ctx, bank.id, storage, "correction.xlsx", _cash_correction_workbook(cash)
         )
         result = ingestion.start_ingestion(
             db_session,
@@ -596,10 +614,11 @@ def test_official_remint_reports_same_date_cash_correction_in_bsd2(db_session: S
             RegulatoryPackageCreate(return_code="BSD2", reporting_date=FIXTURE_AS_OF),
         )
 
-    def cash_row(snapshot: dict[str, Any]) -> dict[str, Any]:
+    def cash_row(snapshot: dict[str, Any]) -> _Bsd2Row:
+        typed_snapshot = TypeAdapter(_Bsd2Snapshot).validate_python(snapshot)
         return next(
             row
-            for section in snapshot["sections"]
+            for section in typed_snapshot["sections"]
             for row in section["rows"]
             if row["code"] == "BSD2.R14.domestic"
         )
@@ -607,7 +626,7 @@ def test_official_remint_reports_same_date_cash_correction_in_bsd2(db_session: S
     upload_book(2_000_000)
     pipeline.run_official(db_session, _official_job(db_session))
     original = generate_bsd2()
-    assert Decimal(cash_row(original.snapshot)["value"]) == Decimal("2")
+    assert Decimal(str(cash_row(original.snapshot)["value"])) == Decimal("2")
     original_snapshot = deepcopy(original.snapshot)
     prior_runs = {
         run.id: (deepcopy(run.inputs), deepcopy(run.metrics), run.input_hash, run.status)
@@ -615,17 +634,17 @@ def test_official_remint_reports_same_date_cash_correction_in_bsd2(db_session: S
     }
     treasury_before = regulatory_liquidity.get_liquidity_dashboard(db_session, ctx, bank.id).live
     assert treasury_before is not None
-    hqla_before = Decimal(treasury_before.metrics["hqla_total_ghs"])
+    hqla_before = TypeAdapter(Decimal).validate_python(treasury_before.metrics["hqla_total_ghs"])
 
     upload_book(3_000_000)
     treasury_after = regulatory_liquidity.get_liquidity_dashboard(db_session, ctx, bank.id).live
     assert treasury_after is not None
-    hqla_after = Decimal(treasury_after.metrics["hqla_total_ghs"])
+    hqla_after = TypeAdapter(Decimal).validate_python(treasury_after.metrics["hqla_total_ghs"])
     assert hqla_after - hqla_before == Decimal("1000000")
     pipeline.run_official(db_session, _official_job(db_session))
     corrected = generate_bsd2()
     assert cash_row(corrected.snapshot)["status"] == "mapped"
-    assert Decimal(cash_row(corrected.snapshot)["value"]) == Decimal("3")
+    assert Decimal(str(cash_row(corrected.snapshot)["value"])) == Decimal("3")
     assert corrected.version == original.version + 1
     assert corrected.supersedes_id == original.id
     prior_package = db_session.get(RegulatoryPackage, original.id)
@@ -738,7 +757,9 @@ def test_official_input_hash_survives_fact_rederivation(db_session: Session) -> 
     )
     fact_ids_after = set(
         db_session.scalars(
-            select(BankFinancialFact.id).where(BankFinancialFact.reporting_period_id.in_(period_ids))
+            select(BankFinancialFact.id).where(
+                BankFinancialFact.reporting_period_id.in_(period_ids)
+            )
         )
     )
     assert fact_ids_after
