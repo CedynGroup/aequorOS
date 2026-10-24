@@ -1,3 +1,5 @@
+from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import patch
@@ -15,8 +17,12 @@ from app.models import (
     LiveMetric,
     LiveMetricSnapshot,
     ParamCapitalThreshold,
+    RegulatoryMetricResult,
     RegulatoryParameter,
+    RegulatoryRun,
+    RegulatoryValidation,
 )
+from app.reporting.service.registry import REGISTRY
 from app.schemas.forecasting import ForecastRunCreate
 from app.services import (
     alerts,
@@ -73,6 +79,96 @@ def test_forecast_assesses_only_in_force_constituents(
     assert metrics["year5_car_pct"].status == ("red" if capital_breach else "green")
     assert metrics["year5_lcr_pct"].status == "na"
     assert metrics["year5_nsfr_pct"].status == "na"
+
+
+@pytest.mark.usefixtures("forecasting_run_authority")
+@pytest.mark.parametrize("capital_breach", [False, True])
+def test_saved_forecast_assessments_preserve_immutable_evidence(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, capital_breach: bool
+) -> None:
+    seed_book(db_session)
+    derived = derive_facts(db_session, MAKER, SAMPLE_BANK_ID, REPORTING_DATE)
+    run = regulatory_forecasting.create_forecast_run(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        ForecastRunCreate(reporting_period_id=derived.reporting_period_id, scenario_code="base"),
+    )
+    assert run.status == "succeeded"
+    for index, ratio in enumerate(("car", "lcr", "nsfr")):
+        metric = db_session.scalars(
+            select(RegulatoryMetricResult).where(
+                RegulatoryMetricResult.run_id == run.id,
+                RegulatoryMetricResult.metric_code == f"year5_{ratio}_pct",
+            )
+        ).one()
+        metric.metric_value = Decimal(
+            "8" if ratio == "car" and capital_breach else "20" if ratio == "car" else "80"
+        )
+        metric.status = "red" if ratio != "car" or capital_breach else "green"
+        validation = db_session.scalars(
+            select(RegulatoryValidation).where(
+                RegulatoryValidation.run_id == run.id,
+                RegulatoryValidation.rule_code == f"year5_{ratio}_above_minimum",
+            )
+        ).first()
+        if validation is None:
+            validation = RegulatoryValidation(
+                organization_id=MAKER.organization_id,
+                bank_id=SAMPLE_BANK_ID,
+                run_id=run.id,
+                rule_code=f"year5_{ratio}_above_minimum",
+                position=10 + index,
+            )
+            db_session.add(validation)
+        validation.passed = ratio == "car" and not capital_breach
+        validation.severity = "error"
+        validation.message = f"Synthetic recorded {ratio} assessment"
+    db_session.flush()
+    stored = db_session.get(RegulatoryRun, run.id)
+    assert stored is not None
+    evidence = deepcopy((stored.inputs, stored.metrics, stored.input_hash))
+    for in_force in (False, True):
+        monkeypatch.setitem(
+            REGISTRY,
+            "LCR-NSFR",
+            replace(
+                REGISTRY["LCR-NSFR"],
+                instrument_status="in_force" if in_force else "unpublished",
+                effective_from=None,
+            ),
+        )
+        result = regulatory_forecasting.get_forecast_run(db_session, MAKER, SAMPLE_BANK_ID, run.id)
+        assert {item.rule_code for item in result.validations if not item.passed} == (
+            ({"year5_car_above_minimum"} if capital_breach else set())
+            | ({"year5_lcr_above_minimum", "year5_nsfr_above_minimum"} if in_force else set())
+        )
+        statuses = {item.metric_code: item.status for item in result.metric_results}
+        assert statuses["year5_car_pct"] == ("red" if capital_breach else "green")
+        assert statuses["year5_lcr_pct"] == ("red" if in_force else "na")
+        assert statuses["year5_nsfr_pct"] == ("red" if in_force else "na")
+    db_session.expire_all()
+    assert (stored.inputs, stored.metrics, stored.input_hash) == evidence
+    assert all(
+        not item.passed
+        for item in db_session.scalars(
+            select(RegulatoryValidation).where(
+                RegulatoryValidation.run_id == run.id,
+                RegulatoryValidation.rule_code.in_(
+                    ("year5_lcr_above_minimum", "year5_nsfr_above_minimum")
+                ),
+            )
+        )
+    )
+    assert all(
+        item.status == "red"
+        for item in db_session.scalars(
+            select(RegulatoryMetricResult).where(
+                RegulatoryMetricResult.run_id == run.id,
+                RegulatoryMetricResult.metric_code.in_(("year5_lcr_pct", "year5_nsfr_pct")),
+            )
+        )
+    )
 
 
 def test_sdi_exposure_status_and_threshold_change_only_on_directive_commencement(

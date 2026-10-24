@@ -16,6 +16,7 @@ import {
   type IcaapFrameworkSummaryRead,
 } from "@/lib/api/icaap";
 import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
+import { frameworkInstrumentStatus } from "@/lib/regulatoryInstruments";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { SecondaryButton } from "./Dialog";
 
@@ -54,7 +55,10 @@ export default function DraftExportMenu({
   return (
     <div className="flex max-w-xl flex-col items-end gap-1">
       <RegulatoryExportWarning
-        status={framework.status}
+        status={frameworkInstrumentStatus(
+          framework.status,
+          framework.effectiveFrom,
+        )}
         effectiveFrom={framework.effectiveFrom}
       />
       <div className="flex items-center gap-2">

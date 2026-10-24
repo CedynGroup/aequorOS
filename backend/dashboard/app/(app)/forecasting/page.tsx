@@ -1,6 +1,7 @@
 "use client";
 
-import { useInForceLiveSummary } from "@/lib/api/regulatoryRules";
+import { useBankRules, useInForceLiveSummary } from "@/lib/api/regulatoryRules";
+import { forecastRuleApplicable } from "@/lib/regulatoryInstruments";
 
 /**
  * Balance Sheet Forecasting — projection workspace for the persisted forecast
@@ -140,6 +141,7 @@ function BalanceSheetWorkspace() {
   const runsQuery = useForecastRuns(forecastingBankId, { limit: 50 });
   const runs = runsQuery.data?.runs ?? [];
   const liveSummary = useInForceLiveSummary(bankId);
+  const rules = useBankRules(forecastingBankId);
   const liveForecast = liveSummary.data?.modules.find(
     (module) => module.module === "forecast",
   );
@@ -258,9 +260,14 @@ function BalanceSheetWorkspace() {
       </SdiModuleContext>
 
       <QueryBoundary
-        isLoading={runsQuery.isLoading}
-        error={runsQuery.error}
-        onRetry={() => runsQuery.refetch()}
+        isLoading={
+          runsQuery.isLoading || Boolean(activeRunId && rules.isLoading)
+        }
+        error={runsQuery.error ?? (activeRunId ? rules.error : null)}
+        onRetry={() => {
+          void runsQuery.refetch();
+          void rules.query.refetch();
+        }}
       >
         <PageContainer className="py-6 space-y-6">
           {/* The institution's reporting date: the statements are about the
@@ -309,7 +316,11 @@ function BalanceSheetWorkspace() {
               title={`Run ${labelize(run.status)}`}
             />
           ) : run ? (
-            <RunDashboard run={run} adverse={adverse} />
+            <RunDashboard
+              run={run}
+              adverse={adverse}
+              liquidityInForce={rules.isModuleInForce("liquidity") === true}
+            />
           ) : null}
         </PageContainer>
       </QueryBoundary>
@@ -386,9 +397,11 @@ function LiveForecastBaseline({
 function RunDashboard({
   run,
   adverse,
+  liquidityInForce,
 }: {
   run: ForecastRunRead;
   adverse: ForecastRunRead | undefined;
+  liquidityInForce: boolean;
 }) {
   const path = run.path;
   // The run's actual horizon: desk runs may project 3–10 years, not only 5.
@@ -571,7 +584,7 @@ function RunDashboard({
         noPadding
         computedAt={computedAt}
       >
-        <HorizonTable path={path} />
+        <HorizonTable path={path} liquidityInForce={liquidityInForce} />
       </SectionCard>
 
       {/* Regulatory ratio paths */}
@@ -592,38 +605,42 @@ function RunDashboard({
             label="CAR"
           />
         </ChartFrame>
-        <ChartFrame
-          title="LCR path"
-          subtitle={`Basel minimum ${fmtPct(lcrThreshold, 0)}`}
-          height={240}
-        >
-          <RatioPathChart
-            data={path.map((p) => ({
-              label: yearLabel(p),
-              value: num(p.lcrPct),
-            }))}
-            threshold={lcrThreshold}
-            thresholdLabel={`Basel min ${fmtPct(lcrThreshold, 0)}`}
-            colorIndex={1}
-            label="LCR"
-          />
-        </ChartFrame>
-        <ChartFrame
-          title="NSFR path"
-          subtitle={`Basel minimum ${fmtPct(nsfrThreshold, 0)}`}
-          height={240}
-        >
-          <RatioPathChart
-            data={path.map((p) => ({
-              label: yearLabel(p),
-              value: num(p.nsfrPct),
-            }))}
-            threshold={nsfrThreshold}
-            thresholdLabel={`Basel min ${fmtPct(nsfrThreshold, 0)}`}
-            colorIndex={2}
-            label="NSFR"
-          />
-        </ChartFrame>
+        {liquidityInForce && (
+          <ChartFrame
+            title="LCR path"
+            subtitle={`Basel minimum ${fmtPct(lcrThreshold, 0)}`}
+            height={240}
+          >
+            <RatioPathChart
+              data={path.map((p) => ({
+                label: yearLabel(p),
+                value: num(p.lcrPct),
+              }))}
+              threshold={lcrThreshold}
+              thresholdLabel={`Basel min ${fmtPct(lcrThreshold, 0)}`}
+              colorIndex={1}
+              label="LCR"
+            />
+          </ChartFrame>
+        )}
+        {liquidityInForce && (
+          <ChartFrame
+            title="NSFR path"
+            subtitle={`Basel minimum ${fmtPct(nsfrThreshold, 0)}`}
+            height={240}
+          >
+            <RatioPathChart
+              data={path.map((p) => ({
+                label: yearLabel(p),
+                value: num(p.nsfrPct),
+              }))}
+              threshold={nsfrThreshold}
+              thresholdLabel={`Basel min ${fmtPct(nsfrThreshold, 0)}`}
+              colorIndex={2}
+              label="NSFR"
+            />
+          </ChartFrame>
+        )}
       </div>
 
       {/* Validations */}
@@ -633,7 +650,11 @@ function RunDashboard({
         noPadding
         computedAt={computedAt}
       >
-        <ValidationList validations={run.validations} />
+        <ValidationList
+          validations={run.validations.filter((item) =>
+            forecastRuleApplicable(item.ruleCode, liquidityInForce),
+          )}
+        />
       </SectionCard>
     </div>
   );
@@ -764,7 +785,7 @@ function DeltaUnder({ value }: { value: number | null }) {
   );
 }
 
-const horizonColumns: Column<HorizonRow>[] = [
+const horizonColumns = (liquidityInForce: boolean): Column<HorizonRow>[] => [
   {
     key: "year",
     header: "Year",
@@ -856,7 +877,9 @@ const horizonColumns: Column<HorizonRow>[] = [
     render: (r) => (
       <span
         className={
-          num(r.point.lcrPct) < 100 ? "text-critical font-medium" : undefined
+          liquidityInForce && num(r.point.lcrPct) < 100
+            ? "text-critical font-medium"
+            : undefined
         }
       >
         {fmtPct(num(r.point.lcrPct), 1)}
@@ -870,7 +893,9 @@ const horizonColumns: Column<HorizonRow>[] = [
     render: (r) => (
       <span
         className={
-          num(r.point.nsfrPct) < 100 ? "text-critical font-medium" : undefined
+          liquidityInForce && num(r.point.nsfrPct) < 100
+            ? "text-critical font-medium"
+            : undefined
         }
       >
         {fmtPct(num(r.point.nsfrPct), 1)}
@@ -879,7 +904,13 @@ const horizonColumns: Column<HorizonRow>[] = [
   },
 ];
 
-function HorizonTable({ path }: { path: ProjectionYearRead[] }) {
+function HorizonTable({
+  path,
+  liquidityInForce,
+}: {
+  path: ProjectionYearRead[];
+  liquidityInForce: boolean;
+}) {
   const rows: HorizonRow[] = path.map((point, i) => {
     const prev = i > 0 ? path[i - 1] : null;
     return {
@@ -892,5 +923,11 @@ function HorizonTable({ path }: { path: ProjectionYearRead[] }) {
         point.year > 1 && prev ? yoyPct(num(point.nii), num(prev.nii)) : null,
     };
   });
-  return <DataTable columns={horizonColumns} rows={rows} density="compact" />;
+  return (
+    <DataTable
+      columns={horizonColumns(liquidityInForce)}
+      rows={rows}
+      density="compact"
+    />
+  );
 }
