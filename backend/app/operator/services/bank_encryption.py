@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.key_management import registry
+from app.core.key_management import reencryption, registry
 from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.schemas import BankKeyConnect, BankKeyRead, BankKeyRotate
 from app.core.key_management.types import KeyStatus, KeyUnavailableError
@@ -84,6 +84,7 @@ def connect_key(  # noqa: PLR0913 - scoped operator mutation
         db.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     _update_storage_reference(db, row)
+    _ = reencryption.enqueue(db, organization_id, bank_id)
     return _read(row)
 
 

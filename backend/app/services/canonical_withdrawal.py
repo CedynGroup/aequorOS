@@ -47,11 +47,13 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import CursorResult, and_, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
 from app.api.deps import TenantContext
 from app.bi.service.enqueue import enqueue_mart_refresh
 from app.core.ids import new_uuid7
+from app.core.key_management import registry
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models import (
@@ -514,6 +516,8 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
         )
     assert row.withdrawal_batch_id is not None  # CHECK-constrained for 'applied'
 
+    # Wait for first-key index cutover before comparing natural keys.
+    _ = registry.bank_key(db, row.organization_id, bank.id)
     model = _model_for(row.entity)
     restored_scope = [
         model.organization_id == row.organization_id,
@@ -606,15 +610,24 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
     # counting toward a filed number would be worse than no marker at all. The
     # evidence lives in this record, in both batches, in both lineage nodes and
     # in both (append-only) audit events.
-    result = cast(
-        "CursorResult[Any]",
-        db.execute(
-            update(model)
-            .where(*restored_scope)
-            .values(withdrawn_at=None, withdrawn_by_batch_id=None, withdrawal_reason=None)
-            .execution_options(synchronize_session=False)
-        ),
-    )
+    try:
+        with db.begin_nested():
+            result = cast(
+                "CursorResult[Any]",
+                db.execute(
+                    update(model)
+                    .where(*restored_scope)
+                    .values(withdrawn_at=None, withdrawn_by_batch_id=None, withdrawal_reason=None)
+                    .execution_options(synchronize_session=False)
+                ),
+            )
+    except IntegrityError as exc:
+        # The current-generation unique index arbitrates a concurrent import
+        # after the conflict query; its rejection must be a governed refusal.
+        raise WithdrawalError(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The withdrawn records were concurrently replaced; reversal refused.",
+        ) from exc
     restored = int(result.rowcount or 0)
 
     row.status = "reversed"

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from copy import copy
 from typing import BinaryIO, cast
 from uuid import UUID
@@ -61,6 +62,19 @@ class ObjectEncryption:
             sessions = cast(Callable[[], Callable[[], Session]], database.get_sessionmaker)()
             self._store = DatabaseEnvelopeStore(sessions)
         return self._store.for_session(self._session) if self._session is not None else self._store
+
+    @contextmanager
+    def publication(self, location: StorageLocation) -> Generator[ObjectEncryption]:
+        store = self._envelopes()
+        if isinstance(store, DatabaseEnvelopeStore):
+            with store.publication(location.institution_slug) as bound:
+                encryption = copy(self)
+                encryption._store = bound
+                # Keep optional-bank policy checks in the publication unit.
+                encryption._session = bound.session
+                yield encryption
+        else:
+            yield self
 
     def encrypt(
         self, location: StorageLocation, data: BinaryIO, metadata: ObjectMetadata

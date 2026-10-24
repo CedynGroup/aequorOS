@@ -222,8 +222,10 @@ recorded keys for its recovery lifetime; live rotation does not migrate those
 wrappers. Physical historical database backups are immutable and are not
 rewritten by live rotation.
 
-Existing platform-only/plaintext objects are not converted; connected-key reads
-refuse them.
+The editable-data re-encryption job converts current editable platform-only objects.
+Connected-key reads refuse legacy plaintext until that conversion. Retained and
+version-pinned objects keep their existing protection and remain explicit old-key
+dependencies; see [the migration contract](bank_field_encryption.md#editable-data-re-encryption).
 Exported plaintext that a user already downloaded is outside object-storage
 revocation.
 
@@ -234,8 +236,10 @@ Object artifacts and their object backups use the bank-held hierarchy above.
 [Sensitive-field encryption](bank_field_encryption.md) reuses its `KeyProvider`
 and envelope catalogue for newly written borrower identities and operational
 payloads. That document lists the covered fields and numeric-only BI behavior.
-Existing rows are not converted; demo datasets are re-imported after connecting
-the bank key. Existing physical backups retain their original protection.
+Existing editable rows are converted by the automatically queued connection job.
+Immutable rows and object versions are explicitly counted as retained, and the
+job reports `complete except N retained immutable records` when they remain.
+Existing physical backups retain their original protection.
 Signing keys and credential custody remain
 [issue 355](https://github.com/CedynGroup/aequorOS/issues/355). Scheduled
 key-health monitoring, alerting and support workflows remain

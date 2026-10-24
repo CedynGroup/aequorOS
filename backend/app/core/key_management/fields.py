@@ -182,7 +182,7 @@ def _index_context(row: BankEncryptionKey) -> dict[str, str]:
     }
 
 
-def _index_key(db: Session, row: BankEncryptionKey) -> bytes:
+def index_key(db: Session, row: BankEncryptionKey) -> bytes:
     if row.index_version_id is None:
         raise KeyUnavailableError("The bank index key is unavailable.")
     return registry.open_envelope(
@@ -230,57 +230,85 @@ def blind_index(  # noqa: PLR0913 - explicit scope at the search boundary
         row = registry.bank_key(db, organization_id, bank_id)
         if row is None and get_key_settings().bank_key_required:
             raise KeyUnavailableError("The bank encryption key is not connected.")
-        secret = _index_key(db, row) if row is not None else None
+        secret = index_key(db, row) if row is not None else None
         return _index(secret, organization_id, bank_id, domain, value, normalization)
 
 
-def _update_indexes(
-    state: InstanceState[object], organization: str, bank: str, secret: bytes | None
-) -> None:
-    obj = state.obj()
-    if obj is None:
-        return
-    table = cast(Table, state.mapper.local_table).name
+def index_values(
+    table: str,
+    values: dict[str, object],
+    organization: str,
+    bank: str,
+    secret: bytes | None,
+) -> dict[str, object]:
     if table == "canonical_counterparties":
-        name = cast(str, state.dict["name"])
-        source = cast(str, state.dict["source_reference"])
-        group = cast(str | None, state.dict.get("group_reference"))
-        for column, domain, value, normalization in (
-            ("name_blind_index", "counterparty.name", name, "name"),
-            ("source_reference_blind_index", "counterparty.source_reference", source, "identifier"),
-            ("concentration_group_blind_index", "counterparty.group", group or name, "identifier"),
-        ):
-            setattr(
-                obj,
-                column,
-                _index(
-                    secret, organization, bank, domain, value, cast(Normalization, normalization)
+        name = cast(str, values["name"])
+        source = cast(str, values["source_reference"])
+        group = cast(str | None, values.get("group_reference"))
+        result: dict[str, object] = {
+            column: _index(
+                secret, organization, bank, domain, value, cast(Normalization, normalization)
+            )
+            for column, domain, value, normalization in (
+                ("name_blind_index", "counterparty.name", name, "name"),
+                (
+                    "source_reference_blind_index",
+                    "counterparty.source_reference",
+                    source,
+                    "identifier",
+                ),
+                (
+                    "concentration_group_blind_index",
+                    "counterparty.group",
+                    group or name,
+                    "identifier",
                 ),
             )
-        identifiers = cast(dict[str, object], state.dict.get("external_identifiers") or {})
-        attributes.set_attribute(
-            obj,
-            "external_identifiers_blind_indexes",
-            {
-                namespace: _index(
-                    secret,
-                    organization,
-                    bank,
-                    "counterparty.identifier:" + namespace,
-                    value,
-                    "identifier",
-                )
-                for namespace, value in identifiers.items()
-                if isinstance(value, str)
-            },
-        )
-    elif table == "related_parties":
-        name = cast(str, state.dict["full_name"])
-        attributes.set_attribute(
-            obj,
-            "full_name_blind_index",
-            _index(secret, organization, bank, "related_party.full_name", name, "name"),
-        )
+        }
+        identifiers = cast(dict[str, object], values.get("external_identifiers") or {})
+        result["external_identifiers_blind_indexes"] = {
+            namespace: _index(
+                secret,
+                organization,
+                bank,
+                "counterparty.identifier:" + namespace,
+                value,
+                "identifier",
+            )
+            for namespace, value in identifiers.items()
+            if isinstance(value, str)
+        }
+        return result
+    if table == "related_parties":
+        return {
+            "full_name_blind_index": _index(
+                secret,
+                organization,
+                bank,
+                "related_party.full_name",
+                cast(str, values["full_name"]),
+                "name",
+            )
+        }
+    return {}
+
+
+def _update_indexes(
+    state: InstanceState[object],
+    organization: str,
+    bank: str,
+    secret: bytes | None,
+) -> None:
+    obj = state.obj()
+    if obj is not None:
+        for column, value in index_values(
+            cast(Table, state.mapper.local_table).name,
+            dict(state.dict),
+            organization,
+            bank,
+            secret,
+        ).items():
+            attributes.set_attribute(obj, column, value)
 
 
 @dataclass
@@ -355,7 +383,7 @@ def encrypt_pending(  # noqa: PLR0912 - one atomic flush boundary
                 "related_parties",
             }:
                 if scope not in index_keys:
-                    index_keys[scope] = _index_key(db, row)
+                    index_keys[scope] = index_key(db, row)
                 _update_indexes(state, organization, row.bank_id, index_keys[scope])
             for col in changed:
                 value = values[col.attribute]

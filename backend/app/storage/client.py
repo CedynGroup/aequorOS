@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from typing import BinaryIO, Literal, Self
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -147,6 +148,14 @@ class StorageHealth:
     detail: str = ""
 
 
+@dataclass(frozen=True)
+class EncryptionInventoryItem:
+    location: StorageLocation
+    version_id: str
+    envelope_id: UUID | None
+    retained: bool
+
+
 class StorageClient(ABC):
     """The single sanctioned interface for AequorOS object storage.
 
@@ -215,6 +224,12 @@ class StorageClient(ABC):
 
     @abstractmethod
     def health_check(self) -> StorageHealth: ...
+
+    def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
+        raise StorageBackendError("This storage backend cannot inventory encryption versions.")
+
+    def reencrypt(self, item: EncryptionInventoryItem) -> bool:
+        raise StorageBackendError("This storage backend cannot migrate encryption versions.")
 
     def retain(self, location: StorageLocation, version_id: str, until: datetime) -> None:
         raise StorageBackendError("This storage backend cannot confirm compliance retention.")

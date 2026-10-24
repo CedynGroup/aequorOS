@@ -34,9 +34,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.tls import require_boto_tls, require_https
+from app.storage import reencryption
 from app.storage.access_log import AccessLogHook, HashChainedAccessLog, null_access_log
 from app.storage.client import (
     RETAINED_TIERS,
+    EncryptionInventoryItem,
     ObjectMetadata,
     StorageAccessError,
     StorageBackendError,
@@ -146,6 +148,18 @@ class S3CompatibleStorageClient(StorageClient):
         metadata: ObjectMetadata,
         content_type: str = "application/octet-stream",
     ) -> StorageObject:
+        with self._encryption.publication(location) as encryption:
+            bound = copy(self)
+            bound._encryption = encryption
+            return bound._write(location, data, metadata, content_type)
+
+    def _write(
+        self,
+        location: StorageLocation,
+        data: BinaryIO,
+        metadata: ObjectMetadata,
+        content_type: str,
+    ) -> StorageObject:
         self._validate_metadata(location, metadata)
         self._require_output_retention_policy(location)
         bucket = location.bucket_name(self._env)
@@ -208,6 +222,25 @@ class S3CompatibleStorageClient(StorageClient):
         version_id = cast(str | None, stat.get("VersionId"))
         self._log("write", location, version_id=version_id)
         return self._to_storage_object(location, stat, version_id=version_id)
+
+    def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
+        yield from reencryption.inventory(
+            cast(reencryption.S3MaintenanceClient, cast(object, self._s3)),
+            self._env,
+            institution_slug,
+        )
+
+    def reencrypt(self, item: EncryptionInventoryItem) -> bool:
+        result = reencryption.reencrypt(
+            cast(reencryption.S3MaintenanceClient, cast(object, self._s3)),
+            self._env,
+            self._encryption,
+            item,
+            self._settings.kms_key_id,
+        )
+        if result:
+            self._log("reencrypt", item.location, version_id=item.version_id)
+        return result
 
     def retain(self, location: StorageLocation, version_id: str, until: datetime) -> None:
         self._require_output_retention_policy(location)

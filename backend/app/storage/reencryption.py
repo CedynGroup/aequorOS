@@ -1,0 +1,181 @@
+"""Conditional replacement of editable objects; retained version IDs never change."""
+
+from __future__ import annotations
+
+import hashlib
+from collections.abc import Iterable, Iterator
+from datetime import UTC, datetime
+from tempfile import SpooledTemporaryFile
+from typing import BinaryIO, Protocol, cast
+from uuid import UUID
+
+# pyright: reportMissingTypeStubs=false
+from botocore.exceptions import BotoCoreError, ClientError
+from pydantic import BaseModel, Field, TypeAdapter
+
+from app.storage.client import (
+    TIERS,
+    EncryptionInventoryItem,
+    ObjectMetadata,
+    StorageAccessError,
+    StorageBackendError,
+    StorageLocation,
+    StorageValidationError,
+)
+from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption
+
+
+class MaintenancePaginator(Protocol):
+    def paginate(self, **kwargs: object) -> Iterable[object]: ...
+
+
+class S3MaintenanceClient(Protocol):
+    def get_paginator(self, operation: str) -> MaintenancePaginator: ...
+    def head_object(self, **kwargs: object) -> dict[str, object]: ...
+    def get_object(self, **kwargs: object) -> dict[str, object]: ...
+    def put_object(self, **kwargs: object) -> dict[str, object]: ...
+
+
+class _Version(BaseModel):
+    Key: str
+    VersionId: str
+    IsLatest: bool
+
+
+class _Page(BaseModel):
+    Versions: list[_Version] = Field(default_factory=list)
+
+
+_HEADERS = TypeAdapter(dict[str, str])
+
+
+def _locked(stat: dict[str, object]) -> bool:
+    if stat.get("ObjectLockLegalHoldStatus") == "ON":
+        return True
+    if not stat.get("ObjectLockMode"):
+        return False
+    until = stat.get("ObjectLockRetainUntilDate")
+    if not isinstance(until, datetime):
+        raise StorageBackendError("Object retention deadline could not be verified.")
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=UTC)
+    return until > datetime.now(UTC)
+
+
+def inventory(
+    client: S3MaintenanceClient, env: str, slug: str
+) -> Iterator[EncryptionInventoryItem]:
+    try:
+        for tier in TIERS:
+            bucket = StorageLocation(slug, tier, "").bucket_name(env)
+            for page in client.get_paginator("list_object_versions").paginate(Bucket=bucket):
+                for entry in _Page.model_validate(page).Versions:
+                    location = StorageLocation(slug, tier, entry.Key)
+                    stat = client.head_object(
+                        Bucket=bucket,
+                        Key=entry.Key,
+                        **({"VersionId": entry.VersionId} if entry.VersionId != "null" else {}),
+                    )
+                    headers = _HEADERS.validate_python(stat.get("Metadata", {}))
+                    envelope = headers.get("key-envelope-id")
+                    format_id = headers.get("encryption-format")
+                    if (
+                        bool(format_id) != bool(envelope)
+                        or format_id
+                        and format_id != ENCRYPTION_FORMAT
+                    ):
+                        raise StorageAccessError("Object encryption metadata is invalid.")
+                    retained = not entry.IsLatest or _locked(stat)
+                    yield EncryptionInventoryItem(
+                        location,
+                        entry.VersionId,
+                        UUID(envelope) if envelope else None,
+                        retained,
+                    )
+    except (ClientError, BotoCoreError, ValueError) as exc:
+        raise StorageBackendError("Object encryption inventory could not be verified.") from exc
+
+
+def _legacy_plaintext(body: BinaryIO, checksum: str) -> BinaryIO:
+    output = SpooledTemporaryFile(max_size=8 * 1024 * 1024)  # noqa: SIM115 - caller owns result
+    digest = hashlib.sha256()
+    try:
+        for chunk in iter(lambda: body.read(1024 * 1024), b""):
+            digest.update(chunk)
+            _ = output.write(chunk)
+        if digest.hexdigest() != checksum:
+            raise StorageAccessError("Legacy object checksum could not be verified.")
+        _ = output.seek(0)
+        return cast(BinaryIO, output)
+    except BaseException:
+        output.close()
+        raise
+    finally:
+        body.close()
+
+
+def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
+    client: S3MaintenanceClient,
+    env: str,
+    encryption: ObjectEncryption,
+    item: EncryptionInventoryItem,
+    sse_key: str | None,
+) -> bool:
+    if item.retained:
+        raise StorageValidationError("Retained object versions cannot be rewritten.")
+    location = item.location
+    with encryption.publication(location) as unit:
+        bucket = location.bucket_name(env)
+        try:
+            stat = client.head_object(Bucket=bucket, Key=location.object_path)
+            if str(stat.get("VersionId", "null")) != item.version_id or _locked(stat):
+                return False
+            source = client.get_object(
+                Bucket=bucket,
+                Key=location.object_path,
+                **({"VersionId": item.version_id} if item.version_id != "null" else {}),
+            )
+            body = cast(BinaryIO, source["Body"])
+            headers = _HEADERS.validate_python(source.get("Metadata", {}))
+            metadata = ObjectMetadata.from_object_metadata(headers)
+            plaintext = (
+                unit.decrypt(location, body, metadata, headers)
+                if headers.get("encryption-format")
+                else _legacy_plaintext(body, metadata.checksum_sha256)
+            )
+            try:
+                encrypted, envelope, key_id = unit.encrypt(location, plaintext, metadata)
+            finally:
+                plaintext.close()
+            try:
+                if envelope is None:
+                    raise StorageAccessError("Re-encryption requires a connected bank key.")
+                headers.update(
+                    {
+                        "encryption-format": ENCRYPTION_FORMAT,
+                        "key-envelope-id": envelope,
+                        "kms-key-id": key_id or "",
+                    }
+                )
+                arguments: dict[str, object] = {
+                    "Bucket": bucket,
+                    "Key": location.object_path,
+                    "Body": encrypted,
+                    "Metadata": headers,
+                    "ContentType": source.get("ContentType", "application/octet-stream"),
+                    "IfMatch": source["ETag"],
+                }
+                if sse_key:
+                    arguments.update(ServerSideEncryption="aws:kms", SSEKMSKeyId=sse_key)
+                _ = client.put_object(**arguments)
+            finally:
+                encrypted.close()
+            return True
+        except ClientError as exc:
+            response = TypeAdapter(dict[str, object]).validate_python(exc.response)
+            error = TypeAdapter(dict[str, object]).validate_python(response.get("Error", {}))
+            if error.get("Code") in {"PreconditionFailed", "ConditionalRequestConflict"}:
+                return False
+            raise StorageBackendError("Object re-encryption could not be completed.") from exc
+        except BotoCoreError as exc:
+            raise StorageBackendError("Object re-encryption could not be completed.") from exc
