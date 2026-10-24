@@ -258,6 +258,7 @@ def test_an_unlisted_job_type_stays_on_the_deployment_default(db_session: Sessio
     its board pack a second time.
     """
     assert set(job_queue.STALE_AFTER_OVERRIDES_SECONDS) == {
+        "bank_reencrypt",
         "etl_dedup",
         "desk_capture",
         "bi_export",

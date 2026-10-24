@@ -27,7 +27,7 @@ from app.models.audit_event import AuditEvent
 from app.models.canonical import CanonicalCounterparty, CanonicalPositionSnapshot
 from app.models.job import Job
 from app.reporting.models.packages import RegulatoryPackage
-from app.services import canonical_withdrawal
+from app.services import canonical_withdrawal, job_queue
 from app.services.canonical_withdrawal import WithdrawalError
 from app.storage.client import EncryptionInventoryItem, StorageBackendError
 from tests.bi.service.test_mart_builder import AS_OF, build, resnapshot_loan_1, seed_book
@@ -58,6 +58,96 @@ class EmptyStorage(InMemoryStorageClient):
 class UnavailableStorage(EmptyStorage):
     def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
         raise StorageBackendError("Synthetic interruption after committed field batches.")
+
+
+def test_progressing_reencryption_is_not_reclaimed_at_the_fleet_window(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    counterparty(db_session, include_package=False)
+    db_session.commit()
+    connect(db_session, provider)
+    now = utc_now()
+    monkeypatch.setattr(job_queue, "utc_now", lambda: now)
+    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    db_session.commit()
+    claimed = job_queue.claim_next(
+        db_session, now, (reencryption.JOB_TYPE,), claimed_by="synthetic-healthy-worker"
+    )
+    assert claimed is not None and claimed.id == job.id
+    scans = 0
+
+    class ProgressingStorage(EmptyStorage):
+        def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
+            nonlocal now, scans
+            scans += 1
+            now += timedelta(minutes=20)
+            progress = reencryption.Progress.model_validate(job.progress)
+            assert progress.fields_rewritten > 0
+            assert job_queue.reclaim_stale(
+                db_session,
+                now,
+                stale_after=timedelta(seconds=900),
+                job_types=(reencryption.JOB_TYPE,),
+            ) == 0
+            assert job.status == "running" and job.attempts == 0
+            return super().encryption_inventory(institution_slug)
+
+    reencryption.run(db_session, claimed, ProgressingStorage())
+    assert scans == 2
+    job_queue.complete(db_session, claimed)
+    assert claimed.status == "succeeded" and claimed.attempts == 0
+    assert reencryption.Progress.model_validate(claimed.progress).summary == "complete"
+
+
+def test_interrupted_reencryption_is_reclaimed_and_resumes_committed_progress(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    party = counterparty(db_session)
+    party_id = party.id
+    db_session.commit()
+    connect(db_session, provider)
+    now = utc_now()
+    monkeypatch.setattr(job_queue, "utc_now", lambda: now)
+    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    db_session.commit()
+    claimed = job_queue.claim_next(
+        db_session, now, (reencryption.JOB_TYPE,), claimed_by="synthetic-interrupted-worker"
+    )
+    assert claimed is not None and claimed.id == job.id
+    with pytest.raises(StorageBackendError, match="Synthetic interruption"):
+        reencryption.run(db_session, claimed, UnavailableStorage())
+    db_session.rollback()
+    progress = reencryption.Progress.model_validate(claimed.progress)
+    assert progress.fields_rewritten > 0
+    now += timedelta(hours=6, seconds=1)
+    assert job_queue.reclaim_stale(
+        db_session,
+        now,
+        stale_after=timedelta(seconds=900),
+        job_types=(reencryption.JOB_TYPE,),
+    ) == 1
+    db_session.refresh(claimed)
+    assert claimed.status == "queued" and claimed.attempts == 1
+    assert reencryption.Progress.model_validate(claimed.progress) == progress
+    resumed = job_queue.claim_next(
+        db_session, now, (reencryption.JOB_TYPE,), claimed_by="synthetic-resuming-worker"
+    )
+    assert resumed is not None and resumed.id == job.id
+    assert resumed.claimed_by == "synthetic-resuming-worker"
+    reencryption.run(db_session, resumed, EmptyStorage())
+    job_queue.complete(db_session, resumed)
+    completed = reencryption.Progress.model_validate(resumed.progress)
+    assert resumed.status == "succeeded" and resumed.attempts == 1
+    assert completed.fields_rewritten == progress.fields_rewritten
+    assert completed.retained == {"regulatory_packages": 1}
+    assert completed.summary == "complete except 1 retained immutable records"
+    db_session.expunge_all()
+    loaded = db_session.get(CanonicalCounterparty, party_id)
+    assert loaded is not None and loaded.name == NAME
 
 
 def test_connection_reindexes_withdrawn_generations_before_reimport(

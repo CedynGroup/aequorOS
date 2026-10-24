@@ -137,6 +137,10 @@ Current editable stored objects are authenticated and conditionally replaced
 using their ETag, including conditional multipart completion for large objects.
 Uploads use bounded parts under the same size policy as ordinary storage writes.
 Each inventory pass handles multiple objects, refreshing key state after commits.
+aequorOS gives `bank_reencrypt` a six-hour stale-job window measured from claim,
+instead of the fleet's 900-second default. Progress commits preserve the resume
+cursor without resetting that window. An interrupted run is reclaimable after
+six hours and resumes its committed progress through the existing queue retry path.
 Legacy platform-protected content is accepted only by this
 maintenance path after checksum verification; normal connected-bank reads keep
 refusing it. A concurrent changed object defeats the conditional replacement and
