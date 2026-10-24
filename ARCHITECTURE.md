@@ -343,8 +343,10 @@ on one canonical store — the live tier for intraday awareness, the official ti
   `regulatory_forecasting.compute_live`, independently of saved official runs.
 - **Official tier** — `pipeline.run_official` (`job_type=official_run`): reuses
   `data_activation.run_official_modules` to mint the immutable 22-scenario + forecast run set for
-  filing. Facts are re-derived only when the period has none, so repeat official runs on unchanged
-  facts reproduce the same `input_hash` per run (see the value-based hash invariant in §3).
+  filing. Every mint re-derives the reporting period's facts from the accepted canonical book,
+  including same-date corrections. Prior runs and generated packages retain their frozen evidence;
+  unchanged financial values reproduce the same `input_hash` per run (see §3). Regression:
+  `backend/tests/services/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
 - **Freshness** (`app/services/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
   live `input_hash` to the latest official run's `input_hash`. Because the hash is value-based, a
   bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as

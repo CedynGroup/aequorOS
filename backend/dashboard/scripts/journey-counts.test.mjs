@@ -37,7 +37,7 @@ function fixture(run) {
   }
 }
 function reports() {
-  return [61, 61, 61, 60].map((count, index) => ({
+  return [61, 61, 61, 61].map((count, index) => ({
     shard: { current: index + 1, total: 4 },
     status: "passed",
     discovered: count,
@@ -70,11 +70,11 @@ function invoke(root, data) {
   assert.equal(readFileSync(summary, "utf8"), existingSummary + result.stdout);
   return result;
 }
-test("accepts a complete four-shard run at the 243-journey floor", () =>
+test("accepts a complete four-shard run at the executed-journey floor", () =>
   fixture((root) => {
     const result = invoke(root, reports());
     assert.equal(result.status, 0, result.stdout);
-    assert.match(result.stdout, /243 executed, 0 skipped/);
+    assert.match(result.stdout, /244 executed, 0 skipped/);
   }));
 test("rejects a vanished journey even when every shard passed", () =>
   fixture((root) => {
@@ -84,7 +84,7 @@ test("rejects a vanished journey even when every shard passed", () =>
     data[0].executed--;
     const result = invoke(root, data);
     assert.equal(result.status, 1);
-    assert.match(result.stdout, /floor is 243/);
+    assert.match(result.stdout, /floor is 244/);
   }));
 test("names skipped journeys and refuses skip-based success", () =>
   fixture((root) => {
@@ -134,7 +134,7 @@ test("counts unsuccessful journeys as executed while refusing the run", () =>
       data[0].journeys[0].status = status;
       const result = invoke(root, data);
       assert.equal(result.status, 1);
-      assert.match(result.stdout, /243 executed, 0 skipped/);
+      assert.match(result.stdout, /244 executed, 0 skipped/);
       assert.ok(
         result.stdout.includes(
           `Journey did not pass: ${data[0].journeys[0].name} (${status})`,

@@ -2689,10 +2689,10 @@
  "tests.api.test_fx_authorization": {
   "reportAny": 24,
   "reportPrivateUsage": 1,
-  "reportUnknownArgumentType": 11,
+  "reportUnknownArgumentType": 6,
   "reportUnknownLambdaType": 2,
-  "reportUnknownMemberType": 49,
-  "reportUnknownVariableType": 30,
+  "reportUnknownMemberType": 41,
+  "reportUnknownVariableType": 23,
   "reportUnusedFunction": 1
  },
  "tests.api.test_grant_administration": {
