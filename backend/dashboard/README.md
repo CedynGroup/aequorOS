@@ -585,7 +585,8 @@ diagnosis:
    `S3_ENDPOINT` is exported. Existing exported S3 configuration is reused in
    auto mode; `AQS_LOCAL_SERVICES=external` also permits the backend to read its
    untracked `.env` without starting a service. The `attestation`, `full-lifecycle`,
-   `submission-lifecycle`, `data-engine-ingestion`, `00-ingestion-worker`, and opt-in `visual-tour`
+   `submission-lifecycle`, `data-engine-ingestion`, `integration-key-use`,
+   `00-ingestion-worker`, and opt-in `visual-tour`
    specs, plus the SSO attestation journey, refuse immediately without it rather
    than letting storage-dependent assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The
