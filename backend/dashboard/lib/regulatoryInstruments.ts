@@ -119,17 +119,3 @@ export function forecastRuleApplicable(
     !["year5_lcr_above_minimum", "year5_nsfr_above_minimum"].includes(ruleId)
   );
 }
-
-export function forecastStatus(
-  metrics: Record<string, unknown>,
-  liquidityInForce: boolean,
-): "red" | "amber" | "green" | "na" {
-  const keys = [
-    "year5_car_status",
-    ...(liquidityInForce ? ["year5_lcr_status", "year5_nsfr_status"] : []),
-  ];
-  const statuses = keys.map((key) => metrics[key]);
-  if (statuses.includes("red")) return "red";
-  if (statuses.includes("amber")) return "amber";
-  return statuses.every((status) => status === "green") ? "green" : "na";
-}

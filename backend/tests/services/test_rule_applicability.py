@@ -1,10 +1,11 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domain.regulatory_instruments import forecast_status
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -95,21 +96,49 @@ def test_sdi_exposure_status_and_threshold_change_only_on_directive_commencement
 
 
 @pytest.mark.usefixtures("forecasting_run_authority")
-def test_cached_forecast_views_and_alert_counts_drop_reference_checks(db_session: Session) -> None:
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize(("car", "expected"), [("8", "red"), ("20", "green"), ("13.25", "amber")])
+def test_cached_forecast_views_and_alert_counts_drop_reference_checks(
+    db_session: Session, legacy: bool, car: str, expected: str
+) -> None:
     seed_book(db_session)
     bank = db_session.get(Bank, SAMPLE_BANK_ID)
     assert bank is not None
     period = db_session.scalars(
-        select(BankReportingPeriod).where(BankReportingPeriod.bank_id == bank.id)
+        select(BankReportingPeriod)
+        .where(BankReportingPeriod.bank_id == bank.id)
+        .order_by(BankReportingPeriod.period_end.desc())
     ).first()
     assert period is not None
+    db_session.add(
+        RegulatoryParameter(
+            scope_type="institution_type",
+            scope_key=bank.institution_type,
+            jurisdiction_code=bank.jurisdiction_code,
+            param_code="car_min",
+            value_numeric=Decimal("30"),
+            unit="percent",
+            confirmation_status="confirmed",
+            source_citation="Synthetic later capital minimum",
+            effective_from=period.period_end + timedelta(days=1),
+            status="approved",
+            proposed_by="synthetic-maker",
+            approved_by="synthetic-checker",
+        )
+    )
     metrics = {
-        "year5_car_pct": "20",
+        "year5_car_pct": car,
         "year5_lcr_pct": "80",
         "year5_nsfr_pct": "90",
-        "year5_car_status": "green",
-        "year5_lcr_status": "red",
-        "year5_nsfr_status": "red",
+        **(
+            {}
+            if legacy
+            else {
+                "year5_car_status": expected,
+                "year5_lcr_status": "red",
+                "year5_nsfr_status": "red",
+            }
+        ),
     }
     db_session.add(
         LiveMetric(
@@ -117,6 +146,7 @@ def test_cached_forecast_views_and_alert_counts_drop_reference_checks(db_session
             bank_id=bank.id,
             module="forecast",
             metrics=metrics,
+            source_as_of_date=period.period_end,
             status="red",
             computed_at=datetime.now(UTC),
         )
@@ -146,11 +176,35 @@ def test_cached_forecast_views_and_alert_counts_drop_reference_checks(db_session
         )
     db_session.flush()
     summary = live_view.get_live_summary(db_session, MAKER, bank.id)
-    assert next(row for row in summary.modules if row.module == "forecast").status == "green"
+    assert next(row for row in summary.modules if row.module == "forecast").status == expected
     snapshots = live_view.list_live_snapshots(db_session, MAKER, bank.id, module="forecast")
-    assert snapshots.snapshots[0].status == "green"
+    assert snapshots.snapshots[0].status == expected
     feed = alerts.get_bank_alerts(db_session, MAKER, bank.id)
     assert [item.rule_id for item in feed.items] == ["year5_car_above_minimum"]
     assert feed.total == 1
     assert feed.by_severity == {"critical": 1}
     assert feed.by_module == {"forecast": 1}
+
+
+@pytest.mark.parametrize("liquidity_in_force", [False, True])
+@pytest.mark.parametrize(
+    ("car", "lcr", "nsfr", "capital_status"),
+    [
+        ("8", "110", "110", "red"),
+        ("20", "80", "110", "green"),
+        ("20", "110", "80", "green"),
+        ("13.25", "110", "110", "amber"),
+    ],
+)
+def test_legacy_constituents_retain_capital_and_assess_only_applicable_liquidity(
+    liquidity_in_force: bool, car: str, lcr: str, nsfr: str, capital_status: str
+) -> None:
+    metrics = {"year5_car_pct": car, "year5_lcr_pct": lcr, "year5_nsfr_pct": nsfr}
+    thresholds = {
+        "car_min": Decimal("13"),
+        "lcr_min": Decimal("100"),
+        "nsfr_min": Decimal("100"),
+        "lcr_amber_floor": Decimal("90"),
+    }
+    expected = "red" if liquidity_in_force and (lcr == "80" or nsfr == "80") else capital_status
+    assert forecast_status(metrics, liquidity_in_force, thresholds) == expected

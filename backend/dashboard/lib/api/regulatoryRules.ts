@@ -4,7 +4,6 @@ import { useModuleScope } from "@/components/shell/BankContext";
 import {
   isRuleInForce,
   forecastRuleApplicable,
-  forecastStatus,
 } from "@/lib/regulatoryInstruments";
 import { useBankAlerts, useReturnTemplates, useLiveSummary } from "./hooks";
 
@@ -93,19 +92,9 @@ export function useInForceLiveSummary(bankId: string | undefined) {
       rules.isReady && !query.error && query.data
         ? {
             ...query.data,
-            modules: query.data.modules
-              .filter((view) => rules.isModuleInForce(view.module))
-              .map((view) =>
-                view.module === "forecast"
-                  ? {
-                      ...view,
-                      status: forecastStatus(
-                        view.metrics,
-                        rules.isModuleInForce("liquidity") === true,
-                      ),
-                    }
-                  : view,
-              ),
+            modules: query.data.modules.filter((view) =>
+              rules.isModuleInForce(view.module),
+            ),
           }
         : undefined,
   };

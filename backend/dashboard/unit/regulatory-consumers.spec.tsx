@@ -39,7 +39,11 @@ import CfpPage from "@/app/(app)/liquidity/cfp/page";
 import MonitoringPage from "@/app/(app)/liquidity/monitoring/page";
 import { irrLimits, liquidityLimits } from "@/components/risk/limits";
 import { isRuleInForce } from "@/lib/regulatoryInstruments";
-import { useBankRules, useInForceAlerts } from "@/lib/api/regulatoryRules";
+import {
+  useBankRules,
+  useInForceAlerts,
+  useInForceLiveSummary,
+} from "@/lib/api/regulatoryRules";
 import type { BiEChartsOption } from "@/components/bi/EChart";
 
 beforeAll(() =>
@@ -64,6 +68,7 @@ const state = vi.hoisted(() => ({
   breached: true,
   irrLoading: false,
   forecast: "",
+  legacyForecast: false,
   exposure: false,
 }));
 function scope() {
@@ -359,7 +364,12 @@ function summary() {
       ...(state.forecast ? ["forecast"] : []),
     ].map((module) => ({
       module,
-      status: module === "forecast" ? "red" : "green",
+      status:
+        module === "forecast"
+          ? state.status === "in_force"
+            ? "red"
+            : state.forecast
+          : "green",
       computedAt: new Date(),
       metrics: {
         lcr_pct: "105",
@@ -368,9 +378,13 @@ function summary() {
         year5_car_pct: state.forecast === "red" ? "8" : "20",
         year5_lcr_pct: "80",
         year5_nsfr_pct: "90",
-        year5_car_status: state.forecast || "green",
-        year5_lcr_status: "red",
-        year5_nsfr_status: "red",
+        ...(state.legacyForecast
+          ? {}
+          : {
+              year5_car_status: state.forecast || "green",
+              year5_lcr_status: "red",
+              year5_nsfr_status: "red",
+            }),
       },
       computedFromInputHash: "a".repeat(64),
       calculationGeneration: 1,
@@ -561,6 +575,7 @@ afterEach(() => {
   state.breached = true;
   state.irrLoading = false;
   state.forecast = "";
+  state.legacyForecast = false;
   state.exposure = false;
 });
 
@@ -1147,5 +1162,45 @@ it.each([false, true])(
     expect(
       screen.getByRole("button", { name: "Print / export PDF" }),
     ).toBeEnabled();
+  },
+);
+
+function ForecastAssessmentProbe() {
+  const summary = useInForceLiveSummary("BK-SYNTH001");
+  return (
+    <p>
+      Forecast status:{" "}
+      {summary.data?.modules.find((view) => view.module === "forecast")?.status}
+    </p>
+  );
+}
+
+it.each([false, true])(
+  "retains backend capital assessments in legacy=%s summaries across consumers",
+  (legacy) => {
+    state.sdi = false;
+    state.legacyForecast = legacy;
+    state.forecast = "red";
+    for (const component of [
+      <PulseWall key="pulse" bankId="BK-SYNTH001" moduleOrder={["forecast"]} />,
+      <LiveStatusCard key="live" />,
+      <RiskPage key="risk" />,
+      <BoardPackPage key="board" />,
+    ]) {
+      const view = render(
+        <>
+          {component}
+          <ForecastAssessmentProbe />
+        </>,
+      );
+      expect(
+        screen.getAllByText(/Balance Sheet Forecast|^forecast$/).length,
+      ).toBeGreaterThan(0);
+      expect(screen.getByText("Forecast status: red")).toBeVisible();
+      view.unmount();
+    }
+    render(<BreachBanner bankId="BK-SYNTH001" />);
+    expect(screen.getByText("Synthetic forecast capital alert")).toBeVisible();
+    expect(screen.queryByText("Synthetic forecast lcr alert")).toBeNull();
   },
 );
