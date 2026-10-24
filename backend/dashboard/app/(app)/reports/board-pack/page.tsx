@@ -50,6 +50,8 @@ export default function BoardPackPage() {
   const rules = useBankRules(bank?.id);
   const live = {
     ...source,
+    isLoading: source.isLoading || rules.isLoading,
+    error: source.error ?? rules.error,
     data: source.data && {
       ...source.data,
       modules: source.data.modules.filter((row) =>
@@ -74,7 +76,10 @@ export default function BoardPackPage() {
     ? "Live evidence is stale after an input change or withdrawal — figures withheld until recomputation completes."
     : null;
   const canPrint =
-    Boolean(live.data?.modules.length) && !live.isLoading && !live.error;
+    rules.isReady &&
+    Boolean(live.data?.modules.length) &&
+    !live.isLoading &&
+    !live.error;
 
   return (
     <>
@@ -104,7 +109,10 @@ export default function BoardPackPage() {
         <QueryBoundary
           isLoading={live.isLoading}
           error={live.error}
-          onRetry={() => live.refetch()}
+          onRetry={() => {
+            void live.refetch();
+            void rules.query.refetch();
+          }}
         >
           <BoardPage>
             <div className="card px-8 py-12 space-y-6">

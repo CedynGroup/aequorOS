@@ -146,6 +146,7 @@ export type PulseCards = {
   cards: Record<LiveModule, PulseCardModel>;
   /** True while any module card is still fetching. */
   isLoading: boolean;
+  error: unknown;
 };
 
 export function usePulseCards(
@@ -426,8 +427,14 @@ export function usePulseCards(
 
   return {
     cards,
-    modules: DEFAULT_MODULE_ORDER.filter(scoped),
-    isLoading: DEFAULT_MODULE_ORDER.some((m) => cards[m].isLoading),
+    modules: DEFAULT_MODULE_ORDER.filter(
+      (module) =>
+        isHrefVisible(LIVE_MODULE_HREFS[module], scope) &&
+        rules.isModuleInForce(module) !== false,
+    ),
+    isLoading:
+      rules.isLoading || DEFAULT_MODULE_ORDER.some((m) => cards[m].isLoading),
+    error: rules.error,
   };
 }
 

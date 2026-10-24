@@ -33,9 +33,17 @@ let chartOption: {
   yAxis: { min: number };
 };
 loader._load = (request, parent, isMain) => {
+  if (request === "next/navigation")
+    return { useSearchParams: () => new URLSearchParams() };
   if (request === "@/lib/api/client")
     return { isApiError: () => false, isModuleUnavailable: () => false };
-  if (request === "@/lib/api/hooks")
+  if (
+    request === "@/lib/api/hooks" ||
+    (request === "./hooks" &&
+      (parent as { filename?: string } | null)?.filename?.endsWith(
+        "/lib/api/regulatoryRules.js",
+      ))
+  )
     return new Proxy(
       {},
       {
@@ -45,6 +53,7 @@ loader._load = (request, parent, isMain) => {
                 data: {
                   templates: [
                     { code: "LCR-NSFR", instrumentStatus: "in_force" },
+                    { code: "IRRBB-PILOT", instrumentStatus: "exposure_draft" },
                   ],
                 },
               }

@@ -528,6 +528,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
                 "AequorOS registers this monthly summary while the DBK 102/300/400/"
                 "700 layouts remain unpublished (research §9, gap G5)."
             ),
+            limit_parameters=("fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct"),
             frequency="monthly",
             # The monthly summary is an AequorOS registration (the official
             # obligation is daily); day 10 is a placeholder aligned to the
@@ -552,6 +553,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
                 "gap G5) — this daily family reconstructs the NOP and contingents "
                 "figures from the FX engine pending the official DBK templates."
             ),
+            limit_parameters=("fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct"),
             frequency="daily",
             # CONFIRMED cadence: next business day by 10:00 a.m. Africa/Accra.
             deadline_rule=daily_next_business_day(10, 0),
@@ -643,6 +645,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
                 "The prudential NPL limit (10%) binds from end-December 2026; the "
                 "notice is IN FORCE and applies to banks and SDIs alike."
             ),
+            limit_parameters=("npl_limit_pct", "npl_dividend_restriction_pct"),
             frequency="monthly",
             # The notice mandates monthly reporting but publishes no day count.
             # Provisional 9-day rule (the LE precedent) until the institution's

@@ -9,6 +9,7 @@ import { useBankRules, useInForceAlerts } from "@/lib/api/regulatoryRules";
  * updates on its own as the background pipeline recomputes; no run button.
  */
 
+import QueryBoundary from "@/components/ui/QueryBoundary";
 import { RadioTower } from "lucide-react";
 import type { LiveModuleView } from "@aequoros/risk-service-api";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
@@ -57,7 +58,11 @@ export default function LiveStatusCard() {
             : "Auto-recomputed on ingestion — upload data to populate"
         }
         action={
-          total > 0 ? (
+          alerts.isLoading ? (
+            <StatusPill tone="slate">Checking rule status…</StatusPill>
+          ) : alerts.error ? (
+            <StatusPill tone="slate">Alerts unavailable</StatusPill>
+          ) : total > 0 ? (
             <StatusPill tone="breach">
               {total} breach{total === 1 ? "" : "es"}
             </StatusPill>
@@ -67,49 +72,56 @@ export default function LiveStatusCard() {
         }
       />
       <CardBody>
-        {summary.isLoading ? (
-          <p className="text-body text-slate">Loading live metrics…</p>
-        ) : modules.length === 0 ? (
-          <p className="text-body text-slate leading-relaxed">
-            No live metrics yet. Upload data in the Data Engine — the pipeline
-            derives and computes every module automatically.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-border-light rounded-sm overflow-hidden border border-border-light">
-            {MODULE_ORDER.filter(rules.isModuleInForce).map((module) => {
-              const view = byModule.get(module);
-              const primary = view
-                ? livePrimaryMetric(module, view.metrics)
-                : null;
-              return (
-                <div key={module} className="bg-surface-raised px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-micro uppercase tracking-wider text-slate truncate">
-                      {LIVE_MODULE_LABELS[module]}
+        <QueryBoundary
+          contained
+          isLoading={rules.isLoading}
+          error={rules.error}
+          onRetry={() => void rules.query.refetch()}
+        >
+          {summary.isLoading ? (
+            <p className="text-body text-slate">Loading live metrics…</p>
+          ) : modules.length === 0 ? (
+            <p className="text-body text-slate leading-relaxed">
+              No live metrics yet. Upload data in the Data Engine — the pipeline
+              derives and computes every module automatically.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-border-light rounded-sm overflow-hidden border border-border-light">
+              {MODULE_ORDER.filter(rules.isModuleInForce).map((module) => {
+                const view = byModule.get(module);
+                const primary = view
+                  ? livePrimaryMetric(module, view.metrics)
+                  : null;
+                return (
+                  <div key={module} className="bg-surface-raised px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-micro uppercase tracking-wider text-slate truncate">
+                        {LIVE_MODULE_LABELS[module]}
+                      </p>
+                      {view && (
+                        <StatusPill
+                          tone={statusTone(view.status)}
+                          className="shrink-0"
+                        >
+                          {view.status}
+                        </StatusPill>
+                      )}
+                    </div>
+                    <p className="mt-1 font-mono text-h3 text-navy tabular-nums">
+                      {primary ? primary.value : "—"}
                     </p>
-                    {view && (
-                      <StatusPill
-                        tone={statusTone(view.status)}
-                        className="shrink-0"
-                      >
-                        {view.status}
-                      </StatusPill>
-                    )}
+                    <p className="text-micro text-slate truncate">
+                      {primary ? primary.label : "Not computed yet"}
+                      {view?.computedAt
+                        ? ` · ${fmtRelative(view.computedAt)}`
+                        : ""}
+                    </p>
                   </div>
-                  <p className="mt-1 font-mono text-h3 text-navy tabular-nums">
-                    {primary ? primary.value : "—"}
-                  </p>
-                  <p className="text-micro text-slate truncate">
-                    {primary ? primary.label : "Not computed yet"}
-                    {view?.computedAt
-                      ? ` · ${fmtRelative(view.computedAt)}`
-                      : ""}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </QueryBoundary>
       </CardBody>
     </Card>
   );

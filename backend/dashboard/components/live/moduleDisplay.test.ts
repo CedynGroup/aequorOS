@@ -306,7 +306,13 @@ test("WindowAnalysis renders each daily headline with the live card's label", ()
   };
   const originalLoad = loader._load;
   loader._load = (request, parent, isMain) => {
-    if (request === "@/lib/api/hooks") {
+    if (
+      request === "@/lib/api/hooks" ||
+      (request === "./hooks" &&
+        (parent as { filename?: string } | null)?.filename?.endsWith(
+          "/lib/api/regulatoryRules.js",
+        ))
+    ) {
       return {
         useWindowAnalytics: () => ({ data, isFetching: false, error: null }),
         useReturnTemplates: () => ({

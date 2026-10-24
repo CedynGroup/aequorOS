@@ -1,5 +1,6 @@
 "use client";
 
+import QueryBoundary from "@/components/ui/QueryBoundary";
 import { useBankRules } from "@/lib/api/regulatoryRules";
 import { useBankContext } from "@/components/shell/BankContext";
 
@@ -15,24 +16,33 @@ export default function SdiLiquidityBoardDisclosure({
   const { bank } = useBankContext();
   const rules = useBankRules(bank?.id);
   return (
-    <div className="flex h-full flex-col items-center justify-center px-6 text-center text-caption text-slate">
-      <p>
-        SDI liquidity stress is not assessed because no BoG SDI liquidity-stress
-        methodology is configured. Basel LCR/NSFR are not substituted.
-      </p>
-      {asOf && (
-        <p className="mt-3 text-navy">
-          Reserve evidence as of {asOf}: {reserveBreaches ?? 0} reserve
-          breach(es).
-          {rules.isInForce("SDI-LMT-MONTHLY") &&
-            table1Breaches !== undefined && (
-              <>
-                {" "}
-                LMTD Table 1 assessment: {table1Breaches} below-floor ratio(s).
-              </>
-            )}
+    <QueryBoundary
+      contained
+      isLoading={rules.isLoading}
+      error={rules.error}
+      onRetry={() => void rules.query.refetch()}
+    >
+      <div className="flex h-full flex-col items-center justify-center px-6 text-center text-caption text-slate">
+        <p>
+          SDI liquidity stress is not assessed because no BoG SDI
+          liquidity-stress methodology is configured. Basel LCR/NSFR are not
+          substituted.
         </p>
-      )}
-    </div>
+        {asOf && (
+          <p className="mt-3 text-navy">
+            Reserve evidence as of {asOf}: {reserveBreaches ?? 0} reserve
+            breach(es).
+            {rules.isInForce("SDI-LMT-MONTHLY") &&
+              table1Breaches !== undefined && (
+                <>
+                  {" "}
+                  LMTD Table 1 assessment: {table1Breaches} below-floor
+                  ratio(s).
+                </>
+              )}
+          </p>
+        )}
+      </div>
+    </QueryBoundary>
   );
 }

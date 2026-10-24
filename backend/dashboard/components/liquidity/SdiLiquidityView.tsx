@@ -148,9 +148,12 @@ function LiquidityPosition({ bankId }: { bankId: string | undefined }) {
     <>
       <PageHeader eyebrow="Liquidity" title="Liquidity" />
       <QueryBoundary
-        isLoading={position.isLoading}
-        error={position.error}
-        onRetry={() => position.refetch()}
+        isLoading={position.isLoading || rules.isLoading}
+        error={position.error ?? rules.error}
+        onRetry={() => {
+          void position.refetch();
+          void rules.query.refetch();
+        }}
       >
         <PageContainer className="py-6 space-y-6">
           {position.data ? (

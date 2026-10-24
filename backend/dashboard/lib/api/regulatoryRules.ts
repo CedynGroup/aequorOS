@@ -13,31 +13,58 @@ export function useBankRules(bankId: string | undefined) {
         item.code ===
         (scope.institutionClass === "sdi" && sdiCode ? sdiCode : code),
     );
-  const isInForce = (code: string, sdiCode?: string) =>
-    Boolean(bankId) && isRuleInForce(instrument(code, sdiCode));
+  const requiredCodes =
+    scope.institutionClass === "sdi"
+      ? ["SDI-LMT-MONTHLY", "SDI-IRRBB-QUARTERLY"]
+      : ["LCR-NSFR", "IRRBB-PILOT"];
+  const error =
+    query.error ??
+    (query.data &&
+    requiredCodes.some((code) => !instrument(code)?.instrumentStatus)
+      ? new Error("Regulatory rule status is unavailable.")
+      : null);
+  const isLoading = Boolean(bankId) && !query.data && !error;
+  const isReady = Boolean(bankId && query.data) && !error;
+  const isInForce = (code: string, sdiCode?: string) => {
+    const evidence = instrument(code, sdiCode);
+    return bankId && !query.error && evidence?.instrumentStatus
+      ? isRuleInForce(evidence)
+      : undefined;
+  };
   const isModuleInForce = (module: string) =>
     module === "liquidity"
       ? scope.institutionClass !== "sdi" && isInForce("LCR-NSFR")
       : module === "irr"
         ? isInForce("IRRBB-PILOT", "SDI-IRRBB-QUARTERLY")
         : true;
-  return { query, instrument, isInForce, isModuleInForce };
+  return {
+    query,
+    instrument,
+    isInForce,
+    isModuleInForce,
+    isLoading,
+    error,
+    isReady,
+  };
 }
 
 export function useInForceAlerts(bankId: string | undefined, limit = 200) {
   const query = useBankAlerts(bankId, limit);
-  const { isModuleInForce } = useBankRules(bankId);
-  const data = query.data;
-  if (!data) return query;
-  const items = data.items.filter((item) => isModuleInForce(item.module));
+  const rules = useBankRules(bankId);
+  const data = rules.isReady && !query.error ? query.data : undefined;
+  const items =
+    data?.items.filter((item) => rules.isModuleInForce(item.module)) ?? [];
   const bySeverity: Record<string, number> = {};
   const byModule: Record<string, number> = {};
   for (const item of items) {
     bySeverity[item.severity] = (bySeverity[item.severity] ?? 0) + 1;
     byModule[item.module] = (byModule[item.module] ?? 0) + 1;
   }
+  const error = query.error ?? rules.error;
   return {
-    ...query,
-    data: { ...data, items, total: items.length, bySeverity, byModule },
+    data: data && { ...data, items, total: items.length, bySeverity, byModule },
+    error,
+    isLoading: !error && (query.isLoading || rules.isLoading),
+    refetch: () => Promise.all([query.refetch(), rules.query.refetch()]),
   };
 }

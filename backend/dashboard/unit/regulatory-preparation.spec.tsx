@@ -49,7 +49,12 @@ vi.mock("@/components/icaap/CycleList", () => ({
 vi.mock("@/lib/api/hooks", () => ({
   useReturnTemplates: () => ({
     data: {
-      templates: ["SDI-LMT-MONTHLY", "ICAAP-REPORT"].map((code) =>
+      templates: [
+        "SDI-LMT-MONTHLY",
+        "ICAAP-REPORT",
+        "LCR-NSFR",
+        "IRRBB-PILOT",
+      ].map((code) =>
         ReturnTemplateReadFromJSON({
           code,
           instrument_status: state.status,

@@ -20,7 +20,7 @@ import SubTabs from "@/components/ui/SubTabs";
 import ValidationList from "@/components/ui/ValidationList";
 import SectionCard from "@/components/ui/SectionCard";
 import EmptyState from "@/components/ui/EmptyState";
-import { PageSkeleton } from "@/components/ui/QueryBoundary";
+import { ErrorPanel, PageSkeleton } from "@/components/ui/QueryBoundary";
 import { LandingInsightStrip } from "@/components/bi/InsightStrip";
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
 import {
@@ -261,8 +261,13 @@ export default function RiskLimitMonitorPage() {
     <>
       <PageHeader eyebrow="Risk & Limits" title="Risk & Limit Monitor" />
 
-      {isLoading ? (
+      {rules.isLoading || isLoading ? (
         <PageSkeleton />
+      ) : rules.error ? (
+        <ErrorPanel
+          error={rules.error}
+          onRetry={() => void rules.query.refetch()}
+        />
       ) : (
         <PageContainer className="py-6 space-y-6">
           <LandingInsightStrip bankId={bankId} asOf={period?.periodEnd} />
@@ -292,7 +297,13 @@ export default function RiskLimitMonitorPage() {
             <KpiStat
               label="Open alerts"
               value={alerts.data?.total ?? "—"}
-              status={(alerts.data?.total ?? 0) > 0 ? "crit" : "ok"}
+              status={
+                alerts.data
+                  ? alerts.data.total > 0
+                    ? "crit"
+                    : "ok"
+                  : undefined
+              }
               hint={
                 <Link href="/alerts" className="text-action hover:underline">
                   Open the Alert Center →

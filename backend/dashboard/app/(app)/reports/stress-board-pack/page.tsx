@@ -17,6 +17,7 @@
  * amber tile and a caption that names the reason.
  */
 
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import SdiLiquidityBoardDisclosure from "@/components/reports/SdiLiquidityBoardDisclosure";
 import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
@@ -59,6 +60,7 @@ export default function StressBoardPack() {
   const bankId = bank?.id;
   const periodId = period?.id;
   const isSdi = moduleScope.institutionClass === "sdi";
+  const rules = useBankRules(bankId);
   const sdiLiquidity = useSdiLiquidityPosition(
     isSdi && moduleScope.liquidityConfidentialView ? bankId : undefined,
   );
@@ -118,7 +120,7 @@ export default function StressBoardPack() {
           <button
             type="button"
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            disabled={!run}
+            disabled={!run || (isSdi && !rules.isReady)}
             onClick={() => window.print()}
           >
             <Printer size={14} /> Print / export PDF
@@ -127,9 +129,14 @@ export default function StressBoardPack() {
       />
 
       <QueryBoundary
-        isLoading={registry.isLoading || approved.isLoading}
-        error={registry.error ?? approved.error}
-        onRetry={() => registry.refetch()}
+        isLoading={
+          registry.isLoading || approved.isLoading || (isSdi && rules.isLoading)
+        }
+        error={registry.error ?? approved.error ?? (isSdi ? rules.error : null)}
+        onRetry={() => {
+          void registry.refetch();
+          void rules.query.refetch();
+        }}
       >
         {/* `print:pt-12` keeps the printed report where it sat before Tailwind 4,
             whose `space-y` no longer leaves a gap after the print-hidden controls. */}
