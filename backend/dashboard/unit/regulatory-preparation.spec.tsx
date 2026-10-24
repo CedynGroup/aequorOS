@@ -46,6 +46,37 @@ vi.mock("@/components/shell/BankContext", () => ({
 vi.mock("@/components/icaap/CycleList", () => ({
   default: () => <p>Assessment cycles</p>,
 }));
+vi.mock("@/lib/api/icaap", () => ({
+  useIcaapFrameworks: () => ({
+    data: {
+      frameworks: [
+        {
+          code: "synthetic",
+          version: "1",
+          status: "exposure_draft",
+          effectiveFrom: new Date("2027-01-01"),
+        },
+      ],
+    },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+  useIcaapFramework: () => ({
+    data: {
+      code: "synthetic",
+      version: "1",
+      status: "exposure_draft",
+      effectiveFrom: new Date("2027-01-01"),
+      title: "Synthetic framework",
+      regulator: "Synthetic regulator",
+      documents: [{ url: "https://example.test/icaap.pdf" }],
+    },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}));
 vi.mock("@/lib/api/hooks", () => ({
   useReturnTemplates: () => ({
     data: {

@@ -2,7 +2,10 @@
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { preparationHref } from "@/lib/regulatoryInstruments";
+import {
+  preparationHref,
+  frameworkInstrumentStatus,
+} from "@/lib/regulatoryInstruments";
 
 /**
  * The ICAAP workspace: the institution's assessment cycles.
@@ -15,8 +18,12 @@ import { preparationHref } from "@/lib/regulatoryInstruments";
 import { useRouter } from "next/navigation";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
-import { useBankContext } from "@/components/shell/BankContext";
-import RegulatoryModuleTabs from "@/components/shell/RegulatoryModuleTabs";
+import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { useIcaapFrameworks } from "@/lib/api/icaap";
+import { hrefAccess } from "@/lib/modules";
+import Link from "next/link";
+import FrameworkStatus from "@/components/icaap/FrameworkStatus";
 import CycleList from "@/components/icaap/CycleList";
 import { regShort } from "@/lib/format";
 
@@ -32,6 +39,15 @@ function IcaapWorkspace() {
   const preparing = useSearchParams().get("preparing") === "1";
   const { bank } = useBankContext();
   const router = useRouter();
+  const scope = useModuleScope();
+  const authorized = hrefAccess("/icaap", scope).state === "enabled";
+  const query = useIcaapFrameworks(authorized ? bank?.id : undefined);
+  const frameworks = (query.data?.frameworks ?? []).filter(
+    (framework) =>
+      preparing ||
+      frameworkInstrumentStatus(framework.status, framework.effectiveFrom) ===
+        "in_force",
+  );
 
   return (
     <>
@@ -40,20 +56,47 @@ function IcaapWorkspace() {
         title="Internal Capital Adequacy Assessment"
         subtitle={`The institution's own assessment of the capital it needs, and the evidence behind it, as filed with ${regShort()}.`}
       />
-      <RegulatoryModuleTabs tabs={[]} contextRule="ICAAP-REPORT">
+      <QueryBoundary
+        contained
+        isLoading={query.isLoading}
+        error={query.error}
+        onRetry={() => void query.refetch()}
+      >
         <PageContainer className="py-6">
-          {bank && (
-            <CycleList
-              bankId={bank.id}
-              onCreated={(cycleId) =>
-                router.push(
-                  preparationHref(`/icaap/${cycleId}/overview`, preparing),
-                )
-              }
-            />
+          <Link
+            className="text-caption text-action underline"
+            href="/submissions/upcoming"
+          >
+            Preparing for upcoming rules
+          </Link>
+          {bank && authorized && frameworks.length > 0 ? (
+            <>
+              <div className="my-3 flex flex-wrap gap-3">
+                {frameworks.map((framework) => (
+                  <FrameworkStatus
+                    key={`${framework.code}|${framework.version}`}
+                    bankId={bank.id}
+                    framework={framework}
+                  />
+                ))}
+              </div>
+              <CycleList
+                bankId={bank.id}
+                frameworks={frameworks}
+                onCreated={(cycleId) =>
+                  router.push(
+                    preparationHref(`/icaap/${cycleId}/overview`, preparing),
+                  )
+                }
+              />
+            </>
+          ) : (
+            <p className="py-6 text-body text-slate">
+              This capability is available from Preparing for upcoming rules.
+            </p>
           )}
         </PageContainer>
-      </RegulatoryModuleTabs>
+      </QueryBoundary>
     </>
   );
 }

@@ -13,6 +13,7 @@ export function instrumentDate(value: InstrumentDate): string | null {
 export function instrumentDisclosure(
   status: string | undefined,
   date?: InstrumentDate,
+  regulator = regShort(),
 ) {
   const effective = instrumentDate(date);
   switch (status) {
@@ -20,7 +21,7 @@ export function instrumentDisclosure(
       return {
         label: "Draft",
         tooltip:
-          `Proposed by ${regShort()}, not law yet. Prepare if useful, no deadline or penalty.` +
+          `Proposed by ${regulator}, not law yet. Prepare if useful, no deadline or penalty.` +
           (effective
             ? ` Expected from ${effective} if made final.`
             : " Expected start date is not established."),
@@ -46,7 +47,7 @@ export function instrumentDisclosure(
     case "unpublished":
       return {
         label: "Reference",
-        tooltip: `International standard used for monitoring only. No ${regShort()} filing duty.`,
+        tooltip: `International standard used for monitoring only. No ${regulator} filing duty.`,
       };
     default:
       return {

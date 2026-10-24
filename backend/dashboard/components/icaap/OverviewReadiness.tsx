@@ -23,7 +23,7 @@ import {
   type IcaapReadinessItemRead,
   type IcaapSeverity,
 } from "@/lib/api/icaap";
-import RegulatoryRuleStatus from "@/components/submissions/RegulatoryRuleStatus";
+import FrameworkStatus from "./FrameworkStatus";
 import DeadlineBadge from "./DeadlineBadge";
 import { FrameworkDigestNotice, RehearsalBanner } from "./Notices";
 
@@ -99,9 +99,7 @@ export default function OverviewReadiness({
       {cycle && readiness && (
         <div className="space-y-4">
           {cycle.cycleKind === "rehearsal" && <RehearsalBanner />}
-          <RegulatoryRuleStatus
-            code={cycle.framework.filingReturnCode ?? "ICAAP-REPORT"}
-          />
+          <FrameworkStatus bankId={bankId} framework={cycle.framework} />
           {!cycle.frameworkDigestMatches && <FrameworkDigestNotice />}
 
           <SectionCard
