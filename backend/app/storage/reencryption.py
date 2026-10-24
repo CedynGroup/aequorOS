@@ -34,13 +34,18 @@ class MaintenancePaginator(Protocol):
 
 class S3MaintenanceClient(Protocol):
     def get_paginator(self, operation: str) -> MaintenancePaginator: ...
-    def head_object(self, **kwargs: object) -> dict[str, object]: ...
     def get_object(self, **kwargs: object) -> dict[str, object]: ...
     def put_object(self, **kwargs: object) -> dict[str, object]: ...
     def create_multipart_upload(self, **kwargs: object) -> dict[str, object]: ...
     def upload_part(self, **kwargs: object) -> dict[str, object]: ...
     def complete_multipart_upload(self, **kwargs: object) -> dict[str, object]: ...
     def abort_multipart_upload(self, **kwargs: object) -> dict[str, object]: ...
+
+
+class ObjectStat(Protocol):
+    def __call__(
+        self, bucket: str, key: str, version_id: str | None = None
+    ) -> dict[str, object]: ...
 
 
 class _Version(BaseModel):
@@ -70,7 +75,7 @@ def _locked(stat: dict[str, object]) -> bool:
 
 
 def inventory(
-    client: S3MaintenanceClient, env: str, slug: str
+    client: S3MaintenanceClient, env: str, slug: str, stat_object: ObjectStat
 ) -> Iterator[EncryptionInventoryItem]:
     try:
         for tier in TIERS:
@@ -78,10 +83,10 @@ def inventory(
             for page in client.get_paginator("list_object_versions").paginate(Bucket=bucket):
                 for entry in _Page.model_validate(page).Versions:
                     location = StorageLocation(slug, tier, entry.Key)
-                    stat = client.head_object(
-                        Bucket=bucket,
-                        Key=entry.Key,
-                        **({"VersionId": entry.VersionId} if entry.VersionId != "null" else {}),
+                    stat = stat_object(
+                        bucket,
+                        entry.Key,
+                        version_id=entry.VersionId if entry.VersionId != "null" else None,
                     )
                     headers = _HEADERS.validate_python(stat.get("Metadata", {}))
                     envelope = headers.get("key-envelope-id")
@@ -151,6 +156,7 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
     encryption: ObjectEncryption,
     item: EncryptionInventoryItem,
     sse_key: str | None,
+    stat_object: ObjectStat,
 ) -> bool:
     if item.retained:
         raise StorageValidationError("Retained object versions cannot be rewritten.")
@@ -158,7 +164,7 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
     with encryption.publication(location) as unit:
         bucket = location.bucket_name(env)
         try:
-            stat = client.head_object(Bucket=bucket, Key=location.object_path)
+            stat = stat_object(bucket, location.object_path)
             if str(stat.get("VersionId", "null")) != item.version_id or _locked(stat):
                 return False
             source = client.get_object(

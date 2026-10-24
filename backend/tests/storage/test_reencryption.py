@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import io
 from collections.abc import Iterator
-from typing import Protocol, cast
+from datetime import UTC, datetime, timedelta
+from typing import BinaryIO, Protocol, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -24,6 +25,7 @@ from app.storage.client import (
     StorageAccessError,
     StorageBackendError,
     StorageLocation,
+    Tier,
 )
 from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption, object_context
 from tests.db.test_postgres_migrations import alembic_config_for_app
@@ -65,6 +67,130 @@ def test_legacy_object_conversion_authenticates_checksum_and_retains_source(
     current = next(v for v in versions if not v.retained)
     assert isinstance(current.envelope_id, UUID)
     assert not bank_storage.storage.reencrypt(item)
+
+
+@pytest.mark.parametrize("tier", ["raw", "temp"])
+@pytest.mark.parametrize("multipart", [False, True])
+def test_reencryption_uses_head_denied_fallback_and_closes_metadata_streams(
+    bank_storage: BankStorage,
+    monkeypatch: pytest.MonkeyPatch,
+    tier: Tier,
+    multipart: bool,
+) -> None:
+    location = StorageLocation(SLUG, tier, "synthetic/customers.csv")
+    content = b"x" * (objects.MULTIPART_SIZE + 1) if multipart else b"synthetic customer data"
+    stored = bank_storage.s3.put_object(
+        Bucket=location.bucket_name("dev"),
+        Key=location.object_path,
+        Body=content,
+        Metadata=metadata_for(SLUG, tier, content).to_object_metadata(),
+    )
+    version_id = str(stored.get("VersionId", "null"))
+    stat_version = version_id if version_id != "null" else None
+    client = cast(objects.S3MaintenanceClient, bank_storage.s3)
+    get_object = client.get_object
+
+    class TrackedBody(io.BytesIO):
+        bytes_read: int = 0
+
+        def read(self, size: int | None = -1) -> bytes:
+            value = super().read(size)
+            self.bytes_read += len(value)
+            return value
+
+    responses: list[tuple[str | None, TrackedBody]] = []
+    denied: list[str | None] = []
+
+    def denied_head(**kwargs: object) -> dict[str, object]:
+        assert str(kwargs["Key"]).endswith(".csv")
+        denied.append(cast(str | None, kwargs.get("VersionId")))
+        raise ClientError({"Error": {"Code": "403"}}, "HeadObject")
+
+    def tracked_get(**kwargs: object) -> dict[str, object]:
+        response = get_object(**kwargs)
+        source = cast(BinaryIO, response["Body"])
+        try:
+            body = TrackedBody(source.read())
+        finally:
+            source.close()
+        response["Body"] = body
+        responses.append((cast(str | None, kwargs.get("VersionId")), body))
+        return response
+
+    monkeypatch.setattr(bank_storage.s3, "head_object", denied_head)
+    monkeypatch.setattr(client, "get_object", tracked_get)
+    [item] = list(bank_storage.storage.encryption_inventory(SLUG))
+    assert item.version_id == version_id and item.envelope_id is None and not item.retained
+    assert denied == [stat_version]
+    assert len(responses) == 1
+    assert responses[0][0] == stat_version
+    assert responses[0][1].closed and responses[0][1].bytes_read == 0
+    responses.clear()
+    denied.clear()
+    assert bank_storage.storage.reencrypt(item)
+    assert denied == [None]
+    assert responses[0][0] is None
+    assert responses[0][1].closed and responses[0][1].bytes_read == 0
+    assert all(body.closed for _, body in responses)
+    descriptor, body = bank_storage.storage.read(location)
+    try:
+        assert body.read() == content
+    finally:
+        body.close()
+    assert descriptor.metadata.checksum_sha256 == metadata_for(SLUG, tier, content).checksum_sha256
+    versions = list(bank_storage.storage.encryption_inventory(SLUG))
+    current = next(version for version in versions if not version.retained)
+    assert current.envelope_id is not None
+    assert len(versions) == (2 if tier == "raw" else 1)
+    if tier == "raw":
+        assert any(version.version_id == version_id and version.retained for version in versions)
+    assert all(body.closed for _, body in responses)
+
+
+@pytest.mark.parametrize("hold", ["legal_hold", "retention"])
+def test_head_denied_fallback_preserves_new_object_holds(
+    bank_storage: BankStorage,
+    monkeypatch: pytest.MonkeyPatch,
+    hold: str,
+) -> None:
+    location = StorageLocation(SLUG, "raw", "synthetic/held.csv")
+    stored = bank_storage.s3.put_object(
+        Bucket=location.bucket_name("dev"),
+        Key=location.object_path,
+        Body=b"synthetic held data",
+        Metadata=metadata_for(SLUG, "raw", b"synthetic held data").to_object_metadata(),
+    )
+    [item] = list(bank_storage.storage.encryption_inventory(SLUG))
+    client = cast(objects.S3MaintenanceClient, bank_storage.s3)
+    get_object = client.get_object
+    bodies: list[BinaryIO] = []
+
+    def denied_head(**_kwargs: object) -> dict[str, object]:
+        raise ClientError({"Error": {"Code": "AccessDenied"}}, "HeadObject")
+
+    def held_get(**kwargs: object) -> dict[str, object]:
+        response = get_object(**kwargs)
+        source = cast(BinaryIO, response["Body"])
+        try:
+            body = io.BytesIO(source.read())
+        finally:
+            source.close()
+        response["Body"] = body
+        if hold == "legal_hold":
+            response["ObjectLockLegalHoldStatus"] = "ON"
+        else:
+            response["ObjectLockMode"] = "COMPLIANCE"
+            response["ObjectLockRetainUntilDate"] = datetime.now(UTC) + timedelta(days=1)
+        bodies.append(body)
+        return response
+
+    monkeypatch.setattr(bank_storage.s3, "head_object", denied_head)
+    monkeypatch.setattr(client, "get_object", held_get)
+    assert not bank_storage.storage.reencrypt(item)
+    [retained] = list(bank_storage.storage.encryption_inventory(SLUG))
+    assert retained.retained and retained.version_id == stored["VersionId"]
+    assert retained.envelope_id is None
+    assert len(bodies) == 2 and all(body.closed for body in bodies)
 
 
 def test_bad_legacy_checksum_is_not_published(bank_storage: BankStorage) -> None:
@@ -131,7 +257,7 @@ def test_object_resume_after_publication_keeps_retained_version_and_retirement_b
 @pytest.mark.parametrize("multipart", [False, True])
 def test_conditional_publication_preserves_concurrent_new_content(
     bank_storage: BankStorage,
-    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
     multipart: bool,
 ) -> None:
     location = StorageLocation(SLUG, "temp", "synthetic/race.csv")
@@ -145,57 +271,40 @@ def test_conditional_publication_preserves_concurrent_new_content(
     [item] = list(bank_storage.storage.encryption_inventory(SLUG))
     client = cast(objects.S3MaintenanceClient, bank_storage.s3)
     aborted: list[object] = []
-    original_etag = client.head_object(
+    original_etag = bank_storage.s3.head_object(
         Bucket=location.bucket_name("dev"), Key=location.object_path
     )["ETag"]
 
-    class RacingClient:
-        def head_object(self, **kwargs: object) -> dict[str, object]:
-            return client.head_object(**kwargs)
+    put_object = client.put_object
+    abort_multipart_upload = client.abort_multipart_upload
 
-        def get_object(self, **kwargs: object) -> dict[str, object]:
-            return client.get_object(**kwargs)
-
-        def get_paginator(self, operation: str) -> objects.MaintenancePaginator:
-            return client.get_paginator(operation)
-
-        def put_object(self, **kwargs: object) -> dict[str, object]:
+    def put_with_concurrent_write(**kwargs: object) -> dict[str, object]:
+        with monkeypatch.context() as writing:
+            writing.setattr(client, "put_object", put_object)
             bank_storage.storage.write(
                 location, io.BytesIO(b"new"), metadata_for(SLUG, "temp", b"new")
             )
-            return client.put_object(**kwargs)
+        return put_object(**kwargs)
 
-        def create_multipart_upload(self, **kwargs: object) -> dict[str, object]:
-            return client.create_multipart_upload(**kwargs)
+    def complete_with_concurrent_write(**kwargs: object) -> dict[str, object]:
+        assert kwargs["IfMatch"] == original_etag
+        bank_storage.storage.write(
+            location, io.BytesIO(b"new"), metadata_for(SLUG, "temp", b"new")
+        )
+        current = bank_storage.s3.head_object(Bucket=kwargs["Bucket"], Key=kwargs["Key"])
+        assert current["ETag"] != kwargs["IfMatch"]
+        raise ClientError({"Error": {"Code": "PreconditionFailed"}}, "CompleteMultipartUpload")
 
-        def upload_part(self, **kwargs: object) -> dict[str, object]:
-            return client.upload_part(**kwargs)
+    def record_abort(**kwargs: object) -> dict[str, object]:
+        aborted.append(kwargs["UploadId"])
+        return abort_multipart_upload(**kwargs)
 
-        def complete_multipart_upload(self, **kwargs: object) -> dict[str, object]:
-            assert kwargs["IfMatch"] == original_etag
-            bank_storage.storage.write(
-                location, io.BytesIO(b"new"), metadata_for(SLUG, "temp", b"new")
-            )
-            current = client.head_object(Bucket=kwargs["Bucket"], Key=kwargs["Key"])
-            assert current["ETag"] != kwargs["IfMatch"]
-            raise ClientError({"Error": {"Code": "PreconditionFailed"}}, "CompleteMultipartUpload")
-
-        def abort_multipart_upload(self, **kwargs: object) -> dict[str, object]:
-            aborted.append(kwargs["UploadId"])
-            return client.abort_multipart_upload(**kwargs)
-
-    assert not objects.reencrypt(
-        RacingClient(),
-        "dev",
-        ObjectEncryption(
-            registry.DatabaseEnvelopeStore(
-                lambda: Session(db_session.get_bind(), join_transaction_mode="create_savepoint"),
-                lambda _: bank_storage.provider,
-            )
-        ),
-        item,
-        None,
-    )
+    if multipart:
+        monkeypatch.setattr(client, "complete_multipart_upload", complete_with_concurrent_write)
+    else:
+        monkeypatch.setattr(client, "put_object", put_with_concurrent_write)
+    monkeypatch.setattr(client, "abort_multipart_upload", record_abort)
+    assert not bank_storage.storage.reencrypt(item)
     _, body = bank_storage.storage.read(location)
     assert body.read() == b"new"
     body.close()
@@ -203,7 +312,7 @@ def test_conditional_publication_preserves_concurrent_new_content(
 
 
 def test_large_object_reencryption_publishes_bounded_parts(
-    bank_storage: BankStorage, db_session: Session
+    bank_storage: BankStorage, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     location = StorageLocation(SLUG, "temp", "synthetic/large.csv")
     content = b"x" * (objects.MULTIPART_SIZE + 1024)
@@ -217,47 +326,26 @@ def test_large_object_reencryption_publishes_bounded_parts(
     client = cast(objects.S3MaintenanceClient, bank_storage.s3)
     parts: list[int] = []
 
-    class BoundedClient:
-        def head_object(self, **kwargs: object) -> dict[str, object]:
-            return client.head_object(**kwargs)
+    upload_part = client.upload_part
+    complete_multipart_upload = client.complete_multipart_upload
 
-        def get_object(self, **kwargs: object) -> dict[str, object]:
-            return client.get_object(**kwargs)
+    def refuse_put(**_kwargs: object) -> dict[str, object]:
+        pytest.fail("Large objects must use bounded multipart publication")
 
-        def get_paginator(self, operation: str) -> objects.MaintenancePaginator:
-            return client.get_paginator(operation)
+    def bounded_part(**kwargs: object) -> dict[str, object]:
+        body = kwargs["Body"]
+        assert isinstance(body, bytes) and len(body) <= objects.MULTIPART_SIZE
+        parts.append(len(body))
+        return upload_part(**kwargs)
 
-        def put_object(self, **kwargs: object) -> dict[str, object]:
-            pytest.fail("Large objects must use bounded multipart publication")
+    def conditional_complete(**kwargs: object) -> dict[str, object]:
+        assert kwargs["IfMatch"]
+        return complete_multipart_upload(**kwargs)
 
-        def create_multipart_upload(self, **kwargs: object) -> dict[str, object]:
-            return client.create_multipart_upload(**kwargs)
-
-        def upload_part(self, **kwargs: object) -> dict[str, object]:
-            body = kwargs["Body"]
-            assert isinstance(body, bytes) and len(body) <= objects.MULTIPART_SIZE
-            parts.append(len(body))
-            return client.upload_part(**kwargs)
-
-        def complete_multipart_upload(self, **kwargs: object) -> dict[str, object]:
-            assert kwargs["IfMatch"]
-            return client.complete_multipart_upload(**kwargs)
-
-        def abort_multipart_upload(self, **kwargs: object) -> dict[str, object]:
-            return client.abort_multipart_upload(**kwargs)
-
-    assert objects.reencrypt(
-        BoundedClient(),
-        "dev",
-        ObjectEncryption(
-            registry.DatabaseEnvelopeStore(
-                lambda: Session(db_session.get_bind(), join_transaction_mode="create_savepoint"),
-                lambda _: bank_storage.provider,
-            )
-        ),
-        item,
-        None,
-    )
+    monkeypatch.setattr(client, "put_object", refuse_put)
+    monkeypatch.setattr(client, "upload_part", bounded_part)
+    monkeypatch.setattr(client, "complete_multipart_upload", conditional_complete)
+    assert bank_storage.storage.reencrypt(item)
     assert len(parts) == 2
     _, body = bank_storage.storage.read(location)
     assert body.read() == content
@@ -291,9 +379,10 @@ def test_object_job_scans_inventory_a_constant_number_of_times(
         encryption: ObjectEncryption,
         item: EncryptionInventoryItem,
         sse_key: str | None,
+        stat_object: objects.ObjectStat,
     ) -> bool:
         nonlocal rotated
-        result = real_reencrypt(client, env, encryption, item, sse_key)
+        result = real_reencrypt(client, env, encryption, item, sse_key, stat_object)
         if result and rotate_during_pass and not rotated:
             rotated = True
             key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
@@ -301,11 +390,11 @@ def test_object_job_scans_inventory_a_constant_number_of_times(
         return result
 
     def inventory(
-        client: objects.S3MaintenanceClient, env: str, slug: str
+        client: objects.S3MaintenanceClient, env: str, slug: str, stat_object: objects.ObjectStat
     ) -> Iterator[EncryptionInventoryItem]:
         nonlocal scans
         scans += 1
-        yield from real_inventory(client, env, slug)
+        yield from real_inventory(client, env, slug, stat_object)
 
     monkeypatch.setattr(objects, "inventory", inventory)
     monkeypatch.setattr(objects, "reencrypt", migrate_object)

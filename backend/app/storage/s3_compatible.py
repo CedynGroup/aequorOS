@@ -226,6 +226,7 @@ class S3CompatibleStorageClient(StorageClient):
             cast(reencryption.S3MaintenanceClient, cast(object, self._s3)),
             self._env,
             institution_slug,
+            self._stat_object,
         )
 
     def reencrypt(self, item: EncryptionInventoryItem) -> bool:
@@ -235,6 +236,7 @@ class S3CompatibleStorageClient(StorageClient):
             self._encryption,
             item,
             self._settings.kms_key_id,
+            self._stat_object,
         )
         if result:
             self._log("reencrypt", item.location, version_id=item.version_id)
