@@ -3,13 +3,12 @@
  *
  * WHY THIS FILE HAS TWO HALVES, AND WHY THE SECOND ONE INTERCEPTS.
  *
- * The WIRE half runs against the real stack, as a real identity, and asserts the
- * refusal a person actually reaches here. That is not a shortcut: this stack runs
- * no `ai`-lane worker, holds no vendor credential and has no approved model
- * configuration, so `POST …/bi/ask` genuinely cannot produce a proposal — it
- * refuses at the deployment gate, in the platform's own sentence. The property
- * worth pinning is exactly that: the reader is told something they can act on,
- * and no reason code reaches the screen.
+ * The WIRE half uses real identities and routes to check the no-figures refusal
+ * and question ownership. The ownership check inserts a queued job directly in
+ * the disposable database: its author can read it, while a same-bank colleague
+ * can neither read nor confirm it. This stack runs no `ai`-lane worker, holds no
+ * vendor credential and has no approved model configuration; the queued fixture
+ * exercises ownership without requiring a model-generated proposal.
  *
  * The SCREEN half drives the confirmation, which needs a `proposed` state that no
  * hermetic stack can produce without a model. So the two ask routes are

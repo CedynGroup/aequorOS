@@ -616,8 +616,8 @@ test.describe.serial("writing and certifying a formula on screen", () => {
       // immediate — the destructive act asks twice.
       await expect(card.getByRole("button", { name: "Delete" })).toBeVisible();
       await expect(card.getByRole("button", { name: "Change" })).toBeVisible();
-      // And it is NOT offered for certification by anyone but its author, which is
-      // asserted from the other side in the checker's journeys below.
+      // Only the author can send a draft for certification; the next journey
+      // checks privacy from the reviewer's session while a draft still exists.
       await expect(
         card.getByRole("heading", { name: "Send this for certification" }),
       ).toBeVisible();
@@ -749,7 +749,7 @@ test.describe.serial("writing and certifying a formula on screen", () => {
       ).toBeVisible();
       await expect(card.getByText(/^Proposed by /)).toBeVisible();
 
-      // Deletion also removes the draft from the reviewer's list.
+      // The deleted draft stays absent; privacy was checked before deletion above.
       await expect(measureHeading(page, SENT_BACK_LABEL)).toHaveCount(0);
     });
 
