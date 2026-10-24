@@ -25,6 +25,15 @@ def rule_in_force(
     )
 
 
+def forecast_legacy_thresholds(db: Session, bank: Bank, as_of: date) -> dict[str, Decimal]:
+    rows = get_active_params(
+        db, bank.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, as_of
+    )
+    return regulatory_parameters.clamp_overrides(
+        db, bank, {row.threshold_code: Decimal(str(row.value_pct)) for row in rows}, as_of=as_of
+    ).values
+
+
 def forecast_view_status(
     db: Session,
     bank: Bank,
@@ -35,10 +44,5 @@ def forecast_view_status(
 ) -> Literal["green", "amber", "red", "na"]:
     thresholds: dict[str, Decimal] | None = None
     if "year5_car_status" not in metrics and as_of is not None:
-        rows = get_active_params(
-            db, bank.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, as_of
-        )
-        thresholds = regulatory_parameters.clamp_overrides(
-            db, bank, {row.threshold_code: Decimal(str(row.value_pct)) for row in rows}, as_of=as_of
-        ).values
+        thresholds = forecast_legacy_thresholds(db, bank, as_of)
     return forecast_status(metrics, liquidity_in_force, thresholds)

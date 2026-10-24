@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import select
@@ -17,9 +18,15 @@ from app.models import (
     RegulatoryParameter,
 )
 from app.schemas.forecasting import ForecastRunCreate
-from app.services import alerts, live_view, regulatory_forecasting, sdi_views
+from app.services import (
+    alerts,
+    live_view,
+    regulatory_applicability,
+    regulatory_forecasting,
+    sdi_views,
+)
 from app.services.fact_derivation import derive_current_facts, derive_facts
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, set_board_threshold
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
 from tests.services.test_sdi_capital_summary import _bank, _seed_capital, _seed_positions
 
@@ -184,6 +191,110 @@ def test_cached_forecast_views_and_alert_counts_drop_reference_checks(
     assert feed.total == 1
     assert feed.by_severity == {"critical": 1}
     assert feed.by_module == {"forecast": 1}
+
+
+@pytest.mark.usefixtures("forecasting_run_authority")
+def test_forecast_history_reuses_legacy_thresholds_only_within_bank_and_source_date(
+    db_session: Session,
+) -> None:
+    seed_book(db_session)
+    set_board_threshold(db_session, "car_min", "13")
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    other_bank = _bank(db_session)
+    first_date = db_session.scalars(
+        select(BankReportingPeriod.period_end)
+        .where(BankReportingPeriod.bank_id == bank.id)
+        .order_by(BankReportingPeriod.period_end.desc())
+    ).first()
+    assert first_date is not None
+    later_date = first_date + timedelta(days=31)
+    modern_date = later_date + timedelta(days=31)
+    db_session.add(
+        RegulatoryParameter(
+            scope_type="institution_type",
+            scope_key=bank.institution_type,
+            jurisdiction_code=bank.jurisdiction_code,
+            param_code="car_min",
+            value_numeric=Decimal("30"),
+            unit="percent",
+            confirmation_status="confirmed",
+            source_citation="Synthetic later capital minimum",
+            effective_from=later_date,
+            status="approved",
+            proposed_by="synthetic-maker",
+            approved_by="synthetic-checker",
+        )
+    )
+    for owner in (bank, other_bank):
+        periods = {}
+        for source_date in (first_date, later_date, modern_date):
+            period = db_session.scalars(
+                select(BankReportingPeriod).where(
+                    BankReportingPeriod.bank_id == owner.id,
+                    BankReportingPeriod.period_end == source_date,
+                )
+            ).first()
+            if period is None:
+                period = BankReportingPeriod(
+                    organization_id=owner.organization_id,
+                    bank_id=owner.id,
+                    period_start=source_date,
+                    period_end=source_date,
+                    label=source_date.isoformat(),
+                    status="open",
+                )
+                db_session.add(period)
+                db_session.flush()
+            periods[source_date] = period.id
+        for index, (source_date, car, recorded) in enumerate(
+            [
+                (first_date, "8", None),
+                (first_date, "20", None),
+                (first_date, "13.25", None),
+                (later_date, "20", None),
+                (later_date, "20", None),
+                (first_date, "8", "green"),
+                (modern_date, "8", "amber"),
+            ]
+        ):
+            db_session.add(
+                LiveMetricSnapshot(
+                    organization_id=owner.organization_id,
+                    bank_id=owner.id,
+                    module="forecast",
+                    reporting_period_id=periods[source_date],
+                    snapshot_date=date.today() - timedelta(days=6 - index),
+                    metrics={
+                        "year5_car_pct": car,
+                        "year5_lcr_pct": "80",
+                        "year5_nsfr_pct": "90",
+                        **({"year5_car_status": recorded} if recorded is not None else {}),
+                    },
+                    status="red",
+                    computed_at=datetime.now(UTC),
+                )
+            )
+    db_session.flush()
+    with patch.object(
+        regulatory_applicability.regulatory_parameters,
+        "clamp_overrides",
+        wraps=regulatory_applicability.regulatory_parameters.clamp_overrides,
+    ) as resolve:
+        for owner, expected in (
+            (bank, ["red", "green", "amber", "red", "red", "green", "amber"]),
+            (other_bank, ["red", "green", "amber", "green", "green", "green", "amber"]),
+            (bank, ["red", "green", "amber", "red", "red", "green", "amber"]),
+        ):
+            resolve.reset_mock()
+            result = live_view.list_live_snapshots(db_session, MAKER, owner.id, module="forecast")
+            assert [snapshot.status for snapshot in result.snapshots] == expected
+            assert resolve.call_count == 2
+            assert {call.kwargs["as_of"] for call in resolve.call_args_list} == {
+                first_date,
+                later_date,
+            }
+            assert all(call.args[1] is owner for call in resolve.call_args_list)
 
 
 @pytest.mark.parametrize("liquidity_in_force", [False, True])
