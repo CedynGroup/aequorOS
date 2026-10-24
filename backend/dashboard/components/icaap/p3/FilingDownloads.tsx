@@ -34,7 +34,11 @@ import {
 } from "@/components/submissions/shared";
 import { fmtLocale } from "@/lib/format";
 import { ICON_SM } from "@/components/icaap/p2/display";
-import { useExportRegulatoryPackage } from "@/lib/api/hooks";
+import {
+  useExportRegulatoryPackage,
+  useRegulatoryPackage,
+} from "@/lib/api/hooks";
+import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
 import {
   useIcaapPackageArtifactVersions,
   useIcaapPackageArtifacts,
@@ -74,6 +78,7 @@ export default function FilingDownloads({
   const artifacts = useIcaapPackageArtifacts(bankId, packageId);
   const versions = useIcaapPackageArtifactVersions(bankId, packageId);
   const exportPackage = useExportRegulatoryPackage(bankId);
+  const detail = useRegulatoryPackage(bankId, packageId);
   const [failure, setFailure] = useState<string | null>(null);
 
   const unavailable =
@@ -101,6 +106,9 @@ export default function FilingDownloads({
         subtitle="The sealed report, each signed revision of it, and the working copy."
       >
         <div className="space-y-4">
+          {(files.length > 0 || signed.length > 0 || canExport) && (
+            <RegulatoryExportWarning snapshot={detail.data?.snapshot} />
+          )}
           {failure && (
             <p className="card border-l-4 border-l-critical bg-critical-light/40 p-3 text-body text-navy/80">
               {failure}

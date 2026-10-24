@@ -11,7 +11,7 @@ export function instrumentDate(value: InstrumentDate): string | null {
 
 /** Publication and commencement stay separate from calculation readiness. */
 export function instrumentDisclosure(
-  status: InstrumentStatus | undefined,
+  status: string | undefined,
   date?: InstrumentDate,
 ) {
   const effective = instrumentDate(date);
@@ -67,7 +67,7 @@ export function isUpcomingRule(status: InstrumentStatus | undefined): boolean {
 }
 
 export function preparationWarning(
-  status: InstrumentStatus | undefined,
+  status: string | undefined,
   date?: InstrumentDate,
 ): string | null {
   if (status === "in_force") return null;
@@ -77,9 +77,27 @@ export function preparationWarning(
 /** A pack keeps its sealed legal basis after the live register changes. */
 export function packagePreparationWarning(
   snapshot: Record<string, unknown> | undefined,
-  fallbackStatus: InstrumentStatus | undefined,
+  fallbackStatus?: string,
   fallbackDate?: InstrumentDate,
 ): string | null {
+  const metadata = snapshot?.metadata;
+  const icaap =
+    metadata && typeof metadata === "object" && "icaap" in metadata
+      ? metadata.icaap
+      : undefined;
+  const framework =
+    icaap && typeof icaap === "object" && "framework" in icaap
+      ? icaap.framework
+      : undefined;
+  if (framework && typeof framework === "object" && "status" in framework) {
+    return preparationWarning(
+      typeof framework.status === "string" ? framework.status : undefined,
+      "effective_from" in framework &&
+        typeof framework.effective_from === "string"
+        ? framework.effective_from
+        : null,
+    );
+  }
   const provenance = snapshot?.provenance;
   if (
     typeof provenance === "object" &&
@@ -101,7 +119,9 @@ export function packagePreparationWarning(
       return preparationWarning(status, date);
     }
   }
-  return preparationWarning(fallbackStatus, fallbackDate);
+  return snapshot
+    ? preparationWarning(undefined)
+    : preparationWarning(fallbackStatus, fallbackDate);
 }
 
 export function preparationHref(href: string, preparing: boolean): string {

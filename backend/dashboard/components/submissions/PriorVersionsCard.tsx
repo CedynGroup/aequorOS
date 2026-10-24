@@ -24,6 +24,7 @@
  */
 
 import { useState } from "react";
+import RegulatoryExportWarning from "./RegulatoryExportWarning";
 import {
   ChevronDown,
   ChevronRight,
@@ -47,6 +48,7 @@ import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import {
   useComparePackageVersions,
   usePackageVersionChain,
+  useRegulatoryPackage,
 } from "@/lib/api/hooks";
 import { fmtTimestamp, shortId } from "@/lib/api/values";
 import {
@@ -298,6 +300,10 @@ function PriorVersionRow({
   currentVersion: number | null;
 }) {
   const [open, setOpen] = useState(false);
+  const detail = useRegulatoryPackage(
+    open ? bankId : undefined,
+    entry.packageId,
+  );
   const [comparing, setComparing] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const comparison = useComparePackageVersions(
@@ -384,6 +390,9 @@ function PriorVersionRow({
             <p className="text-micro font-medium uppercase tracking-wider text-slate">
               Files
             </p>
+            {entry.hasRetrievableFiles && (
+              <RegulatoryExportWarning snapshot={detail.data?.snapshot} />
+            )}
             {entry.hasRetrievableFiles ? (
               <ul className="mt-1.5 space-y-2">
                 {entry.artifactVersions.map((version) => (
