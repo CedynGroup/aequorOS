@@ -28,6 +28,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import InstrumentsRegister from "@/components/submissions/InstrumentsRegister";
 import ReturnsPage from "@/app/(app)/submissions/returns/page";
+import CalendarPage from "@/app/(app)/submissions/calendar/page";
 import RegulatoryRuleStatus from "@/components/submissions/RegulatoryRuleStatus";
 import { useNotifications, useReturnTemplates } from "@/lib/api/hooks";
 import { useBankRules } from "@/lib/api/regulatoryRules";
@@ -227,32 +228,100 @@ function Feed() {
     </>
   );
 }
-it("moves a commenced rule out of Upcoming and into ordinary Returns without remounting", async () => {
-  render(
-    view(
-      <>
-        <section aria-label="Upcoming">
-          <InstrumentsRegister upcoming />
-        </section>
-        <section aria-label="Returns">
-          <ReturnsPage />
-        </section>
-      </>,
-    ),
-  );
-  const upcoming = within(screen.getByRole("region", { name: "Upcoming" }));
-  const returns = within(screen.getByRole("region", { name: "Returns" }));
-  await upcoming.findByRole("heading", { name: "Synthetic large exposure" });
-  expect(returns.queryByRole("option", { name: /LE-MONTHLY/ })).toBeNull();
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(60_000);
-  });
-  await returns.findByRole("option", { name: /LE-MONTHLY/ });
-  expect(
-    upcoming.queryByRole("heading", { name: "Synthetic large exposure" }),
-  ).toBeNull();
-  expect(calls.get("BK-SYNTH001")).toBeGreaterThanOrEqual(2);
-});
+it.each(["poll", "notification"])(
+  "refreshes mounted calendar rows and counts across commencement via %s",
+  async (trigger) => {
+    server.use(
+      http.get(`${apiBaseUrl}/banks/:bankId/reporting-obligations`, () => {
+        const commenced = Date.now() >= Date.parse("2027-01-01T00:00:00Z");
+        return HttpResponse.json({
+          bank_id: "BK-SYNTH001",
+          as_of: new Date().toISOString(),
+          horizon_months: 3,
+          lookback_months: 3,
+          limit: 25,
+          offset: 0,
+          has_more: false,
+          total: commenced ? 1 : 0,
+          summary: {
+            overdue: 0,
+            due_soon: 0,
+            on_track: commenced ? 1 : 0,
+            pending_reupload: 0,
+          },
+          obligations: commenced
+            ? [
+                {
+                  return_code: "LE-MONTHLY",
+                  title: "Synthetic large exposure",
+                  return_family: "large_exposures",
+                  frequency: "monthly",
+                  instrument_status: "in_force",
+                  effective_from: "2027-01-01",
+                  reporting_date: "2027-01-31",
+                  due_date: "2027-02-09",
+                  rag: "on_track",
+                  data_status: "awaiting_data",
+                  package_id: null,
+                  package_status: null,
+                  package_version: null,
+                  fidelity: "PARTIAL",
+                  default_channel: "manual",
+                  annexes: [],
+                },
+              ]
+            : [],
+        });
+      }),
+    );
+    render(
+      view(
+        <>
+          <section aria-label="Upcoming">
+            <InstrumentsRegister upcoming />
+          </section>
+          <section aria-label="Returns">
+            <ReturnsPage />
+          </section>
+          <section aria-label="Calendar">
+            <CalendarPage />
+          </section>
+          {trigger === "notification" && <Feed />}
+        </>,
+      ),
+    );
+    const upcoming = within(screen.getByRole("region", { name: "Upcoming" }));
+    const returns = within(screen.getByRole("region", { name: "Returns" }));
+    const calendar = within(screen.getByRole("region", { name: "Calendar" }));
+    await upcoming.findByRole("heading", { name: "Synthetic large exposure" });
+    await calendar.findByText("No obligations in this horizon");
+    expect(returns.queryByRole("option", { name: /LE-MONTHLY/ })).toBeNull();
+    const onTrack = () =>
+      within(calendar.getByText("On track", { selector: "p" }).parentElement!);
+    expect(onTrack().getByText("0")).toBeVisible();
+    if (trigger === "poll") {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+    } else {
+      await screen.findByText("Notices: 0");
+      vi.setSystemTime(new Date("2027-01-01T00:00:30Z"));
+      irrStatus = "in_force";
+      noticeId = "commencement";
+      fireEvent.click(screen.getByRole("button", { name: "Refresh notices" }));
+      await screen.findByText("Refreshes: 1");
+    }
+    await returns.findByRole("option", { name: /LE-MONTHLY/ });
+    await calendar.findByText("LE-MONTHLY");
+    expect(onTrack().getByText("1")).toBeVisible();
+    expect(calendar.getByText("1–1 of 1")).toBeVisible();
+    expect(
+      upcoming.queryByRole("heading", { name: "Synthetic large exposure" }),
+    ).toBeNull();
+    expect(calls.get("BK-SYNTH001")).toBeGreaterThanOrEqual(2);
+  },
+);
+
 it("refreshes the affected bank on new status notices without losing metadata errors", async () => {
   render(
     view(
