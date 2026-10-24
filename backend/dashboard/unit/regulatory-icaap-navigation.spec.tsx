@@ -81,6 +81,8 @@ function framework() {
     regulator: "Synthetic regulator",
     short_title: "ICAAP framework",
     filing_return_code: "ICAAP-REPORT",
+    status: "exposure_draft",
+    effective_from: "2027-01-01",
   });
 }
 function cycle() {
@@ -127,6 +129,12 @@ vi.mock("@/lib/api/icaap", () => ({
       ],
     }),
   useIcaapFrameworks: () => query({ frameworks: [framework()] }),
+  useIcaapFramework: () =>
+    query({
+      ...framework(),
+      title: "Synthetic ICAAP framework",
+      documents: [{ url: "https://example.test/icaap.pdf" }],
+    }),
   useIcaapCycle: () => query(cycle()),
   useIcaapReadiness: () =>
     query({

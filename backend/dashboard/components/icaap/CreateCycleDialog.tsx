@@ -14,7 +14,7 @@
  * regulator-request kinds arrive with the P3 workflow that gives them meaning.
  */
 
-import RegulatoryRuleStatus from "@/components/submissions/RegulatoryRuleStatus";
+import FrameworkStatus from "./FrameworkStatus";
 import { useState } from "react";
 import { FlaskConical } from "lucide-react";
 import { isApiError } from "@/lib/api/client";
@@ -145,11 +145,7 @@ export default function CreateCycleDialog({
             Issued by {framework.regulator}.
           </p>
         )}
-        {framework && (
-          <RegulatoryRuleStatus
-            code={framework.filingReturnCode ?? "ICAAP-REPORT"}
-          />
-        )}
+        {framework && <FrameworkStatus bankId={bankId} framework={framework} />}
 
         <div className="grid grid-cols-2 gap-4">
           <FieldLabel label="Financial year">

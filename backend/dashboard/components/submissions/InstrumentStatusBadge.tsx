@@ -13,14 +13,16 @@ export default function InstrumentStatusBadge({
   citation,
   sourceUrl,
   code,
+  regulator,
 }: {
   status: InstrumentStatus | undefined;
   effectiveFrom?: InstrumentDate;
   citation?: string;
   sourceUrl?: string | null;
   code?: string;
+  regulator?: string;
 }) {
-  const disclosure = instrumentDisclosure(status, effectiveFrom);
+  const disclosure = instrumentDisclosure(status, effectiveFrom, regulator);
   return (
     <details
       className="relative inline-block text-caption"
@@ -38,17 +40,21 @@ export default function InstrumentStatusBadge({
       >
         <p>{disclosure.tooltip}</p>
         {citation && <p className="mt-2 text-slate">{citation}</p>}
-        <a
-          className="mt-2 inline-block text-action underline"
-          href={
-            sourceUrl ??
-            `/submissions/instruments${code ? `#${encodeURIComponent(code)}` : ""}`
-          }
-        >
-          {sourceUrl
-            ? "Read the source"
-            : "Source details in the instruments register"}
-        </a>
+        {sourceUrl || code ? (
+          <a
+            className="mt-2 inline-block text-action underline"
+            href={
+              sourceUrl ??
+              `/submissions/instruments#${encodeURIComponent(code!)}`
+            }
+          >
+            {sourceUrl
+              ? "Read the source"
+              : "Source details in the instruments register"}
+          </a>
+        ) : (
+          <p className="mt-2 text-slate">Source link not recorded.</p>
+        )}
       </div>
     </details>
   );
