@@ -59,10 +59,10 @@ from app.identity.schemas.authorization import (
     SodPolicyFindingRead,
 )
 from app.identity.service import authorization, grant_administration
-from app.models.audit_event import AuditEvent
 from app.models.canonical import CanonicalReferenceRow
 from app.models.institution_type import InstitutionType
 from app.models.organization import Organization
+from app.services.audit import record_event
 
 router = APIRouter(tags=["authorization"])
 
@@ -635,25 +635,23 @@ def _resolve_access_request(  # noqa: PLR0913 - explicit resolution actor and au
     request.resolved_at = utc_now()
     request.resolved_by_user_id = actor_user_id
     request.binding_id = binding.id
-    db.add(
-        AuditEvent(
-            organization_id=request.organization_id,
-            actor_user_id=actor_user_id,
-            event_type="authorization.access_request_approved",
-            entity_type="authorization_access_request",
-            entity_id=str(request.id),
-            details={
-                "binding_id": str(binding.id),
-                "requester_user_id": str(request.requester_user_id),
-                "route": request.route,
-                "institution_id": request.institution_id,
-                "module": request.module_scope,
-                "sensitivity": request.sensitivity_scope,
-                "permission": request.permission,
-                "authority_sentence": authority_sentence,
-                **(details or {}),
-            },
-        )
+    record_event(
+        db,
+        TenantContext(request.organization_id, actor_user_id=actor_user_id),
+        event_type="authorization.access_request_approved",
+        entity_type="authorization_access_request",
+        entity_id=str(request.id),
+        details={
+            "binding_id": str(binding.id),
+            "requester_user_id": str(request.requester_user_id),
+            "route": request.route,
+            "institution_id": request.institution_id,
+            "module": request.module_scope,
+            "sensitivity": request.sensitivity_scope,
+            "permission": request.permission,
+            "authority_sentence": authority_sentence,
+            **(details or {}),
+        },
     )
 
 
@@ -809,25 +807,23 @@ def create_authorization_access_request(
         if winner is None:
             raise
         return _access_request_read(winner, user=user, bank=bank)
-    db.add(
-        AuditEvent(
-            organization_id=ctx.organization_id,
-            actor_user_id=user.id,
-            event_type="authorization.access_requested",
-            entity_type="authorization_access_request",
-            entity_id=str(request.id),
-            details={
-                "route": request.route,
-                "institution_id": request.institution_id,
-                "module": request.module_scope,
-                "sensitivity": request.sensitivity_scope,
-                "permission": request.permission,
-                "reason_category": request.reason_category,
-                "reason_detail": request.reason_detail,
-                "reference": request.reference,
-                "valid_until": (request.valid_until.isoformat() if request.valid_until else None),
-            },
-        )
+    record_event(
+        db,
+        ctx,
+        event_type="authorization.access_requested",
+        entity_type="authorization_access_request",
+        entity_id=str(request.id),
+        details={
+            "route": request.route,
+            "institution_id": request.institution_id,
+            "module": request.module_scope,
+            "sensitivity": request.sensitivity_scope,
+            "permission": request.permission,
+            "reason_category": request.reason_category,
+            "reason_detail": request.reason_detail,
+            "reference": request.reference,
+            "valid_until": (request.valid_until.isoformat() if request.valid_until else None),
+        },
     )
     db.commit()
     db.refresh(request)
@@ -1024,25 +1020,23 @@ def reject_authorization_access_request(
     request.status = "rejected"
     request.resolved_at = utc_now()
     request.resolved_by_user_id = ctx.actor_user_id
-    db.add(
-        AuditEvent(
-            organization_id=ctx.organization_id,
-            actor_user_id=ctx.actor_user_id,
-            event_type="authorization.access_request_rejected",
-            entity_type="authorization_access_request",
-            entity_id=str(request.id),
-            details={
-                "requester_user_id": str(request.requester_user_id),
-                "route": request.route,
-                "institution_id": request.institution_id,
-                "module": request.module_scope,
-                "sensitivity": request.sensitivity_scope,
-                "permission": request.permission,
-                "reason_category": payload.reason_category.value,
-                "reason_detail": payload.reason_detail,
-                "reference": payload.reference,
-            },
-        )
+    record_event(
+        db,
+        ctx,
+        event_type="authorization.access_request_rejected",
+        entity_type="authorization_access_request",
+        entity_id=str(request.id),
+        details={
+            "requester_user_id": str(request.requester_user_id),
+            "route": request.route,
+            "institution_id": request.institution_id,
+            "module": request.module_scope,
+            "sensitivity": request.sensitivity_scope,
+            "permission": request.permission,
+            "reason_category": payload.reason_category.value,
+            "reason_detail": payload.reason_detail,
+            "reference": payload.reference,
+        },
     )
     db.commit()
     db.refresh(request)

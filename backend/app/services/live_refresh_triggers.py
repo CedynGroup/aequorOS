@@ -16,7 +16,7 @@ change. That second enqueue is inert unless ``BI_MART_ENQUEUE_ENABLED``.
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.bi.service.enqueue import enqueue_mart_refresh
@@ -140,6 +140,20 @@ def enqueue_regulatory_parameter_change(
     parameter: RegulatoryParameter,
 ) -> list[Job]:
     """Reflow banks addressed by one newly approved global parameter."""
+    stmt = regulatory_parameter_banks(parameter)
+
+    reason = f"governed-parameter approved:{parameter.param_code}:{parameter.id}"
+    jobs = [
+        job
+        for bank in db.scalars(stmt)
+        if (job := _enqueue_bank(db, bank, reason=reason)) is not None
+    ]
+    db.flush()
+    return jobs
+
+
+def regulatory_parameter_banks(parameter: RegulatoryParameter) -> Select[tuple[Bank]]:
+    """The banks addressed by the governed parameter, including those without live data."""
     stmt = (
         select(Bank)
         .join(InstitutionType, InstitutionType.type_code == Bank.institution_type)
@@ -150,11 +164,4 @@ def enqueue_regulatory_parameter_change(
     else:
         stmt = stmt.where(InstitutionType.institution_class == parameter.scope_key)
 
-    reason = f"governed-parameter approved:{parameter.param_code}:{parameter.id}"
-    jobs = [
-        job
-        for bank in db.scalars(stmt)
-        if (job := _enqueue_bank(db, bank, reason=reason)) is not None
-    ]
-    db.flush()
-    return jobs
+    return stmt

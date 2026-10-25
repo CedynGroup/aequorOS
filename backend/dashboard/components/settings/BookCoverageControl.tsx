@@ -194,7 +194,7 @@ export default function BookCoverageControl({
             <ul className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-border-light p-2">
               {shown.map((choice) => (
                 <li key={choice.value}>
-                  <label className="flex items-start gap-2 rounded px-1 py-1 text-caption text-navy hover:bg-surface-muted">
+                  <label className="flex items-start gap-2 rounded-sm px-1 py-1 text-caption text-navy hover:bg-surface-muted">
                     <input
                       type="checkbox"
                       className="mt-0.5"

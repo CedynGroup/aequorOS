@@ -142,6 +142,12 @@ export interface CfpSummaryReadApproved {
   preparedBy?: PreparedBy;
   /**
    *
+   * @type {string}
+   * @memberof CfpSummaryReadApproved
+   */
+  revision: string;
+  /**
+   *
    * @type {CfpStatus}
    * @memberof CfpSummaryReadApproved
    */
@@ -170,6 +176,7 @@ export function instanceOfCfpSummaryReadApproved(
   if (!("content" in value) || value["content"] === undefined) return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("id" in value) || value["id"] === undefined) return false;
+  if (!("revision" in value) || value["revision"] === undefined) return false;
   if (!("status" in value) || value["status"] === undefined) return false;
   if (!("updatedAt" in value) || value["updatedAt"] === undefined) return false;
   if (!("version" in value) || value["version"] === undefined) return false;
@@ -217,6 +224,7 @@ export function CfpSummaryReadApprovedFromJSONTyped(
       json["prepared_by"] == null
         ? undefined
         : PreparedByFromJSON(json["prepared_by"]),
+    revision: json["revision"],
     status: CfpStatusFromJSON(json["status"]),
     updatedAt: new Date(json["updated_at"]),
     version: json["version"],
@@ -249,6 +257,7 @@ export function CfpSummaryReadApprovedToJSONTyped(
     created_at: value["createdAt"].toISOString(),
     id: value["id"],
     prepared_by: PreparedByToJSON(value["preparedBy"]),
+    revision: value["revision"],
     status: CfpStatusToJSON(value["status"]),
     updated_at: value["updatedAt"].toISOString(),
     version: value["version"],

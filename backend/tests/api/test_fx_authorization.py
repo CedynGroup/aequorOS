@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from loguru import logger
 from sqlalchemy import delete, func, select
+from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import (
@@ -58,6 +59,7 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.factories.canonical import seed_canonical_fixture
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 SIBLING_BANK_ID = "BK-FX000002"
@@ -977,9 +979,13 @@ def test_queued_official_run_mints_authorized_fx_results(
         role_bundle=RoleBundle.ANALYST,
         sensitivity_scope=SensitivityScope.CONFIDENTIAL,
     )
-    with get_sessionmaker()() as session:
+    with cast(Session, get_sessionmaker()()) as session:
         period = session.get(BankReportingPeriod, period_id)
         assert period is not None
+        seed_canonical_fixture(
+            session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, as_of=period.period_end
+        )
+        session.commit()
         as_of = period.period_end.isoformat()
         if scheduled:
             scheduler._enqueue_due_official_runs(session, ORG_1, get_settings(), utc_now())

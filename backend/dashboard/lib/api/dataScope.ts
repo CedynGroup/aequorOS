@@ -519,3 +519,12 @@ export function coverageFigureLabel(
 export function showsCoverageNotice(coverage: ReaderCoverage): boolean {
   return coverage.qualified && !coverage.pending && coverage.statement !== null;
 }
+
+/** Institution-wide commands must mirror the server's refusal of partial grants. */
+export function wholeInstitutionCapabilities(
+  capabilities: readonly EffectiveCapabilityRead[],
+): readonly EffectiveCapabilityRead[] {
+  return capabilities.filter(
+    (capability) => capability.dataScope?.kind === "all",
+  );
+}
