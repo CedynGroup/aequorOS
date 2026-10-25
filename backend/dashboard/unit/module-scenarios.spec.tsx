@@ -145,7 +145,7 @@ it.each(["irr", "liquidity", "capital", "fx", "ftp"] as const)(
       ),
     ).toBeVisible();
     expect(screen.getByText(/No stored .* scenario runs/)).toBeVisible();
-    expect(screen.getByText("Curve Shift Bp:")).toBeVisible();
+    expect(screen.getByText("Curve shift bps:")).toBeVisible();
   },
 );
 it("sends FTP curve and rule overrides to preview and save, then reopens the saved result", async () => {
@@ -307,18 +307,22 @@ it.each(["irr", "liquidity", "capital", "fx", "ftp"] as const)(
     expect(screen.getAllByText("Baseline · succeeded")).toHaveLength(1);
     expect(screen.getByText("8.5")).toBeVisible();
     expect(screen.getByText("Yes")).toBeVisible();
-    expect(screen.getByText("No")).toBeVisible();
+    expect(screen.getAllByText("No")).toHaveLength(2);
     expect(screen.getAllByText("0")).toHaveLength(2);
     expect(screen.getByText("Unavailable")).toBeVisible();
     expect(screen.queryByText("outdated")).not.toBeInTheDocument();
-    for (const [key, value] of Object.entries(structured)) {
-      const term = screen.getByText(
-        new RegExp(`^${key.replaceAll("_", " ")}$`, "i"),
-        { selector: "dt" },
-      );
-      const definition = within(term.parentElement!).getByRole("definition");
-      expect(JSON.parse(definition.textContent!)).toEqual(value);
-    }
+    const path = screen.getByRole("table", { name: "Stress path" });
+    expect(
+      within(path).getByRole("columnheader", { name: "Quarter" }),
+    ).toBeVisible();
+    expect(within(path).getByText("Q1")).toBeVisible();
+    expect(within(path).getByText("12.25%")).toBeVisible();
+    expect(screen.getByText("Calculation basis and evidence")).toBeVisible();
+    expect(
+      screen.getByText(/Risk breaches: Within aggregate limit/),
+    ).toBeVisible();
+    expect(screen.getByText("No entries recorded.")).toBeVisible();
+    expect(screen.getByText("No metrics recorded.")).toBeVisible();
   },
 );
 

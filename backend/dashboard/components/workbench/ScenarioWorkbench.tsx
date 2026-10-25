@@ -11,20 +11,12 @@ import type {
   EffectiveCapabilityRead,
   WorkbenchModule,
 } from "@aequoros/risk-service-api";
+import ScenarioMetrics, {
+  scenarioLabel,
+  scenarioRisk,
+  scenarioValue,
+} from "./ScenarioMetrics";
 import FtpWhatIf from "@/components/ftp/FtpWhatIf";
-
-function MetricValue({ value }: { value: unknown }) {
-  if (value === null || value === undefined) return "Unavailable";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "object") {
-    return (
-      <pre className="whitespace-pre-wrap break-words">
-        {JSON.stringify(value, null, 2)}
-      </pre>
-    );
-  }
-  return String(value);
-}
 
 export const MODULE_NAMES: Record<WorkbenchModule, string> = {
   irr: "IRRBB",
@@ -93,6 +85,12 @@ export default function ScenarioWorkbench({
           Open enterprise stress workbench
         </PermissionLink>
       )}
+      {module === "ftp" && confidential && (
+        <FtpWhatIf
+          key={`${bank?.id}:${period?.id}`}
+          catalogue={catalogue.data}
+        />
+      )}
       <SectionCard
         title={`${name} scenario definitions`}
         subtitle="System shocks come from the effective-dated parameter register. Custom scenarios belong to this module."
@@ -123,8 +121,10 @@ export default function ScenarioWorkbench({
                     <dl className="text-caption">
                       {Object.entries(entry.shocks).map(([key, value]) => (
                         <div key={key}>
-                          <dt className="inline">{labelize(key)}: </dt>
-                          <dd className="inline">{value}</dd>
+                          <dt className="inline">{scenarioLabel(key)}: </dt>
+                          <dd className="inline">
+                            {scenarioValue(key, value)}
+                          </dd>
                         </div>
                       ))}
                     </dl>
@@ -152,35 +152,36 @@ export default function ScenarioWorkbench({
                   <p className="font-medium">
                     {labelize(run.scenarioCode)} · {run.status}
                   </p>
-                  <p className="text-caption text-slate">
-                    {run.periodLabel} · {fmtDateUTC(run.createdAt)} ·{" "}
-                    {run.engineVersion}
-                  </p>
+                  <div className="text-caption text-slate">
+                    Reporting period: {run.periodLabel}. Computed{" "}
+                    {fmtDateUTC(run.createdAt)}.
+                    <details>
+                      <summary>Technical provenance</summary>Engine:{" "}
+                      {run.engineVersion}
+                    </details>
+                  </div>
                   {run.error && <p role="alert">{run.error.message}</p>}
-                  <dl className="grid gap-2 sm:grid-cols-3 text-caption">
-                    {Object.entries(run.metrics).map(
-                      ([key, value]: [string, unknown]) => (
-                        <div key={key} className="min-w-0">
-                          <dt>{labelize(key.replace(/_ghs$/, ""))}</dt>
-                          <dd className="font-mono">
-                            <MetricValue value={value} />
-                          </dd>
-                        </div>
-                      ),
-                    )}
-                  </dl>
+                  <p className="my-3 text-body text-navy">
+                    {scenarioRisk(run.metrics)}
+                  </p>
+                  <ScenarioMetrics
+                    metrics={run.metrics}
+                    baseline={
+                      run.scenarioCode === "baseline"
+                        ? undefined
+                        : latest.find(
+                            (entry) =>
+                              entry.scenarioCode === "baseline" &&
+                              entry.status === "succeeded",
+                          )?.metrics
+                    }
+                  />
                 </li>
               ))}
             </ul>
           )}
         </QueryBoundary>
       </SectionCard>
-      {module === "ftp" && confidential && (
-        <FtpWhatIf
-          key={`${bank?.id}:${period?.id}`}
-          catalogue={catalogue.data}
-        />
-      )}
     </div>
   );
 }
