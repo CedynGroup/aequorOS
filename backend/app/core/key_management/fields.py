@@ -248,7 +248,7 @@ def _index(  # noqa: PLR0913 - scoped, domain-separated index contract
     normalized = normalize(value, normalization)
     if secret is None:
         # Optional banks retain ordinary field storage before key connection.
-        if normalization == "name":
+        if normalization == "name" or (domain == "counterparty.group" and len(normalized) > 255):
             return hashlib.sha256(normalized.encode()).hexdigest()
         return normalized
     payload = json.dumps(

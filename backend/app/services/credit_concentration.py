@@ -24,16 +24,16 @@ from sqlalchemy.orm import Session, load_only
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
-from app.core.key_management.concentration_identity import counterparty_group_key, opaque_group_key
+from app.core.key_management.concentration_identity import opaque_group_key
 from app.core.key_management.fields import blind_index
 from app.core.key_management.presentation import (
     LOCKED_TEXT,
     SESSION_STATE,
     SESSION_SUPPORT,
     PresentationState,
-    contains_placeholder,
 )
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
+from app.data_engine.public import counterparty_group_labels
 from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.domain.credit.concentration_monitor import (
     BucketReading,
@@ -261,17 +261,20 @@ def concentration_read(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
 
     result = monitor(db, ctx, bank, as_of)
     basis = "net_own_funds" if institution_types.institution_class(db, bank) == "sdi" else "tier1"
-    group_labels = {
-        canonical_group_key("", party): LOCKED_TEXT
-        if contains_placeholder([party.name, party.group_reference, party.attributes])
-        else counterparty_group_key(party.name, party.group_reference, party.attributes or {})
-        for party in db.scalars(
-            select(CanonicalCounterparty).where(
-                CanonicalCounterparty.organization_id == ctx.organization_id,
-                CanonicalCounterparty.bank_id == bank.id,
-            )
-        )
-    }
+    group_labels = counterparty_group_labels(
+        db,
+        ctx,
+        bank.id,
+        CanonicalPositionSnapshot.as_of_date == as_of,
+        CanonicalPosition.position_type.in_(_CONCENTRATION_POSITION_TYPES),
+        group_keys={
+            reading.key
+            for dimension in result.dimensions
+            if dimension.dimension == "single_name"
+            for reading in dimension.buckets
+        }
+        | {reading.key for reading in result.breaches},
+    )
 
     def bucket(reading: BucketReading) -> ConcentrationBucketRead:
         return ConcentrationBucketRead(

@@ -28,6 +28,8 @@ from app.bi.service.execution import execute
 from app.bi.service.identity_policy import IDENTITY_REASON
 from app.core.ids import new_uuid7
 from app.core.key_management import registry
+from app.core.key_management.concentration_identity import counterparty_group_key
+from app.core.key_management.fields import blind_index
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.presentation import (
@@ -555,6 +557,254 @@ def test_unicode_name_writes_updates_and_normalized_search(
     if connected:
         connect(db_session, provider)
     assert_unicode_name_round_trip(db_session, connected)
+
+
+def group_snapshot(
+    db: Session,
+    party: CanonicalCounterparty,
+    reference: str,
+    as_of: date,
+    position_type: str,
+) -> CanonicalPositionSnapshot:
+    common = dict(
+        organization_id=ORG_1,
+        bank_id=party.bank_id,
+        as_of_date=as_of,
+        source_system="EXCEL_CSV",
+        ingestion_batch_id=party.ingestion_batch_id,
+        lineage_id=party.lineage_id,
+        validation_status="accepted",
+    )
+    position = CanonicalPosition(
+        **common, source_reference=reference, position_type=position_type, currency="GHS"
+    )
+    db.add(position)
+    db.flush()
+    snapshot = CanonicalPositionSnapshot(
+        **common,
+        source_reference=reference,
+        position_id=position.id,
+        counterparty_id=party.id,
+        balance=Decimal(100),
+    )
+    db.add(snapshot)
+    db.flush()
+    return snapshot
+
+
+@pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("length", [249, 255])
+@pytest.mark.parametrize(
+    "representation", ["name", "group_reference", "group", "parent", "attribute_reference"]
+)
+def test_long_group_tokens_preserve_exact_search_and_grouping(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    connected: bool,
+    length: int,
+    representation: str,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    labels: list[str] = []
+    for index in range(2):
+        value = "S" * (length - 1) + str(index)
+        party = counterparty(db_session, reference=f"long-party-{index}", name=value)
+        party.group_reference = None
+        party.attributes = {}
+        if representation == "group_reference":
+            party.group_reference = value
+        elif representation != "name":
+            key = "group_reference" if representation == "attribute_reference" else representation
+            party.attributes = {key: value}
+        labels.append(counterparty_group_key(party.name, party.group_reference, party.attributes))
+        group_snapshot(db_session, party, f"long-loan-{index}", AS_OF, "LOAN")
+    db_session.commit()
+    db_session.expunge_all()
+    tokens = list(db_session.scalars(select(CanonicalCounterparty.concentration_group_blind_index)))
+    assert len(tokens) == 2 and all(token is not None and len(token) <= 255 for token in tokens)
+    assert len(set(tokens)) == 2
+    for index, label in enumerate(labels):
+        assert (
+            blind_index(
+                db_session,
+                organization_id=ORG_1,
+                bank_id=BANK_A,
+                domain="counterparty.group",
+                value=label,
+            )
+            in tokens
+        )
+        if not connected and len(label) <= 255:
+            assert label in tokens
+        value = "S" * (length - 1) + str(index)
+        assert len(find_counterparties(db_session, CTX, BANK_A, field="name", value=value)) == 1
+        assert (
+            len(
+                find_counterparties(
+                    db_session, CTX, BANK_A, field="source_reference", value=f"long-party-{index}"
+                )
+            )
+            == 1
+        )
+        assert (
+            len(
+                find_counterparties(
+                    db_session,
+                    CTX,
+                    BANK_A,
+                    field="external_identifier",
+                    namespace="national_id",
+                    value=IDENTIFIER,
+                )
+            )
+            == 2
+        )
+    bank = db_session.get(Bank, BANK_A)
+    assert bank is not None
+    report = credit_concentration.concentration_read(db_session, CTX, bank, AS_OF)
+    single_name = next(d for d in report.dimensions if d.dimension == "single_name")
+    assert {bucket.key for bucket in single_name.buckets} == set(labels)
+    assert single_name.hhi == Decimal(5000)
+
+
+@pytest.mark.parametrize(
+    "representation", ["name", "group_reference", "group", "parent", "attribute_reference"]
+)
+def test_optional_bank_named_limit_matches_the_stored_group(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    representation: str,
+) -> None:
+    _credit_identity_positions(db_session, representation)
+    label = "cp:Synthetic borrower 0" if representation == "name" else "group:Synthetic group 0"
+    db_session.add(
+        ParamConcentrationLimit(
+            organization_id=ORG_1,
+            jurisdiction_code="GH",
+            dimension="single_name",
+            limit_kind="share_of_book_pct",
+            value=Decimal(49),
+            effective_from=AS_OF,
+            approved_by="Synthetic board",
+            approval_timestamp=utc_now(),
+            bucket_key=label,
+        )
+    )
+    db_session.commit()
+    bank = db_session.get(Bank, BANK_A)
+    assert bank is not None
+    report = credit_concentration.concentration_read(db_session, CTX, bank, AS_OF)
+    assert len(report.breaches) == 1 and report.breaches[0].key == label
+
+
+@pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("position_type", ["LOAN", "DEPOSIT"])
+def test_report_labels_only_read_needed_snapshot_representatives(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    connected: bool,
+    position_type: str,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    selected = counterparty(db_session, reference="selected", as_of=date(2020, 1, 1))
+    selected.group_reference = None
+    selected.attributes = {"parent": "Synthetic representative"}
+    group_snapshot(db_session, selected, "selected-position", AS_OF, position_type)
+    selected_id = selected.id
+    excluded_ids = []
+    for index, reason in enumerate(
+        (
+            "old",
+            "future",
+            "unreferenced",
+            "withdrawn",
+            "superseded",
+            "invalid",
+            "wrong_type",
+            "wrong_bank",
+            "older_group",
+            "duplicate_group",
+        )
+    ):
+        party = counterparty(
+            db_session,
+            bank_id=BANK_B if reason == "wrong_bank" else BANK_A,
+            reference=f"excluded-{index}",
+            as_of=AS_OF,
+        )
+        if reason in {"older_group", "duplicate_group"}:
+            party.group_reference = None
+            party.attributes = {"parent": "Synthetic representative"}
+        observed = (
+            date(2020, 1, 1)
+            if reason == "old"
+            else date(2026, 7, 1)
+            if reason == "future"
+            else date(2026, 5, 30)
+            if reason == "older_group"
+            else AS_OF
+        )
+        if reason != "unreferenced" and not (reason == "future" and position_type == "DEPOSIT"):
+            snapshot = group_snapshot(
+                db_session,
+                party,
+                f"excluded-position-{index}",
+                observed,
+                ("DEPOSIT" if position_type == "LOAN" else "LOAN")
+                if reason == "wrong_type"
+                else position_type,
+            )
+            if reason == "withdrawn":
+                snapshot.withdrawn_at = utc_now()
+                snapshot.withdrawn_by_batch_id = party.ingestion_batch_id
+                snapshot.withdrawal_reason = "Synthetic withdrawal"
+            elif reason == "superseded":
+                replacement = group_snapshot(
+                    db_session, selected, "replacement-position", AS_OF, position_type
+                )
+                snapshot.superseded_by = replacement.id
+            elif reason == "invalid":
+                snapshot.validation_status = "error"
+        excluded_ids.append(party.id)
+    db_session.commit()
+    db_session.execute(
+        text(
+            "UPDATE canonical_counterparties SET source_reference = :broken, "
+            "external_identifiers = :json WHERE id = :id"
+        ).bindparams(bindparam("id", type_=Uuid())),
+        {
+            "id": selected_id,
+            "broken": "aqs-bank-field-v1:[]",
+            "json": json.dumps({"aqs-bank-field-v1": []}),
+        },
+    )
+    for record_id in excluded_ids:
+        db_session.execute(
+            text("UPDATE canonical_counterparties SET name = :broken WHERE id = :id").bindparams(
+                bindparam("id", type_=Uuid())
+            ),
+            {"id": record_id, "broken": "aqs-bank-field-v1:[]"},
+        )
+    db_session.commit()
+    db_session.expunge_all()
+    if position_type == "LOAN":
+        bank = db_session.get(Bank, BANK_A)
+        assert bank is not None
+        report = credit_concentration.concentration_read(db_session, CTX, bank, AS_OF)
+        single_name = next(d for d in report.dimensions if d.dimension == "single_name")
+        assert {bucket.key for bucket in single_name.buckets} == {"group:Synthetic representative"}
+        assert single_name.bucket_count == 1
+        assert report.total_book_ghs == Decimal(300)
+    else:
+        report = get_behavioral_liquidity_report(db_session, CTX, BANK_A)
+        groups = [
+            segment for segment in report.segments if segment.dimension == "concentration_group"
+        ]
+        assert {segment.segment for segment in groups} == {"Synthetic representative"}
+        assert len(groups) == 1
+        assert groups[0].current_balance_ghs == 300
 
 
 def test_numeric_sql_aggregation_preserves_decrypted_concentration_labels(
