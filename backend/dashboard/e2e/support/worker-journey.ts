@@ -125,7 +125,6 @@ export type WorkerBookVariant = {
   deposits?: string;
   equity?: string;
   loanMaturityDays?: number;
-  loanReportingBalance?: string;
   securitiesBalance?: string;
   securities?: {
     reference: string;
@@ -215,9 +214,6 @@ export async function writeWorkerWorkbook(
         "attributes.branch_id": "WORKER-BRANCH",
       },
       {
-        ...(variant.loanReportingBalance
-          ? { "attributes.balance_ghs": variant.loanReportingBalance }
-          : {}),
         source_reference: "WORKER-USD-LOAN",
         position_type: "LOAN",
         currency: "USD",

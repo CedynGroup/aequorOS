@@ -202,7 +202,7 @@ test.describe("savings and loans capital regime", () => {
     page,
     request,
   }) => {
-    await treasury.refresh({ ...base, loanReportingBalance: "200000" });
+    await treasury.refresh(base);
     const capital = await treasury.read<{
       net_own_funds_ghs: string;
       total_rwa_ghs: string;
