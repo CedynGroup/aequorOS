@@ -367,6 +367,35 @@ def test_rotation_adds_version_and_keeps_old_ciphertext_readable(
     assert refused.value.revoked
 
 
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+@pytest.mark.parametrize("tier", ["raw", "canonical", "outputs", "temp"])
+def test_rotated_current_key_gates_historical_object_downloads(
+    bank_storage: BankStorage,
+    db_session: Session,
+    status: KeyStatus,
+    tier: Tier,
+) -> None:
+    location = StorageLocation(SLUG, tier, "synthetic/historical.csv")
+    content = b"synthetic historical object"
+    original = bank_storage.storage.write(
+        location, io.BytesIO(content), metadata_for(SLUG, tier, content)
+    )
+    row = registry.scoped_key(db_session, bank_id="BK-SAMP0001", organization_id=ORG_1)
+    registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider)
+    db_session.commit()
+    _, readable = bank_storage.storage.read(location, original.version_id)
+    with readable:
+        assert readable.read() == content
+    bank_storage.provider.set_status(NEXT_KEY, status)
+    with pytest.raises(KeyUnavailableError) as refused:
+        bank_storage.storage.read(location, original.version_id)
+    assert refused.value.revoked == (status == KeyStatus.DISABLED)
+    bank_storage.provider.set_status(NEXT_KEY, KeyStatus.ACTIVE)
+    _, recovered = bank_storage.storage.read(location, original.version_id)
+    with recovered:
+        assert recovered.read() == content
+
+
 def test_object_substitution_and_legacy_plaintext_are_refused(bank_storage: BankStorage) -> None:
     location = StorageLocation(SLUG, "raw", "upload.csv")
     bank_storage.storage.write(

@@ -4,7 +4,7 @@ import json
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -375,6 +375,66 @@ def test_bank_scoped_exact_search_and_master_key_rotation(
         row.id for row in find_counterparties(db_session, CTX, BANK_A, field="name", value=NAME)
     ] == [a_id]
     assert raw_fields(db_session) == before
+
+
+@pytest.mark.parametrize(
+    "operation", ["field", "report", "name", "source_reference", "external_identifier"]
+)
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_current_key_gates_historical_fields_and_indexes(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    operation: str,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    connect(db_session, provider, BANK_B)
+    party_id = counterparty(db_session).id
+    sibling_id = counterparty(db_session, BANK_B).id
+    package_id = db_session.scalar(
+        select(RegulatoryPackage.id).where(RegulatoryPackage.bank_id == BANK_A)
+    )
+    assert package_id is not None
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, NEXT, lambda _name: provider)
+    db_session.commit()
+    db_session.expunge_all()
+
+    def read() -> object:
+        if operation == "field":
+            party = db_session.get(CanonicalCounterparty, party_id)
+            assert party is not None
+            return (party.name, party.source_reference, party.external_identifiers)
+        if operation == "report":
+            package = db_session.get(RegulatoryPackage, package_id)
+            assert package is not None
+            return package.snapshot
+        return [
+            party.id
+            for party in find_counterparties(
+                db_session,
+                CTX,
+                BANK_A,
+                field=cast(Literal["name", "source_reference", "external_identifier"], operation),
+                value=NAME if operation == "name" else IDENTIFIER,
+                namespace="national_id" if operation == "external_identifier" else None,
+            )
+        ]
+
+    expected = read()
+    provider.set_status(NEXT, status)
+    db_session.expunge_all()
+    assert read() == expected
+    db_session.commit()
+    db_session.expunge_all()
+    with pytest.raises(KeyUnavailableError) as refused:
+        read()
+    assert refused.value.revoked == (status == KeyStatus.DISABLED)
+    sibling = db_session.get(CanonicalCounterparty, sibling_id)
+    assert sibling is not None and sibling.name == NAME
+    provider.set_status(NEXT, KeyStatus.ACTIVE)
+    db_session.expunge_all()
+    assert read() == expected
 
 
 @pytest.mark.parametrize("substitution", ["bank", "record", "field"])

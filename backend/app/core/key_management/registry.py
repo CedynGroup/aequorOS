@@ -278,6 +278,11 @@ def open_envelope(
     providers: ProviderFactory = provider_for,
 ) -> ObjectKey:
     unit = _unit(db)
+    current = current_version(db, row)
+    if envelope_id != current:
+        _ = open_envelope(
+            db, row, current, version_context(row.organization_id, row.bank_id), providers
+        )
     envelope = unit.envelopes.get(envelope_id)
     if envelope is None:
         envelope = db.scalar(

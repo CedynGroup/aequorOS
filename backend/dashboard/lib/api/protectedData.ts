@@ -36,11 +36,27 @@ export async function protectedDataFetch(
   const started = revision;
   const response = await fetch(...args);
   const input = args[0];
-  await observeProtectedData(
+  const refused = await observeProtectedData(
     response,
     input instanceof Request ? input.url : String(input),
     started,
   );
+  if (refused) {
+    return Response.json(
+      {
+        error: {
+          code:
+            refused === "revoked"
+              ? "bank_key_revoked"
+              : refused === "support"
+                ? "bank_protected_support"
+                : "bank_key_unavailable",
+          message: protectedDataMessages[refused],
+        },
+      },
+      { status: 503 },
+    );
+  }
   return response;
 }
 
@@ -48,7 +64,7 @@ export async function observeProtectedData(
   response: Response,
   url?: string,
   started = revision,
-) {
+): Promise<Exclude<ProtectedDataState, "available"> | undefined> {
   const raw = response.headers.get("X-Aequoros-Protected-Data");
   try {
     let payload: unknown;
@@ -75,7 +91,8 @@ export async function observeProtectedData(
     }
     if (!payload || typeof payload !== "object" || Array.isArray(payload))
       return;
-    if (started < authorityRevision) return;
+    if (started < authorityRevision) return "unavailable";
+    let refused: Exclude<ProtectedDataState, "available"> | undefined;
     let changed = false;
     for (const [bank, state] of Object.entries(payload)) {
       if (
@@ -84,7 +101,11 @@ export async function observeProtectedData(
         )
       )
         continue;
-      if (state === "available" && started < (locks.get(bank) ?? 0)) continue;
+      if (state === "available" && started < (locks.get(bank) ?? 0)) {
+        const current = protectedDataState(bank);
+        refused = current === "available" ? "unavailable" : current;
+        continue;
+      }
       if (state !== "available") locks.set(bank, ++revision);
       if (notices.get(bank) !== state) {
         notices.set(bank, state as ProtectedDataState);
@@ -92,6 +113,7 @@ export async function observeProtectedData(
       }
     }
     if (changed) listeners.forEach((listener) => listener());
+    return refused;
   } catch {
     /* A malformed notice must not interrupt the original response. */
   }
