@@ -39,6 +39,7 @@ type Configuration = {
   signing?: boolean;
   branchRegister?: boolean;
   ownerReadModules?: string[];
+  institutionType?: string;
   bindings?: {
     role?: string;
     bundle: "viewer" | "analyst" | "approver";
@@ -220,6 +221,7 @@ export const test = base.extend<{
         owned_tenant: storyConfig.ownedTenant ?? false,
         signing: storyConfig.signing ?? false,
         owner_read_modules: storyConfig.ownerReadModules,
+        institution_type: storyConfig.institutionType,
         bindings: (storyConfig.bindings ?? []).map((binding) => ({
           actor_role: binding.role ?? "viewer",
           role_bundle: binding.bundle,

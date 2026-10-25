@@ -614,7 +614,7 @@ diagnosis:
    auto mode; `AQS_LOCAL_SERVICES=external` also permits the backend to read its
    untracked `.env` without starting a service. The `attestation`, `full-lifecycle`,
    `submission-lifecycle`, `data-engine-ingestion`, `integration-key-use`,
-   `grant-administration`, `00-ingestion-worker`, and opt-in `visual-tour`
+   `grant-administration`, `00-ingestion-worker`, `00-treasury-boundaries`, and opt-in `visual-tour`
    specs, plus the SSO attestation journey, refuse immediately without it rather
    than letting storage-dependent assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The
@@ -650,6 +650,16 @@ the same worker and generates BSD2 with the matching cash amount. It refuses to
 start with another bank's queued work, stops its own worker in `finally`, and
 removes its tenant and session state. Keep this story ahead of shared-bank
 mutation stories and keep Playwright at one worker.
+
+`00-treasury-boundaries.spec.ts` uses the same upload and worker path with a
+fresh setup tenant and fresh analyst/approver identities per story. It pins zero
+cash, the 100% LCR threshold, the 75% inflow cap, Level 2A/2B haircuts and both
+HQLA caps, and exclusion of public-sector securities lacking HQLA classification.
+A savings-and-loans variant checks its own capital floor, omits Basel sub-tier
+ratios and refuses a bank forecast for its regime. `storyConfig.institutionType` selects the institution
+regime only for an owned tenant. Securities declare their issuer class separately
+from the bank's HQLA classification. The fixture stops its owned worker before
+identity retirement; it neither completes jobs nor writes financial facts itself.
 
 The canonical fixture ends at a fixed month. Bootstrap first carries it forward
 (`extend_canonical_test_book`) one month-end snapshot at a time through the last
