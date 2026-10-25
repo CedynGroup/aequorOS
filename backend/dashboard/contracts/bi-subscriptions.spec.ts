@@ -1,7 +1,8 @@
 /** HTTP subscription authority, recipient disclosure and owner-only history.
  * Delivery is disabled in this hermetic stack; no email is sent. */
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { biApi, fixtureAsOf, SAMPLE_BANK_ID } from "../e2e/support/bi";
+import { test } from "../e2e/support/scoped-objects";
 import { E2E_USERS } from "../e2e/support/mint";
 
 const SUBSCRIPTIONS = `/banks/${SAMPLE_BANK_ID}/bi/subscriptions`;
@@ -23,6 +24,7 @@ function summaryQuery(asOf: string) {
 test.describe("bi-subscriptions HTTP contracts", () => {
   test("the author's authority is checked, the stored row confers none of it, and the list is a disclosure", async ({
     request,
+    objects,
   }) => {
     const asOf = await fixtureAsOf(request);
 
@@ -84,6 +86,8 @@ test.describe("bi-subscriptions HTTP contracts", () => {
       delivery_note: string;
       is_active: boolean;
     };
+
+    objects.register(SUBSCRIPTIONS, subscription.id);
 
     expect(subscription.owned_by_caller).toBe(true);
     expect(subscription.owner_user_id).toBe(E2E_USERS.admin.id);

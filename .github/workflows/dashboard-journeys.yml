@@ -109,6 +109,7 @@ jobs:
           STORAGE_RETIRE_AFTER: "2099-01-01"
           STORAGE_KMS_KEY_ID: aequoros-key
           PLAYWRIGHT_CRITICAL_OUTCOMES_REPORT: ${{ runner.temp }}/critical-contracts.json
+          PLAYWRIGHT_CONTRACT_REPORT: ${{ runner.temp }}/contracts.json
           E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
         # A separate invocation resets the disposable database and keeps one
         # worker. Contract and journey reporters write separate files.
@@ -136,6 +137,13 @@ jobs:
         with:
           name: dashboard-critical-outcomes-${{ matrix.shard }}
           path: ${{ runner.temp }}/critical-*.json
+          if-no-files-found: error
+      - name: Upload browser contract report
+        if: always() && matrix.shard == 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-browser-contract-report
+          path: ${{ runner.temp }}/contracts.json
           if-no-files-found: error
       # The quarantine size (e2e/support/quarantine.ts) is pinned here on
       # purpose: parking or releasing a journey means editing this gate as well
