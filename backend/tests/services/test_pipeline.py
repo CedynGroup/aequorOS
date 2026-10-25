@@ -8,11 +8,17 @@ immutable, reproducible runs.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import UTC, date
 from decimal import Decimal
+from io import BytesIO
+from typing import Any, TypedDict
 from uuid import uuid4
 
+import openpyxl
 import pytest
+from openpyxl.worksheet.worksheet import Worksheet
+from pydantic import InstanceOf, TypeAdapter
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -20,6 +26,7 @@ from app import worker
 from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.db.base import utc_now
+from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -33,9 +40,11 @@ from app.models import (
     RegulatoryParameter,
     RegulatoryRun,
 )
-from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.schemas.packages import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.reporting.service import generation
+from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.services import (
+    ingestion,
     job_queue,
     live_refresh_triggers,
     live_view,
@@ -46,6 +55,7 @@ from app.services import (
     regulatory_irr,
     regulatory_liquidity,
 )
+from app.services.fact_derivation import evaluate_balance_identity
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import (
     FIXTURE_AS_OF,
@@ -53,6 +63,7 @@ from tests.support.factories.canonical import (
     seed_hedge_and_swap_positions,
 )
 from tests.support.helpers import ORG_1, USER_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = [
     pytest.mark.usefixtures(
@@ -502,6 +513,150 @@ def test_run_official_mints_immutable_reproducible_runs(db_session: Session) -> 
     assert baseline_after_second == baseline_after_first
 
 
+class _Bsd2Row(TypedDict):
+    code: str
+    status: str
+    value: str | None
+
+
+class _Bsd2Section(TypedDict):
+    rows: list[_Bsd2Row]
+
+
+class _Bsd2Snapshot(TypedDict):
+    sections: list[_Bsd2Section]
+
+
+def _cash_correction_workbook(cash: int) -> bytes:
+    workbook = openpyxl.Workbook()
+    sheet = TypeAdapter(InstanceOf[Worksheet]).validate_python(workbook.create_sheet("GL"))
+    sheet.append(
+        ["source_reference", "account_code", "name", "account_class", "currency", "balance"]
+    )
+    sheet.append(["GL/1001", "1001", "Cash on Hand", "ASSET", "GHS", cash])
+    sheet.append(["GL/3001", "3001", "Paid-in Share Capital", "EQUITY", "GHS", cash + 55_280_000])
+    content = BytesIO()
+    workbook.save(content)
+    return content.getvalue()
+
+
+def test_official_remint_reports_same_date_cash_correction_in_bsd2(db_session: Session) -> None:
+    _seed(db_session)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+    storage = InMemoryStorageClient()
+    mapping = ingestion.create_mapping_config(
+        db_session,
+        ctx,
+        SAMPLE_BANK_ID,
+        MappingConfigCreate(
+            source_system="EXCEL_CSV",
+            name="Same-date GL corrections",
+            activate=True,
+            reason="Exercise an accepted same-date cash and funding correction.",
+            config=MappingConfig(
+                field_mappings={
+                    "gl_account": EntityMapping(
+                        source_table="GL",
+                        fields={
+                            key: key
+                            for key in (
+                                "source_reference",
+                                "account_code",
+                                "name",
+                                "account_class",
+                                "currency",
+                                "balance",
+                            )
+                        },
+                    )
+                }
+            ),
+        ),
+    )
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+
+    def upload_book(cash: int) -> None:
+        uploaded = ingestion.upload_source(
+            db_session, ctx, bank.id, storage, "correction.xlsx", _cash_correction_workbook(cash)
+        )
+        result = ingestion.start_ingestion(
+            db_session,
+            ctx,
+            bank.id,
+            IngestionBatchCreate(
+                source_system="EXCEL_CSV",
+                mapping_config_id=mapping.id,
+                as_of_date=FIXTURE_AS_OF,
+                location=uploaded.location,
+                reason="Correct cash and matching equity for the reporting date.",
+            ),
+            storage,
+        )
+        assert result.batch.status in ("accepted", "accepted_with_warnings"), result.batch
+        identity = evaluate_balance_identity(db_session, ctx, bank, FIXTURE_AS_OF)
+        assert identity is not None
+        assert identity.gap == 0
+        pipeline.run_refresh(db_session, _refresh_job(db_session))
+        assert db_session.scalar(
+            select(CurrentFinancialFact.amount).where(
+                CurrentFinancialFact.bank_id == bank.id,
+                CurrentFinancialFact.fact_group == "balance_sheet",
+                CurrentFinancialFact.category == "cash_vault",
+            )
+        ) == Decimal(cash)
+
+    def generate_bsd2() -> RegulatoryPackageRead:
+        return generation.generate_package(
+            db_session,
+            ctx,
+            bank.id,
+            RegulatoryPackageCreate(return_code="BSD2", reporting_date=FIXTURE_AS_OF),
+        )
+
+    def cash_row(snapshot: dict[str, Any]) -> _Bsd2Row:
+        typed_snapshot = TypeAdapter(_Bsd2Snapshot).validate_python(snapshot)
+        return next(
+            row
+            for section in typed_snapshot["sections"]
+            for row in section["rows"]
+            if row["code"] == "BSD2.R14.domestic"
+        )
+
+    upload_book(2_000_000)
+    pipeline.run_official(db_session, _official_job(db_session))
+    original = generate_bsd2()
+    assert Decimal(str(cash_row(original.snapshot)["value"])) == Decimal("2")
+    original_snapshot = deepcopy(original.snapshot)
+    prior_runs = {
+        run.id: (deepcopy(run.inputs), deepcopy(run.metrics), run.input_hash, run.status)
+        for run in db_session.scalars(select(RegulatoryRun))
+    }
+    treasury_before = regulatory_liquidity.get_liquidity_dashboard(db_session, ctx, bank.id).live
+    assert treasury_before is not None
+    hqla_before = TypeAdapter(Decimal).validate_python(treasury_before.metrics["hqla_total_ghs"])
+
+    upload_book(3_000_000)
+    treasury_after = regulatory_liquidity.get_liquidity_dashboard(db_session, ctx, bank.id).live
+    assert treasury_after is not None
+    hqla_after = TypeAdapter(Decimal).validate_python(treasury_after.metrics["hqla_total_ghs"])
+    assert hqla_after - hqla_before == Decimal("1000000")
+    pipeline.run_official(db_session, _official_job(db_session))
+    corrected = generate_bsd2()
+    assert cash_row(corrected.snapshot)["status"] == "mapped"
+    assert Decimal(str(cash_row(corrected.snapshot)["value"])) == Decimal("3")
+    assert corrected.version == original.version + 1
+    assert corrected.supersedes_id == original.id
+    prior_package = db_session.get(RegulatoryPackage, original.id)
+    assert prior_package is not None
+    assert prior_package.snapshot == original_snapshot
+    assert prior_package.snapshot_sha256 == original.snapshot_sha256
+    for run_id, evidence in prior_runs.items():
+        run = db_session.get(RegulatoryRun, run_id)
+        assert run is not None
+        assert (run.inputs, run.metrics, run.input_hash, run.status) == evidence
+
+
 def test_live_dashboards_prefer_current_state_over_existing_official_runs(
     db_session: Session,
 ) -> None:
@@ -551,7 +706,9 @@ def test_live_dashboards_prefer_current_state_over_existing_official_runs(
     assert official_fx.inputs == official_inputs
 
 
-def test_live_refresh_cannot_mutate_sealed_regulatory_package(db_session: Session) -> None:
+def test_live_and_official_refresh_cannot_mutate_sealed_regulatory_package(
+    db_session: Session,
+) -> None:
     """A package binds the official snapshot even as the live book moves on."""
     _seed(db_session)
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
@@ -572,6 +729,7 @@ def test_live_refresh_cannot_mutate_sealed_regulatory_package(db_session: Sessio
     seed_hedge_and_swap_positions(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     db_session.commit()
     pipeline.run_refresh(db_session, _refresh_job(db_session))
+    pipeline.run_official(db_session, _official_job(db_session))
 
     db_session.refresh(package)
     assert package.snapshot == snapshot_before
@@ -580,26 +738,32 @@ def test_live_refresh_cannot_mutate_sealed_regulatory_package(db_session: Sessio
 
 
 def test_official_input_hash_survives_fact_rederivation(db_session: Session) -> None:
-    """Reproducibility must hold across the live engine's fact churn.
-
-    Every ``run_refresh`` re-derives facts, deleting and re-inserting each
-    ``BankFinancialFact`` with a fresh UUID. A filed official run must still
-    reproduce byte-identical ``input_hash`` values afterwards, so the snapshot
-    hash may not depend on the (churning) fact row id or its DB return order.
-    """
+    """Official hashes depend on financial values across period-fact replacement."""
     _seed(db_session)
     pipeline.run_refresh(db_session, _refresh_job(db_session))
     pipeline.run_official(db_session, _official_job(db_session))
     before = _baseline_hashes_by_module(db_session)
     assert set(before) >= _OFFICIAL_REGULATORY_MODULES
+    fact_ids_before = set(db_session.scalars(select(BankFinancialFact.id)))
 
-    # A refresh re-derives facts (new UUIDs, possibly reordered), then a second
-    # official run on the same economics must reproduce the identical hashes.
     pipeline.run_refresh(db_session, _refresh_job(db_session))
     pipeline.run_official(db_session, _official_job(db_session))
     after = _baseline_hashes_by_module(db_session)
 
     assert after == before
+    period_ids = select(BankReportingPeriod.id).where(
+        BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+        BankReportingPeriod.period_end == FIXTURE_AS_OF,
+    )
+    fact_ids_after = set(
+        db_session.scalars(
+            select(BankFinancialFact.id).where(
+                BankFinancialFact.reporting_period_id.in_(period_ids)
+            )
+        )
+    )
+    assert fact_ids_after
+    assert fact_ids_before.isdisjoint(fact_ids_after)
 
 
 def _baseline_liquidity_hashes(db_session: Session) -> set[str]:

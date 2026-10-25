@@ -34,11 +34,12 @@ import hashlib
 import hmac
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from loguru import logger
+from pydantic import JsonValue, TypeAdapter
 from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
@@ -46,11 +47,14 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.core import security
 from app.core.config import AuthSettings, get_settings
+from app.core.tenancy import TenantContext
 from app.db.base import utc_now
+from app.identity.models.bank import Bank
 from app.identity.models.refresh_token import RefreshToken
 from app.identity.models.sso_connection import SsoConnection
 from app.identity.models.user import User
 from app.identity.service import auth_throttle, sso_config
+from app.models.audit_event import AuditEvent
 
 _INVALID = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password."
@@ -271,6 +275,65 @@ def _resolve_user(db: Session, email: str, organization_id: str | None) -> User 
     return users[0] if len(users) == 1 else None
 
 
+def record_authentication_event(
+    db: Session,
+    user: User | None,
+    *,
+    method: str,
+    outcome: Literal["success", "failure"],
+    assurance: dict[str, JsonValue] | None = None,
+) -> None:
+    from app.identity.service import authorization  # noqa: PLC0415
+
+    bank_ids: list[str | None] = []
+    if user is not None:
+        banks = list(db.scalars(select(Bank).where(Bank.organization_id == user.organization_id)))
+        projection = authorization.project_effective_authority(
+            db,
+            TenantContext(
+                user.organization_id,
+                actor_user_id=user.id,
+                authorization_version=user.authorization_version,
+            ),
+            banks,
+            failure_surface="authentication_audit",
+        )
+        bank_ids.extend(item.institution_id for item in projection.institution_capabilities)
+    if not bank_ids:
+        bank_ids.append(None)
+    evidence: dict[str, JsonValue] = {
+        "source": "authentication",
+        "method": method,
+        "outcome": outcome,
+    }
+    for key in ("acr", "amr"):
+        if assurance is not None and key in assurance:
+            evidence[key] = assurance[key]
+    actions = [f"authentication.{method}.{'succeeded' if outcome == 'success' else 'failed'}"]
+    amr = evidence.get("amr")
+    if outcome == "success" and isinstance(amr, list) and "mfa" in amr:
+        actions.append("authentication.mfa.succeeded")
+    attempt_id = uuid4()
+    occurred_at = utc_now()
+    for bank_id in bank_ids:
+        for action in actions:
+            db.add(
+                AuditEvent(
+                    organization_id=user.organization_id if user is not None else None,
+                    actor_user_id=user.id if user is not None else None,
+                    event_type=action,
+                    entity_type="user" if user is not None else "authentication_attempt",
+                    entity_id=str(user.id if user is not None else attempt_id),
+                    created_at=occurred_at,
+                    details={
+                        **evidence,
+                        "attempt_id": str(attempt_id),
+                        **({"bank_id": bank_id} if bank_id is not None else {}),
+                    },
+                )
+            )
+
+
 def login_with_password(
     db: Session,
     *,
@@ -283,35 +346,42 @@ def login_with_password(
     now = utc_now()
     user = _resolve_user(db, email, organization_id)
 
-    # Capability-based, not provider-labeled: anyone holding a password hash may
-    # password-login, INCLUDING accounts later linked to SSO (linking must add a
-    # sign-in method, never silently revoke the password — an SSO-linked admin
-    # who can no longer password-login is locked out of their own fallback).
-    # SSO-only accounts (JIT or provisioned without a password) have no hash and
-    # fail uniformly with unknown emails: never disclose which case it was.
-    if user is None or not user.password_hash:
-        auth_throttle.burn_password_check(password)
-        raise _INVALID
+    try:
+        # Capability-based, not provider-labeled: anyone holding a password hash may
+        # password-login, INCLUDING accounts later linked to SSO (linking must add a
+        # sign-in method, never silently revoke the password — an SSO-linked admin
+        # who can no longer password-login is locked out of their own fallback).
+        # SSO-only accounts (JIT or provisioned without a password) have no hash and
+        # fail uniformly with unknown emails: never disclose which case it was.
+        if user is None or not user.password_hash:
+            auth_throttle.burn_password_check(password)
+            raise _INVALID
 
-    if auth_throttle.lock_expiry(user, now=now) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_423_LOCKED,
-            detail="Account temporarily locked after repeated failures. Try again later.",
-        )
-
-    if not security.verify_password(password, user.password_hash):
-        if auth_throttle.record_failure(db, user, now=now, settings=settings) is not None:
+        if auth_throttle.lock_expiry(user, now=now) is not None:
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
                 detail="Account temporarily locked after repeated failures. Try again later.",
             )
-        raise _INVALID
+
+        if not security.verify_password(password, user.password_hash):
+            if auth_throttle.record_failure(db, user, now=now, settings=settings) is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_423_LOCKED,
+                    detail="Account temporarily locked after repeated failures. Try again later.",
+                )
+            raise _INVALID
+
+    except HTTPException:
+        record_authentication_event(db, user, method="password", outcome="failure")
+        db.commit()
+        raise
 
     # Success: reset throttle, stamp login, opportunistically upgrade the hash.
     auth_throttle.record_success(db, user, commit=False)
     user.last_login_at = now
     if security.needs_rehash(user.password_hash):
         user.password_hash = security.hash_password(password)
+    record_authentication_event(db, user, method="password", outcome="success")
     db.commit()
     return issue_tokens(db, user, settings)
 
@@ -406,69 +476,81 @@ def login_with_sso(
     issued tokens. ``organization_hint`` is compatibility-only and must match it.
     """
     settings = settings or get_settings().auth
+    user: User | None = None
+    assurance: dict[str, JsonValue] = {}
     try:
-        hints: dict[str, object] = security.unverified_claims(id_token)
-    except security.AuthError as exc:
-        raise _SSO_INVALID from exc
+        try:
+            hints: dict[str, object] = security.unverified_claims(id_token)
+        except security.AuthError as exc:
+            raise _SSO_INVALID from exc
 
-    connection = sso_config.find_enabled_by_issuer_audience(
-        db,
-        issuer=str(hints.get("iss", "")),
-        audience=hints.get("aud", ""),
-    )
-    if connection is None:
-        raise _SSO_INVALID
-
-    try:
-        claims: dict[str, object] = security.verify_oidc_id_token(
-            id_token, issuer=connection.issuer, audience=connection.client_id
+        connection = sso_config.find_enabled_by_issuer_audience(
+            db,
+            issuer=str(hints.get("iss", "")),
+            audience=hints.get("aud", ""),
         )
-    except security.AuthError as exc:
-        raise _SSO_INVALID from exc
+        if connection is None:
+            raise _SSO_INVALID
 
-    # Compatibility-only hints never select a tenant.  Check them only after
-    # signature/issuer/audience verification and fail generically on mismatch;
-    # silently overriding in either direction would preserve an authority bug.
-    if organization_hint is not None and organization_hint != connection.organization_id:
-        raise _SSO_INVALID
+        try:
+            claims: dict[str, object] = security.verify_oidc_id_token(
+                id_token, issuer=connection.issuer, audience=connection.client_id
+            )
+            assurance = TypeAdapter(dict[str, JsonValue]).validate_python(
+                {key: claims[key] for key in ("acr", "amr") if key in claims}
+            )
+        except security.AuthError as exc:
+            raise _SSO_INVALID from exc
 
-    email = claims.get("email")
-    # An unverified email must never link to an account (Google always sends the
-    # flag; IdPs that omit it — e.g. Entra — pass, and the pre-provisioning gate
-    # below still applies).
-    if email is not None and claims.get("email_verified") is False:
-        raise _SSO_INVALID
-    if connection.allowed_email_domains:
-        domain = str(email or "").rsplit("@", 1)[-1].lower()
-        if domain not in connection.allowed_email_domains:
+        # Compatibility-only hints never select a tenant.  Check them only after
+        # signature/issuer/audience verification and fail generically on mismatch;
+        # silently overriding in either direction would preserve an authority bug.
+        if organization_hint is not None and organization_hint != connection.organization_id:
+            raise _SSO_INVALID
+
+        email = claims.get("email")
+        # An unverified email must never link to an account (Google always sends the
+        # flag; IdPs that omit it — e.g. Entra — pass, and the pre-provisioning gate
+        # below still applies).
+        if email is not None and claims.get("email_verified") is False:
+            raise _SSO_INVALID
+        organization_id = connection.organization_id
+        user = _resolve_sso_user(db, str(claims["sub"]), email, organization_id)
+        if connection.allowed_email_domains:
+            domain = str(email or "").rsplit("@", 1)[-1].lower()
+            if domain not in connection.allowed_email_domains:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="This email domain is not allowed for SSO sign-in.",
+                )
+
+        if user is None and connection.jit_enabled and connection.allowed_email_domains and email:
+            # Access-request flow: record (or re-acknowledge) a deactivated stub and
+            # refuse the session — approval is an explicit account-admin act. A previously
+            # REJECTED stub becomes a fresh request again (the rejection is cleared).
+            stub = _inactive_user_by_email(db, connection.organization_id, str(email))
+            if stub is None:
+                _record_sso_access_request(db, connection=connection, claims=claims)
+            elif stub.access_rejected_at is not None:
+                stub.access_rejected_at = None
+                db.commit()
+            raise _SSO_PENDING
+        if user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="This email domain is not allowed for SSO sign-in.",
+                detail="No AequorOS account is provisioned for this identity.",
             )
+    except HTTPException:
+        record_authentication_event(db, user, method="sso", outcome="failure", assurance=assurance)
+        db.commit()
+        raise
 
-    organization_id = connection.organization_id
-    user = _resolve_sso_user(db, str(claims["sub"]), email, organization_id)
-    if user is None and connection.jit_enabled and connection.allowed_email_domains and email:
-        # Access-request flow: record (or re-acknowledge) a deactivated stub and
-        # refuse the session — approval is an explicit account-admin act. A previously
-        # REJECTED stub becomes a fresh request again (the rejection is cleared).
-        stub = _inactive_user_by_email(db, connection.organization_id, str(email))
-        if stub is None:
-            _record_sso_access_request(db, connection=connection, claims=claims)
-        elif stub.access_rejected_at is not None:
-            stub.access_rejected_at = None
-            db.commit()
-        raise _SSO_PENDING
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No AequorOS account is provisioned for this identity.",
-        )
     user.auth_provider = "oidc"
     user.sso_subject = str(claims["sub"])
     user.failed_login_attempts = 0
     user.locked_until = None
     user.last_login_at = utc_now()
+    record_authentication_event(db, user, method="sso", outcome="success", assurance=assurance)
     db.commit()
     return issue_tokens(db, user, settings)
 

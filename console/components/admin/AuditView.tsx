@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,7 +8,7 @@ import {
   RotateCcw,
   Search,
 } from "lucide-react";
-import { getAudit, type AuditLogItem } from "@/lib/api";
+import { createAuditBrowser, type AuditLogItem } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
 import { DASH, fmtTimestamp, fmtTs } from "@/lib/format";
 import {
@@ -51,41 +51,40 @@ const LIMIT_OPTIONS = [25, 50, 100, 200];
 export default function AuditView() {
   const [draft, setDraft] = useState<Filters>(BLANK_FILTERS);
   const [applied, setApplied] = useState<Filters>(BLANK_FILTERS);
-  const [limit, setLimit] = useState(50);
-  const [offset, setOffset] = useState(0);
-  const [selected, setSelected] = useState<AuditLogItem | null>(null);
-
-  const { data, error, loading, reload } = useApi(
+  const browseAudit = useMemo(
     () =>
-      getAudit({
+      createAuditBrowser({
         operatorEmail: applied.operatorEmail || undefined,
         targetOrg: applied.targetOrg || undefined,
         action: applied.action || undefined,
         from: applied.from || undefined,
         to: applied.to || undefined,
-        limit,
-        offset,
       }),
-    [
-      applied.operatorEmail,
-      applied.targetOrg,
-      applied.action,
-      applied.from,
-      applied.to,
-      limit,
-      offset,
-    ],
+    [applied],
+  );
+  const [limit, setLimit] = useState(50);
+  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  const cursor = cursors[cursors.length - 1];
+  const [selected, setSelected] = useState<AuditLogItem | null>(null);
+
+  const { data, error, loading, reload } = useApi(
+    () =>
+      browseAudit({
+        limit,
+        cursor,
+      }),
+    [browseAudit, limit, cursor],
   );
 
   function apply() {
     setApplied({ ...draft });
-    setOffset(0);
+    setCursors([undefined]);
   }
 
   function resetFilters() {
     setDraft(BLANK_FILTERS);
-    setApplied(BLANK_FILTERS);
-    setOffset(0);
+    setApplied({ ...BLANK_FILTERS });
+    setCursors([undefined]);
   }
 
   function exportCsv() {
@@ -117,14 +116,15 @@ export default function AuditView() {
 
   const total = data?.total ?? 0;
   const shown = data?.items.length ?? 0;
+  const offset = (cursors.length - 1) * limit;
   const rangeLabel =
     total > 0
       ? `${offset + 1}–${offset + shown} of ${total}`
       : loading
         ? "Loading…"
         : "No entries";
-  const canPrev = offset > 0;
-  const canNext = offset + limit < total;
+  const canPrev = cursors.length > 1;
+  const canNext = Boolean(data?.next_cursor);
   const hasFilters = Object.values(applied).some(Boolean);
 
   const columns: Column<AuditLogItem>[] = [
@@ -273,7 +273,7 @@ export default function AuditView() {
                   value={String(limit)}
                   onChange={(e) => {
                     setLimit(Number(e.target.value));
-                    setOffset(0);
+                    setCursors([undefined]);
                   }}
                 >
                   {LIMIT_OPTIONS.map((n) => (
@@ -301,7 +301,11 @@ export default function AuditView() {
                 size="sm"
                 variant="secondary"
                 icon={<ChevronLeft size={13} aria-hidden />}
-                onClick={() => setOffset((o) => Math.max(0, o - limit))}
+                onClick={() =>
+                  setCursors((pages) =>
+                    pages.length > 1 ? pages.slice(0, -1) : pages,
+                  )
+                }
                 disabled={!canPrev || loading}
               >
                 Prev
@@ -310,7 +314,10 @@ export default function AuditView() {
                 size="sm"
                 variant="secondary"
                 icon={<ChevronRight size={13} aria-hidden />}
-                onClick={() => setOffset((o) => o + limit)}
+                onClick={() => {
+                  const next = data?.next_cursor;
+                  if (next) setCursors((pages) => [...pages, next]);
+                }}
                 disabled={!canNext || loading}
               >
                 Next

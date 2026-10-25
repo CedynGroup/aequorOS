@@ -73,6 +73,11 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_authorization_bindings_principal_type",
         ),
         CheckConstraint(
+            "role_bundle NOT IN ('security_officer', 'compliance_officer') OR "
+            "(module_scope = 'audit' AND data_scope_kind = 'all')",
+            name="ck_authorization_bindings_audit_officer_scope",
+        ),
+        CheckConstraint(
             f"role_bundle IN ({_values(tuple(RoleBundle))})",
             name="ck_authorization_bindings_role_bundle",
         ),

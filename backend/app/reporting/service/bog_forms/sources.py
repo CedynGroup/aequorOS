@@ -220,15 +220,18 @@ def require_usable_capital_register(
 
 
 @resolver("facts.sum")
-def _facts_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:
+def _facts_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
     """Σ ``amount`` over facts in ``group`` whose ``category`` ∈ ``categories``
     for the reporting period, split by the column's currency rule (override
-    with ``currency="all"|"GHS"|"FX"``)."""
+    with ``currency="all"|"GHS"|"FX"``). An absent official source stays
+    missing; a stated zero remains a mapped value. Live facts do not substitute
+    for the official reporting-date materialisation.
+    """
     group = params["group"]
     if group == "capital_component":
         require_usable_capital_register(rc)
     categories: Iterable[str] = params.get("categories", ())
-    stmt = select(func.coalesce(func.sum(BankFinancialFact.amount), 0)).where(
+    stmt = select(func.sum(BankFinancialFact.amount)).where(
         BankFinancialFact.organization_id == rc.ctx.organization_id,
         BankFinancialFact.bank_id == rc.bank.id,
         BankFinancialFact.reporting_period_id == rc.period.id,
@@ -246,8 +249,10 @@ def _facts_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:
         if pred is not None:
             stmt = stmt.where(pred)
     value = rc.db.scalar(stmt)
+    if value is None:
+        return None
     sign = Decimal(str(params.get("sign", 1)))
-    return Decimal(value or 0) * sign
+    return Decimal(value) * sign
 
 
 # ---------------------------------------------------------------------------

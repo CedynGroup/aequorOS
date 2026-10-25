@@ -119,6 +119,8 @@ export * from "./AttestationState";
 export * from "./AttestationStatusRead";
 export * from "./AttestedAt";
 export * from "./AttestedBy";
+export * from "./AuditEventRead";
+export * from "./AuditLogRead";
 export * from "./AuthorisationDate";
 export * from "./AuthorityReference";
 export * from "./AvailableInternalCapital";

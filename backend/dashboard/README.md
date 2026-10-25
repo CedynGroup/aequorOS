@@ -585,7 +585,7 @@ diagnosis:
    `S3_ENDPOINT` is exported. Existing exported S3 configuration is reused in
    auto mode; `AQS_LOCAL_SERVICES=external` also permits the backend to read its
    untracked `.env` without starting a service. The `attestation`, `full-lifecycle`,
-   `submission-lifecycle`, `data-engine-ingestion`, and opt-in `visual-tour`
+   `submission-lifecycle`, `data-engine-ingestion`, `00-ingestion-worker`, and opt-in `visual-tour`
    specs, plus the SSO attestation journey, refuse immediately without it rather
    than letting storage-dependent assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The
@@ -603,13 +603,24 @@ diagnosis:
    it to `reference_data.py`, and nothing else.
 3. **The live fact plane.** Every Treasury/ALM cockpit reads
    `current_financial_facts`, which in the product only the background worker
-   writes (`pipeline_refresh`), and the e2e stack runs no worker
+   writes (`pipeline_refresh`), and the shared fixture runs no worker
    (`RUN_INPROCESS_WORKER=0`; `POST /banks/{id}/refresh` merely enqueues a job).
    The bootstrap therefore stands in for the refresh via
    `tests/fixtures/live_plane.py`, mirroring the latest period's facts into the
    live plane and running the product's own `pipeline.recompute_modules`.
    Without it `/basel`, `/liquidity`, `/ftp/*`, `/irr/*` and `/fx/*` all open on
    the "no computed data yet" envelope.
+
+`00-ingestion-worker.spec.ts` exercises the worker path separately. It provisions
+an empty tenant and real analyst/approver bindings, uploads a balanced synthetic
+book and market data through the bank UI, and approves forecast assumptions
+through the bank API. A standalone `app.worker` claims the queued refresh and
+makes all eight modules current. The journey pins treasury's GHS 2 million HQLA,
+GHS 310,000 net outflows and 645.16% coverage, then uses Mint official run through
+the same worker and generates BSD2 with the matching cash amount. It refuses to
+start with another bank's queued work, stops its own worker in `finally`, and
+removes its tenant and session state. Keep this story ahead of shared-bank
+mutation stories and keep Playwright at one worker.
 
 The canonical fixture ends at a fixed month. Bootstrap first carries it forward
 (`extend_canonical_test_book`) one month-end snapshot at a time through the last
@@ -765,7 +776,7 @@ installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
 counts. The aggregate requires all four reports, unique journey identities,
-and at least **243 executed journeys**, with zero skips. It verifies the
+and at least **244 executed journeys**, with zero skips. It verifies the
 reported counters against the named results and prints every skipped journey
 in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
