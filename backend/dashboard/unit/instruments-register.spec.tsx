@@ -17,7 +17,10 @@ vi.mock("next/navigation", () => ({
     new URLSearchParams(fixture.bankId ? `bankId=${fixture.bankId}` : ""),
 }));
 vi.mock("@/components/shell/BankContext", () => ({
-  useBankContext: () => ({ bank: { id: "BK-SYNTH001" } }),
+  useBankContext: () => ({
+    bank: { id: "BK-SYNTH001", name: "Synthetic Bank" },
+    banks: [{ id: "BK-SYNTH002", name: "Other Bank" }],
+  }),
   useModuleScope: () => ({
     modules: new Set(["liquidity", "irrbb"]),
     organizationModules: new Set(),
@@ -69,7 +72,7 @@ function rule(code: string, status: string) {
 }
 
 describe("instruments register", () => {
-  it("shows every status, dates, dependencies and governed approval evidence together", () => {
+  it("shows every status, dates, dependencies and governed approval evidence together", async () => {
     fixture.templates = [
       rule("LIVE", "in_force"),
       rule("DRAFT", "exposure_draft"),
@@ -78,11 +81,12 @@ describe("instruments register", () => {
     ];
     render(<InstrumentsRegister />);
     for (const label of ["In force", "Draft", "Not yet in force", "Reference"])
-      expect(screen.getByText(label)).toBeVisible();
+      expect(screen.getByText(label, { selector: "summary" })).toBeVisible();
     const live = screen
       .getByRole("heading", { name: "Synthetic LIVE" })
       .closest("section")!;
     expect(within(live).getByText(/Effective date: 2027-01-01/)).toBeVisible();
+    await userEvent.click(within(live).getByText("Citation and calculations"));
     expect(
       within(live).getByText(/Governed date differs from the default/),
     ).toHaveTextContent("2026-12-31");
@@ -90,12 +94,11 @@ describe("instruments register", () => {
       within(live).getByText(/Approved by: Synthetic checker/),
     ).toBeVisible();
     expect(
-      within(live).getByText("synthetic_ratio: synthetic_method"),
+      within(live).getByText("Additional governed calculation or limit"),
     ).toBeVisible();
-    expect(within(live).getByRole("link", { name: "LIVE" })).toHaveAttribute(
-      "href",
-      "/submissions/returns?code=LIVE",
-    );
+    expect(
+      within(live).getByRole("link", { name: "Synthetic LIVE" }),
+    ).toHaveAttribute("href", "/submissions/returns?code=LIVE");
   });
 
   it("separates preparation from in-force duties and reference monitoring", () => {
@@ -123,9 +126,10 @@ describe("instruments register", () => {
   });
 });
 
-it("offers the supported SDI IRRBB preparation workspace", () => {
+it("offers the supported SDI IRRBB preparation workspace", async () => {
   fixture.templates = [rule("SDI-IRRBB-QUARTERLY", "exposure_draft")];
   render(<InstrumentsRegister upcoming />);
+  await userEvent.click(screen.getByText("Citation and calculations"));
   expect(
     screen.getByRole("link", { name: "Open preparation workspace" }),
   ).toHaveAttribute("href", "/irr?preparing=1");
@@ -136,7 +140,7 @@ it("loads the institution named by a notification rather than the active bank", 
   fixture.templates = [rule("SDI-LMT-MONTHLY", "exposure_draft")];
   render(<InstrumentsRegister upcoming />);
   expect(fixture.queriedBankId).toBe("BK-SYNTH002");
-  expect(screen.getByText("Institution: BK-SYNTH002")).toBeVisible();
+  expect(screen.getByText("Institution: Other Bank")).toBeVisible();
   expect(
     screen.queryByRole("link", { name: "Open preparation workspace" }),
   ).toBeNull();
@@ -158,7 +162,7 @@ it.each([
     fixture.templates = [{ ...rule("ISSUER", status), regulator: "BoG" }];
     render(<InstrumentsRegister />);
     expect(fixture.queriedBankId).toBe(bankId || "BK-SYNTH001");
-    const badge = screen.getByText(label);
+    const badge = screen.getByText(label, { selector: "summary" });
     expect(badge).toHaveAttribute("title", expect.stringContaining(wording));
     expect(badge.getAttribute("title")).not.toContain("CBK");
     await userEvent.setup().click(badge);
@@ -174,7 +178,7 @@ it.each([
   ["FX-NOP", ["fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct"]],
   ["DBK-DAILY", ["fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct"]],
   ["NPL-MONTHLY", ["npl_limit_pct", "npl_dividend_restriction_pct"]],
-] as const)("shows the source-backed limits for %s", (code, limits) => {
+] as const)("shows the source-backed limits for %s", async (code, limits) => {
   fixture.templates = [
     {
       ...rule(code, "in_force"),
@@ -185,13 +189,74 @@ it.each([
   const instrument = screen
     .getByRole("heading", { name: `Synthetic ${code}` })
     .closest("section")!;
-  for (const limit of limits)
-    expect(
-      within(instrument).getByText(`limit parameter: ${limit}`, {
-        exact: false,
-      }),
-    ).toBeVisible();
+  await userEvent.click(
+    within(instrument).getByText("Citation and calculations"),
+  );
+  expect(
+    within(instrument).getByText(/Calculations and limits:/).parentElement,
+  ).toHaveTextContent(
+    code === "NPL-MONTHLY"
+      ? "Non-performing loan limit"
+      : "Single-currency net open position limit",
+  );
+  for (const limit of limits) expect(instrument).not.toHaveTextContent(limit);
   expect(
     within(instrument).queryByText("No calculation or limit mapping recorded"),
   ).toBeNull();
+});
+
+it("combines name search and status filtering, then recovers from no matches", async () => {
+  fixture.templates = [
+    rule("LIVE", "in_force"),
+    rule("DRAFT", "exposure_draft"),
+    rule("FINAL", "final_not_in_force"),
+  ];
+  render(<InstrumentsRegister />);
+  const user = userEvent.setup();
+  await user.selectOptions(screen.getByLabelText("Status"), "exposure_draft");
+  expect(
+    screen.getByRole("heading", { name: "Synthetic DRAFT" }),
+  ).toBeVisible();
+  expect(screen.queryByRole("heading", { name: "Synthetic LIVE" })).toBeNull();
+  await user.type(screen.getByLabelText("Search instruments"), "LIVE");
+  expect(
+    screen.getByText("No instruments match your search and status filter."),
+  ).toBeVisible();
+  await user.selectOptions(screen.getByLabelText("Status"), "");
+  expect(screen.getByRole("heading", { name: "Synthetic LIVE" })).toBeVisible();
+  await user.clear(screen.getByLabelText("Search instruments"));
+  expect(
+    screen.getByRole("heading", { name: "Synthetic FINAL" }),
+  ).toBeVisible();
+});
+
+it("keeps in-force status honest when the only citation is provisional", async () => {
+  fixture.templates = [
+    {
+      ...rule("LIVE", "in_force"),
+      effectiveFrom: null,
+      sourceUrl: null,
+      directiveCitation: "Reporting guide (Sept 2020, draft)",
+      generator: "lrt_profile",
+      calculations: ["limit parameter: narrow_to_volatile"],
+    },
+  ];
+  render(<InstrumentsRegister />);
+  expect(
+    screen.getByText("Start date not published by Synthetic regulator"),
+  ).toBeVisible();
+  await userEvent.click(screen.getByText("Citation and calculations"));
+  expect(screen.getByText(/Provisional citation:/)).toBeVisible();
+  expect(
+    screen
+      .getAllByText("Reporting guide (Sept 2020, draft)")
+      .find((element) => element.closest("details")?.open),
+  ).toBeVisible();
+  expect(
+    screen.getByText("Narrow liquid assets to volatile liabilities"),
+  ).toBeVisible();
+  expect(screen.getByText("In force", { selector: "summary" })).toBeVisible();
+  expect(document.body).not.toHaveTextContent(
+    /BK-SYNTH001|lrt_profile|narrow_to_volatile|synthetic_commencement|Primary source link not recorded/,
+  );
 });

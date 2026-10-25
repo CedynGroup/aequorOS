@@ -837,13 +837,14 @@ it("shows SDI ratios only as deliberate monitoring preparation", () => {
     screen.getByRole("cell", { name: "Synthetic LMTD ratio" }),
   ).toBeVisible();
 });
-it("offers deliberate reference monitoring from the instruments register", () => {
+it("offers deliberate reference monitoring from the instruments register", async () => {
   state.sdi = false;
   state.status = "unpublished";
   render(<InstrumentsRegister />);
   const section = screen
     .getByRole("heading", { name: "LCR-NSFR" })
     .closest("section")!;
+  fireEvent.click(within(section).getByText("Citation and calculations"));
   expect(
     within(section).getByRole("link", { name: "Open preparation workspace" }),
   ).toHaveAttribute("href", "/liquidity?preparing=1");
