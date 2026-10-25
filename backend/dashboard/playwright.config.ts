@@ -140,8 +140,8 @@ export default defineConfig({
         // and the shell hides the Explore "Ask a question" tab, and `bi-ask.spec.ts`
         // would navigate to a walled-up door and pass on an empty state. Setting it
         // sends nothing to any vendor: the AI gates are separate and all shut here
-        // (no approved configuration, no credential, no `ai`-lane worker), which is
-        // precisely the refusal the wire half of that spec asserts. It is set HERE
+        // (no approved configuration, no credential, no `ai`-lane worker). HTTP
+        // refusals and ownership live in `contracts/bi-ask.spec.ts`. It is set HERE
         // rather than in `backend/.env` so a developer's own flag state cannot change
         // what the journeys see, and the flag-OFF shell is asserted by intercepting
         // `/feature-flags`, as the BI flag's own journey does.

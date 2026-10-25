@@ -386,7 +386,7 @@ NextAuth session-cookie variants, including secure/host-prefixed names and
 received numeric chunks. The auth response boundary also clears these variants
 for an empty session or successful sign-out, and removes stale siblings when
 issuing a session. Sign-out still invokes backend refresh-token revocation.
-See `lib/authCookies.ts` and `e2e/session-cookie-hygiene.spec.ts`.
+See `lib/authCookies.ts` and the [browser coverage guidance](#end-to-end-playwright).
 
 Login, sign-out, and session redirects retain the request's origin; a callback
 on another origin returns to the current origin instead. In the dashboard,
@@ -569,10 +569,11 @@ without the explicit opt-in, startup refuses SQLite with "Database transport
 requires PostgreSQL with a hostname." Exception limits are governed by
 [the transport contract](../docs/transport_security.md#local-development-and-narrowly-bounded-exceptions).
 
-`session-cookie-hygiene.spec.ts` deliberately sends a cookie encrypted with a
-foreign secret and malformed cookie chunks. Auth.js reports `JWTSessionError`
-and "no matching decryption secret" during those refusal journeys; their
-assertions prove the cookie is cleared and a subsequent real login succeeds.
+`e2e/session-cookie-hygiene.spec.ts` deliberately sends a cookie encrypted with a
+foreign secret, verifies it is cleared and completes a subsequent real login.
+Auth.js reports `JWTSessionError` and "no matching decryption secret" during that
+refusal. `contracts/session-http.spec.ts` checks malformed cookie families and
+runtime host warnings.
 The server configuration imports the minting helper's test secret constants, and
 `session-lifecycle.spec.ts` decrypts a real login cookie and verifies rotation.
 
