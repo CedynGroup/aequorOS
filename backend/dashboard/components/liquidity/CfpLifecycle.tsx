@@ -324,6 +324,7 @@ function CfpEditor({
   }
   return (
     <SectionCard
+      className="!overflow-visible"
       title="Manage contingency funding plan"
       subtitle="Draft, independent Board approval, activation and stand-down. All changes require a reason."
     >
@@ -347,6 +348,8 @@ function CfpEditor({
             ? "Author and save a draft."
             : current.status === "draft"
               ? "Review the draft and obtain independent Board approval."
+              : approved?.approvalOverdue
+                ? "Create a new draft and renew Board approval."
               : approved?.active
                 ? "Monitor indicators and stand down when appropriate."
                 : "Review evidence and activate when required."}
