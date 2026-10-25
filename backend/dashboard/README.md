@@ -577,8 +577,7 @@ assertions prove the cookie is cleared and a subsequent real login succeeds.
 The server configuration imports the minting helper's test secret constants, and
 `session-lifecycle.spec.ts` decrypts a real login cookie and verifies rotation.
 
-Three prerequisites are not obvious, and each one has already cost a long
-diagnosis:
+The stack has these prerequisites:
 
 1. **Object storage.** `StorageBackend` is `Literal["s3"]` — there is no
    filesystem mode — so validated packages need a reachable S3/MinIO endpoint.
@@ -611,6 +610,10 @@ diagnosis:
    live plane and running the product's own `pipeline.recompute_modules`.
    Without it `/basel`, `/liquidity`, `/ftp/*`, `/irr/*` and `/fx/*` all open on
    the "no computed data yet" envelope.
+4. **Bank-held keys.** The full suite requires the bank-key emulator described in
+   [the encryption journey setup](../docs/bank_encryption.md#browser-encryption-journeys).
+   Start it and export `BANK_KMS_ENDPOINT_URL` before the commands below. The local
+   service runner provisions Postgres and MinIO; it does not start this emulator.
 
 The canonical fixture ends at a fixed month. Bootstrap first carries it forward
 (`extend_canonical_test_book`) one month-end snapshot at a time through the last
@@ -766,8 +769,10 @@ installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
 counts. The aggregate requires all four reports, unique journey identities,
-and at least **243 executed journeys**, with zero skips. It verifies the
-reported counters against the named results and prints every skipped journey
+and the minimum execution count set by
+[the journey assertion](../../.github/scripts/assert_dashboard_journeys.mjs),
+with zero skips. It verifies the reported counters against the named results
+and prints every skipped journey
 in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
 fail the gate even when the remaining reports pass. Raise the floor when adding
@@ -856,19 +861,7 @@ before and after. Type-checking cannot see a clipped column.
 
 ### Encryption journeys with local KMS
 
-Start the opt-in emulator from the repository root:
-
-```sh
-docker compose -f backend/docker-compose.yml --profile encryption up -d risk-kms
-BANK_KMS_ENDPOINT_URL=http://127.0.0.1:18080 \
-  pnpm --filter @aequoros/dashboard e2e bank-encryption.spec.ts
-```
-
-The full journey suite also requires this endpoint when it includes encryption
-stories. Keys and data are synthetic. Each story owns a tenant and restores its
-key/fault state in cleanup; keep `workers: 1`. CI supplies its own pinned local-kms
-service. The HTTP fault proxy exercises the real AWS key provider's outage path.
-See [the emulator contract](../docs/bank_encryption.md#local-kms-emulator-and-ci)
-for production refusal, provider tests, and the cross-account-grant limitation.
-Use `E2E_RUNTIME_DIR` and `E2E_EVIDENCE_DIR` to keep disposable runtime state and
-review screenshots outside the checkout.
+Follow [the browser encryption journey guide](../docs/bank_encryption.md#browser-encryption-journeys)
+for emulator setup, the focused command, fixture isolation, recovery coverage and
+evidence paths. Its [emulator contract](../docs/bank_encryption.md#local-kms-emulator-and-ci)
+owns endpoint restrictions and the cross-account-grant limitation.

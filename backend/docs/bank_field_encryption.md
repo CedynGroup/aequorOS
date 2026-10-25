@@ -131,10 +131,12 @@ lock response with the same state, before they can repopulate caches or
 notifications.
 
 Mutation errors and late key-outage or revocation responses preserve unsaved
-editor drafts. BI catalogue data and saved dashboard definitions without
-protected identity members remain cached, retaining numeric dependencies,
-dashboard title, widgets and change note, and the alert's selected threshold
-basis. Protected cached payloads and read-only labels are still removed or
+editor drafts. The related-party editor disables and greys its fieldset and submit
+button once protected data is locked; Cancel remains usable. Recovery re-enables
+the controls with the draft intact. BI catalogue data and saved dashboard
+definitions without protected identity members remain cached, retaining numeric
+dependencies, dashboard title, widgets and change note, and the alert's selected
+threshold basis. Protected cached payloads and read-only labels are still removed or
 replaced by placeholders, scoped to the locked bank. Protected report previews
 show a locked panel, never an empty or successful validation report.
 
