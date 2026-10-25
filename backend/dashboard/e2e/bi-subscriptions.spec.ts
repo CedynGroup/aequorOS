@@ -38,7 +38,8 @@
  *     registry through the bank, so "07:30" is never ambiguous.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/scoped-objects";
 import path from "node:path";
 import { E2E_TMP } from "../playwright.config";
 import { biApi, fixtureAsOf, SAMPLE_BANK_ID } from "./support/bi";
@@ -63,6 +64,7 @@ function summaryQuery(asOf: string) {
 test.describe("scheduled report subscriptions", () => {
   test("the author's authority is checked, the stored row confers none of it, and the list is a disclosure", async ({
     request,
+    objects,
   }) => {
     const asOf = await fixtureAsOf(request);
 
@@ -124,6 +126,8 @@ test.describe("scheduled report subscriptions", () => {
       delivery_note: string;
       is_active: boolean;
     };
+
+    objects.register(SUBSCRIPTIONS, subscription.id);
 
     expect(subscription.owned_by_caller).toBe(true);
     expect(subscription.owner_user_id).toBe(E2E_USERS.admin.id);
@@ -404,7 +408,15 @@ test.describe("the scheduled reports workspace", () => {
     ).toBeVisible();
 
     await expect(submit).toBeEnabled();
+    const created = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.endsWith(SUBSCRIPTIONS) &&
+        response.request().method() === "POST" &&
+        response.status() === 201,
+    );
     await submit.click();
+    const subscriptionId = ((await (await created).json()) as { id: string })
+      .id;
 
     // The saved report, as the workspace lists it.
     const card = page
@@ -458,9 +470,7 @@ test.describe("the scheduled reports workspace", () => {
           recipients: unknown[];
         }[];
       }
-    ).subscriptions.find(
-      (entry) => entry.name === "Loan book by grade, Mondays",
-    );
+    ).subscriptions.find((entry) => entry.id === subscriptionId);
     expect(saved).toBeDefined();
     expect(saved!.is_active).toBe(false);
     expect(saved!.time_zone).toBe("Africa/Accra");
