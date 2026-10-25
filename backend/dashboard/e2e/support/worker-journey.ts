@@ -416,7 +416,7 @@ export async function writeWorkerMarketWorkbook(
   });
 }
 
-async function writeWorkbook(
+export async function writeWorkbook(
   filename: string,
   sheets: Record<string, Record<string, string>[]>,
 ): Promise<void> {
