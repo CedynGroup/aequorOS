@@ -853,3 +853,22 @@ the overflow you cannot remove, remove the one you can. **Design changes are
 reviewed as pixels**: follow the visual-tour capture instructions under
 [End-to-end (Playwright)](#end-to-end-playwright) and compare the screenshots
 before and after. Type-checking cannot see a clipped column.
+
+### Encryption journeys with local KMS
+
+Start the opt-in emulator from the repository root:
+
+```sh
+docker compose -f backend/docker-compose.yml --profile encryption up -d risk-kms
+BANK_KMS_ENDPOINT_URL=http://127.0.0.1:18080 \
+  pnpm --filter @aequoros/dashboard e2e bank-encryption.spec.ts
+```
+
+The full journey suite also requires this endpoint when it includes encryption
+stories. Keys and data are synthetic. Each story owns a tenant and restores its
+key/fault state in cleanup; keep `workers: 1`. CI supplies its own pinned local-kms
+service. The HTTP fault proxy exercises the real AWS key provider's outage path.
+See [the emulator contract](../docs/bank_encryption.md#local-kms-emulator-and-ci)
+for production refusal, provider tests, and the cross-account-grant limitation.
+Use `E2E_RUNTIME_DIR` and `E2E_EVIDENCE_DIR` to keep disposable runtime state and
+review screenshots outside the checkout.

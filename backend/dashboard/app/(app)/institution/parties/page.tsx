@@ -228,6 +228,7 @@ export default function RelatedPartiesPage() {
         action={
           <button
             type="button"
+            disabled={!bankId}
             onClick={() => {
               setAdding(true);
               setSelection(null);

@@ -53,6 +53,21 @@ export const E2E_USERS: Record<
     roles: ["analyst"],
     authv: 3,
   },
+  encryption_revocation: {
+    ...identities.journey.encryption_revocation,
+    roles: ["analyst"],
+    authv: 3,
+  },
+  encryption_outage: {
+    ...identities.journey.encryption_outage,
+    roles: ["analyst"],
+    authv: 3,
+  },
+  encryption_rotation: {
+    ...identities.journey.encryption_rotation,
+    roles: ["analyst"],
+    authv: 3,
+  },
   fresh_forecast_analyst: {
     ...identities.journey.fresh_forecast_analyst,
     roles: ["analyst"],

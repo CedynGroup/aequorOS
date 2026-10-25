@@ -19,7 +19,9 @@ import { E2E_AUTH_SECRET, E2E_JWT_SECRET } from "./e2e/support/mint";
 import { acquireE2ERunLock } from "./e2e/support/runtime-lock";
 import { selectE2ERuntimePorts } from "./e2e/support/runtime-ports";
 
-export const E2E_TMP = path.join(__dirname, "e2e", ".tmp");
+export const E2E_TMP = process.env.E2E_RUNTIME_DIR
+  ? path.resolve(process.env.E2E_RUNTIME_DIR)
+  : path.join(__dirname, "e2e", ".tmp");
 acquireE2ERunLock(E2E_TMP);
 const runtimePorts = selectE2ERuntimePorts();
 export const E2E_BACKEND_PORT = runtimePorts.backend;
@@ -42,9 +44,13 @@ const E2E_VAULT_KEY = Buffer.from(
 
 const BACKEND_DIR = path.join(__dirname, "..");
 const E2E_DB = path.join(E2E_TMP, "e2e.db");
+export const E2E_KMS_UPSTREAM = process.env.BANK_KMS_ENDPOINT_URL ?? "";
+export const E2E_KMS_STATE = path.join(E2E_TMP, "kms-service-state");
+const kmsProxy = `http://127.0.0.1:${runtimePorts.kms}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  outputDir: path.join(E2E_TMP, "test-results"),
   globalSetup: "./e2e/global-setup.ts",
   timeout: 60_000,
   expect: { timeout: 15_000 },
@@ -58,6 +64,22 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: [
+    ...(E2E_KMS_UPSTREAM
+      ? [
+          {
+            command: "node e2e/support/kms-proxy.cjs",
+            cwd: __dirname,
+            url: `${kmsProxy}/health`,
+            reuseExistingServer: false,
+            env: {
+              APP_ENV: "test",
+              BANK_KMS_ENDPOINT_URL: E2E_KMS_UPSTREAM,
+              E2E_KMS_STATE,
+              E2E_KMS_PROXY_PORT: String(runtimePorts.kms),
+            },
+          },
+        ]
+      : []),
     {
       // Started first: the bootstrap below registers its issuer URL, and the
       // dashboard's NextAuth discovers it on the first SSO sign-in.
@@ -85,6 +107,7 @@ export default defineConfig({
       timeout: 300_000,
       env: {
         DATABASE_URL: `sqlite+pysqlite:///${E2E_DB}`,
+        BANK_KMS_ENDPOINT_URL: E2E_KMS_UPSTREAM ? kmsProxy : "",
         WORKER_DATABASE_URL: "",
         // Signer identities need a pepper even with disposable software keys.
         SIGNER_ID_PEPPER: "e2e-signer-pepper-not-production-000",
