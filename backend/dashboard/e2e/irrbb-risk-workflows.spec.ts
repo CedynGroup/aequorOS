@@ -489,7 +489,7 @@ test.describe("IRRBB functional workflow", () => {
       .getByRole("combobox", { name: "Run", exact: true })
       .selectOption(run.run_id);
     await expect(
-      section(page, `ICAAP Stress Test — ${run.scenario_code}`),
+      section(page, `ICAAP Stress Test: ${run.scenario_code}`),
     ).toContainText(`input hash ${run.input_hash.slice(0, 12)}`);
     const table5 = section(
       page,
