@@ -84,6 +84,7 @@ def connect_key(  # noqa: PLR0913 - scoped operator mutation
         db.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     _update_storage_reference(db, row)
+    db.flush()
     _ = reencryption.enqueue(db, organization_id, bank_id)
     return _read(row)
 

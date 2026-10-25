@@ -8,8 +8,8 @@ from typing import cast
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Engine, event, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy import Connection, Engine, event, select, text
+from sqlalchemy.orm import Session, SessionTransaction
 
 from app import worker
 from app.core.key_management import maintenance, reencryption, registry
@@ -126,12 +126,18 @@ def test_duplicate_worker_waits_for_publication_commit_or_rollback(
     storage = Storage()
     monkeypatch.setattr(reencryption, "get_storage_client", lambda: storage)
 
+    def track_backend(
+        _session: Session, _transaction: SessionTransaction, connection: Connection
+    ) -> None:
+        # Publication may check out a different connection after the copy commits.
+        backend_b.append(cast(int, connection.scalar(text("SELECT pg_backend_pid()"))))
+
     def session(organization_id: str | None = None) -> Session:
         db = Session(database)
         if organization_id is not None:
             db.info["organization_id"] = organization_id
             if getattr(runner, "name", "") == "B":
-                backend_b.append(cast(int, db.scalar(text("SELECT pg_backend_pid()"))))
+                event.listen(db, "after_begin", track_backend)
         return db
 
     monkeypatch.setattr(worker, "_new_session", session)
@@ -146,6 +152,8 @@ def test_duplicate_worker_waits_for_publication_commit_or_rollback(
         try:
             assert copied_a.wait(10)
             now += timedelta(days=1)
+            # The production reaper opens a fresh session after the claim commits.
+            db_session.expire_all()
             assert job_queue.reclaim_stale(db_session, now, stale_after=timedelta(seconds=900)) == 1
             second = pool.submit(execute, "B")
             assert copied_b.wait(10)
@@ -157,7 +165,7 @@ def test_duplicate_worker_waits_for_publication_commit_or_rollback(
             while monotonic() < deadline:
                 blocked = bool(
                     db_session.scalar(
-                        text("SELECT cardinality(pg_blocking_pids(:pid))"), {"pid": backend_b[0]}
+                        text("SELECT cardinality(pg_blocking_pids(:pid))"), {"pid": backend_b[-1]}
                     )
                 )
                 if blocked:

@@ -281,3 +281,10 @@ def test_connecting_existing_bank_enqueues_migration(
         )
     )
     assert job is not None and job.status == "queued"
+    key = registry.scoped_key(operator_db, organization_id=organization, bank_id=bank)
+    assert key.current_version_id is not None
+    assert key.index_version_id == key.current_version_id
+    material = registry.prepare_envelope(
+        operator_db, key, registry.version_context(organization, bank), registry.provider_for
+    )
+    assert material.envelope_id == key.current_version_id

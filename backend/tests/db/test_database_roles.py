@@ -240,6 +240,7 @@ def test_worker_reencrypts_with_scoped_audit_counts(
             organization_id=ORG_1,
             name="Synthetic worker migration",
             short_name="Synthetic",
+            storage_slug="synthetic-worker-reencryption",
             currency="GHS",
             jurisdiction_code="GH",
             license_type="bank",
