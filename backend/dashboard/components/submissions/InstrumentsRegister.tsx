@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Info, Search } from "lucide-react";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
@@ -10,6 +10,7 @@ import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import { useReturnTemplates } from "@/lib/api/hooks";
+import { isoDate } from "@/lib/api/values";
 import {
   instrumentDate,
   instrumentIssuer,
@@ -39,7 +40,21 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const templates = (query.data?.templates ?? []).filter(
+  const allTemplates = query.data?.templates ?? [];
+  const today = isoDate(new Date());
+  const horizon = new Date(`${today}T00:00:00Z`);
+  horizon.setUTCDate(horizon.getUTCDate() + 90);
+  const horizonDate = isoDate(horizon);
+  const commencingCount = allTemplates.filter((item) => {
+    const effective = instrumentDate(item.effectiveFrom);
+    return (
+      item.instrumentStatus === "final_not_in_force" &&
+      effective !== null &&
+      effective > today &&
+      effective <= horizonDate
+    );
+  }).length;
+  const templates = allTemplates.filter(
     (item) =>
       (!upcoming || isUpcomingRule(item.instrumentStatus)) &&
       (!status || item.instrumentStatus === status) &&
@@ -66,14 +81,14 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
             ? "Prepare for proposed and forthcoming rules. Draft dates are conditional on final publication. Preparation does not establish compliance or readiness for live filing."
             : "Legal status, commencement and source evidence for every registered rule and the returns and calculations it drives. Dates not established by the source are shown explicitly."}
         </p>
-        <Link
-          className="text-action underline"
-          href={`${upcoming ? "/submissions/instruments" : "/submissions/upcoming"}${requestedBankId ? `?bankId=${encodeURIComponent(requestedBankId)}` : ""}`}
-        >
-          {upcoming
-            ? "All regulatory instruments"
-            : "Preparing for upcoming rules"}
-        </Link>
+        {upcoming && (
+          <Link
+            className="text-action underline"
+            href={`/submissions/instruments${requestedBankId ? `?bankId=${encodeURIComponent(requestedBankId)}` : ""}`}
+          >
+            All regulatory instruments
+          </Link>
+        )}
         <div className="flex flex-wrap gap-4">
           <label className="relative flex-1 min-w-48 self-end text-caption text-navy">
             <span className="sr-only">Search instruments</span>
@@ -118,6 +133,29 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
             </select>
           </label>
         </div>
+        {!upcoming && !query.error && commencingCount > 0 && (
+          <div
+            role="note"
+            className="card border-l-4 border-l-action bg-action-light/30 flex items-start gap-3 p-4"
+          >
+            <Info
+              size={16}
+              className="mt-0.5 shrink-0 text-slate"
+              aria-hidden
+            />
+            <p className="min-w-0 text-body text-navy">
+              {commencingCount}{" "}
+              {commencingCount === 1 ? "rule commences" : "rules commence"} in
+              the next 90 days.{" "}
+              <Link
+                className="text-action underline"
+                href={`/submissions/upcoming${requestedBankId ? `?bankId=${encodeURIComponent(requestedBankId)}` : ""}`}
+              >
+                Prepare
+              </Link>
+            </p>
+          </div>
+        )}
         <div
           className="hidden lg:grid lg:grid-cols-[2fr_1fr_1.5fr_1fr_1.5fr] gap-4 px-4 text-caption font-medium text-slate"
           aria-hidden="true"
