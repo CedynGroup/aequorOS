@@ -292,7 +292,11 @@ for (const [source, links] of [
     page,
   }) => {
     for (const [label] of links) {
+      // The document can load while Next is still recompiling Auth.js. Resolve
+      // the session before spending the presentation assertion budget.
+      const sessionReady = page.waitForResponse("**/api/auth/session");
       await page.goto(source);
+      expect((await sessionReady).status()).toBe(200);
       const heading = page.getByRole("heading", { level: 1 });
       await expect(heading).toBeVisible();
       await expect(heading.locator("..").locator("p")).toHaveText([
