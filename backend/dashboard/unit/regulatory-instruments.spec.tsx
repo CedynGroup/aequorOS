@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import fc from "fast-check";
@@ -27,31 +27,26 @@ const statuses = [
   "unpublished",
 ] as const;
 
-it("keeps opened source details inside the viewport after opening and resizing", () => {
-  render(<InstrumentStatusBadge status="exposure_draft" code="SYNTHETIC" />);
-  const badge = screen.getByText("Draft");
-  const details = badge.closest("details")!;
-  const tooltip = screen.getByRole("tooltip", { hidden: true });
-  // jsdom has no layout; supply the browser's measured tooltip geometry.
-  let bounds = { left: -12, right: 276 } as DOMRect;
-  vi.spyOn(tooltip, "getClientRects").mockImplementation(
-    () => [bounds] as unknown as DOMRectList,
+it("renders distinct status colours without disclosure markers and keeps explanations in flow", () => {
+  const { container } = render(
+    <>
+      {statuses.map((status) => (
+        <InstrumentStatusBadge key={status} status={status} code="SYNTHETIC" />
+      ))}
+    </>,
   );
-  vi.spyOn(tooltip, "getBoundingClientRect").mockImplementation(() => bounds);
+  const badges = [...container.querySelectorAll("summary")];
+  expect(new Set(badges.map((badge) => badge.className)).size).toBe(4);
+  for (const badge of badges) expect(badge).toHaveClass("list-none");
+  const badge = screen.getByText("Draft");
   fireEvent.click(badge);
-  fireEvent(details, new Event("toggle"));
-  expect(tooltip.style.transform).toBe("translateX(20px)");
+  const explanation = screen.getAllByRole("tooltip")[0];
+  expect(explanation).not.toHaveClass("absolute");
   expect(
-    screen.getByRole("link", {
+    screen.getAllByRole("link", {
       name: "Source details in the instruments register",
-    }),
+    })[0],
   ).toHaveAttribute("href", "/submissions/instruments#SYNTHETIC");
-  bounds = { left: 800, right: window.innerWidth + 32 } as DOMRect;
-  fireEvent(window, new Event("resize"));
-  expect(tooltip.style.transform).toBe("translateX(-40px)");
-  bounds = { left: 12, right: 300 } as DOMRect;
-  fireEvent(window, new Event("resize"));
-  expect(tooltip.style.transform).toBe("translateX(0px)");
 });
 
 describe("regulatory status", () => {
@@ -101,7 +96,7 @@ describe("regulatory status", () => {
 
   it("does not invent a commencement date", () => {
     expect(instrumentDisclosure("final_not_in_force").tooltip).toContain(
-      "not established",
+      "Start date not published",
     );
     expect(preparationWarning("exposure_draft")).toContain(
       "does not establish compliance",

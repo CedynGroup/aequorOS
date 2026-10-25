@@ -3,6 +3,10 @@ import path from "node:path";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
+import {
+  instrumentIssuer,
+  readableCalculation,
+} from "../lib/regulatoryInstruments";
 import { mintBackendToken } from "./support/mint";
 
 const evidence = process.env.E2E_EVIDENCE_DIR;
@@ -76,15 +80,24 @@ test("register exposes every status, dates, source and calculation dependencies"
     await expect(
       section.getByRole("heading", { name: item.title, exact: true }),
     ).toBeVisible();
+    await section
+      .getByText("Citation and calculations", { exact: true })
+      .click();
     await expect(section).toContainText(item.directive_citation);
     await expect(section).toContainText(
-      item.effective_from ?? "Not established in the register",
+      item.effective_from ??
+        (item.instrument_status === "unpublished"
+          ? "No filing commencement date"
+          : `Start date not published by ${instrumentIssuer(item.regulator)}`),
     );
     for (const calculation of item.calculations)
-      await expect(section).toContainText(calculation);
+      await expect(section).toContainText(readableCalculation(calculation));
+    await section
+      .getByText("Citation and calculations", { exact: true })
+      .click();
   }
   const draft = page.locator('section[id="LMT"]');
-  await draft.locator("summary").click();
+  await draft.locator("summary").first().click();
   await expect(draft.getByRole("tooltip")).toContainText(
     /Proposed by BoG, not law yet. Prepare if useful, no deadline or penalty./i,
   );
@@ -107,6 +120,11 @@ test("register exposes every status, dates, source and calculation dependencies"
     await draft.screenshot({
       path: path.join(evidence, "draft-status-source.png"),
     });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: path.join(evidence, "instruments-register-mobile.png"),
+      fullPage: true,
+    });
   }
 });
 
@@ -127,6 +145,7 @@ test("upcoming rules isolate preparation and preserve navigation into a gated mo
   await expect(page.locator('section[id="CAR-RWA"]')).toHaveCount(0);
   await expect(page.locator('section[id="LCR-NSFR"]')).toHaveCount(0);
   const irr = page.locator('section[id="IRRBB-PILOT"]');
+  await irr.getByText("Citation and calculations", { exact: true }).click();
   await irr.getByRole("link", { name: "Open preparation workspace" }).click();
   await expect(page).toHaveURL(/\/irr\/standardised\?preparing=1/);
   await expect(page.getByText("Draft", { exact: true }).first()).toBeVisible();
@@ -192,6 +211,8 @@ test("draft-based stress export discloses preparation status at the PDF decision
 }) => {
   await page.goto("/reports/stress-board-pack");
   const print = page.getByRole("button", { name: /Print|PDF/i }).first();
+  await expect(page.getByRole("note")).toHaveCount(1);
+  await expect(page.getByRole("note")).not.toContainText("BOG");
   await expect(print).toBeVisible();
   await expect(
     page.getByText(/This pack is for preparation or monitoring/).first(),
@@ -350,6 +371,7 @@ test("governed dates disclose approval and deny another bank's uncovered reader"
   ).toBe(true);
   await page.goto("/submissions/instruments");
   const icaap = page.locator('section[id="ICAAP-REPORT"]');
+  await icaap.getByText("Citation and calculations", { exact: true }).click();
   await expect(icaap).toContainText("Governed date differs from the default.");
   await expect(icaap).toContainText("2028-12-31");
   await expect(icaap).toContainText("Disposable commencement approver");
@@ -385,7 +407,7 @@ test("foreign active regulators do not relabel instrument evidence and final fra
       fixture(jurisdiction);
       await page.goto("/submissions/instruments");
       const draft = page.locator('section[id="LMT"]');
-      await draft.locator("summary").click();
+      await draft.locator("summary").first().click();
       await expect(draft.getByRole("tooltip")).toContainText(
         /Proposed by BoG/i,
       );
@@ -447,9 +469,12 @@ test("daily status scan delivers commencement and change notices once with a ban
   });
   await inbox.getByRole("button", { name: /Inbox/ }).click();
   await expect(
-    inbox.getByText("BK-SAMP0001 · LE-MONTHLY: rule status changed", {
-      exact: true,
-    }),
+    inbox.getByText(
+      "Sample Bank Ltd · Large Exposures Return (Templates 1/1a/2/3/4): rule status changed",
+      {
+        exact: true,
+      },
+    ),
   ).toBeVisible();
   if (evidence) {
     await page.screenshot({
@@ -462,7 +487,10 @@ test("daily status scan delivers commencement and change notices once with a ban
     );
   }
   await inbox
-    .getByText("BK-SAMP0001 · LE-MONTHLY: rule status changed", { exact: true })
+    .getByText(
+      "Sample Bank Ltd · Large Exposures Return (Templates 1/1a/2/3/4): rule status changed",
+      { exact: true },
+    )
     .click();
   await expect(page).toHaveURL(
     /\/submissions\/instruments\?bankId=BK-SAMP0001/,
@@ -585,7 +613,7 @@ test("status tooltip and source stay readable inside the viewport", async ({
 }) => {
   await page.goto("/submissions/instruments");
   const draft = page.locator('section[id="LMT"]');
-  await draft.locator("summary").click();
+  await draft.locator("summary").first().click();
   const tooltip = draft.getByRole("tooltip");
   await expect(tooltip).toBeVisible();
   await expect(tooltip).toContainText(/Proposed by BoG, not law yet\./i);

@@ -137,6 +137,8 @@ it("takes an authorized SDI from the sidebar to its supported preparation worksp
   fireEvent.click(
     screen.getByRole("link", { name: "Preparing for upcoming rules" }),
   );
+  for (const disclosure of screen.getAllByText("Citation and calculations"))
+    fireEvent.click(disclosure);
   const entry = screen.getByRole("link", {
     name: "Open preparation workspace",
   });

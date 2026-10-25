@@ -5,7 +5,7 @@
  * pack from a selected immutable enterprise-stress run: cover + provenance,
  * executive summary, the projection charts, driver attribution, the N-way
  * comparison, management-action with/without, analyst/CRO narrative (composer-
- * local capture, item 7), and the full Appendix II Tables 1–6 — printable to PDF
+ * local capture, item 7), and the full Appendix II Tables 1–6: printable to PDF
  * via the app's print-optimised board-pack path (design system §5).
  *
  * FAIL CLOSED (NEW-10). Every floor on this page comes from the run payload —
@@ -21,8 +21,7 @@ import { useBankRules } from "@/lib/api/regulatoryRules";
 import SdiLiquidityBoardDisclosure from "@/components/reports/SdiLiquidityBoardDisclosure";
 import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
-import { preparationWarning } from "@/lib/regulatoryInstruments";
-import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
+import { instrumentDisclosure } from "@/lib/regulatoryInstruments";
 import { Printer } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import SectionCard from "@/components/ui/SectionCard";
@@ -117,21 +116,24 @@ export default function StressBoardPack() {
     ? ["SDI-STRESS-ANNUAL"]
     : ["ICAAP-STRESS", "STRESS-PACK"];
   if (sections.appendix && !isSdi) packCodes.push("ICAAP-STRESS-APPENDIX2");
-  const packWarnings = new Map(
-    packCodes
-      .map((code) => {
+  const packWarnings = [
+    ...new Set(
+      packCodes.flatMap((code) => {
         const instrument = rules.query.error
           ? undefined
           : rules.instrument(code);
-        const warning = preparationWarning(
-          instrument?.instrumentStatus,
-          instrument?.effectiveFrom,
-          instrument?.regulator,
-        );
-        return [warning, instrument] as const;
-      })
-      .filter(([warning]) => Boolean(warning)),
-  );
+        return instrument?.instrumentStatus === "in_force"
+          ? []
+          : [
+              instrumentDisclosure(
+                instrument?.instrumentStatus,
+                instrument?.effectiveFrom,
+                instrument?.regulator,
+              ).tooltip,
+            ];
+      }),
+    ),
+  ];
 
   return (
     <>
@@ -140,14 +142,13 @@ export default function StressBoardPack() {
         title="Stress Board-Pack Composer"
         action={
           <div className="max-w-xl space-y-2">
-            {[...packWarnings].map(([warning, instrument]) => (
-              <RegulatoryExportWarning
-                key={warning}
-                status={instrument?.instrumentStatus}
-                effectiveFrom={instrument?.effectiveFrom}
-                regulator={instrument?.regulator}
-              />
-            ))}
+            {packWarnings.length > 0 && (
+              <p role="note" className="text-caption text-warning">
+                {packWarnings.join(" ")} This pack is for preparation or
+                monitoring. It does not establish compliance or readiness for
+                live filing.
+              </p>
+            )}
             <button
               type="button"
               className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
@@ -265,13 +266,13 @@ export default function StressBoardPack() {
             <EmptyState
               Icon={Printer}
               title="No stress run to compose"
-              description="Run an approved macro scenario from the enterprise stress workbench first — the immutable run becomes the source for this board pack."
+              description="Run an approved macro scenario from the enterprise stress workbench first. The immutable run becomes the source for this board pack."
             />
           ) : (
             <div className="space-y-6">
               {/* Cover */}
               <SectionCard
-                title={`${isSdi ? "SDI Stress Test" : "ICAAP Stress Test"} — ${run.scenario_code}`}
+                title={`${isSdi ? "SDI Stress Test" : "ICAAP Stress Test"}: ${run.scenario_code}`}
                 subtitle={`${bank?.name ?? ""} · reporting period ${period ? fmtDateUTC(new Date(period.periodEnd)) : ""}`}
                 actions={
                   <StatusPill
@@ -328,7 +329,7 @@ export default function StressBoardPack() {
                   {(() => {
                     // A null capital gap is NOT a gap of zero. `num()` mapped it
                     // to 0, which printed "GHS'000 0" with an "ok" status on a
-                    // BOARD PACK — a board told there is no shortfall when the
+                    // BOARD PACK: a board told there is no shortfall when the
                     // figure was never computed (audit A360-6, the DriverWaterfall
                     // class). An uncomputed figure says so and carries no status.
                     const gap = numOrNull(run.summary.capital_gap);
@@ -345,7 +346,7 @@ export default function StressBoardPack() {
                         }
                         hint={
                           gap === null
-                            ? "This run reported no capital gap figure. Nothing is shown in its place — an uncomputed figure is not a zero."
+                            ? "This run reported no capital gap figure. Nothing is shown in its place: an uncomputed figure is not a zero."
                             : undefined
                         }
                       />
@@ -389,10 +390,10 @@ export default function StressBoardPack() {
               {sections.charts && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <ChartFrame
-                    title="CAR — base vs stress"
+                    title="CAR: base vs stress"
                     subtitle={
                       carFloor === null
-                        ? "No CAR floor configured — no floor line drawn"
+                        ? "No CAR floor configured: no floor line drawn"
                         : `Against the ${fmtFloorPct(carFloor)} floor on this run`
                     }
                     height={240}
@@ -426,10 +427,10 @@ export default function StressBoardPack() {
                     </ChartFrame>
                   ) : (
                     <ChartFrame
-                      title="LCR — base vs stress"
+                      title="LCR: base vs stress"
                       subtitle={
                         lcrFloor === null
-                          ? "No LCR floor configured — no floor line drawn"
+                          ? "No LCR floor configured: no floor line drawn"
                           : `Against the ${fmtFloorPct(lcrFloor)} floor on this run`
                       }
                       height={240}

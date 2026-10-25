@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
 import { isHrefVisible } from "@/lib/modules";
@@ -11,6 +11,9 @@ import QueryBoundary from "@/components/ui/QueryBoundary";
 import { useReturnTemplates } from "@/lib/api/hooks";
 import {
   instrumentDate,
+  instrumentIssuer,
+  instrumentDisclosure,
+  readableCalculation,
   isUpcomingRule,
   isRuleInForce,
 } from "@/lib/regulatoryInstruments";
@@ -25,14 +28,23 @@ export default function InstrumentsRegister(props: { upcoming?: boolean }) {
 }
 
 function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
-  const { bank } = useBankContext();
+  const { bank, banks } = useBankContext();
   const requestedBankId = useSearchParams().get("bankId");
   const bankId = requestedBankId ?? bank?.id;
+  const institution =
+    bankId === bank?.id ? bank : banks?.find((item) => item.id === bankId);
   const scope = useModuleScope();
   const query = useReturnTemplates(bankId);
 
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
   const templates = (query.data?.templates ?? []).filter(
-    (item) => !upcoming || isUpcomingRule(item.instrumentStatus),
+    (item) =>
+      (!upcoming || isUpcomingRule(item.instrumentStatus)) &&
+      (!status || item.instrumentStatus === status) &&
+      item.title
+        .toLocaleLowerCase()
+        .includes(search.trim().toLocaleLowerCase()),
   );
   return (
     <>
@@ -43,8 +55,10 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
         }
       />
       <PageContainer className="py-6 space-y-4">
-        {bankId && (
-          <p className="text-caption text-slate">Institution: {bankId}</p>
+        {institution?.name && (
+          <p className="text-caption text-slate">
+            Institution: {institution.name}
+          </p>
         )}
         <p className="text-body text-slate">
           {upcoming
@@ -59,6 +73,54 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
             ? "All regulatory instruments"
             : "Preparing for upcoming rules"}
         </Link>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex-1 min-w-48 text-caption text-navy">
+            Search instruments
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="mt-1 block w-full rounded-sm border border-border px-3 py-2"
+            />
+          </label>
+          <label className="text-caption text-navy">
+            Status
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+              className="mt-1 block rounded-sm border border-border px-3 py-2"
+            >
+              <option value="">All statuses</option>
+              {[
+                "exposure_draft",
+                "final_not_in_force",
+                "in_force",
+                "unpublished",
+              ]
+                .filter(
+                  (value) =>
+                    !upcoming ||
+                    value === "exposure_draft" ||
+                    value === "final_not_in_force",
+                )
+                .map((value) => (
+                  <option key={value} value={value}>
+                    {instrumentDisclosure(value).label}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+        <div
+          className="hidden lg:grid lg:grid-cols-[2fr_1fr_1.5fr_1fr_1.5fr] gap-4 px-4 text-caption font-medium text-slate"
+          aria-hidden="true"
+        >
+          <span>Instrument</span>
+          <span>Status</span>
+          <span>Effective / expected date</span>
+          <span>Issuer</span>
+          <span>Linked return</span>
+        </div>
         <QueryBoundary
           contained
           isLoading={query.isLoading}
@@ -67,9 +129,9 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
         >
           {templates.length === 0 && (
             <p className="text-body text-slate">
-              {upcoming
+              {upcoming && !search && !status
                 ? "No upcoming rules in the register."
-                : "No instruments available."}
+                : "No instruments match your search and status filter."}
             </p>
           )}
           {templates.map((item) => {
@@ -93,10 +155,20 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
               <section
                 id={item.code}
                 key={item.code}
-                className="card p-5 space-y-3 scroll-mt-6"
+                className="border-b border-border px-4 py-3 space-y-3 scroll-mt-6"
               >
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <h2 className="text-h3 text-navy">{item.title}</h2>
+                <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1.5fr_1fr_1.5fr] items-start gap-4">
+                  <div>
+                    <h2 className="text-body font-medium text-navy">
+                      {item.title}
+                    </h2>
+                    {item.instrumentStatus === "in_force" &&
+                      /draft/i.test(item.directiveCitation ?? "") && (
+                        <p className="mt-1 text-caption text-warning">
+                          Provisional citation
+                        </p>
+                      )}
+                  </div>
                   <InstrumentStatusBadge
                     status={item.instrumentStatus}
                     regulator={item.regulator}
@@ -105,96 +177,111 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
                     sourceUrl={item.sourceUrl}
                     code={item.code}
                   />
-                </div>
-                <p className="text-caption text-navy">
-                  {item.instrumentStatus === "exposure_draft"
-                    ? "Expected start if made final"
-                    : "Effective date"}
-                  : {effective ?? "Not established in the register"}
-                </p>
-                <p className="text-caption text-slate">
-                  {item.directiveCitation}
-                </p>
-                {item.sourceUrl ? (
-                  <a
-                    className="text-action underline text-caption"
-                    href={item.sourceUrl}
-                  >
-                    Read the source
-                  </a>
-                ) : (
-                  <p className="text-caption text-slate">
-                    Primary source link not recorded. The citation above
-                    identifies the registered evidence.
+                  <p className="text-caption text-navy">
+                    {effective ? (
+                      <>
+                        {item.instrumentStatus === "exposure_draft"
+                          ? "Expected start if made final"
+                          : "Effective date"}
+                        : {effective}
+                      </>
+                    ) : item.instrumentStatus === "unpublished" ? (
+                      "No filing commencement date"
+                    ) : (
+                      `Start date not published by ${instrumentIssuer(item.regulator || "the regulator")}`
+                    )}
                   </p>
-                )}
-                {item.commencementParameter && (
-                  <div className="text-caption text-navy space-y-1">
-                    <p>
-                      {differs
-                        ? "Governed date differs from the default."
-                        : "Governed commencement date."}{" "}
-                      Default: {defaultDate ?? "Not established"}. Applied to
-                      this institution: {effective ?? "Not established"}.
-                    </p>
-                    <p>
-                      Approved by:{" "}
-                      {item.commencementApprovedBy ?? "Approval not recorded"}
-                      {item.commencementApprovedAt
-                        ? ` on ${instrumentDate(item.commencementApprovedAt)}`
-                        : ""}
-                      . Parameter: {item.commencementParameter}.
-                    </p>
-                    <p className="text-slate">
-                      A governed reporting anchor does not finalise an exposure
-                      draft.
-                    </p>
-                  </div>
-                )}
-                {!isRuleInForce(item) &&
-                  capability &&
-                  bankId === bank?.id &&
-                  isHrefVisible(capability, scope) && (
+                  <p className="text-caption text-slate">
+                    {instrumentIssuer(item.regulator || "Issuer not recorded")}
+                  </p>
+                  {bankId === bank?.id ? (
                     <Link
-                      className="text-action underline text-caption"
-                      href={`${capability}?preparing=1`}
+                      className="text-caption text-action underline"
+                      href={`/submissions/returns?code=${encodeURIComponent(item.code)}`}
                     >
-                      Open preparation workspace
+                      {item.title}
                     </Link>
+                  ) : (
+                    <p className="text-caption text-slate">{item.title}</p>
                   )}
-                <dl className="text-caption text-navy space-y-1">
-                  <div>
-                    <dt className="inline font-medium">Return: </dt>
-                    <dd className="inline">
-                      {bankId === bank?.id ? (
-                        <Link
-                          className="text-action underline"
-                          href={`/submissions/returns?code=${encodeURIComponent(item.code)}`}
-                        >
-                          {item.code}
-                        </Link>
-                      ) : (
-                        item.code
+                </div>
+                <details className="text-caption">
+                  <summary className="cursor-pointer text-action">
+                    Citation and calculations
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    {item.instrumentStatus === "in_force" &&
+                      /draft/i.test(item.directiveCitation ?? "") && (
+                        <p className="text-warning">
+                          Provisional citation: the registered evidence is a
+                          draft. The recorded legal status remains in force;
+                          final source confirmation is needed.
+                        </p>
                       )}
-                    </dd>
+                    <p className="text-caption text-slate">
+                      {item.directiveCitation}
+                    </p>
+                    {item.sourceUrl ? (
+                      <a
+                        className="block w-fit text-action underline text-caption"
+                        href={item.sourceUrl}
+                      >
+                        Read the source
+                      </a>
+                    ) : null}
+                    {item.commencementParameter && (
+                      <div className="text-caption text-navy space-y-1">
+                        <p>
+                          {differs
+                            ? "Governed date differs from the default."
+                            : "Governed commencement date."}{" "}
+                          Default: {defaultDate ?? "Not established"}. Applied
+                          to this institution: {effective ?? "Not established"}.
+                        </p>
+                        <p>
+                          Approved by:{" "}
+                          {item.commencementApprovedBy ??
+                            "Approval not recorded"}
+                          {item.commencementApprovedAt
+                            ? ` on ${instrumentDate(item.commencementApprovedAt)}`
+                            : ""}
+                          .
+                        </p>
+                        <p className="text-slate">
+                          A governed reporting anchor does not finalise an
+                          exposure draft.
+                        </p>
+                      </div>
+                    )}
+                    {!isRuleInForce(item) &&
+                      capability &&
+                      bankId === bank?.id &&
+                      isHrefVisible(capability, scope) && (
+                        <Link
+                          className="block w-fit text-action underline text-caption"
+                          href={`${capability}?preparing=1`}
+                        >
+                          Open preparation workspace
+                        </Link>
+                      )}
+                    <dl className="text-caption text-navy space-y-1">
+                      <div>
+                        <dt className="inline font-medium">
+                          Calculations and limits:{" "}
+                        </dt>
+                        <dd className="inline">
+                          {item.calculations?.length
+                            ? [
+                                ...new Set(
+                                  item.calculations.map(readableCalculation),
+                                ),
+                              ].join(", ")
+                            : "No calculation or limit mapping recorded"}
+                        </dd>
+                      </div>
+                    </dl>
                   </div>
-                  <div>
-                    <dt className="inline font-medium">
-                      Calculations and limits:{" "}
-                    </dt>
-                    <dd className="inline">
-                      {item.calculations?.length
-                        ? item.calculations.join(", ")
-                        : "No calculation or limit mapping recorded"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="inline font-medium">Calculation engine: </dt>
-                    <dd className="inline">
-                      {item.generator} ({item.code})
-                    </dd>
-                  </div>
-                </dl>
+                </details>
               </section>
             );
           })}

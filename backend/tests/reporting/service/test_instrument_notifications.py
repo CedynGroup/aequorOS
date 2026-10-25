@@ -108,9 +108,10 @@ def test_scan_emits_once_and_detects_finalisation(
     )
     relevant = [row for row in rows if ":LE-MONTHLY:" in row.type]
     assert len(relevant) == 2
-    assert all(bank.id in row.title for row in relevant)
+    assert all(bank.name in row.title and definition.title in row.title for row in relevant)
+    assert all(bank.id not in row.title and definition.code not in row.title for row in relevant)
     assert all(
-        bank.name in row.body and bank.id in row.body and row.entity_id == bank.id
+        bank.name in row.body and bank.id not in row.body and row.entity_id == bank.id
         for row in relevant
     )
     assert {row.type.split(":")[0] for row in relevant} == {

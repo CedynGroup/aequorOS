@@ -8,12 +8,18 @@ export function instrumentDate(value: InstrumentDate): string | null {
   return typeof value === "string" ? value : value ? isoDate(value) : null;
 }
 
+/** Presentation casing for the recorded Ghana return-family issuer. */
+export function instrumentIssuer(issuer: string): string {
+  return issuer === "BOG" ? "BoG" : issuer;
+}
+
 /** Publication and commencement stay separate from calculation readiness. */
 export function instrumentDisclosure(
   status: string | undefined,
   date?: InstrumentDate,
   regulator = "the regulator",
 ) {
+  regulator = instrumentIssuer(regulator);
   const effective = instrumentDate(date);
   switch (status) {
     case "exposure_draft":
@@ -23,7 +29,7 @@ export function instrumentDisclosure(
           `Proposed by ${regulator}, not law yet. Prepare if useful, no deadline or penalty.` +
           (effective
             ? ` Expected from ${effective} if made final.`
-            : " Expected start date is not established."),
+            : ` Start date not published by ${regulator}.`),
       };
     case "final_not_in_force":
       return {
@@ -32,7 +38,7 @@ export function instrumentDisclosure(
           "Final rule. " +
           (effective
             ? `Filing becomes required from ${effective}.`
-            : "The commencement date is not established."),
+            : `Start date not published by ${regulator}.`),
       };
     case "in_force":
       return {
@@ -41,7 +47,7 @@ export function instrumentDisclosure(
           "Required. Deadlines and penalties apply." +
           (effective
             ? ` In force from ${effective}.`
-            : " The effective date is not established in the register."),
+            : ` Start date not published by ${regulator}.`),
       };
     case "unpublished":
       return {
@@ -171,4 +177,50 @@ export function forecastRuleApplicable(
     liquidityInForce ||
     !["year5_lcr_above_minimum", "year5_nsfr_above_minimum"].includes(ruleId)
   );
+}
+
+/** Bank-facing calculation names; methodology ids remain in sealed evidence. */
+export function readableCalculation(value: string): string {
+  const key = value.startsWith("limit parameter: ")
+    ? value.slice("limit parameter: ".length)
+    : value.split(":")[0].trim();
+  const labels: Record<string, string> = {
+    lcr_pct: "Liquidity coverage ratio",
+    car_pct: "Capital adequacy ratio",
+    cet1_ratio_pct: "Common Equity Tier 1 ratio",
+    tier1_ratio_pct: "Tier 1 capital ratio",
+    leverage_ratio_pct: "Leverage ratio",
+    net_own_funds_ghs: "Net own funds",
+    stressed_car_end_pct: "Stressed capital adequacy ratio",
+    car_erosion_pp: "Capital ratio erosion",
+    car_min: "Minimum capital adequacy ratio",
+    cet1_min: "Minimum Common Equity Tier 1 ratio",
+    tier1_min: "Minimum Tier 1 capital ratio",
+    leverage_min: "Minimum leverage ratio",
+    fx_nop_single_limit_pct: "Single-currency net open position limit",
+    fx_nop_aggregate_limit_pct: "Aggregate net open position limit",
+    npl_limit_pct: "Non-performing loan limit",
+    npl_dividend_restriction_pct:
+      "Non-performing loan dividend restriction threshold",
+    large_exposure_limit_pct: "Single counterparty exposure limit",
+    large_exposure_id_threshold_pct: "Large exposure identification threshold",
+    aggregate_large_exposure_cap: "Aggregate large exposure cap",
+    irrbb_outlier_threshold_pct_tier1: "Interest rate risk outlier threshold",
+    irrbb_sf_major_currency_threshold_pct:
+      "Major currency significance threshold",
+  };
+  const ratio =
+    /^(narrow|broad)_to_(volatile|short_term|total_deposits|total_assets)$/.exec(
+      key,
+    );
+  if (ratio) {
+    const denominator: Record<string, string> = {
+      volatile: "volatile liabilities",
+      short_term: "short-term liabilities",
+      total_deposits: "total deposits",
+      total_assets: "total assets",
+    };
+    return `${ratio[1] === "narrow" ? "Narrow" : "Broad"} liquid assets to ${denominator[ratio[2]]}`;
+  }
+  return labels[key] ?? "Additional governed calculation or limit";
 }

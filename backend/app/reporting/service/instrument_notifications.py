@@ -67,10 +67,10 @@ def scan_instrument_statuses(db: Session, ctx: TenantContext, bank: Bank, today:
                 ctx,
                 type=f"reporting.instrument.{event}:{definition.code}:",
                 severity="info" if status in ("exposure_draft", "unpublished") else "warning",
-                title=f"{bank.id} · {definition.code}: "
+                title=f"{bank.name} · {definition.title}: "
                 + ("rule status changed" if event == "changed" else "commencement approaching"),
                 body=(
-                    f"{bank.name} ({bank.id}): {definition.title}. "
+                    f"{bank.name}: {definition.title}. "
                     f"Legal status: {status.replace('_', ' ')}. "
                     f"Effective date: {effective.isoformat() if effective else 'not established'}. "
                     "Review the regulatory instruments register for source evidence. "
