@@ -466,11 +466,15 @@ def test_bulk_fields_and_objects_unwrap_once_per_version_and_discard_on_boundary
     assert calls == 1
     provider.set_status(KEY, KeyStatus.DISABLED)
     db_session.expunge_all()
-    assert len(list(db_session.scalars(select(CanonicalCounterparty)))) == 30
+    cached = list(db_session.scalars(select(CanonicalCounterparty)))
+    assert len(cached) == 30 and all(row.name == NAME for row in cached)
+    assert calls == 1
     db_session.commit()
     db_session.expunge_all()
+    loaded = list(db_session.scalars(select(CanonicalCounterparty)))
+    assert len(loaded) == 30
     with pytest.raises(KeyUnavailableError):
-        list(db_session.scalars(select(CanonicalCounterparty)))
+        _ = loaded[0].name
     db_session.rollback()
     with pytest.raises(StorageAccessError):
         bank_storage.storage.for_session(db_session).read(location)

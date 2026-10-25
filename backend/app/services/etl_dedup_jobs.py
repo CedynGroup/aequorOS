@@ -64,7 +64,7 @@ from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Load, Session
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
 from app.api.deps import TenantContext
@@ -581,6 +581,7 @@ def _load_cross_source_rows(
                 CanonicalProduct.product_code.label("product_code"),
                 CanonicalCounterparty,
             )
+            .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
             .join(
                 CanonicalPosition,
                 CanonicalPositionSnapshot.position_id == CanonicalPosition.id,

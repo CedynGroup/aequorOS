@@ -38,7 +38,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Load, Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
@@ -1528,6 +1528,7 @@ def _classified_loan_rows(
         select(
             CanonicalPositionSnapshot, CanonicalPosition, CanonicalCounterparty, CanonicalProduct
         )
+        .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
         .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
         .outerjoin(
             CanonicalCounterparty,

@@ -265,13 +265,15 @@ class CanonicalCounterparty(CanonicalMetadataMixin, Base):
         *canonical_constraints("canonical_counterparties"),
     )
 
-    name: Mapped[str] = mapped_column(ProtectedText(), nullable=False, deferred=True)
+    name: Mapped[str] = mapped_column(
+        ProtectedText(), nullable=False, deferred=True, deferred_group="bank_identity"
+    )
     counterparty_type: Mapped[str] = mapped_column(String(32), nullable=False)
     country_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
     rating: Mapped[str | None] = mapped_column(String(16), nullable=True)
     rating_source: Mapped[str | None] = mapped_column(String(40), nullable=True)
     group_reference: Mapped[str | None] = mapped_column(
-        ProtectedText(), nullable=True, deferred=True
+        ProtectedText(), nullable=True, deferred=True, deferred_group="bank_identity"
     )
     # Residency of the counterparty relative to the bank's jurisdiction
     # (LMTD 2026 ¶5 "Narrow Liquid Assets": non-resident correspondent
@@ -282,6 +284,7 @@ class CanonicalCounterparty(CanonicalMetadataMixin, Base):
     external_identifiers: Mapped[dict[str, Any]] = mapped_column(
         ProtectedJSON(empty_object=True),
         deferred=True,
+        deferred_group="bank_identity",
         default=dict,
         server_default=sql_text("'{}'"),
         nullable=False,
@@ -294,7 +297,9 @@ class CanonicalCounterparty(CanonicalMetadataMixin, Base):
         nullable=False,
     )
 
-    source_reference: Mapped[str] = mapped_column(ProtectedText(), nullable=False, deferred=True)
+    source_reference: Mapped[str] = mapped_column(
+        ProtectedText(), nullable=False, deferred=True, deferred_group="bank_identity"
+    )
     source_reference_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
     concentration_group_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)

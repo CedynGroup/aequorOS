@@ -32,6 +32,7 @@ from tests.core.test_bank_field_encryption import (
     raw_fields,
     saved_version,
 )
+from tests.core.test_bank_field_readers import GroupAxis, assert_long_concentration_tokens
 from tests.db import test_postgres_migrations as migrations
 from tests.support.helpers import ORG_1, USER_1
 
@@ -293,3 +294,12 @@ def test_new_sensitive_fields_are_ciphertext_in_postgres(
     restored = db.get(CanonicalCounterparty, borrower_id)
     assert restored is not None and restored.name == NAME
     assert restored.external_identifiers == {"national_id": IDENTIFIER}
+
+
+@pytest.mark.parametrize("axis", ["name", "reference", "group_reference", "group", "parent"])
+def test_optional_concentration_tokens_fit_postgres_columns(
+    sensitive_db: tuple[Session, LocalKeyProvider, KeyReference],
+    axis: GroupAxis,
+) -> None:
+    db, _, _ = sensitive_db
+    assert_long_concentration_tokens(db, axis)

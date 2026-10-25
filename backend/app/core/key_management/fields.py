@@ -14,13 +14,14 @@ import json
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from itertools import batched
 from typing import Literal, cast
 from uuid import UUID
 
 from pydantic import TypeAdapter
 from sqlalchemy import JSON, Table, Text, event, inspect, select
 from sqlalchemy.engine import Dialect
-from sqlalchemy.orm import InstanceState, Session, attributes, object_session
+from sqlalchemy.orm import InstanceState, Mapper, Session, attributes, object_session, undefer
 from sqlalchemy.types import TypeDecorator
 
 from app.core.ids import new_uuid4, new_uuid7
@@ -245,7 +246,7 @@ def _index(  # noqa: PLR0913 - scoped, domain-separated index contract
     normalized = normalize(value, normalization)
     if secret is None:
         # Optional banks retain ordinary field storage before key connection.
-        if normalization == "name":
+        if normalization == "name" or domain == "counterparty.group":
             return hashlib.sha256(normalized.encode()).hexdigest()
         return normalized
     payload = json.dumps(
@@ -331,6 +332,53 @@ class _Restore:
     values: dict[str, object] = field(repr=False)
 
 
+def _pending_columns(state: InstanceState[object]) -> list[FieldColumn]:
+    columns = field_columns(state)
+    if not columns:
+        return []
+    if state.pending or any(state.attrs[col.attribute].history.has_changes() for col in columns):
+        return columns
+    if cast(Table, state.mapper.local_table).name == "canonical_counterparties":
+        history = state.attrs["attributes"].history
+        if history.has_changes():
+            before = cast(dict[str, object], history.deleted[0]) if history.deleted else {}
+            after = cast(dict[str, object], state.dict.get("attributes") or {})
+            if any(
+                before.get(key) != after.get(key) for key in ("group_reference", "group", "parent")
+            ):
+                return columns
+    return []
+
+
+def _load_pending_fields(db: Session, states: list[InstanceState[object]]) -> None:
+    groups: dict[tuple[Mapper[object], str, str | None], list[UUID]] = {}
+    for state in states:
+        columns = field_columns(state)
+        if not state.persistent or all(col.attribute in state.dict for col in columns):
+            continue
+        instance = state.obj()
+        assert instance is not None and state.identity is not None
+        parent = columns[0].kind.parent
+        for attribute in ("organization_id", parent[1] if parent else "bank_id"):
+            if attribute not in state.dict:
+                _ = cast(object, attributes.get_attribute(instance, attribute))
+        organization, bank = _scope(db, state, columns)
+        groups.setdefault((state.mapper, organization, bank), []).append(
+            cast(UUID, state.identity[0])
+        )
+    for (mapper, organization, bank), ids in groups.items():
+        table = cast(Table, mapper.local_table)
+        for batch in batched(ids, 500):
+            stmt = (
+                select(mapper.class_)
+                .options(undefer("*"))
+                .where(table.c.organization_id == organization, table.c.id.in_(batch))
+            )
+            if "bank_id" in table.c:
+                stmt = stmt.where(table.c.bank_id == bank)
+            _ = db.scalars(stmt).all()
+
+
 @event.listens_for(Session, "before_flush")
 def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
     db: Session, _flush_context: object, _instances: object
@@ -341,29 +389,15 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
     write_keys: dict[tuple[str, str], registry.ObjectKey] = {}
     index_keys: dict[tuple[str, str], bytes] = {}
     with db.no_autoflush:
-        for instance in cast(list[object], list(db.new) + list(db.dirty)):
-            state = cast(InstanceState[object], inspect(instance))
-            columns = field_columns(state)
-            group_changed = False
-            if cast(Table, state.mapper.local_table).name == "canonical_counterparties":
-                history = state.attrs["attributes"].history
-                if history.has_changes():
-                    before = cast(dict[str, object], history.deleted[0]) if history.deleted else {}
-                    after = cast(dict[str, object], state.dict.get("attributes") or {})
-                    group_changed = any(
-                        before.get(key) != after.get(key)
-                        for key in ("group_reference", "group", "parent")
-                    )
-            if not columns or not (
-                state.pending
-                or group_changed
-                or any(state.attrs[col.attribute].history.has_changes() for col in columns)
-            ):
-                continue
-            if state.persistent:
-                for col in columns:
-                    if col.attribute not in state.dict:
-                        _ = cast(object, attributes.get_attribute(instance, col.attribute))
+        pending = [
+            (instance, state, columns)
+            for instance in cast(list[object], list(db.new) + list(db.dirty))
+            if (
+                columns := _pending_columns(state := cast(InstanceState[object], inspect(instance)))
+            )
+        ]
+        _load_pending_fields(db, [state for _, state, _ in pending])
+        for instance, state, columns in pending:
             for col in columns:
                 if state.dict.get(col.attribute) is None:
                     if col.kind.empty_object:

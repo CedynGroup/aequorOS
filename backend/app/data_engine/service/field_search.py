@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal, cast
 
 from sqlalchemy import JSON, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Load, Session
 
 from app.core.key_management.fields import blind_index, normalize
 from app.core.tenancy import TenantContext
@@ -48,7 +48,9 @@ def find_counterparties(  # noqa: PLR0913 - explicit bank and identifier namespa
         )
         predicate = identifier.as_string() == token
     candidates = db.scalars(
-        select(CanonicalCounterparty).where(
+        select(CanonicalCounterparty)
+        .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
+        .where(
             CanonicalCounterparty.organization_id == ctx.organization_id,
             CanonicalCounterparty.bank_id == bank_id,
             CanonicalCounterparty.superseded_by.is_(None),
