@@ -29,7 +29,12 @@ from app.core.ids import new_uuid7
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
-from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
+from app.core.key_management.types import (
+    KeyIntegrityError,
+    KeyReference,
+    KeyStatus,
+    KeyUnavailableError,
+)
 from app.core.tenancy import TenantContext
 from app.data_engine.service.field_search import find_counterparties
 from app.db.base import utc_now
@@ -42,6 +47,7 @@ from app.identity.schemas.institution_profile import (
     RelatedPartyUpdate,
 )
 from app.identity.service import institution_profile
+from app.live import position_book
 from app.ml.behavioral.history import load_deposit_month_aggregates
 from app.models.audit_event import AuditEvent
 from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
@@ -49,7 +55,7 @@ from app.models.canonical_withdrawal import CanonicalWithdrawal
 from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailure
 from app.reporting.models.packages import RegulatoryPackage
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import canonical_withdrawal, ingestion
+from app.services import canonical_withdrawal, credit_concentration, fact_derivation, ingestion
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.bi.fixtures import materialize_bi_plane
 from tests.support.helpers import ORG_1, USER_1
@@ -196,14 +202,13 @@ def raw_fields(db: Session) -> dict[str, list[tuple[object, ...]]]:
     # of whichever columns happen to have an encryption implementation today.
     catalogue = {
         "canonical_counterparties": (
-            "name, external_identifiers, group_reference, attributes, source_reference"
+            "name, external_identifiers, group_reference, source_reference"
         ),
         "related_parties": "full_name, contact",
         "related_party_roles": "other_responsibilities, term_of_appointment, icag_registration",
         "ingestion_batches": "validation_report, etl_report, error_message",
         "lineage_records": "details",
         "translation_failures": "raw_record, error_message",
-        "regulatory_packages": "snapshot, validation_report, notes",
     }
     return {
         table: [
@@ -394,7 +399,9 @@ def test_ciphertext_cannot_be_moved_between_banks_records_or_fields(
     db_session.commit()
     db_session.expunge_all()
     with pytest.raises(KeyUnavailableError):
-        db_session.get(CanonicalCounterparty, a_id)
+        loaded = db_session.get(CanonicalCounterparty, a_id)
+        assert loaded is not None
+        _ = loaded.name
 
 
 def test_bank_a_key_cannot_unwrap_bank_b_and_revocation_refuses_reads(
@@ -416,7 +423,9 @@ def test_bank_a_key_cannot_unwrap_bank_b_and_revocation_refuses_reads(
     provider.set_status(KEY_B, KeyStatus.DISABLED)
     db_session.expunge_all()
     with pytest.raises(KeyUnavailableError):
-        db_session.get(CanonicalCounterparty, b_id)
+        loaded = db_session.get(CanonicalCounterparty, b_id)
+        assert loaded is not None
+        _ = loaded.name
     db_session.expunge_all()
     with pytest.raises(KeyUnavailableError):
         find_counterparties(db_session, CTX, BANK_B, field="name", value=NAME)
@@ -545,7 +554,7 @@ def test_unicode_name_writes_updates_and_normalized_search(
     assert_unicode_name_round_trip(db_session, connected)
 
 
-def test_numeric_sql_aggregation_preserves_decrypted_concentration_labels(
+def test_numeric_sql_aggregation_preserves_opaque_concentration_groups(
     db_session: Session,
     provider: LocalKeyProvider,
 ) -> None:
@@ -581,12 +590,15 @@ def test_numeric_sql_aggregation_preserves_decrypted_concentration_labels(
             )
         )
     db_session.commit()
+    provider.set_status(KEY_A, KeyStatus.DISABLED)
     db_session.expunge_all()
     aggregates = load_deposit_month_aggregates(
         db_session, CTX, BANK_A, AS_OF, 1, non_maturing_only=False
     )
     assert len(aggregates) == 1
-    assert aggregates[0].concentration_group == "SYNTHETIC-GROUP-17"
+    assert len(aggregates[0].concentration_group) == 64
+    assert NAME not in aggregates[0].concentration_group
+    assert "SYNTHETIC-GROUP-17" not in aggregates[0].concentration_group
     assert aggregates[0].balance_ghs == 300 and aggregates[0].n_accounts == 2
 
 
@@ -879,6 +891,8 @@ def test_connected_bank_bi_keeps_numeric_facts_without_identity_copies(
         )
     )
     db_session.commit()
+    provider.set_status(KEY_A, KeyStatus.DISABLED)
+    db_session.expunge_all()
     outcome = materialize_bi_plane(db_session, organization_id=ORG_1, bank_id=BANK_A, as_of=AS_OF)
     assert outcome is not None and outcome.status == "succeeded"
     db_session.expunge_all()
@@ -1074,7 +1088,8 @@ def test_saved_alert_list_filters_encrypt_and_round_trip(
     alert_id = alert.id
     db_session.expunge_all()
     raw = cast(object, db_session.execute(text("SELECT filters FROM bi_alerts")).scalar_one())
-    assert "aqs-bank-field-v1" in str(raw) and NAME not in str(raw)
+    assert ("aqs-bank-field-v1" in str(raw)) == bool(filters)
+    assert NAME not in str(raw)
     loaded = db_session.get(BiAlert, alert_id)
     assert loaded is not None and loaded.filters == (filters or [])
     loaded.filters = [{"member": "counterparty.id", "op": "eq", "values": ["synthetic-id"]}]
@@ -1118,3 +1133,196 @@ def test_key_connection_encrypts_new_writes_without_rewriting_existing_records(
     db_session.expunge_all()
     restored = db_session.get(CanonicalCounterparty, current_id)
     assert restored is not None and restored.name == NAME
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_numeric_book_and_filing_payloads_survive_key_loss(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    party = counterparty(db_session, include_package=False)
+    party.attributes = {"sovereign": True, "credit_conversion_factor": "0.5"}
+    position = CanonicalPosition(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        as_of_date=AS_OF,
+        source_system="EXCEL_CSV",
+        source_reference="synthetic-credit",
+        ingestion_batch_id=party.ingestion_batch_id,
+        lineage_id=party.lineage_id,
+        validation_status="accepted",
+        position_type="LOAN",
+        currency="GHS",
+    )
+    db_session.add(position)
+    db_session.flush()
+    db_session.add(
+        CanonicalPositionSnapshot(
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            as_of_date=AS_OF,
+            source_system="EXCEL_CSV",
+            source_reference="synthetic-credit-snapshot",
+            ingestion_batch_id=party.ingestion_batch_id,
+            lineage_id=party.lineage_id,
+            validation_status="accepted",
+            position_id=position.id,
+            counterparty_id=party.id,
+            balance=Decimal("123"),
+        )
+    )
+    package = RegulatoryPackage(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        return_family="bsd",
+        return_code="BSD1",
+        reporting_date=AS_OF,
+        frequency="monthly",
+        status="generated",
+        version=1,
+        snapshot={"balance": "123"},
+        validation_report={"valid": True},
+        notes="Synthetic numeric filing",
+        generated_by=USER_1,
+    )
+    db_session.add(package)
+    db_session.flush()
+    package_id, party_id = package.id, party.id
+    db_session.commit()
+    with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+        bank = fresh.get(Bank, BANK_A)
+        assert bank is not None
+        before = position_book.credit_source_basis(
+            position_book.load_position_records(fresh, CTX, bank, AS_OF)
+        )
+        expected_identity = fact_derivation.evaluate_balance_identity(fresh, CTX, bank, AS_OF)
+        expected_exposures = credit_concentration.load_credit_exposures(fresh, CTX, bank, AS_OF)
+        assert expected_identity is not None
+        assert len(expected_exposures) == 1 and expected_exposures[0].ead == Decimal("123")
+    provider.set_status(KEY_A, status)
+    with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+        bank = fresh.get(Bank, BANK_A)
+        assert bank is not None
+        records = position_book.load_position_records(fresh, CTX, bank, AS_OF)
+        assert position_book.credit_source_basis(records) == before
+        assert (
+            fact_derivation.evaluate_balance_identity(fresh, CTX, bank, AS_OF) == expected_identity
+        )
+        assert (
+            credit_concentration.load_credit_exposures(fresh, CTX, bank, AS_OF)
+            == expected_exposures
+        )
+        loaded = fresh.get(RegulatoryPackage, package_id)
+        assert loaded is not None and loaded.snapshot == {"balance": "123"}
+        assert loaded.validation_report == {"valid": True}
+        assert loaded.notes == "Synthetic numeric filing"
+        loaded_party = fresh.get(CanonicalCounterparty, party_id)
+        assert loaded_party is not None
+        assert loaded_party.attributes["credit_conversion_factor"] == "0.5"
+        with pytest.raises(KeyUnavailableError):
+            _ = loaded_party.name
+
+
+@pytest.mark.parametrize("connected", [False, True])
+def test_mixed_bi_filters_protect_only_identity_values(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    connected: bool,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    numeric_filter = {"member": "position.currency", "op": "eq", "values": ["GHS"]}
+    identity_filter = {"member": "counterparty.name", "op": "eq", "values": [NAME]}
+    spec = {"widgets": [{"query": {"filters": [numeric_filter, identity_filter]}}]}
+    version = saved_version(db_session, spec)
+    db_session.add(version)
+    db_session.flush()
+    version_id = version.id
+    db_session.commit()
+    raw_value = cast(object, db_session.scalar(text("SELECT spec FROM bi_dashboard_versions")))
+    raw = raw_value if isinstance(raw_value, str) else json.dumps(raw_value)
+    stored = cast(dict[str, object], json.loads(raw))
+    assert "GHS" in raw
+    assert (NAME not in json.dumps(stored, ensure_ascii=False)) == connected
+    assert ("aqs-bank-field-v1" in raw) == connected
+    db_session.expunge_all()
+    restored = db_session.get(BiDashboardVersion, version_id)
+    assert restored is not None and restored.spec == spec
+    db_session.commit()
+    if connected:
+        provider.set_status(KEY_A, KeyStatus.DISABLED)
+        with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+            with pytest.raises(KeyUnavailableError):
+                fresh.get(BiDashboardVersion, version_id)
+        provider.set_status(KEY_A, KeyStatus.ACTIVE)
+        widgets = cast(list[dict[str, object]], stored["widgets"])
+        query = cast(dict[str, object], widgets[0]["query"])
+        filters = cast(list[object], query["filters"])
+        filters.reverse()
+        db_session.execute(
+            text("UPDATE bi_dashboard_versions SET spec=:spec WHERE id=:id").bindparams(
+                bindparam("id", type_=Uuid(as_uuid=True))
+            ),
+            {"spec": json.dumps(stored), "id": version_id},
+        )
+        db_session.commit()
+        db_session.expunge_all()
+        with pytest.raises(KeyUnavailableError):
+            db_session.get(BiDashboardVersion, version_id)
+
+
+@pytest.mark.parametrize("connected", [False, True])
+def test_numeric_group_tokens_track_group_attributes_without_identity_reads(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    connected: bool,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    first = counterparty(db_session, include_package=False)
+    second = counterparty(db_session, reference="synthetic-second", include_package=False)
+    first.group_reference = second.group_reference = None
+    first.attributes = {"parent": "Synthetic group A"}
+    second.attributes = {"parent": "Synthetic group B"}
+    db_session.commit()
+    assert first.concentration_group_blind_index != second.concentration_group_blind_index
+    second.attributes = {"parent": "Synthetic group A"}
+    db_session.commit()
+    expected = first.concentration_group_blind_index
+    assert second.concentration_group_blind_index == expected
+    second_id = second.id
+    provider.set_status(KEY_A, KeyStatus.DISABLED)
+    with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+        loaded = fresh.get(CanonicalCounterparty, second_id)
+        assert loaded is not None
+        loaded.attributes = {"parent": "Synthetic group A", "sovereign": True}
+        fresh.flush()
+        assert loaded.attributes["sovereign"] is True
+        assert loaded.concentration_group_blind_index == expected
+
+
+@pytest.mark.parametrize("invalid_spec", [[], "invalid canvas"])
+def test_numeric_saved_content_rejects_invalid_json_shape(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    invalid_spec: object,
+) -> None:
+    connect(db_session, provider)
+    version = saved_version(db_session, {"widgets": []})
+    db_session.add(version)
+    db_session.flush()
+    version_id = version.id
+    db_session.commit()
+    db_session.execute(
+        text("UPDATE bi_dashboard_versions SET spec=:spec WHERE id=:id").bindparams(
+            bindparam("id", type_=Uuid(as_uuid=True))
+        ),
+        {"spec": json.dumps(invalid_spec), "id": version_id},
+    )
+    db_session.commit()
+    provider.set_status(KEY_A, KeyStatus.DISABLED)
+    with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+        with pytest.raises(KeyIntegrityError):
+            fresh.get(BiDashboardVersion, version_id)

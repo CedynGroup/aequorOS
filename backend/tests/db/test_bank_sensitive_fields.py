@@ -262,14 +262,14 @@ def test_new_sensitive_fields_are_ciphertext_in_postgres(
             sitting_allowance=Decimal("12.34"),
         )
     )
-    db.add(saved_version(db, {"borrower": NAME}))
+    db.add(saved_version(db, {"filters": [{"member": "counterparty.name", "values": [NAME]}]}))
     db.add(
         BiSubscription(
             organization_id=ORG_1,
             bank_id="BK-SAMP0001",
             owner_user_id=USER_1,
             name="Synthetic",
-            query={"borrower": NAME},
+            query={"filters": [{"member": "counterparty.name", "values": [NAME]}]},
             artifact_format="csv",
             cadence="daily",
             hour=7,

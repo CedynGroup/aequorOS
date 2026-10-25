@@ -874,11 +874,10 @@ def _build_positions(  # noqa: PLR0912, PLR0913 - one build carries its whole id
             gl_account,
             base_currency=base_currency,
             classified=classified.get(snapshot.id),
+            include_identity=not protected,
         )
         _count_attribute_overflows(overflows, snapshot.attributes)
         values = _position_values(row, built_at)
-        if protected:
-            values["counterparty_group"] = None
         pending.append(values)
         result.rows += 1
         result.aggregates[tuple(getattr(row, column) for column in _AGG_GRAIN)].add(row)
@@ -1001,6 +1000,7 @@ def _build_events(  # noqa: PLR0913 - one build carries its whole identity
             latest.setdefault(snapshot.position_id, (snapshot, counterparty, product))
 
     values: list[dict[str, Any]] = []
+    protected = connected(db, organization_id, bank_id)
     for event in events:
         position = positions.get((event.source_system, event.position_source_reference))
         match: extract.SnapshotMatch | None = None
@@ -1015,6 +1015,7 @@ def _build_events(  # noqa: PLR0913 - one build carries its whole identity
                     None,
                     base_currency=base_currency,
                     classified=None,
+                    include_identity=not protected,
                 )
                 if found is not None
                 else None

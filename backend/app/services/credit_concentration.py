@@ -24,6 +24,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
+from app.core.key_management import registry
+from app.core.key_management.concentration_identity import counterparty_group_key
+from app.core.key_management.types import KeyIntegrityError
 from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.domain.credit.concentration_monitor import (
     ConcentrationLimit,
@@ -60,14 +63,9 @@ def _dec_or_none(value: Any) -> Decimal | None:
 def _group_key(source_reference: str, counterparty: CanonicalCounterparty | None) -> str:
     """Connected-group / single-name identity (le_generation's pattern)."""
     if counterparty is not None:
-        if counterparty.group_reference:
-            return f"group:{counterparty.group_reference}"
-        cp_attributes = counterparty.attributes or {}
-        for key in ("group_reference", "group", "parent"):
-            value = cp_attributes.get(key)
-            if value:
-                return f"group:{value}"
-        return f"cp:{counterparty.name}"
+        return counterparty_group_key(
+            counterparty.name, counterparty.group_reference, counterparty.attributes or {}
+        )
     return f"pos:{source_reference}"
 
 
@@ -108,6 +106,7 @@ def load_credit_exposures(
         .order_by(CanonicalPositionSnapshot.source_reference)
     ).all()
     base_ccy = jurisdictions.base_currency(bank)
+    protected = registry.bank_key(db, ctx.organization_id, bank.id) is not None
     exposures: list[ConcentrationExposure] = []
     for snapshot, position, counterparty, product_row in records:
         attributes = snapshot.attributes or {}
@@ -121,11 +120,17 @@ def load_credit_exposures(
         sector = attributes.get("sector") or attributes.get("industry")
         collateral = attributes.get("collateral_type") or attributes.get("crm_collateral_class")
         employer = attributes.get("employer")
+        if protected and counterparty is not None:
+            group_key = counterparty.concentration_group_blind_index
+            if group_key is None:
+                raise KeyIntegrityError("The counterparty concentration index is missing.")
+        else:
+            group_key = _group_key(snapshot.source_reference, counterparty)
         exposures.append(
             ConcentrationExposure(
                 exposure_id=snapshot.source_reference,
                 ead=balance_ghs,
-                group_key=_group_key(snapshot.source_reference, counterparty),
+                group_key=group_key,
                 sector=str(sector) if sector else None,
                 geography=counterparty.country_code if counterparty is not None else None,
                 product=product_row.product_code if product_row is not None else None,
