@@ -238,3 +238,35 @@ it("explains Credit's baseline-only scope and selected scenario data date", () =
     screen.getByText(/Credit supports the baseline scenario only/),
   ).toHaveTextContent("31 Mar 2026");
 });
+
+it("shows the capital engine's reported metric breach independently of execution success", async () => {
+  server.use(
+    http.post(`${base}/capital/run-all-scenarios`, () =>
+      HttpResponse.json({
+        runs: [
+          {
+            ...run("baseline", "succeeded"),
+            metrics: { car_pct: "11" },
+            metric_results: [
+              {
+                id: "capital-car",
+                metric_code: "car_pct",
+                metric_value: "11",
+                position: 1,
+                status: "red",
+                threshold_min: "13",
+                unit: "pct",
+              },
+            ],
+          },
+        ],
+      }),
+    ),
+  );
+  mount("capital");
+  await userEvent.click(
+    screen.getByRole("button", { name: "Run all Capital scenarios" }),
+  );
+  expect(await screen.findByText("Succeeded")).toBeVisible();
+  expect(screen.getByText("Risk breaches: CAR percentage.")).toBeVisible();
+});
