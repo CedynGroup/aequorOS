@@ -714,11 +714,13 @@ Canonical balances, batch lineage and absence of sibling writes are checked
 before finally-based credential and tenant cleanup.
 
 The full filing lifecycle (`e2e/full-lifecycle.spec.ts`) takes both a regulator
-rejection and a checker send-back through a replacement package, renewed maker
-and checker signatures, and acknowledgement. It preserves the superseded
-snapshot, withdrawn signatures and earlier receipt history; a previous version's
-review basis is refused, repeated Validator approval is idempotent, and duplicate
-transmission cannot add a receipt. Package versions advance independently of the
+rejection and a checker send-back through correction of a synthetic source book
+via the Data Engine, a replacement package, renewed maker and checker signatures,
+and acknowledgement. It pins the replacement cash figure and its new source run
+while preserving the superseded snapshot and hash, withdrawn signatures and
+earlier receipt history. A previous version's review basis is refused, repeated
+Validator approval is idempotent, and duplicate transmission cannot add a receipt.
+Package versions advance independently of the
 ORASS revision, which counts regulator-granted resubmissions.
 
 The T24 journey configures a core in the browser, stages and ingests
