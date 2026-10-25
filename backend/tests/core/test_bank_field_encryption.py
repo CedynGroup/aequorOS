@@ -1159,6 +1159,161 @@ def withdraw_counterparties(db: Session) -> CanonicalWithdrawal:
     return applied
 
 
+@pytest.fixture
+def reference_ingestion_upload(
+    db_session: Session, provider: LocalKeyProvider, tmp_path: Path
+) -> IngestionBatchCreate:
+    mapping = MappingConfig(
+        field_mappings={
+            "counterparty": EntityMapping(
+                source_table="Customers",
+                fields={
+                    "source_reference": "CustomerId",
+                    "name": "CustomerName",
+                    "counterparty_type": "Type",
+                },
+            ),
+            "position": EntityMapping(
+                source_table="Loans",
+                fields={
+                    "source_reference": "Reference",
+                    "position_type": "Type",
+                    "currency": "Currency",
+                    "balance": "Balance",
+                    "counterparty_reference": "CustomerId",
+                },
+            ),
+        }
+    )
+    ingestion.create_mapping_config(
+        db_session,
+        CTX,
+        BANK_A,
+        MappingConfigCreate(
+            source_system="EXCEL_CSV",
+            name="Synthetic reference lookup",
+            config=mapping,
+            activate=True,
+            reason="Synthetic reference lookup",
+        ),
+    )
+    workbook = Workbook()
+    customers = workbook.active
+    assert customers is not None
+    customers.title = "Customers"
+    customers.append(["CustomerId", "CustomerName", "Type"])
+    customers.append([IDENTIFIER, "Synthetic replacement", "RETAIL_INDIVIDUAL"])
+    loans = cast(Worksheet, workbook.create_sheet("Loans"))
+    loans.append(["Reference", "Type", "Currency", "Balance", "CustomerId"])
+    loans.append(["historical-loan", "LOAN", "GHS", 100, "historical-party"])
+    loans.append(["replacement-loan", "LOAN", "GHS", 200, IDENTIFIER])
+    path = tmp_path / "reference-lookups.xlsx"
+    workbook.save(path)
+    return IngestionBatchCreate(
+        source_system="EXCEL_CSV",
+        as_of_date=AS_OF,
+        location=str(path),
+        mapping_config_id=None,
+        reason="Synthetic reference lookup",
+    )
+
+
+@pytest.mark.parametrize("connected", [False, True])
+def test_ingestion_reference_lookups_leave_unused_fields_unread(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    reference_ingestion_upload: IngestionBatchCreate,
+    connected: bool,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    historical = counterparty(
+        db_session, reference="historical-party", as_of=date(2026, 5, 31), include_package=False
+    )
+    current = counterparty(db_session, include_package=False)
+    prior_date = counterparty(db_session, as_of=date(2026, 5, 31), include_package=False)
+    other_source = counterparty(db_session, source_system="API_PUSH", include_package=False)
+    other_bank = counterparty(
+        db_session, bank_id=BANK_B, reference="historical-party", include_package=False
+    )
+    historical_id, prior_id, current_id, other_source_id, other_bank_id = (
+        historical.id,
+        prior_date.id,
+        current.id,
+        other_source.id,
+        other_bank.id,
+    )
+    db_session.commit()
+    for record_id in (historical_id, prior_id, current_id, other_source_id, other_bank_id):
+        db_session.execute(
+            text(
+                "UPDATE canonical_counterparties SET name = :broken, group_reference = :broken, "
+                "external_identifiers = :json, attributes = :json WHERE id = :id"
+            ).bindparams(bindparam("id", type_=Uuid())),
+            {
+                "id": record_id,
+                "broken": "aqs-bank-field-v1:[]",
+                "json": json.dumps({"aqs-bank-field-v1": []}),
+            },
+        )
+    db_session.commit()
+    db_session.expunge_all()
+    storage = InMemoryStorageClient()
+    if connected:
+        for status in (KeyStatus.DISABLED, KeyStatus.UNAVAILABLE):
+            provider.set_status(KEY_A, status)
+            with pytest.raises(KeyUnavailableError):
+                ingestion.start_ingestion(
+                    db_session, CTX, BANK_A, reference_ingestion_upload, storage
+                )
+            db_session.rollback()
+            assert list(db_session.scalars(select(CanonicalPositionSnapshot.id))) == []
+        provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    result = ingestion.start_ingestion(db_session, CTX, BANK_A, reference_ingestion_upload, storage)
+    assert result.batch.status in {"accepted", "accepted_with_warnings"}
+    db_session.expunge_all()
+    replacement_id = db_session.scalar(
+        select(CanonicalCounterparty.id).where(
+            CanonicalCounterparty.ingestion_batch_id == result.batch.id,
+            CanonicalCounterparty.bank_id == BANK_A,
+        )
+    )
+    assert replacement_id is not None
+    snapshots = db_session.execute(
+        select(
+            CanonicalPositionSnapshot.source_reference,
+            CanonicalPositionSnapshot.counterparty_id,
+            CanonicalPositionSnapshot.balance,
+        ).where(CanonicalPositionSnapshot.ingestion_batch_id == result.batch.id)
+    ).all()
+    assert set(snapshots) == {
+        ("historical-loan", historical_id, Decimal(100)),
+        ("replacement-loan", replacement_id, Decimal(200)),
+    }
+    generations = dict(
+        db_session.execute(
+            select(
+                CanonicalCounterparty.id,
+                CanonicalCounterparty.superseded_by,
+            )
+        ).all()
+    )
+    assert generations[current_id] == replacement_id
+    assert all(
+        generations[record_id] is None
+        for record_id in (
+            historical_id,
+            prior_id,
+            other_source_id,
+            other_bank_id,
+            replacement_id,
+        )
+    )
+    replacement = db_session.get(CanonicalCounterparty, replacement_id)
+    assert replacement is not None and replacement.name == "Synthetic replacement"
+    assert replacement.source_reference == IDENTIFIER
+
+
 @pytest.mark.parametrize("connected", [False, True])
 @pytest.mark.parametrize("withdraw", [False, True])
 @pytest.mark.parametrize("initial_name", [NAME, EXPANDING_NAME])

@@ -27,7 +27,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import String, and_, any_, bindparam, func, select
 from sqlalchemy.dialects.postgresql import ARRAY, insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 from sqlalchemy.sql.elements import ColumnElement
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
@@ -1628,7 +1628,17 @@ def _known_references(
             return frozenset(
                 row.source_reference
                 for row in db.scalars(
-                    select(CanonicalCounterparty).where(
+                    select(CanonicalCounterparty)
+                    .options(
+                        load_only(
+                            CanonicalCounterparty.id,
+                            CanonicalCounterparty.organization_id,
+                            CanonicalCounterparty.bank_id,
+                            CanonicalCounterparty.source_reference,
+                            raiseload=True,
+                        )
+                    )
+                    .where(
                         CanonicalCounterparty.organization_id == ctx.organization_id,
                         CanonicalCounterparty.bank_id == bank.id,
                         CanonicalCounterparty.superseded_by.is_(None),
@@ -1875,7 +1885,17 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
             return {
                 row.source_reference: row.id
                 for row in db.scalars(
-                    select(CanonicalCounterparty).where(
+                    select(CanonicalCounterparty)
+                    .options(
+                        load_only(
+                            CanonicalCounterparty.id,
+                            CanonicalCounterparty.organization_id,
+                            CanonicalCounterparty.bank_id,
+                            CanonicalCounterparty.source_reference,
+                            raiseload=True,
+                        )
+                    )
+                    .where(
                         CanonicalCounterparty.organization_id == ctx.organization_id,
                         CanonicalCounterparty.bank_id == bank.id,
                         CanonicalCounterparty.superseded_by.is_(None),
@@ -1898,7 +1918,17 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
             return {
                 row.source_reference: row
                 for row in db.scalars(
-                    select(CanonicalCounterparty).where(
+                    select(CanonicalCounterparty)
+                    .options(
+                        load_only(
+                            CanonicalCounterparty.id,
+                            CanonicalCounterparty.organization_id,
+                            CanonicalCounterparty.bank_id,
+                            CanonicalCounterparty.source_reference,
+                            raiseload=True,
+                        )
+                    )
+                    .where(
                         CanonicalCounterparty.organization_id == ctx.organization_id,
                         CanonicalCounterparty.bank_id == bank.id,
                         CanonicalCounterparty.superseded_by.is_(None),
