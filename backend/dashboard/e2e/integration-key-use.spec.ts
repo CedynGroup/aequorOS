@@ -59,6 +59,10 @@ test("an issued machine key writes its bank's book, refuses a real sibling bank,
   page,
   request,
 }, testInfo) => {
+  test.info().annotations.push({
+    type: "critical-outcome",
+    description: "integration.key-scope-revocation",
+  });
   const asOf = "2026-06-30";
   const empty = { accounts: [], batches: 0, pushEvents: 0, openedEvents: 0 };
   expect(readMachineBank(MACHINE_BANK, asOf)).toEqual(empty);

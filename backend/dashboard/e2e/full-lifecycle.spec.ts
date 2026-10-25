@@ -635,6 +635,10 @@ test.describe("full lifecycle", () => {
     browser,
     request,
   }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "filing.rejected-correction",
+    });
     const date = journeyDates.reject;
     await setSandboxConfig({ sandbox_behavior: "reject" });
     try {
@@ -698,6 +702,10 @@ test.describe("full lifecycle", () => {
     browser,
     request,
   }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "filing.sent-back-correction",
+    });
     const date = journeyDates.sendBack;
     const note = "Line 12 double-counts the placement maturing 2 April.";
     await setSandboxConfig({ sandbox_behavior: "ack" });

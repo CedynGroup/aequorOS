@@ -862,6 +862,17 @@ result and cannot inflate the count. Missing/unfinished tests or a lost shard
 fail the gate even when the remaining reports pass. Raise the floor when adding
 coverage; reducing it requires a reviewed suite change.
 
+The [critical-outcome catalogue](../../.github/scripts/dashboard_critical_outcomes.json)
+beside the numeric gate names a small set of required business outcomes. Each
+owning test declares its stable ID as a `critical-outcome` Playwright annotation.
+The outcome reporter records actual final results separately for journeys and
+contracts. The aggregate requires all four journey reports and the unsharded
+contract report, and rejects missing, duplicate, unknown, failed or wrongly
+layered outcomes even when the numeric floor passes. Keep IDs stable when
+renaming or splitting stories; changes to the catalogue require review. These
+IDs guard scenario presence and passing execution; meaningful assertions and
+code review still determine whether each story proves its declared outcome.
+
 Screenshot diagnostics are separate from the required suite; see the visual-tour
 capture command and output under [End-to-end (Playwright)](#end-to-end-playwright).
 

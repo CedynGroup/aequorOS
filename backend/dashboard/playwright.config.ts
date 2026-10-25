@@ -51,8 +51,15 @@ export default defineConfig({
   retries: 0,
   workers: 1, // journeys share one disposable canonical test bank; keep them ordered + isolated
   reporter: process.env.CI
-    ? [["./e2e/support/quarantine-reporter.ts"], ["list"]]
-    : [["list"]],
+    ? [
+        ["./e2e/support/quarantine-reporter.ts"],
+        ["./e2e/support/critical-outcome-reporter.ts", { layer: "journey" }],
+        ["list"],
+      ]
+    : [
+        ["./e2e/support/critical-outcome-reporter.ts", { layer: "journey" }],
+        ["list"],
+      ],
   use: {
     baseURL: E2E_BASE_URL,
     trace: "retain-on-failure",

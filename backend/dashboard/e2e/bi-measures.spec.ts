@@ -202,6 +202,10 @@ test.describe.serial("writing and certifying a formula on screen", () => {
       browser,
       request,
     }) => {
+      test.info().annotations.push({
+        type: "critical-outcome",
+        description: "formula.draft-privacy",
+      });
       // A SECOND draft, so the deletion journey destroys something the rest of the
       // file does not need. It is written through the same composer gate, which is
       // the only way this surface makes one.

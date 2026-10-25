@@ -73,6 +73,10 @@ test("an uploaded book becomes fresh 645.16% liquidity coverage and the BSD2 cas
   page,
   request,
 }, testInfo) => {
+  test.info().annotations.push({
+    type: "critical-outcome",
+    description: "data.worker-to-return",
+  });
   test.setTimeout(180_000);
   const initial = await bankRead<LiveSummary>(request, "/live-summary");
   expect(initial).toMatchObject({
