@@ -1,7 +1,8 @@
 /** Browser subscription composition and persisted scheduling.
  * Delivery is disabled in this hermetic stack; no email is sent.
  * Recipient disclosure and ownership contracts live in contracts/bi-subscriptions.spec.ts. */
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/scoped-objects";
 import path from "node:path";
 import { E2E_TMP } from "../playwright.config";
 import { biApi, SAMPLE_BANK_ID } from "./support/bi";
@@ -110,7 +111,15 @@ test.describe("the scheduled reports workspace", () => {
     ).toBeVisible();
 
     await expect(submit).toBeEnabled();
+    const created = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.endsWith(SUBSCRIPTIONS) &&
+        response.request().method() === "POST" &&
+        response.status() === 201,
+    );
     await submit.click();
+    const subscriptionId = ((await (await created).json()) as { id: string })
+      .id;
 
     // The saved report, as the workspace lists it.
     const card = page
@@ -164,9 +173,7 @@ test.describe("the scheduled reports workspace", () => {
           recipients: unknown[];
         }[];
       }
-    ).subscriptions.find(
-      (entry) => entry.name === "Loan book by grade, Mondays",
-    );
+    ).subscriptions.find((entry) => entry.id === subscriptionId);
     expect(saved).toBeDefined();
     expect(saved!.is_active).toBe(false);
     expect(saved!.time_zone).toBe("Africa/Accra");

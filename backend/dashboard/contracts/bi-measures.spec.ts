@@ -1,6 +1,7 @@
-/** Server formula validation, privacy and independent certification contracts. */
-import { expect, test } from "@playwright/test";
-import { createHash } from "node:crypto";
+/** Server formula validation, privacy and independently prepared certification contracts. */
+import { formulaFixture, digestOf } from "../e2e/support/formula-fixture";
+import { expect } from "@playwright/test";
+import { test } from "../e2e/support/scoped-objects";
 import { biApi, SAMPLE_BANK_ID } from "../e2e/support/bi";
 
 /**
@@ -26,9 +27,13 @@ const FORMULA = `SAFE_DIV([m:${NUMERATOR}], [m:${DENOMINATOR}]) * 100`;
 const MEASURE_KEY = "e2e_npl_share_pct";
 const MEASURE_LABEL = "Non-performing share of the loan book";
 
-function digestOf(source: string): string {
-  return createHash("sha256").update(Buffer.from(source, "utf8")).digest("hex");
-}
+/**
+ * THE VALIDATION ROUTE IS THE ONLY AUTHORITY ON THE LANGUAGE, and this is what
+ * the editor renders. Three answers, each of which the surface shows differently:
+ * accepted (with the figures it reads), refused by the parser (with a character
+ * offset), and refused because the caller may not read a figure it names.
+ */
+const prepareFormula = formulaFixture(FORMULA);
 
 test.describe("the formula language", () => {
   test("says what a good formula reads, and where a bad one went wrong", async ({
@@ -113,38 +118,13 @@ test.describe("the formula language", () => {
 /**
  * THE PROMOTION IS TWO IDENTITIES, ON THE WIRE.
  *
- * Serial because these are the stages of ONE formula's life and each is only
- * meaningful against the state the last one left. The id is not known until the
- * create, so it is carried between them, and the last stage removes the fixture
- * so the list is left as it was found.
+ * Each story prepares its own formula through the supported governance routes.
+ * Fixture teardown removes that exact document even after an early failure.
  */
-test.describe.serial("certifying a formula takes two people", () => {
-  let measureId = "";
-  test.afterAll(async ({ playwright }) => {
-    if (!measureId) return;
-    const request = await playwright.request.newContext();
-    try {
-      const row = await biApi(
-        request,
-        "admin",
-        `/banks/${SAMPLE_BANK_ID}/bi/measures/${measureId}`,
-      );
-      if (row.status === 404) return;
-      expect(row.status).toBe(200);
-      const removed = await biApi(
-        request,
-        "admin",
-        `/banks/${SAMPLE_BANK_ID}/bi/measures/${measureId}`,
-        { method: "DELETE" },
-      );
-      expect(removed.status).toBe(204);
-    } finally {
-      await request.dispose();
-    }
-  });
-
+test.describe("certifying a formula takes two people", () => {
   test("its author writes it, and it is a draft that only they can see", async ({
     request,
+    objects,
   }) => {
     const created = await biApi(
       request,
@@ -172,7 +152,8 @@ test.describe.serial("certifying a formula takes two people", () => {
       owned_by_caller: boolean;
       awaiting_caller_decision: boolean;
     };
-    measureId = measure.id;
+    const measureId = measure.id;
+    objects.register(`/banks/${SAMPLE_BANK_ID}/bi/measures`, measureId);
     expect(measure.state).toBe("personal");
     expect(measure.badge).toBe("personal");
     expect(measure.owned_by_caller).toBe(true);
@@ -196,7 +177,15 @@ test.describe.serial("certifying a formula takes two people", () => {
 
   test("its author cannot certify it, and the refusal is the platform's own SoD verdict", async ({
     request,
+    objects,
   }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      MEASURE_KEY,
+      MEASURE_LABEL,
+      "draft",
+    );
     const proposed = await biApi(
       request,
       "admin",
@@ -254,7 +243,15 @@ test.describe.serial("certifying a formula takes two people", () => {
 
   test("a decision taken against a version that has moved is refused", async ({
     request,
+    objects,
   }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      MEASURE_KEY,
+      MEASURE_LABEL,
+      "proposed",
+    );
     const stale = await biApi(
       request,
       "approver",
@@ -277,7 +274,15 @@ test.describe.serial("certifying a formula takes two people", () => {
 
   test("a second person certifies the exact text, and it becomes the institution's", async ({
     request,
+    objects,
   }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      MEASURE_KEY,
+      MEASURE_LABEL,
+      "proposed",
+    );
     // The checker can see the proposal — they have to be able to read what they
     // are being asked to certify — and the server tells them it is theirs to
     // decide.
@@ -343,7 +348,15 @@ test.describe.serial("certifying a formula takes two people", () => {
 
   test("a reader refused its figures is not told the formula exists", async ({
     request,
+    objects,
   }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      MEASURE_KEY,
+      MEASURE_LABEL,
+      "certified",
+    );
     // A CERTIFIED MEASURE IS THE INSTITUTION'S VOCABULARY, but only to whoever may
     // read the figures it names. A measure a reader cannot compute is ABSENT from
     // their list rather than shown as restricted — its label is authored text that
@@ -374,7 +387,15 @@ test.describe.serial("certifying a formula takes two people", () => {
 
   test("the certified formula answers a question, and the fixture is left as it was", async ({
     request,
+    objects,
   }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      MEASURE_KEY,
+      MEASURE_LABEL,
+      "certified",
+    );
     // THE POINT OF CERTIFYING ONE: it can now be named in a query like any other
     // figure, and the server resolves it into the figures its text names.
     const answered = await biApi(
@@ -427,3 +448,46 @@ async function asOf(request: Parameters<typeof biApi>[0]): Promise<string> {
   expect(periods.length).toBeGreaterThan(0);
   return periods[0].period_end.slice(0, 10);
 }
+
+test.describe("owner deletion of a certified formula", () => {
+  const UI_KEY = "e2e_ui_npl_share_pct";
+  const UI_LABEL = "Non-performing share, defined on screen";
+  const SENT_BACK_KEY = "e2e_ui_sent_back_pct";
+  /**
+   * A certified formula can be removed through its supported owner API, while
+   * the browser deliberately withholds that control.
+   */
+  test("the certified fixture formula is removed", async ({
+    request,
+    objects,
+  }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      UI_KEY,
+      UI_LABEL,
+      "certified",
+    );
+    const list = await biApi(
+      request,
+      "admin",
+      `/banks/${SAMPLE_BANK_ID}/bi/measures`,
+    );
+    expect(list.status).toBe(200);
+    const rows = (
+      list.body as { measures: { id: string; measure_key: string }[] }
+    ).measures;
+    // Only this story's certified formula is selected for deletion.
+    expect(rows.map((entry) => entry.measure_key)).not.toContain(SENT_BACK_KEY);
+    const row = rows.find((entry) => entry.measure_key === UI_KEY);
+    expect(row, `${UI_KEY} should exist for this deletion story`).toBeTruthy();
+    expect(row!.id).toBe(measureId);
+    const removed = await biApi(
+      request,
+      "admin",
+      `/banks/${SAMPLE_BANK_ID}/bi/measures/${measureId}`,
+      { method: "DELETE" },
+    );
+    expect(removed.status).toBe(204);
+  });
+});

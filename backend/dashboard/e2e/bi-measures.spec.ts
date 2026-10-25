@@ -1,9 +1,10 @@
 /** Formula composition, privacy, deletion and certification through the browser. */
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { test } from "./support/scoped-objects";
+import { formulaFixture } from "./support/formula-fixture";
 import path from "node:path";
 import { E2E_TMP } from "../playwright.config";
 import { biApi, SAMPLE_BANK_ID } from "./support/bi";
-
 /**
  * The figures the formula reads, and their catalogue labels.
  *
@@ -24,6 +25,7 @@ const DENOMINATOR_LABEL = "Gross loans";
  */
 const FORMULA = `SAFE_DIV([m:${NUMERATOR}], [m:${DENOMINATOR}]) * 100`;
 
+const prepareFormula = formulaFixture(FORMULA);
 const UI_KEY = "e2e_ui_npl_share_pct";
 const UI_LABEL = "Non-performing share, defined on screen";
 const SENT_BACK_KEY = "e2e_ui_sent_back_pct";
@@ -106,7 +108,7 @@ async function writeDraft(
   await expect(measureCard(page, label)).toBeVisible();
 }
 
-test.describe.serial("writing and certifying a formula on screen", () => {
+test.describe("writing and certifying a formula on screen", () => {
   /**
    * THE AUTHOR'S HALF. `admin` holds organization-wide Analyst — `VIEW, CREATE,
    * EDIT, RUN, VALIDATE, EXPORT` and deliberately no `APPROVE` — so everything
@@ -174,8 +176,7 @@ test.describe.serial("writing and certifying a formula on screen", () => {
     test("a saved formula is a draft, is its author's to delete, and is nobody else's", async ({
       page,
     }) => {
-      // The previous journey deliberately did not save, so there is nothing yet —
-      // this is where the draft is actually created, through the same gate.
+      // This story creates its own draft through the composer gate.
       await writeDraft(page, UI_KEY, UI_LABEL);
 
       const card = measureCard(page, UI_LABEL);
@@ -190,8 +191,7 @@ test.describe.serial("writing and certifying a formula on screen", () => {
       // immediate — the destructive act asks twice.
       await expect(card.getByRole("button", { name: "Delete" })).toBeVisible();
       await expect(card.getByRole("button", { name: "Change" })).toBeVisible();
-      // Only the author can send a draft for certification; the next journey
-      // checks privacy from the reviewer's session while a draft still exists.
+      // Only the author can send their draft for certification.
       await expect(
         card.getByRole("heading", { name: "Send this for certification" }),
       ).toBeVisible();
@@ -200,7 +200,6 @@ test.describe.serial("writing and certifying a formula on screen", () => {
     test("a draft is private while it exists, and deletion honours both answers", async ({
       page,
       browser,
-      request,
     }) => {
       // A SECOND draft, so the deletion journey destroys something the rest of the
       // file does not need. It is written through the same composer gate, which is
@@ -259,22 +258,14 @@ test.describe.serial("writing and certifying a formula on screen", () => {
       await expect(measureHeading(page, SENT_BACK_LABEL)).toHaveCount(0);
       await page.reload();
       await expect(measureHeading(page, SENT_BACK_LABEL)).toHaveCount(0);
-      const list = await biApi(
-        request,
-        "admin",
-        `/banks/${SAMPLE_BANK_ID}/bi/measures`,
-      );
-      expect(list.status).toBe(200);
-      expect(
-        (list.body as { measures: { measure_key: string }[] }).measures.map(
-          (row) => row.measure_key,
-        ),
-      ).not.toContain(SENT_BACK_KEY);
     });
 
     test("sending it for certification needs a reason, and then it is out of the author's hands", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "draft");
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       const send = card.getByRole("button", {
@@ -324,7 +315,24 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("the reviewer is shown the exact proposed text and no deleted draft", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "proposed");
+      const deletedId = await prepareFormula(
+        request,
+        objects,
+        SENT_BACK_KEY,
+        SENT_BACK_LABEL,
+        "draft",
+      );
+      const removed = await biApi(
+        request,
+        "admin",
+        `/banks/${SAMPLE_BANK_ID}/bi/measures/${deletedId}`,
+        { method: "DELETE" },
+      );
+      expect(removed.status).toBe(204);
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       await expect(
@@ -335,13 +343,16 @@ test.describe.serial("writing and certifying a formula on screen", () => {
       ).toBeVisible();
       await expect(card.getByText(/^Proposed by /)).toBeVisible();
 
-      // The deleted draft stays absent; privacy was checked before deletion above.
+      // A draft deleted in this story stays absent from the reviewer's list.
       await expect(measureHeading(page, SENT_BACK_LABEL)).toHaveCount(0);
     });
 
     test("a decision needs a stated conclusion, and sending it back is one of the two", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "proposed");
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       const back = card.getByRole("button", {
@@ -385,7 +396,10 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("it is a draft again, deletable again, and can be sent a second time", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "returned");
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       await expect(card.getByText("Draft", { exact: true })).toBeVisible();
@@ -413,7 +427,10 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("certifies the exact text, and the record says which text it was", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "reproposed");
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       await expect(
@@ -453,7 +470,10 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("a certified formula offers NO delete control, and says why", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "certified");
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       await expect(
@@ -484,7 +504,10 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("and it appears in Explore's picker as one of the institution's own figures", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "certified");
       await page.goto("/explore");
       const measures = page.locator("section.card").filter({
         has: page.getByRole("heading", { name: "Measure", level: 3 }),
@@ -519,34 +542,5 @@ test.describe.serial("writing and certifying a formula on screen", () => {
         ),
       ).toBeVisible();
     });
-  });
-
-  // Cleanup is unconditional, including after a failed or skipped serial stage.
-  test.afterAll(async ({ playwright }) => {
-    const request = await playwright.request.newContext();
-    try {
-      const list = await biApi(
-        request,
-        "admin",
-        `/banks/${SAMPLE_BANK_ID}/bi/measures`,
-      );
-      expect(list.status).toBe(200);
-      const rows = (
-        list.body as { measures: { id: string; measure_key: string }[] }
-      ).measures;
-      for (const row of rows.filter((entry) =>
-        [UI_KEY, SENT_BACK_KEY].includes(entry.measure_key),
-      )) {
-        const removed = await biApi(
-          request,
-          "admin",
-          `/banks/${SAMPLE_BANK_ID}/bi/measures/${row.id}`,
-          { method: "DELETE" },
-        );
-        expect(removed.status).toBe(204);
-      }
-    } finally {
-      await request.dispose();
-    }
   });
 });
