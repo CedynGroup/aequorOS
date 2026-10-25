@@ -26,7 +26,8 @@
  * checker genuinely can, against real bindings rather than a flag.
  */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { test } from "./support/scoped-objects";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { E2E_TMP } from "../playwright.config";
@@ -148,16 +149,13 @@ test.describe("the formula language", () => {
 /**
  * THE PROMOTION IS TWO IDENTITIES, ON THE WIRE.
  *
- * Serial because these are the stages of ONE formula's life and each is only
- * meaningful against the state the last one left. The id is not known until the
- * create, so it is carried between them, and the last stage removes the fixture
- * so the list is left as it was found.
+ * Each story prepares its own formula through the supported governance routes.
+ * Fixture teardown removes that exact document even after an early failure.
  */
-test.describe.serial("certifying a formula takes two people", () => {
-  let measureId = "";
-
+test.describe("certifying a formula takes two people", () => {
   test("its author writes it, and it is a draft that only they can see", async ({
     request,
+    objects,
   }) => {
     const created = await biApi(
       request,
@@ -185,7 +183,8 @@ test.describe.serial("certifying a formula takes two people", () => {
       owned_by_caller: boolean;
       awaiting_caller_decision: boolean;
     };
-    measureId = measure.id;
+    const measureId = measure.id;
+    objects.register(`/banks/${SAMPLE_BANK_ID}/bi/measures`, measureId);
     expect(measure.state).toBe("personal");
     expect(measure.badge).toBe("personal");
     expect(measure.owned_by_caller).toBe(true);
@@ -209,7 +208,15 @@ test.describe.serial("certifying a formula takes two people", () => {
 
   test("its author cannot certify it, and the refusal is the platform's own SoD verdict", async ({
     request,
+    objects,
   }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      MEASURE_KEY,
+      MEASURE_LABEL,
+      "draft",
+    );
     const proposed = await biApi(
       request,
       "admin",
@@ -267,7 +274,15 @@ test.describe.serial("certifying a formula takes two people", () => {
 
   test("a decision taken against a version that has moved is refused", async ({
     request,
+    objects,
   }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      MEASURE_KEY,
+      MEASURE_LABEL,
+      "proposed",
+    );
     const stale = await biApi(
       request,
       "approver",
@@ -290,7 +305,15 @@ test.describe.serial("certifying a formula takes two people", () => {
 
   test("a second person certifies the exact text, and it becomes the institution's", async ({
     request,
+    objects,
   }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      MEASURE_KEY,
+      MEASURE_LABEL,
+      "proposed",
+    );
     // The checker can see the proposal — they have to be able to read what they
     // are being asked to certify — and the server tells them it is theirs to
     // decide.
@@ -356,7 +379,15 @@ test.describe.serial("certifying a formula takes two people", () => {
 
   test("a reader refused its figures is not told the formula exists", async ({
     request,
+    objects,
   }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      MEASURE_KEY,
+      MEASURE_LABEL,
+      "certified",
+    );
     // A CERTIFIED MEASURE IS THE INSTITUTION'S VOCABULARY, but only to whoever may
     // read the figures it names. A measure a reader cannot compute is ABSENT from
     // their list rather than shown as restricted — its label is authored text that
@@ -387,7 +418,15 @@ test.describe.serial("certifying a formula takes two people", () => {
 
   test("the certified formula answers a question, and the fixture is left as it was", async ({
     request,
+    objects,
   }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      MEASURE_KEY,
+      MEASURE_LABEL,
+      "certified",
+    );
     // THE POINT OF CERTIFYING ONE: it can now be named in a query like any other
     // figure, and the server resolves it into the figures its text names.
     const answered = await biApi(
@@ -532,7 +571,7 @@ async function writeDraft(
   await expect(measureCard(page, label)).toBeVisible();
 }
 
-test.describe.serial("writing and certifying a formula on screen", () => {
+test.describe("writing and certifying a formula on screen", () => {
   /**
    * THE AUTHOR'S HALF. `admin` holds organization-wide Analyst — `VIEW, CREATE,
    * EDIT, RUN, VALIDATE, EXPORT` and deliberately no `APPROVE` — so everything
@@ -600,8 +639,7 @@ test.describe.serial("writing and certifying a formula on screen", () => {
     test("a saved formula is a draft, is its author's to delete, and is nobody else's", async ({
       page,
     }) => {
-      // The previous journey deliberately did not save, so there is nothing yet —
-      // this is where the draft is actually created, through the same gate.
+      // This story creates its own draft through the composer gate.
       await writeDraft(page, UI_KEY, UI_LABEL);
 
       const card = measureCard(page, UI_LABEL);
@@ -616,8 +654,7 @@ test.describe.serial("writing and certifying a formula on screen", () => {
       // immediate — the destructive act asks twice.
       await expect(card.getByRole("button", { name: "Delete" })).toBeVisible();
       await expect(card.getByRole("button", { name: "Change" })).toBeVisible();
-      // Only the author can send a draft for certification; the next journey
-      // checks privacy from the reviewer's session while a draft still exists.
+      // Only the author can send their draft for certification.
       await expect(
         card.getByRole("heading", { name: "Send this for certification" }),
       ).toBeVisible();
@@ -688,7 +725,10 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("sending it for certification needs a reason, and then it is out of the author's hands", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "draft");
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       const send = card.getByRole("button", {
@@ -738,7 +778,24 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("the reviewer is shown the exact proposed text and no deleted draft", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "proposed");
+      const deletedId = await prepareFormula(
+        request,
+        objects,
+        SENT_BACK_KEY,
+        SENT_BACK_LABEL,
+        "draft",
+      );
+      const removed = await biApi(
+        request,
+        "admin",
+        `/banks/${SAMPLE_BANK_ID}/bi/measures/${deletedId}`,
+        { method: "DELETE" },
+      );
+      expect(removed.status).toBe(204);
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       await expect(
@@ -749,13 +806,16 @@ test.describe.serial("writing and certifying a formula on screen", () => {
       ).toBeVisible();
       await expect(card.getByText(/^Proposed by /)).toBeVisible();
 
-      // The deleted draft stays absent; privacy was checked before deletion above.
+      // A draft deleted in this story stays absent from the reviewer's list.
       await expect(measureHeading(page, SENT_BACK_LABEL)).toHaveCount(0);
     });
 
     test("a decision needs a stated conclusion, and sending it back is one of the two", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "proposed");
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       const back = card.getByRole("button", {
@@ -799,7 +859,10 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("it is a draft again, deletable again, and can be sent a second time", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "returned");
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       await expect(card.getByText("Draft", { exact: true })).toBeVisible();
@@ -827,7 +890,10 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("certifies the exact text, and the record says which text it was", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "reproposed");
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       await expect(
@@ -867,7 +933,10 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("a certified formula offers NO delete control, and says why", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "certified");
       await page.goto("/explore/measures");
       const card = measureCard(page, UI_LABEL);
       await expect(
@@ -898,7 +967,10 @@ test.describe.serial("writing and certifying a formula on screen", () => {
 
     test("and it appears in Explore's picker as one of the institution's own figures", async ({
       page,
+      request,
+      objects,
     }) => {
+      await prepareFormula(request, objects, UI_KEY, UI_LABEL, "certified");
       await page.goto("/explore");
       const measures = page.locator("section.card").filter({
         has: page.getByRole("heading", { name: "Measure", level: 3 }),
@@ -936,14 +1008,20 @@ test.describe.serial("writing and certifying a formula on screen", () => {
   });
 
   /**
-   * Leave the fixture as it was found.
-   *
-   * Through the API rather than the screen, because the screen deliberately offers
-   * no way to delete a certified measure — which is the property the journey above
-   * asserts. `bi-subscriptions.spec.ts` runs after this file, so a measure left
-   * behind would change what a later journey's catalogue holds.
+   * A certified formula can be removed through its supported owner API, while
+   * the browser deliberately withholds that control.
    */
-  test("the certified fixture formula is removed", async ({ request }) => {
+  test("the certified fixture formula is removed", async ({
+    request,
+    objects,
+  }) => {
+    const measureId = await prepareFormula(
+      request,
+      objects,
+      UI_KEY,
+      UI_LABEL,
+      "certified",
+    );
     const list = await biApi(
       request,
       "admin",
@@ -953,18 +1031,59 @@ test.describe.serial("writing and certifying a formula on screen", () => {
     const rows = (
       list.body as { measures: { id: string; measure_key: string }[] }
     ).measures;
-    // The draft was deleted on screen, which is why only one is left here — and
-    // asserting that is the second, independent proof that the delete journey
-    // really deleted something.
+    // Only this story's certified formula is selected for deletion.
     expect(rows.map((entry) => entry.measure_key)).not.toContain(SENT_BACK_KEY);
     const row = rows.find((entry) => entry.measure_key === UI_KEY);
-    expect(row, `${UI_KEY} should still exist to be cleaned up`).toBeTruthy();
+    expect(row, `${UI_KEY} should exist for this deletion story`).toBeTruthy();
+    expect(row!.id).toBe(measureId);
     const removed = await biApi(
       request,
       "admin",
-      `/banks/${SAMPLE_BANK_ID}/bi/measures/${row!.id}`,
+      `/banks/${SAMPLE_BANK_ID}/bi/measures/${measureId}`,
       { method: "DELETE" },
     );
     expect(removed.status).toBe(204);
   });
 });
+
+/** Prepare only this story's prerequisite through supported governance routes. */
+async function prepareFormula(
+  request: Parameters<typeof biApi>[0],
+  objects: { create(route: string, data: object): Promise<string> },
+  key: string,
+  label: string,
+  state: "draft" | "proposed" | "returned" | "reproposed" | "certified",
+): Promise<string> {
+  const route = `/banks/${SAMPLE_BANK_ID}/bi/measures`;
+  const id = await objects.create(route, {
+    measure_key: key,
+    label,
+    expression: FORMULA,
+    value_type: "pct",
+    description: "Independent synthetic formula",
+    favourable_direction: "lower_better",
+  });
+  const propose = async () => {
+    const result = await biApi(request, "admin", `${route}/${id}/proposal`, {
+      method: "POST",
+      data: { reason: "Review this story's exact formula" },
+    });
+    expect(result.status, JSON.stringify(result.body)).toBe(200);
+  };
+  const decide = async (decision: "approve" | "reject") => {
+    const result = await biApi(request, "approver", `${route}/${id}/decision`, {
+      method: "POST",
+      data: {
+        decision,
+        reason: "Independent prerequisite review",
+        expression_digest: digestOf(FORMULA),
+      },
+    });
+    expect(result.status, JSON.stringify(result.body)).toBe(200);
+  };
+  if (state !== "draft") await propose();
+  if (state === "returned" || state === "reproposed") await decide("reject");
+  if (state === "reproposed") await propose();
+  if (state === "certified") await decide("approve");
+  return id;
+}
