@@ -229,13 +229,13 @@ This is the answer to "who gets access, at what level, and for what." Posture:
 | 11  | **CRO / Head of Risk**              | 2              | Owns risk appetite & limits; independent review of all risk; **approves models & assumptions**                                                                                                                   | all risk modules, BEH, REG (risk returns)      | A / challenge + configure       | Approver (all) + `beh:approve` + Risk config                                     |
 | 12  | **Regulatory Reporting Officer**    | 2              | Assembles BoG returns; runs validation rules; reconciles template↔source; **submits to ORASS**; owns supervisor relationship                                                                                     | REG, DATA (V), all outputs (consume)           | I + submit                      | Analyst (REG) + `reg:submit`                                                     |
 | 13  | **Internal Audit**                  | 3              | Independent assurance over controls, models, SoD, lineage; reads all, changes nothing                                                                                                                            | ALL (read + **audit log**)                     | V-only + audit                  | Auditor                                                                          |
-| 14  | **Compliance**                      | 2              | Obligation mapping; policy adherence; verifies SoD/four-eyes are configured & operating                                                                                                                          | REG, DATA (policy), config-audit               | V + policy config               | Auditor + policy config                                                          |
+| 14  | **Compliance**                      | 2              | Obligation mapping; policy adherence; verifies SoD/four-eyes are configured & operating                                                                                                                          | REG, DATA (policy), config-audit               | V + policy config               | [Audit authority](#125-audit-log-view) + policy config                           |
 | 15  | **Board / Exec (read-only)**        | Gov            | Consume ALCO/board dashboards; risk appetite vs actuals; no operational access                                                                                                                                   | aggregated dashboards                          | V-only (published)              | Viewer (published views)                                                         |
 | 16  | **Managing Director / CEO**         | Exec           | **Final attester on BoG returns** — "the MD sends the report to BoG" is a signature act, not a compilation step; chairs ALCO in most banks; consumes board views                                                 | REG (attest only), aggregated dashboards       | A / sign-off                    | Approver limited to `reg:sign_off` (signing step-up), top tier; Viewer elsewhere |
 | 17  | **ALCO Secretary / pack compiler**  | 1/2            | Assembles the committee pack from unit-owned sections; chases section sign-offs; records decisions & action items; circulates pre-meeting. Usually treasury middle office or Finance (confirm with practitioner) | all module outputs (V), PACK                   | I (compile) + V                 | Analyst (PACK) + `pack:compile`, `pack:publish`, `committee:record`              |
 | 18  | **Credit contributor**              | 1              | Contributes the credit section (loan book, NPLs, concentrations narrative) to the monthly committee pack; **not a treasury user** — touches nothing else                                                         | PACK (own section), LE outputs (V)             | I (own section only)            | Analyst scoped to owned pack section                                             |
 | 19  | **Operations contributor**          | 1              | Contributes the op-risk incidents section monthly; **not a treasury user** — the narrowest access pattern in the product                                                                                         | PACK (own section)                             | I (own section only)            | Analyst scoped to owned pack section                                             |
-| —   | **Org Admin**                       | —              | Manages the bank's users, roles, SSO/SCIM, org settings, audit — **no operational approve/run**                                                                                                                  | Access administration                          | admin                           | Org Admin                                                                        |
+| —   | **Org Admin**                       | —              | Manages the bank's users, roles, SSO/SCIM, org settings — **no operational approve/run**                                                                                                                         | Access administration                          | admin                           | Org Admin                                                                        |
 | —   | **Org Owner**                       | —              | The bank's account owner: Org Admin + billing + ownership transfer                                                                                                                                               | Access + billing                               | admin+                          | Org Owner                                                                        |
 
 **Reading it for dashboards:** persona → role preset → [§9](#9-per-persona-dashboards-what-to-build) tells you the landing page, visible nav, and allowed actions to render.
@@ -311,16 +311,16 @@ deliberately capped to avoid role explosion.
 
 ### 6.1 Target base roles
 
-| Base role                         | Replaces / maps from      | Purpose                                      | Key permissions                                                                   | Must NOT                                                         |
-| --------------------------------- | ------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| **Viewer**                        | `viewer`                  | Read-only within scope                       | `*:view` (scoped)                                                                 | any mutation                                                     |
-| **Auditor**                       | _(new; a Viewer variant)_ | Read-only **+ audit-log read**, whole tenant | `*:view`, `audit:read`                                                            | any mutation, any approve                                        |
-| **Analyst** (Preparer / maker)    | `analyst`                 | Core treasury/ALM work                       | `{module}:view\|create\|edit\|run`, `export` (scoped)                             | approve/sign-off/submit **their own** object                     |
-| **Approver** (Reviewer / checker) | `approver`                | Four-eyes approval                           | `{module}:review\|approve`, `reg:sign_off` (scoped) — **not** `reg:submit`, see ⁴ | edit the object they are approving, transmit it to the regulator |
-| **Validator** (Filing officer)    | _(new 2026-09-20)_        | Transmits the return to the regulator        | `reg:view`, `reg:submit` (scoped)                                                 | approve, prepare or re-run checks on what they file              |
-| **Org Admin**                     | _(split out of `admin`)_  | Account administration only                  | `users:*`, `roles:*`, `sso:*`, `scim:*`, `org:settings`, `audit:read`             | operational `run/approve/submit` (SoD C9)                        |
-| **Org Owner**                     | _(top of `admin`)_        | Bank's account owner                         | Org Admin **+** `billing:*`, `org:transfer`, `org:delete`                         | cross-tenant anything                                            |
-| **Billing Manager**               | _(new, optional)_         | Subscription & seats                         | `billing:*`                                                                       | domain data                                                      |
+| Base role                         | Replaces / maps from      | Purpose                               | Key permissions                                                                   | Must NOT                                                         |
+| --------------------------------- | ------------------------- | ------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| **Viewer**                        | `viewer`                  | Read-only within scope                | `*:view` (scoped)                                                                 | any mutation                                                     |
+| **Auditor**                       | _(new; a Viewer variant)_ | Read-only within granted scope        | `*:view`; audit authority: [§12.5](#125-audit-log-view)                           | any mutation, any approve                                        |
+| **Analyst** (Preparer / maker)    | `analyst`                 | Core treasury/ALM work                | `{module}:view\|create\|edit\|run`, `export` (scoped)                             | approve/sign-off/submit **their own** object                     |
+| **Approver** (Reviewer / checker) | `approver`                | Four-eyes approval                    | `{module}:review\|approve`, `reg:sign_off` (scoped) — **not** `reg:submit`, see ⁴ | edit the object they are approving, transmit it to the regulator |
+| **Validator** (Filing officer)    | _(new 2026-09-20)_        | Transmits the return to the regulator | `reg:view`, `reg:submit` (scoped)                                                 | approve, prepare or re-run checks on what they file              |
+| **Org Admin**                     | _(split out of `admin`)_  | Account administration only           | `users:*`, `roles:*`, `sso:*`, `scim:*`, `org:settings`                           | operational `run/approve/submit` (SoD C9)                        |
+| **Org Owner**                     | _(top of `admin`)_        | Bank's account owner                  | Org Admin **+** `billing:*`, `org:transfer`, `org:delete`                         | cross-tenant anything                                            |
+| **Billing Manager**               | _(new, optional)_         | Subscription & seats                  | `billing:*`                                                                       | domain data                                                      |
 
 **Migration note (as built through 2026-09-11):** today's single `admin`
 conflated account administration with operational superuser authority — a
@@ -393,7 +393,7 @@ Feed-key scope and issuance are governed by the
 
 **Domain (per module)** — `{module}` uses the executable
 [`Module` vocabulary](../backend/app/core/authorization.py), excluding the
-Account and Audit account-plane modules:
+Account and the separately governed [Audit module](#125-audit-log-view):
 
 _(`credit` added 2026-09-22: the credit engine, blotter and marts had been reachable
 under the `risk` label with no server-side consumer of a `risk` binding. Contract:
@@ -438,7 +438,7 @@ committee:record       minutes, decisions log, action items with owners —
 
 ```
 org:settings   users:read   users:manage   roles:read   roles:manage
-sso:manage     scim:manage   audit:read    billing:manage   org:transfer   org:delete
+sso:manage     scim:manage   billing:manage   org:transfer   org:delete
 ```
 
 **Platform plane (vendor):**
@@ -450,7 +450,8 @@ platform:flags     platform:billing     platform:audit   platform:staff
 
 ### 7.2 Base-role → permission matrix (verbs collapsed across granted modules)
 
-`●` = for every module in the user's grant scope. `—` = never.
+`●` = for every operational module in the user's grant scope. `—` = never.
+Audit authority is governed separately by [§12.5](#125-audit-log-view).
 
 | Permission                                      | Viewer | Auditor | Analyst | Approver | Org Admin | Org Owner |
 | ----------------------------------------------- | :----: | :-----: | :-----: | :------: | :-------: | :-------: |
@@ -466,7 +467,6 @@ platform:flags     platform:billing     platform:audit   platform:staff
 | `pack:contribute`                               |   —    |    —    |   ●⁵    |    —     |     —     |     —     |
 | `pack:signoff_section`                          |   —    |    —    |    —    |    ●⁵    |     —     |     —     |
 | `pack:compile` / `publish` / `committee:record` |   —    |    —    |   ●⁵    |    —     |     —     |     —     |
-| `audit:read`                                    |   —    |    ●    |    —    |    —     |     ●     |     ●     |
 | `users:* / roles:* / sso:* / scim:*`            |   —    |    —    |    —    |    —     |     ●     |     ●     |
 | `org:settings`                                  |   —    |    —    |    —    |    —     |     ●     |     ●     |
 | `billing:* / org:transfer / org:delete`         |   —    |    —    |    —    |    —     |     —     |     ●     |
@@ -681,13 +681,13 @@ role-gate the surface, don't fork the app.
 | **CFO**                      | Command Center(CFO lens), REG, CAP, FCST, LIQ, Reports                      | **sign off / attest** returns & plans, approve, view                      | data entry, deal entry                                 |
 | **CRO / Head of Risk**       | all risk modules, BEH, REG(risk), Risk & Limits, Alerts                     | approve/challenge, approve models, configure risk appetite/limits         | run own calcs then self-approve                        |
 | **Reg Reporting Officer**    | REG, DATA(view), all outputs(view), Reports                                 | prep + validate + **submit to ORASS** (post sign-off)                     | edit source financials, self-sign-off                  |
-| **Auditor**                  | ALL (read) + **Audit log**                                                  | view everything, export evidence                                          | every mutation, every approve                          |
-| **Compliance**               | REG, DATA(policy), Reports, Audit(read)                                     | configure policy/SoD rules, view                                          | operational writes                                     |
+| **Auditor**                  | ALL (read) + **Audit log**                                                  | view evidence; audit authority: [§12.5](#125-audit-log-view)              | every mutation, every approve                          |
+| **Compliance**               | REG, DATA(policy), Reports; audit: [§12.5](#125-audit-log-view)             | configure policy/SoD rules, view                                          | operational writes                                     |
 | **Board / Exec (Viewer)**    | Command Center (published), module dashboards (aggregated)                  | view published views only                                                 | raw data, export, drill-to-source                      |
 | **MD / CEO**                 | Command Center (published), REG (attestation queue), Reports                | **sign/attest returns** (step-up), view published views                   | edit anything, deal entry, data entry, submit          |
 | **ALCO Secretary**           | Committee pack workspace, all module outputs (view), Reports                | assemble pack, chase section sign-offs, record decisions/actions, publish | edit unit sections they don't own, reg sign-off/submit |
 | **Credit / Ops contributor** | **Their pack section only** (+ LE outputs view for Credit)                  | contribute + edit own section until sign-off                              | everything else — the narrowest surface in the app     |
-| **Org Admin / Owner**        | **Access control** (+ read dashboards)                                      | manage users/roles/SSO/SCIM/audit (+ billing = Owner)                     | run/approve/submit anything                            |
+| **Org Admin / Owner**        | **Access control** (+ read dashboards)                                      | manage users/roles/SSO/SCIM (+ billing = Owner)                           | run/approve/submit anything                            |
 
 The existing **role-lens tabs** on Command Center (Treasurer / ALM / Risk / CFO)
 are the right pattern — extend them to _default and lock_ to the user's role
@@ -711,7 +711,6 @@ Already partly built (`Header.tsx`). Target:
   My security                  (my password, my MFA devices, my active sessions / "sign out everywhere", personal API tokens)
   ─────────────
   Organization settings        ← only if users:read / org:settings
-  Audit log                     ← only if audit:read
   ─────────────
   Switch organization ▸        ← if the user belongs to >1 org (rare for banks; keep for staff)
   Documentation / Support
@@ -895,7 +894,8 @@ For the platform console's "view as" (Pigment's reference model):
 ### 12.1 Role-aware account menu
 
 See [§10.1](#101-personal--the-avatar-dropdown-every-user). Show the signed-in identity + role; reveal
-"Organization settings" / "Audit log" **only** with the matching permission.
+"Organization settings" **only** with the matching permission. Audit navigation
+follows [§12.5](#125-audit-log-view).
 
 ### 12.2 Members (users list) table
 
@@ -935,10 +935,9 @@ clone → rename → toggle, with **sensitive permissions flagged**.
 
 ### 12.5 Audit log view
 
-Read-only table: **Timestamp · Actor (with impersonator chain) · Action ·
-Target · Reason · IP/session · Result**. Filters: actor, action type, resource,
-date range, org (platform only). Export to CSV/SIEM. Impersonation & privileged
-actions surfaced distinctly. **Immutable — no edit/delete in the UI.**
+The [bank audit contract](../backend/docs/tamper_evident_records.md#bank-audit-read-api)
+owns bank-visible event coverage, officer authority, filters, integrity limits and
+staged API/export/screen delivery. Per-bank SIEM export is separate work (#414).
 
 ---
 
@@ -991,15 +990,9 @@ domains[] (verified), enforced (bool), jit_enabled, scim_token_hash, status`.
 `id, org_id, object_type, object_id, action (requested|reviewed|approved|rejected|signed_off|submitted),
 actor_user_id, reason, occurred_at`. Append-only; **checker ≠ prior maker enforced in the service**.
 
-**`audit_log`** _(new — append-only, tamper-evident)_:
-`id, org_id (nullable for platform), actor_user_id, impersonator_user_id (nullable),
-action, resource_type, resource_id, reason, ip, session_id, result, occurred_at`.
-Not editable/deletable via the app. The existing database audit streams and
-the compliance-storage delivery boundary are governed by
-[the tamper-evident records contract](../backend/docs/tamper_evident_records.md).
-The proposed schema covers logins, role/permission changes, every
-create/edit/delete/**export**, approvals, submissions, impersonation, SSO/SCIM
-changes, and every financial mutation (with its reason).
+**Audit records:** use the existing streams governed by
+[the tamper-evident records contract](../backend/docs/tamper_evident_records.md#bank-audit-read-api);
+do not create the formerly proposed `audit_log` table.
 
 **`platform_staff`** + **`platform_staff_roles`** _(new)_: vendor employees
 (super-admin / support / billing / read-only), outside RLS.
@@ -1073,7 +1066,7 @@ GET/PUT /orgs/{org}/scim                            scim:manage
 # org settings, security, audit
 GET/PUT /orgs/{org}/settings                        org:settings
 GET/PUT /orgs/{org}/security-policy                 org:settings
-GET     /orgs/{org}/audit                           audit:read
+# Bank audit route and authority: see §12.5 and its authoritative contract
 
 # approvals (generalized maker-checker) — mounted per approvable object
 POST  /.../{object}:request-review | review | approve | reject | sign-off | submit
@@ -1135,7 +1128,8 @@ transfer remain staff-plane work.
 **Phase 1 — org admin console + invites.**
 The Members identity/grant table and scalar grant assignment are built. The
 remaining phase adds `organizations`/`users` fields, `invitations`, invite
-modal, seat limits, suspend/deactivate, and `audit_log` (write path + view).
+modal, seat limits, and suspend/deactivate. Audit delivery follows
+[§12.5](#125-audit-log-view).
 Banks will then be able to onboard their own people by email. **The invite modal
 offers the unit presets from §5.1** (Treasury / ALM / Risk / Finance / Credit / Operations
 / Executive / Internal Audit → the §5 persona bundles) so an org admin invites

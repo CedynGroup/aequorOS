@@ -20,6 +20,7 @@ from decimal import Decimal
 from typing import cast
 
 from fastapi import HTTPException, status
+from pydantic import JsonValue
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -286,6 +287,8 @@ def update_register(
             detail=f"Threshold percentages must be positive: {', '.join(non_positive)}.",
         )
 
+    previous_thresholds: dict[str, JsonValue] = {}
+    written: list[ParamLiquidityThreshold] = []
     now = utc_now()
     for code, pct in payload.thresholds.items():
         open_rows = db.scalars(
@@ -306,21 +309,24 @@ def update_register(
                         "already starts on or after the requested effective date."
                     ),
                 )
+            previous_thresholds[row.threshold_code] = str(row.threshold_pct)
             row.effective_to = payload.effective_from
-        db.add(
-            ParamLiquidityThreshold(
-                organization_id=ctx.organization_id,
-                jurisdiction_code=jurisdiction,
-                institution_class=payload.institution_class,
-                threshold_code=code,
-                threshold_pct=pct,
-                effective_from=payload.effective_from,
-                approved_by=payload.approved_by,
-                approval_timestamp=now,
-                notes=payload.notes,
-            )
+        created = ParamLiquidityThreshold(
+            organization_id=ctx.organization_id,
+            jurisdiction_code=jurisdiction,
+            institution_class=payload.institution_class,
+            threshold_code=code,
+            threshold_pct=pct,
+            effective_from=payload.effective_from,
+            approved_by=payload.approved_by,
+            approval_timestamp=now,
+            notes=payload.notes,
         )
+        db.add(created)
+        written.append(created)
     db.flush()
+    for created in written:
+        db.refresh(created)
     record_event(
         db,
         ctx,
@@ -332,6 +338,10 @@ def update_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "codes": sorted(payload.thresholds),
+            "before": {"thresholds": previous_thresholds},
+            "after": {
+                "thresholds": {entry.threshold_code: str(entry.threshold_pct) for entry in written}
+            },
             "reason": payload.reason,
         },
     )
@@ -411,6 +421,8 @@ def update_haircut_schedule(
             detail=f"Haircut percentages must be within [0, 100]: {', '.join(out_of_range)}.",
         )
 
+    previous_haircuts: dict[str, JsonValue] = {}
+    written: list[ParamLiquidityHaircut] = []
     now = utc_now()
     for asset_class, pct in payload.haircuts.items():
         normalized = asset_class.strip().upper()
@@ -431,20 +443,23 @@ def update_haircut_schedule(
                         "already starts on or after the requested effective date."
                     ),
                 )
+            previous_haircuts[row.asset_class] = str(row.haircut_pct)
             row.effective_to = payload.effective_from
-        db.add(
-            ParamLiquidityHaircut(
-                organization_id=ctx.organization_id,
-                jurisdiction_code=jurisdiction,
-                asset_class=normalized,
-                haircut_pct=pct,
-                effective_from=payload.effective_from,
-                approved_by=payload.approved_by,
-                approval_timestamp=now,
-                notes=payload.notes,
-            )
+        created = ParamLiquidityHaircut(
+            organization_id=ctx.organization_id,
+            jurisdiction_code=jurisdiction,
+            asset_class=normalized,
+            haircut_pct=pct,
+            effective_from=payload.effective_from,
+            approved_by=payload.approved_by,
+            approval_timestamp=now,
+            notes=payload.notes,
         )
+        db.add(created)
+        written.append(created)
     db.flush()
+    for created in written:
+        db.refresh(created)
     record_event(
         db,
         ctx,
@@ -455,6 +470,8 @@ def update_haircut_schedule(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "asset_classes": sorted(cls.strip().upper() for cls in payload.haircuts),
+            "before": {"haircuts": previous_haircuts},
+            "after": {"haircuts": {entry.asset_class: str(entry.haircut_pct) for entry in written}},
             "reason": payload.reason,
         },
     )

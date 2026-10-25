@@ -49,6 +49,8 @@ _REFERENCE_ROLE_PERMISSIONS: dict[RoleBundle, frozenset[Permission]] = {
     RoleBundle.MEMBER: frozenset(),
     RoleBundle.VIEWER: frozenset({Permission.VIEW}),
     RoleBundle.AUDITOR: frozenset({Permission.VIEW}),
+    RoleBundle.SECURITY_OFFICER: frozenset({Permission.VIEW, Permission.EXPORT}),
+    RoleBundle.COMPLIANCE_OFFICER: frozenset({Permission.VIEW, Permission.EXPORT}),
     RoleBundle.ANALYST: frozenset(
         {
             Permission.VIEW,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -239,7 +240,7 @@ def test_create_and_list_keep_every_scalar_dimension_exact(
         params={"principal_user_id": str(GRANTEE)},
     )
     assert listed.status_code == 200, listed.text
-    assert len(listed.json()["bindings"]) == 1
+    assert len(cast(list[object], listed.json()["bindings"])) == 1
     assert listed.json()["bindings"][0]["sensitivity_scope"] == "confidential"
 
     with _session() as db:
@@ -1513,6 +1514,14 @@ def test_active_member_route_access_request_is_deduplicated_audited_and_approved
         )
         assert audit is not None
         assert audit.actor_user_id == GRANTEE
+        assert audit.details["bank_id"] == BANK_A
+        approval_audit = db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "authorization.access_request_approved",
+                AuditEvent.entity_id == created.json()["id"],
+            )
+        )
+        assert approval_audit is not None and approval_audit.details["bank_id"] == BANK_A
 
 
 def test_organization_scoped_access_request_carries_expiry_into_the_grant(
@@ -1880,6 +1889,7 @@ def test_rejected_request_is_audited_with_its_reason_and_can_be_refiled(
         assert audit.details["reason_category"] == "other"
         assert audit.details["reason_detail"] == "Treasury forecasting is not part of this role"
         assert audit.details["reference"] == "HR-2026-0042"
+        assert audit.details["bank_id"] == BANK_A
         assert not list(
             db.scalars(
                 select(AuthorizationBinding).where(
@@ -2048,3 +2058,30 @@ def test_capital_request_requires_whole_institution_coverage(
         assert request is not None
         assert request.status == "approved"
         assert str(request.binding_id) == resolved.json()["binding"]["id"]
+
+
+@pytest.mark.parametrize("role", ["security_officer", "compliance_officer"])
+def test_owner_explicitly_assigns_audit_officers(grant_client: TestClient, role: str) -> None:
+    response = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(grant_client, role=role, module="audit", sensitivity="restricted"),
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["binding"]["role_bundle"] == role
+    assert response.json()["binding"]["module_scope"] == "audit"
+
+
+@pytest.mark.parametrize("role", ["security_officer", "compliance_officer"])
+def test_audit_officers_cannot_be_granted_product_modules(
+    grant_client: TestClient, role: str
+) -> None:
+    response = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json={
+            **_payload(role=role, module="liq", sensitivity="restricted"),
+            "expected_authority_sentence": "Unsupported audit officer product grant",
+        },
+    )
+    assert response.status_code == 409, response.text

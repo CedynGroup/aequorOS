@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from decimal import Decimal
 from threading import Event
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
@@ -140,7 +140,7 @@ def test_calculation_correctness_persistence_and_reproducible_rerun(
     assert run["status"] == "succeeded"
     assert run["engine_version"] == "balance-sheet-v1.0.0"
     assert run["as_of_date"] == run["inputs"]["as_of_date"]
-    assert len(run["input_hash"]) == 64
+    assert len(cast(str, run["input_hash"])) == 64
     assert [
         (row["total_assets"], row["total_liabilities"], row["total_equity"])
         for row in run["outputs"]

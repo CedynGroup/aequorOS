@@ -43,6 +43,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from pydantic import JsonValue, TypeAdapter
 from sqlalchemy import CursorResult, select, update
 from sqlalchemy.orm import Session
 
@@ -51,7 +52,12 @@ from app.attestation.models import SigningAuthorization
 from app.core import security
 from app.core.config import get_settings
 from app.identity import public as auth_throttle
-from app.identity.public import SsoConnection, User, find_enabled_by_issuer_audience
+from app.identity.public import (
+    SsoConnection,
+    User,
+    find_enabled_by_issuer_audience,
+    record_authentication_event,
+)
 from app.services.audit import record_event
 
 logger = logging.getLogger(__name__)
@@ -130,33 +136,40 @@ def verify_step_up(  # noqa: PLR0913 - two distinct proof methods + metadata
             User.is_active.is_(True),
         )
     )
-    if user is None:
-        # The actor's own membership went away mid-session. The API's auth
-        # dependency already refuses an inactive user, so this is defence in
-        # depth — but it answers exactly like a wrong password, and pays the
-        # same Argon2id cost, so the two are indistinguishable from outside.
-        if password:
-            auth_throttle.burn_password_check(password)
-        raise StepUpFailed(_REAUTH_FAILED)
-    if user.auth_provider == "service":
-        raise StepUpFailed("Service accounts cannot sign — machines do not attest.")
-
+    method = "oidc_step_up" if id_token else "password_step_up" if password else "step_up"
     evidence: dict[str, Any] = {
         "method": None,
         "verified_at": datetime.now(UTC).isoformat(),
         **(request_metadata or {}),
     }
-
-    if id_token:
-        _verify_oidc_proof(db, ctx, user, id_token, evidence)
-        return evidence
-
-    if password:
-        _verify_password_proof(db, user, password)
-        evidence["method"] = "password_reauth"
-        return evidence
-
-    raise StepUpRequired("Signing requires re-authentication. Confirm your identity to continue.")
+    assurance: dict[str, JsonValue] = {}
+    try:
+        if user is None:
+            # The actor's own membership went away mid-session. The API's auth
+            # dependency already refuses an inactive user, so this is defence in
+            # depth — but it answers exactly like a wrong password, and pays the
+            # same Argon2id cost, so the two are indistinguishable from outside.
+            if password:
+                auth_throttle.burn_password_check(password)
+            raise StepUpFailed(_REAUTH_FAILED)
+        if user.auth_provider == "service":
+            raise StepUpFailed("Service accounts cannot sign — machines do not attest.")
+        if id_token:
+            assurance = _verify_oidc_proof(db, ctx, user, id_token, evidence)
+        elif password:
+            _verify_password_proof(db, user, password)
+            evidence["method"] = "password_reauth"
+        else:
+            raise StepUpRequired(
+                "Signing requires re-authentication. Confirm your identity to continue."
+            )
+    except HTTPException:
+        record_authentication_event(db, user, method=method, outcome="failure")
+        db.commit()
+        raise
+    record_authentication_event(db, user, method=method, outcome="success", assurance=assurance)
+    db.commit()
+    return evidence
 
 
 def _verify_oidc_proof(
@@ -165,7 +178,7 @@ def _verify_oidc_proof(
     user: User,
     id_token: str,
     evidence: dict[str, Any],
-) -> None:
+) -> dict[str, JsonValue]:
     """A fresh IdP assertion. Deliberately NOT gated on the password lockout.
 
     An id_token is an RS256/ES256 assertion verified against the IdP's JWKS —
@@ -230,6 +243,9 @@ def _verify_oidc_proof(
         if claim in claims:
             evidence[claim] = claims[claim]
     evidence["method"] = "oidc_reauth"
+    return TypeAdapter(dict[str, JsonValue]).validate_python(
+        {key: claims[key] for key in ("acr", "amr") if key in claims}
+    )
 
 
 def _verify_password_proof(db: Session, user: User, password: str) -> None:
