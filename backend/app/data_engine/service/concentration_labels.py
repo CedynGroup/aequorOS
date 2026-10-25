@@ -54,9 +54,10 @@ def counterparty_group_labels(
     )
     representatives = db.execute(
         select(
-            cast(ColumnElement[UUID], ranked.c.id), cast(ColumnElement[str], ranked.c.token)
+            cast(ColumnElement[UUID], ranked.c.id),
+            cast(ColumnElement[str | None], ranked.c.token),
         ).where(cast(ColumnElement[int], ranked.c.rank) == 1)
-    )
+    ).tuples()
     ids = [
         record_id
         for record_id, token in representatives

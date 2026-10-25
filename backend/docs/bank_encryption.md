@@ -37,13 +37,8 @@ owns the encryption format and integrity checks. Only the wrapped version and
 its exact KMS reference are persisted in `object_key_envelopes`; S3 metadata
 holds the version UUID.
 
-Each database unit of work unwraps each required version once, sharing it
-between field loads and session-bound storage. Plaintext version material is
-session-local and excluded from logs; commit, rollback and close discard it.
-Standalone operations own short-lived units. Revocation refuses the next unit
-once KMS enforces the permission change; an already admitted unit may complete.
-No persistent or process-wide plaintext cache is permitted. See the
-[field design](bank_field_encryption.md#keys-and-storage).
+Key access, revocation and plaintext-cache lifetime for both fields and objects
+follow the [unit-of-work boundary](bank_field_encryption.md#keys-and-storage).
 
 ## Bank-side AWS setup
 
@@ -263,8 +258,9 @@ retained versions, substitution, revocation, downloads and backup recovery),
 `test_bank_key_rollout.py` (optional platform storage, required-key refusal and
 connected-key failures in every environment),
 `tests/operator/test_bank_encryption.py` (staff and bank scoping), and
-`tests/db/test_tenant_rls_completeness.py` (migrated envelope RLS). CI uses fake
-providers and moto, never real AWS KMS calls.
+`tests/db/test_tenant_rls_completeness.py` (migrated envelope RLS). The HTTP
+provider contract and its CI service are documented in
+[Local KMS emulator and CI](#local-kms-emulator-and-ci).
 
 ## Local KMS emulator and CI
 

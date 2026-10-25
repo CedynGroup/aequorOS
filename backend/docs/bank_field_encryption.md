@@ -31,11 +31,17 @@ Field and object encryption reuse `BankEncryptionKey`, `ObjectKeyEnvelope`,
 `KeyProvider` and the existing encryption SDK. Each immutable data-key version is
 wrapped by the bank's KMS key. Ciphertext records its version UUID.
 
-A unit of work resolves the current version once and unwraps each required version
-once. Request-bound storage shares the session cache. Root transaction completion,
-rollback or session close discards plaintext key material. Encryption takes no
-key-row or advisory locks. Rotation creates a new current version; earlier
-versions remain available to read earlier ciphertext. There is no re-encryption
+A unit of work resolves the current version once and establishes access to it
+before opening any historical payload or index version. Each required version is
+unwrapped at most once. Revoking the current key therefore blocks fresh protected
+reads, exact searches and object access once KMS enforces the permission change,
+even while an older key remains enabled; an already admitted unit may complete.
+Request-bound storage shares the session cache; standalone operations own
+short-lived units. Root transaction completion, rollback or session close discards
+plaintext key material, which is excluded from logs. No persistent or process-wide
+plaintext key cache is permitted. Encryption takes no key-row or advisory locks.
+Rotation creates a new current version; earlier versions remain available to read
+earlier ciphertext. There is no re-encryption
 maintenance command.
 
 Object writes use committed versions, so published ciphertext remains readable
@@ -65,11 +71,14 @@ Optional banks use unkeyed SHA-256 tokens and retain plaintext names.
 ## BI
 
 Connected-key banks retain numeric BI. The builder stores opaque UUID aliases
-instead of readable counterparty identity. Identity dimensions and filters,
-including saved dashboard and notification queries, return an explanation asking
-the reader to remove those fields. Saved payloads written after key connection
-use the same field encryption. Secured identity BI is tracked in
-[issue 595](https://github.com/CedynGroup/aequorOS/issues/595).
+instead of readable counterparty identity. The protected identity member policy
+is defined in [`app/bi/domain/identity.py`](../app/bi/domain/identity.py); it applies
+across measures, dimensions, filters, sorting, pivots and top-N queries. Queries
+requesting those members, including saved dashboard and notification queries,
+return an explanation asking the reader to remove those fields. Aggregate
+counterparty dimensions outside that policy remain available. Saved payloads
+written after key connection use the same field encryption. Secured identity BI
+is tracked in [issue 595](https://github.com/CedynGroup/aequorOS/issues/595).
 
 ## Dedicated database option
 
@@ -116,9 +125,18 @@ every five seconds. Staff support placeholders do not poll for recovery.
 Successful protected reads clear the notice and restore values; cached locked or
 failed reads, including inactive screens, are invalidated so returning to a
 screen refreshes it immediately. Unrelated numeric responses and responses from
-requests started before the current lock cannot clear that lock. Mutation
-errors keep the editor mounted and its draft values intact. Protected report
-previews show a locked panel, never an empty or successful validation report.
+requests started before the current lock cannot clear that lock. Shared fetch
+boundaries reject stale protected response bodies, including after a repeated
+lock response with the same state, before they can repopulate caches or
+notifications.
+
+Mutation errors and late key-outage or revocation responses preserve unsaved
+editor drafts. BI catalogue data and saved dashboard definitions without
+protected identity members remain cached, retaining numeric dependencies,
+dashboard title, widgets and change note, and the alert's selected threshold
+basis. Protected cached payloads and read-only labels are still removed or
+replaced by placeholders, scoped to the locked bank. Protected report previews
+show a locked panel, never an empty or successful validation report.
 
 The concentration monitor continues computing numeric exposures, shares and HHI
 when labels are locked. Named single-name or connected-group limits that require
