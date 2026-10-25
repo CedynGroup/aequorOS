@@ -1,11 +1,14 @@
 // Set E2E_EVIDENCE_DIR to write screenshot evidence to that directory:
 // E2E_CAPABILITY_ONLY=1 E2E_EVIDENCE_DIR=<path> pnpm exec playwright test e2e/liquidity-monitoring-authorization.spec.ts
 // Keep the output outside version control; /docs/** is ignored by publication policy.
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/story-identities";
+import { expectBankStatus } from "./support/real-authority";
 import path from "path";
 import { E2E_TMP } from "../playwright.config";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+test.use({ storyConfig: { roles: ["viewer"] } });
 
 test.describe("unbound Liquidity Monitoring user", () => {
   test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
@@ -71,64 +74,69 @@ test.describe("unbound Liquidity Monitoring user", () => {
 });
 
 test.describe("exactly bound Liquidity user", () => {
-  test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [{ bundle: "viewer", module: "liq", sensitivity: "all" }],
+    },
+  });
 
-  test("confidential-only monitoring omits unavailable metric status and names collapsed links", async ({
-    page,
-  }) => {
-    await page.route("**/auth/me", async (route) => {
-      const response = await route.fetch();
-      const profile = await response.json();
-      for (const institution of profile.effective_authority
-        .institution_capabilities) {
-        institution.capabilities = institution.capabilities.filter(
-          (capability: { module: string; sensitivity: string }) =>
-            capability.module !== "liq" ||
-            capability.sensitivity === "confidential",
-        );
-      }
-      await route.fulfill({ response, json: profile });
+  test.describe("confidential-only scope", () => {
+    test.use({
+      storyConfig: {
+        roles: ["viewer"],
+        bindings: [
+          { bundle: "viewer", module: "liq", sensitivity: "confidential" },
+        ],
+      },
     });
-    const aggregateRequests: string[] = [];
-    page.on("request", (request) => {
-      if (request.url().includes("/liquidity/dashboard")) {
-        aggregateRequests.push(request.url());
+    test("confidential-only monitoring omits unavailable metric status and names collapsed links", async ({
+      page,
+    }) => {
+      await expectBankStatus("/liquidity/dashboard", 403);
+      await expectBankStatus("/liquidity/ewis", 200);
+      const aggregateRequests: string[] = [];
+      page.on("request", (request) => {
+        if (request.url().includes("/liquidity/dashboard")) {
+          aggregateRequests.push(request.url());
+        }
+      });
+      await page.goto("/liquidity/monitoring");
+      for (const label of ["FX funding gap", "FX share of liabilities"]) {
+        const card = page.locator(".card").filter({
+          has: page.getByText(label, { exact: true }),
+        });
+        await expect(card).toBeVisible();
+        await expect(card.getByText("—", { exact: true })).toBeVisible();
+        await expect(card).not.toHaveCSS("box-shadow", /inset/);
+      }
+      expect(aggregateRequests).toEqual([]);
+      await page.getByRole("button", { name: "Collapse sidebar" }).click();
+      const liquidity = page
+        .getByRole("navigation")
+        .getByRole("link", { name: "Liquidity", exact: true });
+      await expect(liquidity).toHaveAttribute("aria-disabled", "true");
+      const reason =
+        "Requires Liquidity Monitoring · Aggregated · View. Ask your organization owner or admin to grant it.";
+      await liquidity.hover();
+      await expect(
+        page.getByRole("tooltip").filter({ hasText: reason }),
+      ).toBeVisible();
+      await liquidity.focus();
+      await expect(liquidity).toBeFocused();
+      await expect(
+        page.getByRole("tooltip").filter({ hasText: reason }),
+      ).toBeVisible();
+      await liquidity.press("Enter");
+      await expect(page).toHaveURL(/\/liquidity\/monitoring$/);
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(evidenceDir, "liquidity-confidential-monitoring.png"),
+          fullPage: true,
+        });
       }
     });
-    await page.goto("/liquidity/monitoring");
-    for (const label of ["FX funding gap", "FX share of liabilities"]) {
-      const card = page.locator(".card").filter({
-        has: page.getByText(label, { exact: true }),
-      });
-      await expect(card).toBeVisible();
-      await expect(card.getByText("—", { exact: true })).toBeVisible();
-      await expect(card).not.toHaveCSS("box-shadow", /inset/);
-    }
-    expect(aggregateRequests).toEqual([]);
-    await page.getByRole("button", { name: "Collapse sidebar" }).click();
-    const liquidity = page
-      .getByRole("navigation")
-      .getByRole("link", { name: "Liquidity", exact: true });
-    await expect(liquidity).toHaveAttribute("aria-disabled", "true");
-    const reason =
-      "Requires Liquidity Monitoring · Aggregated · View. Ask your organization owner or admin to grant it.";
-    await liquidity.hover();
-    await expect(
-      page.getByRole("tooltip").filter({ hasText: reason }),
-    ).toBeVisible();
-    await liquidity.focus();
-    await expect(liquidity).toBeFocused();
-    await expect(
-      page.getByRole("tooltip").filter({ hasText: reason }),
-    ).toBeVisible();
-    await liquidity.press("Enter");
-    await expect(page).toHaveURL(/\/liquidity\/monitoring$/);
-    if (evidenceDir) {
-      await page.screenshot({
-        path: path.join(evidenceDir, "liquidity-confidential-monitoring.png"),
-        fullPage: true,
-      });
-    }
   });
 
   test("shows only authorized Liquidity reads", async ({ page }) => {
@@ -199,7 +207,13 @@ test.describe("exactly bound Liquidity user", () => {
 
 test.describe("aggregated-only Liquidity user", () => {
   test.use({
-    storageState: path.join(E2E_TMP, "liquidity_aggregated_viewer.json"),
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [
+        { bundle: "viewer", module: "liq", sensitivity: "aggregated" },
+      ],
+    },
   });
 
   test("omits confidential assessments and requests from the cockpit", async ({

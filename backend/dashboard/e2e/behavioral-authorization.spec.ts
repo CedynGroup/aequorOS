@@ -1,5 +1,7 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { test } from "./support/story-identities";
+import { expectBankStatus } from "./support/real-authority";
 import path from "path";
 import { writeFile } from "node:fs/promises";
 import { E2E_TMP } from "../playwright.config";
@@ -7,33 +9,6 @@ import { E2E_TMP } from "../playwright.config";
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const BEHAVIORAL_API = /\/banks\/[^/]+\/behavioral(?:\/|$)/;
 const RUN_REASON = /Requires Behavioral Models · Confidential · Run/i;
-
-type Capability = { module: string; sensitivity: string; permission: string };
-
-/**
- * Narrow the signed-in user's projected authority to exactly the Behavioral
- * capabilities under test. The dashboard reads nothing but this projection,
- * so the journey proves what a real binding of that shape would show.
- */
-async function projectBehavioralAuthority(
-  page: Page,
-  keep: (capability: Capability) => boolean,
-) {
-  await page.route("**/auth/me", async (route) => {
-    const response = await route.fetch();
-    const profile = await response.json();
-    profile.effective_authority.organization_capabilities = [];
-    for (const institution of profile.effective_authority
-      .institution_capabilities) {
-      institution.capabilities = institution.capabilities.filter(
-        (capability: Capability) =>
-          capability.module === "beh" && keep(capability),
-      );
-    }
-    // A navigation can cancel the request while the profile is in flight.
-    await route.fulfill({ response, json: profile }).catch(() => undefined);
-  });
-}
 
 function recordBehavioralRequests(page: Page): string[] {
   const requests: string[] = [];
@@ -62,17 +37,19 @@ async function expectAccessRequired(page: Page, href: string) {
   ).toBeVisible();
 }
 
-test.afterEach(async ({ page }) => {
-  // Abandon, never await, a profile handler the last navigation cancelled.
-  await page.unrouteAll({ behavior: "ignoreErrors" });
-});
-
 test.describe("unbound Behavioral user", () => {
-  test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [{ bundle: "viewer", module: "liq", sensitivity: "all" }],
+    },
+  });
 
   test("disables navigation, denies deep links, and sends no Behavioral requests", async ({
     page,
   }) => {
+    await expectBankStatus("/behavioral/nmd-duration", 403);
     const requests = recordBehavioralRequests(page);
 
     await page.goto("/liquidity");
@@ -112,18 +89,24 @@ test.describe("unbound Behavioral user", () => {
   });
 });
 
-test.describe("Behavioral run-only analyst without view", () => {
-  test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
+test.describe("Behavioral confidential-only analyst without aggregated view", () => {
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [
+        { bundle: "analyst", module: "beh", sensitivity: "confidential" },
+      ],
+    },
+  });
 
   test("cannot open the module by deep link and issues no requests", async ({
     page,
   }) => {
-    await projectBehavioralAuthority(
-      page,
-      (capability) =>
-        capability.permission === "run" &&
-        capability.sensitivity === "confidential",
-    );
+    await expectBankStatus("/behavioral/nmd-duration/train", 200, {
+      method: "POST",
+    });
+    await expectBankStatus("/behavioral/nmd-duration", 403);
     const requests = recordBehavioralRequests(page);
 
     await expectAccessRequired(page, "/behavioral/prepayment");
@@ -140,15 +123,21 @@ test.describe("Behavioral run-only analyst without view", () => {
 });
 
 test.describe("Behavioral reader without run permission", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [
+        { bundle: "viewer", module: "beh", sensitivity: "aggregated" },
+      ],
+    },
+  });
 
   test("keeps Retrain visible, disabled, and explained", async ({ page }) => {
-    await projectBehavioralAuthority(
-      page,
-      (capability) =>
-        capability.permission === "view" &&
-        capability.sensitivity === "aggregated",
-    );
+    await expectBankStatus("/behavioral/nmd-duration", 200);
+    await expectBankStatus("/behavioral/nmd-duration/train", 403, {
+      method: "POST",
+    });
     const trainRequests: string[] = [];
     page.on("request", (request) => {
       if (
@@ -199,7 +188,10 @@ test.describe("Behavioral reader without run permission", () => {
 });
 
 test.describe("Behavioral analyst", () => {
-  test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "analyst.json"),
+    storyConfig: { roles: ["analyst"], bindings: [] },
+  });
 
   test("retrains a model with effective authority", async ({ page }) => {
     await page.goto("/behavioral/nmd-duration");

@@ -38,6 +38,14 @@ type Configuration = {
   ownedTenant?: boolean;
   signing?: boolean;
   branchRegister?: boolean;
+  ownerReadModules?: string[];
+  bindings?: {
+    role?: string;
+    bundle: "viewer" | "analyst" | "approver";
+    module: string;
+    sensitivity: string;
+    branches?: string[];
+  }[];
 };
 type Story = { organizationId: string; bankId: string; actors: Actor[] };
 const BACKEND = path.resolve(__dirname, "../../..");
@@ -211,6 +219,15 @@ export const test = base.extend<{
         bank_id: bankId,
         owned_tenant: storyConfig.ownedTenant ?? false,
         signing: storyConfig.signing ?? false,
+        owner_read_modules: storyConfig.ownerReadModules,
+        bindings: (storyConfig.bindings ?? []).map((binding) => ({
+          actor_role: binding.role ?? "viewer",
+          role_bundle: binding.bundle,
+          module_scope: binding.module,
+          sensitivity_scope: binding.sensitivity,
+          data_scope_kind: binding.branches ? "branch" : "all",
+          data_scope_values: binding.branches ?? [],
+        })),
         actors: storyConfig.roles.map((role) => ({
           role,
           user_id: randomUUID(),
