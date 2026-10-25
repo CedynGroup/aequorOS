@@ -1030,7 +1030,7 @@ def test_saved_identity_filter_is_encrypted_and_explicitly_refused(
     assert authority.refused_members(query) == ("counterparty.name",)
 
 
-def test_register_digest_tracks_decrypted_values(
+def test_register_digest_tracks_stored_values(
     db_session: Session,
     provider: LocalKeyProvider,
 ) -> None:

@@ -45,7 +45,9 @@ unavailability, damaged ciphertext and cross-bank substitution are rejected.
 The ORM encrypts new records and changed covered columns before flush, then
 restores their application values. Counterparty identity fields load on demand;
 other entity loads decrypt covered ciphertext. Scalar SQL ciphertext projections
-remain opaque. Optional banks without a
+remain opaque. Complete-register attestation commitments use stored values, stable
+record IDs, update timestamps and the current key version without decrypting
+identities. Rotation or re-encryption requires in-review returns to be regenerated. Optional banks without a
 connected key retain ordinary field storage.
 
 ## Exact-match search

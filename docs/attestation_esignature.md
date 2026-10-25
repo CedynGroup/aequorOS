@@ -508,14 +508,19 @@ adds the master-data analogue, computed at generation and stored on the package:
 
 ```python
 register_state_digest = sha256(canonical_json({
-    "schema": "aequoros-register-state-v1",
-    "rows": sorted([                # only the register rows that fed this pack
-        {"table": "shareholdings", "id": ..., "updated_at": ...,
-         "values_digest": sha256(canonical_json(row_business_fields))}
-        for row in contributing_rows
+    "schema": "aequoros-register-state-v2",
+    "rows": sorted([                # complete bank register
+        {"table": "shareholdings", "id": ..., "updated_at": ..., "key_version": ...,
+         "values_digest": sha256(canonical_json(row_stored_values))}
+        for row in complete_register_rows
     ], key=canonical_json),
 }))
 ```
+
+Protected values enter this commitment as stored ciphertext, without key access.
+Stable record IDs, update timestamps and the current bank key version are bound.
+Rotation or re-encryption makes an in-review commitment stale; certification,
+approval and first submission refuse it until the return is regenerated.
 
 This binds _which register state_ produced the pack, so a later mutation of a
 shareholding or an outlet is detectable against a signed pack even though the

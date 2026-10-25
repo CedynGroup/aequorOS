@@ -476,10 +476,8 @@ def test_register_state_rows_carry_business_fields_only(db_session: Session) -> 
     # The declared table list must match what the projection actually emits.
     assert set(register_state.REGISTER_TABLES) == tables
     for row in rows:
-        assert set(row) == {"table", "id", "updated_at", "values"}
+        assert set(row) == {"table", "id", "updated_at", "key_version", "values"}
         values: dict[str, Any] = row["values"]
-        # Bookkeeping must not ride in ``values``: the digest has to move only
-        # when reportable data moves.
         assert not {"id", "organization_id", "bank_id", "created_at", "updated_at"} & set(values)
     # Every projected value is JSON-native — canonical_json has no default=.
     assert digests.register_state_digest(rows)

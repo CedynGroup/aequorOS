@@ -196,8 +196,20 @@ def test_canonicalisation_refuses_non_json_native_values() -> None:
 
 def test_register_state_digest_tracks_values_not_row_order() -> None:
     rows = [
-        {"table": "shareholdings", "id": "a", "updated_at": "t1", "values": {"pct": "50.00"}},
-        {"table": "outlets", "id": "b", "updated_at": "t2", "values": {"city": "Accra"}},
+        {
+            "table": "shareholdings",
+            "id": "a",
+            "updated_at": "t1",
+            "key_version": None,
+            "values": {"pct": "50.00"},
+        },
+        {
+            "table": "outlets",
+            "id": "b",
+            "updated_at": "t2",
+            "key_version": None,
+            "values": {"city": "Accra"},
+        },
     ]
     assert digests.register_state_digest(rows) == digests.register_state_digest(
         list(reversed(rows))

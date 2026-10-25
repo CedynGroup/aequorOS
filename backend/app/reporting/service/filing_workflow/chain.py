@@ -47,6 +47,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.public import ensure_register_current
 from app.core.authorization import ConditionCheck, ConditionKind, Permission
 from app.reporting.domain import review_digest as digest_domain
 from app.reporting.domain import workflow as domain
@@ -414,6 +415,7 @@ def assert_transmission_permitted(
         # The BG/FMD/2026/07 re-upload: the same filing, completing. Its chain
         # was already satisfied when it first reached the regulator.
         return
+    ensure_register_current(db, ctx, package)
     state = load_state(db, ctx, package)
     if not state.stages:
         raise conflict(
@@ -516,6 +518,7 @@ def start_chain(
     status that used to stand for it.
     """
     _lock(db, package)
+    ensure_register_current(db, ctx, package)
     if not package.checks_passed:
         raise conflict(
             "checks_not_passed",
@@ -614,6 +617,7 @@ def decide(
     if payload.decision == "returned":
         return _send_back(db, ctx, package, state, stage, payload)
 
+    ensure_register_current(db, ctx, package)
     expected = domain.DECISION_FOR_KIND[stage.decision_kind]
     # The decision may already be on record: the transmitting stage takes TWO
     # steps that can fail independently — recording the approval, then handing
@@ -680,6 +684,7 @@ def hand_off(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> Cha
     what "not yet" means instead of the screen guessing.
     """
     _lock(db, package)
+    ensure_register_current(db, ctx, package)
     state = load_state(db, ctx, package)
     seq = package.current_stage_seq
     stage = None if seq is None else state.stage(seq)

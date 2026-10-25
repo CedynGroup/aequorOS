@@ -9,6 +9,7 @@ leave no package, no superseded predecessor, and the cycle still in review.
 from __future__ import annotations
 
 import copy
+from collections.abc import Mapping
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import TypedDict, cast
@@ -19,13 +20,17 @@ from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import IcaapAccess
 from app.attestation.service.digests import content_digest
+from app.core.key_management.types import KeyStatus
 from app.icaap.models.workspace import IcaapCycle, IcaapStageDecision
-from app.icaap.schemas.workspace import IcaapFreezeCreate
-from app.icaap.service import cycles, freeze, guards, workflow
+from app.icaap.schemas.workspace import IcaapCycleRead, IcaapFreezeCreate
+from app.icaap.service import cycles, freeze, guards, snapshot, workflow
 from app.models import BankFinancialFact, BankReportingPeriod, RegulatoryPackage
-from app.reporting.service.generation import snapshot_content_hash
+from app.reporting.service.generation import GeneratedReturn, snapshot_content_hash
 from app.services import reconciliation
+from tests.core import test_key_unavailable_numeric as encrypted
+from tests.core.test_bank_field_encryption import KEY_A
 from tests.icaap.service.p3_support import (
     AS_OF,
     access_for,
@@ -626,3 +631,55 @@ class TestTheCycleIsSealedAfterwards:
                 IcaapSectionWorkingSave(doc={"type": "doc", "content": []}, base_rev=1),
             )
         assert _error(caught.value) == "cycle_sealed"
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_snapshot_commits_protected_register_without_key_access(
+    canonical_book: Session,
+    extra_frameworks: None,
+    monkeypatch: pytest.MonkeyPatch,
+    status: KeyStatus,
+) -> None:
+    db = canonical_book
+    access, _reviewer, _approver, cycle = cast(
+        tuple[IcaapAccess, IcaapAccess, IcaapAccess, IcaapCycleRead], _build(db)
+    )
+    provider = encrypted.connect(db, monkeypatch)
+    encrypted.register(db)
+    row = guards.get_cycle_or_404(db, access, cycle.id)
+    digest = workflow.get_stages(db, access, cycle.id).review_digest
+    period = freeze.resolve_period(db, access, row, "ICAAP-REPORT")
+    definition = freeze._definition("ICAAP-REPORT")  # pyright: ignore[reportPrivateUsage]
+    before = cast(
+        GeneratedReturn,
+        snapshot.build(
+            db,
+            access,
+            row,
+            review_digest=digest,
+            bank=access.bank,
+            period=period,
+            definition=definition,
+        ),
+    )
+    db.commit()
+    db.expunge_all()
+    provider.set_status(KEY_A, status)
+    row = guards.get_cycle_or_404(db, access, cycle.id)
+    after = cast(
+        GeneratedReturn,
+        snapshot.build(
+            db,
+            access,
+            row,
+            review_digest=digest,
+            bank=access.bank,
+            period=period,
+            definition=definition,
+        ),
+    )
+    assert content_digest(after.snapshot) == content_digest(before.snapshot)
+    metadata = cast(Mapping[str, object], after.snapshot["metadata"])
+    icaap = cast(Mapping[str, object], metadata["icaap"])
+    profile = cast(Mapping[str, object], icaap["institution_profile"])
+    assert profile["register_state_digest"]
