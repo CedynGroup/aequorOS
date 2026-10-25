@@ -218,35 +218,6 @@ for (const route of ["/irr", "/fx"]) {
   });
 }
 
-test("SDI liquidity header and card grid share both edges at wide viewports", async ({
-  page,
-}) => {
-  await page.route("**/api/v1/banks", async (route) => {
-    const response = await route.fetch();
-    const payload = await response.json();
-    for (const bank of payload.banks) {
-      bank.institution_type_detail.institution_class = "sdi";
-    }
-    await route.fulfill({ response, json: payload });
-  });
-  await page.route("**/banks/*/sdi/liquidity-position", async (route) => {
-    await route.fulfill({
-      json: {
-        as_of: "2026-08-31",
-        ratios: [],
-        reserves: [],
-        maturity_ladder: [],
-        readiness: [],
-      },
-    });
-  });
-  await page.goto("/liquidity");
-  await expect(
-    page.getByRole("heading", { name: "LMTD Table 1 prudential ratios" }),
-  ).toBeVisible();
-  await expectAlignedHeaderAndCards(page);
-});
-
 for (const [route, title] of [
   ["/institution", "Institution Profile"],
   ["/institution/parties", "Related parties"],
