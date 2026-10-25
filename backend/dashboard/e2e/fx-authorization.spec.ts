@@ -193,6 +193,12 @@ test.describe("bound FX user", () => {
     await expect(
       page.getByRole("button", { name: "Run enterprise stress" }),
     ).toHaveCount(0);
+    const run = page.getByRole("button", { name: "Run all FX scenarios" });
+    await expect(run).toBeDisabled();
+    await run.locator("..").hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
+      /Requires FX · Confidential · Run authority for the whole institution/,
+    );
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "fx-run-disabled.png"),

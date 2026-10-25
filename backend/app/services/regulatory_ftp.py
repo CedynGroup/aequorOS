@@ -1142,14 +1142,15 @@ def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its f
     shocks: dict[str, Decimal],
     scenario_code: str = "analysis",
 ) -> _FtpAnalysis:
-    """Workbench seam: reprice the book under an arbitrary curve/spread shift
-    without persisting anything. The combined shift is curve + funding spread,
-    exactly how the official scenario overlays compose."""
+    """Compute-only seam for curve/spread shifts and temporary rule overrides.
+
+    The combined shift is curve + funding spread, as in official scenario
+    overlays. Rule overrides replace the loaded parameter values only for this
+    analysis; they never change the governed register or official-run path.
+    """
     facts = _load_facts(db, ctx, bank, period)
     active = _load_ftp_params_or_none(db, ctx, bank, period.period_end)
     draws = _load_ltp_draws(db, ctx, bank, period.period_end)
-    # What-if rule overrides live only in this analysis; governed parameters
-    # and the official-run path are never changed.
     if active is not None:
         active = replace(
             active,

@@ -1,5 +1,6 @@
 "use client";
 
+import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import KpiStat, { type KpiStatus } from "@/components/ui/KpiStat";
@@ -42,7 +43,7 @@ function kpiStatus(status: "green" | "amber" | "red" | string): KpiStatus {
 /**
  * The engine's traffic light, but only where the comparison it encodes can
  * actually be made. When the governed floor (or the ratio) did not resolve the
- * KPI takes `floorStatus`, which is never `ok` — a green edge is a compliance
+ * KPI takes `floorStatus`, which is never `ok`. a green edge is a compliance
  * affirmation and must not be drawn on an assessment nobody made.
  */
 function gatedKpiStatus(
@@ -65,7 +66,7 @@ function floorHint(floor: number | null, absence: string): string {
  * so a stored run's PASS cannot outlive the requirement it was measured
  * against: a run records what was applied WHEN IT RAN, and if that floor no
  * longer resolves from the institution's parameter set the row is restated as
- * "not assessed" rather than presented as today's verdict — the same authority,
+ * "not assessed" rather than presented as today's verdict. the same authority,
  * and therefore the same answer, as the KPI edge and the floors panel.
  */
 const FLOOR_RULE_CODES = {
@@ -103,19 +104,19 @@ export default function BaselOverview() {
   // `car_min`, `car_early_warning` and `car_critical` from the institution's
   // regulatory parameter set and this endpoint refuses with 409
   // `missing_parameter` rather than guessing when any of them is unset. A
-  // literal here is therefore never a "sensible default" — it is a fabricated
+  // literal here is therefore never a "sensible default". it is a fabricated
   // regulatory floor that every ratio on this page is then judged against. The
   // Bank of Ghana minimum is CRD ¶71's 10% *plus* the ¶75 capital-conservation
   // buffer (13% today) and has moved four times since 2020, so a written-down
   // `10` silently understates the bar; `10.5` and `9` matched no published
   // instrument at all. Absence stays absence and every consumer below renders
-  // it as "not assessed" — never green, never a breach against an invented bar.
+  // it as "not assessed". never green, never a breach against an invented bar.
   const carMin = numOrNull(data?.buffers.carMinPct);
   const carEarlyWarning = numOrNull(data?.buffers.carEarlyWarningPct);
   const carCritical = numOrNull(data?.buffers.carCriticalPct);
   // NEW-53. A FLOOR HAS ONE AUTHORITY, AND EVERY PANEL READS IT.
   //
-  // These four minima all come from `buffers` — the institution's active
+  // These four minima all come from `buffers`. the institution's active
   // regulatory parameter set, resolved server-side by
   // `regulatory_capital._buffers_or_409` from the same dict the engine is
   // handed. That is what makes the three panels below agree: the KPI edge (the
@@ -123,7 +124,7 @@ export default function BaselOverview() {
   // panel, and the validation rules (evaluated against these floors) are three
   // views of one comparison.
   //
-  // Tier 1 / CET1 / leverage USED to read `runMetricThreshold(run, …)` — the
+  // Tier 1 / CET1 / leverage USED to read `runMetricThreshold(run, …)`. the
   // threshold snapshotted into the latest stored RegulatoryRun. That is a
   // historical record of what was applied when that run executed, not the
   // current requirement, and `latestRunId` is null for every bank before its
@@ -265,11 +266,18 @@ export default function BaselOverview() {
         title="Basel Capital"
         action={
           data ? (
-            <LiveEngineNote live={data.live} stored={data.stored} />
+            <LiveEngineNote
+              live={data.live}
+              stored={data.stored}
+              dataAsOf={data.period.periodEnd}
+            />
           ) : undefined
         }
       />
 
+      <PageContainer className="py-4">
+        <RunModuleScenarios module="capital" />
+      </PageContainer>
       <QueryBoundary
         isLoading={dashboard.isLoading}
         error={dashboard.error}
@@ -290,7 +298,7 @@ export default function BaselOverview() {
                 sparkline={<Sparkline data={carTrend} />}
                 hint={
                   carMin === null
-                    ? "No capital adequacy minimum on file — compliance not assessed"
+                    ? "No capital adequacy minimum on file. compliance not assessed"
                     : `${regShort()} minimum ${fmtFloorPct(carMin)}`
                 }
                 explain={explain.explainFor("car_pct")}
@@ -307,7 +315,7 @@ export default function BaselOverview() {
                 sparkline={<Sparkline data={tier1Trend} />}
                 hint={floorHint(
                   tier1Min,
-                  "No Tier 1 minimum on file — compliance not assessed",
+                  "No Tier 1 minimum on file. compliance not assessed",
                 )}
                 explain={explain.explainFor("tier1_ratio_pct")}
               />
@@ -320,7 +328,7 @@ export default function BaselOverview() {
                 sparkline={<Sparkline data={cet1Trend} />}
                 hint={floorHint(
                   cet1Min,
-                  "No CET1 minimum on file — compliance not assessed",
+                  "No CET1 minimum on file. compliance not assessed",
                 )}
                 explain={explain.explainFor("cet1_ratio_pct")}
               />
@@ -334,13 +342,13 @@ export default function BaselOverview() {
                 )}
                 hint={floorHint(
                   leverageMin,
-                  "No leverage-ratio minimum on file — compliance not assessed",
+                  "No leverage-ratio minimum on file. compliance not assessed",
                 )}
                 explain={explain.explainFor("leverage_ratio_pct")}
               />
             </div>
 
-            {/* Regulatory floors — CAR & companions are floor limits */}
+            {/* Regulatory floors. CAR & companions are floor limits */}
             <SectionCard
               title="Regulatory floors"
               // Deliberately NOT "`regShort()` CRD minimums". Only `car_min` is
@@ -353,7 +361,7 @@ export default function BaselOverview() {
               // regulator over a number it did not set is the attribution
               // defect this programme already corrected on the liquidity
               // screens.
-              subtitle="Each ratio against the minimum resolved from this institution's parameter set — compliant while it stays above its floor"
+              subtitle="Each ratio against the minimum resolved from this institution's parameter set. compliant while it stays above its floor"
               computedAt={computedAt}
               footer={provenance}
             >
@@ -383,7 +391,7 @@ export default function BaselOverview() {
                     breach zone, colours the bar and prints a headroom figure
                     against a number no regulator set and no tenant configured.
                     A ratio whose governed floor does not resolve gets the
-                    measurement and an explicit non-assessment instead — and,
+                    measurement and an explicit non-assessment instead. and,
                     per NEW-53, the KPI edge above and the validation row below
                     reach the same verdict from the same authority. */}
                 {tier1Min === null ? (
@@ -447,13 +455,13 @@ export default function BaselOverview() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <ChartFrame
                 className="lg:col-span-2"
-                title="CAR — reporting-period trend"
+                title="CAR. reporting-period trend"
                 subtitle={`CAR and Tier 1 across ${carTrend.length} reporting periods`}
                 height={260}
                 actions={
                   compliantCount === null ? (
                     <StatusPill tone="pending">
-                      No CAR minimum on file — compliance not assessed
+                      No CAR minimum on file. compliance not assessed
                     </StatusPill>
                   ) : (
                     <StatusPill tone="success">
@@ -465,7 +473,7 @@ export default function BaselOverview() {
                   <>
                     {hasInlineTrendPoints ? (
                       <span>
-                        Hollow points are live computations — they solidify once
+                        Hollow points are live computations. they solidify once
                         those periods’ results are stored.
                       </span>
                     ) : (
@@ -596,7 +604,7 @@ export default function BaselOverview() {
                 <BufferCell
                   label="Headroom"
                   // Headroom is distance to the minimum. With no minimum there
-                  // is no distance to state — not a zero one.
+                  // is no distance to state. not a zero one.
                   value={
                     carMin === null ? null : numOrNull(data.buffers.headroomPp)
                   }
