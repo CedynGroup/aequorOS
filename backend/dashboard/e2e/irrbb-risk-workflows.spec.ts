@@ -397,6 +397,12 @@ test.describe("IRRBB functional workflow", () => {
     await page.goto("/irr");
     await openTab(page, "Scenarios");
     await expect(
+      page.getByRole("heading", { name: "IRRBB Scenarios", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("link", { name: "Open enterprise stress workbench" })
+      .click();
+    await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
     ).toBeVisible();
 

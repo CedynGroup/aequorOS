@@ -39,14 +39,12 @@ sensitivity grants IRRBB authority.
 
 ## Dashboard controls
 
-The `/irr` dashboards require aggregated view; `/irr/scenarios` requires
-confidential view. Run buttons and the sensitivity analysis horizon
-control consume the exact confidential run capability from effective authority.
-The enterprise workbench applies this run gate across all module lenses. When
-multiple permissions are missing, the FTP lens's confidential-run denial or the
-FX lens's run denial takes precedence over the IRRBB denial. The
-[FTP](ftp_enforcement_rollout.md#dashboard-controls) and
-[FX](fx_enforcement_rollout.md) lens gates remain in effect.
+The `/irr` dashboards require aggregated view. Run buttons and the sensitivity
+analysis horizon control consume the exact confidential run capability from effective authority.
+The separate enterprise workbench applies the IRRBB run gate; its backend also
+retains the conditional FX run gate described above. Workspace locations and
+scenario access are documented in
+[Treasury scenario workspaces](../dashboard/README.md#treasury-scenario-workspaces).
 The shared permission-only disabled-control policy is defined in
 [the RBAC guide](../../docs/rbac.md); native disabled controls expose their
 explanation through a keyboard-focusable wrapper.
