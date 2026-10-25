@@ -44,6 +44,7 @@ vi.mock("@/lib/api/hooks", () => ({
 }));
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   fixture.bankId = "";
   setActiveJurisdiction({});
 });
@@ -259,4 +260,79 @@ it("keeps in-force status honest when the only citation is provisional", async (
   expect(document.body).not.toHaveTextContent(
     /BK-SYNTH001|lrt_profile|narrow_to_volatile|synthetic_commencement|Primary source link not recorded/,
   );
+});
+
+describe("commencement notice", () => {
+  function onDate() {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-25T12:00:00Z"));
+  }
+
+  it("counts final rules tomorrow through day 90 before applying table filters", async () => {
+    onDate();
+    fixture.bankId = "BK-SYNTH002";
+    fixture.templates = [
+      {
+        ...rule("TOMORROW", "final_not_in_force"),
+        effectiveFrom: new Date("2026-10-26T00:00:00Z"),
+      },
+      { ...rule("DAY90", "final_not_in_force"), effectiveFrom: "2027-01-23" },
+      { ...rule("DRAFT", "exposure_draft"), effectiveFrom: "2026-11-01" },
+    ];
+    render(<InstrumentsRegister />);
+    const notice = screen.getByRole("note");
+    expect(notice).toHaveTextContent("2 rules commence in the next 90 days.");
+    expect(
+      within(notice).getByRole("link", { name: "Prepare" }),
+    ).toHaveAttribute("href", "/submissions/upcoming?bankId=BK-SYNTH002");
+    expect(
+      screen.queryByRole("link", { name: "Preparing for upcoming rules" }),
+    ).toBeNull();
+    await userEvent.type(
+      screen.getByRole("searchbox", { name: "Search instruments" }),
+      "no matching rule",
+    );
+    expect(
+      screen.getByText("No instruments match your search and status filter."),
+    ).toBeVisible();
+    expect(notice).toHaveTextContent("2 rules commence in the next 90 days.");
+  });
+
+  it.each([
+    ["final_not_in_force", "2026-10-24"],
+    ["final_not_in_force", "2026-10-25"],
+    ["final_not_in_force", "2027-01-24"],
+    ["final_not_in_force", null],
+    ["exposure_draft", "2026-11-01"],
+    ["in_force", "2026-11-01"],
+    ["unpublished", "2026-11-01"],
+  ])("hides the notice for %s with date %s", (status, effectiveFrom) => {
+    onDate();
+    fixture.templates = [{ ...rule("OTHER", status), effectiveFrom }];
+    render(<InstrumentsRegister />);
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Prepare" })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Preparing for upcoming rules" }),
+    ).toBeNull();
+  });
+
+  it("uses singular copy for one final rule and omits the notice on Upcoming rules", () => {
+    onDate();
+    fixture.templates = [rule("FINAL", "final_not_in_force")];
+    const { unmount } = render(<InstrumentsRegister />);
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "1 rule commences in the next 90 days.",
+    );
+    expect(screen.getByRole("link", { name: "Prepare" })).toHaveAttribute(
+      "href",
+      "/submissions/upcoming",
+    );
+    unmount();
+    render(<InstrumentsRegister upcoming />);
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "All regulatory instruments" }),
+    ).toHaveAttribute("href", "/submissions/instruments");
+  });
 });
