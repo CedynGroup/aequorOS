@@ -408,6 +408,7 @@ pnpm --filter @aequoros/dashboard test        # legacy + Vitest behavior suites
 pnpm --filter @aequoros/dashboard test:coverage # CI coverage and shrink-only ratchet
 pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
 pnpm --filter @aequoros/dashboard e2e         # Playwright; package journeys need S3/MinIO
+pnpm --filter @aequoros/dashboard e2e:contracts # browser presentation and HTTP contracts
 ```
 
 Regenerate the API client after any backend contract change:

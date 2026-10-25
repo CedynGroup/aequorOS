@@ -236,11 +236,14 @@ export async function sendBackAsChecker(
     await send.click();
     await expect(workspace).toBeHidden({ timeout: CEREMONY_TIMEOUT });
 
-    // Off the checker queue: it is the preparer's again.
+    // This return leaves the checker queue; other filed returns stay reachable.
     await page.goto("/submissions/approvals");
-    await expect(page.getByText("Queue is clear")).toBeVisible({
+    await expect(
+      page.getByRole("heading", { name: "In review", exact: true }),
+    ).toBeVisible({
       timeout: 30_000,
     });
+    await expect(row).toHaveCount(0);
   } finally {
     await context.close();
   }
