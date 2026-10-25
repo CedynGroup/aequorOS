@@ -28,6 +28,12 @@ export interface CfpApprove {
    * @type {string}
    * @memberof CfpApprove
    */
+  expectedRevision: string;
+  /**
+   *
+   * @type {string}
+   * @memberof CfpApprove
+   */
   reason: string;
 }
 
@@ -39,6 +45,8 @@ export function instanceOfCfpApprove(value: object): value is CfpApprove {
     !("approvalReference" in value) ||
     value["approvalReference"] === undefined
   )
+    return false;
+  if (!("expectedRevision" in value) || value["expectedRevision"] === undefined)
     return false;
   if (!("reason" in value) || value["reason"] === undefined) return false;
   return true;
@@ -58,6 +66,7 @@ export function CfpApproveFromJSONTyped(
   return {
     ...json,
     approvalReference: json["approval_reference"],
+    expectedRevision: json["expected_revision"],
     reason: json["reason"],
   };
 }
@@ -76,6 +85,7 @@ export function CfpApproveToJSONTyped(
 
   return {
     approval_reference: value["approvalReference"],
+    expected_revision: value["expectedRevision"],
     reason: value["reason"],
   };
 }

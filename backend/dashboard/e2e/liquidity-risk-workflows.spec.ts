@@ -278,7 +278,11 @@ test.describe("Liquidity functional workflow", () => {
     // ---- CFP: the early-warning evaluation and the plan's state.
     await openTab(page, "CFP");
     await expect(
-      page.getByRole("heading", { name: "Contingency Funding Plan" }),
+      page.getByRole("heading", {
+        name: "Contingency Funding Plan",
+        level: 1,
+        exact: true,
+      }),
     ).toBeVisible();
     await expectKpi(page, "Escalation state", "Business as usual");
     await expectKpi(page, "Indicators at action", "0", "0 at watch");
