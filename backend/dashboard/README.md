@@ -686,7 +686,11 @@ Settings section placement, authentication/cookie protocols, grant/access-reques
 contracts, BI authorization/privacy/governance, and the exhaustive macro-scenario
 API catalogue. Both commands boot the same
 disposable product stack with one worker and no retries, on separate invocations.
-The contract suite uses a list reporter and does not emit journey accounting.
+The contract suite reports every collected test and its final result through
+`e2e/support/contract-reporter.ts`, alongside the list reporter. Skips, missing
+results and expected failures fail the suite. `PLAYWRIGHT_CONTRACT_REPORT` selects
+the JSON destination (by default, `contracts.json` in the test-results directory).
+This report is separate from journey accounting.
 Navigation/recovery remains in `e2e/navigation-recovery.spec.ts`; macro read-only
 UI checks live together in `e2e/default-macro-scenarios.spec.ts`. Settings authority
 and preference persistence use fresh actors, while shell presentation is checked
