@@ -454,11 +454,15 @@ it.each(editableSections)(
     );
     expect(approval()).toBeDisabled();
     await user.click(
-      section.getByRole("button", { name: `Remove row 2 from ${title.toLowerCase()}` }),
+      section.getByRole("button", {
+        name: `Remove row 2 from ${title.toLowerCase()}`,
+      }),
     );
     expect(approval()).toBeEnabled();
     await user.click(
-      section.getByRole("button", { name: `Remove row 1 from ${title.toLowerCase()}` }),
+      section.getByRole("button", {
+        name: `Remove row 1 from ${title.toLowerCase()}`,
+      }),
     );
     expect(approval()).toBeDisabled();
     expect(approvalRecorded).toBe(false);
@@ -994,14 +998,68 @@ it.each(editableSections)(
 );
 
 it("keeps operational status and refusal explanations visible when the content editor is collapsed", async () => {
-  server.use(http.get(url, () => HttpResponse.json({ current: { ...plan, content: authoredContent }, approved: null })));
+  server.use(
+    http.get(url, () =>
+      HttpResponse.json({
+        current: { ...plan, content: authoredContent },
+        approved: null,
+      }),
+    ),
+  );
   const user = userEvent.setup();
   mount();
   await user.click(await screen.findByText("Edit plan content"));
   expect(screen.getByDisplayValue("Committed facility")).not.toBeVisible();
   expect(screen.getByText(/Current plan: v1/)).toBeVisible();
   expect(screen.getByText(/Approval validity:/)).toBeVisible();
-  expect(screen.getByText(/The preparer cannot approve their own plan/)).toBeVisible();
+  expect(
+    screen.getByText(/The preparer cannot approve their own plan/),
+  ).toBeVisible();
   expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
   expect(screen.getByRole("button", { name: "Activate CFP" })).toBeVisible();
+});
+
+it("explains overdue approval as the next action and refuses activation", async () => {
+  const approved = { ...plan, status: "approved", approval_overdue: true };
+  server.use(
+    http.get(url, () => HttpResponse.json({ current: approved, approved })),
+  );
+  mount();
+  expect(
+    await screen.findByText(/Create a new draft and renew Board approval/),
+  ).toBeVisible();
+  expect(
+    screen.getByText("Renew Board approval before activation."),
+  ).toBeVisible();
+  expect(screen.getByRole("button", { name: "Activate CFP" })).toBeDisabled();
+});
+
+it("offers named indicators from the EWI register while retaining the stored code", async () => {
+  server.use(
+    http.get(url, () =>
+      HttpResponse.json({
+        current: { ...plan, content: authoredContent },
+        approved: null,
+      }),
+    ),
+    http.get(`${apiBaseUrl}/banks/BK-SAMP0001/liquidity/ewis`, () =>
+      HttpResponse.json({
+        indicators: [
+          {
+            code: "funding_concentration",
+            name: "Growing concentration in funding sources",
+          },
+        ],
+      }),
+    ),
+  );
+  mount();
+  const suggestion = await screen.findByRole("option", {
+    name: "Growing concentration in funding sources",
+    hidden: true,
+  });
+  const input = screen.getByLabelText("Indicator code (from the EWI register)");
+  expect(input).toHaveValue("LCR");
+  expect(suggestion).toHaveValue("funding_concentration");
+  expect(input).toHaveAttribute("list", suggestion.parentElement!.id);
 });
