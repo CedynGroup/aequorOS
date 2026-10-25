@@ -720,6 +720,17 @@ def compute_live(
                 for breach in concentration.breaches
             ),
         )
+    if concentration is not None and concentration.locked_limits:
+        findings = (
+            *findings,
+            LiveFindingSpec(
+                rule_id="concentration_limits_locked",
+                severity="medium",
+                message="Named concentration limits are locked and have not been evaluated "
+                "because the bank identity matching key is unavailable.",
+                metric="largest_single_name_share_pct",
+            ),
+        )
     return LiveModuleResult(
         metrics=metrics,
         status=npl_status,

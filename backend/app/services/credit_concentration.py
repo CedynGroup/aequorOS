@@ -24,13 +24,16 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
+from app.core.key_management.fields import blind_index
+from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.domain.credit.concentration_monitor import (
+    BucketReading,
     ConcentrationLimit,
     ConcentrationMonitorResult,
     monitor_concentration,
 )
-from app.domain.stress.concentration import ConcentrationExposure
+from app.domain.stress.concentration import DIM_SINGLE_NAME, ConcentrationExposure
 from app.identity.public import Bank
 from app.models import (
     CanonicalCounterparty,
@@ -170,15 +173,39 @@ def active_limits(
     rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamConcentrationLimit, as_of
     )
-    return tuple(
-        ConcentrationLimit(
-            dimension=row.dimension,
-            limit_kind=row.limit_kind,
-            value=row.value,
-            bucket_key=row.bucket_key,
+    limits: list[ConcentrationLimit] = []
+    for row in rows:
+        key = row.bucket_key
+        locked = False
+        if (
+            row.dimension == DIM_SINGLE_NAME
+            and row.limit_kind != "hhi"
+            and key is not None
+            and not key.startswith("pos:")
+        ):
+            try:
+                key = blind_index(
+                    db,
+                    organization_id=ctx.organization_id,
+                    bank_id=bank.id,
+                    domain="counterparty.group",
+                    value=key,
+                )
+            except KeyIntegrityError:
+                raise
+            except KeyUnavailableError:
+                key = None
+                locked = True
+        limits.append(
+            ConcentrationLimit(
+                dimension=row.dimension,
+                limit_kind=row.limit_kind,
+                value=row.value,
+                bucket_key=key,
+                locked=locked,
+            )
         )
-        for row in rows
-    )
+    return tuple(limits)
 
 
 def monitor(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> ConcentrationMonitorResult:
@@ -207,12 +234,13 @@ def concentration_read(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
         ConcentrationBucketRead,
         ConcentrationDimensionRead,
         CreditConcentrationRead,
+        LockedConcentrationLimitRead,
     )
 
     result = monitor(db, ctx, bank, as_of)
     basis = "net_own_funds" if institution_types.institution_class(db, bank) == "sdi" else "tier1"
 
-    def bucket(reading: Any) -> Any:
+    def bucket(reading: BucketReading) -> ConcentrationBucketRead:
         return ConcentrationBucketRead(
             key=reading.key,
             exposure_ghs=reading.exposure_ghs,
@@ -244,5 +272,11 @@ def concentration_read(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
             for dimension in result.dimensions
         ],
         breaches=[bucket(b) for b in result.breaches],
-        limit_count=len(active_limits(db, ctx, bank, as_of)),
+        limit_count=result.limit_count,
+        locked_limits=[
+            LockedConcentrationLimitRead(
+                dimension=limit.dimension, limit_kind=limit.limit_kind, value=limit.value
+            )
+            for limit in result.locked_limits
+        ],
     )

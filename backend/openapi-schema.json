@@ -16150,6 +16150,13 @@
             "title": "Limit Count",
             "type": "integer"
           },
+          "locked_limits": {
+            "items": {
+              "$ref": "#/components/schemas/LockedConcentrationLimitRead"
+            },
+            "title": "Locked Limits",
+            "type": "array"
+          },
           "total_book_ghs": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Book Ghs",
@@ -16162,7 +16169,8 @@
           "capital_basis",
           "dimensions",
           "breaches",
-          "limit_count"
+          "limit_count",
+          "locked_limits"
         ],
         "title": "CreditConcentrationRead",
         "type": "object"
@@ -43522,6 +43530,37 @@
           "non_performing"
         ],
         "title": "LoanGradeBucketRead",
+        "type": "object"
+      },
+      "LockedConcentrationLimitRead": {
+        "additionalProperties": false,
+        "properties": {
+          "dimension": {
+            "title": "Dimension",
+            "type": "string"
+          },
+          "limit_kind": {
+            "title": "Limit Kind",
+            "type": "string"
+          },
+          "limit_status": {
+            "const": "locked",
+            "default": "locked",
+            "title": "Limit Status",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dimension",
+          "limit_kind",
+          "value"
+        ],
+        "title": "LockedConcentrationLimitRead",
         "type": "object"
       },
       "LoginRequest": {
