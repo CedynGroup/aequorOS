@@ -26,7 +26,7 @@ from __future__ import annotations
 import io
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 import openpyxl
 import pytest
@@ -447,12 +447,16 @@ def test_every_input_cell_of_both_sheets_is_bound(
         tally = by_sheet.setdefault(section["title"], {"mapped": 0, "input_required": 0})
         for row in section["rows"]:
             tally[row["status"]] += 1
-    # the hermetic book has no accruals sub-ledger and no capex register: the rows fed
-    # only by those datasets (6A 11, 35, 56, 64, 66–69; 6B 35, 53, 57, 63) stay
-    # input_required end to end; BSD6B's Other Assets foreign slice is 0 — nothing to
-    # allocate, so its bands read 0 (mapped)
-    assert by_sheet["BSD6A"] == {"mapped": 44 * 10 - 8, "input_required": 16 * 10 + 8}
-    assert by_sheet["BSD6B"] == {"mapped": 40 * 10, "input_required": 10 * 10}
+    # Missing reference registers and official fact slices stay input_required.
+    # The book states neither provisions nor current-year profit; its foreign
+    # slice also has no vault cash, other-assets or capital-component facts.
+    assert by_sheet["BSD6A"] == {"mapped": 42 * 10 - 8, "input_required": 18 * 10 + 8}
+    assert by_sheet["BSD6B"] == {"mapped": 31 * 10, "input_required": 19 * 10}
+    missing_facts = {"BSD6A": (29, 46), "BSD6B": (8, 29, 34, 41, 43, 44, 45, 46, 47)}
+    for sheet, rows in missing_facts.items():
+        cells = cast(dict[str, object], bsd6["bog_form"]["cells"][sheet])
+        for row in rows:
+            assert all(cells[f"{col}{row}"] is None for col in "BCDEFGHIJK"), (sheet, row)
 
 
 def test_total_equals_sum_of_bands_and_bogs_section_formulas_re_add_them(
@@ -469,9 +473,8 @@ def test_total_equals_sum_of_bands_and_bogs_section_formulas_re_add_them(
                 continue
             assert sum(b for b in bands if b is not None) == total, (sheet, row)
             checked += 1
-        # every platform-fed row except BSD6A "Other Assets" (bands blank by design;
-        # its foreign slice is 0 on BSD6B, so nothing is left to allocate there)
-        assert checked == {"BSD6A": 43, "BSD6B": 40}[sheet], sheet
+        # Every fully stated row except domestic Other Assets, which has no band.
+        assert checked == {"BSD6A": 41, "BSD6B": 31}[sheet], sheet
         # the template's own section arithmetic over those inputs, per column
         layout = load_layout("BSD6").sheet(sheet)
         for col in "BCDEFGHIJK":
@@ -505,13 +508,15 @@ def test_from_bsd2_and_totals_agree_with_bsd2(
             from_bsd2 = _num(cells.get(f"B{row}"))
             ref_values = [_num(bsd2_cells.get(ref)) for ref in refs]
             if from_bsd2 is None:
-                # every BSD2 leaf behind the row is input_required (the accruals
-                # sub-ledger is not ingested in the hermetic book): so is the BSD6 row,
-                # FROM BSD2 included (BSD2's subtotal formula over blanks is not a figure)
+                # Missing reference registers or official facts leave the whole
+                # row blank, including a FROM BSD2 formula subtotal over blanks.
                 assert _num(cells.get(f"C{row}")) is None, (sheet, row)
                 components = line.params["components"]
                 assert isinstance(components, list)
-                assert all(c["source"] == "refs.sum" for c in components), (sheet, row)
+                assert all(c["source"] in {"refs.sum", "facts.sum"} for c in components), (
+                    sheet,
+                    row,
+                )
                 continue
             expected = sum(value or Decimal(0) for value in ref_values)
             assert from_bsd2 == expected, (sheet, row, refs)
@@ -521,7 +526,7 @@ def test_from_bsd2_and_totals_agree_with_bsd2(
             assert total == from_bsd2, (sheet, row, refs)
             agreed += 1
             nonzero += total != 0
-        assert agreed >= 40, sheet  # noqa: PLR2004
+        assert agreed == {"BSD6A": 42, "BSD6B": 31}[sheet], sheet
         # the seeded book reaches the ladder; BSD6B carries fewer live rows now
         # that BSD2's capital lines are Domestic-only (they no longer leak cedi
         # capital into the foreign-currency sheet — the tie-out above still holds)
@@ -546,8 +551,8 @@ def test_guide_placements_land_in_the_documented_bands(
     a = bsd6["bog_form"]["cells"]["BSD6A"]
     b = bsd6["bog_form"]["cells"]["BSD6B"]
 
-    def band(cells: dict[str, Any], row: int, name: str) -> Decimal:
-        return _num(cells[f"{BAND_COLUMNS[name]}{row}"]) or Decimal(0)
+    def band(cells: dict[str, Any], row: int, name: str) -> Decimal | None:
+        return _num(cells[f"{BAND_COLUMNS[name]}{row}"])
 
     # loans to private enterprises: 30M in 3y–<5y, 4M (Sat 2031-03-29 → Mon = 5y edge)
     assert band(a, 24, "3y_lt_5y") == 30 * MILLION
@@ -574,8 +579,9 @@ def test_guide_placements_land_in_the_documented_bands(
     assert band(a, 41, "5y_plus") == _num(a["C41"]) != 0  # paid-up capital → 5y+
     assert band(a, 44, "overdue") == _num(a["C44"]) == -2 * MILLION  # negative reserve
     assert band(a, 44, "5y_plus") == 0
-    # provisions → Overdue (fixture provisions facts may be zero; the band holds the total)
-    assert band(a, 29, "overdue") == _num(a["C29"])
+    # No official provision fact is stated, so neither band nor total is zero.
+    assert band(a, 29, "overdue") is None
+    assert a["C29"] is None
     # Other Assets: FROM BSD2 + Total filled, bands blank for the bank to allocate
     assert _num(a["C34"]) is not None and _num(a["C34"]) != 0
     assert all(a.get(f"{col}34") is None for col in "DEFGHIJK")

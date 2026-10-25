@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from app.schemas.liquidity_cfp import CfpRead
 from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
 
 pytestmark = requires_real_data
@@ -197,7 +198,11 @@ def test_cfp_routes_enforce_maker_checker_roles(real_client: TestClient) -> None
     # Drafting never touches the approved plan.
     assert after["approved"] == before["approved"]
 
-    approve_payload = {"approval_reference": "BM-1", "reason": "annual"}
+    approve_payload = {
+        "expected_revision": CfpRead.model_validate_json(drafted.text).revision,
+        "approval_reference": "BM-1",
+        "reason": "annual",
+    }
     gated = real_client.post(
         f"{CFP_URL}/approve", headers=real_headers(roles=("analyst",)), json=approve_payload
     )

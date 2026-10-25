@@ -299,8 +299,11 @@ def test_bsd2a_category_rows_equal_bsd2_foreign_column(
         assert _f(fx, f"E{row}") == pytest.approx(sum(_f(bsd2, ref) for ref in refs)), row
     assert _f(fx, "E13") == 200_000.0 == _f(bsd2, "C7")  # FX notes and coins
     assert _f(fx, "E27") == 1_500_000.0 == _f(bsd2, "C68")  # gross FX loans
-    assert _f(fx, "N27") == pytest.approx(_f(bsd2, "C69"))  # provisions column
-    assert _f(fx, "E39") == _f(bsd2, "C113") == 0.0  # other assets (no FX fact on the book)
+    # Missing official provision and foreign other-assets facts stay blank in
+    # both the dependency and its currency return, including the derived ratio.
+    assert fx["N27"] is None and bsd2["C69"] is None
+    assert fx["E39"] is None and bsd2["C113"] is None
+    assert fx["H39"] is None
     assert _f(fx, "E30") == pytest.approx(_f(bsd2, "C34") + _f(bsd2, "C72") + _f(bsd2, "C102"))
     assert _f(fx, "E30") == 800_000.0 == _f(bsd2, "C34")  # the USD cocoa bill, via C54→C53→C34
     assert _f(fx, "E66") == pytest.approx(_f(bsd2, "C228") + _f(bsd2, "C233"))
@@ -319,10 +322,10 @@ def test_bsd2a_category_rows_equal_bsd2_foreign_column(
         assert fx.get(f"E{row}") is None and fx.get(f"H{row}") is None
         assert _f(fx, f"G{row}") == pytest.approx(net_worth)
     counts = payload["status_counts"]
-    assert counts == {"mapped": 67, "input_required": 785, "unmapped": 0, "derived": 0}
+    assert counts == {"mapped": 64, "input_required": 788, "unmapped": 0, "derived": 0}
     section = snapshot["sections"][0]
     statuses = {row["cell"]: row["status"] for row in section["rows"]}
-    assert statuses["E39"] == "mapped" and statuses["E99"] == "input_required"
+    assert statuses["E39"] == "input_required" and statuses["E99"] == "input_required"
     assert statuses["D14"] == "input_required"
     scaled = {row["cell"]: row["value"] for row in section["rows"]}
     assert float(scaled["E27"]) == pytest.approx(1.5)  # sections carry the sheet unit
