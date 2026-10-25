@@ -1,9 +1,8 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
 /**
- * Liquidity, worked end to end by an analyst: read the fixture's LCR, buffer
- * and NSFR back off the Cockpit, Buffer and NSFR tabs, read the CFP's
- * early-warning evaluation, then run an enterprise stress from the Stress tab
- * and confirm the stressed coverage it shows is the run the platform kept.
+ * Independent liquidity outcomes: reconcile LCR and its buffer, reconcile NSFR,
+ * explain CFP readiness, and persist a governed adverse stress. Each story
+ * opens the module afresh and establishes its own navigation prerequisites.
  *
  * The expectations are the FIXTURE's, not the screen's. Every balance below is
  * the canonical book's (`tests/fixtures/canonical_bank_fixture.py`
@@ -123,24 +122,25 @@ const ADVERSE = {
   baselineCarPct: 36.959044,
 };
 
-test.describe("Liquidity functional workflow", () => {
+test.describe("Liquidity coverage, funding and stress outcomes", () => {
   test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
 
-  test("reads the fixture's LCR, buffer, NSFR and CFP, then stresses and persists", async ({
-    page,
-  }) => {
-    test.setTimeout(120_000);
-    // The derived position: 735 HQLA over 499 net outflows, 1,961 ASF over 1,294.5 RSF.
-    expect([HQLA_M, OUTFLOWS_M, CAPPED_INFLOWS_M, NET_OUTFLOWS_M]).toEqual([
-      735, 619, 120, 499,
-    ]);
-    expect([ASF_M, RSF_M]).toEqual([1961, 1294.5]);
-
-    // ---- Cockpit: the ratios, then the outflow and inflow decomposition.
+  test.describe.configure({ timeout: 120_000 });
+  test.beforeEach(async ({ page }) => {
     await page.goto("/liquidity");
     await expect(
       page.getByRole("heading", { name: "Liquidity Cockpit" }),
     ).toBeVisible();
+  });
+
+  test("LCR cash flows reconcile to the HQLA buffer", async ({ page }) => {
+    // The derived position: 735 HQLA over 499 net outflows.
+    expect([HQLA_M, OUTFLOWS_M, CAPPED_INFLOWS_M, NET_OUTFLOWS_M]).toEqual([
+      735, 619, 120, 499,
+    ]);
+
+    // ---- Cockpit: the ratios, then the outflow and inflow decomposition.
+
     await expectKpi(page, "Liquidity Coverage Ratio", pct(LCR_PCT, 2));
     await expectKpi(page, "HQLA stock", ghsM(HQLA_M), "Post-haircut weighted");
     await expectKpi(
@@ -251,7 +251,12 @@ test.describe("Liquidity functional workflow", () => {
       ghsM(HQLA_M),
       "100.0%",
     ]);
+  });
 
+  test("NSFR reconciles weighted available and required funding", async ({
+    page,
+  }) => {
+    expect([ASF_M, RSF_M]).toEqual([1961, 1294.5]);
     // ---- NSFR: both sides of the ratio, line by line.
     await openTab(page, "NSFR");
     const asf = section(page, "Available Stable Funding (ASF)").getByRole(
@@ -274,7 +279,11 @@ test.describe("Liquidity functional workflow", () => {
           `Basel minimum 100%.`,
       ),
     ).toBeVisible();
+  });
 
+  test("CFP indicators explain readiness without inventing unconfigured triggers", async ({
+    page,
+  }) => {
     // ---- CFP: the early-warning evaluation and the plan's state.
     await openTab(page, "CFP");
     await expect(
@@ -301,7 +310,11 @@ test.describe("Liquidity functional workflow", () => {
       await expect(row.locator("td").nth(4)).toHaveText("Not set");
       await expect(row.locator("td").nth(5)).toHaveText("Unconfigured");
     }
+  });
 
+  test("adverse stress persists the resulting liquidity and capital coverage", async ({
+    page,
+  }) => {
     // ---- Stress: drive the adverse scenario through every engine.
     await openTab(page, "Stress");
     await expect(

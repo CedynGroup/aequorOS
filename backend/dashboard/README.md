@@ -692,6 +692,11 @@ UI checks live together in `e2e/default-macro-scenarios.spec.ts`. Settings autho
 and preference persistence use fresh actors, while shell presentation is checked
 once in the contract suite.
 
+Treasury risk stories are separated by observable outcome. Each opens its module
+afresh; scenario history and board-pack stories execute their own prerequisite
+run, so they can be selected without running an earlier story first. The coherent
+ingestion-to-worker-to-generated-return journey stays together.
+
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run the commands from the repository
 root; the tour writes full-page screenshots of every route to
