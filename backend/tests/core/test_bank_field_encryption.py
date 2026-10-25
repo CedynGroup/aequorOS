@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Literal, cast
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -773,7 +774,7 @@ def test_report_labels_only_read_needed_snapshot_representatives(
     selected.attributes = {"parent": "Synthetic representative"}
     group_snapshot(db_session, selected, "selected-position", AS_OF, position_type)
     selected_id = selected.id
-    excluded_ids = []
+    excluded_ids: list[UUID] = []
     for index, reason in enumerate(
         (
             "old",
@@ -1350,14 +1351,15 @@ def test_ingestion_reference_lookups_leave_unused_fields_unread(
         ("historical-loan", historical_id, Decimal(100)),
         ("replacement-loan", replacement_id, Decimal(200)),
     }
-    generations = dict(
-        db_session.execute(
+    generations: dict[UUID, UUID | None] = {
+        record_id: successor_id
+        for record_id, successor_id in db_session.execute(
             select(
                 CanonicalCounterparty.id,
                 CanonicalCounterparty.superseded_by,
             )
-        ).all()
-    )
+        ).tuples()
+    }
     assert generations[current_id] == replacement_id
     assert all(
         generations[record_id] is None
