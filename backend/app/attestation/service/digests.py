@@ -29,8 +29,8 @@ Three digests, each with a distinct job (docs/attestation_esignature.md §3.1):
     The complete-register commitment for returns with no engine run
     (``source_runs = []``). It binds stable register record IDs, update
     timestamps, stored values including ciphertext, and the current bank
-    key version. Rotation, re-encryption and register edits change it. Weaker than ``input_hash``: it proves state, not
-    derivation (legal register L16).
+    key version. Rotation, re-encryption and register edits change it. Weaker
+    than ``input_hash``: it proves state, not derivation (legal register L16).
 
 ``certification_digest``
     What every signer signs. Binds institution + return identity + the

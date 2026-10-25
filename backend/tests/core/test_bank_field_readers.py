@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from decimal import Decimal
 from typing import Literal
@@ -31,7 +31,7 @@ type Reader = Literal["references", "training", "matching", "bi", "contracts"]
 
 
 @contextmanager
-def counterparty_selects(db: Session) -> Iterator[list[str]]:
+def counterparty_selects(db: Session) -> Generator[list[str]]:
     statements: list[str] = []
 
     def record(

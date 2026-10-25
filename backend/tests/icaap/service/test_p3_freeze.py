@@ -20,14 +20,14 @@ from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import IcaapAccess
 from app.attestation.service.digests import content_digest
 from app.core.key_management.types import KeyStatus
 from app.icaap.models.workspace import IcaapCycle, IcaapStageDecision
-from app.icaap.schemas.workspace import IcaapCycleRead, IcaapFreezeCreate
+from app.icaap.schemas.workspace import IcaapFreezeCreate
 from app.icaap.service import cycles, freeze, guards, snapshot, workflow
 from app.models import BankFinancialFact, BankReportingPeriod, RegulatoryPackage
 from app.reporting.service.generation import GeneratedReturn, snapshot_content_hash
+from app.reporting.service.registry import ReturnDefinition
 from app.services import reconciliation
 from tests.core import test_key_unavailable_numeric as encrypted
 from tests.core.test_bank_field_encryption import KEY_A
@@ -641,15 +641,16 @@ def test_snapshot_commits_protected_register_without_key_access(
     status: KeyStatus,
 ) -> None:
     db = canonical_book
-    access, _reviewer, _approver, cycle = cast(
-        tuple[IcaapAccess, IcaapAccess, IcaapAccess, IcaapCycleRead], _build(db)
-    )
+    access, _reviewer, _approver, cycle = _build(db)
     provider = encrypted.connect(db, monkeypatch)
     encrypted.register(db)
     row = guards.get_cycle_or_404(db, access, cycle.id)
     digest = workflow.get_stages(db, access, cycle.id).review_digest
-    period = freeze.resolve_period(db, access, row, "ICAAP-REPORT")
-    definition = freeze._definition("ICAAP-REPORT")  # pyright: ignore[reportPrivateUsage]
+    period = cast(BankReportingPeriod, freeze.resolve_period(db, access, row, "ICAAP-REPORT"))
+    definition = cast(
+        ReturnDefinition,
+        freeze._definition("ICAAP-REPORT"),  # pyright: ignore[reportPrivateUsage]
+    )
     before = cast(
         GeneratedReturn,
         snapshot.build(

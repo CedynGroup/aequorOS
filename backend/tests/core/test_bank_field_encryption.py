@@ -1236,7 +1236,9 @@ def test_mixed_bi_filters_protect_only_identity_values(
         connect(db_session, provider)
     numeric_filter = {"member": "position.currency", "op": "eq", "values": ["GHS"]}
     identity_filter = {"member": "counterparty.name", "op": "eq", "values": [NAME]}
-    spec = {"widgets": [{"query": {"filters": [numeric_filter, identity_filter]}}]}
+    spec: dict[str, object] = {
+        "widgets": [{"query": {"filters": [numeric_filter, identity_filter]}}]
+    }
     version = saved_version(db_session, spec)
     db_session.add(version)
     db_session.flush()
@@ -1254,9 +1256,11 @@ def test_mixed_bi_filters_protect_only_identity_values(
     db_session.commit()
     if connected:
         provider.set_status(KEY_A, KeyStatus.DISABLED)
-        with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
-            with pytest.raises(KeyUnavailableError):
-                fresh.get(BiDashboardVersion, version_id)
+        with (
+            Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh,
+            pytest.raises(KeyUnavailableError),
+        ):
+            fresh.get(BiDashboardVersion, version_id)
         provider.set_status(KEY_A, KeyStatus.ACTIVE)
         widgets = cast(list[dict[str, object]], stored["widgets"])
         query = cast(dict[str, object], widgets[0]["query"])
@@ -1324,6 +1328,8 @@ def test_numeric_saved_content_rejects_invalid_json_shape(
     )
     db_session.commit()
     provider.set_status(KEY_A, KeyStatus.DISABLED)
-    with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
-        with pytest.raises(KeyIntegrityError):
-            fresh.get(BiDashboardVersion, version_id)
+    with (
+        Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh,
+        pytest.raises(KeyIntegrityError),
+    ):
+        fresh.get(BiDashboardVersion, version_id)

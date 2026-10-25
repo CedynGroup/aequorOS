@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import cast
 
 import pytest
@@ -52,7 +52,7 @@ def connect(db: Session, monkeypatch: pytest.MonkeyPatch) -> LocalKeyProvider:
         db,
         bank_id=bank.id,
         organization_id=ORG_1,
-        storage_slug=bank.storage_slug,
+        storage_slug=cast(str, bank.storage_slug),
         key=KEY_A,
         providers=resolve,
     )
@@ -115,7 +115,9 @@ def test_bsd14_generates_after_key_loss_with_protected_register(
     assert not payload["errors"]
     for ref, expected in rates.EXPECTED.items():
         actual = cells[ref]
-        assert actual is not None and float(actual) == pytest.approx(expected)
+        assert actual is not None and float(actual) == cast(
+            Callable[[object], object], pytest.approx
+        )(expected)
 
 
 @pytest.mark.usefixtures("credit_run_authority")

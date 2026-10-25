@@ -6,17 +6,17 @@ Data Engine after key connection.
 
 ## Covered fields
 
-| Table                      | Fields                                                                              |
-| -------------------------- | ----------------------------------------------------------------------------------- |
-| `canonical_counterparties` | `name`, `source_reference`, `group_reference`, `external_identifiers`               |
-| `related_parties`          | `full_name`, `contact`                                                              |
-| `related_party_roles`      | `other_responsibilities`, `term_of_appointment`, `icag_registration`                |
-| `ingestion_batches`        | `validation_report`, `etl_report`, `error_message`                                  |
-| `translation_failures`     | `raw_record`, `error_message`                                                       |
-| `lineage_records`          | `details` for bank-scoped records                                                   |
-| `bi_dashboard_versions`    | identity-filter values in `spec`                                                    |
-| `bi_subscriptions`         | identity-filter values in `query`                                                   |
-| `bi_alerts`                | identity-filter values in `filters`                                                 |
+| Table                      | Fields                                                                |
+| -------------------------- | --------------------------------------------------------------------- |
+| `canonical_counterparties` | `name`, `source_reference`, `group_reference`, `external_identifiers` |
+| `related_parties`          | `full_name`, `contact`                                                |
+| `related_party_roles`      | `other_responsibilities`, `term_of_appointment`, `icag_registration`  |
+| `ingestion_batches`        | `validation_report`, `etl_report`, `error_message`                    |
+| `translation_failures`     | `raw_record`, `error_message`                                         |
+| `lineage_records`          | `details` for bank-scoped records                                     |
+| `bi_dashboard_versions`    | identity-filter values in `spec`                                      |
+| `bi_subscriptions`         | identity-filter values in `query`                                     |
+| `bi_alerts`                | identity-filter values in `filters`                                   |
 
 Numeric balances, positions, counterparty calculation attributes, filing payloads,
 ownership percentages and calculation inputs retain ordinary database encryption
@@ -45,10 +45,9 @@ unavailability, damaged ciphertext and cross-bank substitution are rejected.
 The ORM encrypts new records and changed covered columns before flush, then
 restores their application values. Counterparty identity fields load on demand;
 other entity loads decrypt covered ciphertext. Scalar SQL ciphertext projections
-remain opaque. Complete-register attestation commitments use stored values, stable
-record IDs, update timestamps and the current key version without decrypting
-identities. Rotation or re-encryption requires in-review returns to be regenerated. Optional banks without a
-connected key retain ordinary field storage.
+remain opaque. Complete-register attestation commitments follow the
+[attestation digest contract](../../docs/attestation_esignature.md#31-what-gets-signed--two-artefacts-per-signature).
+Optional banks without a connected key retain ordinary field storage.
 
 ## Exact-match search
 

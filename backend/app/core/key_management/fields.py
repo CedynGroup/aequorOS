@@ -81,7 +81,7 @@ class ProtectedField(TypeDecorator[object]):
             raise KeyUnavailableError("Sensitive fields require a scoped ORM write.")
         return [str(value.envelope_id), base64.b64encode(value.message).decode("ascii")]
 
-    def _decode(self, value: object) -> SealedField:
+    def decode(self, value: object) -> SealedField:
         try:
             envelope, message = TypeAdapter(tuple[UUID, str]).validate_python(value)
             return SealedField(envelope, base64.b64decode(message, validate=True))
@@ -105,7 +105,7 @@ class ProtectedText(ProtectedField):
                 payload = _JSON.validate_json(value[len(FORMAT) + 1 :])
             except ValueError as exc:
                 raise KeyIntegrityError("Encrypted field format is invalid.") from exc
-            return self._decode(payload)
+            return self.decode(payload)
         return value
 
 
@@ -119,7 +119,7 @@ class ProtectedJSON(ProtectedField):
 
     def process_result_value(self, value: object, dialect: Dialect) -> object:
         if isinstance(value, dict) and FORMAT in value:
-            return self._decode(cast(dict[str, object], value)[FORMAT])
+            return self.decode(cast(dict[str, object], value)[FORMAT])
         return cast(object, value)
 
 
@@ -368,7 +368,7 @@ def _load_pending_fields(db: Session, states: list[InstanceState[object]]) -> No
         )
     for (mapper, organization, bank), ids in groups.items():
         table = cast(Table, mapper.local_table)
-        for batch in batched(ids, 500):
+        for batch in batched(ids, 500, strict=False):
             stmt = (
                 select(mapper.class_)
                 .options(undefer("*"))
@@ -559,7 +559,7 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
                 def open_values(item: object, path: str, col: FieldColumn = col) -> object:
                     if not isinstance(item, dict) or FORMAT not in item:
                         return cast(object, item)
-                    sealed = col.kind._decode(cast(dict[str, object], item)[FORMAT])
+                    sealed = col.kind.decode(cast(dict[str, object], item)[FORMAT])
                     if row is None:
                         raise KeyUnavailableError("The bank encryption key is not connected.")
                     return _open_field(db, row, state, sealed, col.column + ":" + path)

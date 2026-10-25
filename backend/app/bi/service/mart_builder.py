@@ -1505,9 +1505,9 @@ def _build_dim_branch(  # noqa: PLR0913 - one build carries its whole identity
     )
 
 
-def _latest_current_rows(
-    db: Session, model: type, organization_id: str, bank_id: str, as_of: date
-) -> list[Any]:
+def _latest_current_rows[T: (CanonicalProduct, CanonicalCounterparty, CanonicalGlAccount)](
+    db: Session, model: type[T], organization_id: str, bank_id: str, as_of: date
+) -> list[T]:
     """Included, current-generation rows of ``model`` on/before ``as_of``, newest first."""
     stmt = (
         select(model)
