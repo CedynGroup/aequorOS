@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   CfpAudience,
   CfpHorizon,
@@ -72,55 +72,57 @@ function Rows<T extends object>({
       {rows.map((row, index) => (
         <div key={index} className="grid gap-3 sm:grid-cols-2">
           {fields.map((field) => (
-            <label key={field.key} className="text-caption">
-              {field.title ?? label(field.key)}
-              {field.optional ? " (optional)" : ""}
-              {field.options ? (
-                <select
-                  className={inputCls}
-                  value={String(Reflect.get(row, field.key) ?? "")}
-                  onChange={(event) =>
-                    onChange(
-                      rows.map((item, i) =>
-                        i === index
-                          ? { ...item, [field.key]: event.target.value }
-                          : item,
-                      ),
-                    )
-                  }
-                >
-                  {field.options.map((value) => (
-                    <option key={value} value={value}>
-                      {label(value)}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  list={field.choices ? `cfp-indicators-${index}` : undefined}
-                  className={inputCls}
-                  required={!field.optional}
-                  type={field.numeric ? "number" : "text"}
-                  step={field.numeric ? (field.step ?? 1) : undefined}
-                  min={field.min}
-                  max={field.max}
-                  value={String(Reflect.get(row, field.key) ?? "")}
-                  onChange={(event) =>
-                    onChange(
-                      rows.map((item, i) =>
-                        i === index
-                          ? {
-                              ...item,
-                              [field.key]: field.numeric
-                                ? Number(event.target.value)
-                                : event.target.value,
-                            }
-                          : item,
-                      ),
-                    )
-                  }
-                />
-              )}
+            <Fragment key={field.key}>
+              <label className="text-caption">
+                {field.title ?? label(field.key)}
+                {field.optional ? " (optional)" : ""}
+                {field.options ? (
+                  <select
+                    className={inputCls}
+                    value={String(Reflect.get(row, field.key) ?? "")}
+                    onChange={(event) =>
+                      onChange(
+                        rows.map((item, i) =>
+                          i === index
+                            ? { ...item, [field.key]: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                  >
+                    {field.options.map((value) => (
+                      <option key={value} value={value}>
+                        {label(value)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    list={field.choices ? `cfp-indicators-${index}` : undefined}
+                    className={inputCls}
+                    required={!field.optional}
+                    type={field.numeric ? "number" : "text"}
+                    step={field.numeric ? (field.step ?? 1) : undefined}
+                    min={field.min}
+                    max={field.max}
+                    value={String(Reflect.get(row, field.key) ?? "")}
+                    onChange={(event) =>
+                      onChange(
+                        rows.map((item, i) =>
+                          i === index
+                            ? {
+                                ...item,
+                                [field.key]: field.numeric
+                                  ? Number(event.target.value)
+                                  : event.target.value,
+                              }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                )}
+              </label>
               {field.choices && (
                 <datalist id={`cfp-indicators-${index}`}>
                   {field.choices.map((choice) => (
@@ -130,7 +132,7 @@ function Rows<T extends object>({
                   ))}
                 </datalist>
               )}
-            </label>
+            </Fragment>
           ))}
           <button
             type="button"
@@ -350,9 +352,9 @@ function CfpEditor({
               ? "Review the draft and obtain independent Board approval."
               : approved?.approvalOverdue
                 ? "Create a new draft and renew Board approval."
-              : approved?.active
-                ? "Monitor indicators and stand down when appropriate."
-                : "Review evidence and activate when required."}
+                : approved?.active
+                  ? "Monitor indicators and stand down when appropriate."
+                  : "Review evidence and activate when required."}
         </p>
         <p className="text-caption text-slate">
           Activation and stand-down capture indicators for{" "}
