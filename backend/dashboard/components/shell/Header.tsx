@@ -198,11 +198,11 @@ function LiveFreshnessPill() {
   if (impersonating) {
     return (
       <span
-        title="Live figures — read-only staff inspection."
+        title="Live engine freshness. read-only staff inspection."
         className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-success/30 bg-success-light text-success text-caption font-medium whitespace-nowrap"
       >
         <RadioTower size={11} aria-hidden />
-        Live
+        Live engine
       </span>
     );
   }
@@ -226,7 +226,7 @@ function LiveFreshnessPill() {
             reason: "Recompute live figures (header)",
           })
         }
-        title="The live tier has not recomputed recently — click to recompute now. It refreshes automatically as data arrives and on the hourly schedule."
+        title="The live tier has not recomputed recently. Click to recompute now. It refreshes automatically as data arrives and on the hourly schedule."
         className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-warning/30 bg-warning-light text-warning text-caption font-medium whitespace-nowrap hover:bg-warning/15 disabled:opacity-60"
       >
         {refresh.isPending ? (
@@ -243,11 +243,11 @@ function LiveFreshnessPill() {
 
   return (
     <span
-      title={`Live figures — recomputed automatically as data arrives and on the hourly schedule${latest ? `; engines last ran ${fmtRelative(latest)}` : ""}.`}
+      title={`Live engine freshness. recomputed automatically as data arrives and on the hourly schedule${latest ? `; engines last ran ${fmtRelative(latest)}` : ""}.`}
       className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-success/30 bg-success-light text-success text-caption font-medium whitespace-nowrap"
     >
       <RadioTower size={11} aria-hidden />
-      Live
+      Live engine
     </span>
   );
 }

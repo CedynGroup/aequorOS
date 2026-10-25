@@ -48,7 +48,7 @@ it("selects a historical period, runs and reloads its stored results without rep
     period_label: "August 2026",
     engine_version: "liquidity",
     input_hash: "august-inputs",
-    metrics: { lcr_pct: "143.25" },
+    metrics: { lcr_pct: "143.25%" },
     error: null,
     created_at: "2026-10-01T00:00:00Z",
     updated_at: "2026-10-01T00:00:00Z",
@@ -179,15 +179,19 @@ it("selects a historical period, runs and reloads its stored results without rep
   });
   expect(selector).toHaveValue("september");
   await user.selectOptions(selector, "august");
-  expect(screen.getByText(/Viewing the/)).toHaveTextContent("August 2026");
+  expect(screen.getByText(/Selected reporting period:/)).toHaveTextContent(
+    "August 2026",
+  );
   expect(writes).toBe(0);
   await user.click(
     screen.getByRole("button", { name: "Run all Liquidity scenarios" }),
   );
-  expect(await screen.findByText("143.25")).toBeVisible();
-  await user.click(screen.getByRole("button", { name: /Return to live edge/ }));
+  expect(await screen.findByText("143.25%")).toBeVisible();
+  await user.click(
+    screen.getByRole("button", { name: /View latest reporting period/ }),
+  );
   await waitFor(() =>
-    expect(screen.queryByText("143.25")).not.toBeInTheDocument(),
+    expect(screen.queryByText("143.25%")).not.toBeInTheDocument(),
   );
   expect(screen.queryByText(/scenario outcomes/)).not.toBeInTheDocument();
   expect(client.getQueryData(liveKey)).toEqual(live);
@@ -198,7 +202,7 @@ it("selects a historical period, runs and reloads its stored results without rep
     await screen.findByRole("combobox", { name: "As-of reporting period" }),
     "august",
   );
-  expect(await screen.findByText("143.25")).toBeVisible();
+  expect(await screen.findByText("143.25%")).toBeVisible();
   expect(writes).toBe(1);
   expect(client.getQueryData(liveKey)).toEqual(live);
 });

@@ -9,7 +9,13 @@ import {
   it,
   vi,
 } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
@@ -131,10 +137,18 @@ it.each(["liquidity", "capital", "fx", "credit"] as const)(
       name: new RegExp(`Run all ${module} scenarios`, "i"),
     });
     await userEvent.click(button);
-    expect(await screen.findByText("Baseline · succeeded")).toBeVisible();
+    const table = await screen.findByRole("table", {
+      name: "Scenario execution and risk outcomes",
+    });
+    const baseline = within(table).getByRole("row", { name: /Baseline/ });
+    expect(within(baseline).getByText("Succeeded")).toBeVisible();
     expect(
-      screen.getByText("Severe · failed · Configure this scenario"),
+      within(baseline).getByText(/Risk assessment unavailable/),
     ).toBeVisible();
+    const severe = within(table).getByRole("row", { name: /Severe/ });
+    expect(within(severe).getByText("Failed")).toBeVisible();
+    expect(within(severe).getByText("Configure this scenario")).toBeVisible();
+    expect(within(severe).getByText(/Not assessed/)).toBeVisible();
     await waitFor(() =>
       expect(client.getQueryState(registry)?.isInvalidated).toBe(true),
     );
@@ -193,4 +207,34 @@ it("refuses a partial data-scope run grant with a whole-institution reason", asy
   expect(await screen.findByRole("tooltip")).toHaveTextContent(
     "whole institution",
   );
+});
+
+it("reports a risk breach even when the FX calculation succeeds", async () => {
+  server.use(
+    http.post(`${base}/fx/run-all-scenarios`, () =>
+      HttpResponse.json({
+        runs: [
+          {
+            ...run("baseline", "succeeded"),
+            metrics: { within_single_limit: false },
+          },
+        ],
+      }),
+    ),
+  );
+  mount("fx");
+  await userEvent.click(
+    screen.getByRole("button", { name: "Run all FX scenarios" }),
+  );
+  expect(await screen.findByText("Succeeded")).toBeVisible();
+  expect(
+    screen.getByText(/Risk breaches: Within single limit: No/),
+  ).toBeVisible();
+});
+
+it("explains Credit's baseline-only scope and selected scenario data date", () => {
+  mount("credit");
+  expect(
+    screen.getByText(/Credit supports the baseline scenario only/),
+  ).toHaveTextContent("31 Mar 2026");
 });

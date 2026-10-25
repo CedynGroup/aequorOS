@@ -3,7 +3,7 @@
 /**
  * Shared frame for the Credit / Loan Book tabs: page header with the live
  * provenance note, query boundary, and the dashboard payload handed to the tab
- * body via render prop — the IRRBB workspace pattern, so each tab stays purely
+ * body via render prop. the IRRBB workspace pattern, so each tab stays purely
  * presentational.
  */
 
@@ -44,7 +44,11 @@ export default function CreditWorkspace({
         title="Credit"
         action={
           data ? (
-            <LiveEngineNote live={data.live} stored={data.stored} />
+            <LiveEngineNote
+              live={data.live}
+              stored={data.stored}
+              dataAsOf={data.period.periodEnd}
+            />
           ) : undefined
         }
       />

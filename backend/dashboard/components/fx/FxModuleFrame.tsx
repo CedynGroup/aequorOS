@@ -59,7 +59,11 @@ export default function FxModuleFrame({
         title={title}
         action={
           data ? (
-            <LiveEngineNote live={data.live} stored={data.stored} />
+            <LiveEngineNote
+              live={data.live}
+              stored={data.stored}
+              dataAsOf={data.period.periodEnd}
+            />
           ) : undefined
         }
       />

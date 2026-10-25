@@ -1,5 +1,6 @@
 "use client";
 
+import { scenarioRisk } from "./ScenarioMetrics";
 import { isApiError } from "@/lib/api/client";
 import { useState } from "react";
 import type {
@@ -105,7 +106,7 @@ export default function RunModuleScenarios({ module }: { module: Module }) {
   const button = (descriptionId?: string) => (
     <button
       type="button"
-      className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+      className="btn-primary min-h-11 rounded px-5 py-2.5 font-medium disabled:cursor-not-allowed disabled:opacity-50"
       disabled={!!reason || busy}
       aria-describedby={descriptionId}
       onClick={() => void runAll()}
@@ -148,6 +149,15 @@ export default function RunModuleScenarios({ module }: { module: Module }) {
           Creates stored regulatory runs; current live results remain separate.
         </span>
       </div>
+      {reason && <p className="text-caption text-slate">{reason}</p>}
+      <p className="text-caption text-slate">
+        Scenario data date:{" "}
+        {period ? fmtDateUTC(period.periodEnd) : "no period selected"}. This
+        selection applies to scenario runs. Overview cards show their own
+        dashboard reporting date; a calculation timestamp is not a data date.
+        {module === "credit" &&
+          " Credit supports the baseline scenario only; no credit stress overlays are run."}
+      </p>
       {outcome?.signature === signature && (
         <div
           aria-live="polite"
@@ -164,14 +174,56 @@ export default function RunModuleScenarios({ module }: { module: Module }) {
               before retrying.
             </p>
           ) : (
-            <ul>
-              {outcome.runs.map((run) => (
-                <li key={run.id}>
-                  {labelize(run.scenarioCode)} · {run.status}
-                  {run.error ? ` · ${run.error.message}` : ""}
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <caption className="sr-only">
+                  Scenario execution and risk outcomes
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className="p-2">
+                      Scenario
+                    </th>
+                    <th scope="col" className="p-2">
+                      Execution
+                    </th>
+                    <th scope="col" className="p-2">
+                      Risk assessment
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {outcome.runs.map((run) => (
+                    <tr key={run.id} className="border-t border-border-light">
+                      <th scope="row" className="p-2 font-medium">
+                        {labelize(run.scenarioCode)}
+                      </th>
+                      <td className="p-2">
+                        {labelize(run.status)}
+                        {run.error && (
+                          <p className="mt-1 text-critical">
+                            {run.error.message}
+                          </p>
+                        )}
+                      </td>
+                      <td className="p-2">
+                        {run.status === "succeeded"
+                          ? scenarioRisk(
+                              run.metrics,
+                              Object.fromEntries(
+                                (run.metricResults ?? []).map((metric) => [
+                                  metric.metricCode,
+                                  metric.status,
+                                ]),
+                              ),
+                            )
+                          : "Not assessed. Execution did not complete successfully."}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
