@@ -17,7 +17,14 @@ from app.bi.schemas.notifications import (
     BiAlertRead,
     BiSubscriptionDeliveryListRead,
 )
-from app.bi.schemas.query import BiCatalogueRead, BiFilter, BiQuery, BiQueryResult
+from app.bi.schemas.query import (
+    BiCatalogueRead,
+    BiFilter,
+    BiPackListRead,
+    BiPackRead,
+    BiQuery,
+    BiQueryResult,
+)
 from app.bi.service import alerts, subscriptions
 from app.bi.service.authorization import query_members
 from app.bi.service.identity_policy import IDENTITY_MESSAGE, IDENTITY_REASON
@@ -414,3 +421,69 @@ def test_numeric_saved_content_remains_available_without_identity_key(  # noqa: 
     )
     assert response.status_code == 200, response.text
     assert BiQueryResult.model_validate(cast(object, response.json())).rows
+
+
+def _cro_pack(payload: object, listing: bool) -> BiPackRead:
+    if listing:
+        return next(
+            pack for pack in BiPackListRead.model_validate(payload).packs if pack.id == "cro"
+        )
+    return BiPackRead.model_validate(payload)
+
+
+@pytest.mark.parametrize("listing", [False, True])
+def test_pack_etags_change_when_key_connection_restricts_identity_widgets(  # noqa: PLR0913
+    db_client: TestClient,
+    db_session: Session,
+    mart: Bank,
+    bi_on: None,
+    monkeypatch: pytest.MonkeyPatch,
+    listing: bool,
+) -> None:
+    authv = routes.grant_only(db_session, (routes.Grant(ModuleScope.ALL, SensitivityScope.ALL),))
+    request_headers = headers(authorization_version=authv)
+    path = routes.BASE + ("/packs" if listing else "/packs/cro")
+    url = f"{path}?as_of={routes.AS_OF.isoformat()}"
+    before = db_client.get(url, headers=request_headers)
+    assert before.status_code == 200, before.text
+    pack = _cro_pack(cast(object, before.json()), listing)
+    identity = next(widget for widget in pack.widgets if widget.id == "large_exposures")
+    assert identity.access == "granted" and identity.query is not None
+    old_etag = before.headers["etag"]
+    cached_headers = {**request_headers, "If-None-Match": old_etag}
+    unchanged = db_client.get(url, headers=cached_headers)
+    assert unchanged.status_code == 304 and not unchanged.content
+    assert unchanged.headers["etag"] == old_etag
+
+    provider = LocalKeyProvider()
+    key = KeyReference("aws_kms", "synthetic-bi-pack", "us-east-1", "111122223333")
+    provider.add_key(key)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    registry.register(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=mart.id,
+        storage_slug="synthetic-bi-pack",
+        key=key,
+        providers=providers,
+    )
+    db_session.commit()
+    db_session.expunge_all()
+    refreshed = db_client.get(url, headers=cached_headers)
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.headers["etag"] != old_etag
+    restricted = _cro_pack(cast(object, refreshed.json()), listing)
+    identity = next(widget for widget in restricted.widgets if widget.id == "large_exposures")
+    assert identity.access == "restricted" and identity.query is None and identity.title is None
+    assert restricted.message == IDENTITY_MESSAGE
+    numeric = next(widget for widget in restricted.widgets if widget.id == "npl_by_sector")
+    assert numeric.access == "granted" and numeric.query is not None
+    again = db_client.get(
+        url, headers={**request_headers, "If-None-Match": refreshed.headers["etag"]}
+    )
+    assert again.status_code == 304 and not again.content
+    assert again.headers["etag"] == refreshed.headers["etag"]
