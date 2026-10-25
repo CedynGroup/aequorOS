@@ -418,7 +418,8 @@ def test_annex_totals_tie_to_the_bsd2_spine(db_client: TestClient, seeded_book: 
     # hermetic book carries a cedi other-assets plug and no FX other-assets fact)
     assert _f(a6, "B51") == pytest.approx(_f(spine, "B113"))
     assert _f(spine, "B113") > 0
-    assert _f(a6, "C51") == pytest.approx(_f(spine, "C113")) == 0.0
+    assert a6["C51"] is None
+    assert spine["C113"] is None
 
     # Annex 15 — other liabilities: total row = BSD2 line 29, domestic AND foreign
     assert _f(a15, "C51") == pytest.approx(_f(spine, "B278")) == 2_000_000.0
@@ -431,8 +432,8 @@ def test_annex_totals_tie_to_the_bsd2_spine(db_client: TestClient, seeded_book: 
 
     # detail rows stay blank + input_required, category totals are mapped
     counts = payload["status_counts"]
-    assert counts["mapped"] == 280 + 44
-    assert counts["input_required"] == 130 + 1421
+    assert counts["mapped"] == 265 + 44
+    assert counts["input_required"] == 145 + 1421
     assert counts["unmapped"] == 0
     section = next(s for s in snapshot["sections"] if s["title"] == A16)
     statuses = {row["cell"]: row["status"] for row in section["rows"]}
