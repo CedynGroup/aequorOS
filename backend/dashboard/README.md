@@ -61,6 +61,30 @@ Detailed refusal reasons and affected-row rendering remain a follow-up for
 issue #409. The backend result, filing and operator logging contracts are owned by
 [Per-figure results and calculation logs](../../ARCHITECTURE.md#per-figure-results-and-calculation-logs).
 
+### Board pack evidence
+
+The board pack uses the current baseline live generations, regardless of the
+reporting-period selector. Headlines and module tables read one live-summary
+payload. Each brief prints its producing generation, full input hash, engine
+version, source date and UTC computation time. These are live-generation
+identifiers, not official-run attestations; registry history never supplies
+evidence for these figures. Modules can have different source dates.
+
+Stale generations (including pending recomputation after withdrawal), failed or
+blocked computations, and incomplete provenance withhold figures visibly. Missing
+modules show an unavailable-evidence notice. Only live-published metrics appear;
+validation counts, additional dashboard detail and independently changing alerts
+are outside this report basis. The print view carries the same evidence and
+refusals. Placeholder engine versions (`live-<module>`) withhold figures with
+“version unavailable, recompute to certify” until a new generation supplies its
+producing version. FX portfolio VaR carries the producer's exact shared-interval
+sample qualification, including the existing insufficient-pilot-evidence warning.
+The one-day VaR label does not assume a confidence level.
+
+SDI rating still requires producing-version and input-hash provenance beyond a
+pass-through; its incomplete evidence remains withheld. This is follow-up work,
+not an alternative version inferred by the board pack.
+
 ### Forecasting tools
 
 On **Forecasting → Assumptions**, choose **Propose new version**, enter an
@@ -561,7 +585,7 @@ diagnosis:
    `S3_ENDPOINT` is exported. Existing exported S3 configuration is reused in
    auto mode; `AQS_LOCAL_SERVICES=external` also permits the backend to read its
    untracked `.env` without starting a service. The `attestation`, `full-lifecycle`,
-   `submission-lifecycle`, `data-engine-ingestion`, and opt-in `visual-tour`
+   `submission-lifecycle`, `data-engine-ingestion`, `00-ingestion-worker`, and opt-in `visual-tour`
    specs, plus the SSO attestation journey, refuse immediately without it rather
    than letting storage-dependent assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The
@@ -579,13 +603,24 @@ diagnosis:
    it to `reference_data.py`, and nothing else.
 3. **The live fact plane.** Every Treasury/ALM cockpit reads
    `current_financial_facts`, which in the product only the background worker
-   writes (`pipeline_refresh`), and the e2e stack runs no worker
+   writes (`pipeline_refresh`), and the shared fixture runs no worker
    (`RUN_INPROCESS_WORKER=0`; `POST /banks/{id}/refresh` merely enqueues a job).
    The bootstrap therefore stands in for the refresh via
    `tests/fixtures/live_plane.py`, mirroring the latest period's facts into the
    live plane and running the product's own `pipeline.recompute_modules`.
    Without it `/basel`, `/liquidity`, `/ftp/*`, `/irr/*` and `/fx/*` all open on
    the "no computed data yet" envelope.
+
+`00-ingestion-worker.spec.ts` exercises the worker path separately. It provisions
+an empty tenant and real analyst/approver bindings, uploads a balanced synthetic
+book and market data through the bank UI, and approves forecast assumptions
+through the bank API. A standalone `app.worker` claims the queued refresh and
+makes all eight modules current. The journey pins treasury's GHS 2 million HQLA,
+GHS 310,000 net outflows and 645.16% coverage, then uses Mint official run through
+the same worker and generates BSD2 with the matching cash amount. It refuses to
+start with another bank's queued work, stops its own worker in `finally`, and
+removes its tenant and session state. Keep this story ahead of shared-bank
+mutation stories and keep Playwright at one worker.
 
 The canonical fixture ends at a fixed month. Bootstrap first carries it forward
 (`extend_canonical_test_book`) one month-end snapshot at a time through the last
@@ -741,7 +776,7 @@ installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
 counts. The aggregate requires all four reports, unique journey identities,
-and at least **243 executed journeys**, with zero skips. It verifies the
+and at least **244 executed journeys**, with zero skips. It verifies the
 reported counters against the named results and prints every skipped journey
 in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
@@ -811,9 +846,9 @@ are described under [Sign-in and session recovery](#sign-in-and-session-recovery
 ## Design system
 
 Palette, typography scale, density rules and the traffic-light semantics are in
-`docs/DASHBOARD_DESIGN_SYSTEM.md` and `tailwind.config.ts`. Color is functional:
-green/amber/red map to regulatory thresholds, never to branding. Numerical cells
-are right-aligned with tabular numerals.
+`docs/DASHBOARD_DESIGN_SYSTEM.md` and the `@theme` block in `app/globals.css`.
+Color is functional: green/amber/red map to regulatory thresholds, never to
+branding. Numerical cells are right-aligned with tabular numerals.
 
 **No table may overflow silently (NEW-54).** `DataTable` has always been
 `overflow-x-auto`, which scrolls but says nothing, so at 1280px the FTP Line

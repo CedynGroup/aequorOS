@@ -1,5 +1,6 @@
 """Policy's interface for other features: re-exports only, no logic."""
 
+from app.models.institution_type import InstitutionType
 from app.models.parameter_register import (
     ParamCapitalThreshold,
     ParamEclAssumption,
@@ -17,6 +18,7 @@ from app.services.jurisdictions import (
 from app.services.params import PrefetchedActiveParams, get_active_params
 
 __all__ = [
+    "InstitutionType",
     "InstitutionTypeUnresolved",
     "ParamCapitalThreshold",
     "ParamEclAssumption",

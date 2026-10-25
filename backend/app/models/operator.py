@@ -196,6 +196,7 @@ class OperatorInspectorSession(UuidV4PrimaryKeyMixin, Base):
     started_by: Mapped[str] = mapped_column(String(320), nullable=False)
     mode: Mapped[str] = mapped_column(String(16), nullable=False)
     reason: Mapped[str] = mapped_column(String, nullable=False)
+    support_reference: Mapped[str | None] = mapped_column(String(200), nullable=True)
     read_only: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=sql_text("true"), nullable=False
     )

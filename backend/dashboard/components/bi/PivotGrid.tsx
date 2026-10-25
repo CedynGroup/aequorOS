@@ -21,7 +21,7 @@ const PivotGrid = dynamic(() => import("./PivotGridCanvas"), {
   ssr: false,
   loading: () => (
     <div
-      className="h-80 w-full animate-pulse rounded bg-surface"
+      className="h-80 w-full animate-pulse rounded-sm bg-surface"
       aria-busy="true"
       aria-label="Preparing the grid"
     />

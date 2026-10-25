@@ -153,12 +153,17 @@ def approve_regulatory_parameter(
         db,
         operator,
         action="regulatory_parameter.approve",
+        resources=[
+            {"organization_id": bank.organization_id, "bank_id": bank.id}
+            for bank in db.scalars(live_refresh_triggers.regulatory_parameter_banks(row))
+        ],
         detail={
             "param_id": str(row.id),
             "param_code": row.param_code,
             "scope_key": row.scope_key,
             "effective_from": row.effective_from.isoformat(),
             "live_refreshes_enqueued": len(refresh_jobs),
+            "reason": payload.change_rationale,
         },
     )
     db.commit()

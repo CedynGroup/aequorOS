@@ -4,14 +4,24 @@
  * so QueryBoundary + ChartFrame have matching placeholders.
  */
 
-export function Skeleton({ className = '' }: { className?: string }) {
+export function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`skeleton ${className}`} aria-hidden="true" />;
 }
 
 /** Table-shaped loading state. */
-export function SkeletonRows({ rows = 5, className = '' }: { rows?: number; className?: string }) {
+export function SkeletonRows({
+  rows = 5,
+  className = "",
+}: {
+  rows?: number;
+  className?: string;
+}) {
   return (
-    <div className={`space-y-2 p-4 ${className}`} role="status" aria-label="Loading">
+    <div
+      className={`space-y-2 p-4 ${className}`}
+      role="status"
+      aria-label="Loading"
+    >
       {Array.from({ length: rows }, (_, i) => (
         <Skeleton key={i} className="h-9 w-full" />
       ))}
@@ -20,9 +30,9 @@ export function SkeletonRows({ rows = 5, className = '' }: { rows?: number; clas
 }
 
 export function SkeletonLine({
-  width = '100%',
+  width = "100%",
   height = 12,
-  className = '',
+  className = "",
 }: {
   width?: string | number;
   height?: number;
@@ -30,7 +40,7 @@ export function SkeletonLine({
 }) {
   return (
     <div
-      className={`bg-surface rounded animate-pulse ${className}`}
+      className={`bg-surface rounded-sm animate-pulse ${className}`}
       style={{ width, height }}
       aria-hidden
     />
@@ -56,7 +66,10 @@ export function SkeletonTable({ rows = 5 }: { rows?: number }) {
         ))}
       </div>
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="px-4 py-3 border-b border-border-light flex gap-6">
+        <div
+          key={i}
+          className="px-4 py-3 border-b border-border-light flex gap-6"
+        >
           <SkeletonLine width="20%" height={12} />
           <SkeletonLine width="14%" height={12} />
           <SkeletonLine width="12%" height={12} />
@@ -69,9 +82,13 @@ export function SkeletonTable({ rows = 5 }: { rows?: number }) {
 
 export function SkeletonChart({ height = 240 }: { height?: number }) {
   return (
-    <div className="card p-5 flex flex-col gap-4" style={{ minHeight: height }} aria-busy="true">
+    <div
+      className="card p-5 flex flex-col gap-4"
+      style={{ minHeight: height }}
+      aria-busy="true"
+    >
       <SkeletonLine width="30%" height={14} />
-      <div className="flex-1 bg-surface rounded animate-pulse" />
+      <div className="flex-1 bg-surface rounded-sm animate-pulse" />
     </div>
   );
 }

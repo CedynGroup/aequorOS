@@ -100,14 +100,14 @@ jobs:
       # return). Uploaded even on failure: that is when they matter most.
       - name: Upload journey evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dashboard-journey-evidence-${{ matrix.shard }}
           path: ${{ runner.temp }}/evidence
           if-no-files-found: ignore
       - name: Upload journey report
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dashboard-journey-report-${{ matrix.shard }}
           path: ${{ runner.temp }}/journeys.json

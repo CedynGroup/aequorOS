@@ -2,7 +2,7 @@
 
 Every function here is deterministic and free of database or tenant concerns:
 callers supply the per-currency net open positions (in GHS-equivalent), the
-daily FX return histories, the hedge book, and the resolved parameter set, and
+dated FX return intervals, the hedge book, and the resolved parameter set, and
 receive fully materialized net-open-position (NOP), value-at-risk (VaR) and
 hedge-effectiveness results with per-line items. Monetary amounts quantize to
 ``MONEY`` (4 dp) and ratio/percentage figures to ``RATIO_PCT`` (6 dp), both with
@@ -401,11 +401,11 @@ def compute_stressed_var(
     by ``(1 + correlation_uplift)`` to reflect the tail co-movement the stress
     scenario prescribes.
 
-    When a bank's uploaded history is too short to reach the configured window,
-    the window is clamped to the tail of the available history (keeping its width
-    where it fits) so a short upload still yields a best-effort stress instead of
-    failing the whole FX analysis. With the full history present the window is
-    used exactly as configured, so this degradation is inert on complete data.
+    When the shared sample is too short to reach the configured window, the
+    window is clamped to its available tail (keeping its width where it fits)
+    so a nonempty sample still yields a best-effort stress instead of failing
+    the whole FX analysis. If the window fits within the shared sample, it is
+    used exactly as configured.
     """
     if not positions:
         raise FxComputationError("At least one FX position is required to compute stressed VaR.")

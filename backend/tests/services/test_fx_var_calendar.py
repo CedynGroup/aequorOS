@@ -13,12 +13,13 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import ModuleDataUnavailable
 from app.domain.fx.engine import FxComputationError, FxPosition, compute_var
-from app.models import BankFinancialFact, BankReportingPeriod, RegulatoryRun
+from app.models import BankFinancialFact, BankReportingPeriod, LiveMetric, RegulatoryRun
 from app.services import regulatory_fx
 from app.services.fact_derivation import (
     _Canonical,  # pyright: ignore[reportPrivateUsage]
     _derive_fx_returns,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.fixtures.live_plane import materialize_live_plane
 from tests.services.test_nop_currency_coverage import (
     _add_unrepresented_currency,  # pyright: ignore[reportPrivateUsage]
     _book,  # pyright: ignore[reportPrivateUsage]
@@ -75,7 +76,10 @@ def test_undated_legacy_facts_require_rederivation() -> None:
         regulatory_fx._returns_from_facts([fact])  # pyright: ignore[reportPrivateUsage]
 
 
-def test_short_sample_is_disclosed_in_dashboard_and_immutable_evidence(db_session: Session) -> None:
+@pytest.mark.parametrize("observations", [1, 249, 250])
+def test_sample_is_disclosed_in_dashboard_immutable_and_live_evidence(
+    db_session: Session, observations: int
+) -> None:
     bank, period, ctx = _book(db_session)
     facts = list(
         db_session.scalars(
@@ -90,27 +94,39 @@ def test_short_sample_is_disclosed_in_dashboard_and_immutable_evidence(db_sessio
     for fact in facts:
         attributes = cast(dict[str, object], fact.attributes)
         intervals = TypeAdapter(list[dict[str, str]]).validate_python(attributes["intervals"])
-        fact.attributes = {**attributes, "intervals": intervals[-1:]}
+        fact.attributes = {**attributes, "intervals": intervals[-observations:]}
     db_session.flush()
     run = regulatory_fx._create_and_execute(db_session, ctx, bank, period, "baseline")  # pyright: ignore[reportPrivateUsage]
     assert run.status == "succeeded", run
     evidence = _Evidence.model_validate(run.metrics)
-    assert evidence.var_observations == 1
-    assert evidence.var_sample_limited is True
-    assert len(evidence.var_intervals) == 1
-    assert evidence.stressed_var_intervals == evidence.var_intervals
+    assert evidence.var_observations == observations
+    assert evidence.var_sample_limited is (observations < 250)
+    assert len(evidence.var_intervals) == observations
+    if observations == 1:
+        assert evidence.stressed_var_intervals == evidence.var_intervals
     snapshot = _Snapshot.model_validate(run.inputs)
     assert snapshot.var_sample_policy.version == "exact-interval-intersection-v1"
     dashboard = regulatory_fx.get_fx_dashboard(db_session, ctx, bank.id, period.id)
     assert dashboard.stored
     sample = next(v for v in dashboard.validations if v.rule_code == "var_sample_evidence")
-    assert not sample.passed and sample.severity == "warning"
-    assert "1/250" in sample.message
-    assert "not adequate pilot risk evidence" in sample.message
+    assert sample.passed is (observations >= 250)
+    assert sample.severity == ("warning" if observations < 250 else "info")
+    assert f"{observations}/250" in sample.message
+    assert ("not adequate pilot risk evidence" in sample.message) is (observations < 250)
     assert evidence.var_intervals[0][0].isoformat() in sample.message
     stress = next(v for v in dashboard.validations if v.rule_code == "stressed_var_disclosed")
-    assert "1 shared intervals" in stress.message
+    assert "shared intervals" in stress.message
     assert "indicative management" in stress.message
+    _, modules_ok, _ = materialize_live_plane(
+        db_session, organization_id=ctx.organization_id, bank_id=bank.id
+    )
+    assert "fx" in modules_ok
+    live = db_session.scalars(
+        select(LiveMetric).where(LiveMetric.bank_id == bank.id, LiveMetric.module == "fx")
+    ).one()
+    assert live.engine_version == regulatory_fx.ENGINE_VERSION
+    assert live.metrics["var_99_1d_ghs"] == str(dashboard.metrics.var_99_1d_ghs)
+    assert live.metrics["var_sample_evidence"] == sample.message
 
 
 def test_old_saved_results_cannot_supply_dashboard_var(db_session: Session) -> None:

@@ -13,9 +13,11 @@ audit trail is part of the governance story the spec commits to.
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter
+from pydantic import JsonValue
 
 from app.models import DeskOperatingEnvironmentAssessment
 from app.operator.deps import Operator, OperatorDb, record_operator_action
@@ -79,9 +81,7 @@ def compute_preview(
     return DeskOperatingEnvironmentPreview.model_validate(preview)
 
 
-@router.post(
-    "/assessments", response_model=DeskOperatingEnvironmentAssessmentRead, status_code=201
-)
+@router.post("/assessments", response_model=DeskOperatingEnvironmentAssessmentRead, status_code=201)
 def stage_assessment(
     payload: DeskOperatingEnvironmentComputeRequest, db: OperatorDb, operator: Operator
 ) -> DeskOperatingEnvironmentAssessmentRead:
@@ -122,9 +122,7 @@ def list_assessments(
     )
 
 
-@router.get(
-    "/assessments/{assessment_id}", response_model=DeskOperatingEnvironmentAssessmentRead
-)
+@router.get("/assessments/{assessment_id}", response_model=DeskOperatingEnvironmentAssessmentRead)
 def get_assessment(
     assessment_id: UUID, db: OperatorDb, _operator: Operator
 ) -> DeskOperatingEnvironmentAssessmentRead:
@@ -184,6 +182,7 @@ def publish_assessment(
         db,
         operator,
         action="desk.operating_environment.publish",
+        resources=cast(list[dict[str, JsonValue]], result["results"]),
         detail={
             "assessment_id": str(assessment_id),
             "status": result["status"],

@@ -488,6 +488,7 @@ def _supersede_liquidity(  # noqa: PLR0913 - the full supersession record, one a
         target_id=str(new_row.id),
         before={
             "register": "liquidity",
+            "jurisdiction_code": current.jurisdiction_code,
             "threshold_code": current.threshold_code,
             "institution_class": current.institution_class,
             "value_pct": before_value,
@@ -495,6 +496,7 @@ def _supersede_liquidity(  # noqa: PLR0913 - the full supersession record, one a
         },
         after={
             "register": "liquidity",
+            "jurisdiction_code": current.jurisdiction_code,
             "threshold_code": new_row.threshold_code,
             "institution_class": new_row.institution_class,
             "value_pct": float(new_row.threshold_pct),
@@ -531,12 +533,14 @@ def _supersede_capital(  # noqa: PLR0913 - the full supersession record, one arg
         target_id=str(new_row.id),
         before={
             "register": "capital",
+            "jurisdiction_code": current.jurisdiction_code,
             "threshold_code": current.threshold_code,
             "value_pct": before_value,
             "prior_row_id": str(current.id),
         },
         after={
             "register": "capital",
+            "jurisdiction_code": current.jurisdiction_code,
             "threshold_code": new_row.threshold_code,
             "value_pct": float(new_row.value_pct),
             "effective_from": new_row.effective_from.isoformat(),

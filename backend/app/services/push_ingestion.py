@@ -116,6 +116,7 @@ def open_push_batch(
         ctx,
         event_type="push_batch.opened",
         entity_type="push_batch",
+        bank_id=bank.id,
         entity_id=push_id,
         details={
             "as_of_date": payload.as_of_date.isoformat(),
@@ -178,6 +179,7 @@ def stage_push_records(  # noqa: PLR0913 - mirrors record_event's shape
         ctx,
         event_type="push_batch.records_staged",
         entity_type="push_batch",
+        bank_id=bank.id,
         entity_id=push_batch_id,
         details={"page": page_number, "records": page.record_count},
     )
@@ -234,6 +236,7 @@ def commit_push_batch(
         ctx,
         event_type="push_batch.committed",
         entity_type="push_batch",
+        bank_id=bank.id,
         entity_id=push_batch_id,
         details={
             "ingestion_batch_id": str(started.batch.id),

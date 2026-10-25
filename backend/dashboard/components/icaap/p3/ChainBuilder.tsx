@@ -146,7 +146,7 @@ function StageRow({
 }) {
   const position = index + 1;
   return (
-    <li className="rounded border border-border-light p-3">
+    <li className="rounded-sm border border-border-light p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-caption font-medium text-navy">Stage {position}</p>
         <div className="flex items-center gap-1">
