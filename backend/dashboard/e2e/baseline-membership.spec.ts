@@ -1,20 +1,13 @@
 import { expect } from "@playwright/test";
 import { test } from "./support/story-identities";
 import path from "path";
-import { writeFileSync } from "fs";
 import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../playwright.config";
-import {
-  E2E_PASSWORD,
-  E2E_USERS,
-  e2eEmail,
-  mintBackendToken,
-  writeStorageState,
-} from "./support/mint";
+import { E2E_USERS, mintBackendToken, writeStorageState } from "./support/mint";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 test.use({
   storyConfig: {
-    roles: ["admin", "invite_fresh", "viewer"],
+    roles: ["admin", "invite_fresh"],
     ownedTenant: true,
   },
 });
@@ -192,12 +185,16 @@ test.describe("fresh active member baseline", () => {
       }),
     ).toBeVisible();
 
-    await page.goto("/settings#members");
-    await expect(page).toHaveURL(/\/access\/members$/);
-    await page.goto("/settings#authentication");
-    await expect(page).toHaveURL(/\/access\/authentication$/);
-    await page.goto("/settings#integration-keys");
-    await expect(page).toHaveURL(/\/access\/integration-keys$/);
+    for (const route of ["members", "authentication", "integration-keys"]) {
+      await page.goto(`/settings#${route}`);
+      await expect(page).toHaveURL(new RegExp(`/access/${route}$`));
+      await expect(
+        page.getByText(
+          "This section is available to organization owners and administrators.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+    }
 
     await page.goto("/fx");
     await expect(
@@ -299,54 +296,5 @@ test.describe("fresh active member baseline", () => {
     );
     expect(revoked.status(), await revoked.text()).toBe(200);
     await writeStorageState("invite_fresh", E2E_BASE_URL, E2E_TMP);
-  });
-
-  test("password sign-in grants self-service but no institution or directory authority", async ({
-    request,
-    storyIdentity,
-  }) => {
-    const api = `${E2E_API_ORIGIN}/api/v1`;
-    const login = await request.post(`${api}/auth/login`, {
-      data: {
-        email: e2eEmail("viewer"),
-        password: E2E_PASSWORD,
-      },
-    });
-    expect(login.status()).toBe(200);
-    const headers = {
-      Authorization: `Bearer ${(await login.json()).access_token}`,
-    };
-    const me = await request.get(`${api}/auth/me`, { headers });
-    expect(me.status()).toBe(200);
-    const profile = await me.json();
-    expect(profile.organization_id).toBe(storyIdentity.organizationId);
-    expect(profile.effective_authority.organization_capabilities).toEqual([]);
-    expect(profile.effective_authority.institution_capabilities).toEqual([]);
-    const evidence: unknown[] = [
-      { path: "/auth/me", status: me.status(), body: profile },
-    ];
-    const update = await request.patch(`${api}/auth/me`, {
-      headers,
-      data: { theme: "system" },
-    });
-    expect(update.status()).toBe(200);
-    expect((await update.json()).theme).toBe("system");
-    for (const [route, status] of [
-      ["/banks", 200],
-      [`/banks/${storyIdentity.bankId}`, 404],
-      ["/banks/BK-NONE0001", 404],
-      ["/organization/users", 403],
-    ] as const) {
-      const response = await request.get(`${api}${route}`, { headers });
-      expect(response.status()).toBe(status);
-      const body = await response.json();
-      if (route === "/banks") expect(body.banks).toEqual([]);
-      evidence.push({ path: route, status: response.status(), body });
-    }
-    if (evidenceDir)
-      writeFileSync(
-        path.join(evidenceDir, "baseline-api.json"),
-        JSON.stringify(evidence, null, 2),
-      );
   });
 });

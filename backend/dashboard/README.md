@@ -546,8 +546,8 @@ three servers use OS-selected free ports (optional `E2E_BACKEND_PORT`,
 `E2E_DASHBOARD_PORT` and `E2E_IDP_PORT` preferences fall back when occupied),
 then `e2e/global-setup.ts` seeds through the API and mints per-role session
 cookies. The Next.js server uses `.next-e2e`, so it cannot contaminate the
-normal development cache. Because every journey shares the disposable database
-and session files, a worktree-local lock rejects a second concurrent E2E run.
+normal development cache. Both browser suites use the worktree's disposable
+database and session files, so a worktree-local lock rejects concurrent E2E runs.
 The stack never touches the primary database.
 
 The disposable Next.js server uses `NEXT_FONT_GOOGLE_MOCKED_RESPONSES` with
@@ -673,9 +673,23 @@ retain the canonical spine's figures. Capital and stress expectations for the
 latest period therefore use the position book's net CRD credit basis.
 
 ```bash
-pnpm --filter @aequoros/dashboard e2e            # the journeys
+pnpm --filter @aequoros/dashboard e2e            # functional journeys
+pnpm --filter @aequoros/dashboard e2e:contracts  # browser presentation and HTTP contracts
 AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual
 ```
+
+Functional outcomes live in `e2e/`: source ingestion, computed figures,
+navigation and recovery, scoped authority, and persisted user actions.
+`contracts/` owns presentation and HTTP contracts: header geometry and metadata,
+Settings section placement, authentication/cookie protocols, grant/access-request
+contracts, BI authorization/privacy/governance, and the exhaustive macro-scenario
+API catalogue. Both commands boot the same
+disposable product stack with one worker and no retries, on separate invocations.
+The contract suite uses a list reporter and does not emit journey accounting.
+Navigation/recovery remains in `e2e/navigation-recovery.spec.ts`; macro read-only
+UI checks live together in `e2e/default-macro-scenarios.spec.ts`. Settings authority
+and preference persistence use fresh actors, while shell presentation is checked
+once in the contract suite.
 
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run the commands from the repository
@@ -824,8 +838,11 @@ successful detection of an ignored-only PR.
 
 Four runners use Playwright `--shard=1/4` through `--shard=4/4`, each with one
 worker and its own disposable SQLite database, fixture bank, loopback MinIO
-with built-in KMS and local OIDC issuer. Tests in one spec stay together; no
-mutable bank or storage is shared between shards. Each runner restores or
+with built-in KMS and local OIDC issuer. Shard 1 then runs the browser contracts
+serially on a fresh database with a separate results directory. A contract
+failure fails that shard job and the required gate even when every journey
+report meets the numeric floor. Contracts never contribute to that floor.
+Tests in one spec stay together; no mutable bank or storage is shared between shards. Each runner restores or
 installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined

@@ -37,7 +37,7 @@ function fixture(run) {
   }
 }
 function reports() {
-  return [63, 63, 63, 62].map((count, index) => ({
+  return [50, 50, 50, 50].map((count, index) => ({
     shard: { current: index + 1, total: 4 },
     status: "passed",
     discovered: count,
@@ -74,7 +74,7 @@ test("accepts a complete four-shard run at the executed-journey floor", () =>
   fixture((root) => {
     const result = invoke(root, reports());
     assert.equal(result.status, 0, result.stdout);
-    assert.match(result.stdout, /251 executed, 0 skipped/);
+    assert.match(result.stdout, /200 executed, 0 skipped/);
   }));
 test("rejects a vanished journey even when every shard passed", () =>
   fixture((root) => {
@@ -84,7 +84,7 @@ test("rejects a vanished journey even when every shard passed", () =>
     data[0].executed--;
     const result = invoke(root, data);
     assert.equal(result.status, 1);
-    assert.match(result.stdout, /floor is 251/);
+    assert.match(result.stdout, /floor is 200/);
   }));
 test("names skipped journeys and refuses skip-based success", () =>
   fixture((root) => {
@@ -134,7 +134,7 @@ test("counts unsuccessful journeys as executed while refusing the run", () =>
       data[0].journeys[0].status = status;
       const result = invoke(root, data);
       assert.equal(result.status, 1);
-      assert.match(result.stdout, /251 executed, 0 skipped/);
+      assert.match(result.stdout, /200 executed, 0 skipped/);
       assert.ok(
         result.stdout.includes(
           `Journey did not pass: ${data[0].journeys[0].name} (${status})`,
@@ -172,4 +172,27 @@ test("real Playwright reporter writes unique named results, including skipped na
     assert.equal(data.skipped, 1);
     assert.equal(new Set(data.journeys.map((journey) => journey.id)).size, 21);
     assert.match(data.skippedNames[0], /explicit diagnostic/);
+  }));
+
+test("a contract failure cannot be hidden by complete passing journey reports", () =>
+  fixture((root) => {
+    assert.equal(invoke(root, reports()).status, 0);
+    const gate = path.join(repo, ".github/scripts/dashboard_journeys_gate.sh");
+    for (const jobResult of ["success", "failure", "cancelled"]) {
+      const result = spawnSync("bash", [gate], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          RESULTS: JSON.stringify({
+            changes: { result: "success", outputs: { journeys: "true" } },
+            journeys: { result: jobResult },
+          }),
+        },
+      });
+      assert.equal(
+        result.status,
+        jobResult === "success" ? 0 : 1,
+        result.stdout + result.stderr,
+      );
+    }
   }));

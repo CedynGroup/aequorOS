@@ -95,6 +95,22 @@ jobs:
           PLAYWRIGHT_QUARANTINE_REPORT: ${{ runner.temp }}/journeys.json
           E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
         run: mise exec -- pnpm --filter @aequoros/dashboard e2e --shard=${{ matrix.shard }}/4
+      - name: Run dashboard browser contracts
+        if: matrix.shard == 1
+        env:
+          S3_ENDPOINT: http://127.0.0.1:9000
+          S3_ACCESS_KEY: ciminio
+          S3_SECRET_KEY: ciminio123
+          S3_REGION: us-east-1
+          S3_BUCKET: aequoros
+          STORAGE_BACKEND: minio
+          STORAGE_ENV: mvp
+          STORAGE_RETIRE_AFTER: "2099-01-01"
+          STORAGE_KMS_KEY_ID: aequoros-key
+          E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
+        # A separate invocation resets the disposable database and keeps one
+        # worker. Its list reporter cannot overwrite the journey shard report.
+        run: mise exec -- pnpm --filter @aequoros/dashboard e2e:contracts --output=${{ runner.temp }}/browser-contract-results
       # Reviewer-visible screenshots the authorization and SSO journeys write
       # (the issuer's form, the signed-in shell, the refusals, the step-up
       # return). Uploaded even on failure: that is when they matter most.

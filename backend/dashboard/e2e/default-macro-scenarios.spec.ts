@@ -6,8 +6,6 @@ import path from "path";
 import { E2E_TMP } from "../playwright.config";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
-const runPermissionReason =
-  "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.";
 
 test.describe("default macro scenarios", () => {
   test.use({
@@ -74,10 +72,12 @@ test.describe("default macro scenarios", () => {
         bindings: [
           { bundle: "viewer", module: "irrbb", sensitivity: "all" },
           { bundle: "viewer", module: "risk", sensitivity: "confidential" },
+          { bundle: "viewer", module: "ftp", sensitivity: "all" },
+          { bundle: "viewer", module: "fx", sensitivity: "all" },
         ],
       },
     });
-    test("keeps the run control visible and explains missing authority", async ({
+    test("read-only grants refuse execution and explain the missing authority in IRRBB, FTP and FX", async ({
       page,
     }) => {
       await page.goto("/irr/scenarios");
@@ -88,16 +88,42 @@ test.describe("default macro scenarios", () => {
         data: {
           scenario_id: await scenario.inputValue(),
           reporting_period_id: await currentBankPeriod(),
+          reason: "Read-only scenario execution must be refused",
         },
       });
-      const run = page.getByRole("button", {
-        name: "Run enterprise stress",
+      const cloneControls = page.getByRole("button", {
+        name: "Cloning requires the Analyst role or higher.",
         exact: true,
       });
-      await expect(run).toBeVisible();
-      await expect(run).toBeDisabled();
-      await run.hover({ force: true });
-      await expect(page.getByRole("tooltip")).toHaveText(runPermissionReason);
+      await expect(cloneControls).toHaveCount(9);
+      for (const clone of await cloneControls.all()) {
+        await expect(clone).toBeVisible();
+        await expect(clone).toBeDisabled();
+      }
+      for (const [lens, reason] of [
+        [
+          "irr",
+          "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.",
+        ],
+        [
+          "ftp",
+          "Requires Funds Transfer Pricing · Confidential · Run. Ask your organization owner or admin to grant it.",
+        ],
+        [
+          "fx",
+          "Requires FX run permission at confidential sensitivity. An organization owner can grant it.",
+        ],
+      ]) {
+        await page.goto(`/${lens}/scenarios`);
+        const run = page.getByRole("button", {
+          name: "Run enterprise stress",
+          exact: true,
+        });
+        await expect(run).toBeVisible();
+        await expect(run).toBeDisabled();
+        await run.hover({ force: true });
+        await expect(page.getByRole("tooltip")).toHaveText(reason);
+      }
 
       if (evidenceDir) {
         await page.screenshot({
