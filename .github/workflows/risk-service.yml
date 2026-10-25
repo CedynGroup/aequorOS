@@ -447,6 +447,14 @@ jobs:
           CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-schema
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-schema/report.xml
         run: mise run risk-service:test-postgres-schema
+      - name: Upload failed schema shard PostgreSQL log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pg-schema-server-log-${{ matrix.shard }}
+          path: ${{ runner.temp }}/postgres.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload schema shard evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -555,6 +563,14 @@ jobs:
           CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-suite
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-suite/report.xml
         run: mise run risk-service:test-postgres-suite
+      - name: Upload failed suite shard PostgreSQL log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pg-suite-server-log-${{ matrix.shard }}
+          path: ${{ runner.temp }}/postgres.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload suite shard evidence
         if: always()
         uses: actions/upload-artifact@v7

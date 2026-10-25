@@ -211,6 +211,7 @@ export async function approveAndSignAsChecker(
 export async function sendBackAsChecker(
   browser: Browser,
   storageState: string,
+  code: string,
   date: string,
   note: string,
 ): Promise<void> {
@@ -218,7 +219,12 @@ export async function sendBackAsChecker(
   try {
     const page = await context.newPage();
     await page.goto("/submissions/approvals");
-    const row = page.getByRole("row", { name: new RegExp(fmtDateGB(date)) });
+    const row = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name: code, exact: true }) })
+      .filter({
+        has: page.getByRole("cell", { name: fmtDateGB(date), exact: true }),
+      });
     await expect(row.first()).toBeVisible({ timeout: 30_000 });
     await row.first().click();
     await page.getByTestId("review-and-sign").click();
@@ -236,8 +242,30 @@ export async function sendBackAsChecker(
     await send.click();
     await expect(workspace).toBeHidden({ timeout: CEREMONY_TIMEOUT });
 
-    // This return leaves the checker queue; other filed returns stay reachable.
+    // Off the checker queue: it is the preparer's again.
+    const queueReads = [
+      "pending_approval",
+      "approved",
+      "submitted",
+      "acknowledged",
+    ].map((status) =>
+      page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === "GET" &&
+          /\/banks\/[^/]+\/regulatory-packages$/.test(url.pathname) &&
+          url.searchParams.get("status") === status
+        );
+      }),
+    );
     await page.goto("/submissions/approvals");
+    for (const response of await Promise.all(queueReads)) {
+      expect(response.ok()).toBeTruthy();
+      await response.finished();
+    }
+    await expect(page.getByLabel("Loading table", { exact: true })).toHaveCount(
+      0,
+    );
     await expect(
       page.getByRole("heading", { name: "In review", exact: true }),
     ).toBeVisible({

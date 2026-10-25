@@ -186,14 +186,24 @@ test.describe("bound FX user", () => {
   }) => {
     await signInWithFxGrants(["aggregated", "confidential"], "approver");
 
+    const periodsLoaded = page.waitForResponse(
+      (response) =>
+        /\/banks\/[^/]+\/reporting-periods$/.test(
+          new URL(response.url()).pathname,
+        ) && response.request().method() === "GET",
+    );
     await page.goto("/fx/scenarios");
+    const periodsResponse = await periodsLoaded;
+    expect(periodsResponse.ok()).toBeTruthy();
+    await periodsResponse.finished();
     await page
       .getByRole("button", { name: "Scenarios & run", exact: true })
       .click();
     const run = page.getByRole("button", { name: "Run enterprise stress" });
     await expect(run).toBeVisible();
     await expect(run).toBeDisabled();
-    await run.locator("..").hover();
+    await run.locator("..").focus();
+    await expect(run.locator("..")).toBeFocused();
     await expect(page.getByRole("tooltip")).toHaveText(
       "Requires FX run permission at confidential sensitivity. An organization owner can grant it.",
     );

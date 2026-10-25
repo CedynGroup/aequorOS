@@ -758,7 +758,13 @@ test.describe("full lifecycle", () => {
       const signatures = filingSignatures(original.id);
       expect(signatures).toHaveLength(1);
       const staleReview = await filingChain(request, original.id);
-      await sendBackAsChecker(browser, approverState, date, note);
+      await sendBackAsChecker(
+        browser,
+        approverState,
+        LIQUIDITY_RETURN,
+        date,
+        note,
+      );
 
       await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
       await expect(page.getByText("Unsigned").first()).toBeVisible();
