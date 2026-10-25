@@ -52,11 +52,13 @@ export default defineConfig({
   workers: 1, // journeys share one disposable canonical test bank; keep them ordered + isolated
   reporter: process.env.CI
     ? [
+        ["./e2e/support/artifact-reporter.ts"],
         ["./e2e/support/quarantine-reporter.ts"],
         ["./e2e/support/critical-outcome-reporter.ts", { layer: "journey" }],
         ["list"],
       ]
     : [
+        ["./e2e/support/artifact-reporter.ts"],
         ["./e2e/support/critical-outcome-reporter.ts", { layer: "journey" }],
         ["list"],
       ],
