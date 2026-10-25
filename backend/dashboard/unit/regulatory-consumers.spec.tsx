@@ -107,8 +107,13 @@ vi.mock("@/components/shell/BankContext", () => ({
     bank: { id: "BK-SYNTH001", name: "Synthetic institution" },
     period: { id: "period", periodEnd: new Date("2026-01-31") },
     moduleScope: scope(),
+    institutionCapabilities: scope().institutionCapabilities,
+    authorityPending: false,
   }),
   useModuleScope: () => scope(),
+}));
+vi.mock("@/components/profile/ProfileProvider", () => ({
+  useUserProfile: () => ({ profile: { userId: "synthetic-user" } }),
 }));
 vi.mock("next/navigation", () => ({
   useSearchParams: () =>
@@ -500,7 +505,12 @@ vi.mock("@/lib/api/hooks", () => ({
   useMarkNotificationRead: () => ({ mutate: vi.fn() }),
   useMarkAllNotificationsRead: () => ({ mutate: vi.fn() }),
   useEwiDashboard: () => query({ indicators: [], escalationState: "normal" }),
-  useCfpSummary: () => query({ approved: null }),
+  useCfpSummary: () => query({ current: null, approved: null }),
+  useCfpLifecycle: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+    error: null,
+  }),
   useCfpEvents: () => query({ events: [] }),
   useLiquidityThresholdRegister: () => query({ thresholds: [] }),
   useLiquidityHaircutSchedule: () => query({ haircuts: [] }),
