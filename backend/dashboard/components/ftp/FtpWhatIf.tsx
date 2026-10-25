@@ -13,8 +13,12 @@ import QueryBoundary from "@/components/ui/QueryBoundary";
 import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 import { inputCls } from "@/components/institution/shared";
 import { hasEffectiveCapability } from "@/lib/modules";
-import { fmtDateUTC, labelize } from "@/lib/api/values";
-import { currencyCode } from "@/lib/format";
+import { fmtDateUTC } from "@/lib/api/values";
+import ScenarioMetrics, {
+  scenarioLabel,
+  scenarioRisk,
+  scenarioValue,
+} from "@/components/workbench/ScenarioMetrics";
 import {
   useRunScenarioAnalysis,
   useSaveScenarioAnalysis,
@@ -47,31 +51,26 @@ export function ScenarioResults({
             {result.status}
           </h3>
           {result.errorMessage && <p role="alert">{result.errorMessage}</p>}
-          <dl className="grid gap-3 sm:grid-cols-3">
-            {Object.entries(result.metrics ?? {}).map(([key, value]) => (
-              <div key={key}>
-                <dt className="text-caption text-slate">
-                  {labelize(key.replace(/_ghs$/, ""))}
-                  {key.endsWith("_ghs") ? ` (${currencyCode()})` : ""}
-                </dt>
-                <dd className="font-mono">
-                  {result.refusals?.[key]
-                    ? `Unavailable: ${result.refusals[key].reason ?? labelize(result.refusals[key].reasonCode)}`
-                    : value}
-                  {result.metricStatuses?.[key]
-                    ? ` · ${labelize(result.metricStatuses?.[key])}`
-                    : ""}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <p className="my-3 text-body text-navy">
+            {scenarioRisk(result.metrics ?? {}, result.metricStatuses ?? {})}
+          </p>
+          <ScenarioMetrics
+            metrics={result.metrics ?? {}}
+            baseline={
+              index > 0 && results[0]?.status === "succeeded"
+                ? (results[0].metrics ?? undefined)
+                : undefined
+            }
+            statuses={result.metricStatuses ?? {}}
+            refusals={result.refusals ?? {}}
+          />
           <details className="mt-2 text-caption">
             <summary>Applied inputs and validations</summary>
             <dl>
               {Object.entries(result.shocksApplied).map(([key, value]) => (
                 <div key={key}>
-                  <dt className="inline">{labelize(key)}: </dt>
-                  <dd className="inline">{value}</dd>
+                  <dt className="inline">{scenarioLabel(key)}: </dt>
+                  <dd className="inline">{scenarioValue(key, value)}</dd>
                 </div>
               ))}
             </dl>
@@ -180,7 +179,7 @@ export default function FtpWhatIf({
     const button = (id?: string) => (
       <button
         type="button"
-        className="btn-primary disabled:opacity-50"
+        className="btn-primary min-h-11 rounded px-5 py-2 font-medium disabled:opacity-50"
         aria-describedby={id}
         disabled={disabled}
         onClick={() => void execute(action)}
@@ -244,6 +243,15 @@ export default function FtpWhatIf({
           Preview writes no regulatory runs. Saving recomputes a separate
           analysis snapshot; governed curves and rules stay unchanged.
         </p>
+        {!ready && (
+          <p className="text-caption text-slate">
+            {!period
+              ? "Select a reporting period before previewing."
+              : !entry?.configured
+                ? "This scenario cannot run until its governed parameters are configured."
+                : "Correct the override values before previewing."}
+          </p>
+        )}
         {!validInputs && (
           <p role="alert">Enter decimal numbers for each override.</p>
         )}

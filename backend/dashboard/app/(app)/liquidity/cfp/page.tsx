@@ -20,7 +20,7 @@ import { isHrefVisible } from "@/lib/modules";
 import type { EwiEvaluationRead } from "@aequoros/risk-service-api";
 
 // Server-side EWI states (LRMD ¶28(e)–(f)): values, Board trigger levels and
-// RAG classifications all come from the engine — nothing is derived here.
+// RAG classifications all come from the engine. nothing is derived here.
 const STATUS_TONE: Record<string, StatusTone> = {
   normal: "success",
   watch: "amber",
@@ -43,7 +43,7 @@ const ESCALATION_COPY: Record<
 > = {
   normal: { label: "Business as usual", status: "ok" },
   heightened_monitoring: { label: "Heightened monitoring", status: "warn" },
-  escalation: { label: "Escalation — action trigger breached", status: "crit" },
+  escalation: { label: "Escalation. action trigger breached", status: "crit" },
   cfp_active: { label: "CFP ACTIVE", status: "crit" },
 };
 
@@ -82,7 +82,7 @@ const indicatorColumns: Column<EwiEvaluationRead>[] = [
         <p className="font-medium text-navy">{r.name}</p>
         <p className="text-caption text-slate">{r.metricBasis}</p>
         {r.recoveryPlanReference ? (
-          <p className="text-caption text-slate/80">
+          <p className="text-caption text-slate">
             Recovery plan: {String(r.recoveryPlanReference)}
           </p>
         ) : null}
@@ -198,7 +198,7 @@ export default function ContingencyFundingPlan() {
         >
           <SectionCard
             title="Activation log"
-            subtitle="¶74 events — each carries the EWI snapshot at event time and the regulator-notification evidence"
+            subtitle="¶74 events. each carries the EWI snapshot at event time and the regulator-notification evidence"
             noPadding
             footer={
               <span>
@@ -273,7 +273,17 @@ export default function ContingencyFundingPlan() {
                 label="Escalation state"
                 value={escalation.label}
                 status={escalation.status}
-                hint="Computed server-side from indicator states"
+                hint={`Computed from available evidence. ${unconfiguredIndicators.length + noDataIndicators.length} evidence gaps; this state does not confirm readiness.`}
+              />
+              <KpiStat
+                label="EWI evidence coverage"
+                value={`${indicators.length - unconfiguredIndicators.length - noDataIndicators.length} / ${indicators.length} assessed`}
+                status={
+                  unconfiguredIndicators.length + noDataIndicators.length > 0
+                    ? "warn"
+                    : "ok"
+                }
+                hint={`${unconfiguredIndicators.length} unconfigured · ${noDataIndicators.length} without data`}
               />
               <KpiStat
                 label="Indicators at action"
@@ -325,18 +335,6 @@ export default function ContingencyFundingPlan() {
                 }
                 hint="Intraday through structural funding horizons"
               />
-              <KpiStat
-                label="EWI evidence gaps"
-                value={String(
-                  unconfiguredIndicators.length + noDataIndicators.length,
-                )}
-                status={
-                  unconfiguredIndicators.length + noDataIndicators.length > 0
-                    ? "warn"
-                    : "ok"
-                }
-                hint={`${unconfiguredIndicators.length} unconfigured · ${noDataIndicators.length} without data`}
-              />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -345,7 +343,20 @@ export default function ContingencyFundingPlan() {
                 title="Early-warning distribution"
                 subtitle="Server-calculated indicator states; unconfigured and no-data signals remain visible control gaps."
               >
-                <EwiDistributionChart data={ewiDistribution} />
+                {indicators.length === 0 ? (
+                  <p className="text-body text-slate">
+                    No indicators are available for this period. Configure the
+                    EWI register and ingest the required data to populate this
+                    chart.
+                  </p>
+                ) : (
+                  <EwiDistributionChart data={ewiDistribution} />
+                )}
+                <p className="mt-3 text-caption text-slate">
+                  Unconfigured indicators need Board-approved thresholds.
+                  No-data indicators need source evidence. Neither state
+                  confirms that risk is within limits.
+                </p>
               </SectionCard>
               <SectionCard
                 title="Plan execution readiness"
@@ -394,7 +405,7 @@ export default function ContingencyFundingPlan() {
 
             <SectionCard
               title="Early-warning indicators"
-              subtitle="The eight directive starter indicators plus any Board additions — values, trigger levels and states computed by the engine"
+              subtitle="The eight directive starter indicators plus any Board additions. values, trigger levels and states computed by the engine"
               noPadding
               footer={
                 <span>
@@ -574,7 +585,7 @@ export default function ContingencyFundingPlan() {
 
 /**
  * Early-warning indicator states as a count per state. The counts are integers,
- * so the axis carries `minInterval: 1` — a fractional "1.5 indicators" tick would
+ * so the axis carries `minInterval: 1`. a fractional "1.5 indicators" tick would
  * describe something that cannot exist.
  */
 function EwiDistributionChart({
