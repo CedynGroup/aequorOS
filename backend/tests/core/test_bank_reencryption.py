@@ -204,7 +204,7 @@ def test_field_migration_and_verification_resume_across_bounded_dispatches(
         counterparty(db_session, reference=f"Synthetic-{number}", include_package=False)
     connect(db_session, provider)
     monkeypatch.setattr(reencryption, "BATCH_SIZE", 2)
-    root = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    _ = reencryption.enqueue(db_session, ORG_1, BANK_A)
     db_session.commit()
     checkpoints: dict[str, list[UUID | None]] = {"fields": [], "verify_fields": []}
     while True:
@@ -253,7 +253,11 @@ def test_bounded_dispatches_outlive_the_old_six_hour_window_without_reclaim(
     now = utc_now()
     beginning = now
     monkeypatch.setattr(job_queue, "utc_now", lambda: now)
-    monkeypatch.setattr(reencryption.time, "monotonic", lambda: (now - beginning).total_seconds())
+
+    def elapsed() -> float:
+        return (now - beginning).total_seconds()
+
+    monkeypatch.setattr(reencryption.time, "monotonic", elapsed)
 
     class SlowStorage(EmptyStorage):
         versions: dict[int, UUID | None] = dict.fromkeys(range(100))
@@ -711,7 +715,11 @@ def test_job_clears_historical_bi_identity_copies_and_keeps_numeric_queries(
     provider = LocalKeyProvider()
     reference = KeyReference("aws_kms", "synthetic-bi-upgrade", "us-east-1", "111122223333")
     provider.add_key(reference)
-    monkeypatch.setattr(registry, "provider_for", lambda _: provider)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     registry.register(
         db_session,
         organization_id=ORG_1,
@@ -755,12 +763,16 @@ def test_job_clears_historical_bi_identity_copies_and_keeps_numeric_queries(
     for row in db_session.execute(
         select(BiDimCounterparty.__table__).where(BiDimCounterparty.bank_id == bank.id)
     ).mappings():
-        assert row["name"] == row["source_reference"] == str(cast(object, row["counterparty_id"]))
+        assert (
+            cast(object, row["name"])
+            == cast(object, row["source_reference"])
+            == str(cast(object, row["counterparty_id"]))
+        )
         assert row["group_reference"] is None
     for model in (BiFactPositionDaily, BiFactPositionEom):
         rows = db_session.execute(
             select(model.as_of_date, model.counterparty_group).where(model.bank_id == bank.id)
         ).all()
-        assert {row.as_of_date for row in rows} == {historical, AS_OF}
-        assert all(row.counterparty_group is None for row in rows)
+        assert {cast(object, row.as_of_date) for row in rows} == {historical, AS_OF}
+        assert all(cast(object, row.counterparty_group) is None for row in rows)
     assert numeric_rows() == before

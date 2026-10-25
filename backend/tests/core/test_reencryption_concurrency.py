@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier, Event, local
 from time import monotonic, sleep
@@ -54,14 +54,9 @@ def engine(db: Session) -> Engine:
     return bind
 
 
-@pytest.mark.parametrize("rollback_publication", [False, True])
-def test_duplicate_worker_waits_for_publication_commit_or_rollback(
-    db_session: Session,
-    provider: LocalKeyProvider,
-    monkeypatch: pytest.MonkeyPatch,
-    rollback_publication: bool,
-) -> None:
-    database = engine(db_session)
+def prepare_duplicate_job(
+    db_session: Session, provider: LocalKeyProvider
+) -> tuple[UUID, UUID, EncryptionInventoryItem, UUID]:
     party_id = counterparty(db_session, include_package=False).id
     connect(db_session, provider)
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
@@ -81,6 +76,62 @@ def test_duplicate_worker_waits_for_publication_commit_or_rollback(
     job.payload = {"reencryption_bytes": item.size_bytes}
     job_id = job.id
     db_session.commit()
+    return party_id, target, item, job_id
+
+
+def assert_duplicate_job_finishes(
+    db_session: Session, job_id: UUID, party_id: UUID, target: UUID
+) -> None:
+    db_session.expire_all()
+    parent = db_session.get(Job, job_id)
+    assert parent is not None and parent.status == "succeeded"
+    progress = reencryption.Progress.model_validate(parent.progress)
+    assert progress.next_job_id is not None
+    db_session.commit()
+    for _ in range(200):
+        if not worker.run_once((reencryption.JOB_TYPE,), worker_id="C"):
+            break
+    db_session.expire_all()
+    latest = db_session.scalar(
+        select(Job).where(Job.bank_id == BANK_A).order_by(Job.queued_at.desc()).limit(1)
+    )
+    assert (
+        latest is not None and reencryption.Progress.model_validate(latest.progress).phase == "done"
+    )
+    value = db_session.scalar(
+        select(CanonicalCounterparty.name).where(CanonicalCounterparty.id == party_id)
+    )
+    assert isinstance(value, SealedField) and value.envelope_id == target
+
+
+def assert_worker_blocked(db_session: Session, backend_b: list[int], second: Future[bool]) -> None:
+    deadline = monotonic() + 10
+    blocked = False
+    while monotonic() < deadline:
+        blocked = bool(
+            cast(
+                int,
+                db_session.scalar(
+                    text("SELECT cardinality(pg_blocking_pids(:pid))"),
+                    {"pid": backend_b[-1]},
+                ),
+            )
+        )
+        if blocked:
+            break
+        sleep(0.01)
+    assert blocked and not second.done()
+
+
+@pytest.mark.parametrize("rollback_publication", [False, True])
+def test_duplicate_worker_waits_for_publication_commit_or_rollback(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    rollback_publication: bool,
+) -> None:
+    database = engine(db_session)
+    party_id, target, item, job_id = prepare_duplicate_job(db_session, provider)
     now = utc_now()
     monkeypatch.setattr(worker, "utc_now", lambda: now)
     runner = local()
@@ -160,18 +211,7 @@ def test_duplicate_worker_waits_for_publication_commit_or_rollback(
             publish_a.set()
             assert locked_a.wait(10)
             publish_b.set()
-            deadline = monotonic() + 10
-            blocked = False
-            while monotonic() < deadline:
-                blocked = bool(
-                    db_session.scalar(
-                        text("SELECT cardinality(pg_blocking_pids(:pid))"), {"pid": backend_b[-1]}
-                    )
-                )
-                if blocked:
-                    break
-                sleep(0.01)
-            assert blocked and not second.done()
+            assert_worker_blocked(db_session, backend_b, second)
         finally:
             publish_a.set()
             publish_b.set()
@@ -182,27 +222,8 @@ def test_duplicate_worker_waits_for_publication_commit_or_rollback(
         else:
             assert first.result(timeout=15)
         assert second is not None and second.result(timeout=15)
-    db_session.expire_all()
-    parent = db_session.get(Job, job_id)
-    assert parent is not None and parent.status == "succeeded"
-    progress = reencryption.Progress.model_validate(parent.progress)
-    assert progress.next_job_id is not None
-    db_session.commit()
     runner.name = "C"
-    for _ in range(200):
-        if not worker.run_once((reencryption.JOB_TYPE,), worker_id="C"):
-            break
-    db_session.expire_all()
-    latest = db_session.scalar(
-        select(Job).where(Job.bank_id == BANK_A).order_by(Job.queued_at.desc()).limit(1)
-    )
-    assert (
-        latest is not None and reencryption.Progress.model_validate(latest.progress).phase == "done"
-    )
-    value = db_session.scalar(
-        select(CanonicalCounterparty.name).where(CanonicalCounterparty.id == party_id)
-    )
-    assert isinstance(value, SealedField) and value.envelope_id == target
+    assert_duplicate_job_finishes(db_session, job_id, party_id, target)
 
 
 def test_duplicate_concurrent_batch_publishes_one_continuation(

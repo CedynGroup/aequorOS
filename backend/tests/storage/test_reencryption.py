@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from importlib import import_module
 from typing import BinaryIO, Protocol, cast
 from uuid import UUID, uuid4
 
 import pytest
 from alembic.script import ScriptDirectory
-from botocore.exceptions import ClientError
 from pydantic import TypeAdapter
 from sqlalchemy import delete
 from sqlalchemy.engine import Connection
@@ -20,19 +21,19 @@ from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.db.base import utc_now
 from app.identity.public import Bank
+from app.models.job import Job
 from app.models.risk import StoredObject
 from app.services import job_queue
 from app.storage import reencryption as objects
 from app.storage.client import (
     EncryptionCursor,
-    EncryptionInventoryItem,
     EncryptionPage,
     StorageAccessError,
     StorageBackendError,
     StorageLocation,
     Tier,
 )
-from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption, object_context
+from app.storage.encryption import ENCRYPTION_FORMAT, object_context
 from tests.db.test_postgres_migrations import alembic_config_for_app
 from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption import (
@@ -47,23 +48,13 @@ from tests.support.reencryption import drain
 
 __all__ = ["bank_storage"]
 
+ClientError = cast(
+    Callable[[dict[str, object], str], Exception],
+    import_module("botocore.exceptions").ClientError,
+)
 
-@pytest.mark.committing_db
-@pytest.mark.parametrize("concurrent_write", [False, True])
-def test_large_object_copy_runs_alone_and_rechecks_at_atomic_publication(
-    bank_storage: BankStorage,
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-    concurrent_write: bool,
-) -> None:
-    monkeypatch.setattr(reencryption, "LARGE_OBJECT_BYTES", 1024 * 1024)
-    monkeypatch.setattr(registry, "provider_for", lambda _: bank_storage.provider)
-    large = StorageLocation(SLUG, "temp", "a-large.csv")
-    small = StorageLocation(SLUG, "temp", "z-small.csv")
-    content = b"synthetic large content\n" * 60000
-    replacement = b"synthetic concurrent writer"
-    for location, data in ((large, content), (small, b"synthetic small")):
-        bank_storage.storage.write(location, io.BytesIO(data), metadata_for(SLUG, "temp", data))
+
+def claim_large_object_job(db_session: Session, bank_storage: BankStorage) -> Job:
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
     registry.rotate(db_session, key, NEXT_KEY, lambda _: bank_storage.provider)
     db_session.commit()
@@ -77,6 +68,31 @@ def test_large_object_copy_runs_alone_and_rechecks_at_atomic_publication(
             break
         reencryption.run(db_session, job, bank_storage.storage)
         job_queue.complete(db_session, job)
+    return job
+
+
+@pytest.mark.committing_db
+@pytest.mark.parametrize("concurrent_write", [False, True])
+def test_large_object_copy_runs_alone_and_rechecks_at_atomic_publication(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    concurrent_write: bool,
+) -> None:
+    monkeypatch.setattr(reencryption, "LARGE_OBJECT_BYTES", 1024 * 1024)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    large = StorageLocation(SLUG, "temp", "a-large.csv")
+    small = StorageLocation(SLUG, "temp", "z-small.csv")
+    content = b"synthetic large content\n" * 60000
+    replacement = b"synthetic concurrent writer"
+    for location, data in ((large, content), (small, b"synthetic small")):
+        bank_storage.storage.write(location, io.BytesIO(data), metadata_for(SLUG, "temp", data))
+    job = claim_large_object_job(db_session, bank_storage)
+    progress = reencryption.Progress.model_validate(job.progress)
     assert progress.large_object is not None and progress.large_object.location == large
     assert progress.objects_rewritten == 0
     assert job.payload["reencryption_bytes"] == progress.large_object.size_bytes
@@ -139,7 +155,11 @@ def test_inventory_metadata_budget_persists_each_exact_version_cursor(
             Body=b"synthetic",
             Metadata=metadata_for(SLUG, "temp", b"synthetic").to_object_metadata(),
         )
-    monkeypatch.setattr(registry, "provider_for", lambda _: bank_storage.provider)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     client = cast(objects.S3MaintenanceClient, bank_storage.s3)
     list_versions = client.list_object_versions
     calls: list[dict[str, object]] = []
@@ -173,6 +193,17 @@ def test_inventory_metadata_budget_persists_each_exact_version_cursor(
     assert all(cursor.version == "null" for cursor in object_cursors)
     assert any(call.get("VersionIdMarker") == "null" for call in calls)
     assert reencryption.Progress.model_validate(job.progress).objects_rewritten == 3
+
+
+def read_ciphertext(bank: BankStorage, location: StorageLocation, version_id: str) -> bytes:
+    response = bank.s3.get_object(
+        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId=version_id
+    )
+    source = cast(BinaryIO, response["Body"])
+    try:
+        return source.read()
+    finally:
+        source.close()
 
 
 def minio_metadata(
@@ -262,14 +293,7 @@ def test_title_cased_deleted_history_keeps_its_envelope_and_retirement_hold(
         location, io.BytesIO(content), metadata_for(SLUG, "raw", content)
     )
     assert stored.version_id is not None
-    response = bank_storage.s3.get_object(
-        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId=stored.version_id
-    )
-    source = cast(BinaryIO, response["Body"])
-    try:
-        ciphertext = source.read()
-    finally:
-        source.close()
+    ciphertext = read_ciphertext(bank_storage, location, stored.version_id)
     bank_storage.storage.delete(location)
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
     original_envelope = key.current_version_id
@@ -301,14 +325,7 @@ def test_title_cased_deleted_history_keeps_its_envelope_and_retirement_hold(
     finally:
         historical.close()
     assert descriptor.version_id == stored.version_id
-    response = bank_storage.s3.get_object(
-        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId=stored.version_id
-    )
-    retained_body = cast(BinaryIO, response["Body"])
-    try:
-        assert retained_body.read() == ciphertext
-    finally:
-        retained_body.close()
+    assert read_ciphertext(bank_storage, location, stored.version_id) == ciphertext
     assert bodies and all(body.closed for body in bodies)
     monkeypatch.setattr(registry, "utc_now", lambda: rotated_at + timedelta(days=3))
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
@@ -343,6 +360,29 @@ def test_legacy_object_conversion_authenticates_checksum_and_retains_source(
     current = next(v for v in versions if not v.retained)
     assert isinstance(current.envelope_id, UUID)
     assert not bank_storage.storage.reencrypt(item)
+
+
+def assert_reencrypted_versions(
+    bank_storage: BankStorage,
+    location: StorageLocation,
+    content: bytes,
+    version_id: str,
+) -> None:
+    descriptor, body = bank_storage.storage.read(location)
+    try:
+        assert body.read() == content
+    finally:
+        body.close()
+    assert (
+        descriptor.metadata.checksum_sha256
+        == metadata_for(SLUG, location.tier, content).checksum_sha256
+    )
+    versions = list(bank_storage.storage.encryption_inventory(SLUG))
+    current = next(version for version in versions if not version.retained)
+    assert current.envelope_id is not None
+    assert len(versions) == (2 if location.tier == "raw" else 1)
+    if location.tier == "raw":
+        assert any(version.version_id == version_id and version.retained for version in versions)
 
 
 @pytest.mark.parametrize("tier", ["raw", "temp"])
@@ -408,18 +448,7 @@ def test_reencryption_uses_head_denied_fallback_and_closes_metadata_streams(
     assert responses[0][1].closed and responses[0][1].bytes_read == 0
     assert responses[1][0] == version_id
     assert all(body.closed for _, body in responses)
-    descriptor, body = bank_storage.storage.read(location)
-    try:
-        assert body.read() == content
-    finally:
-        body.close()
-    assert descriptor.metadata.checksum_sha256 == metadata_for(SLUG, tier, content).checksum_sha256
-    versions = list(bank_storage.storage.encryption_inventory(SLUG))
-    current = next(version for version in versions if not version.retained)
-    assert current.envelope_id is not None
-    assert len(versions) == (2 if tier == "raw" else 1)
-    if tier == "raw":
-        assert any(version.version_id == version_id and version.retained for version in versions)
+    assert_reencrypted_versions(bank_storage, location, content, version_id)
     assert all(body.closed for _, body in responses)
 
 
@@ -641,43 +670,42 @@ def test_object_job_uses_bounded_inventory_pages(
             Body=b"synthetic",
             Metadata=metadata_for(SLUG, "raw", b"synthetic").to_object_metadata(),
         )
-    monkeypatch.setattr(registry, "provider_for", lambda _: bank_storage.provider)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     real_inventory_page = objects.inventory_page
     real_reencrypt = objects.reencrypt
     pages: list[int] = []
     rotated = False
 
-    def migrate_object(
-        client: objects.S3MaintenanceClient,
-        env: str,
-        encryption: ObjectEncryption,
-        item: EncryptionInventoryItem,
-        sse_key: str | None,
-        stat_object: objects.ObjectStat,
-    ) -> bool:
-        nonlocal rotated
-        result = real_reencrypt(client, env, encryption, item, sse_key, stat_object)
-        if result and rotate_during_pass and not rotated:
-            rotated = True
-            key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
-            registry.rotate(db_session, key, NEXT_KEY, lambda _: bank_storage.provider)
-        return result
+    def observe_reencryption[**P](original: Callable[P, bool]) -> Callable[P, bool]:
+        def migrate_object(*args: P.args, **kwargs: P.kwargs) -> bool:
+            nonlocal rotated
+            result = original(*args, **kwargs)
+            if result and rotate_during_pass and not rotated:
+                rotated = True
+                key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
+                registry.rotate(db_session, key, NEXT_KEY, lambda _: bank_storage.provider)
+            return result
 
-    def inventory_page(
-        client: objects.S3MaintenanceClient,
-        env: str,
-        slug: str,
-        stat_object: objects.ObjectStat,
-        cursor: EncryptionCursor,
-        limit: int,
-    ) -> EncryptionPage:
-        page = real_inventory_page(client, env, slug, stat_object, cursor, limit)
-        assert len(page.items) <= limit == 1
-        pages.append(len(page.items))
-        return page
+        return migrate_object
 
-    monkeypatch.setattr(objects, "inventory_page", inventory_page)
-    monkeypatch.setattr(objects, "reencrypt", migrate_object)
+    def observe_inventory[**P](
+        original: Callable[P, EncryptionPage],
+    ) -> Callable[P, EncryptionPage]:
+        def inventory_page(*args: P.args, **kwargs: P.kwargs) -> EncryptionPage:
+            limit = cast(int, args[-1])
+            page = original(*args, **kwargs)
+            assert len(page.items) <= limit == 1
+            pages.append(len(page.items))
+            return page
+
+        return inventory_page
+
+    monkeypatch.setattr(objects, "inventory_page", observe_inventory(real_inventory_page))
+    monkeypatch.setattr(objects, "reencrypt", observe_reencryption(real_reencrypt))
     job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
     db_session.commit()
     job = drain(db_session, job, bank_storage.storage)
@@ -695,15 +723,13 @@ def test_object_job_uses_bounded_inventory_pages(
 
 
 class VersionMigration(Protocol):
-    def _backfill_references(self, connection: Connection) -> None: ...
-    def _backfill_versions(self, connection: Connection) -> None: ...
+    def backfill_references(self, connection: Connection) -> None: ...
+    def backfill_versions(self, connection: Connection) -> None: ...
 
 
-def test_existing_bank_upgrade_preserves_legacy_objects_and_initializes_empty_banks(
-    bank_storage: BankStorage,
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def prepare_legacy_bank_upgrade(
+    bank_storage: BankStorage, db_session: Session
+) -> tuple[StorageLocation, bytes, dict[str, str], UUID]:
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
     key.current_version_id = key.index_version_id = None
     db_session.flush()
@@ -772,12 +798,25 @@ def test_existing_bank_upgrade_preserves_legacy_objects_and_initializes_empty_ba
         )
     finally:
         encrypted.close()
-    monkeypatch.setattr(registry, "provider_for", lambda _: bank_storage.provider)
+    return location, content, context, envelope_id
+
+
+def test_existing_bank_upgrade_preserves_legacy_objects_and_initializes_empty_banks(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    location, content, context, envelope_id = prepare_legacy_bank_upgrade(bank_storage, db_session)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
     revision = ScriptDirectory.from_config(alembic_config_for_app()).get_revision("202610220102")
     assert revision is not None
     migration = cast(VersionMigration, cast(object, revision.module))
-    migration._backfill_references(db_session.connection())
-    migration._backfill_versions(db_session.connection())
+    migration.backfill_references(db_session.connection())
+    migration.backfill_versions(db_session.connection())
     db_session.commit()
     db_session.expunge_all()
     for bank in ("BK-SAMP0001", "BK-EMPTY001"):
@@ -856,6 +895,27 @@ def test_database_pin_retains_only_its_location_with_a_null_version(
     assert inventory["editable.csv"].envelope_id is not None
 
 
+def assert_versioning_content(
+    bank_storage: BankStorage,
+    location: StorageLocation,
+    original_content: bytes,
+    original_ciphertext: bytes,
+    latest_content: bytes,
+) -> None:
+    descriptor, historical = bank_storage.storage.read(location, version_id="null")
+    try:
+        assert historical.read() == original_content
+    finally:
+        historical.close()
+    assert descriptor.version_id == "null"
+    assert read_ciphertext(bank_storage, location, "null") == original_ciphertext
+    _, current_body = bank_storage.storage.read(location)
+    try:
+        assert current_body.read() == latest_content
+    finally:
+        current_body.close()
+
+
 @pytest.mark.parametrize("head_denied", [False, True])
 def test_versioning_transition_keeps_null_version_envelope_and_blocks_retirement(
     bank_storage: BankStorage,
@@ -880,14 +940,7 @@ def test_versioning_transition_keeps_null_version_envelope_and_blocks_retirement
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
     original_envelope = key.current_version_id
     assert original_envelope is not None
-    original = bank_storage.s3.get_object(
-        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId="null"
-    )
-    original_body = cast(BinaryIO, original["Body"])
-    try:
-        original_ciphertext = original_body.read()
-    finally:
-        original_body.close()
+    original_ciphertext = read_ciphertext(bank_storage, location, "null")
     bank_storage.s3.put_bucket_versioning(
         Bucket=location.bucket_name("dev"), VersioningConfiguration={"Status": "Enabled"}
     )
@@ -922,25 +975,9 @@ def test_versioning_transition_keeps_null_version_envelope_and_blocks_retirement
     current = next(item for item in versions if not item.retained)
     assert current.version_id == latest.version_id
     assert current.envelope_id == progress.target_version
-    descriptor, historical = bank_storage.storage.read(location, version_id="null")
-    try:
-        assert historical.read() == original_content
-    finally:
-        historical.close()
-    assert descriptor.version_id == "null"
-    retained = bank_storage.s3.get_object(
-        Bucket=location.bucket_name("dev"), Key=location.object_path, VersionId="null"
+    assert_versioning_content(
+        bank_storage, location, original_content, original_ciphertext, latest_content
     )
-    retained_body = cast(BinaryIO, retained["Body"])
-    try:
-        assert retained_body.read() == original_ciphertext
-    finally:
-        retained_body.close()
-    _, current_body = bank_storage.storage.read(location)
-    try:
-        assert current_body.read() == latest_content
-    finally:
-        current_body.close()
     if head_denied:
         assert "null" in denied_versions and latest.version_id in denied_versions
     monkeypatch.setattr(registry, "utc_now", lambda: rotated_at + timedelta(days=3))

@@ -64,7 +64,7 @@ def _current_index(column: str) -> None:
     )
 
 
-def _backfill_indexes(connection: Connection) -> None:
+def backfill_indexes(connection: Connection) -> None:
     metadata = sa.MetaData()
     for name in (COUNTERPARTIES, PARTIES):
         table = sa.Table(name, metadata, autoload_with=connection)
@@ -101,7 +101,7 @@ def upgrade() -> None:
     op.add_column(PARTIES, sa.Column("full_name_blind_index", sa.String(255), nullable=True))
     connection = op.get_bind()
     with force_rls_suspended(connection, COUNTERPARTIES, PARTIES):
-        _backfill_indexes(connection)
+        backfill_indexes(connection)
     op.drop_index("uq_canonical_counterparties_current", table_name=COUNTERPARTIES)
     _current_index("source_reference_blind_index")
     op.create_index(

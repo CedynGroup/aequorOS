@@ -25,7 +25,7 @@ __all__ = ["provider"]
 
 
 class IndexMigration(Protocol):
-    def _backfill_indexes(self, connection: Connection) -> None: ...
+    def backfill_indexes(self, connection: Connection) -> None: ...
 
 
 def test_upgrade_indexes_all_existing_generations_before_using_them(
@@ -67,7 +67,7 @@ def test_upgrade_indexes_all_existing_generations_before_using_them(
     revision = ScriptDirectory.from_config(alembic_config_for_app()).get_revision("202610220101")
     assert revision is not None
     migration = cast(IndexMigration, cast(object, revision.module))
-    migration._backfill_indexes(db_session.connection())
+    migration.backfill_indexes(db_session.connection())
     db_session.commit()
     db_session.expunge_all()
     stored = db_session.get(CanonicalCounterparty, cp_id)

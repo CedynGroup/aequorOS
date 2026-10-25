@@ -20,7 +20,7 @@ branch_labels = None
 depends_on = None
 
 
-def _backfill_references(connection: Connection) -> None:
+def backfill_references(connection: Connection) -> None:
     metadata = sa.MetaData()
     envelopes = sa.Table("object_key_envelopes", metadata, autoload_with=connection)
     keys = sa.Table("bank_encryption_keys", metadata, autoload_with=connection)
@@ -36,7 +36,7 @@ def _backfill_references(connection: Connection) -> None:
     )
 
 
-def _backfill_versions(connection: Connection) -> None:
+def backfill_versions(connection: Connection) -> None:
     with Session(bind=connection) as db:
         for key in db.scalars(sa.select(BankEncryptionKey)).all():
             db.info["organization_id"] = key.organization_id
@@ -54,7 +54,7 @@ def upgrade() -> None:
         op.add_column("object_key_envelopes", sa.Column(name, sa.String(size), nullable=True))
     connection = op.get_bind()
     with force_rls_suspended(connection, "object_key_envelopes"):
-        _backfill_references(connection)
+        backfill_references(connection)
     for name in ("provider", "key_id", "region", "owner_account"):
         op.alter_column("object_key_envelopes", name, nullable=False)
     op.create_unique_constraint(
@@ -73,7 +73,7 @@ def upgrade() -> None:
             deferrable=True,
             initially="DEFERRED",
         )
-    _backfill_versions(connection)
+    backfill_versions(connection)
 
 
 def downgrade() -> None:

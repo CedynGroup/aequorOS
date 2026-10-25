@@ -1305,7 +1305,9 @@ def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
     )
     connect(db_session, provider)
     stored = raw_fields(db_session)
-    immutable = db_session.execute(text("SELECT spec FROM bi_dashboard_versions")).scalar_one()
+    immutable = cast(
+        object, db_session.execute(text("SELECT spec FROM bi_dashboard_versions")).scalar_one()
+    )
     for model in models:
         db_session.expunge_all()
         provider.set_status(KEY_A, KeyStatus.ACTIVE)

@@ -258,6 +258,7 @@ def test_worker_reencrypts_with_scoped_audit_counts(
         db.add(party)
         db.commit()
         bank_id, party_id = bank.id, party.id
+        assert bank.storage_slug is not None
         key = registry.register(
             db,
             organization_id=ORG_1,

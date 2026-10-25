@@ -1,6 +1,12 @@
 {
   "columns": [
-    ["bank_encryption_keys", "current_version_id", "aqs_worker", "UPDATE", false],
+    [
+      "bank_encryption_keys",
+      "current_version_id",
+      "aqs_worker",
+      "UPDATE",
+      false
+    ],
     ["bank_encryption_keys", "index_version_id", "aqs_worker", "UPDATE", false],
     ["bank_encryption_keys", "updated_at", "aqs_worker", "UPDATE", false],
     ["jobs", "bank_id", "aqs_api", "UPDATE", false],
