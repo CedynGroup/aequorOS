@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CanonicalPositionReadFromJSON } from "@aequoros/risk-service-api";
@@ -13,6 +13,7 @@ import SnapshotPreview from "../components/submissions/SnapshotPreview";
 import { setAccessToken } from "../lib/api/token";
 import {
   clearProtectedData,
+  observeProtectedData,
   protectedDataMessages,
 } from "../lib/api/protectedData";
 import { setActiveJurisdiction } from "../lib/format";
@@ -153,6 +154,76 @@ it("keeps numeric details and the source batch link in the position drawer", asy
   await userEvent.click(screen.getByRole("button", { name: "Close details" }));
   expect(close).toHaveBeenCalledOnce();
 });
+
+it.each(["revoked", "unavailable", "support"] as const)(
+  "masks retained position identifiers during %s and restores them without losing numbers",
+  async (state) => {
+    const close = vi.fn();
+    view(
+      <PositionDrawer
+        position={CanonicalPositionReadFromJSON({
+          ...position,
+          source_reference: "Synthetic account",
+        })}
+        onClose={close}
+      />,
+      () => ({
+        nodes: [{ ...lineage.nodes[0], operation_ref: "Synthetic extraction" }],
+      }),
+    );
+    await screen.findByText(/Synthetic extraction/);
+    expect(
+      screen.getByRole("dialog", { name: "Position Synthetic account" }),
+    ).toBeVisible();
+    const disclose = (bank: string, value: string) =>
+      observeProtectedData(
+        new Response(null, {
+          headers: {
+            "X-Aequoros-Protected-Data": JSON.stringify({ [bank]: value }),
+          },
+        }),
+      );
+    await act(async () => {
+      await disclose("BK-OTHER001", state);
+    });
+    expect(
+      screen.getByRole("heading", { name: "Synthetic account" }),
+    ).toBeVisible();
+    await act(async () => {
+      await disclose("BK-SAMP0001", state);
+    });
+    expect(
+      screen.queryByRole("dialog", { name: "Position Synthetic account" }),
+    ).toBeNull();
+    expect(screen.queryByText("Synthetic account")).toBeNull();
+    expect(screen.queryByText(/Synthetic extraction/)).toBeNull();
+    expect(
+      screen.getByRole("dialog", { name: "Position 🔒 Protected data" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "🔒 Protected data" }),
+    ).toBeVisible();
+    expect(screen.getByText("1,250.5 EUR")).toBeVisible();
+    expect(screen.getByText("5.25% · FIXED")).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "View source batch" }),
+    ).toHaveAttribute("href", "/data-engine/batches/synthetic-batch");
+    await act(async () => {
+      await disclose("BK-SAMP0001", "available");
+    });
+    expect(
+      screen.getByRole("dialog", { name: "Position Synthetic account" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Synthetic account" }),
+    ).toBeVisible();
+    expect(screen.getByText(/Synthetic extraction/)).toBeVisible();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Close details" }),
+    );
+    expect(close).toHaveBeenCalledOnce();
+  },
+);
 
 it.each(["revoked", "unavailable", "support"] as const)(
   "renders the %s snapshot refusal instead of trying to render encrypted sections",

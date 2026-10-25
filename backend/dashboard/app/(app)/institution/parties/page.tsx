@@ -583,6 +583,12 @@ function PartyForm({
   party: RelatedPartyRead | null;
   onClose: () => void;
 }) {
+  const locked =
+    useSyncExternalStore(
+      subscribeProtectedData,
+      () => protectedDataState(bankId),
+      () => "available",
+    ) !== "available";
   const create = useCreateRelatedParty(bankId);
   const update = useUpdateRelatedParty(bankId);
   const mutation = party ? update : create;
@@ -620,7 +626,8 @@ function PartyForm({
     );
   };
 
-  const canSubmit = fullName.trim().length > 0 && reason.trim().length > 0;
+  const canSubmit =
+    !locked && fullName.trim().length > 0 && reason.trim().length > 0;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -657,231 +664,243 @@ function PartyForm({
 
   return (
     <SectionCard
-      title={party ? `Edit ${party.fullName}` : "Add related party"}
+      title={
+        party
+          ? `Edit ${locked ? "🔒 Protected data" : party.fullName}`
+          : "Add related party"
+      }
       subtitle="Full replacement — the roles list below replaces the stored roles on save"
     >
       <form onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Field label="Full name" htmlFor="rp-name" required>
-            <input
-              id="rp-name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Party type" htmlFor="rp-type">
-            <select
-              id="rp-type"
-              value={partyType}
-              onChange={(e) => setPartyType(e.target.value as PartyType)}
-              className={inputCls}
-            >
-              {(Object.keys(PARTY_TYPE_LABELS) as PartyType[]).map((value) => (
-                <option key={value} value={value}>
-                  {PARTY_TYPE_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Status" htmlFor="rp-status">
-            <select
-              id="rp-status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as PartyStatus)}
-              className={inputCls}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </Field>
-          <div className="flex flex-col justify-end gap-2">
-            <label className="inline-flex items-center gap-2 text-caption text-navy">
+        <fieldset disabled={locked} className="space-y-4 disabled:opacity-60">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Field label="Full name" htmlFor="rp-name" required>
               <input
-                type="checkbox"
-                checked={regulatedElsewhere}
-                onChange={(e) => setRegulatedElsewhere(e.target.checked)}
-              />
-              Regulated elsewhere
-            </label>
-          </div>
-          {regulatedElsewhere && (
-            <Field label="Regulated jurisdiction" htmlFor="rp-jurisdiction">
-              <input
-                id="rp-jurisdiction"
-                value={regulatedJurisdiction}
-                onChange={(e) => setRegulatedJurisdiction(e.target.value)}
+                id="rp-name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
                 className={inputCls}
               />
             </Field>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-micro font-medium text-slate uppercase tracking-wider">
-              Roles
-            </p>
-            <button
-              type="button"
-              onClick={() => setRoles((prev) => [...prev, emptyRole()])}
-              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
-            >
-              <Plus size={11} aria-hidden />
-              Add role
-            </button>
+            <Field label="Party type" htmlFor="rp-type">
+              <select
+                id="rp-type"
+                value={partyType}
+                onChange={(e) => setPartyType(e.target.value as PartyType)}
+                className={inputCls}
+              >
+                {(Object.keys(PARTY_TYPE_LABELS) as PartyType[]).map(
+                  (value) => (
+                    <option key={value} value={value}>
+                      {PARTY_TYPE_LABELS[value]}
+                    </option>
+                  ),
+                )}
+              </select>
+            </Field>
+            <Field label="Status" htmlFor="rp-status">
+              <select
+                id="rp-status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as PartyStatus)}
+                className={inputCls}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </Field>
+            <div className="flex flex-col justify-end gap-2">
+              <label className="inline-flex items-center gap-2 text-caption text-navy">
+                <input
+                  type="checkbox"
+                  checked={regulatedElsewhere}
+                  onChange={(e) => setRegulatedElsewhere(e.target.checked)}
+                />
+                Regulated elsewhere
+              </label>
+            </div>
+            {regulatedElsewhere && (
+              <Field label="Regulated jurisdiction" htmlFor="rp-jurisdiction">
+                <input
+                  id="rp-jurisdiction"
+                  value={regulatedJurisdiction}
+                  onChange={(e) => setRegulatedJurisdiction(e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+            )}
           </div>
-          {roles.length === 0 ? (
-            <p className="text-caption text-slate">
-              No roles yet — add at least one to describe the relationship.
-            </p>
-          ) : (
-            <ul className="space-y-3">
-              {roles.map((draft, index) => (
-                <li
-                  key={index}
-                  className="rounded border border-border-light bg-surface px-3 py-3"
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <Field label="Role" htmlFor={`rp-role-${index}`}>
-                      <select
-                        id={`rp-role-${index}`}
-                        value={draft.role}
-                        onChange={(e) =>
-                          setRole(index, {
-                            role: e.target.value as RelatedPartyRoleCode,
-                          })
-                        }
-                        className={inputCls}
-                      >
-                        {ROLE_OPTIONS.map((value) => (
-                          <option key={value} value={value}>
-                            {roleLabel(value)}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field
-                      label="Appointed on"
-                      htmlFor={`rp-appointed-${index}`}
-                    >
-                      <input
-                        id={`rp-appointed-${index}`}
-                        type="date"
-                        value={draft.appointedOn}
-                        onChange={(e) =>
-                          setRole(index, { appointedOn: e.target.value })
-                        }
-                        className={inputCls}
-                      />
-                    </Field>
-                    <Field label="Term" htmlFor={`rp-term-${index}`}>
-                      <input
-                        id={`rp-term-${index}`}
-                        value={draft.termOfAppointment}
-                        onChange={(e) =>
-                          setRole(index, { termOfAppointment: e.target.value })
-                        }
-                        placeholder="e.g. 3 years"
-                        className={inputCls}
-                      />
-                    </Field>
-                    <Field
-                      label="Sitting allowance"
-                      htmlFor={`rp-sitting-${index}`}
-                    >
-                      <input
-                        id={`rp-sitting-${index}`}
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={draft.sittingAllowance}
-                        onChange={(e) =>
-                          setRole(index, { sittingAllowance: e.target.value })
-                        }
-                        className={inputCls}
-                      />
-                    </Field>
-                    <Field
-                      label="Travel allowance"
-                      htmlFor={`rp-travel-${index}`}
-                    >
-                      <input
-                        id={`rp-travel-${index}`}
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={draft.travelAllowance}
-                        onChange={(e) =>
-                          setRole(index, { travelAllowance: e.target.value })
-                        }
-                        className={inputCls}
-                      />
-                    </Field>
-                    <Field label="Annual fees" htmlFor={`rp-fees-${index}`}>
-                      <input
-                        id={`rp-fees-${index}`}
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={draft.annualFees}
-                        onChange={(e) =>
-                          setRole(index, { annualFees: e.target.value })
-                        }
-                        className={inputCls}
-                      />
-                    </Field>
-                    {draft.role === "external_auditor" && (
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-micro font-medium text-slate uppercase tracking-wider">
+                Roles
+              </p>
+              <button
+                type="button"
+                onClick={() => setRoles((prev) => [...prev, emptyRole()])}
+                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+              >
+                <Plus size={11} aria-hidden />
+                Add role
+              </button>
+            </div>
+            {roles.length === 0 ? (
+              <p className="text-caption text-slate">
+                No roles yet — add at least one to describe the relationship.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {roles.map((draft, index) => (
+                  <li
+                    key={index}
+                    className="rounded border border-border-light bg-surface px-3 py-3"
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <Field label="Role" htmlFor={`rp-role-${index}`}>
+                        <select
+                          id={`rp-role-${index}`}
+                          value={draft.role}
+                          onChange={(e) =>
+                            setRole(index, {
+                              role: e.target.value as RelatedPartyRoleCode,
+                            })
+                          }
+                          className={inputCls}
+                        >
+                          {ROLE_OPTIONS.map((value) => (
+                            <option key={value} value={value}>
+                              {roleLabel(value)}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
                       <Field
-                        label="ICAG registration"
-                        htmlFor={`rp-icag-${index}`}
+                        label="Appointed on"
+                        htmlFor={`rp-appointed-${index}`}
                       >
                         <input
-                          id={`rp-icag-${index}`}
-                          value={draft.icagRegistration}
+                          id={`rp-appointed-${index}`}
+                          type="date"
+                          value={draft.appointedOn}
                           onChange={(e) =>
-                            setRole(index, { icagRegistration: e.target.value })
+                            setRole(index, { appointedOn: e.target.value })
                           }
                           className={inputCls}
                         />
                       </Field>
-                    )}
-                    <Field
-                      label="Other responsibilities"
-                      htmlFor={`rp-other-${index}`}
-                      className="sm:col-span-2"
+                      <Field label="Term" htmlFor={`rp-term-${index}`}>
+                        <input
+                          id={`rp-term-${index}`}
+                          value={draft.termOfAppointment}
+                          onChange={(e) =>
+                            setRole(index, {
+                              termOfAppointment: e.target.value,
+                            })
+                          }
+                          placeholder="e.g. 3 years"
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field
+                        label="Sitting allowance"
+                        htmlFor={`rp-sitting-${index}`}
+                      >
+                        <input
+                          id={`rp-sitting-${index}`}
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={draft.sittingAllowance}
+                          onChange={(e) =>
+                            setRole(index, { sittingAllowance: e.target.value })
+                          }
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field
+                        label="Travel allowance"
+                        htmlFor={`rp-travel-${index}`}
+                      >
+                        <input
+                          id={`rp-travel-${index}`}
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={draft.travelAllowance}
+                          onChange={(e) =>
+                            setRole(index, { travelAllowance: e.target.value })
+                          }
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field label="Annual fees" htmlFor={`rp-fees-${index}`}>
+                        <input
+                          id={`rp-fees-${index}`}
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={draft.annualFees}
+                          onChange={(e) =>
+                            setRole(index, { annualFees: e.target.value })
+                          }
+                          className={inputCls}
+                        />
+                      </Field>
+                      {draft.role === "external_auditor" && (
+                        <Field
+                          label="ICAG registration"
+                          htmlFor={`rp-icag-${index}`}
+                        >
+                          <input
+                            id={`rp-icag-${index}`}
+                            value={draft.icagRegistration}
+                            onChange={(e) =>
+                              setRole(index, {
+                                icagRegistration: e.target.value,
+                              })
+                            }
+                            className={inputCls}
+                          />
+                        </Field>
+                      )}
+                      <Field
+                        label="Other responsibilities"
+                        htmlFor={`rp-other-${index}`}
+                        className="sm:col-span-2"
+                      >
+                        <input
+                          id={`rp-other-${index}`}
+                          value={draft.otherResponsibilities}
+                          onChange={(e) =>
+                            setRole(index, {
+                              otherResponsibilities: e.target.value,
+                            })
+                          }
+                          className={inputCls}
+                        />
+                      </Field>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRoles((prev) => prev.filter((_, i) => i !== index))
+                      }
+                      className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-critical hover:border-critical/40"
                     >
-                      <input
-                        id={`rp-other-${index}`}
-                        value={draft.otherResponsibilities}
-                        onChange={(e) =>
-                          setRole(index, {
-                            otherResponsibilities: e.target.value,
-                          })
-                        }
-                        className={inputCls}
-                      />
-                    </Field>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRoles((prev) => prev.filter((_, i) => i !== index))
-                    }
-                    className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-critical hover:border-critical/40"
-                  >
-                    <X size={11} aria-hidden />
-                    Remove role
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+                      <X size={11} aria-hidden />
+                      Remove role
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-        <div className="max-w-xl">
-          <ReasonField id="rp-reason" value={reason} onChange={setReason} />
-        </div>
+          <div className="max-w-xl">
+            <ReasonField id="rp-reason" value={reason} onChange={setReason} />
+          </div>
+        </fieldset>
 
         {mutation.error && (
           <ErrorPanel

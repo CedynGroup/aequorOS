@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -241,6 +242,142 @@ it.each(["revoked", "unavailable"] as const)(
       expect(screen.queryByLabelText(/Full name/)).toBeNull(),
     );
     expect(screen.getAllByText("Unsaved new name").length).toBeGreaterThan(0);
+  },
+);
+
+it.each(
+  (["create", "edit"] as const).flatMap((mode) =>
+    (["revoked", "unavailable", "support"] as const).map((state) => ({
+      mode,
+      state,
+    })),
+  ),
+)(
+  "locks the $mode party form during $state and restores its draft",
+  async ({ mode, state }) => {
+    let disclosure = "available";
+    const writes: { method: string; payload: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST" || init?.method === "PUT") {
+          writes.push({
+            method: init.method,
+            payload: JSON.parse(String(init.body)),
+          });
+          return Response.json(party("Unsaved name"));
+        }
+        return profileResponse(disclosure);
+      }),
+    );
+    mount(<RelatedPartiesPage />);
+    await screen.findByText("Synthetic owner");
+    if (mode === "edit") {
+      await userEvent.click(screen.getByText("Synthetic owner"));
+      await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    } else {
+      await userEvent.click(
+        screen.getByRole("button", { name: "Add related party" }),
+      );
+    }
+    await userEvent.click(screen.getByRole("button", { name: "Add role" }));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Role"),
+      "external_auditor",
+    );
+    const drafts = [
+      { label: /Full name/, value: "Unsaved name" },
+      { label: "Term", value: "Unsaved term" },
+      { label: "ICAG registration", value: "Unsaved registration" },
+      { label: "Other responsibilities", value: "Unsaved responsibilities" },
+      { label: /Reason for change/, value: "Synthetic edit" },
+    ];
+    for (const { label, value } of drafts) {
+      await userEvent.clear(screen.getByLabelText(label));
+      await userEvent.type(screen.getByLabelText(label), value);
+    }
+    await userEvent.type(screen.getByLabelText("Sitting allowance"), "1250");
+    const save = screen.getByRole("button", {
+      name: mode === "edit" ? "Save party" : "Add party",
+    });
+    const form = save.closest("form")!;
+    expect(save).toBeEnabled();
+    await act(async () => {
+      await observeProtectedData(
+        new Response(null, {
+          headers: {
+            "X-Aequoros-Protected-Data": JSON.stringify({
+              "BK-OTHER001": state,
+            }),
+          },
+        }),
+      );
+    });
+    expect(screen.getByLabelText(/Full name/)).toBeEnabled();
+    disclosure = state;
+    await act(async () => {
+      await observeProtectedData(profileResponse(disclosure));
+    });
+    for (const { label, value } of drafts) {
+      expect(screen.getByLabelText(label)).toBeDisabled();
+      expect(screen.getByLabelText(label)).toHaveValue(value);
+    }
+    for (const control of within(form).getAllByRole("combobox")) {
+      expect(control).toBeDisabled();
+    }
+    expect(screen.getByLabelText("Sitting allowance")).toBeDisabled();
+    expect(screen.getByLabelText("Sitting allowance")).toHaveValue(1250);
+    expect(screen.getByRole("button", { name: "Add role" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove role" })).toBeDisabled();
+    expect(save).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    expect(
+      screen.queryByRole("heading", { name: "Edit Synthetic owner" }),
+    ).toBeNull();
+    if (mode === "edit") {
+      expect(
+        screen.getByRole("heading", { name: "Edit 🔒 Protected data" }),
+      ).toBeVisible();
+    }
+    fireEvent.submit(form);
+    await userEvent.click(save);
+    expect(writes).toEqual([]);
+    disclosure = "available";
+    await act(async () => {
+      await observeProtectedData(profileResponse(disclosure));
+    });
+    for (const { label, value } of drafts) {
+      expect(screen.getByLabelText(label)).toBeEnabled();
+      expect(screen.getByLabelText(label)).toHaveValue(value);
+    }
+    if (mode === "edit") {
+      expect(
+        screen.getByRole("heading", { name: "Edit Synthetic owner" }),
+      ).toBeVisible();
+    }
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/Full name/)).toBeNull(),
+    );
+    expect(writes).toEqual([
+      {
+        method: mode === "edit" ? "PUT" : "POST",
+        payload: expect.objectContaining({
+          full_name: "Unsaved name",
+          reason: "Synthetic edit",
+          roles: [
+            expect.objectContaining({
+              role: "external_auditor",
+              term_of_appointment: "Unsaved term",
+              icag_registration: "Unsaved registration",
+              other_responsibilities: "Unsaved responsibilities",
+              sitting_allowance: "1250",
+            }),
+          ],
+        }),
+      },
+    ]);
   },
 );
 
