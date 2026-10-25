@@ -11,13 +11,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, TypedDict, cast
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import Column, ColumnElement, Table, select, type_coerce
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service.digests import RegisterState, RegisterStateRow
 from app.core.key_management.fields import ProtectedField
 from app.core.key_management.models import BankEncryptionKey
 from app.identity.public import (
@@ -45,14 +46,6 @@ REGISTER_TABLES: tuple[str, ...] = (
 )
 
 
-class RegisterStateRow(TypedDict):
-    table: str
-    id: str
-    updated_at: str
-    key_version: str | None
-    values: dict[str, object]
-
-
 def _canonical_value(value: Any) -> Any:
     """Pre-stringify to a JSON-native, driver-independent form.
 
@@ -76,18 +69,17 @@ def _canonical_value(value: Any) -> Any:
 
 
 def _entry(
-    table: str, row_id: UUID, updated_at: datetime, values: dict[str, Any], key_version: UUID | None
+    table: str, row_id: UUID, updated_at: datetime, values: dict[str, Any]
 ) -> RegisterStateRow:
     return {
         "table": table,
         "id": str(row_id),
         "updated_at": updated_at.isoformat(),
-        "key_version": str(key_version) if key_version is not None else None,
         "values": {key: _canonical_value(value) for key, value in values.items()},
     }
 
 
-def register_state_rows(db: Session, ctx: TenantContext, bank_id: str) -> list[RegisterStateRow]:
+def project_register_state(db: Session, ctx: TenantContext, bank_id: str) -> RegisterState:
     """Project all eight register tables without decrypting protected values."""
     key_version = db.scalar(
         select(BankEncryptionKey.current_version_id).where(
@@ -219,10 +211,14 @@ def register_state_rows(db: Session, ctx: TenantContext, bank_id: str) -> list[R
                     cast(UUID, record["id"]),
                     cast(datetime, record["updated_at"]),
                     {name: record[name] for name in fields},
-                    key_version,
                 )
             )
-    return rows
+    return {
+        "organization_id": ctx.organization_id,
+        "bank_id": bank_id,
+        "key_version": str(key_version) if key_version is not None else None,
+        "rows": rows,
+    }
 
 
-__all__ = ["REGISTER_TABLES", "register_state_rows"]
+__all__ = ["REGISTER_TABLES", "project_register_state"]

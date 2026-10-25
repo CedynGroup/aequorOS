@@ -1048,16 +1048,17 @@ def test_register_digest_tracks_stored_values(
     # Compare persisted projections on both sides. SQLite drops timezone info
     # on reload; a freshly-created in-memory timestamp is not that baseline.
     db_session.expunge_all()
-    before = register_state_digest(register_state.register_state_rows(db_session, CTX, BANK_A))
+    before = register_state_digest(register_state.project_register_state(db_session, CTX, BANK_A))
     db_session.expunge_all()
-    after = register_state_digest(register_state.register_state_rows(db_session, CTX, BANK_A))
+    after = register_state_digest(register_state.project_register_state(db_session, CTX, BANK_A))
     assert after == before
     loaded = db_session.get(RelatedParty, party_id)
     assert loaded is not None
     loaded.full_name = "Synthetic changed reportable name"
     db_session.commit()
     assert (
-        register_state_digest(register_state.register_state_rows(db_session, CTX, BANK_A)) != before
+        register_state_digest(register_state.project_register_state(db_session, CTX, BANK_A))
+        != before
     )
 
 

@@ -50,12 +50,27 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Literal
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, TypedDict
 
 ATTESTATION_SCHEMA = "aequoros-attestation-v2"
-REGISTER_STATE_SCHEMA = "aequoros-register-state-v2"
+REGISTER_STATE_SCHEMA = "aequoros-register-state-v3"
 SIGNATURE_PAYLOAD_SCHEMA = "aequoros-signature-v1"
+
+
+class RegisterStateRow(TypedDict):
+    table: str
+    id: str
+    updated_at: str
+    values: dict[str, object]
+
+
+class RegisterState(TypedDict):
+    organization_id: str
+    bank_id: str
+    key_version: str | None
+    rows: list[RegisterStateRow]
+
 
 type BindingClass = Literal["engine_run", "master_data"]
 
@@ -157,21 +172,23 @@ def content_digest(snapshot: Mapping[str, Any]) -> str:
     return digest_of(strip_volatile_fields(snapshot))
 
 
-def register_state_digest(rows: Iterable[Mapping[str, Any]]) -> str:
+def register_state_digest(state: RegisterState) -> str:
     """Commit the complete register's stored values, record identity and key version."""
     entries = [
         {
             "table": str(row["table"]),
             "id": str(row["id"]),
             "updated_at": str(row["updated_at"]),
-            "key_version": row["key_version"],
             "values_digest": digest_of(row["values"]),
         }
-        for row in rows
+        for row in state["rows"]
     ]
     return digest_of(
         {
             "schema": REGISTER_STATE_SCHEMA,
+            "organization_id": state["organization_id"],
+            "bank_id": state["bank_id"],
+            "key_version": state["key_version"],
             "rows": sorted(entries, key=canonical_json),
         }
     )

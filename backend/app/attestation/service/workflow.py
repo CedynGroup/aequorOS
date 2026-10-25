@@ -236,7 +236,7 @@ def ensure_register_current(db: Session, ctx: TenantContext, package: Regulatory
     if package.register_state_digest is None or package.status == "submitted":
         return
     current = digests.register_state_digest(
-        register_state.register_state_rows(db, ctx, package.bank_id)
+        register_state.project_register_state(db, ctx, package.bank_id)
     )
     if current != package.register_state_digest:
         raise AttestationConflict(

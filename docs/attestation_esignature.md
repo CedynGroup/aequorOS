@@ -508,9 +508,10 @@ adds the master-data analogue, computed at generation and stored on the package:
 
 ```python
 register_state_digest = sha256(canonical_json({
-    "schema": "aequoros-register-state-v2",
+    "schema": "aequoros-register-state-v3",
+    "organization_id": ..., "bank_id": ..., "key_version": ...,
     "rows": sorted([                # complete bank register
-        {"table": "shareholdings", "id": ..., "updated_at": ..., "key_version": ...,
+        {"table": "shareholdings", "id": ..., "updated_at": ...,
          "values_digest": sha256(canonical_json(row_stored_values))}
         for row in complete_register_rows
     ], key=canonical_json),

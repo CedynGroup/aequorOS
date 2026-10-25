@@ -20,6 +20,7 @@ from app.live.public import BankReportingPeriod
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import PackageApprovalRequestCreate, RegulatoryPackageCreate
 from app.reporting.service import generation, validation, workflow
+from app.reporting.service.filing_workflow import chain
 from app.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.services import fact_derivation, regulatory_credit
 from tests.core.test_bank_field_encryption import KEY_A, NEXT
@@ -75,18 +76,18 @@ def test_complete_register_commitment_reads_stored_state_without_key(
     materialize_canonical_test_book(db)
     provider = connect(db, monkeypatch)
     register(db)
-    before = register_state.register_state_rows(db, lrt.MAKER, SAMPLE_BANK_ID)
+    before = register_state.project_register_state(db, lrt.MAKER, SAMPLE_BANK_ID)
     digest = digests.register_state_digest(before)
-    party = next(row for row in before if row["table"] == "related_parties")
+    party = next(row for row in before["rows"] if row["table"] == "related_parties")
     stored_name = party["values"]["full_name"]
     assert isinstance(stored_name, str) and stored_name.startswith(FIELD_FORMAT + ":")
     assert FIELD_FORMAT in cast(Mapping[str, object], party["values"]["contact"])
-    assert party["key_version"] is not None
+    assert before["key_version"] is not None
     db.commit()
     db.expunge_all()
     provider.set_status(KEY_A, status)
-    after = register_state.register_state_rows(db, lrt.MAKER, SAMPLE_BANK_ID)
-    assert {row["table"] for row in after} == set(register_state.REGISTER_TABLES)
+    after = register_state.project_register_state(db, lrt.MAKER, SAMPLE_BANK_ID)
+    assert {row["table"] for row in after["rows"]} == set(register_state.REGISTER_TABLES)
     assert digests.register_state_digest(after) == digest
     db.commit()
     with pytest.raises(KeyUnavailableError):
@@ -200,7 +201,7 @@ def test_rotation_refuses_review_of_sealed_register_until_regeneration(
     package = db.get(RegulatoryPackage, package_id)
     assert package is not None
     current = digests.register_state_digest(
-        register_state.register_state_rows(db, lrt.MAKER, SAMPLE_BANK_ID)
+        register_state.project_register_state(db, lrt.MAKER, SAMPLE_BANK_ID)
     )
     assert current != sealed
     with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
@@ -218,3 +219,81 @@ def test_rotation_refuses_review_of_sealed_register_until_regeneration(
     review._decide(db, review.APPROVER, regenerated)  # pyright: ignore[reportPrivateUsage]
     assert regenerated.version == package.version + 1
     assert package.register_state_digest == sealed
+
+
+def assert_stale_register_refuses_forward_actions(db: Session, package: RegulatoryPackage) -> None:
+    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
+        attestation.ensure_register_current(db, lrt.MAKER, package)
+    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
+        chain.start_chain(db, lrt.MAKER, package)
+    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
+        review._decide(db, review.APPROVER, package)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
+        chain.hand_off(db, review.APPROVER, package)
+    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
+        chain.assert_transmission_permitted(db, lrt.MAKER, package)
+    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
+        attestation.ensure_submittable(db, lrt.MAKER, package)
+
+
+def test_empty_register_bsd14_requires_regeneration_after_rotation(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = db_session
+    materialize_canonical_test_book(db)
+    provider = connect(db, monkeypatch)
+    relax_signing(db, organization_id=ORG_1, return_code="BSD14")
+    review._officer(db, review.APPROVER, "empty-review@example.test", "Empty Register Reviewer")  # pyright: ignore[reportPrivateUsage]
+    before = register_state.project_register_state(db, lrt.MAKER, SAMPLE_BANK_ID)
+    assert before["rows"] == [] and before["key_version"] is not None
+    sealed = digests.register_state_digest(before)
+    package = lrt._generate(db, "BSD14")  # pyright: ignore[reportPrivateUsage]
+    assert package.source_runs == [] and package.register_state_digest == sealed
+    validation.validate_package(db, lrt.MAKER, SAMPLE_BANK_ID, package.id)
+    workflow.request_approval(
+        db, lrt.MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate()
+    )
+    package_id = package.id
+    db.commit()
+    db.expunge_all()
+    assert (
+        digests.register_state_digest(
+            register_state.project_register_state(db, lrt.MAKER, SAMPLE_BANK_ID)
+        )
+        == sealed
+    )
+    key = registry.scoped_key(db, bank_id=SAMPLE_BANK_ID, organization_id=ORG_1)
+
+    def resolve(_name: str) -> LocalKeyProvider:
+        return provider
+
+    registry.rotate(db, key, NEXT, providers=resolve)
+    db.commit()
+    db.expunge_all()
+    package = db.get(RegulatoryPackage, package_id)
+    assert package is not None
+    after = register_state.project_register_state(db, lrt.MAKER, SAMPLE_BANK_ID)
+    assert after["rows"] == [] and after["key_version"] != before["key_version"]
+    current = digests.register_state_digest(after)
+    assert current != sealed
+    assert_stale_register_refuses_forward_actions(db, package)
+    assert package.register_state_digest == sealed
+    review._decide(  # pyright: ignore[reportPrivateUsage]
+        db,
+        review.APPROVER,
+        package,
+        decision="returned",
+        return_to_seq=1,
+        comment="Regenerate this return after the bank encryption key rotation.",
+    )
+    assert package.status == "generated"
+    regenerated = lrt._generate(db, "BSD14")  # pyright: ignore[reportPrivateUsage]
+    assert regenerated.register_state_digest == current
+    validation.validate_package(db, lrt.MAKER, SAMPLE_BANK_ID, regenerated.id)
+    workflow.request_approval(
+        db, lrt.MAKER, SAMPLE_BANK_ID, regenerated.id, PackageApprovalRequestCreate()
+    )
+    review._decide(db, review.APPROVER, regenerated)  # pyright: ignore[reportPrivateUsage]
+    assert regenerated.version == package.version + 1
+    assert package.register_state_digest == sealed
+    assert register_state.project_register_state(db, lrt.MAKER, SAMPLE_BANK_ID)["rows"] == []
