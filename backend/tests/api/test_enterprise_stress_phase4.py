@@ -288,7 +288,9 @@ def _run(client: TestClient) -> dict:
     return response.json()
 
 
-def test_bottom_up_credit_and_concentration_flow_into_the_run(db_client: TestClient) -> None:
+def test_bottom_up_credit_and_concentration_flow_into_the_run(
+    db_client: TestClient, db_session: Session
+) -> None:
     run = _run(db_client)
     outcome = run["outcome"]
 
@@ -307,7 +309,23 @@ def test_bottom_up_credit_and_concentration_flow_into_the_run(db_client: TestCli
 
     # Concentration: the connected corporate group is the single largest name.
     concentration = outcome["concentration"]
-    assert concentration["largest_group_key"] == "group:GRP-1"
+    group_token = db_session.scalar(
+        select(CanonicalCounterparty.concentration_group_blind_index).where(
+            CanonicalCounterparty.organization_id == ORG_1,
+            CanonicalCounterparty.bank_id == run["bank_id"],
+            CanonicalCounterparty.as_of_date == _AS_OF,
+            CanonicalCounterparty.counterparty_type == "CORPORATE",
+        )
+    )
+    assert group_token is not None and group_token != "group:GRP-1"
+    assert concentration["largest_group_key"] == group_token
+    assert Decimal(concentration["largest_group_exposure"]) == Decimal("170000000")
+    single_name = next(
+        dim for dim in concentration["dimensions"] if dim["dimension"] == "single_name"
+    )
+    assert single_name["top_key"] == group_token
+    assert single_name["bucket_count"] == 2
+    assert concentration["largest_funding_source"] == group_token
     assert Decimal(concentration["total_incremental_loss"]) > Decimal("0")
 
     # Contingent leverage: the derivative inflates the leverage exposure.
