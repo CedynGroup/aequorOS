@@ -70,3 +70,75 @@ it("separates successful execution from reported breaches and absent assessment"
     scenarioRisk({ triggers: [{ fired: true, action: "Convene ALCO" }] }),
   ).toContain("Convene ALCO");
 });
+
+it("shows refusals and policy warnings beside affected values without inventing a delta", () => {
+  render(
+    <ScenarioMetrics
+      metrics={{ lcr_pct: null, nsfr_pct: null, car_pct: "12", count: 0 }}
+      baseline={{ lcr_pct: "100", nsfr_pct: "100", car_pct: "13", count: 0 }}
+      refusals={{
+        lcr_pct: { reason: "Liquidity source evidence missing" },
+        nsfr_pct: { reasonCode: "missing_limit" },
+      }}
+      statuses={{ car_pct: "amber", count: "na" }}
+    />,
+  );
+  expect(
+    screen.getByText("Unavailable: Liquidity source evidence missing"),
+  ).toBeVisible();
+  expect(screen.getByText("Unavailable: Missing limit")).toBeVisible();
+  expect(screen.getAllByText("Not comparable")).toHaveLength(2);
+  expect(
+    screen.getByText(/Warning. Approaching the configured limit/),
+  ).toBeVisible();
+});
+
+it("renders currency buckets and nested evidence without a JSON dump", () => {
+  render(
+    <ScenarioMetrics
+      metrics={{
+        currency_gaps: [
+          {
+            currency: "EUR",
+            assets: ["0E-8", "1200.5"],
+            evidence: { source: "Uploaded positions" },
+          },
+        ],
+        basis: { allowance_basis: "Booked general provisions" },
+      }}
+    />,
+  );
+  const table = screen.getByRole("table", { name: "Currency gaps" });
+  expect(within(table).getByText("EUR")).toBeVisible();
+  expect(
+    within(table).getByText(`${currencyCode()} ${fmtNum(1200.5, 2)}`),
+  ).toBeVisible();
+  expect(within(table).getByText("Uploaded positions")).toBeVisible();
+});
+
+it("does not treat non-finite values or nonnumeric comparisons as measured outcomes", () => {
+  fc.assert(
+    fc.property(
+      fc.constantFrom(
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.NEGATIVE_INFINITY,
+      ),
+      (value) => {
+        expect(scenarioValue("car_pct", value)).toBe("Unavailable");
+        expect(scenarioDelta("car_pct", value, 10)).toBe("Not comparable");
+      },
+    ),
+  );
+  expect(scenarioDelta("margin", "not reported", 0)).toBe("Not comparable");
+  expect(scenarioDelta("within_limit", true, false)).toBe("Not comparable");
+  expect(scenarioRisk({}, { lcr_pct: "red" })).toContain(
+    "Risk breaches: LCR percentage",
+  );
+  expect(scenarioRisk({}, { lcr_pct: "green" })).toContain(
+    "No reported breaches",
+  );
+  expect(scenarioRisk({ triggers: [{ fired: true }] })).toContain(
+    "Capital trigger breached",
+  );
+});
