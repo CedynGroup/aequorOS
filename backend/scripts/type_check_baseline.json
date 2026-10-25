@@ -1029,7 +1029,7 @@
   "reportUnknownVariableType": 1
  },
  "app.services.attestation.digests": {
-  "reportAny": 9,
+  "reportAny": 6,
   "reportUnknownArgumentType": 1,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 6
@@ -1169,9 +1169,9 @@
   "reportUnusedFunction": 1
  },
  "app.services.bi.mart_builder": {
-  "reportAny": 107,
-  "reportUnknownArgumentType": 20,
-  "reportUnknownMemberType": 15,
+  "reportAny": 93,
+  "reportUnknownArgumentType": 13,
+  "reportUnknownMemberType": 7,
   "reportUnknownVariableType": 4
  },
  "app.services.bi.nlq.candidates": {
@@ -1229,15 +1229,13 @@
   "reportPrivateUsage": 1
  },
  "app.services.credit_concentration": {
-  "reportAny": 36,
+  "reportAny": 16,
   "reportUnknownArgumentType": 3,
   "reportUnknownMemberType": 6,
   "reportUnknownVariableType": 4
  },
  "app.services.credit_exposure_book": {
-  "reportAny": 12,
-  "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 2
+  "reportAny": 7
  },
  "app.services.data_activation": {
   "reportAny": 13,
@@ -4415,7 +4413,7 @@
   "reportUnknownVariableType": 57
  },
  "tests.services.test_attestation_phase0": {
-  "reportAny": 25
+  "reportAny": 22
  },
  "tests.services.test_attestation_signers": {
   "reportAny": 8,
