@@ -15,17 +15,36 @@ import QueryBoundary from "@/components/ui/QueryBoundary";
 import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 import { inputCls } from "@/components/institution/shared";
 import { hasEffectiveCapability, hasStructuralCapability } from "@/lib/modules";
-import { useCfpSummary, useCfpLifecycle } from "@/lib/api/hooks";
+import {
+  useCfpSummary,
+  useCfpLifecycle,
+  useEwiDashboard,
+} from "@/lib/api/hooks";
 import { fmtDateUTC } from "@/lib/api/values";
 import { cfpContentForComparison } from "@/lib/api/cfp";
 import { isApiError } from "@/lib/api/client";
 
-const label = (value: string) =>
-  value.replaceAll(/([A-Z])/g, " $1").replaceAll("_", " ");
+const names: Record<string, string> = {
+  intraday: "Intraday",
+  up_to_1m: "Up to 1 month",
+  "1_to_3m": "1 to 3 months",
+  "3_to_12m": "3 to 12 months",
+  over_12m: "Over 12 months",
+  depositRunoffUpliftPct: "Deposit runoff uplift (%)",
+  fundingCostUpliftBps: "Funding cost uplift (bps)",
+};
+const label = (value: string) => {
+  const words = value
+    .replaceAll(/([A-Z])/g, " $1")
+    .replaceAll("_", " ")
+    .toLowerCase();
+  return names[value] ?? words.charAt(0).toUpperCase() + words.slice(1);
+};
 type Field = {
   key: string;
   title?: string;
   options?: readonly string[];
+  choices?: { code: string; name: string }[];
   optional?: boolean;
   numeric?: boolean;
   step?: number | "any";
@@ -78,6 +97,7 @@ function Rows<T extends object>({
                 </select>
               ) : (
                 <input
+                  list={field.choices ? `cfp-indicators-${index}` : undefined}
                   className={inputCls}
                   required={!field.optional}
                   type={field.numeric ? "number" : "text"}
@@ -101,6 +121,15 @@ function Rows<T extends object>({
                   }
                 />
               )}
+              {field.choices && (
+                <datalist id={`cfp-indicators-${index}`}>
+                  {field.choices.map((choice) => (
+                    <option key={choice.code} value={choice.code}>
+                      {choice.name}
+                    </option>
+                  ))}
+                </datalist>
+              )}
             </label>
           ))}
           <button
@@ -108,7 +137,7 @@ function Rows<T extends object>({
             className="text-caption text-critical text-left"
             onClick={() => onChange(rows.filter((_, i) => i !== index))}
           >
-            Remove {title.toLowerCase()} {index + 1}
+            Remove row {index + 1} from {title.toLowerCase()}
           </button>
         </div>
       ))}
@@ -154,6 +183,7 @@ function CfpEditor({
     useBankContext();
   const { profile } = useUserProfile();
   const mutation = useCfpLifecycle(bank?.id);
+  const ewis = useEwiDashboard(bank?.id, period?.id);
   const current = summary.current;
   const approved = summary.approved;
   const [content, setContent] = useState<CfpContentInput>(
@@ -266,7 +296,7 @@ function CfpEditor({
     const button = (id?: string) => (
       <button
         type="button"
-        className="btn-secondary disabled:opacity-50"
+        className="btn-secondary min-h-11 rounded border border-border px-4 py-2 font-medium disabled:opacity-50"
         aria-describedby={id}
         disabled={
           !!refusal ||
@@ -279,10 +309,17 @@ function CfpEditor({
         {text}
       </button>
     );
-    return refusal ? (
-      <DisabledWithReason reason={refusal}>{button}</DisabledWithReason>
-    ) : (
-      button()
+    return (
+      <div className="space-y-2">
+        {refusal ? (
+          <DisabledWithReason reason={refusal}>{button}</DisabledWithReason>
+        ) : (
+          button()
+        )}
+        {refusal && (
+          <p className="max-w-sm text-caption text-slate">{refusal}</p>
+        )}
+      </div>
     );
   }
   return (
@@ -298,6 +335,22 @@ function CfpEditor({
             : "No draft or approved plan"}
           . Board approval: {approved?.approvalReference ?? "Not recorded"}.
         </p>
+        <p className="text-body text-navy">
+          Approval validity:{" "}
+          {approved?.approvalOverdue
+            ? "Overdue. Renew Board approval."
+            : approved?.approvalExpiresAt
+              ? `Valid until ${fmtDateUTC(new Date(approved.approvalExpiresAt))}.`
+              : "No current approval recorded."}{" "}
+          Next action:{" "}
+          {!current
+            ? "Author and save a draft."
+            : current.status === "draft"
+              ? "Review the draft and obtain independent Board approval."
+              : approved?.active
+                ? "Monitor indicators and stand down when appropriate."
+                : "Review evidence and activate when required."}
+        </p>
         <p className="text-caption text-slate">
           Activation and stand-down capture indicators for{" "}
           {period
@@ -306,6 +359,23 @@ function CfpEditor({
           . aequorOS records an internal regulator notification; it does not
           transmit it externally.
         </p>
+        <div className="rounded border border-border-light bg-surface p-4 space-y-3">
+          <p className="font-medium text-navy">Board approval and activation</p>
+          <label className="block text-caption">
+            Board approval reference
+            <input
+              maxLength={200}
+              className={inputCls}
+              value={reference}
+              onChange={(event) => setReference(event.target.value)}
+            />
+          </label>
+          <div className="flex flex-wrap gap-3">
+            {actionButton("approve", "Record Board approval", approveReason)}
+            {actionButton("activate", "Activate CFP", activateReason)}
+            {actionButton("standDown", "Stand down CFP", standDownReason)}
+          </div>
+        </div>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -313,184 +383,187 @@ function CfpEditor({
           }}
           className="space-y-4"
         >
-          <fieldset
-            disabled={!canDraft || mutation.isPending}
-            className="space-y-4"
-          >
-            <Rows
-              title="EWI triggers"
-              rows={content.ewiTriggers ?? []}
-              fields={[
-                { key: "indicatorCode" },
-                { key: "triggerCondition" },
-                { key: "notes", optional: true },
-              ]}
-              empty={{ indicatorCode: "", triggerCondition: "" }}
-              onChange={(ewiTriggers) =>
-                setContent({ ...content, ewiTriggers })
+          <details open className="rounded border border-border-light p-4">
+            <summary className="cursor-pointer font-medium text-navy">
+              Edit plan content
+            </summary>
+            <fieldset
+              disabled={!canDraft || mutation.isPending}
+              className="space-y-4"
+            >
+              <Rows
+                title="EWI triggers"
+                rows={content.ewiTriggers ?? []}
+                fields={[
+                  {
+                    key: "indicatorCode",
+                    title: "Indicator code (from the EWI register)",
+                    choices: ewis.data?.indicators,
+                  },
+                  { key: "triggerCondition" },
+                  { key: "notes", optional: true },
+                ]}
+                empty={{ indicatorCode: "", triggerCondition: "" }}
+                onChange={(ewiTriggers) =>
+                  setContent({ ...content, ewiTriggers })
+                }
+              />
+              <Rows
+                title="Funding options"
+                rows={content.fundingOptions ?? []}
+                fields={[
+                  { key: "horizon", options: Object.values(CfpHorizon) },
+                  { key: "source" },
+                  { key: "estimatedCapacity", optional: true },
+                  { key: "leadTime", optional: true },
+                  { key: "notes", optional: true },
+                ]}
+                empty={{ horizon: "intraday", source: "" }}
+                onChange={(fundingOptions) =>
+                  setContent({ ...content, fundingOptions })
+                }
+              />
+              <Rows
+                title="Action plans"
+                rows={content.actionPlans ?? []}
+                fields={[
+                  { key: "side", options: ["asset", "liability"] },
+                  { key: "action" },
+                  { key: "owner" },
+                  { key: "timeline", optional: true },
+                ]}
+                empty={{ side: "asset", action: "", owner: "" }}
+                onChange={(actionPlans) =>
+                  setContent({ ...content, actionPlans })
+                }
+              />
+              <Rows
+                title="Alternative sources"
+                rows={content.alternativeSources ?? []}
+                fields={[
+                  { key: "source" },
+                  { key: "conditions", optional: true },
+                  { key: "notes", optional: true },
+                ]}
+                empty={{ source: "" }}
+                onChange={(alternativeSources) =>
+                  setContent({ ...content, alternativeSources })
+                }
+              />
+              <Rows
+                title="Escalation procedures"
+                rows={content.escalationProcedures ?? []}
+                fields={[
+                  { key: "priority", numeric: true, min: 1, max: 99 },
+                  { key: "stage" },
+                  { key: "trigger" },
+                  { key: "actions" },
+                  { key: "owner" },
+                ]}
+                empty={{
+                  priority: 1,
+                  stage: "",
+                  trigger: "",
+                  actions: "",
+                  owner: "",
+                }}
+                onChange={(escalationProcedures) =>
+                  setContent({ ...content, escalationProcedures })
+                }
+              />
+              <Rows
+                title="Key relationships"
+                rows={content.keyRelationships ?? []}
+                fields={[
+                  { key: "institution" },
+                  { key: "role" },
+                  { key: "contactName", optional: true },
+                  { key: "phone", optional: true },
+                  { key: "email", optional: true },
+                  { key: "notes", optional: true },
+                ]}
+                empty={{ institution: "", role: "" }}
+                onChange={(keyRelationships) =>
+                  setContent({ ...content, keyRelationships })
+                }
+              />
+              <Rows
+                title="Communication plans"
+                rows={content.communicationPlans ?? []}
+                fields={[
+                  { key: "audience", options: Object.values(CfpAudience) },
+                  { key: "channel" },
+                  { key: "owner" },
+                  { key: "messageOutline", optional: true },
+                ]}
+                empty={{ audience: "regulator", channel: "", owner: "" }}
+                onChange={(communicationPlans) =>
+                  setContent({ ...content, communicationPlans })
+                }
+              />
+              <Rows
+                title="Behavioral liquidity scenarios"
+                rows={content.behavioralLiquidityScenarios ?? []}
+                fields={[
+                  { key: "name" },
+                  {
+                    key: "activationHorizon",
+                    options: Object.values(CfpHorizon),
+                  },
+                  { key: "linkedAction" },
+                  { key: "depositRunoffUpliftPct", numeric: true, step: "any" },
+                  { key: "fundingCostUpliftBps", numeric: true, step: "any" },
+                  { key: "notes", optional: true },
+                ]}
+                empty={{
+                  name: "",
+                  activationHorizon: "intraday",
+                  linkedAction: "",
+                  depositRunoffUpliftPct: 0,
+                  fundingCostUpliftBps: 0,
+                }}
+                onChange={(behavioralLiquidityScenarios) =>
+                  setContent({ ...content, behavioralLiquidityScenarios })
+                }
+              />
+            </fieldset>
+          </details>
+          <div className="sticky bottom-0 z-10 space-y-3 border-t border-border bg-surface p-4 shadow-sm">
+            <label className="block text-caption">
+              Reason / evidence
+              <textarea
+                required
+                maxLength={2000}
+                className={inputCls}
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+              />
+            </label>
+            <DisabledWithReason
+              reason={
+                !canDraft
+                  ? "Requires Liquidity · Confidential · Create for a new version or Edit for a draft."
+                  : "Enter a reason before saving."
               }
-            />
-            <Rows
-              title="Funding options"
-              rows={content.fundingOptions ?? []}
-              fields={[
-                { key: "horizon", options: Object.values(CfpHorizon) },
-                { key: "source" },
-                { key: "estimatedCapacity", optional: true },
-                { key: "leadTime", optional: true },
-                { key: "notes", optional: true },
-              ]}
-              empty={{ horizon: "intraday", source: "" }}
-              onChange={(fundingOptions) =>
-                setContent({ ...content, fundingOptions })
-              }
-            />
-            <Rows
-              title="Action plans"
-              rows={content.actionPlans ?? []}
-              fields={[
-                { key: "side", options: ["asset", "liability"] },
-                { key: "action" },
-                { key: "owner" },
-                { key: "timeline", optional: true },
-              ]}
-              empty={{ side: "asset", action: "", owner: "" }}
-              onChange={(actionPlans) =>
-                setContent({ ...content, actionPlans })
-              }
-            />
-            <Rows
-              title="Alternative sources"
-              rows={content.alternativeSources ?? []}
-              fields={[
-                { key: "source" },
-                { key: "conditions", optional: true },
-                { key: "notes", optional: true },
-              ]}
-              empty={{ source: "" }}
-              onChange={(alternativeSources) =>
-                setContent({ ...content, alternativeSources })
-              }
-            />
-            <Rows
-              title="Escalation procedures"
-              rows={content.escalationProcedures ?? []}
-              fields={[
-                { key: "priority", numeric: true, min: 1, max: 99 },
-                { key: "stage" },
-                { key: "trigger" },
-                { key: "actions" },
-                { key: "owner" },
-              ]}
-              empty={{
-                priority: 1,
-                stage: "",
-                trigger: "",
-                actions: "",
-                owner: "",
-              }}
-              onChange={(escalationProcedures) =>
-                setContent({ ...content, escalationProcedures })
-              }
-            />
-            <Rows
-              title="Key relationships"
-              rows={content.keyRelationships ?? []}
-              fields={[
-                { key: "institution" },
-                { key: "role" },
-                { key: "contactName", optional: true },
-                { key: "phone", optional: true },
-                { key: "email", optional: true },
-                { key: "notes", optional: true },
-              ]}
-              empty={{ institution: "", role: "" }}
-              onChange={(keyRelationships) =>
-                setContent({ ...content, keyRelationships })
-              }
-            />
-            <Rows
-              title="Communication plans"
-              rows={content.communicationPlans ?? []}
-              fields={[
-                { key: "audience", options: Object.values(CfpAudience) },
-                { key: "channel" },
-                { key: "owner" },
-                { key: "messageOutline", optional: true },
-              ]}
-              empty={{ audience: "regulator", channel: "", owner: "" }}
-              onChange={(communicationPlans) =>
-                setContent({ ...content, communicationPlans })
-              }
-            />
-            <Rows
-              title="Behavioral liquidity scenarios"
-              rows={content.behavioralLiquidityScenarios ?? []}
-              fields={[
-                { key: "name" },
-                {
-                  key: "activationHorizon",
-                  options: Object.values(CfpHorizon),
-                },
-                { key: "linkedAction" },
-                { key: "depositRunoffUpliftPct", numeric: true, step: "any" },
-                { key: "fundingCostUpliftBps", numeric: true, step: "any" },
-                { key: "notes", optional: true },
-              ]}
-              empty={{
-                name: "",
-                activationHorizon: "intraday",
-                linkedAction: "",
-                depositRunoffUpliftPct: 0,
-                fundingCostUpliftBps: 0,
-              }}
-              onChange={(behavioralLiquidityScenarios) =>
-                setContent({ ...content, behavioralLiquidityScenarios })
-              }
-            />
-          </fieldset>
-          <label className="block text-caption">
-            Reason / evidence
-            <textarea
-              required
-              maxLength={2000}
-              className={inputCls}
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-            />
-          </label>
-          <DisabledWithReason
-            reason={
-              !canDraft
-                ? "Requires Liquidity · Confidential · Create for a new version or Edit for a draft."
-                : "Enter a reason before saving."
-            }
-          >
-            {(id) => (
-              <button
-                className="btn-primary disabled:opacity-50"
-                aria-describedby={id}
-                disabled={!canDraft || mutation.isPending || !reason.trim()}
-              >
-                Save draft
-              </button>
+            >
+              {(id) => (
+                <button
+                  className="btn-primary min-h-11 rounded px-5 py-2 font-medium disabled:opacity-50"
+                  aria-describedby={id}
+                  disabled={!canDraft || mutation.isPending || !reason.trim()}
+                >
+                  Save draft
+                </button>
+              )}
+            </DisabledWithReason>
+            {!canDraft && (
+              <p className="text-caption text-slate">
+                Requires Liquidity · Confidential · Create for a new version or
+                Edit for a draft.
+              </p>
             )}
-          </DisabledWithReason>
+          </div>
         </form>
-        <label className="block text-caption">
-          Board approval reference
-          <input
-            maxLength={200}
-            className={inputCls}
-            value={reference}
-            onChange={(event) => setReference(event.target.value)}
-          />
-        </label>
-        <div className="flex flex-wrap gap-3">
-          {actionButton("approve", "Record Board approval", approveReason)}
-          {actionButton("activate", "Activate CFP", activateReason)}
-          {actionButton("standDown", "Stand down CFP", standDownReason)}
-        </div>
         {!reason.trim() && (
           <p className="text-caption text-slate">
             Enter a reason / evidence to enable an authorized action. Board

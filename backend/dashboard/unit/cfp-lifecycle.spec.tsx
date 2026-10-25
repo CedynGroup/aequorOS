@@ -53,7 +53,11 @@ vi.mock("@/components/shell/BankContext", () => ({
 vi.mock("@/components/profile/ProfileProvider", () => ({
   useUserProfile: () => ({ profile: { userId: context.actor } }),
 }));
-const server = setupServer();
+const server = setupServer(
+  http.get(`${apiBaseUrl}/banks/BK-SAMP0001/liquidity/ewis`, () =>
+    HttpResponse.json({ indicators: [] }),
+  ),
+);
 let client: QueryClient;
 const url = `${apiBaseUrl}/banks/BK-SAMP0001/liquidity/cfp`;
 const plan = {
@@ -121,14 +125,14 @@ const authoredContent = {
   ],
 };
 const editableSections = [
-  { title: "EWI triggers", field: "trigger Condition" },
-  { title: "Funding options", field: "source" },
-  { title: "Action plans", field: "action" },
-  { title: "Alternative sources", field: "source" },
-  { title: "Escalation procedures", field: "stage" },
-  { title: "Key relationships", field: "institution" },
-  { title: "Communication plans", field: "channel" },
-  { title: "Behavioral liquidity scenarios", field: "name" },
+  { title: "EWI triggers", field: "Trigger condition" },
+  { title: "Funding options", field: "Source" },
+  { title: "Action plans", field: "Action" },
+  { title: "Alternative sources", field: "Source" },
+  { title: "Escalation procedures", field: "Stage" },
+  { title: "Key relationships", field: "Institution" },
+  { title: "Communication plans", field: "Channel" },
+  { title: "Behavioral liquidity scenarios", field: "Name" },
 ];
 function mount(content = <CfpLifecycle />) {
   return render(
@@ -326,40 +330,40 @@ print(json.dumps(True))
   await screen.findByRole("button", { name: "Add funding options" });
   const inputs: Record<string, Record<string, string>> = {
     "EWI triggers": {
-      "indicator Code": "LCR",
-      "trigger Condition": "Below trigger",
+      "Indicator code (from the EWI register)": "LCR",
+      "Trigger condition": "Below trigger",
     },
     "Funding options": {
-      source: "Committed facility",
-      "estimated Capacity": "100 million",
-      "lead Time": "Same day",
+      Source: "Committed facility",
+      "Estimated capacity": "100 million",
+      "Lead time": "Same day",
     },
-    "Action plans": { action: "Sell liquid assets", owner: "Treasury" },
+    "Action plans": { Action: "Sell liquid assets", Owner: "Treasury" },
     "Alternative sources": {
-      source: "Standby facility",
-      conditions: "Board consent",
+      Source: "Standby facility",
+      Conditions: "Board consent",
     },
     "Escalation procedures": {
-      stage: "Watch",
-      trigger: "LCR breach",
-      actions: "Convene committee",
-      owner: "CRO",
+      Stage: "Watch",
+      Trigger: "LCR breach",
+      Actions: "Convene committee",
+      Owner: "CRO",
     },
     "Key relationships": {
-      institution: "Clearing bank",
-      role: "Settlement",
-      "contact Name": "Duty officer",
+      Institution: "Clearing bank",
+      Role: "Settlement",
+      "Contact name": "Duty officer",
     },
     "Communication plans": {
-      channel: "Internal record",
-      owner: "Compliance",
-      "message Outline": "Activation evidence",
+      Channel: "Internal record",
+      Owner: "Compliance",
+      "Message outline": "Activation evidence",
     },
     "Behavioral liquidity scenarios": {
-      name: "Deposit stress",
-      "linked Action": "Sell liquid assets",
-      "deposit Runoff Uplift Pct": "0.5",
-      "funding Cost Uplift Bps": "12.5",
+      Name: "Deposit stress",
+      "Linked action": "Sell liquid assets",
+      "Deposit runoff uplift (%)": "0.5",
+      "Funding cost uplift (bps)": "12.5",
     },
   };
   for (const [title, fields] of Object.entries(inputs)) {
@@ -376,14 +380,14 @@ print(json.dumps(True))
   await user.selectOptions(
     within(
       screen.getByRole("group", { name: "Communication plans" }),
-    ).getByLabelText("audience"),
+    ).getByLabelText("Audience"),
     "regulator",
   );
   await user.type(
     screen.getByLabelText("Reason / evidence"),
     "Treasury evidence",
   );
-  const priority = screen.getByLabelText("priority");
+  const priority = screen.getByLabelText("Priority");
   await user.clear(priority);
   await user.type(priority, "1.5");
   expect(priority).toBeInvalid();
@@ -395,13 +399,13 @@ print(json.dumps(True))
   await user.click(screen.getByRole("button", { name: "Save draft" }));
   await screen.findByText(/Current plan: v1 · draft/);
   expect(screen.getByDisplayValue("Committed facility")).toBeVisible();
-  expect(screen.getByLabelText("deposit Runoff Uplift Pct")).toHaveValue(0.5);
-  expect(screen.getByLabelText("funding Cost Uplift Bps")).toHaveValue(12.5);
+  expect(screen.getByLabelText("Deposit runoff uplift (%)")).toHaveValue(0.5);
+  expect(screen.getByLabelText("Funding cost uplift (bps)")).toHaveValue(12.5);
   view.unmount();
   client.clear();
   mount();
   expect(await screen.findByDisplayValue("Committed facility")).toBeVisible();
-  expect(screen.getByLabelText("funding Cost Uplift Bps")).toHaveValue(12.5);
+  expect(screen.getByLabelText("Funding cost uplift (bps)")).toHaveValue(12.5);
 }, 30_000);
 
 it.each(editableSections)(
@@ -450,11 +454,11 @@ it.each(editableSections)(
     );
     expect(approval()).toBeDisabled();
     await user.click(
-      section.getByRole("button", { name: `Remove ${title.toLowerCase()} 2` }),
+      section.getByRole("button", { name: `Remove row 2 from ${title.toLowerCase()}` }),
     );
     expect(approval()).toBeEnabled();
     await user.click(
-      section.getByRole("button", { name: `Remove ${title.toLowerCase()} 1` }),
+      section.getByRole("button", { name: `Remove row 1 from ${title.toLowerCase()}` }),
     );
     expect(approval()).toBeDisabled();
     expect(approvalRecorded).toBe(false);
@@ -527,28 +531,28 @@ print(json.dumps(True))
 
 it.each([
   {
-    field: "deposit Runoff Uplift Pct",
+    field: "Deposit runoff uplift (%)",
     wireField: "deposit_runoff_uplift_pct",
     saved: "0.500",
     changed: "1.5",
     original: "0.5",
   },
   {
-    field: "funding Cost Uplift Bps",
+    field: "Funding cost uplift (bps)",
     wireField: "funding_cost_uplift_bps",
     saved: "12.500",
     changed: "15.5",
     original: "12.5",
   },
   {
-    field: "deposit Runoff Uplift Pct",
+    field: "Deposit runoff uplift (%)",
     wireField: "deposit_runoff_uplift_pct",
     saved: "1E-7",
     changed: "0.0000002",
     original: "0.0000001",
   },
   {
-    field: "funding Cost Uplift Bps",
+    field: "Funding cost uplift (bps)",
     wireField: "funding_cost_uplift_bps",
     saved: "0.000",
     changed: "0.5",
@@ -622,13 +626,13 @@ it.each([
 
 it.each([
   {
-    field: "deposit Runoff Uplift Pct",
+    field: "Deposit runoff uplift (%)",
     wireField: "deposit_runoff_uplift_pct",
     saved: "0.500000000000000000001",
     changed: "0.5",
   },
   {
-    field: "funding Cost Uplift Bps",
+    field: "Funding cost uplift (bps)",
     wireField: "funding_cost_uplift_bps",
     saved: "12.500000000000000000001",
     changed: "12.5",
@@ -988,3 +992,16 @@ it.each(editableSections)(
     ]);
   },
 );
+
+it("keeps operational status and refusal explanations visible when the content editor is collapsed", async () => {
+  server.use(http.get(url, () => HttpResponse.json({ current: { ...plan, content: authoredContent }, approved: null })));
+  const user = userEvent.setup();
+  mount();
+  await user.click(await screen.findByText("Edit plan content"));
+  expect(screen.getByDisplayValue("Committed facility")).not.toBeVisible();
+  expect(screen.getByText(/Current plan: v1/)).toBeVisible();
+  expect(screen.getByText(/Approval validity:/)).toBeVisible();
+  expect(screen.getByText(/The preparer cannot approve their own plan/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Activate CFP" })).toBeVisible();
+});
