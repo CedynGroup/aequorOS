@@ -486,8 +486,11 @@ official reads must be explicit.
   twice, concurrently with itself. A handler that outgrows the fleet default
   (`WORKER_STALE_JOB_SECONDS`) gets an entry in `job_queue.STALE_AFTER_OVERRIDES_SECONDS`,
   **never a bigger global number** (the global also governs how fast a genuinely dead worker's
-  jobs come back). Setting the default asserts every unlisted type finishes inside it — the
-  config comment names them. When a job exhausts `max_attempts` nothing re-enqueues it: the
+  jobs come back). Large-object re-encryption dispatches instead extend their own claim window
+  from the persisted source size; [the migration contract](backend/docs/bank_field_encryption.md#editable-data-re-encryption)
+  owns their isolation and retry rules. Setting the default asserts every other unlisted type
+  finishes inside it — the config comment names them. When a job exhausts `max_attempts`
+  nothing re-enqueues it: the
   recovery surface is `GET /operator/v1/jobs/stuck-dedup` (fleet board, read) +
   `POST /operator/v1/tenants/{org}/fix/redrive-dedup` (session-gated, audited), and it is
   manual on purpose — stranded jobs fail for unrelated reasons that each need a look.

@@ -191,7 +191,7 @@ def _publish(
         raise
 
 
-def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
+def reencrypt(  # noqa: PLR0912, PLR0913, PLR0915 - atomic publication and resource cleanup boundary
     client: S3MaintenanceClient,
     env: str,
     encryption: ObjectEncryption,
@@ -204,7 +204,8 @@ def reencrypt(  # noqa: PLR0913 - storage boundary carries encryption context
     if item.retained:
         raise StorageValidationError("Retained object versions cannot be rewritten.")
     location = item.location
-    with encryption.publication(location) as unit:
+    with encryption.publication(location) as publication_unit:
+        unit = publication_unit
         bucket = location.bucket_name(env)
         body: BinaryIO | None = None
         try:

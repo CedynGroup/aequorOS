@@ -37,13 +37,8 @@ owns the encryption format and integrity checks. Only the wrapped version and
 its exact KMS reference are persisted in `object_key_envelopes`; S3 metadata
 holds the version UUID.
 
-Each database unit of work unwraps each required version once, sharing it
-between field loads and session-bound storage. Plaintext version material is
-session-local and excluded from logs; commit, rollback and close discard it.
-Standalone operations own short-lived units. Revocation refuses the next unit
-once KMS enforces the permission change; an already admitted unit may complete.
-No persistent or process-wide plaintext cache is permitted. See the
-[field design](bank_field_encryption.md#keys-and-storage).
+Key reuse, revocation boundaries and plaintext-material lifetime follow the
+[key unit-of-work contract](bank_field_encryption.md#keys-and-storage).
 
 ## Bank-side AWS setup
 
@@ -171,10 +166,10 @@ S3 URLs; document transfer under bank keys remains follow-up work.
 
 The bank grants access to its replacement key while retaining the old grant.
 Rotation verifies the replacement and publishes a new immutable data-key
-version in the existing envelope catalogue. Only rotation bookkeeping locks the
-registry. Encryption and downloads use lock-free version lookups; an admitted
-unit of work may finish with its previous version while later work uses the new
-one. Ciphertext records its version UUID, and old versions keep their exact KMS
+version in the existing envelope catalogue. Key-version mutations lock the
+registry. Ordinary encryption and downloads use version lookups without key-row
+locks; an admitted unit of work may finish with its previous version while later
+work uses the new one. Ciphertext records its version UUID, and old versions keep their exact KMS
 references. Failed rotation rolls back the new pointer/version. Object writes
 reference committed versions, so business rollback cannot orphan published
 ciphertext. See [the field design](bank_field_encryption.md#keys-and-storage)
@@ -236,10 +231,8 @@ Object artifacts and their object backups use the bank-held hierarchy above.
 [Sensitive-field encryption](bank_field_encryption.md) reuses its `KeyProvider`
 and envelope catalogue for newly written borrower identities and operational
 payloads. That document lists the covered fields and numeric-only BI behavior.
-Existing editable rows are converted by the automatically queued connection job.
-Immutable rows and object versions are explicitly counted as retained, and the
-job reports `complete except N retained immutable records` when they remain.
-Existing physical backups retain their original protection.
+Existing-data migration and retained-record reporting follow
+[the editable-data re-encryption contract](bank_field_encryption.md#editable-data-re-encryption).
 Signing keys and credential custody remain
 [issue 355](https://github.com/CedynGroup/aequorOS/issues/355). Scheduled
 key-health monitoring, alerting and support workflows remain

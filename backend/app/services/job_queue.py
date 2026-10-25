@@ -144,8 +144,9 @@ _BACKOFF_BASE_SECONDS = 5
 #: so the measured 2h02m is an upper bound, not a typical case. A deployment that
 #: raises that bound to get the full pass must raise this window with it.
 #:
-#: Everything NOT listed here is on the deployment default and therefore asserts
-#: that it completes well inside it — see ``WorkerSettings.worker_stale_job_seconds``.
+#: Other jobs use the deployment default, except isolated large-object
+#: ``bank_reencrypt`` dispatches; see docs/bank_field_encryption.md for their
+#: size-based extension. See ``WorkerSettings.worker_stale_job_seconds``.
 STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
     "etl_dedup": 4 * 60 * 60,
     # ``desk_capture`` walks the Bank of Ghana's published tables over HTTP, so

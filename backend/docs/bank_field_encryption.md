@@ -35,8 +35,14 @@ A unit of work resolves the current version once and unwraps each required versi
 once. PostgreSQL units share a bank-scoped transaction advisory lock with object
 publication. First connection, index cutover, and final migration verification
 take it exclusively to drain earlier admitted writers. Request-bound storage
-shares the session cache. Root transaction completion, rollback or session close
-discards plaintext key material. Ordinary encryption takes no key-row locks.
+shares the session cache; standalone operations own short-lived units. Plaintext
+key material is excluded from logs. Revocation refuses the next unit once KMS
+enforces the permission change; an already admitted unit may complete.
+Root transaction completion, rollback or session close discards session key
+material. Isolated large-object migration retains only its
+captured source and target object secrets for the transfer, as described below;
+they are scoped to that dispatch. No persistent or process-wide plaintext cache
+is permitted. Ordinary encryption takes no key-row locks.
 Rotation creates a new current version; earlier versions remain available to read
 earlier ciphertext. The operator API exposes an explicit re-encryption job;
 rotation itself does not queue one.
@@ -59,14 +65,18 @@ case folding and collapsed whitespace; identifiers retain case and punctuation.
 Searches scope by organization and bank and confirm decrypted candidate values.
 A stable index-version pointer keeps exact matches working across routine
 payload-key rotation. First connection re-indexes every generation, including withdrawn rows,
-atomically before publishing the connection. Explicit re-encryption moves the
-index secret to an independent envelope under the current key without changing tokens.
+atomically before publishing the connection. After a master-key replacement,
+explicit re-encryption moves the index secret to an independent envelope under
+the current key without changing tokens.
 This prevents mixed raw/HMAC natural keys during re-import and withdrawal
 reversal. The current-generation unique index also arbitrates concurrent
 re-import/reversal; a losing reversal returns 409. Numeric concentration grouping uses opaque indexes.
 
 Name index tokens are 64 characters for both connected and optional banks.
 Optional banks use unkeyed SHA-256 tokens and retain plaintext names.
+Counterparty names retain the plaintext length limit defined by
+[`CounterpartyData`](../app/domain/ingestion/contracts.py), enforced during
+ingestion and before persistence for both optional-key and connected-key banks.
 
 ## BI
 
@@ -90,7 +100,6 @@ and writes, cross-bank isolation, exact matching, old-version reads after
 rotation, numeric BI and identity refusals. PostgreSQL/storage tests exercise
 concurrent ingestion, push, exports, attachments and downloads, bounded unwrap
 counts and published-manifest readability after rollback.
-
 
 ## Editable-data re-encryption
 
@@ -118,18 +127,15 @@ between atomic operations, then commits its checkpoint and queues its successor
 in the same transaction. BI identity cleanup and catalogue cleanup also use
 bounded batches. Verification uses the same persisted cursors rather than a
 full-bank pass in one dispatch. The queue's ordinary 900-second reclaim window
-applies to normal batches. Interrupted batches resume their committed checkpoint; duplicate runs
-of a batch publish only one continuation. Object retries discover already
+applies to normal batches. Interrupted batches resume their committed checkpoint;
+duplicate runners serialize on the shared job row and may return without further
+work only after observing committed handoff or terminal state. A rolled-back
+handoff leaves the batch reclaimable. Object retries discover already
 published current-version ciphertext. A failed or exhausted job can be requested
 again safely. If rotation changes the current version mid-run, the job restarts
 its scan for that version. Old keys must remain decrypt-capable throughout migration.
 Handed-off parents and completed progress cannot absorb a later request, even
 when a worker died before recording their final queue status.
-
-At rotation, the job wraps the existing, domain-separated blind-index secret in
-a new envelope under the current bank key. Search and uniqueness tokens remain
-stable while their secret's envelope moves off the old key. First connection
-still converts legacy raw references atomically before admitting keyed writers.
 
 The job locks each editable row before replacing only its protected columns,
 preserving logical values and timestamps. It updates neither saved BI version
