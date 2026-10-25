@@ -128,6 +128,13 @@ export function isLockedBankQuery(queryKey: QueryKey): boolean {
   );
 }
 
+const protectedBiIdentityMembers = new Set([
+  "counterparty.id",
+  "counterparty.name",
+  "counterparty.source_reference",
+  "counterparty.group",
+]);
+
 function isUnencryptedBiDefinition(query: Query): boolean {
   if (query.queryKey[0] === BI_CATALOGUE_PREFIX) return true;
   if (query.queryKey[0] !== BI_DASHBOARD_PREFIX) return false;
@@ -143,7 +150,7 @@ function isUnencryptedBiDefinition(query: Query): boolean {
       ...(question.sort ?? []).map((sort) => sort.member),
       ...(question.pivot ? [question.pivot.dimension] : []),
       ...(question.topN ? [question.topN.dimension] : []),
-    ].some((member) => member.startsWith("counterparty."));
+    ].some((member) => protectedBiIdentityMembers.has(member));
   });
 }
 

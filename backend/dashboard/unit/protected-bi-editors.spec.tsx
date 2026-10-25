@@ -68,11 +68,29 @@ const ID = "00000000-0000-4000-8000-000000000001";
 const PROTECTED_ID = "00000000-0000-4000-8000-000000000002";
 const DAY = "2026-09-30";
 const scope = queryAuthorityScope("OR-test", "reader@example.com", 1);
+const aggregateMembers = [
+  "counterparty.type",
+  "counterparty.country",
+  "counterparty.rating",
+];
 const catalogue = {
   ...catalogueWire,
+  dimensions: [
+    ...catalogueWire.dimensions,
+    ...aggregateMembers.map((id) => ({
+      id,
+      label: id,
+      description: id,
+      module: "credit",
+      sensitivity: "aggregated",
+      value_type: "text",
+      values: [],
+    })),
+  ],
   measures: catalogueWire.measures.map((measure) => ({
     ...measure,
     thresholds_source: "credit.limit",
+    allowed_dimensions: [...measure.allowed_dimensions, ...aggregateMembers],
   })),
 };
 const dashboard = {
@@ -160,7 +178,7 @@ function ProtectedTitle() {
   return <p>{query.data?.title}</p>;
 }
 
-function setup() {
+function setup(numericDashboard = dashboard) {
   const p = providers();
   p.client.setDefaultOptions({
     queries: { retry: false, staleTime: Infinity, refetchOnWindowFocus: false },
@@ -171,7 +189,7 @@ function setup() {
     p.client.clear();
   });
   p.client.setQueryData(catalogueKey, BiCatalogueReadFromJSON(catalogue));
-  p.client.setQueryData(numericKey, BiDashboardReadFromJSON(dashboard));
+  p.client.setQueryData(numericKey, BiDashboardReadFromJSON(numericDashboard));
   p.client.setQueryData(
     protectedKey,
     BiDashboardReadFromJSON({
@@ -200,14 +218,27 @@ function setup() {
 
 it.each(
   (["create", "edit", "alert"] as const).flatMap((surface) =>
-    (["unavailable", "revoked"] as const).map((reason) => ({
-      surface,
-      reason,
-    })),
+    (surface === "edit"
+      ? ["branch.code", ...aggregateMembers]
+      : ["branch.code"]
+    ).flatMap((dimension) =>
+      (["unavailable", "revoked"] as const).map((reason) => ({
+        surface,
+        dimension,
+        reason,
+      })),
+    ),
   ),
 )(
-  "keeps the $surface draft when a navigated-away read returns $reason",
-  async ({ surface, reason }) => {
+  "keeps the $surface draft using $dimension when a navigated-away read returns $reason",
+  async ({ surface, dimension, reason }) => {
+    const numericDashboard = {
+      ...dashboard,
+      widgets: dashboard.widgets.map((widget) => ({
+        ...widget,
+        query: { ...widget.query, dimensions: [dimension] },
+      })),
+    };
     let finishRead: ((response: Response) => void) | undefined;
     vi.stubGlobal(
       "fetch",
@@ -221,11 +252,11 @@ it.each(
         if (url.endsWith("/feature-flags"))
           return json({ bi_alerts_enabled: true });
         if (url.endsWith("/bi/alerts")) return json({ alerts: [] });
-        if (url.includes(`/bi/dashboards/${ID}`)) return json(dashboard);
+        if (url.includes(`/bi/dashboards/${ID}`)) return json(numericDashboard);
         throw new Error(`Unexpected request: ${url}`);
       }),
     );
-    const p = setup();
+    const p = setup(numericDashboard);
     const otherKey = biDashboardKey(scope, "BK-other", PROTECTED_ID, DAY);
     p.client.setQueryData(otherKey, { title: "Other bank private title" });
     const params = Promise.resolve({ id: ID });
@@ -317,7 +348,7 @@ it.each(
       BiCatalogueReadFromJSON(catalogue),
     );
     expect(p.client.getQueryData(numericKey)).toEqual(
-      BiDashboardReadFromJSON(dashboard),
+      BiDashboardReadFromJSON(numericDashboard),
     );
     expect(screen.getByLabelText("Name")).toHaveValue("Unsaved title");
     if (surface === "alert") {
@@ -347,42 +378,69 @@ it.each(
   },
 );
 
-it.each([
+const queryShapes = [
+  { axis: "measures", query: (member: string) => ({ measures: [member] }) },
+  { axis: "dimensions", query: (member: string) => ({ dimensions: [member] }) },
   {
-    filters: [
-      {
-        member: "counterparty.name",
-        op: "eq",
-        values: ["Synthetic private borrower"],
-      },
-    ],
+    axis: "filters",
+    query: (member: string) => ({
+      filters: [{ member, op: "eq", values: ["Synthetic filter value"] }],
+    }),
   },
-  { dimensions: ["counterparty.group"] },
-  { sort: [{ member: "counterparty.source_reference", direction: "asc" }] },
-  { pivot: { dimension: "counterparty.id", measures: ["loans.balance_rc"] } },
   {
-    top_n: {
-      dimension: "counterparty.name",
-      n: 5,
-      measure: "loans.balance_rc",
-    },
+    axis: "sort",
+    query: (member: string) => ({ sort: [{ member, direction: "asc" }] }),
   },
-  { measures: ["counterparty.name"] },
-])("evicts identity-bearing dashboard definitions %j", async (identity) => {
-  const p = setup();
-  p.client.setQueryData(
-    protectedKey,
-    BiDashboardReadFromJSON({
+  {
+    axis: "pivot",
+    query: (member: string) => ({
+      pivot: { dimension: member, measures: ["loans.balance_rc"] },
+    }),
+  },
+  {
+    axis: "topN",
+    query: (member: string) => ({
+      top_n: { dimension: member, n: 5, measure: "loans.balance_rc" },
+    }),
+  },
+];
+
+it.each(
+  [
+    ...aggregateMembers.map((member) => ({ member, identity: false })),
+    ...[
+      "counterparty.id",
+      "counterparty.name",
+      "counterparty.source_reference",
+      "counterparty.group",
+    ].map((member) => ({ member, identity: true })),
+  ].flatMap(({ member, identity }) =>
+    queryShapes.flatMap(({ axis, query }) =>
+      (["unavailable", "revoked"] as const).map((reason) => ({
+        member,
+        identity,
+        axis,
+        query: query(member),
+        reason,
+      })),
+    ),
+  ),
+)(
+  "applies the identity policy to $member in $axis on $reason",
+  async ({ identity, query, reason }) => {
+    const p = setup();
+    const definition = BiDashboardReadFromJSON({
       ...dashboard,
       id: PROTECTED_ID,
-      widgets: [
-        { ...dashboard.widgets[0], query: { ...queryWire, ...identity } },
-      ],
-    }),
-  );
-  await observeProtectedData(lockedResponse("revoked"));
-  expect(p.client.getQueryData(protectedKey)).toBeUndefined();
-  expect(p.client.getQueryData(numericKey)).toEqual(
-    BiDashboardReadFromJSON(dashboard),
-  );
-});
+      widgets: [{ ...dashboard.widgets[0], query: { ...queryWire, ...query } }],
+    });
+    p.client.setQueryData(protectedKey, definition);
+    await observeProtectedData(lockedResponse(reason));
+    expect(p.client.getQueryData(protectedKey)).toEqual(
+      identity ? undefined : definition,
+    );
+    expect(p.client.getQueryData(numericKey)).toEqual(
+      BiDashboardReadFromJSON(dashboard),
+    );
+  },
+);
