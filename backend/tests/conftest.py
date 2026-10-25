@@ -232,19 +232,14 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # /health/ready reads that list; a developer's SIGNING_BACKEND=openbao would
     # otherwise add gaps to suites that have nothing to do with signing.
     monkeypatch.setenv("SIGNING_BACKEND", "software")
-    get_settings.cache_clear()
-    get_engine.cache_clear()
-    yield
-    get_settings.cache_clear()
-    get_engine.cache_clear()
-
-
-@pytest.fixture(autouse=True)
-def clear_key_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("BANK_KMS_ENDPOINT_URL", "")
+    get_settings.cache_clear()
     get_key_settings.cache_clear()
+    get_engine.cache_clear()
     yield
+    get_settings.cache_clear()
     get_key_settings.cache_clear()
+    get_engine.cache_clear()
 
 
 @pytest.fixture(autouse=True)

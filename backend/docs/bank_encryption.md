@@ -292,14 +292,15 @@ disposable data is needed.
 Run the provider's HTTP contract from the repository root:
 
 ```sh
-TEST_KMS_ENDPOINT_URL=http://127.0.0.1:18080 mise exec -- uv run --directory backend \
+TEST_KMS_ENDPOINT_URL=http://127.0.0.1:18080 mise -C backend exec -- uv run \
   pytest tests/storage/test_kms_emulator.py -q
 ```
 
-Every dashboard journey CI shard owns an ephemeral emulator service and runs
-this contract before starting the browser stack; a JUnit assertion disallows
-skipping it. It covers real SDK wrap/unwrap, authenticated context, disabled-key
-refusal, recovery, and data-key rewrapping to a second key. AWS cross-account
+The storage contract job and every dashboard journey CI shard own ephemeral
+emulator services and run this contract; JUnit assertions disallow skipping it.
+Journey shards run it before starting the browser stack. It covers real SDK
+wrap/unwrap, authenticated context, disabled-key refusal, recovery, and data-key
+rewrapping to a second key. AWS cross-account
 policy and grant enforcement are outside the emulator's model and remain covered
 by mocked provider tests. Guided key setup and historical re-encryption journeys
 belong to their separate feature stacks.

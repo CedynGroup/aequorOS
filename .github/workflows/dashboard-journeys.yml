@@ -73,8 +73,8 @@ jobs:
           TEST_KMS_ENDPOINT_URL: http://127.0.0.1:18080
           PYTEST_ADDOPTS: --junitxml=/tmp/kms-contract.xml
         run: |
-          mise exec -- uv run --directory backend pytest tests/storage/test_kms_emulator.py -q
-          python .github/scripts/assert_pytest_ran.py /tmp/kms-contract.xml --min-executed 1 --max-skipped 0
+          mise -C backend exec -- uv run pytest tests/storage/test_kms_emulator.py -q
+          python3 .github/scripts/assert_pytest_ran.py /tmp/kms-contract.xml --min-executed 1 --max-skipped 0
       - name: Install workspace dependencies
         run: mise exec -- pnpm install --frozen-lockfile
       # The browser build is fixed by the exact @playwright/test pin in the
