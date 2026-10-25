@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Search } from "lucide-react";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
@@ -74,13 +75,19 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
             : "Preparing for upcoming rules"}
         </Link>
         <div className="flex flex-wrap gap-4">
-          <label className="flex-1 min-w-48 text-caption text-navy">
-            Search instruments
+          <label className="relative flex-1 min-w-48 self-end text-caption text-navy">
+            <span className="sr-only">Search instruments</span>
+            <Search
+              size={16}
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate"
+            />
             <input
               type="search"
+              placeholder="Search instruments"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="mt-1 block w-full rounded-sm border border-border px-3 py-2"
+              className="block w-full rounded-sm border border-border pl-9 pr-3 py-2"
             />
           </label>
           <label className="text-caption text-navy">
