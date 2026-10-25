@@ -1,9 +1,15 @@
 /** Browser certified packs, saved revisions, copies and per-reader disclosure.
  * Payload certification and refusal contracts live in contracts/bi-dashboards.spec.ts. */
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/scoped-objects";
 import path from "node:path";
 import { E2E_BASE_URL, E2E_TMP } from "../playwright.config";
-import { CERTIFIED_PACKS, fixtureAsOf } from "./support/bi";
+import {
+  biApi,
+  CERTIFIED_PACKS,
+  fixtureAsOf,
+  SAMPLE_BANK_ID,
+} from "./support/bi";
 
 /**
  * The dashboard this suite builds, and the two views on it.
@@ -15,13 +21,16 @@ import { CERTIFIED_PACKS, fixtureAsOf } from "./support/bi";
  * rather than something asserted from code.
  */
 const SAVED_TITLE = "Weekly funding review";
-
 const GRANTED_VIEW = "Funding by account type";
-
 const REFUSED_VIEW = "Loan book total";
-
 /** The measure the refused view reads, which must never reach that reader. */
 const REFUSED_MEMBER = "loans.balance_rc";
+
+/**
+ * Titles and captions the `alco` pack carries for the widgets a
+ * Liquidity-only reader is refused. Every one must be absent from that reader's
+ * response: each names a figure, and naming the figure is the disclosure.
+ */
 
 /**
  * Titles, captions and members the `credit` pack carries for the widgets a
@@ -45,10 +54,6 @@ const WITHHELD_CREDIT_STRINGS = [
   "loans.npl_ratio_pct",
   "loan.grade",
 ] as const;
-
-test.describe("certified dashboards", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
-});
 
 test.describe("the Dashboards page", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
@@ -244,10 +249,8 @@ test.describe("a pack whose every figure this reader is refused", () => {
 /**
  * A DASHBOARD A READER SAVES FOR THEMSELVES, end to end and in a browser.
  *
- * Serial on purpose: these are the stages of ONE document's life — built, listed,
- * arranged into a second version, opened by a colleague with narrower access, and
- * deleted — and each stage is only meaningful against the state the previous one
- * left. The id is not known until the first save, so it is carried between them.
+ * Each story owns a fresh canvas, prepares only the revision it needs, and
+ * removes its exact created document in fixture teardown.
  *
  * Every assertion here is of something only a working feature produces: a figure
  * in the institution's own unit inside the tile, a second version in an
@@ -255,10 +258,8 @@ test.describe("a pack whose every figure this reader is refused", () => {
  * for a reader who is refused, and a 404 after the delete. Navigating to a page
  * and finding an empty state would prove none of it.
  */
-test.describe.serial("a dashboard the reader saves for themselves", () => {
+test.describe("a dashboard the reader saves for themselves", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
-
-  let dashboardPath = "";
 
   test("is built from the catalogue and opens with its figures", async ({
     page,
@@ -297,7 +298,8 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
     await page.waitForURL(
       /\/dashboards\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
-    dashboardPath = new URL(page.url()).pathname;
+    const dashboardPath = new URL(page.url()).pathname;
+    expect(dashboardPath).toMatch(/^\/dashboards\/[0-9a-f-]+$/);
 
     await expect(
       page.getByRole("heading", { name: SAVED_TITLE }),
@@ -331,7 +333,10 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
 
   test("is on the Dashboards list beside the certified packs", async ({
     page,
+    request,
+    objects,
   }) => {
+    const dashboardPath = await prepareDashboard(request, objects, false);
     await page.goto("/dashboards");
     await expect(
       page.getByRole("heading", { name: "Saved at this institution" }),
@@ -369,7 +374,10 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
 
   test("is arranged, widened and shared, and the history keeps both versions", async ({
     page,
+    request,
+    objects,
   }) => {
+    const dashboardPath = await prepareDashboard(request, objects, false);
     await page.goto(`${dashboardPath}/edit`);
     await expect(
       page.getByRole("heading", { name: "Arrange this dashboard" }),
@@ -443,7 +451,10 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
 
   test("resolves for a colleague with narrower access as a refusal, naming nothing", async ({
     browser,
+    request,
+    objects,
   }) => {
+    const dashboardPath = await prepareDashboard(request, objects, true);
     // A SECOND REAL IDENTITY, not a mocked one: the Liquidity-only reader holds
     // an exact LIQUIDITY binding and nothing else, so the deposit view is theirs
     // and the loan view is not. The document is the same document.
@@ -513,7 +524,10 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
 
   test("says what sharing does and does not grant, and names a colleague", async ({
     page,
+    request,
+    objects,
   }) => {
+    const dashboardPath = await prepareDashboard(request, objects, true);
     await page.goto(dashboardPath);
 
     // THE HONEST NOTE, in production copy, on the panel that does the sharing.
@@ -569,7 +583,10 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
 
   test("is deleted by its owner, and the history goes with it", async ({
     page,
+    request,
+    objects,
   }) => {
+    const dashboardPath = await prepareDashboard(request, objects, false);
     await page.goto(dashboardPath);
     await expect(
       page.getByRole("heading", { name: "Delete this dashboard" }),
@@ -618,10 +635,8 @@ test.describe.serial("a dashboard the reader saves for themselves", () => {
  * into a month's under the heading the pack's author wrote, so the builder refuses
  * and says so.
  */
-test.describe.serial("a certified pack copied into the reader's own", () => {
+test.describe("a certified pack copied into the reader's own", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
-
-  let copyPath = "";
 
   test("becomes a Personal dashboard the reader owns, with the pack's own views", async ({
     page,
@@ -638,7 +653,8 @@ test.describe.serial("a certified pack copied into the reader's own", () => {
     await page.waitForURL(
       /\/dashboards\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
-    copyPath = new URL(page.url()).pathname;
+    const copyPath = new URL(page.url()).pathname;
+    expect(copyPath).toMatch(/^\/dashboards\/[0-9a-f-]+$/);
 
     await expect(
       page.getByRole("heading", {
@@ -664,7 +680,11 @@ test.describe.serial("a certified pack copied into the reader's own", () => {
     await expect(page.getByRole("heading", { name: "Sharing" })).toBeVisible();
   });
 
-  test("is not rearranged here, and the refusal says why", async ({ page }) => {
+  test("is not rearranged here, and the refusal says why", async ({
+    page,
+    objects,
+  }) => {
+    const copyPath = `/dashboards/${await objects.create(`/banks/${SAMPLE_BANK_ID}/bi/dashboards`, { title: "Copy of Asset and liability committee", from_pack: "alco" })}`;
     await page.goto(`${copyPath}/edit`);
     // `EmptyState` states its title as a paragraph, not a heading, so the refusal
     // is read as text.
@@ -684,7 +704,8 @@ test.describe.serial("a certified pack copied into the reader's own", () => {
     await expect(page.getByText(/^Version 1$/).first()).toBeVisible();
   });
 
-  test("is deleted, leaving the list as it was", async ({ page }) => {
+  test("is deleted, leaving the list as it was", async ({ page, objects }) => {
+    const copyPath = `/dashboards/${await objects.create(`/banks/${SAMPLE_BANK_ID}/bi/dashboards`, { title: "Copy of Asset and liability committee", from_pack: "alco" })}`;
     await page.goto(copyPath);
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     await page
@@ -721,3 +742,62 @@ test.describe("the edit route", () => {
     ).toHaveCount(0);
   });
 });
+
+/** A fresh canvas for one story; shared variants have their own second revision. */
+async function prepareDashboard(
+  request: Parameters<typeof biApi>[0],
+  objects: { create(route: string, data: object): Promise<string> },
+  shared: boolean,
+): Promise<string> {
+  const route = `/banks/${SAMPLE_BANK_ID}/bi/dashboards`;
+  const spec = {
+    widgets: [
+      {
+        id: "funding",
+        kind: "table",
+        title: GRANTED_VIEW,
+        query: {
+          measures: ["deposits.balance_rc"],
+          dimensions: ["position.deposit_account_type"],
+          window: "as_of",
+        },
+      },
+    ],
+    layout: [{ i: "funding", x: 0, y: 0, w: 6, h: 5 }],
+  };
+  const id = await objects.create(route, {
+    title: SAVED_TITLE,
+    spec,
+    visibility: "private",
+  });
+  if (shared) {
+    const result = await biApi(request, "admin", `${route}/${id}`, {
+      method: "PUT",
+      data: {
+        title: SAVED_TITLE,
+        visibility: "org",
+        spec: {
+          widgets: [
+            ...spec.widgets,
+            {
+              id: "loans",
+              kind: "kpi",
+              title: REFUSED_VIEW,
+              query: {
+                measures: [REFUSED_MEMBER],
+                dimensions: [],
+                window: "as_of",
+              },
+            },
+          ],
+          layout: [
+            { ...spec.layout[0], w: 12 },
+            { i: "loans", x: 0, y: 5, w: 6, h: 5 },
+          ],
+        },
+      },
+    });
+    expect(result.status, JSON.stringify(result.body)).toBe(200);
+  }
+  return `/dashboards/${id}`;
+}
