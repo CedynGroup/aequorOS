@@ -408,6 +408,7 @@ pnpm --filter @aequoros/dashboard test        # legacy + Vitest behavior suites
 pnpm --filter @aequoros/dashboard test:coverage # CI coverage and shrink-only ratchet
 pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
 pnpm --filter @aequoros/dashboard e2e         # Playwright; package journeys need S3/MinIO
+pnpm --filter @aequoros/dashboard e2e:contracts # browser presentation and HTTP contracts
 ```
 
 Regenerate the API client after any backend contract change:
@@ -695,6 +696,11 @@ Navigation/recovery remains in `e2e/navigation-recovery.spec.ts`; macro read-onl
 UI checks live together in `e2e/default-macro-scenarios.spec.ts`. Settings authority
 and preference persistence use fresh actors, while shell presentation is checked
 once in the contract suite.
+
+Treasury risk stories are separated by observable outcome. Each opens its module
+afresh; scenario history and board-pack stories execute their own prerequisite
+run, so they can be selected without running an earlier story first. The coherent
+ingestion-to-worker-to-generated-return journey stays together.
 
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run the commands from the repository

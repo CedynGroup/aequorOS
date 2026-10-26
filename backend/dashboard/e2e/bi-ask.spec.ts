@@ -143,13 +143,10 @@ test.describe("a reader asking in words", () => {
   test("is shown the platform's refusal, never a reason code", async ({
     page,
   }) => {
-    // THE REFUSAL IS THE SERVER'S SENTENCE, rendered verbatim. It is delivered by
-    // interception because no refusal is reachable end to end in this stack: the
-    // only pre-quota refusal (`bi_ask_no_figures_available`) belongs to a reader
-    // with no institution, whose screen never offers the box at all — asserted on
-    // its own terms in the next journey — and every other refusal is behind the
-    // 500 named in the file docstring. The BODY here is the route's own, copied
-    // from `app/bi/api/ask_bi.py::_unavailable`.
+    // Interception selects the nlq_disabled refusal to check that the browser
+    // renders the server's sentence and withholds its machine reason. The body
+    // follows `app/bi/api/ask_bi.py::_unavailable`; real HTTP authorization and
+    // question ownership are covered in `contracts/bi-ask.spec.ts`.
     await page.route(
       `**/api/v1/banks/${SAMPLE_BANK_ID}/bi/ask`,
       async (route) => {
