@@ -65,6 +65,7 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     key: KeyReference,
     providers: ProviderFactory = provider_for,
 ) -> BankEncryptionKey:
+    lock_bank_version(db, organization_id, bank_id)
     _lock_keys(db, key)
     resolved = require_active(providers(key.provider).describe(key))
     row = BankEncryptionKey(
@@ -101,6 +102,7 @@ def bank_key(db: Session, organization: str, bank: str) -> BankEncryptionKey | N
 
 
 def scoped_key(db: Session, *, bank_id: str, organization_id: str) -> BankEncryptionKey:
+    lock_bank_version(db, organization_id, bank_id)
     row = db.scalar(
         select(BankEncryptionKey)
         .where(
@@ -121,6 +123,7 @@ def rotate(
     destination: KeyReference,
     providers: ProviderFactory = provider_for,
 ) -> int:
+    lock_bank_version(db, row.organization_id, row.bank_id)
     source = reference(row)
     _lock_keys(db, source, destination)
     if source == destination:
@@ -295,7 +298,6 @@ def lock_bank_version(db: Session, organization: str, bank: str, *, read: bool =
 def _new_version(
     db: Session, row: BankEncryptionKey, key: KeyReference, providers: ProviderFactory
 ) -> ObjectKeyEnvelope:
-    lock_bank_version(db, row.organization_id, row.bank_id)
     digest = context_digest(version_context(row.organization_id, row.bank_id))
     provider = providers(key.provider)
     context = wrapping_context(row.bank_id, digest)
@@ -357,6 +359,7 @@ def current_version(db: Session, row: BankEncryptionKey) -> UUID:
 def initialize_version(
     db: Session, row: BankEncryptionKey, providers: ProviderFactory = provider_for
 ) -> None:
+    lock_bank_version(db, row.organization_id, row.bank_id)
     if row.current_version_id is not None:
         return
     _new_version(

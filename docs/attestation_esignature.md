@@ -532,8 +532,11 @@ version creation takes the exclusive lock. Minting, certification, forward revie
 and transmission retain that lock through commit, including the external send
 and its local receipt. Step-up rechecks freshness after authentication commits
 and before issuing authorization. Ordinary object decryption remains lock-free.
-Administrator key mutations acquire the version lock before locking the bank row,
-so package and review-stage foreign keys cannot form a lock cycle with rotation.
+Administrator and staff key mutations acquire the version lock before locking
+bank or key rows or inserting a key registration. Legacy connection probes take
+the same lock after their external probe and before initialization or observation
+writes. Package and review-stage foreign keys therefore cannot form a lock cycle
+with these mutations. Staff key reads do not acquire mutation locks.
 
 This binds _which register state_ produced the pack, so a later mutation of a
 shareholding or an outlet is detectable against a signed pack even though the

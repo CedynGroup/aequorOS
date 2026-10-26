@@ -102,6 +102,7 @@ def test_connection(
                 "The key failed authentication. Check the key ARN and encryption context, "
                 "then test again."
             )
+        registry.lock_bank_version(db, ctx.organization_id, bank_id)
         connected = db.scalar(
             select(BankEncryptionKey)
             .where(
@@ -119,6 +120,7 @@ def test_connection(
     except KeyUnavailableError as exc:
         passed = False
         message = str(exc)
+    registry.lock_bank_version(db, ctx.organization_id, bank_id)
     checked_at = utc_now()
     observation = (
         update(BankEncryptionKey)

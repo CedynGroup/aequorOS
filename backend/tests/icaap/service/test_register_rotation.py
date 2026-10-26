@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import time
 from collections.abc import Mapping, Sequence
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from threading import Event
 from typing import Literal, cast
 
 import pytest
-from sqlalchemy import Engine, select, text
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from app.attestation.service import digests, register_state
@@ -39,6 +38,7 @@ from tests.icaap.service.p3_support import access_for
 from tests.reporting.service import test_regulatory_reporting_channels as channels
 from tests.support.factories.filing_chain import complete_chain
 from tests.support.helpers import ORG_1
+from tests.support.key_concurrency import assert_blocked, backend_pid
 
 pytestmark = [pytest.mark.committing_db, pytest.mark.usefixtures("return_generation_authority")]
 exporter_calls = channels.exporter_calls
@@ -63,10 +63,6 @@ def postgres(db_session: Session) -> Engine:
     return engine
 
 
-def _pid(db: Session) -> int:
-    return cast(int, db.scalar(text("SELECT pg_backend_pid()")))
-
-
 def _prepare_key(db: Session, monkeypatch: pytest.MonkeyPatch, *, connected: bool) -> None:
     provider = LocalKeyProvider()
     provider.add_key(ADMIN_KEY.reference())
@@ -88,28 +84,11 @@ def _prepare_key(db: Session, monkeypatch: pytest.MonkeyPatch, *, connected: boo
 def _change_key(engine: Engine, started: Queue[int], action: Literal["connect", "rotate"]) -> None:
     with Session(engine) as writer:
         writer.info["organization_id"] = ORG_1
-        started.put(_pid(writer))
+        started.put(backend_pid(writer))
         if action == "connect":
             bank_encryption.connect(writer, channels.MAKER, SAMPLE_BANK_ID, ADMIN_KEY)
         else:
             bank_encryption.rotate(writer, channels.MAKER, SAMPLE_BANK_ID, ADMIN_ROTATION)
-
-
-def _assert_blocked(engine: Engine, blocker: int, waiter: int, rotation: Future[None]) -> None:
-    deadline = time.monotonic() + 5
-    blocked = False
-    with engine.connect() as observer:
-        while not blocked and not rotation.done() and time.monotonic() < deadline:
-            blocked = cast(
-                bool,
-                observer.scalar(
-                    text("SELECT :blocker = ANY(pg_blocking_pids(:waiter))"),
-                    {"blocker": blocker, "waiter": waiter},
-                ),
-            )
-            if not blocked:
-                time.sleep(0.01)
-    assert blocked
 
 
 @pytest.mark.parametrize("kind", ["ordinary", "icaap"])
@@ -132,12 +111,12 @@ def test_register_projection_pins_rotation_through_package_mint(
     committed = digests.register_state_digest(
         register_state.project_register_state(db, access.ctx, SAMPLE_BANK_ID)
     )
-    reader = _pid(db)
+    reader = backend_pid(db)
     started: Queue[int] = Queue()
     with ThreadPoolExecutor(max_workers=1) as pool:
         rotation = pool.submit(_change_key, postgres, started, action)
         try:
-            _assert_blocked(postgres, reader, started.get(timeout=5), rotation)
+            assert_blocked(postgres, reader, started.get(timeout=5), rotation)
             if cycle is None:
                 read = generation.generate_package(
                     db,
@@ -227,12 +206,12 @@ def test_admin_key_change_waits_for_guarded_stage_insert(
             db, channels.MAKER, SAMPLE_BANK_ID, package_id, PackageApprovalRequestCreate()
         )
     attestation.ensure_register_current(db, channels.MAKER, package)
-    reader = _pid(db)
+    reader = backend_pid(db)
     started: Queue[int] = Queue()
     with ThreadPoolExecutor(max_workers=1) as pool:
         change = pool.submit(_change_key, postgres, started, action)
         try:
-            _assert_blocked(postgres, reader, started.get(timeout=5), change)
+            assert_blocked(postgres, reader, started.get(timeout=5), change)
             if stage == "start":
                 workflow.request_approval(
                     db, channels.MAKER, SAMPLE_BANK_ID, package_id, PackageApprovalRequestCreate()
@@ -295,7 +274,7 @@ def test_rotation_waits_for_remote_receipt_and_local_submission_commit(
     def send() -> None:
         with Session(postgres) as sender:
             sender.info["organization_id"] = ORG_1
-            sender_pid.put(_pid(sender))
+            sender_pid.put(backend_pid(sender))
             workflow.submit_package_via_channel(
                 sender,
                 channels.MAKER,
@@ -312,7 +291,7 @@ def test_rotation_waits_for_remote_receipt_and_local_submission_commit(
                 sending.result(timeout=5)
                 pytest.fail("The sandbox did not accept the filing.")
             rotation = pool.submit(_change_key, postgres, rotation_pid, "rotate")
-            _assert_blocked(
+            assert_blocked(
                 postgres, sender_pid.get(timeout=5), rotation_pid.get(timeout=5), rotation
             )
         finally:
