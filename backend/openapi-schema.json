@@ -52611,23 +52611,165 @@
         "title": "RelatedPartyRoleRead",
         "type": "object"
       },
-      "RelatedPartyUpdate": {
+      "RelatedPartyRoleUpdate": {
         "additionalProperties": false,
-        "description": "Full replacement; ``roles`` is replace-on-write.",
         "properties": {
-          "contact": {
-            "additionalProperties": true,
-            "title": "Contact",
-            "type": "object"
+          "annual_fees": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Fees"
           },
-          "full_name": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Full Name",
+          "appointed_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Appointed On"
+          },
+          "icag_registration": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icag Registration"
+          },
+          "other_responsibilities": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other Responsibilities"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelatedPartyRoleCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role_id": {
+            "format": "uuid",
+            "title": "Role Id",
             "type": "string"
           },
+          "sitting_allowance": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sitting Allowance"
+          },
+          "term_of_appointment": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Of Appointment"
+          },
+          "travel_allowance": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travel Allowance"
+          }
+        },
+        "required": [
+          "role_id"
+        ],
+        "title": "RelatedPartyRoleUpdate",
+        "type": "object"
+      },
+      "RelatedPartyUpdate": {
+        "additionalProperties": false,
+        "description": "Supplied fields change; explicit roles replace, role_updates retain IDs.",
+        "properties": {
+          "contact": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
           "party_type": {
-            "$ref": "#/components/schemas/PartyType"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartyType"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reason": {
             "maxLength": 500,
@@ -52636,9 +52778,15 @@
             "type": "string"
           },
           "regulated_elsewhere": {
-            "default": false,
-            "title": "Regulated Elsewhere",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulated Elsewhere"
           },
           "regulated_jurisdiction": {
             "anyOf": [
@@ -52652,6 +52800,13 @@
             ],
             "title": "Regulated Jurisdiction"
           },
+          "role_updates": {
+            "items": {
+              "$ref": "#/components/schemas/RelatedPartyRoleUpdate"
+            },
+            "title": "Role Updates",
+            "type": "array"
+          },
           "roles": {
             "items": {
               "$ref": "#/components/schemas/RelatedPartyRoleInput"
@@ -52660,14 +52815,18 @@
             "type": "array"
           },
           "status": {
-            "$ref": "#/components/schemas/PartyStatus",
-            "default": "active"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartyStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
-          "reason",
-          "party_type",
-          "full_name"
+          "reason"
         ],
         "title": "RelatedPartyUpdate",
         "type": "object"
