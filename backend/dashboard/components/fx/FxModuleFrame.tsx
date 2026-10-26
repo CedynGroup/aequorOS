@@ -7,6 +7,7 @@
  * a render prop so the payload is fetched (and cached) once per query key.
  */
 
+import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
 import ValidationList from "@/components/ui/ValidationList";
 import PageContainer from "@/components/ui/PageContainer";
 import type { ReactNode } from "react";
@@ -58,11 +59,18 @@ export default function FxModuleFrame({
         title={title}
         action={
           data ? (
-            <LiveEngineNote live={data.live} stored={data.stored} />
+            <LiveEngineNote
+              live={data.live}
+              stored={data.stored}
+              dataAsOf={data.period.periodEnd}
+            />
           ) : undefined
         }
       />
 
+      <PageContainer className="py-4">
+        <RunModuleScenarios module="fx" />
+      </PageContainer>
       <QueryBoundary
         isLoading={dashboard.isLoading}
         error={dashboard.error}

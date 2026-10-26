@@ -56,7 +56,7 @@ describe("liquidity navigation grants", () => {
               riskConfidentialView: risk,
             }),
           );
-          // Independent policy table: SDIs have no Basel buffer/NSFR; stress couples LIQ and RISK.
+          // Independent policy table: SDIs have no Basel buffer/NSFR; module scenarios need only Liquidity authority.
           const hidden =
             institutionClass === "sdi" &&
             ["/liquidity/buffer", "/liquidity/nsfr"].includes(route);
@@ -68,9 +68,7 @@ describe("liquidity navigation grants", () => {
               "/liquidity/stress",
             ].includes(route) ||
             (institutionClass === "sdi" && route === "/liquidity");
-          const allowed =
-            (needsConfidential ? confidential : aggregated) &&
-            (route !== "/liquidity/stress" || risk);
+          const allowed = needsConfidential ? confidential : aggregated;
           expect(actual.state).toBe(
             hidden ? "hidden" : allowed ? "enabled" : "disabled",
           );

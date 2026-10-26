@@ -48,6 +48,8 @@
     "e2e",
     "playwright.config.ts",
     "visual",
-    "playwright.visual.config.ts"
+    "playwright.visual.config.ts",
+    "contracts",
+    "playwright.contracts.config.ts"
   ]
 }

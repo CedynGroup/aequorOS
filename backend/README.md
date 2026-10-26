@@ -502,6 +502,9 @@ existing **Full suite on Postgres**, **Postgres schema, RLS and locks**, and
 collection manifests and JUnit reports; the aggregates verify that their union
 contains every expected test exactly once, preserve the full-suite execution
 floor, and reject any skipped schema/RLS or live OpenBao test.
+Failed schema and suite shards also upload `postgres.log` as
+`pg-schema-server-log-<shard>` or `pg-suite-server-log-<shard>` when the log
+exists, retained for seven days.
 
 Main pushes and queued merge results always run the full suite. On pull requests,
 only changes confined to the
@@ -561,7 +564,7 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
   the migrations read (`jurisdictions`; `institution_types.seed_rows`;
   `regulatory_parameters.seed_rows`) — add a new registry there once and both callers get
   it. A missing registry surfaces as a fail-closed 409 naming a seed migration.
-  Shared live-plane preparation, the separate real-worker journey and full Playwright
+  Shared live-plane preparation, the separate real-worker journeys and full Playwright
   prerequisites (object storage included) are owned by the
   [dashboard end-to-end guide](dashboard/README.md#end-to-end-playwright); for SSO, see its
   [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).
