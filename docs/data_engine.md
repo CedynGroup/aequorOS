@@ -621,22 +621,18 @@ After acceptance, every attempted identity-field change produces a non-configura
 
 ### 8.4 Audit Log
 
-Separate from the lineage graph, `audit_events` records selected business and
-authorization actions. Database-enforced audit chains, append-only guards and
-verification follow [the tamper-evident records contract](../backend/docs/tamper_evident_records.md#audit-chain).
+Audit evidence is separate from the lineage graph. Event coverage, bank
+attribution, access and verification are governed by
+[the bank audit contract](../backend/docs/tamper_evident_records.md#bank-audit-read-api).
 The storage access recorder has a separate hash chain. Neither establishes
 complete login history, a bank SIEM feed or an approved operational retention
 period.
 
 **Planned:** login history and account audit visibility under
 [#297](https://github.com/CedynGroup/aequorOS/issues/297) and
-[#131](https://github.com/CedynGroup/aequorOS/issues/131); bank-visible staff
-access under [#351](https://github.com/CedynGroup/aequorOS/issues/351).
+[#131](https://github.com/CedynGroup/aequorOS/issues/131).
 **To confirm:** the security owner must provide the log coverage, SIEM delivery
 plan and retention schedule. See the [BoG evidence pack](compliance/bog-evidence-pack.md).
-
-Database audit-chain enforcement and verification are governed by
-[the tamper-evident records contract](../backend/docs/tamper_evident_records.md).
 
 ---
 

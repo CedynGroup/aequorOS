@@ -15,7 +15,7 @@ policy.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -71,8 +71,10 @@ _CONTENT_BLOCKS = (
 )
 
 
-def _current_plan(db: Session, ctx: TenantContext, bank: Bank) -> ContingencyFundingPlan | None:
-    return db.scalar(
+def _current_plan(
+    db: Session, ctx: TenantContext, bank: Bank, *, for_update: bool = False
+) -> ContingencyFundingPlan | None:
+    statement = (
         select(ContingencyFundingPlan)
         .where(
             ContingencyFundingPlan.organization_id == ctx.organization_id,
@@ -81,6 +83,9 @@ def _current_plan(db: Session, ctx: TenantContext, bank: Bank) -> ContingencyFun
         .order_by(ContingencyFundingPlan.version.desc())
         .limit(1)
     )
+    if for_update:
+        statement = statement.with_for_update().execution_options(populate_existing=True)
+    return db.scalar(statement)
 
 
 def _approved_plan(db: Session, ctx: TenantContext, bank: Bank) -> ContingencyFundingPlan | None:
@@ -102,11 +107,20 @@ def _approval_overdue(plan: ContingencyFundingPlan) -> bool:
     return plan.approval_expires_at < utc_now().date()
 
 
+def _revision(plan: ContingencyFundingPlan) -> str:
+    updated_at = plan.updated_at
+    updated_at = (
+        updated_at.replace(tzinfo=UTC) if updated_at.tzinfo is None else updated_at.astimezone(UTC)
+    )
+    return f"{plan.id}:{plan.version}:{updated_at.isoformat(timespec='microseconds')}"
+
+
 def _read(plan: ContingencyFundingPlan) -> CfpRead:
     return CfpRead(
         id=plan.id,
         bank_id=plan.bank_id,
         version=plan.version,
+        revision=_revision(plan),
         status=plan.status,  # pyright: ignore[reportArgumentType]
         content=CfpContent.model_validate(plan.content),
         prepared_by=plan.prepared_by,
@@ -159,7 +173,7 @@ def ewi_dashboard(
 def put_cfp(db: Session, ctx: TenantContext, bank_id: str, payload: CfpPut) -> CfpRead:
     """Create or update the draft plan (a new draft supersedes no approval)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
-    current = _current_plan(db, ctx, bank)
+    current = _current_plan(db, ctx, bank, for_update=True)
     permission = (
         Permission.EDIT if current is not None and current.status == "draft" else Permission.CREATE
     )
@@ -233,7 +247,7 @@ def _require_directive_complete(content: CfpContent) -> None:
 
 def approve_cfp(db: Session, ctx: TenantContext, bank_id: str, payload: CfpApprove) -> CfpRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    plan = _current_plan(db, ctx, bank)
+    plan = _current_plan(db, ctx, bank, for_update=True)
     if plan is None or plan.status != "draft":
         scoped_authorization.require_resolved_bank_permission(
             db,
@@ -296,6 +310,17 @@ def approve_cfp(db: Session, ctx: TenantContext, bank_id: str, payload: CfpAppro
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=scoped_authorization.DEFAULT_DENIAL_DETAIL,
+        )
+    if payload.expected_revision != _revision(plan):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "stale_cfp_revision",
+                "message": (
+                    "The plan changed since you loaded it. Reload the latest plan "
+                    "and review it before approving."
+                ),
+            },
         )
     _require_directive_complete(CfpContent.model_validate(plan.content))
     now = utc_now()
@@ -458,6 +483,14 @@ def activate_cfp(
                     "No Board-approved contingency funding plan exists; approve a "
                     "plan before activating it."
                 ),
+            },
+        )
+    if plan.approval_expires_at is None or _approval_overdue(plan):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "cfp_approval_expired",
+                "message": "Renew Board approval before activating this plan.",
             },
         )
     if plan.active:

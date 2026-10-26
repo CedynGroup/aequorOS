@@ -1,17 +1,12 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Eye, ShieldAlert } from 'lucide-react';
-import { startInspectorSession } from '@/lib/api';
-import { useInspector } from '@/lib/inspector';
-import { useMutation } from '@/lib/use-api';
-import {
-  Button,
-  Field,
-  Modal,
-  Select,
-  Textarea,
-} from '@/components/ui';
+import { useState } from "react";
+import { Eye, ShieldAlert } from "lucide-react";
+import { startInspectorSession } from "@/lib/api";
+import { useInspector } from "@/lib/inspector";
+import { inspectorHours } from "@/lib/inspector-duration";
+import { useMutation } from "@/lib/use-api";
+import { Button, Field, Input, Modal, Select, Textarea } from "@/components/ui";
 
 /**
  * Launches a time-boxed, audited Tenant Inspector session against one org.
@@ -25,9 +20,9 @@ import {
 // consent = a read-only look with the tenant's knowledge; break_glass = an
 // emergency read-only session without consent (admin-gated). Both are the
 // backend's InspectorMode values, sent as-is.
-type InspectMode = 'consent' | 'break_glass';
+type InspectMode = "consent" | "break_glass";
 
-const TTL_PRESETS = [15, 30, 60, 120];
+const TTL_PRESETS = [15, 30, 60];
 
 export function InspectTenantButton({
   orgId,
@@ -38,24 +33,30 @@ export function InspectTenantButton({
 }) {
   const { setActive } = useInspector();
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState('');
-  const [mode, setMode] = useState<InspectMode>('consent');
+  const [reason, setReason] = useState("");
+  const [supportReference, setSupportReference] = useState("");
+  const [mode, setMode] = useState<InspectMode>("consent");
   const [ttl, setTtl] = useState(30);
+  const [durationUnit, setDurationUnit] = useState<"hours" | "minutes">(
+    "hours",
+  );
 
   const start = useMutation(startInspectorSession, {
-    successMessage: 'Inspector session started',
-    errorContext: 'Start inspector session',
+    successMessage: "Inspector session started",
+    errorContext: "Start inspector session",
     onSuccess: (session) => {
       setActive(session);
       setOpen(false);
-      setReason('');
-      setMode('consent');
+      setReason("");
+      setSupportReference("");
+      setMode("consent");
       setTtl(30);
+      setDurationUnit("hours");
     },
   });
 
   const reasonValid = reason.trim().length >= 3;
-  const breakGlass = mode === 'break_glass';
+  const breakGlass = mode === "break_glass";
 
   return (
     <>
@@ -76,34 +77,41 @@ export function InspectTenantButton({
         size="md"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setOpen(false)} disabled={start.loading}>
+            <Button
+              variant="ghost"
+              onClick={() => setOpen(false)}
+              disabled={start.loading}
+            >
               Cancel
             </Button>
             <Button
-              variant={breakGlass ? 'danger' : 'primary'}
+              variant={breakGlass ? "danger" : "primary"}
               loading={start.loading}
-              disabled={!reasonValid}
-              icon={breakGlass ? <ShieldAlert size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
+              disabled={!reasonValid || !supportReference.trim()}
+              icon={
+                breakGlass ? (
+                  <ShieldAlert size={14} aria-hidden />
+                ) : (
+                  <Eye size={14} aria-hidden />
+                )
+              }
               onClick={() =>
                 void start.mutate({
                   organization_id: orgId,
                   reason: reason.trim(),
+                  support_reference: supportReference.trim(),
                   mode,
                   ttl_minutes: ttl,
                 })
               }
             >
-              {breakGlass ? 'Break glass' : 'Start read-only'}
+              {breakGlass ? "Break glass" : "Start read-only"}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
-          <Field
-            label="Reason"
-            required
-            hint="Recorded verbatim in the audit log and shown in the active-session banner."
-          >
+          <Field label="Reason" required>
             <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -113,44 +121,71 @@ export function InspectTenantButton({
             />
           </Field>
 
+          <Field label="Support reference" required>
+            <Input
+              value={supportReference}
+              onChange={(e) => setSupportReference(e.target.value)}
+              maxLength={200}
+              placeholder="Ticket or incident reference"
+            />
+          </Field>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Mode">
-              <Select value={mode} onChange={(e) => setMode(e.target.value as InspectMode)}>
-                <option value="consent">Consent — read-only</option>
-                <option value="break_glass">Break glass — emergency, no consent</option>
+              <Select
+                value={mode}
+                onChange={(e) => setMode(e.target.value as InspectMode)}
+              >
+                <option value="consent">Consent (read-only)</option>
+                <option value="break_glass">
+                  Break glass (emergency, no consent)
+                </option>
               </Select>
             </Field>
-            <Field label="Duration">
-              <Select value={String(ttl)} onChange={(e) => setTtl(Number(e.target.value))}>
-                {TTL_PRESETS.map((m) => (
-                  <option key={m} value={m}>
-                    {m} minutes
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            <div className="grid grid-cols-2 items-start gap-2">
+              <Field label="Session duration" htmlFor="tenant-inspect-duration">
+                <Select
+                  id="tenant-inspect-duration"
+                  value={String(ttl)}
+                  onChange={(e) => setTtl(Number(e.target.value))}
+                >
+                  {TTL_PRESETS.map((m) => (
+                    <option key={m} value={m}>
+                      {durationUnit === "hours"
+                        ? `${inspectorHours(m)} h`
+                        : `${m} min`}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Unit" htmlFor="tenant-inspect-duration-unit">
+                <Select
+                  id="tenant-inspect-duration-unit"
+                  aria-label="Session duration unit"
+                  value={durationUnit}
+                  onChange={(e) =>
+                    setDurationUnit(
+                      e.target.value === "minutes" ? "minutes" : "hours",
+                    )
+                  }
+                >
+                  <option value="hours">Hours</option>
+                  <option value="minutes">Minutes</option>
+                </Select>
+              </Field>
+            </div>
           </div>
 
-          <div
-            className={`rounded-md border p-3 text-caption ${
-              breakGlass
-                ? 'border-critical/40 bg-critical-light text-critical'
-                : 'border-warning/40 bg-warning-light text-warning'
-            }`}
-          >
-            {breakGlass ? (
+          {breakGlass && (
+            <div className="rounded-md border border-critical/40 bg-critical-light p-3 text-caption text-critical">
               <p>
-                <span className="font-medium">Break glass</span> opens a read / write session — you
-                will be able to modify this tenant&apos;s data. Use only for an emergency the tenant
-                cannot resolve themselves.
+                <span className="font-medium">Break glass</span> opens a read /
+                write session — you will be able to modify this tenant&apos;s
+                data. Use only for an emergency the tenant cannot resolve
+                themselves.
               </p>
-            ) : (
-              <p>
-                A <span className="font-medium">read-only</span> session lets you view this
-                tenant&apos;s data without any ability to change it.
-              </p>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </Modal>
     </>

@@ -8,7 +8,9 @@
     "**/*.ts",
     "../playwright.config.ts",
     "../visual/**/*.ts",
-    "../playwright.visual.config.ts"
+    "../playwright.visual.config.ts",
+    "../contracts/**/*.ts",
+    "../playwright.contracts.config.ts"
   ],
   "exclude": []
 }

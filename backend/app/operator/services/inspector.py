@@ -41,6 +41,7 @@ def session_read(row: OperatorInspectorSession) -> InspectorSessionRead:
         started_at=row.started_at,
         expires_at=row.expires_at,
         reason=row.reason,
+        support_reference=row.support_reference,
         ended_at=row.ended_at,
         ended_by=row.ended_by,
     )
@@ -53,6 +54,7 @@ def start_session(  # noqa: PLR0913 - one argument per session attribute
     started_by: str,
     mode: str,
     reason: str,
+    support_reference: str,
     ttl_minutes: int,
 ) -> OperatorInspectorSession:
     """Stage an inspection window against a tenant (404 if unknown org).
@@ -67,6 +69,7 @@ def start_session(  # noqa: PLR0913 - one argument per session attribute
         started_by=started_by,
         mode=mode,
         reason=reason,
+        support_reference=support_reference,
         read_only=True,
         started_at=now,
         expires_at=now + timedelta(minutes=ttl_minutes),

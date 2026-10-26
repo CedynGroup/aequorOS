@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.core.key_management.schemas import BankKeyConnect
 from app.schemas.common import JsonObject
@@ -144,6 +144,7 @@ type ActivityKind = Literal["ingestion_batch", "job", "official_run", "package",
 
 
 class ActivityItemRead(ClosedModel):
+    bank_id: str | None = None
     ts: datetime
     kind: ActivityKind
     summary: str
@@ -285,8 +286,10 @@ class OperatorAuditLogListRead(ClosedModel):
     activity feed). Filtered, paginated, newest-first."""
 
     items: list[OperatorAuditLogRead]
-    #: Total rows matching the filters (before ``limit``/``offset``).
+    #: Total rows matching the filters (before the cursor and ``limit``).
     total: int
+    as_of: datetime
+    next_cursor: str | None = None
 
 
 # -- fleet overview --------------------------------------------------------------
@@ -385,6 +388,9 @@ type InspectorMode = Literal["consent", "break_glass"]
 class InspectorSessionCreate(ClosedModel):
     organization_id: str = Field(min_length=1, max_length=16)
     reason: str = Field(min_length=1, max_length=2000)
+    support_reference: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
+    ]
     mode: InspectorMode
     #: Session lifetime in minutes (15–60); enforcement lives in
     #: ``app.operator.inspection``.
@@ -396,11 +402,13 @@ class InspectorSessionRead(ClosedModel):
     organization_id: str
     mode: InspectorMode
     #: Descriptive flag; see ``OperatorInspectorSession`` for the access contract.
+    #: Separately minted examiner tokens grant only reads.
     read_only: bool
     started_by: str
     started_at: datetime
     expires_at: datetime
     reason: str
+    support_reference: str | None = None
     ended_at: datetime | None = None
     ended_by: str | None = None
 

@@ -307,7 +307,7 @@ back to them, with the comment that sent it.
 - No control is rendered that the server would refuse for this principal at this stage; and every
   control that is rendered-but-disabled states why.
 - The e2e journeys are rewritten to walk the three roles as three sessions. They encode today's
-  two-step flow and must be **rewritten to assert the new rule, never loosened to pass**.
+  chain and must **assert the new rule, never be loosened to pass**.
 
 ## 5. Risks, and what must not regress
 
@@ -316,14 +316,8 @@ back to them, with the comment that sent it.
 - **ORASS parity.** `rejected` (returned for correction) and `declined` (final refusal) are the
   REGULATOR's outcomes and are not stages. Keep them distinct from an internal send-back, or the
   audit trail conflates "BoG rejected this" with "our Approver sent it back".
-- **The e2e journeys** (`full-lifecycle`, the four attestation specs) encode today's two-step
-  flow and will need rewriting to the new chain — **rewritten to assert the new rule, never
-  loosened to pass**. Step 1 took the first bite: `scripts/e2e_bootstrap.py` seeds a
-  `validator` fixture (read sentence + filing sentence) and `full-lifecycle` journeys 1–3
-  now submit and poll in that third session instead of the preparer's. They have not been
-  run, so treat the first run after this change as the verification. Follow the
-  [dashboard E2E guidance](../dashboard/README.md#end-to-end-playwright) for local
-  execution and CI dispatch.
+- **The e2e journeys.** The [dashboard E2E guidance](../dashboard/README.md#end-to-end-playwright)
+  owns current filing-journey coverage, local execution and CI dispatch.
 - **Rehearsal packages** (D-068) must remain unfilable through every new path.
 
 ## 6. Recommended sequencing

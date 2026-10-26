@@ -27,7 +27,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -38,7 +38,6 @@ from app.domain.authority.registry import MetricFamily
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank, User
 from app.models import (
-    BankFinancialFact,
     BankReportingPeriod,
     Job,
     LiveFinding,
@@ -410,9 +409,8 @@ def _mark_prior_live_metrics_unavailable(
 def run_official(session: Session, job: Job) -> None:
     """Immutable tier: mint the official 22-scenario + forecast runs for a bank.
 
-    Reuses ``data_activation.run_official_modules``. Facts are re-derived only
-    when the period has none, so repeat official runs on unchanged facts
-    reproduce the same immutable ``input_hash`` per run.
+    Reuses ``data_activation.run_official_modules`` after deriving period facts
+    from the accepted canonical book. Prior runs retain their frozen inputs.
     """
     ctx = _ctx_from_job(session, job, require_actor=True)
     bank = _bank_or_error(session, ctx, job)
@@ -434,22 +432,14 @@ def run_official(session: Session, job: Job) -> None:
     as_of = _as_of_from_payload(job)
 
     period = _find_period(session, ctx, bank, as_of)
-    if period is None or not _has_facts(session, ctx, bank, period):
-        derivation = derive_facts(session, ctx, bank.id, as_of)
-        session.commit()
-        period_id = derivation.reporting_period_id
-    else:
-        # Facts already exist, so the derivation — and with it the only place
-        # the balance-sheet control used to run — is skipped for input_hash
-        # stability. That skipped the CONTROL too (audit 2026-08-22 D-3a): a
-        # later ingestion at this as-of can break the identity while the facts
-        # sit there balanced and stale, and the scheduled run minted immutable
-        # runs on them with no verdict anywhere in the chain. The gate is
-        # read-only, so reproducibility is untouched.
-        period_id = period.id
+    if period is not None:
         filing_reconciliation.assert_filing_reconciled(
-            session, ctx, bank, as_of=as_of, period_id=period_id, purpose="official_run"
+            session, ctx, bank, as_of=as_of, period_id=period.id, purpose="official_run"
         )
+
+    derivation = derive_facts(session, ctx, bank.id, as_of)
+    session.commit()
+    period_id = derivation.reporting_period_id
 
     runs = data_activation.run_official_modules(session, ctx, bank.id, period_id)
     record_event(
@@ -802,18 +792,3 @@ def _ensure_live_period(
     session.add(period)
     session.flush()
     return period
-
-
-def _has_facts(
-    session: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
-) -> bool:
-    count = session.scalar(
-        select(func.count())
-        .select_from(BankFinancialFact)
-        .where(
-            BankFinancialFact.organization_id == ctx.organization_id,
-            BankFinancialFact.bank_id == bank.id,
-            BankFinancialFact.reporting_period_id == period.id,
-        )
-    )
-    return bool(count)

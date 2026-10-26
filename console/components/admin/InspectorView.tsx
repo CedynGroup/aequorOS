@@ -35,10 +35,16 @@ import {
 } from "@/components/ui";
 import { AdminBoundary } from "./AdminBoundary";
 import { isSessionLive } from "./util";
+import {
+  inspectorDurationValue,
+  inspectorDurationMinutes,
+  type InspectorDurationUnit,
+} from "@/lib/inspector-duration";
 
 interface StartForm {
   organization_id: string;
   reason: string;
+  support_reference: string;
   mode: InspectorMode;
   ttl_minutes: number;
 }
@@ -46,6 +52,7 @@ interface StartForm {
 const BLANK_FORM: StartForm = {
   organization_id: "",
   reason: "",
+  support_reference: "",
   mode: "consent",
   ttl_minutes: 30,
 };
@@ -56,6 +63,8 @@ export default function InspectorView() {
   const [activeOnly, setActiveOnly] = useState(false);
   const [orgFilter, setOrgFilter] = useState("");
   const [startOpen, setStartOpen] = useState(false);
+  const [durationUnit, setDurationUnit] =
+    useState<InspectorDurationUnit>("hours");
   const [form, setForm] = useState<StartForm>(BLANK_FORM);
   const [formErr, setFormErr] = useState<
     Partial<Record<keyof StartForm, string>>
@@ -110,6 +119,7 @@ export default function InspectorView() {
 
   function openStart() {
     setForm(BLANK_FORM);
+    setDurationUnit("hours");
     setFormErr({});
     startM.reset();
     setStartOpen(true);
@@ -121,18 +131,24 @@ export default function InspectorView() {
       errs.organization_id = "Choose a tenant to inspect.";
     if (!form.reason.trim())
       errs.reason = "A reason is required and is written to the audit log.";
+    if (!form.support_reference.trim())
+      errs.support_reference = "A support reference is required.";
     if (
       !Number.isFinite(form.ttl_minutes) ||
       form.ttl_minutes < 15 ||
       form.ttl_minutes > 60
     ) {
-      errs.ttl_minutes = "TTL must be between 15 and 60 minutes.";
+      errs.ttl_minutes =
+        durationUnit === "hours"
+          ? "Session duration must be between 0.25 and 1 hour."
+          : "Session duration must be between 15 and 60 minutes.";
     }
     setFormErr(errs);
     if (Object.keys(errs).length > 0) return;
     void startM.mutate({
       organization_id: form.organization_id,
       reason: form.reason.trim(),
+      support_reference: form.support_reference.trim(),
       mode: form.mode,
       ttl_minutes: form.ttl_minutes,
     });
@@ -324,9 +340,9 @@ export default function InspectorView() {
               All inspection is read-only. Consent sessions view tenant data
               with the tenant&apos;s knowledge; break-glass is emergency access
               without consent and requires the operator_admin role — the API
-              returns 403 otherwise, surfaced here. Sessions self-expire at
-              their TTL; state is derived from the expiry (the log is
-              append-only).
+              returns 403 otherwise, surfaced here. Sessions expire
+              automatically when their duration ends; state is derived from the
+              expiry (the log is append-only).
             </InfoTip>
           </span>
         }
@@ -386,7 +402,6 @@ export default function InspectorView() {
         open={startOpen}
         onClose={() => setStartOpen(false)}
         title="Start inspection session"
-        description="Open a time-boxed, audited read-only session against one tenant."
         size="md"
         footer={
           <>
@@ -439,7 +454,6 @@ export default function InspectorView() {
             label="Reason"
             required
             error={formErr.reason}
-            hint="Written verbatim to the audit log and shown on the active-session banner."
             htmlFor="insp-reason"
           >
             <Textarea
@@ -454,6 +468,24 @@ export default function InspectorView() {
             />
           </Field>
 
+          <Field
+            label="Support reference"
+            required
+            error={formErr.support_reference}
+            htmlFor="insp-reference"
+          >
+            <Input
+              id="insp-reference"
+              value={form.support_reference}
+              maxLength={200}
+              invalid={Boolean(formErr.support_reference)}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, support_reference: e.target.value }))
+              }
+              placeholder="Ticket or incident reference"
+            />
+          </Field>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label="Mode"
@@ -461,7 +493,7 @@ export default function InspectorView() {
               hint={
                 form.mode === "break_glass"
                   ? "Break-glass — requires operator_admin."
-                  : "Consent — read-only."
+                  : undefined
               }
               htmlFor="insp-mode"
             >
@@ -475,35 +507,57 @@ export default function InspectorView() {
                   }))
                 }
               >
-                <option value="consent">Consent — with tenant knowledge</option>
+                <option value="consent">Consent (with tenant knowledge)</option>
                 <option value="break_glass">
-                  Break-glass — emergency, admin
+                  Break-glass (emergency, admin)
                 </option>
               </Select>
             </Field>
 
-            <Field
-              label="TTL (minutes)"
-              required
-              error={formErr.ttl_minutes}
-              htmlFor="insp-ttl"
-            >
-              <Input
-                id="insp-ttl"
-                type="number"
-                min={15}
-                max={60}
-                step={5}
-                value={String(form.ttl_minutes)}
-                invalid={Boolean(formErr.ttl_minutes)}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    ttl_minutes: Number(e.target.value),
-                  }))
-                }
-              />
-            </Field>
+            <div className="grid grid-cols-2 items-start gap-2">
+              <Field
+                label="Session duration"
+                required
+                error={formErr.ttl_minutes}
+                htmlFor="insp-ttl"
+              >
+                <Input
+                  id="insp-ttl"
+                  type="number"
+                  min={durationUnit === "hours" ? 0.25 : 15}
+                  max={durationUnit === "hours" ? 1 : 60}
+                  step={durationUnit === "hours" ? 5 / 60 : 5}
+                  value={String(
+                    inspectorDurationValue(form.ttl_minutes, durationUnit),
+                  )}
+                  invalid={Boolean(formErr.ttl_minutes)}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      ttl_minutes: inspectorDurationMinutes(
+                        Number(e.target.value),
+                        durationUnit,
+                      ),
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="Unit" htmlFor="insp-duration-unit">
+                <Select
+                  id="insp-duration-unit"
+                  aria-label="Session duration unit"
+                  value={durationUnit}
+                  onChange={(e) =>
+                    setDurationUnit(
+                      e.target.value === "minutes" ? "minutes" : "hours",
+                    )
+                  }
+                >
+                  <option value="hours">Hours</option>
+                  <option value="minutes">Minutes</option>
+                </Select>
+              </Field>
+            </div>
           </div>
 
           {form.mode === "break_glass" && (

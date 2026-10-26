@@ -43,6 +43,7 @@ def _start_session(
     response = client.post(
         SESSIONS,
         json={
+            "support_reference": "SUP-TEST",
             "organization_id": org_id,
             "reason": "act-as-examiner",
             "mode": "consent",
@@ -69,9 +70,7 @@ def test_mint_success_returns_scoped_token_and_audits(
     session_id = _start_session(operator_client, organization_id, ttl_minutes=60)
 
     before = utc_now()
-    response = operator_client.post(
-        _act_token_url(session_id), headers=operator_headers()
-    )
+    response = operator_client.post(_act_token_url(session_id), headers=operator_headers())
     assert response.status_code == 200, response.text
     body = response.json()
     assert set(body) == {"act_token", "expires_at", "dashboard_url"}
@@ -96,9 +95,7 @@ def test_mint_success_returns_scoped_token_and_audits(
     # Audited as inspector.act_token.mint — and the raw token never appears.
     audit = list(
         operator_db.scalars(
-            select(OperatorAuditLog).where(
-                OperatorAuditLog.action == "inspector.act_token.mint"
-            )
+            select(OperatorAuditLog).where(OperatorAuditLog.action == "inspector.act_token.mint")
         )
     )
     assert len(audit) == 1
@@ -109,9 +106,7 @@ def test_mint_success_returns_scoped_token_and_audits(
 
 
 def test_mint_unknown_session_is_404(operator_client: TestClient) -> None:
-    response = operator_client.post(
-        _act_token_url(str(uuid.uuid4())), headers=operator_headers()
-    )
+    response = operator_client.post(_act_token_url(str(uuid.uuid4())), headers=operator_headers())
     assert response.status_code == 404, response.text
 
 
@@ -125,9 +120,7 @@ def test_mint_ended_session_is_409(operator_client: TestClient) -> None:
     assert response.status_code == 409, response.text
 
 
-def test_mint_expired_session_is_409(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_mint_expired_session_is_409(operator_client: TestClient, operator_db: Session) -> None:
     organization_id = _provision(operator_client)
     session_id = _start_session(operator_client, organization_id)
     # Force the session past its expiry (end_session updates the same row, so
@@ -141,9 +134,7 @@ def test_mint_expired_session_is_409(
     assert response.status_code == 409, response.text
 
 
-def test_mint_by_non_owner_is_403(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_mint_by_non_owner_is_403(operator_client: TestClient, operator_db: Session) -> None:
     organization_id = _provision(operator_client)
     # The dev token (dev@aequoros.com) opens the session …
     session_id = _start_session(operator_client, organization_id)

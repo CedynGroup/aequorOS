@@ -42,6 +42,16 @@ ROLE_EXPECTATIONS: tuple[
     (PrincipalType.HUMAN, RoleBundle.AUDITOR, frozenset({Permission.VIEW})),
     (
         PrincipalType.HUMAN,
+        RoleBundle.SECURITY_OFFICER,
+        frozenset({Permission.VIEW, Permission.EXPORT}),
+    ),
+    (
+        PrincipalType.HUMAN,
+        RoleBundle.COMPLIANCE_OFFICER,
+        frozenset({Permission.VIEW, Permission.EXPORT}),
+    ),
+    (
+        PrincipalType.HUMAN,
         RoleBundle.ANALYST,
         frozenset(
             {

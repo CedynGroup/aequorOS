@@ -120,6 +120,24 @@ IRRBB_SHOCKS: dict[str, dict[str, str]] = {
 }
 
 
+#: Starting bank stress calibrations, carried from the canonical bank fixture.
+#: These are internal scenario assumptions, not regulatory minima.
+BANK_FX_SHOCKS: dict[str, dict[str, str]] = {
+    "mild_depreciation": {"ghs_usd_shock_pct": "10"},
+    "severe_depreciation": {"ghs_usd_shock_pct": "20"},
+    "cedi_crisis": {
+        "ghs_usd_shock_pct": "30",
+        "correlation_uplift": "0.2",
+        "crisis_window_start": "60",
+        "crisis_window_end": "110",
+    },
+}
+BANK_FTP_SHOCKS: dict[str, dict[str, str]] = {
+    "rates_up_200": {"curve_shift_bp": "200"},
+    "funding_stress": {"funding_spread_add_bps": "100"},
+}
+
+
 # ---------------------------------------------------------------------------
 # Bank (CRD) register
 # ---------------------------------------------------------------------------
@@ -291,8 +309,7 @@ def _base_curve_rows(base_curve: dict[str, str] | None) -> dict[str, str]:
     return dict(base_curve or {})
 
 
-def seed_tenant_register(  # noqa: PLR0913 - the institution, approver, dates and
-    # the optional market curve; every one is required to write a governed row
+def seed_tenant_register(  # noqa: PLR0912, PLR0913 - explicit register tables and approval provenance
     db: Session,
     *,
     bank: Bank,
@@ -302,8 +319,8 @@ def seed_tenant_register(  # noqa: PLR0913 - the institution, approver, dates an
 ) -> SeedResult:
     """Create the institution's starting board register. Idempotent.
 
-    Only tables that are EMPTY for this organization are written, so re-running
-    after a board has revised its own limits never overwrites them.
+    Existing register tables are left intact. Bank FX/FTP shocks fill only
+    absent module/scenario/key combinations, preserving every board generation.
 
     The organization, jurisdiction and licence class are the ``bank``'s own
     (resolved fail-closed through the policy chain). The governed capital
@@ -382,6 +399,33 @@ def seed_tenant_register(  # noqa: PLR0913 - the institution, approver, dates an
         skipped[ParamStressShock.__tablename__] = count
 
     if institution_class == "bank":
+        existing_shocks = {
+            (row.module, row.scenario_code, row.shock_key)
+            for row in db.scalars(
+                select(ParamStressShock).where(
+                    ParamStressShock.organization_id == organization_id,
+                    ParamStressShock.jurisdiction_code == jurisdiction_code,
+                )
+            )
+        }
+        bank_shocks = [
+            ParamStressShock(
+                module=module,
+                scenario_code=scenario,
+                shock_key=key,
+                shock_value=Decimal(value),
+                **common,
+            )
+            for module, scenarios in (("fx", BANK_FX_SHOCKS), ("ftp", BANK_FTP_SHOCKS))
+            for scenario, shocks in scenarios.items()
+            for key, value in shocks.items()
+            if (module, scenario, key) not in existing_shocks
+        ]
+        rows += bank_shocks
+        if bank_shocks:
+            table = "param_stress_shock"
+            created[table] = created.get(table, 0) + len(bank_shocks)
+
         if (count := existing(ParamRiskWeight)) == 0:
             rows += [
                 ParamRiskWeight(risk_weight_code=code, weight_pct=Decimal(value), **common)

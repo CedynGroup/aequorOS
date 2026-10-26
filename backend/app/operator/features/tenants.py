@@ -29,6 +29,7 @@ def list_tenants(db: OperatorDb, operator: Operator) -> TenantsListRead:
     record_operator_action(
         db,
         operator,
+        resources=result,
         action="tenants.list",
         detail={"tenant_rows": len(result.tenants)},
     )
@@ -44,16 +45,14 @@ def get_tenant(org_id: str, db: OperatorDb, operator: Operator) -> TenantRead:
     organization_id = normalize_public_id(org_id)
     result = operator_views.get_tenant(db, organization_id)
     record_operator_action(
-        db, operator, action="tenants.get", target_org=organization_id, detail={}
+        db, operator, action="tenants.get", target_org=organization_id, detail={}, resources=result
     )
     db.commit()
     return result
 
 
 @router.get("/{org_id}/users", response_model=TenantUsersListRead)
-def get_tenant_users(
-    org_id: str, db: OperatorDb, operator: Operator
-) -> TenantUsersListRead:
+def get_tenant_users(org_id: str, db: OperatorDb, operator: Operator) -> TenantUsersListRead:
     """The tenant's own user directory, scoped strictly to this org. Requires an
     active Tenant Inspector session (403 otherwise); the read is audited."""
     organization_id = normalize_public_id(org_id)
@@ -91,9 +90,7 @@ def get_tenant_entitlements(
 
 
 @router.get("/{org_id}/storage", response_model=TenantStorageRead)
-def get_tenant_storage(
-    org_id: str, db: OperatorDb, operator: Operator
-) -> TenantStorageRead:
+def get_tenant_storage(org_id: str, db: OperatorDb, operator: Operator) -> TenantStorageRead:
     """Best-effort object-storage view — never fails on the documented MinIO
     quirks (Cloudflare WAF blocks HEAD; no KES). Requires an active Tenant
     Inspector session (403 otherwise); audited."""

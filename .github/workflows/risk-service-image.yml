@@ -1,0 +1,38 @@
+name: Risk Service Image
+
+# Separate from the always-reported Risk service gate: registry availability
+# must not determine whether lint and typecheck pass.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - release
+      - "release/**"
+    # Match the Dockerfile's COPY inputs, plus build configuration. Backend
+    # tests, docs and dashboard changes do not affect this production image.
+    paths:
+      - ".github/workflows/risk-service-image.yml"
+      - "backend/Dockerfile"
+      - "backend/.dockerignore"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
+      - "backend/app/**"
+      - "backend/alembic/**"
+      - "backend/alembic.ini"
+      - "backend/scripts/bootstrap_database.py"
+      - "backend/scripts/database_roles_202610120096.sql"
+      - "backend/scripts/database_roles_local.sql"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build production risk-service image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production risk-service image
+        run: docker build --tag aequoros/risk-service:ci ./backend

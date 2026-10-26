@@ -2002,29 +2002,57 @@ export interface AuditLogItem {
 export interface AuditLogResponse {
   items: AuditLogItem[];
   total: number;
+  as_of: string;
+  next_cursor: string | null;
 }
 
-/** GET /operator/v1/audit — the append-only operator_audit_log, filterable. */
-export function getAudit(opts?: {
+interface AuditLogOptions {
+  asOf?: string;
   operatorEmail?: string;
   targetOrg?: string;
   action?: string;
   from?: string;
   to?: string;
   limit?: number;
-  offset?: number;
-}): Promise<AuditLogResponse> {
+  cursor?: string;
+}
+
+/** GET /operator/v1/audit — the append-only operator_audit_log, filterable. */
+export function getAudit(opts: AuditLogOptions): Promise<AuditLogResponse> {
   return request<AuditLogResponse>(
     `/operator/v1/audit${query({
-      operator_email: opts?.operatorEmail,
-      target_org: opts?.targetOrg,
-      action: opts?.action,
-      from: opts?.from,
-      to: opts?.to,
-      limit: opts?.limit,
-      offset: opts?.offset,
+      operator_email: opts.operatorEmail,
+      target_org: opts.targetOrg,
+      action: opts.action,
+      from: opts.from,
+      to: opts.to ? new Date(opts.to).toISOString() : undefined,
+      as_of: opts.asOf,
+      limit: opts.limit,
+      cursor: opts.cursor,
     })}`,
   );
+}
+
+export function createAuditBrowser(
+  filters: Omit<AuditLogOptions, "asOf" | "limit" | "cursor"> = {},
+) {
+  let firstPage: Promise<AuditLogResponse> | undefined;
+  return async (
+    opts: Pick<AuditLogOptions, "limit" | "cursor">,
+  ): Promise<AuditLogResponse> => {
+    if (firstPage) {
+      const { as_of } = await firstPage;
+      return getAudit({ ...filters, ...opts, asOf: as_of });
+    }
+    const page = getAudit({ ...filters, ...opts });
+    firstPage = page;
+    try {
+      return await page;
+    } catch (error) {
+      firstPage = undefined;
+      throw error;
+    }
+  };
 }
 
 // --------------------------------------------------------------------------
@@ -2351,6 +2379,7 @@ export interface InspectorSession {
   started_at: string;
   expires_at: string;
   reason: string;
+  support_reference?: string | null;
   ended_at: string | null;
   ended_by: string | null;
 }
@@ -2364,6 +2393,7 @@ export interface InspectorSessionsResponse {
 export function startInspectorSession(body: {
   organization_id: string;
   reason: string;
+  support_reference: string;
   mode: InspectorMode;
   ttl_minutes: number;
 }): Promise<InspectorSession> {

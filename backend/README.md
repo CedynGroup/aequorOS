@@ -21,7 +21,8 @@ and local-development exceptions are governed by
 Bank-held object encryption and optional rollout are in
 [the bank key setup guide](docs/bank_key_setup.md).
 
-Audit-chain verification, paging, filing and session retention, backup
+Bank audit reads, Inspector support-reference capture, audit-chain verification,
+paging, filing and session retention, backup
 publication and required migration-role preparation are in
 [the tamper-evident records contract](docs/tamper_evident_records.md).
 
@@ -554,18 +555,15 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
 - Hermetic and Postgres-gated mutation checks follow [Run Tests](#run-tests), including
   its dedicated test-database requirement. Tests against the primary are limited to the
   read-only live-data suite above.
-- **Anything built with `Base.metadata.create_all` runs no migration and no worker, so it
-  must seed what those two would have written.** That is the hermetic pytest
-  suite AND the Playwright stack (`scripts/e2e_bootstrap.py`). Two shared fixtures own it:
-  `tests/fixtures/reference_data.py` seeds every GLOBAL registry from the same catalogues
+- **`Base.metadata.create_all` skips migrations.** The hermetic pytest suite and the
+  shared Playwright bootstrap therefore use `tests/fixtures/reference_data.py` to seed
+  every GLOBAL registry from the same catalogues
   the migrations read (`jurisdictions`; `institution_types.seed_rows`;
   `regulatory_parameters.seed_rows`) — add a new registry there once and both callers get
-  it — and `tests/fixtures/live_plane.py` stands in for the worker's `pipeline_refresh`,
-  because every Treasury/ALM cockpit reads `current_financial_facts`, which only the worker
-  writes. Skip either and the failure is late and misleading: a missing registry surfaces as
-  a fail-closed 409 naming a seed migration, a missing live plane as "no computed data yet"
-  on every module page. Full prerequisites (object storage included):
-  `backend/dashboard/README.md` §End-to-end; for SSO, see its
+  it. A missing registry surfaces as a fail-closed 409 naming a seed migration.
+  Shared live-plane preparation, the separate real-worker journeys and full Playwright
+  prerequisites (object storage included) are owned by the
+  [dashboard end-to-end guide](dashboard/README.md#end-to-end-playwright); for SSO, see its
   [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).
   **Test databases are built once per pytest process, never per test**
   (`backend/tests/conftest.py`): tenant API rollback-isolated tests share one

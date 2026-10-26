@@ -86,6 +86,8 @@ _ROLE_LABELS = {
     RoleBundle.MEMBER: "Member",
     RoleBundle.VIEWER: "Viewer",
     RoleBundle.AUDITOR: "Auditor",
+    RoleBundle.SECURITY_OFFICER: "Security officer",
+    RoleBundle.COMPLIANCE_OFFICER: "Compliance officer",
     RoleBundle.ANALYST: "Analyst",
     RoleBundle.APPROVER: "Approver",
     RoleBundle.VALIDATOR: "Validator",
@@ -556,6 +558,10 @@ _NON_GRANTABLE_BUNDLES = frozenset(
 def validate_public_grant(role_bundle: RoleBundle, scope: authorization.BindingScope) -> None:
     if scope.data_scope is not DataScope.ALL and scope.module_scope is not ModuleScope.CREDIT:
         raise GrantAdministrationError("Branch and region narrowing is supported only for Credit")
+    if role_bundle in {RoleBundle.SECURITY_OFFICER, RoleBundle.COMPLIANCE_OFFICER} and (
+        scope.module_scope is not ModuleScope.AUDIT or scope.data_scope is not DataScope.ALL
+    ):
+        raise GrantAdministrationError("audit officers require whole-institution Audit coverage")
     if role_bundle in _NON_GRANTABLE_BUNDLES:
         raise GrantAdministrationError("this role bundle is not grantable from Members")
     if role_bundle is RoleBundle.ACCOUNT_ADMIN and (
