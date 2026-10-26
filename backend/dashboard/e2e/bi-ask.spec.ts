@@ -1,53 +1,13 @@
-/**
- * Asking a question in words — the confirmation, and what it refuses.
- *
- * WHY THIS FILE HAS TWO HALVES, AND WHY THE SECOND ONE INTERCEPTS.
- *
- * The WIRE half uses real identities and routes to check the no-figures refusal
- * and question ownership. The ownership check inserts a queued job directly in
- * the disposable database: its author can read it, while a same-bank colleague
- * can neither read nor confirm it. This stack runs no `ai`-lane worker, holds no
- * vendor credential and has no approved model configuration; the queued fixture
- * exercises ownership without requiring a model-generated proposal.
- *
- * The SCREEN half drives the confirmation, which needs a `proposed` state that no
- * hermetic stack can produce without a model. So the two ask routes are
- * intercepted with bodies shaped exactly as `app/bi/schemas/nlq.py` declares —
- * the same technique `bi-authorization.spec.ts` uses on `/feature-flags`, and for
- * the same reason: the state under test is a deployment fact, not a data fact.
- * What is NOT faked is the thing that matters most, and it cannot be: the browser
- * makes a real `POST …/run`, and this spec reads its body back out of the request
- * and asserts the query is BYTE-IDENTICAL to the proposal it was shown, including
- * a field the generated client does not know about. That is the one assertion a
- * unit test cannot make, because the hazard lives in the browser's serialisation.
- *
- * WHAT HAS NO JOURNEY HERE, SO NOBODY MISTAKES THE ABSENCE FOR COVERAGE. The
- * AI-gate refusal — the sentence an admin gets on a platform with AI switched off —
- * cannot be reached in this stack today: `app/bi/jobs/bi_nlq.py::request_translation`
- * meters the AI quota BEFORE it honours the gate decision, and the quota query
- * touches `ai_commentary_drafts`, which `Base.metadata.create_all` does not build
- * because `app/bi/models/commentary.py` is not imported by `app/models/__init__.py`.
- * So the route answers 500 rather than its refusal. Diagnosis, traceback and the
- * two-line fix are in `.ai/bi_recon/p5g_ask_surface_report.md`; the refusal itself
- * is covered by `backend/tests/bi/api/test_bi_ask_routes.py`, where the table exists.
- * Add the journey when the ordering is fixed.
- *
- * `BI_NLQ_ENABLED` is set in `playwright.config.ts` beside `BI_ENABLED`, for the
- * same reason and with the same care: with it off the ask routes answer 409 and
- * the shell HIDES the tab, so these journeys would navigate to a walled-up door
- * and pass on an empty state. Setting it sends nothing to any vendor — the AI
- * gates are independent and all shut.
- */
-
+/** Browser question confirmation and lossless query serialization.
+ * Proposed translations are boundary fixtures; no AI worker or vendor runs.
+ * HTTP refusals and existing-question ownership live in contracts/bi-ask.spec.ts. */
 import { expect, test, type Page, type Route } from "@playwright/test";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
 import { E2E_TMP } from "../playwright.config";
-import { biApi, fixtureAsOf, SAMPLE_BANK_ID } from "./support/bi";
-import { E2E_ORG_ID, E2E_USERS } from "./support/mint";
+import { SAMPLE_BANK_ID } from "./support/bi";
 
 const ASK_TAB = "Ask a question";
+
 const QUESTION = "gross loans by branch, largest first";
 
 /**
@@ -149,86 +109,6 @@ async function interceptAsk(
   );
 }
 
-// --- the wire half ----------------------------------------------------------
-
-test.describe("the ask routes", () => {
-  test("refuse a reader whose access covers no figure, naming none", async ({
-    request,
-  }) => {
-    const asOf = await fixtureAsOf(request);
-    // A baseline member holds no BI-source grant, so there is no question they
-    // could ask — and the refusal is decided BEFORE anything leaves the platform.
-    const asked = await biApi(
-      request,
-      "viewer",
-      `/banks/${SAMPLE_BANK_ID}/bi/ask`,
-      { method: "POST", data: { question: QUESTION, as_of: asOf } },
-    );
-    expect(asked.status).toBe(403);
-    const detail =
-      (asked.body as { error?: { details?: Record<string, unknown> } }).error
-        ?.details ?? {};
-    expect(detail.error_code).toBe("bi_ask_no_figures_available");
-    // Production copy: a sentence naming the action an owner would take, and no
-    // figure, id or count that would tell this reader what exists.
-    expect(String(detail.message)).toMatch(/Org Owner/);
-    expect(String(detail.message)).toMatch(/[.!]$/);
-    expect(Object.keys(detail)).toEqual(["error_code", "message"]);
-  });
-
-  test("do not serve one reader's question to another", async ({ request }) => {
-    const id = randomUUID();
-    const db = new DatabaseSync(path.join(E2E_TMP, "e2e.db"));
-    try {
-      // No model or AI worker runs here. Persist only the queue record needed
-      // for ownership, then exercise the real read and confirmation routes.
-      db.prepare(
-        `INSERT INTO jobs
-        (id, organization_id, bank_id, job_type, status, payload, progress,
-         attempts, max_attempts, queued_at)
-        VALUES (?, ?, ?, 'bi_nlq_translate', 'queued', ?, '{}', 0, 3, ?)`,
-      ).run(
-        id.replaceAll("-", ""),
-        E2E_ORG_ID,
-        SAMPLE_BANK_ID,
-        JSON.stringify({
-          principal_user_id: E2E_USERS.admin.id,
-          as_of: await fixtureAsOf(request),
-          payload: { question: QUESTION },
-          offered_member_ids: ["loans.balance_rc"],
-        }),
-        new Date().toISOString(),
-      );
-      const route = `/banks/${SAMPLE_BANK_ID}/bi/ask/${id}`;
-      const owner = await biApi(request, "admin", route);
-      expect(owner.status).toBe(200);
-      expect(owner.body).toMatchObject({ question_id: id, question: QUESTION });
-      // A same-bank colleague must not read or confirm this existing question.
-      const read = await biApi(request, "approver", route);
-      expect(read.status).toBe(404);
-      const run = await biApi(request, "approver", `${route}/run`, {
-        method: "POST",
-        data: {
-          query: {
-            measures: ["loans.balance_rc"],
-            time: { as_of: await fixtureAsOf(request) },
-          },
-        },
-      });
-      expect(run.status).toBe(404);
-      const stillOwned = await biApi(request, "admin", route);
-      expect(stillOwned.status).toBe(200);
-      expect(stillOwned.body).toMatchObject({
-        question_id: id,
-        state: "translating",
-      });
-    } finally {
-      db.prepare("DELETE FROM jobs WHERE id = ?").run(id.replaceAll("-", ""));
-      db.close();
-    }
-  });
-});
-
 // --- the screen half --------------------------------------------------------
 
 test.describe("a reader asking in words", () => {
@@ -263,13 +143,10 @@ test.describe("a reader asking in words", () => {
   test("is shown the platform's refusal, never a reason code", async ({
     page,
   }) => {
-    // THE REFUSAL IS THE SERVER'S SENTENCE, rendered verbatim. It is delivered by
-    // interception because no refusal is reachable end to end in this stack: the
-    // only pre-quota refusal (`bi_ask_no_figures_available`) belongs to a reader
-    // with no institution, whose screen never offers the box at all — asserted on
-    // its own terms in the next journey — and every other refusal is behind the
-    // 500 named in the file docstring. The BODY here is the route's own, copied
-    // from `app/bi/api/ask_bi.py::_unavailable`.
+    // Interception selects the nlq_disabled refusal to check that the browser
+    // renders the server's sentence and withholds its machine reason. The body
+    // follows `app/bi/api/ask_bi.py::_unavailable`; real HTTP authorization and
+    // question ownership are covered in `contracts/bi-ask.spec.ts`.
     await page.route(
       `**/api/v1/banks/${SAMPLE_BANK_ID}/bi/ask`,
       async (route) => {

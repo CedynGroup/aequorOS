@@ -1,5 +1,6 @@
 /** Real grant lifecycle against the disposable backend; no response interception. */
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/story-identities";
 import path from "node:path";
 import { writeFile } from "node:fs/promises";
 import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../playwright.config";
@@ -11,6 +12,16 @@ const moduleRequest = /\/banks\/[^/]+\/(?:forecast|reverse-stress)(?:\/|$)/;
 // Revoke every grant this journey creates. Revoked rows stay in a member's history,
 // so both Forecasting members are identities no other journey grants or counts.
 const createdBindings: string[] = [];
+test.use({
+  storyConfig: {
+    roles: [
+      "account_admin",
+      "invite_fresh",
+      "forecast_member",
+      "forecast_summary_member",
+    ],
+  },
+});
 
 test.afterEach(async ({ request }) => {
   const token = await mintBackendToken("admin");
@@ -78,19 +89,18 @@ test("real Forecasting grants separate summary, confidential reading, and execut
 }) => {
   test.slow();
   const transcript: unknown[] = [];
-  let version = E2E_USERS.forecast_member.authv;
   async function api(
     method: string,
     route: string,
     data?: unknown,
     role = "forecast_member",
-    authv = version,
+    token?: string,
   ) {
     const response = await request.fetch(`${E2E_API_ORIGIN}/api/v1${route}`, {
       method,
       data,
       headers: {
-        Authorization: `Bearer ${await mintBackendToken(role, role === "admin" ? E2E_USERS.admin.authv : authv)}`,
+        Authorization: `Bearer ${token ?? (await mintBackendToken(role))}`,
       },
     });
     const body = await response.json();
@@ -123,7 +133,6 @@ test("real Forecasting grants separate summary, confidential reading, and execut
     );
     expect(created.status).toBe(201);
     createdBindings.push(created.body.binding.id);
-    version += 1;
   }
   async function readerPage() {
     const state = await writeStorageState(
@@ -131,17 +140,7 @@ test("real Forecasting grants separate summary, confidential reading, and execut
       E2E_BASE_URL,
       E2E_TMP,
     );
-    // Storage helper defaults to initial authv; use the current version explicitly.
-    const { mintSessionCookie } = await import("./support/mint");
     const context = await browser.newContext({ storageState: state });
-    await context.addCookies([
-      {
-        name: "authjs.session-token",
-        value: await mintSessionCookie("forecast_member", version),
-        domain: "127.0.0.1",
-        path: "/",
-      },
-    ]);
     return { context, page: await context.newPage() };
   }
   await grant("confidential");
@@ -207,7 +206,7 @@ test("real Forecasting grants separate summary, confidential reading, and execut
       });
     await context.close();
   }
-  const staleVersion = version;
+  const staleToken = await mintBackendToken("forecast_member");
   await grant("confidential", "analyst");
   expect(
     (
@@ -216,7 +215,7 @@ test("real Forecasting grants separate summary, confidential reading, and execut
         `${bank}/forecast/runs`,
         undefined,
         "forecast_member",
-        staleVersion,
+        staleToken,
       )
     ).status,
   ).toBe(401);
@@ -273,13 +272,11 @@ test("real Forecasting grants separate summary, confidential reading, and execut
   );
   expect(summaryBinding.status).toBe(201);
   createdBindings.push(summaryBinding.body.binding.id);
-  const summaryVersion = E2E_USERS.forecast_summary_member.authv + 1;
   const summaries = await api(
     "GET",
     `${bank}/forecast/runs`,
     undefined,
     "forecast_summary_member",
-    summaryVersion,
   );
   expect(summaries.status).toBe(200);
   expect(summaries.body.runs.length).toBeGreaterThan(0);
@@ -290,7 +287,6 @@ test("real Forecasting grants separate summary, confidential reading, and execut
         `${bank}/forecast/runs/${summaries.body.runs[0].id}`,
         undefined,
         "forecast_summary_member",
-        summaryVersion,
       )
     ).status,
   ).toBe(404);
@@ -299,16 +295,7 @@ test("real Forecasting grants separate summary, confidential reading, and execut
     E2E_BASE_URL,
     E2E_TMP,
   );
-  const { mintSessionCookie } = await import("./support/mint");
   const context = await browser.newContext({ storageState: state });
-  await context.addCookies([
-    {
-      name: "authjs.session-token",
-      value: await mintSessionCookie("forecast_summary_member", summaryVersion),
-      domain: "127.0.0.1",
-      path: "/",
-    },
-  ]);
   const page = await context.newPage();
   const details: string[] = [];
   page.on("request", (r) => {

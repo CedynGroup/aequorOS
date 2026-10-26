@@ -1,9 +1,8 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
 /**
- * IRRBB, worked end to end by an analyst: run the scenario set, then read the
- * fixture's repricing ladder, earnings-at-risk, EVE sensitivity and limits back
- * off every tab, and confirm the run the screen started is the one the
- * platform kept.
+ * Independent IRRBB outcomes cover repricing, scenario analytics, breach
+ * history, Appendix II, and board-pack composition and printing. Each story
+ * creates any scenario or stress run its persisted-result assertions need.
  *
  * The expectations are the FIXTURE's, not the screen's. The ladder below is the
  * canonical book's repricing positions (`tests/fixtures/canonical_bank_fixture.py`
@@ -160,22 +159,24 @@ const EVE_SCENARIOS = [
 ];
 const WORST = EVE_SCENARIOS[1];
 
-test.describe("IRRBB functional workflow", () => {
+test.describe("IRRBB repricing, scenario and regulatory evidence outcomes", () => {
   test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
 
-  test("runs the scenario set and reads the fixture's ladder, EaR, EVE and limits", async ({
-    page,
-  }) => {
-    test.setTimeout(120_000);
-    const ear12 = earningsAtRisk(12, 200);
-    // The regulatory 12-month EaR, derived: −7.4506M on a −370M ≤12m gap.
-    expect(ear12).toBeCloseTo(-7.4506, 6);
-    expect(gapInside(12)).toBe(-370);
-
+  test.describe.configure({ timeout: 120_000 });
+  test.beforeEach(async ({ page }) => {
     await page.goto("/irr?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Interest Rate Risk" }).first(),
     ).toBeVisible();
+  });
+
+  test("repricing gaps reconcile the ladder and swap-bucket drill-down", async ({
+    page,
+  }) => {
+    const ear12 = earningsAtRisk(12, 200);
+    // The regulatory 12-month EaR, derived: −7.4506M on a −370M ≤12m gap.
+    expect(ear12).toBeCloseTo(-7.4506, 6);
+    expect(gapInside(12)).toBe(-370);
 
     // ---- Overview: the headline KPIs and the engine's own rule messages.
     await expectKpi(
@@ -207,33 +208,42 @@ test.describe("IRRBB functional workflow", () => {
       ),
     ).toBeVisible();
 
-    // ---- Run the scenario set. The response is the persisted batch.
-    const runButton = page.getByRole("button", { name: "Run IRRBB scenarios" });
-    await expect(runButton).toBeEnabled();
-    const minted = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/irr/run-all-scenarios") &&
-        response.request().method() === "POST",
+    // ---- Gap Analysis: the full ladder, bucket by bucket.
+    await openTab(page, "Gap Analysis");
+    await expectKpi(
+      page,
+      "12-month cumulative gap",
+      signedGhsM(gapInside(12)),
+      "Liability-sensitive over 12 months",
     );
-    await runButton.click();
-    const response = await minted;
-    expect(response.status()).toBe(201);
-    const batch = await response.json();
-    expect(
-      batch.runs.map((run: { scenario_code: string }) => run.scenario_code),
-    ).toEqual([
-      "baseline",
-      "parallel_up_200",
-      "parallel_down_200",
-      "short_up_250",
-      "short_down_250",
-      "steepener",
-      "flattener",
-    ]);
-    const baseline = batch.runs[0];
-    expect(baseline.status).toBe("succeeded");
-    const periodLabel: string = baseline.inputs.reporting_period.label;
+    const ladderTable = page.getByRole("table");
+    for (const [i, row] of LADDER.entries()) {
+      await expectRow(ladderTable, row.bucket, [
+        row.bucket,
+        `${row.midpointYears.toFixed(2)}y`,
+        ghsM(row.totalRsa),
+        ghsM(row.totalRsl),
+        signedGhsM(row.gap),
+        signedGhsM(CUMULATIVE[i]),
+        row.midpointMonths < 12 ? "EaR window" : "—",
+      ]);
+    }
+    // Drill into the bucket the swap's receive leg lands in.
+    await page.getByRole("cell", { name: "1-3m", exact: true }).click();
+    await expect(page.getByText("1-3m — bucket drill-down")).toBeVisible();
+    await expect(page.locator("dl")).toContainText(
+      `Rate-sensitive assets${ghsM(410)}`,
+    );
+    await expect(page.locator("dl")).toContainText(
+      `Rate-sensitive liabilities${ghsM(600)}`,
+    );
+  });
 
+  test("scenario execution persists EVE and separates desk EaR from regulatory figures", async ({
+    page,
+  }) => {
+    const ear12 = earningsAtRisk(12, 200);
+    const baseline = await runIrrScenarioBatch(page);
     // The platform kept exactly what it computed, and it is the fixture's book.
     const persisted = await apiGet(
       page,
@@ -270,37 +280,6 @@ test.describe("IRRBB functional workflow", () => {
           Math.round(Number(s.delta_eve_ghs)) / 1e6,
       ),
     ).toEqual(EVE_SCENARIOS.map((s) => s.delta));
-    await expect(runButton).toHaveText("Run IRRBB scenarios");
-
-    // ---- Gap Analysis: the full ladder, bucket by bucket.
-    await openTab(page, "Gap Analysis");
-    await expectKpi(
-      page,
-      "12-month cumulative gap",
-      signedGhsM(gapInside(12)),
-      "Liability-sensitive over 12 months",
-    );
-    const ladderTable = page.getByRole("table");
-    for (const [i, row] of LADDER.entries()) {
-      await expectRow(ladderTable, row.bucket, [
-        row.bucket,
-        `${row.midpointYears.toFixed(2)}y`,
-        ghsM(row.totalRsa),
-        ghsM(row.totalRsl),
-        signedGhsM(row.gap),
-        signedGhsM(CUMULATIVE[i]),
-        row.midpointMonths < 12 ? "EaR window" : "—",
-      ]);
-    }
-    // Drill into the bucket the swap's receive leg lands in.
-    await page.getByRole("cell", { name: "1-3m", exact: true }).click();
-    await expect(page.getByText("1-3m — bucket drill-down")).toBeVisible();
-    await expect(page.locator("dl")).toContainText(
-      `Rate-sensitive assets${ghsM(410)}`,
-    );
-    await expect(page.locator("dl")).toContainText(
-      `Rate-sensitive liabilities${ghsM(600)}`,
-    );
 
     // ---- EVE & NII: every scenario, then a desk horizon the engine computes.
     await openTab(page, "EVE & NII");
@@ -362,7 +341,13 @@ test.describe("IRRBB functional workflow", () => {
       signedGhsM(ear12),
       "regulatory 12-month horizon",
     );
+  });
 
+  test("a newly executed scenario batch backs the period breach history", async ({
+    page,
+  }) => {
+    const baseline = await runIrrScenarioBatch(page);
+    const periodLabel = baseline.inputs.reporting_period.label;
     // ---- Limits: the worst case against the supervisory ceiling, and the run
     // this journey minted now backs the period's breach-history entry.
     await openTab(page, "Limits");
@@ -390,21 +375,10 @@ test.describe("IRRBB functional workflow", () => {
     }
   });
 
-  test("drives the IRRBB parallel +200bp stress from the Scenarios tab and persists it", async ({
+  test("parallel +200bp stress reconciles Appendix II with the persisted IRRBB result", async ({
     page,
   }) => {
-    test.setTimeout(120_000);
-    await page.goto("/irr?preparing=1");
-    await openTab(page, "Scenarios");
-    await expect(
-      page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
-    ).toBeVisible();
-
-    const run = await runEnterpriseStress(
-      page,
-      "IRRBB parallel +200bp (moderate)",
-    );
-    expect(run.scenario_code).toBe("system_irr_parallel_up_200");
+    const run = await runParallelIrrStress(page);
     // The engine's three-year path for the fixture book under a parallel +200bp
     // rate path: capital erodes by 0.30pp and coverage falls from the fixture's
     // derived 147.29% (see the Liquidity journey) to 138.60%.
@@ -455,13 +429,7 @@ test.describe("IRRBB functional workflow", () => {
       charge,
       charge,
     ]);
-    const chargeCells = [
-      "Pillar 2: IRRBB",
-      ...Array(4).fill("Not modelled"),
-      ...Array(3).fill(
-        charge.toLocaleString("en-US", { maximumFractionDigits: 0 }),
-      ),
-    ];
+    const chargeCells = parallelIrrChargeCells();
     await page
       .getByRole("button", { name: "Appendix II", exact: true })
       .click();
@@ -479,7 +447,14 @@ test.describe("IRRBB functional workflow", () => {
     }
 
     await expectPersistedStressRun(page, run, "36.66%");
+  });
 
+  test("board-pack composition and printing retain the chosen IRRBB run and charge", async ({
+    page,
+  }) => {
+    const run = await runParallelIrrStress(page);
+    const chargeCells = parallelIrrChargeCells();
+    await expectPersistedStressRun(page, run, "36.66%");
     await page.getByRole("link", { name: "Board-pack composer" }).click();
     await expect(page).toHaveURL(/\/reports\/stress-board-pack$/);
     await expect(
@@ -569,4 +544,65 @@ function pct(ratio: number): string {
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
+}
+
+type IrrScenarioBaseline = {
+  id: string;
+  input_hash: string;
+  inputs: { reporting_period: { label: string } };
+};
+async function runIrrScenarioBatch(page: Page): Promise<IrrScenarioBaseline> {
+  // ---- Run the scenario set. The response is the persisted batch.
+  const runButton = page.getByRole("button", { name: "Run IRRBB scenarios" });
+  await expect(runButton).toBeEnabled();
+  const minted = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/irr/run-all-scenarios") &&
+      response.request().method() === "POST",
+  );
+  await runButton.click();
+  const response = await minted;
+  expect(response.status()).toBe(201);
+  const batch = await response.json();
+  expect(
+    batch.runs.map((run: { scenario_code: string }) => run.scenario_code),
+  ).toEqual([
+    "baseline",
+    "parallel_up_200",
+    "parallel_down_200",
+    "short_up_250",
+    "short_down_250",
+    "steepener",
+    "flattener",
+  ]);
+  const baseline = batch.runs[0];
+  expect(baseline.status).toBe("succeeded");
+
+  await expect(runButton).toHaveText("Run IRRBB scenarios");
+  return baseline as IrrScenarioBaseline;
+}
+async function runParallelIrrStress(page: Page) {
+  await openTab(page, "Scenarios");
+  await expect(
+    page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
+  ).toBeVisible();
+
+  const run = await runEnterpriseStress(
+    page,
+    "IRRBB parallel +200bp (moderate)",
+  );
+  expect(run.scenario_code).toBe("system_irr_parallel_up_200");
+
+  return run;
+}
+function parallelIrrChargeCells(): string[] {
+  const deltaEve = economicValue(200) - economicValue(0);
+  const charge = Number((Math.max(-deltaEve, 0) / 1_000).toFixed(3));
+  return [
+    "Pillar 2: IRRBB",
+    ...Array(4).fill("Not modelled"),
+    ...Array(3).fill(
+      charge.toLocaleString("en-US", { maximumFractionDigits: 0 }),
+    ),
+  ];
 }

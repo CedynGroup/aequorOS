@@ -93,13 +93,32 @@ jobs:
           STORAGE_RETIRE_AFTER: "2099-01-01"
           STORAGE_KMS_KEY_ID: aequoros-key
           PLAYWRIGHT_QUARANTINE_REPORT: ${{ runner.temp }}/journeys.json
+          PLAYWRIGHT_CRITICAL_OUTCOMES_REPORT: ${{ runner.temp }}/critical-journeys.json
           E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
         run: |
-          mise exec -- pnpm --filter @aequoros/dashboard e2e --shard=${{ matrix.shard }}/4
+          mise exec -- pnpm --filter @aequoros/dashboard e2e --shard=${{ matrix.shard }}/4 --output=${{ runner.temp }}/journey-results
           if [ "${{ matrix.shard }}" = "4" ]; then
             PLAYWRIGHT_QUARANTINE_REPORT="$RUNNER_TEMP/regulatory-journeys.json" \
-              mise exec -- pnpm --filter @aequoros/dashboard e2e --config=playwright.regulatory.config.ts
+              mise exec -- pnpm --filter @aequoros/dashboard e2e --config=playwright.regulatory.config.ts --output="$RUNNER_TEMP/regulatory-results"
           fi
+      - name: Run dashboard browser contracts
+        if: matrix.shard == 1
+        env:
+          S3_ENDPOINT: http://127.0.0.1:9000
+          S3_ACCESS_KEY: ciminio
+          S3_SECRET_KEY: ciminio123
+          S3_REGION: us-east-1
+          S3_BUCKET: aequoros
+          STORAGE_BACKEND: minio
+          STORAGE_ENV: mvp
+          STORAGE_RETIRE_AFTER: "2099-01-01"
+          STORAGE_KMS_KEY_ID: aequoros-key
+          PLAYWRIGHT_CRITICAL_OUTCOMES_REPORT: ${{ runner.temp }}/critical-contracts.json
+          PLAYWRIGHT_CONTRACT_REPORT: ${{ runner.temp }}/contracts.json
+          E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
+        # A separate invocation resets the disposable database and keeps one
+        # worker. Contract and journey reporters write separate files.
+        run: mise exec -- pnpm --filter @aequoros/dashboard e2e:contracts --output=${{ runner.temp }}/browser-contract-results
       # Reviewer-visible screenshots the authorization and SSO journeys write
       # (the issuer's form, the signed-in shell, the refusals, the step-up
       # return). Uploaded even on failure: that is when they matter most.
@@ -110,12 +129,42 @@ jobs:
           name: dashboard-journey-evidence-${{ matrix.shard }}
           path: ${{ runner.temp }}/evidence
           if-no-files-found: ignore
+      - name: Upload journey test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-journey-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/journey-results
+          include-hidden-files: true
+          if-no-files-found: ignore
+      - name: Upload browser contract test results
+        if: always() && matrix.shard == 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-browser-contract-results
+          path: ${{ runner.temp }}/browser-contract-results
+          include-hidden-files: true
+          if-no-files-found: ignore
       - name: Upload journey report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: dashboard-journey-report-${{ matrix.shard }}
           path: ${{ runner.temp }}/journeys.json
+          if-no-files-found: error
+      - name: Upload critical outcome reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-critical-outcomes-${{ matrix.shard }}
+          path: ${{ runner.temp }}/critical-*.json
+          if-no-files-found: error
+      - name: Upload browser contract report
+        if: always() && matrix.shard == 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-browser-contract-report
+          path: ${{ runner.temp }}/contracts.json
           if-no-files-found: error
       # The quarantine size (e2e/support/quarantine.ts) is pinned here on
       # purpose: parking or releasing a journey means editing this gate as well
@@ -156,6 +205,28 @@ jobs:
         run: |
           node .github/scripts/assert_dashboard_journeys.mjs \
             "$RUNNER_TEMP"/journey-reports/*/journeys.json
+      - name: Download complete browser contract report
+        if: needs.changes.outputs.journeys == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: dashboard-browser-contract-report
+          path: ${{ runner.temp }}/contract-report
+      - name: Require the reviewed browser contract collection without skips
+        if: needs.changes.outputs.journeys == 'true'
+        run: |
+          node .github/scripts/assert_dashboard_contracts.mjs \
+            "$RUNNER_TEMP"/contract-report/contracts.json
+      - name: Download critical outcome reports
+        if: needs.changes.outputs.journeys == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dashboard-critical-outcomes-*
+          path: ${{ runner.temp }}/critical-outcomes
+      - name: Require passing critical outcomes in their declared layers
+        if: needs.changes.outputs.journeys == 'true'
+        run: |
+          node .github/scripts/assert_dashboard_outcomes.mjs \
+            "$RUNNER_TEMP"/critical-outcomes/*/critical-*.json
       - name: Require the journey shards or a verified irrelevant change
         if: always()
         env:

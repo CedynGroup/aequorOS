@@ -13,76 +13,77 @@
  * `support/mint.ts`, so it is deliberately left alone.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test as scopedTest } from "./support/scoped-objects";
+import { biApi } from "./support/bi";
 import path from "path";
-import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
-import { mintBackendToken } from "./support/mint";
+import { E2E_TMP } from "../playwright.config";
 import { requireObjectStorage } from "./support/object-storage";
 
 const SAMPLE_BANK_ID = "BK-SAMP0001";
 
-/**
- * The financial year the canonical fixture can actually compute.
- *
- * A cycle's figures bind to the book AS AT the framework's reporting date —
- * there is no "nearest earlier period" fallback, by design — so the journey
- * must choose the year whose 31 December the fixture carries. Resolved from
- * the API in `beforeAll` rather than written down, so a fixture that moves
- * does not silently leave this test binding nothing.
- */
-let fixtureFiscalYear = 0;
-
-async function api(
-  token: string,
-  method: string,
-  pathName: string,
-  body?: unknown,
-): Promise<any> {
-  const response = await fetch(`${E2E_API_ORIGIN}/api/v1${pathName}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!response.ok) {
-    throw new Error(
-      `${method} ${pathName} -> ${response.status}: ${await response.text()}`,
+const test = scopedTest.extend<{ fixtureFiscalYear: number; cycleId: string }>({
+  fixtureFiscalYear: async ({ request }, provide) => {
+    const periods = await biApi(
+      request,
+      "admin",
+      `/banks/${SAMPLE_BANK_ID}/reporting-periods`,
     );
-  }
-  return response.json();
-}
+    expect(periods.status).toBe(200);
+    const rows = (
+      periods.body as { periods: { id: string; period_end: string }[] }
+    ).periods;
+    const yearEnd =
+      rows.find((period) => period.period_end.endsWith("-12-31")) ?? rows[0];
+    expect(yearEnd).toBeDefined();
+    const run = await biApi(
+      request,
+      "admin",
+      `/banks/${SAMPLE_BANK_ID}/regulatory-runs`,
+      {
+        method: "POST",
+        data: {
+          module: "capital",
+          reporting_period_id: yearEnd.id,
+          scenario_code: "baseline",
+        },
+      },
+    );
+    expect(run.status).toBe(201);
+    await provide(Number(yearEnd.period_end.slice(0, 4)));
+  },
+  cycleId: async ({ request, objects, fixtureFiscalYear }, provide) => {
+    const frameworks = await biApi(
+      request,
+      "analyst",
+      `/banks/${SAMPLE_BANK_ID}/icaap/frameworks`,
+    );
+    expect(frameworks.status).toBe(200);
+    const framework = (
+      frameworks.body as { frameworks: { code: string; version: string }[] }
+    ).frameworks[0];
+    expect(framework).toBeDefined();
+    const id = await objects.create(
+      `/banks/${SAMPLE_BANK_ID}/icaap/cycles`,
+      {
+        fiscal_year: fixtureFiscalYear,
+        cycle_kind: "rehearsal",
+        basis: "solo",
+        framework_code: framework.code,
+        framework_version: framework.version,
+        reason: "Independent synthetic workspace story",
+      },
+      "analyst",
+    );
+    await provide(id);
+  },
+});
 
 test.describe("ICAAP workspace", () => {
   test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
-  test.describe.configure({ mode: "serial" });
-
-  test.beforeAll(async () => {
-    // A cycle's figures bind to a SEALED capital run for the exact reporting
-    // date, never to the live plane — so the run has to exist before the
-    // journey asks for it.
-    const admin = await mintBackendToken("admin");
-    const periods = await api(
-      admin,
-      "GET",
-      `/banks/${SAMPLE_BANK_ID}/reporting-periods`,
-    );
-    const yearEnd =
-      periods.periods.find((period: { period_end: string }) =>
-        period.period_end.endsWith("-12-31"),
-      ) ?? periods.periods[0];
-    await api(admin, "POST", `/banks/${SAMPLE_BANK_ID}/regulatory-runs`, {
-      module: "capital",
-      reporting_period_id: yearEnd.id,
-      scenario_code: "baseline",
-    });
-    fixtureFiscalYear = Number(String(yearEnd.period_end).slice(0, 4));
-    expect(fixtureFiscalYear).toBeGreaterThan(2000);
-  });
-
   test("creates a rehearsal cycle, writes a section and commits a version", async ({
     page,
+    fixtureFiscalYear,
   }) => {
     await page.goto("/icaap?preparing=1");
     await expect(
@@ -158,11 +159,9 @@ test.describe("ICAAP workspace", () => {
 
   test("downloads the draft PDF and the Word working copy", async ({
     page,
+    cycleId,
   }) => {
-    await page.goto("/icaap?preparing=1");
-    // The cycle's title is the framework's own wording, so the row is reached
-    // by position rather than by a title this test would have to duplicate.
-    await page.locator("table a").first().click();
+    await page.goto(`/icaap/${cycleId}/overview?preparing=1`);
     await expect(page).toHaveURL(/\/icaap\/[0-9a-f-]+\//);
 
     for (const [label, extension] of [
@@ -176,13 +175,12 @@ test.describe("ICAAP workspace", () => {
     }
   });
 
-  test("attaches a supporting document", async ({ page }) => {
+  test("attaches a supporting document", async ({ page, cycleId }) => {
     // Attachments are persisted to object storage; without it the upload can
     // never succeed, so refuse immediately rather than burning the timeout.
     requireObjectStorage();
 
-    await page.goto("/icaap?preparing=1");
-    await page.locator("table a").first().click();
+    await page.goto(`/icaap/${cycleId}/overview?preparing=1`);
     await page.getByRole("link", { name: "Attachments", exact: true }).click();
     await expect(page).toHaveURL(/\/attachments\?preparing=1$/);
 

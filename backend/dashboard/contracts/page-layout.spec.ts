@@ -1,13 +1,7 @@
-// The live detail test initializes the storage client but fails before any
-// object-store operation. Without local storage configuration, run with:
-// STORAGE_ENV=dev STORAGE_BACKEND=s3 S3_ENDPOINT=http://127.0.0.1:9
-// S3_ACCESS_KEY=e2e-unused S3_SECRET_KEY=e2e-unused pnpm e2e page-header-navigation
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "fs";
-import { execFileSync } from "node:child_process";
 import path from "path";
-import { mintBackendToken } from "./support/mint";
-import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
+import { E2E_TMP } from "../playwright.config";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
@@ -39,47 +33,7 @@ async function srgbPixel(page: Page, color: string): Promise<number[]> {
   }, color);
 }
 
-async function expectAlignedHeaderAndCards(page: Page) {
-  const heading = page.getByRole("heading", { level: 1 });
-  const header = heading.locator("../../../..");
-  const firstCard = page.locator("main .card").first();
-  await expect(firstCard).toBeVisible();
-  for (const width of [1280, 1920]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await expect
-      .poll(async () => {
-        const titleBox = await heading.boundingBox();
-        const headerContent = await header
-          .locator(":scope > div")
-          .boundingBox();
-        // The first card may sit in a grid or in a row of cards (the BI
-        // insight strip every landing page opens with). Either way the
-        // container is the content edge; a row's cards are capped in width
-        // and scroll, so the card's own box would never reach the right edge.
-        const grid = await firstCard.evaluate((card) => {
-          const parent = card.parentElement;
-          const display = parent ? getComputedStyle(parent).display : "";
-          const body =
-            parent && (display === "grid" || display === "flex")
-              ? parent
-              : card;
-          const box = body.getBoundingClientRect();
-          return { left: box.left, right: box.right };
-        });
-        return {
-          left: Math.round((titleBox?.x ?? -1) - grid.left),
-          right: Math.round(
-            (headerContent ? headerContent.x + headerContent.width : -1) -
-              grid.right,
-          ),
-        };
-      })
-      .toEqual({ left: 0, right: 0 });
-    await expect(header).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-    await expect(header).toHaveCSS("border-bottom-width", "0px");
-    await expect(header).toHaveCSS("box-shadow", "none");
-  }
-}
+import { expectAlignedHeaderAndCards } from "./support/layout";
 
 test.use({
   storageState: path.join(E2E_TMP, "admin.json"),
@@ -189,78 +143,6 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
   }
 });
 
-test("object detail headers retain linked breadcrumbs", async ({
-  page,
-  request,
-}) => {
-  // A missing source creates a real failed ingestion attempt without writing
-  // canonical bank data or requiring an object-store operation.
-  const headers = {
-    Authorization: `Bearer ${await mintBackendToken("admin")}`,
-  };
-  const bankUrl = `${E2E_API_ORIGIN}/api/v1/banks/BK-SAMP0001`;
-  const mapping = await request.post(`${bankUrl}/mapping-configs`, {
-    headers,
-    data: {
-      source_system: "EXCEL_CSV",
-      name: "Header navigation test",
-      config: {},
-      activate: true,
-      reason: "Verify persisted ingestion detail navigation",
-    },
-  });
-  expect(mapping.ok(), await mapping.text()).toBeTruthy();
-  const attempt = await request.post(`${bankUrl}/ingestion-batches`, {
-    headers,
-    data: {
-      source_system: "EXCEL_CSV",
-      as_of_date: "2026-08-31",
-      location: path.join(E2E_TMP, "missing-header-test-source.csv"),
-      reason: "Verify failed ingestion detail header",
-    },
-  });
-  expect(attempt.status(), await attempt.text()).toBe(201);
-  expect((await attempt.json()).batch.status).toBe("failed");
-  await page.goto("/data-engine");
-  await page.getByRole("link", { name: "Detail", exact: true }).first().click();
-  await expect(page).toHaveURL(/\/data-engine\/batches\/[^/]+$/);
-
-  await expect(
-    page.getByRole("heading", { name: /Ingestion batch/ }),
-  ).toBeVisible();
-  const header = page
-    .getByRole("heading", { name: /Ingestion batch/ })
-    .locator("..");
-  await expect(header.locator("p").first()).toHaveText("Data Engine");
-  await expectAlignedHeaderAndCards(page);
-  const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(breadcrumb).toBeVisible();
-  await expect(
-    breadcrumb.getByRole("link", { name: "Data Engine" }),
-  ).toHaveAttribute("href", "/data-engine");
-  await expect(
-    breadcrumb.getByRole("link", { name: "Batches" }),
-  ).toHaveAttribute("href", "/data-engine");
-
-  if (evidenceDir) {
-    mkdirSync(evidenceDir, { recursive: true });
-    await page.screenshot({
-      path: path.join(evidenceDir, "detail-header-with-breadcrumb.png"),
-      fullPage: true,
-    });
-  }
-  for (const label of ["Batches", "Data Engine"]) {
-    const detailUrl = page.url();
-    await breadcrumb.getByRole("link", { name: label, exact: true }).click();
-    await expect(page).toHaveURL(/\/data-engine$/);
-    await expect(
-      page.getByRole("heading", { name: "Data Engine", exact: true }),
-    ).toBeVisible();
-    await page.goto(detailUrl);
-    await expect(breadcrumb).toBeVisible();
-  }
-});
-
 test("IRRBB tabs keep the module eyebrow without breadcrumbs", async ({
   page,
 }) => {
@@ -326,14 +208,6 @@ for (const [route, eyebrow] of [
 test("Credit cards share the header edges at wide viewports", async ({
   page,
 }) => {
-  // This asserted "Waiting for data" until `c50209cd`, which aligned the e2e
-  // fixture's position book with its fact spine. The live credit module now
-  // COMPUTES, so the empty state is gone and the premise was stale rather than
-  // the page being wrong. The test's subject was always the layout, and
-  // `expectAlignedHeaderAndCards` already waits for the first card itself, so
-  // the empty-state assertion was only ever how this spec knew the page had
-  // settled. Asserting a specific empty state here would now mean asserting the
-  // fixture has LESS data than it has.
   await page.goto("/credit");
   await expectAlignedHeaderAndCards(page);
 });
@@ -349,35 +223,6 @@ for (const route of ["/irr", "/fx"]) {
     await expectAlignedHeaderAndCards(page);
   });
 }
-
-test("SDI liquidity header and card grid share both edges at wide viewports", async ({
-  page,
-}) => {
-  await page.route("**/api/v1/banks", async (route) => {
-    const response = await route.fetch();
-    const payload = await response.json();
-    for (const bank of payload.banks) {
-      bank.institution_type_detail.institution_class = "sdi";
-    }
-    await route.fulfill({ response, json: payload });
-  });
-  await page.route("**/banks/*/sdi/liquidity-position", async (route) => {
-    await route.fulfill({
-      json: {
-        as_of: "2026-08-31",
-        ratios: [],
-        reserves: [],
-        maturity_ladder: [],
-        readiness: [],
-      },
-    });
-  });
-  await page.goto("/liquidity?preparing=1");
-  await expect(
-    page.getByRole("heading", { name: "LMTD Table 1 preparation assessment" }),
-  ).toBeVisible();
-  await expectAlignedHeaderAndCards(page);
-});
 
 for (const [route, title] of [
   ["/institution", "Institution Profile"],
@@ -412,93 +257,6 @@ for (const [route, title] of [
   });
 }
 
-for (const [source, links] of [
-  [
-    "/behavioral/nmd-duration",
-    [
-      ["Feeds IRRBB assumptions", "/irr"],
-      ["Feeds FTP", "/ftp"],
-    ],
-  ],
-  [
-    "/behavioral/prepayment",
-    [
-      ["Feeds LCR", "/liquidity"],
-      ["Feeds cash-flow forecast", "/liquidity/forecast"],
-    ],
-  ],
-  ["/behavioral/deposit-stability", [["Feeds LCR outflows", "/liquidity"]]],
-] as const) {
-  test(`Behavioral body feed links navigate from ${source}`, async ({
-    page,
-  }) => {
-    for (const [label, destination] of links) {
-      await page.goto(source);
-      const heading = page.getByRole("heading", { level: 1 });
-      await expect(heading).toBeVisible();
-      await expect(heading.locator("..").locator("p")).toHaveText([
-        "Behavioral Models",
-      ]);
-      const link = page.getByRole("link", { name: label, exact: true });
-      await expect(link).toBeVisible();
-      const titleBox = await heading.boundingBox();
-      const linkBox = await link.boundingBox();
-      expect(linkBox!.y).toBeGreaterThan(titleBox!.y + titleBox!.height);
-      if (evidenceDir) {
-        await page.screenshot({
-          path: path.join(
-            evidenceDir,
-            `${source.split("/").pop()}-body-feeds.png`,
-          ),
-          fullPage: true,
-        });
-      }
-      await link.click();
-      await expect(page).toHaveURL(new RegExp(`${destination}$`));
-      if (destination === "/irr" || destination === "/liquidity") {
-        await expect(
-          page.getByText(
-            "This capability is available from Preparing for upcoming rules.",
-          ),
-        ).toBeVisible();
-      } else {
-        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      }
-    }
-  });
-}
-
-test("Markets network failure keeps the error card aligned and retry recovers", async ({
-  page,
-}) => {
-  await page.route("**/banks/*/market-data/views*", (route) =>
-    route.abort("failed"),
-  );
-  await page.goto("/markets");
-  await expect(
-    page.getByText("Could not load data", { exact: true }),
-  ).toBeVisible();
-  await expectAlignedHeaderAndCards(page);
-  if (evidenceDir) {
-    await page.screenshot({
-      path: path.join(evidenceDir, "markets-error-alignment.png"),
-      fullPage: true,
-    });
-  }
-  await page.unroute("**/banks/*/market-data/views*");
-  const recovered = page.waitForResponse((response) =>
-    response.url().includes("/market-data/views"),
-  );
-  await page.getByRole("button", { name: "Retry", exact: true }).click();
-  expect((await recovered).status()).toBe(200);
-  await expect(
-    page.getByText("Could not load data", { exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "Credit monitor", exact: true }),
-  ).toBeVisible();
-});
-
 test("module tabs render on page ground with a hairline and active underline", async ({
   page,
 }) => {
@@ -521,42 +279,64 @@ test("module tabs render on page ground with a hairline and active underline", a
     });
   }
 });
+for (const [source, links] of [
+  [
+    "/behavioral/nmd-duration",
+    [
+      ["Feeds IRRBB assumptions", "/irr"],
+      ["Feeds FTP", "/ftp"],
+    ],
+  ],
+  [
+    "/behavioral/prepayment",
+    [
+      ["Feeds LCR", "/liquidity"],
+      ["Feeds cash-flow forecast", "/liquidity/forecast"],
+    ],
+  ],
+  ["/behavioral/deposit-stability", [["Feeds LCR outflows", "/liquidity"]]],
+] as const) {
+  test(`Behavioral feed links stay below the heading at ${source}`, async ({
+    page,
+  }) => {
+    for (const [label] of links) {
+      // The document can load while Next is still recompiling Auth.js. Resolve
+      // the session before spending the presentation assertion budget.
+      const sessionReady = page.waitForResponse("**/api/auth/session");
+      await page.goto(source);
+      expect((await sessionReady).status()).toBe(200);
+      const heading = page.getByRole("heading", { level: 1 });
+      await expect(heading).toBeVisible();
+      await expect(heading.locator("..").locator("p")).toHaveText([
+        "Behavioral Models",
+      ]);
+      const link = page.getByRole("link", { name: label, exact: true });
+      await expect(link).toBeVisible();
+      const titleBox = await heading.boundingBox();
+      const linkBox = await link.boundingBox();
+      expect(linkBox!.y).toBeGreaterThan(titleBox!.y + titleBox!.height);
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(
+            evidenceDir,
+            `${source.split("/").pop()}-body-feeds.png`,
+          ),
+          fullPage: true,
+        });
+      }
+    }
+  });
+}
 
-test("SDI live liquidity cards align with real backend responses", async ({
+test("Markets aligns its error card when its data request fails", async ({
   page,
 }) => {
-  // Change only the disposable fixture's licence class; restore it even on failure.
-  const setType = (type: string) =>
-    execFileSync(path.join(__dirname, "../../.venv/bin/python"), [
-      "-c",
-      `
-import sqlite3, sys
-with sqlite3.connect(sys.argv[1]) as db:
-    db.execute("UPDATE banks SET institution_type=? WHERE id='BK-SAMP0001'", (sys.argv[2],))
-`,
-      path.join(E2E_TMP, "e2e.db"),
-      type,
-    ]);
-  setType("savings_and_loans");
-  try {
-    const response = page.waitForResponse((r) =>
-      r.url().includes("/sdi/liquidity-position"),
-    );
-    await page.goto("/liquidity?preparing=1");
-    expect((await response).status()).toBe(200);
-    await expect(
-      page.getByRole("heading", {
-        name: "LMTD Table 1 preparation assessment",
-      }),
-    ).toBeVisible();
-    await expectAlignedHeaderAndCards(page);
-    if (evidenceDir) {
-      await page.screenshot({
-        path: path.join(evidenceDir, "sdi-live-liquidity-alignment.png"),
-        fullPage: true,
-      });
-    }
-  } finally {
-    setType("universal_bank");
-  }
+  await page.route("**/banks/*/market-data/views*", (route) =>
+    route.abort("failed"),
+  );
+  await page.goto("/markets");
+  await expect(
+    page.getByText("Could not load data", { exact: true }),
+  ).toBeVisible();
+  await expectAlignedHeaderAndCards(page);
 });
