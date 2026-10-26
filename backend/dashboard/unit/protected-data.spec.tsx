@@ -97,6 +97,56 @@ it("retries a locked read automatically and restores the visible value", async (
   client.clear();
 });
 
+it.each(["retained", "current"] as const)(
+  "keeps retrying a readable %s-key profile until every write prerequisite recovers",
+  async (readKey) => {
+    vi.useFakeTimers();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let ready = false;
+    let reads = 0;
+    function HistoricalRead() {
+      const query = useQuery({
+        queryKey: ["institution-profile", "BK-SAMP0001"],
+        queryFn: async () => {
+          reads++;
+          notify(ready ? "available" : "unavailable");
+          return `Readable ${readKey}-key party`;
+        },
+      });
+      return <p>{query.data}</p>;
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <ProtectedDataNotice />
+        <HistoricalRead />
+      </QueryClientProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(screen.getByText(`Readable ${readKey}-key party`)).toBeVisible();
+    expect(screen.getByText(protectedDataMessages.unavailable)).toBeVisible();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(reads).toBe(2);
+    expect(protectedDataState("BK-SAMP0001")).toBe("unavailable");
+    ready = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(reads).toBe(3);
+    expect(screen.queryByText(protectedDataMessages.unavailable)).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(reads).toBe(3);
+    client.clear();
+  },
+);
+
 it("offers manual retry after revocation", async () => {
   const client = new QueryClient();
   let reads = 0;

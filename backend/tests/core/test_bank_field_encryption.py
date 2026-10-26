@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
+from pydantic import TypeAdapter
 from sqlalchemy import Uuid, bindparam, select, text
 from sqlalchemy.orm import Session, undefer_group
 
@@ -50,6 +51,7 @@ from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
 from app.identity.public import Bank, User
 from app.identity.schemas.institution_profile import (
+    InstitutionProfileFullRead,
     RelatedPartyCreate,
     RelatedPartyRoleInput,
     RelatedPartyUpdate,
@@ -1520,6 +1522,145 @@ def test_empty_profile_observes_key_recovery_after_a_refused_party_create(
     )
     assert saved.status_code == 201, saved.text
     assert saved.json()["full_name"] == NAME
+
+
+@pytest.mark.parametrize("missing_current", [False, True])
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_rotated_profile_keeps_failure_until_both_write_keys_recover(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    missing_current: bool,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    payload = RelatedPartyCreate(
+        reason="Synthetic rotated recovery",
+        party_type="individual",
+        full_name="Synthetic retained-key party",
+        contact={"email": "retained@example.test"},
+        roles=[RelatedPartyRoleInput(role="director", sitting_allowance=Decimal(45))],
+    )
+    retained = institution_profile.create_related_party(db_session, CTX, BANK_A, payload)
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, NEXT, lambda _name: provider)
+    assert row.current_version_id != row.index_version_id
+    db_session.commit()
+    current = institution_profile.create_related_party(
+        db_session,
+        CTX,
+        BANK_A,
+        payload.model_copy(update={"full_name": "Synthetic current-key party"}),
+    )
+    stored_query = text("SELECT full_name FROM related_parties WHERE bank_id=:bank ORDER BY id")
+    stored = TypeAdapter(list[str]).validate_python(
+        cast(object, db_session.scalars(stored_query, {"bank": BANK_A}).all())
+    )
+    db_session.commit()
+    missing = NEXT if missing_current else KEY_A
+    provider.set_status(missing, status)
+    url = f"/api/v1/banks/{BANK_A}/institution-profile"
+    write_url = f"/api/v1/banks/{BANK_A}/related-parties"
+    refused = db_client.post(write_url, headers=headers(), json=payload.model_dump(mode="json"))
+    assert refused.status_code == 503, refused.text
+    reason = "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    assert refused.json()["error"]["code"] == f"bank_key_{reason}"
+    for _ in range(2):
+        response = db_client.get(url, headers=headers())
+        assert response.status_code == 200, response.text
+        assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
+        parties = {
+            party.id: party
+            for party in InstitutionProfileFullRead.model_validate_json(
+                response.content
+            ).related_parties
+        }
+        visible, locked = (retained, current) if missing_current else (current, retained)
+        assert parties[visible.id].full_name == visible.full_name
+        assert parties[visible.id].contact == {"email": "retained@example.test"}
+        assert parties[locked.id].full_name == LOCKED_TEXT
+        assert all(party.roles[0].sitting_allowance == Decimal(45) for party in parties.values())
+    assert (
+        TypeAdapter(list[str]).validate_python(
+            cast(object, db_session.scalars(stored_query, {"bank": BANK_A}).all())
+        )
+        == stored
+    )
+    db_session.commit()
+    provider.set_status(missing, KeyStatus.ACTIVE)
+    recovered = db_client.get(url, headers=headers())
+    assert recovered.status_code == 200, recovered.text
+    assert json.loads(recovered.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+    restored = InstitutionProfileFullRead.model_validate_json(recovered.content)
+    assert {party.full_name for party in restored.related_parties} == {
+        retained.full_name,
+        current.full_name,
+    }
+    saved = db_client.post(write_url, headers=headers(), json=payload.model_dump(mode="json"))
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["full_name"] == payload.full_name
+
+
+@pytest.mark.parametrize("rotated", [False, True])
+def test_profile_recovery_unwraps_each_required_version_once(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    rotated: bool,
+) -> None:
+    connect(db_session, provider)
+    for index in range(3):
+        institution_profile.create_related_party(
+            db_session,
+            CTX,
+            BANK_A,
+            RelatedPartyCreate(
+                reason="Synthetic bounded key observation",
+                party_type="individual",
+                full_name=f"Synthetic historical party {index}",
+                contact={"email": "synthetic@example.test"},
+                roles=[RelatedPartyRoleInput(role="director", other_responsibilities="Review")],
+            ),
+        )
+    if rotated:
+        row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+        registry.rotate(db_session, row, NEXT, lambda _name: provider)
+        db_session.commit()
+    unwrap = provider.unwrap
+    calls: list[KeyReference] = []
+
+    def observed(key: KeyReference, wrapped: bytes, context: dict[str, str]) -> bytes:
+        calls.append(key)
+        return unwrap(key, wrapped, context)
+
+    monkeypatch.setattr(provider, "unwrap", observed)
+    response = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
+    assert response.status_code == 200, response.text
+    assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+    assert (
+        len(InstitutionProfileFullRead.model_validate_json(response.content).related_parties) == 3
+    )
+    assert calls.count(KEY_A) == 1 and calls.count(NEXT) == int(rotated)
+    assert len(calls) == 1 + int(rotated)
+
+
+def test_empty_rotated_profile_combines_prerequisite_failure_severity(
+    db_client: TestClient, db_session: Session, provider: LocalKeyProvider
+) -> None:
+    connect(db_session, provider)
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, NEXT, lambda _name: provider)
+    db_session.commit()
+    provider.set_status(NEXT, KeyStatus.UNAVAILABLE)
+    provider.set_status(KEY_A, KeyStatus.DISABLED)
+    url = f"/api/v1/banks/{BANK_A}/institution-profile"
+    for expected in ("revoked", "unavailable", "available"):
+        response = db_client.get(url, headers=headers())
+        assert response.status_code == 200, response.text
+        assert response.json()["related_parties"] == []
+        assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: expected}
+        provider.set_status(KEY_A if expected == "revoked" else NEXT, KeyStatus.ACTIVE)
 
 
 @pytest.mark.parametrize("connected", [False, True])

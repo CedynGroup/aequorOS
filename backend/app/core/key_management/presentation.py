@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from typing import Literal, cast
+from uuid import UUID
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -20,9 +21,11 @@ LOCKED_JSON = "_aequoros_protected_data"
 class PresentationState:
     support: bool = False
     banks: dict[str, LockReason] = field(default_factory=dict)
+    read_locks: dict[UUID, Literal["revoked", "unavailable"]] = field(default_factory=dict)
 
     def record(self, bank: str, reason: LockReason) -> None:
-        if reason != "available" or bank not in self.banks:
+        severity = ("available", "unavailable", "revoked", "support")
+        if severity.index(reason) >= severity.index(self.banks.get(bank, "available")):
             self.banks[bank] = reason
 
 
