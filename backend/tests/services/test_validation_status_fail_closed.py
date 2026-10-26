@@ -30,6 +30,7 @@ from app.domain.ingestion.constants import (
 )
 from app.models import Bank, BankReportingPeriod, CanonicalPositionSnapshot
 from app.reporting.service.bog_forms.catalog import all_form_specs
+from app.reporting.service.bog_forms.engine import FormResult
 from app.reporting.service.bog_forms.generation import compute_with_dependencies
 from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
 from app.reporting.service.bog_forms.sources_ext.bsd11 import largest_exposures
@@ -183,17 +184,19 @@ def _report_book(db_session: Session) -> tuple[Bank, BankReportingPeriod, Tenant
     return bank, period, ctx
 
 
-@pytest.mark.parametrize("state", ["pending", "error", "blocked", "withdrawn", "superseded"])
 def test_every_bog_form_excludes_an_ineligible_canonical_book(
-    db_session: Session, state: str
+    db_session: Session,
 ) -> None:
     bank, period, ctx = _report_book(db_session)
 
     def figures() -> dict[str, dict[tuple[str, str], object]]:
+        seen: dict[str, FormResult] = {}
         return {
             spec.code: cast(
                 dict[tuple[str, str], object],
-                compute_with_dependencies(db_session, ctx, bank, period, spec.code).all_values(),
+                compute_with_dependencies(
+                    db_session, ctx, bank, period, spec.code, _seen=seen
+                ).all_values(),
             )
             for spec in all_form_specs()
         }
@@ -204,7 +207,29 @@ def test_every_bog_form_excludes_an_ineligible_canonical_book(
     )
     db_session.flush()
     accepted_book = figures()
-    assert accepted_book != empty_book
+    # These forms need inputs outside this compact canonical book. Keep the
+    # exceptions explicit so a new form cannot silently get a vacuous control.
+    unpopulated = {
+        "BSD1A": "No withdrawal-transactions register",
+        "BSD1B": "No daily FX run at the weekly reporting anchor",
+        "BSD3B": "No subsidiary exposure register",
+        "BSD5A": "Capital facts and persisted runs are unchanged by this canonical overlay",
+        "BSD5B": "No consolidated capital inputs",
+        "BSD7A": "No income and expense GL accounts",
+        "BSD7B": "No consolidated income and expense inputs",
+        "BSD10": "No capital-expenditure register",
+        "BSD14": "No contractual rates at the weekly reporting anchor",
+        "BSD15A": "No domestic tariff register",
+        "BSD15B": "No foreign tariff register",
+        "BSD16": "No ATM operations register",
+        "BSD17": "No remittance-flows register",
+    }
+    assert set(unpopulated) < set(accepted_book)
+    for code, admitted in accepted_book.items():
+        if code in unpopulated:
+            assert admitted == empty_book[code], unpopulated[code]
+        else:
+            assert admitted != empty_book[code], f"{code} must read an admitted sentinel"
     tables = [
         mapper.local_table
         for mapper in Base.registry.mappers
@@ -223,18 +248,24 @@ def test_every_bog_form_excludes_an_ineligible_canonical_book(
         )
     db_session.expire_all()
     assert figures() == accepted_book
-    for table in tables:
-        if state == "withdrawn":
-            values: dict[str, object] = {"withdrawn_at": datetime.now(UTC)}
-        elif state == "superseded":
-            values = {"superseded_by": table.columns["id"]}
-        else:
-            values = {"validation_status": state}
-        db_session.execute(
-            update(table).where(table.columns["bank_id"] == bank.id).values(**values)
-        )
-    db_session.expire_all()
-    assert figures() == empty_book
+    for state in ("pending", "error", "blocked", "withdrawn", "superseded"):
+        savepoint = db_session.begin_nested()
+        try:
+            for table in tables:
+                if state == "withdrawn":
+                    values: dict[str, object] = {"withdrawn_at": datetime.now(UTC)}
+                elif state == "superseded":
+                    values = {"superseded_by": table.columns["id"]}
+                else:
+                    values = {"validation_status": state}
+                db_session.execute(
+                    update(table).where(table.columns["bank_id"] == bank.id).values(**values)
+                )
+            db_session.expire_all()
+            assert figures() == empty_book, state
+        finally:
+            savepoint.rollback()
+            db_session.expire_all()
 
 
 @pytest.mark.parametrize("state", ["pending", "error", "blocked", "withdrawn", "superseded"])
