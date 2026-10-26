@@ -136,6 +136,45 @@ it("offers manual retry after revocation", async () => {
   client.clear();
 });
 
+it.each(
+  (["revoked", "unavailable"] as const).flatMap((locked) =>
+    (["available", "support"] as const).map((settled) => ({ locked, settled })),
+  ),
+)(
+  "skips a queued recovery poll when $locked changes to $settled",
+  async ({ locked, settled }) => {
+    vi.useFakeTimers();
+    const client = new QueryClient();
+    const fetch = vi.mocked(globalThis.fetch);
+    notify(locked);
+    const view = render(
+      <QueryClientProvider client={client}>
+        <ProtectedDataNotice />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+
+    act(() => {
+      notify(settled);
+      // Run the already-scheduled poll before React cleans up the old effect.
+      vi.advanceTimersByTime(5_000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    if (settled === "support") {
+      expect(screen.getByText(protectedDataMessages.support)).toBeVisible();
+    } else {
+      expect(screen.queryByRole("status")).toBeNull();
+    }
+    view.unmount();
+    client.clear();
+  },
+);
+
 it("discards decrypted cache data when a protected refetch is refused", async () => {
   const client = createAuthorityQueryClient();
   const queryKey = ["saved-protected-canvas"];
