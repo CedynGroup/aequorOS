@@ -1,9 +1,8 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
 /**
- * FTP, worked end to end by an analyst: read the fixture's transfer curve,
- * product margins and NMD behaviouralisation, then run the FTP scenario set —
- * the baseline, a +200bp shift of the whole curve and a +100bp funding-spread
- * stress — and read each persisted run back on the Ex-ante vs Ex-post tab.
+ * Independent FTP outcomes reconcile curve and product margins, NMD rules,
+ * and scenario overlays with the persisted ex-ante comparison. The scenario
+ * story creates the batch whose results it reads back.
  *
  * The expectations are the FIXTURE's, not the screen's. The curve and the
  * product book are `tests/fixtures/canonical_bank_fixture.py` `_FTP_CURVE_POINTS`
@@ -16,6 +15,7 @@
 import { expect, test } from "@playwright/test";
 import path from "path";
 import { E2E_TMP } from "../playwright.config";
+import { openTab } from "./support/navigation";
 import {
   SAMPLE_BANK_ID,
   apiGet,
@@ -212,23 +212,27 @@ const NMD = [
   };
 });
 
-test.describe("FTP functional workflow", () => {
+test.describe("FTP pricing and persisted scenario outcomes", () => {
   test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
 
-  test("reads the fixture's curve, margins and NMD, runs the overlays and reads them ex-ante", async ({
+  test.describe.configure({ timeout: 120_000 });
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/ftp");
+    await expect(
+      page.getByRole("heading", { name: "Transfer Curve" }),
+    ).toBeVisible();
+  });
+
+  test("transfer pricing reconciles curve build-up to product margins", async ({
     page,
   }) => {
-    test.setTimeout(120_000);
     const base = portfolio(0);
     // Hand-checkable anchors: 262.652M contribution on a 3,650M book.
     expect(base.contribution).toBeCloseTo(262.652, 9);
     expect(base.belowFloor).toBe(2);
 
     // ---- Curve: every tenor's build-up and the portfolio KPIs.
-    await page.goto("/ftp");
-    await expect(
-      page.getByRole("heading", { name: "Transfer Curve" }),
-    ).toBeVisible();
+
     const blended =
       sum(NMD.map((s) => s.balance * s.assigned)) /
       sum(NMD.map((s) => s.balance));
@@ -292,7 +296,11 @@ test.describe("FTP functional workflow", () => {
         signedGhsM((p.balance * margin(p)) / 100),
       ]);
     }
+  });
 
+  test("NMD rules reconcile segment balances and assigned transfer prices", async ({
+    page,
+  }) => {
     // ---- Rules: the NMD behaviouralisation that sets the blended FTP.
     await page.getByRole("link", { name: "Rules", exact: true }).click();
     const nmd = section(page, "NMD behaviouralisation").getByRole("table");
@@ -308,7 +316,13 @@ test.describe("FTP functional workflow", () => {
         pct(s.assigned),
       ]);
     }
+  });
 
+  test("scenario overlays persist contribution and match the ex-ante comparison", async ({
+    page,
+  }) => {
+    const base = portfolio(0);
+    await openTab(page, "Rules");
     // ---- Run the scenario set; each overlay moves the curve under the book.
     const runButton = page.getByRole("button", { name: "Run FTP scenarios" });
     await expect(runButton).toBeEnabled();

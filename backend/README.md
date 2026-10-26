@@ -561,7 +561,7 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
   the migrations read (`jurisdictions`; `institution_types.seed_rows`;
   `regulatory_parameters.seed_rows`) — add a new registry there once and both callers get
   it. A missing registry surfaces as a fail-closed 409 naming a seed migration.
-  Shared live-plane preparation, the separate real-worker journey and full Playwright
+  Shared live-plane preparation, the separate real-worker journeys and full Playwright
   prerequisites (object storage included) are owned by the
   [dashboard end-to-end guide](dashboard/README.md#end-to-end-playwright); for SSO, see its
   [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).

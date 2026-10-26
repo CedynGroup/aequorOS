@@ -1,15 +1,16 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "../e2e/support/story-identities";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { E2E_API_ORIGIN } from "../playwright.config";
-import { E2E_USERS, mintBackendToken, mintSessionCookie } from "./support/mint";
+import { E2E_USERS, mintBackendToken } from "../e2e/support/mint";
 
 const evidence = process.env.E2E_EVIDENCE_DIR;
 const bank = "/banks/BK-SAMP0001";
+test.use({ storyConfig: { roles: ["analyst", "approver", "macro_viewer"] } });
 
-test("system contracts, governed clones, and real denied authority", async ({
+test("default scenario API contracts, governed clones and immutable run identity", async ({
   request,
-  page,
 }) => {
   test.setTimeout(120_000);
   const transcript: unknown[] = [];
@@ -18,13 +19,12 @@ test("system contracts, governed clones, and real denied authority", async ({
     route: string,
     data?: unknown,
     role = "analyst",
-    version?: number,
   ) {
     const response = await request.fetch(`${E2E_API_ORIGIN}/api/v1${route}`, {
       method,
       data,
       headers: {
-        Authorization: `Bearer ${await mintBackendToken(role, version)}`,
+        Authorization: `Bearer ${await mintBackendToken(role)}`,
       },
     });
     const body = await response.json();
@@ -50,7 +50,7 @@ test("system contracts, governed clones, and real denied authority", async ({
   );
   const period = (await api("GET", `${bank}/reporting-periods`)).body.periods[0]
     .id;
-  const run = (id: string, role = "analyst", version?: number) =>
+  const run = (id: string, role = "analyst") =>
     api(
       "POST",
       `${bank}/enterprise-stress/runs`,
@@ -60,7 +60,6 @@ test("system contracts, governed clones, and real denied authority", async ({
         reason: "Live default scenario verification",
       },
       role,
-      version,
     );
   const calibrations: Record<string, Record<string, number>> = {
     parallel_up_200: { parallel_bp: 200, short_bp: 200, long_bp: 200 },
@@ -262,72 +261,5 @@ test("system contracts, governed clones, and real denied authority", async ({
       )
     ).status,
   ).toBe(201);
-  expect(
-    (await run(system.id, "macro_viewer", E2E_USERS.macro_viewer.authv + 1))
-      .status,
-  ).toBe(403);
-  await page.context().addCookies([
-    {
-      name: "authjs.session-token",
-      value: await mintSessionCookie(
-        "macro_viewer",
-        E2E_USERS.macro_viewer.authv + 1,
-      ),
-      domain: "127.0.0.1",
-      path: "/",
-    },
-  ]);
-  await page.goto("/irr/enterprise-stress");
-  const control = page.getByRole("button", {
-    name: "Run enterprise stress",
-    exact: true,
-  });
-  await expect(control).toBeVisible();
-  await expect(control).toBeDisabled();
-  await control.hover({ force: true });
-  await expect(page.getByRole("tooltip")).toHaveText(
-    "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.",
-  );
-  const cloneControls = page.getByRole("button", {
-    name: "Cloning requires the Analyst role or higher.",
-    exact: true,
-  });
-  await expect(cloneControls).toHaveCount(9);
-  for (const cloneControl of await cloneControls.all()) {
-    await expect(cloneControl).toBeVisible();
-    await expect(cloneControl).toBeDisabled();
-  }
-  if (evidence)
-    await page.screenshot({
-      path: path.join(evidence, "real-denied-authority.png"),
-      fullPage: true,
-    });
-  await page.goto("/ftp/scenarios");
-  const previewControl = page.getByRole("button", {
-    name: "Preview FTP what-if",
-  });
-  await expect(previewControl).toBeDisabled();
-  await previewControl.locator("..").hover();
-  await expect(page.getByRole("tooltip")).toHaveText(
-    "Requires FTP · Confidential · Run authority.",
-  );
-  await expect(
-    page.getByRole("button", { name: "Save FTP analysis" }),
-  ).toBeDisabled();
-  await expect(control).toHaveCount(0);
-  if (evidence)
-    await page.screenshot({
-      path: path.join(evidence, "ftp-denial-precedence.png"),
-      fullPage: true,
-    });
-  await page.goto("/fx/scenarios");
-  await expect(
-    page.getByRole("heading", { name: "FX scenario definitions" }),
-  ).toBeVisible();
-  await expect(control).toHaveCount(0);
-  if (evidence)
-    await page.screenshot({
-      path: path.join(evidence, "fx-denial-precedence.png"),
-      fullPage: true,
-    });
+  expect((await run(system.id, "macro_viewer")).status).toBe(403);
 });

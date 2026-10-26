@@ -4419,8 +4419,8 @@
  "tests.services.test_attestation_signing_structure_pin": {
   "reportAny": 1,
   "reportMissingTypeStubs": 2,
-  "reportUnknownArgumentType": 14,
-  "reportUnknownLambdaType": 4,
+  "reportUnknownArgumentType": 13,
+  "reportUnknownLambdaType": 2,
   "reportUnknownMemberType": 14,
   "reportUnknownVariableType": 15
  },

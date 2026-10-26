@@ -1,23 +1,5 @@
-/**
- * Insights — the catalogue a reader may analyse, and the statements the
- * platform is prepared to make about a reporting date.
- *
- * Every assertion here names a figure, a production label or a refusal that
- * could only appear if the whole chain worked: the Data Engine fixture book →
- * the live plane → the `bi_*` marts → the statements. A navigate-and-see-a-page
- * test would prove none of it, which is why the catalogue counts and the
- * statement sentences are pinned individually rather than through "the section
- * rendered".
- *
- * THE GENERATED STATEMENTS ARE COVERED FROM BOTH SIDES. `GET …/bi/insights`
- * composes them server-side and `InsightStrip` renders them under the page
- * header, so the third journey drives the route — where the per-reader filtering
- * that is the strip's disclosure property can be measured against a narrower
- * identity — and the fourth reads the same sentences off the screen. Neither is
- * redundant: the API half proves the withholding, the browser half proves the
- * reader is actually told.
- */
-
+/** Browser catalogue, navigation and certified insight rendering.
+ * Per-reader payload filtering lives in contracts/bi-insights.spec.ts. */
 import { expect, test } from "@playwright/test";
 import path from "node:path";
 import { E2E_TMP } from "../playwright.config";
@@ -100,66 +82,6 @@ test.describe("Insights", () => {
 
     await analyse.getByRole("link", { name: /Open Explore/ }).click();
     await expect(page).toHaveURL(/\/explore$/);
-  });
-
-  test("the statements the platform will make, and the ones it withholds from a narrower reader", async ({
-    request,
-  }) => {
-    const asOf = await fixtureAsOf(request);
-    const route = `/banks/${SAMPLE_BANK_ID}/bi/insights?as_of=${asOf}`;
-
-    const wide = await biApi(request, "admin", route);
-    expect(wide.status).toBe(200);
-    const wideBody = wide.body as {
-      as_of: string;
-      compare_to: string;
-      insights: {
-        rule_id: string;
-        headline: string;
-        detail: string;
-        qualifiers: string[];
-      }[];
-    };
-
-    // A statement is composed server-side from typed facts, and it is compared
-    // against a prior period the caller did not have to name.
-    expect(wideBody.as_of).toBe(asOf);
-    expect(wideBody.compare_to).not.toBe(asOf);
-    expect(wideBody.insights.length).toBeGreaterThan(0);
-
-    // A figure that was not computed is SAID to be absent, in words, and is
-    // explicitly not reported as zero or as flat.
-    const gap = wideBody.insights.find(
-      (insight) => insight.rule_id === "data_gap",
-    );
-    expect(gap).toBeDefined();
-    expect(gap!.detail).toContain(
-      "It is not zero, and it has not stayed flat.",
-    );
-
-    // Liquidity-only access covers advisory metrics, not certified headline
-    // candidates. The refusal discloses neither unavailable figures nor labels.
-    const narrow = await biApi(request, "liquidity_viewer", route);
-    expect(narrow.status).toBe(403);
-    expect(narrow.body).toMatchObject({
-      error: { details: { error_code: "bi_insights_authorization_denied" } },
-    });
-    const narrowText = JSON.stringify(narrow.body);
-    for (const withheld of [
-      "Liquidity coverage ratio (LCR)",
-      "loans.npl_ratio_pct",
-      "engine.car_pct",
-      "Gross loans",
-      "Non-performing exposure",
-      "Capital adequacy ratio",
-      "Tier 1 ratio",
-      "Net open position",
-    ]) {
-      expect(
-        narrowText.includes(withheld),
-        `a Liquidity-only reader's insights must not name ${withheld}`,
-      ).toBe(false);
-    }
   });
 
   test("the strip states what the platform will say, under the page header", async ({
