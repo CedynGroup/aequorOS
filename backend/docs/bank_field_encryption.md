@@ -93,7 +93,10 @@ counts and published-manifest readability after rollback.
 
 Tenant GET/HEAD sessions disclose protected identity fields as locked placeholders
 when a bank key is revoked or unreachable. Staff and Inspector presentation sessions
-hide those fields even for optional, unconnected banks. Numeric projections still
+hide those fields even for optional, unconnected banks. Support filing reads expose
+only filing metadata: snapshot and comparison bodies are locked, and validation,
+approval and methodology details are withheld. Bank-user filing reads retain their
+complete content. Numeric projections still
 use their stored values and indexes. Structured executable BI configuration refuses
 with a locked panel instead of substituting an empty query.
 

@@ -47724,23 +47724,56 @@
         "description": "A line-item figures diff between two versions of the same return.",
         "properties": {
           "added_count": {
-            "title": "Added Count",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added Count"
           },
           "base": {
             "$ref": "#/components/schemas/PackageComparisonSideRead"
           },
           "changed_count": {
-            "title": "Changed Count",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed Count"
           },
-          "identical": {
-            "title": "Identical",
+          "content_locked": {
+            "default": false,
+            "title": "Content Locked",
             "type": "boolean"
           },
+          "identical": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identical"
+          },
           "removed_count": {
-            "title": "Removed Count",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed Count"
           },
           "sections": {
             "items": {
@@ -47753,8 +47786,15 @@
             "$ref": "#/components/schemas/PackageComparisonSideRead"
           },
           "unchanged_section_count": {
-            "title": "Unchanged Section Count",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unchanged Section Count"
           }
         },
         "required": [

@@ -1,267 +1,286 @@
 from __future__ import annotations
 
 import copy
-import json
-from decimal import Decimal
-from typing import cast
+from dataclasses import replace
+from datetime import timedelta
+from functools import cache
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx2 import Response
 from pydantic import TypeAdapter
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.attestation.service.digests import content_digest
-from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.presentation import (
-    LOCKED_TEXT,
-    SESSION_STATE,
-    SESSION_SUPPORT,
-    PresentationState,
-)
-from app.identity.public import Bank
-from app.identity.schemas.institution_profile import (
-    RelatedPartyCreate,
-    RelatedPartyRoleInput,
-    ShareholdingCreate,
-)
-from app.identity.service import institution_profile
-from app.models import BankReportingPeriod, RegulatoryPackage
-from app.reporting.service import common, generation, lrt_generation, snapshot_diff
-from app.reporting.service.registry import get_definition
+from app.core.key_management.presentation import LOCKED_JSON, SESSION_SUPPORT
+from app.icaap.domain.frameworks import registry as frameworks
+from app.icaap.domain.frameworks.schema import FilingAnnex, Framework
+from app.icaap.schemas.workspace import IcaapFreezeCreate
+from app.icaap.service import cycles, freeze, workflow
+from app.models import RegulatoryPackage, RelatedParty, RelatedPartyRole
+from app.reporting.schemas.packages import RegulatoryPackageCreate
+from app.reporting.service import common, generation, snapshot_diff, validation
 from tests.api import test_impersonation_auth as impersonation
-from tests.core import test_bank_field_encryption as fields
-from tests.support.helpers import ORG_1, USER_1
+from tests.core import test_key_unavailable_numeric as encrypted
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.icaap.service import p3_support as p3
+from tests.reporting.service.bog_forms import test_bsd8 as bsd8
+from tests.reporting.service.bog_forms import test_bsd13 as bsd13
+from tests.services import test_le_and_lmt as le
+from tests.services import test_lrt_packs as lrt
+from tests.support.helpers import ORG_1, headers
 
-provider = fields.provider
+extra_frameworks = p3.extra_frameworks
+pytestmark = pytest.mark.usefixtures(
+    "return_generation_authority", "capital_run_authority", "extra_frameworks"
+)
 _OBJECT = TypeAdapter(dict[str, object])
 _OBJECTS = TypeAdapter(list[dict[str, object]])
 
 
-def party_snapshot(db: Session) -> dict[str, object]:
-    party = institution_profile.create_related_party(
-        db,
-        fields.CTX,
-        fields.BANK_A,
-        RelatedPartyCreate(
-            reason="Synthetic filing presentation",
-            party_type="individual",
-            full_name=fields.NAME,
-            contact={"email": "private@example.test"},
-            roles=[
-                RelatedPartyRoleInput(role="shareholder"),
-                RelatedPartyRoleInput(role="ultimate_beneficial_owner"),
-                RelatedPartyRoleInput(
-                    role="director", term_of_appointment="Private term", annual_fees=Decimal("123")
-                ),
-                RelatedPartyRoleInput(
-                    role="other_key_management", other_responsibilities="Private duties"
-                ),
-                RelatedPartyRoleInput(role="external_auditor", icag_registration="123456"),
-                RelatedPartyRoleInput(
-                    role="outsourced_individual", other_responsibilities="Private services"
-                ),
-                RelatedPartyRoleInput(role="liquidator"),
-            ],
+def freeze_annex(db: Session, monkeypatch: pytest.MonkeyPatch) -> RegulatoryPackage:
+    published = frameworks.all_frameworks()
+    framework = frameworks.get(*p3.TEST_FRAMEWORK)
+    assert framework.filing is not None
+    amended = replace(
+        framework,
+        filing=replace(
+            framework.filing,
+            annexes=(FilingAnnex("LRT-PARTY", False, ()),),
         ),
     )
-    institution_profile.add_shareholding(
-        db,
-        fields.CTX,
-        fields.BANK_A,
-        party.id,
-        ShareholdingCreate(
-            reason="Synthetic holding",
-            share_type="ordinary",
-            shareholder_rights="voting",
-            number_of_shares=Decimal("100"),
-            pct_shareholding=Decimal("25"),
-            ubo_party_id=party.id,
-        ),
-    )
-    period = BankReportingPeriod(
-        organization_id=ORG_1,
-        bank_id=fields.BANK_A,
-        period_start=fields.AS_OF,
-        period_end=fields.AS_OF,
-        label="Synthetic",
-        status="open",
-    )
-    db.add(period)
-    db.flush()
-    bank = db.get(Bank, fields.BANK_A)
-    assert bank is not None
-    definition = get_definition("LRT-PARTY")
-    assert definition is not None
-    generated = lrt_generation.generate_lrt_party(db, fields.CTX, bank, period, definition)
-    return cast(dict[str, object], generated.snapshot)
+
+    @cache
+    def published_frameworks() -> tuple[Framework, ...]:
+        return tuple(
+            amended if (item.code, item.version) == (framework.code, framework.version) else item
+            for item in published
+        )
+
+    with monkeypatch.context() as config:
+        config.setattr(frameworks, "_default", published_frameworks)
+        access = p3.access_for(db)
+        p3.govern_first_as_of(db, p3.AS_OF)
+        p3.seal_capital_run(db, access)
+        generation.generate_package(
+            db,
+            access.ctx,
+            SAMPLE_BANK_ID,
+            RegulatoryPackageCreate(
+                return_code="LRT-PARTY",
+                reporting_date=p3.AS_OF,
+            ),
+        )
+        cycle = cycles.create_cycle(db, access, p3.annual_payload())
+        p3.write_every_section(db, access, cycle.id)
+        p3.answer_every_requirement(db, access, cycle.id)
+        p3.make_p2_ready(db, access, cycle.id)
+        p3.attach(db, access, cycle.id, "senior_management_report", sha="a" * 64)
+        p3.submit(db, access, cycle.id)
+        reviewer = p3.access_for(
+            db,
+            p3.make_user(
+                db, email="cro@example.test", name="Reviewer", job_title="Chief Risk Officer"
+            ),
+        )
+        p3.decide(db, reviewer, cycle.id, 2, "reviewed")
+        approver = p3.access_for(db, p3.make_user(db, email="brc@example.test", name="Approver"))
+        p3.decide(db, approver, cycle.id, 3, "approved")
+        digest = workflow.get_stages(db, access, cycle.id).review_digest
+        result = freeze.freeze_cycle(
+            db,
+            access,
+            cycle.id,
+            IcaapFreezeCreate(
+                review_digest=digest,
+                reason="Freeze actual annex presentation fixture",
+            ),
+        )
+        package = db.get(RegulatoryPackage, result.package.id)
+        assert package is not None
+        assert any(
+            str(section["code"]).startswith("annex_LRT-PARTY__")
+            for section in _OBJECTS.validate_python(package.snapshot["sections"])
+        )
+        return package
 
 
-def snapshot_pair(db: Session, return_code: str) -> tuple[RegulatoryPackage, RegulatoryPackage]:
-    snapshot = party_snapshot(db)
-    sections = _OBJECTS.validate_python(snapshot["sections"])
-    if return_code == "LRT-CAPITAL":
-        sections = [section for section in sections if section["code"] == "shareholders"]
-        sections[0]["code"] = "shareholder_register"
-    elif return_code == "ICAAP-REPORT":
-        for section in sections:
-            section["code"] = f"annex_LRT-PARTY__{section['code']}"
-    sections.append(
-        {
-            "code": "capital",
-            "title": "Capital",
-            "rows": [{"code": "capital", "description": "Capital held", "value": "100"}],
-        }
-    )
-    snapshot["sections"] = sections
-    snapshot["return_code"] = return_code
-    definition = get_definition(return_code)
-    assert definition is not None
-    base = RegulatoryPackage(
-        organization_id=ORG_1,
-        bank_id=fields.BANK_A,
-        return_family=definition.family,
-        return_code=return_code,
-        reporting_date=fields.AS_OF,
-        frequency=definition.frequency,
-        status="superseded",
-        version=1,
-        generated_by=USER_1,
-        snapshot=copy.deepcopy(snapshot),
-        content_digest=content_digest(snapshot),
-        snapshot_sha256=generation.snapshot_content_hash(snapshot),
-    )
-    target_snapshot = copy.deepcopy(snapshot)
-    target_sections = _OBJECTS.validate_python(target_snapshot["sections"])
-    for section in target_sections:
-        rows = _OBJECTS.validate_python(section["rows"])
-        if str(section["code"]).endswith("auditors"):
-            rows[0]["value"] = "987654"
-        if section["code"] == "shareholder_register":
-            rows[0]["value"] = "30"
-        if section["code"] == "capital":
-            rows[0]["value"] = "140"
-        section["rows"] = rows
-    target_snapshot["sections"] = target_sections
-    target = RegulatoryPackage(
-        organization_id=ORG_1,
-        bank_id=fields.BANK_A,
-        return_family=definition.family,
-        return_code=return_code,
-        reporting_date=fields.AS_OF,
-        frequency=definition.frequency,
-        status="generated",
-        version=2,
-        generated_by=USER_1,
-        snapshot=target_snapshot,
-        content_digest=content_digest(target_snapshot),
-        snapshot_sha256=generation.snapshot_content_hash(target_snapshot),
-    )
-    db.add_all([base, target])
+def generated_package(db: Session, code: str) -> RegulatoryPackage:
+    if code == "LE-MONTHLY":
+        le._run_capital_baseline(db)  # pyright: ignore[reportPrivateUsage]
+        le._seed_le_book(db, le._tier1(db))  # pyright: ignore[reportPrivateUsage]
+    elif code == "LMT":
+        le._run_liquidity_baseline(db)  # pyright: ignore[reportPrivateUsage]
+        le._seed_lmt_book(db)  # pyright: ignore[reportPrivateUsage]
+    elif code == "BSD8":
+        previous = le.REPORTING_DATE.replace(day=1) - timedelta(days=1)
+        bsd8._seed_classified_book(db, le.REPORTING_DATE, previous)  # pyright: ignore[reportPrivateUsage]
+    elif code == "BSD13":
+        bsd13._seed_book(db, le.REPORTING_DATE)  # pyright: ignore[reportPrivateUsage]
     db.commit()
-    return base, target
+    result = generation.generate_package(
+        db,
+        lrt.MAKER,
+        SAMPLE_BANK_ID,
+        RegulatoryPackageCreate(
+            return_code=code,
+            reporting_date=le.REPORTING_DATE,
+            notes="Synthetic private filing note",
+        ),
+    )
+    package = db.get(RegulatoryPackage, result.id)
+    assert package is not None
+    validation.validate_package(db, lrt.MAKER, SAMPLE_BANK_ID, package.id)
+    return package
 
 
-@pytest.mark.parametrize("connected", [False, True])
-@pytest.mark.parametrize("return_code", ["LRT-PARTY", "LRT-CAPITAL", "ICAAP-REPORT"])
-def test_inspector_snapshot_and_comparison_mask_identity_without_altering_evidence(
+def changed_party_version(db: Session) -> RegulatoryPackage:
+    auditor = db.scalar(
+        select(RelatedPartyRole)
+        .join(
+            RelatedParty,
+            RelatedParty.id == RelatedPartyRole.party_id,
+        )
+        .where(
+            RelatedPartyRole.organization_id == ORG_1,
+            RelatedParty.bank_id == SAMPLE_BANK_ID,
+            RelatedPartyRole.role == "external_auditor",
+        )
+    )
+    assert auditor is not None
+    auditor.icag_registration = "Synthetic private comparison registration"
+    db.flush()
+    read = generation.generate_package(
+        db,
+        lrt.MAKER,
+        SAMPLE_BANK_ID,
+        RegulatoryPackageCreate(
+            return_code="LRT-PARTY",
+            reporting_date=le.REPORTING_DATE,
+        ),
+    )
+    target = db.get(RegulatoryPackage, read.id)
+    assert target is not None
+    return target
+
+
+def assert_staff_bodies_hidden(
+    package: RegulatoryPackage,
+    identity: str | None,
+    detail: Response,
+    compared: Response,
+) -> None:
+    for response in (detail, compared):
+        assert response.status_code == 200, response.text
+        assert response.headers["Cache-Control"] == "no-store"
+        if identity is not None:
+            assert identity not in response.text
+    body = _OBJECT.validate_json(detail.content)
+    assert (body["return_code"], body["version"], body["reporting_date"]) == (
+        package.return_code,
+        package.version,
+        package.reporting_date.isoformat(),
+    )
+    assert body["status"] == package.status and body["generated_at"]
+    assert body["snapshot"] == {LOCKED_JSON: "support"}
+    assert body["validation_report"] is None and body["validation_passed"] is None
+    assert (body["source_runs"], body["approvals"], body["declared_methodologies"]) == ([], [], [])
+    assert body["notes"] is None and body["regulator_comments"] is None
+    diff = _OBJECT.validate_json(compared.content)
+    assert diff["content_locked"] is True and diff["sections"] == []
+    for field in (
+        "identical",
+        "changed_count",
+        "added_count",
+        "removed_count",
+        "unchanged_section_count",
+    ):
+        assert diff[field] is None
+    assert _OBJECT.validate_python(diff["base"])["package_id"] == str(package.id)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "LRT-PROFILE",
+        "LRT-OUTLET",
+        "LRT-PARTY",
+        "LRT-CAPITAL",
+        "LRT-PRODUCT",
+        "LE-MONTHLY",
+        "LMT",
+        "BSD8",
+        "BSD11",
+        "BSD13",
+        "ICAAP-REPORT",
+    ],
+)
+def test_enabled_key_support_reads_are_metadata_only_for_real_generated_packages(
     db_client: TestClient,
     db_session: Session,
-    provider: LocalKeyProvider,
-    connected: bool,
-    return_code: str,
+    monkeypatch: pytest.MonkeyPatch,
+    code: str,
 ) -> None:
-    if connected:
-        fields.connect(db_session, provider)
-    base, target = snapshot_pair(db_session, return_code)
-    snapshot = copy.deepcopy(base.snapshot)
-    evidence = {
-        row.id: (json.dumps(row.snapshot, sort_keys=True), row.content_digest, row.snapshot_sha256)
-        for row in (base, target)
-    }
-    ordinary = common.read_package(db_session, base)
-    assert ordinary.snapshot == snapshot
-    ordinary_diff = snapshot_diff.build_comparison(db_session, base, target)
-    assert ordinary_diff.changed_count == 2
+    materialize_canonical_test_book(db_session)
+    encrypted.connect(db_session, monkeypatch)
+    encrypted.register(db_session)
+    package = (
+        freeze_annex(db_session, monkeypatch)
+        if code == "ICAAP-REPORT"
+        else generated_package(db_session, code)
+    )
+    target = changed_party_version(db_session) if code == "LRT-PARTY" else package
+    db_session.commit()
+    db_session.refresh(package)
+    original = copy.deepcopy(package.snapshot)
+    seals = (package.content_digest, package.snapshot_sha256, package.register_state_digest)
+    url = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package.id}"
+    ordinary = db_client.get(url, headers=headers())
+    assert ordinary.status_code == 200, ordinary.text
+    assert _OBJECT.validate_json(ordinary.content)["snapshot"] == original
+    identity = {
+        "LRT-PARTY": "Ama Mensah",
+        "LRT-CAPITAL": "Golden Coast Holdings Ltd",
+        "LE-MONTHLY": "Akwaaba Industries Ltd",
+        "LMT": "Kanda Pensions Trust",
+        "BSD8": "Kumasi Traders Ltd",
+        "BSD11": "Ama Mensah",
+        "BSD13": "Citibank NA",
+        "ICAAP-REPORT": "Ama Mensah",
+    }.get(code)
+    if identity is not None:
+        assert identity in ordinary.text
+    normal_comparison = db_client.get(
+        f"{url}/comparison", params={"against": str(target.id)}, headers=headers()
+    )
+    assert normal_comparison.status_code == 200, normal_comparison.text
+    assert _OBJECT.validate_json(normal_comparison.content)["identical"] == (
+        package.id == target.id
+    )
+    if code == "LRT-PARTY":
+        assert "Synthetic private comparison registration" in normal_comparison.text
     token = impersonation._impersonation_token(ORG_1)  # pyright: ignore[reportPrivateUsage]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    url = f"/api/v1/banks/{fields.BANK_A}/regulatory-packages/{base.id}"
-    detail = db_client.get(url, headers=headers)
-    comparison = db_client.get(
-        f"{url}/comparison", params={"against": str(target.id)}, headers=headers
+    staff_headers = {"Authorization": f"Bearer {token}"}
+    detail = db_client.get(url, headers=staff_headers)
+    compared = db_client.get(
+        f"{url}/comparison", params={"against": str(target.id)}, headers=staff_headers
     )
-    for response in (detail, comparison):
-        assert response.status_code == 200, response.text
-        for secret in (
-            fields.NAME,
-            "private@example.test",
-            "Private term",
-            "Private duties",
-            "Private services",
-            "123456",
-            "987654",
-        ):
-            assert secret not in response.text
-        assert LOCKED_TEXT in response.text
-        assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {
-            fields.BANK_A: "support"
-        }
-    shown = _OBJECT.validate_json(detail.content)
-    shown_snapshot = _OBJECT.validate_python(shown["snapshot"])
-    shown_sections = _OBJECTS.validate_python(shown_snapshot["sections"])
-    for section in shown_sections:
-        for row in _OBJECTS.validate_python(section["rows"]):
-            if section["code"] != "capital":
-                assert row["description"] == LOCKED_TEXT
-            if (
-                str(section["code"]).endswith("shareholders")
-                or section["code"] == "shareholder_register"
-            ):
-                assert Decimal(str(row["value"])) == 25
-                assert Decimal(str(row["number_of_shares"])) == 100
-            if str(section["code"]).endswith("directors"):
-                assert Decimal(str(row["annual_fees"])) == 123
-    shown_diff = _OBJECT.validate_json(comparison.content)
-    assert shown_diff["changed_count"] == ordinary_diff.changed_count
-    assert shown_diff["identical"] is False
-    capital = next(
-        section
-        for section in _OBJECTS.validate_python(shown_diff["sections"])
-        if section["code"] == "capital"
+    assert_staff_bodies_hidden(package, identity, detail, compared)
+    listing = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages",
+        params={"return_code": code},
+        headers=staff_headers,
     )
-    assert _OBJECTS.validate_python(capital["lines"])[0]["delta"] == "40"
+    assert listing.status_code == 200, listing.text
+    rows = _OBJECTS.validate_python(_OBJECT.validate_json(listing.content)["packages"])
+    assert rows and all(row["notes"] is None and row["regulator_comments"] is None for row in rows)
+    db_session.info[SESSION_SUPPORT] = True
+    assert common.read_package(db_session, package).snapshot == {LOCKED_JSON: "support"}
+    assert snapshot_diff.build_comparison(db_session, package, target).content_locked is True
+    assert package.snapshot == original
+    db_session.info.pop(SESSION_SUPPORT)
     db_session.expire_all()
-    for package_id, original in evidence.items():
-        stored = db_session.get(RegulatoryPackage, package_id)
-        assert stored is not None
-        assert (
-            json.dumps(stored.snapshot, sort_keys=True),
-            stored.content_digest,
-            stored.snapshot_sha256,
-        ) == original
-    assert base.snapshot == snapshot
-
-
-@pytest.mark.parametrize("support_mode", ["flag", "state"])
-def test_support_snapshot_reads_preserve_loaded_orm_state_and_normal_reads(
-    db_session: Session,
-    provider: LocalKeyProvider,
-    support_mode: str,
-) -> None:
-    fields.connect(db_session, provider)
-    base, target = snapshot_pair(db_session, "LRT-PARTY")
-    originals = [copy.deepcopy(base.snapshot), copy.deepcopy(target.snapshot)]
-    if support_mode == "flag":
-        db_session.info[SESSION_SUPPORT] = True
-    else:
-        db_session.info[SESSION_STATE] = PresentationState(support=True)
-    presented = common.read_package(db_session, base)
-    compared = snapshot_diff.build_comparison(db_session, base, target)
-    assert fields.NAME not in presented.model_dump_json()
-    assert "123456" not in compared.model_dump_json()
-    assert LOCKED_TEXT in presented.model_dump_json()
-    assert [base.snapshot, target.snapshot] == originals
-    db_session.info.pop(SESSION_SUPPORT, None)
-    db_session.info.pop(SESSION_STATE, None)
-    assert common.read_package(db_session, base).snapshot == originals[0]
-    assert "123456" in snapshot_diff.build_comparison(db_session, base, target).model_dump_json()
+    assert package.snapshot == original
+    assert (package.content_digest, package.snapshot_sha256, package.register_state_digest) == seals
+    restored = db_client.get(url, headers=headers())
+    assert _OBJECT.validate_json(restored.content)["snapshot"] == original

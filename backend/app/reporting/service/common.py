@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Literal, cast
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.key_management.presentation import (
     LOCKED_JSON,
-    LOCKED_TEXT,
     SESSION_STATE,
     SESSION_SUPPORT,
     PresentationState,
@@ -172,7 +171,7 @@ def validation_passed(package: RegulatoryPackage) -> bool | None:
 
 
 def read_summary(
-    package: RegulatoryPackage, *, stage_title: str | None = None
+    db: Session, package: RegulatoryPackage, *, stage_title: str | None = None
 ) -> RegulatoryPackageSummaryRead:
     """The package as a queue row.
 
@@ -180,6 +179,7 @@ def read_summary(
     resolves every row's title in ONE query (see ``packages.list_packages``),
     and doing it per row would fan a queue out into a query per package.
     """
+    support = support_presentation(db, package.bank_id)
     return RegulatoryPackageSummaryRead(
         id=package.id,
         bank_id=package.bank_id,
@@ -193,12 +193,12 @@ def read_summary(
         supersedes_id=package.supersedes_id,
         generated_by=package.generated_by,
         generated_at=package.generated_at,
-        validation_passed=validation_passed(package),
-        notes=package.notes,
+        validation_passed=None if support else validation_passed(package),
+        notes=None if support else package.notes,
         attestation_state=package.attestation_state,
         submission_revision=package.submission_revision,
         snapshot_sha256=package.snapshot_sha256,
-        regulator_comments=package.regulator_comments,
+        regulator_comments=None if support else package.regulator_comments,
         is_rehearsal=package.is_rehearsal,
         current_stage_seq=package.current_stage_seq,
         current_stage_title=stage_title,
@@ -208,78 +208,29 @@ def read_summary(
     )
 
 
-_SNAPSHOT_IDENTITY_SECTIONS = frozenset(
-    {
-        "shareholders",
-        "directors",
-        "key_management",
-        "auditors",
-        "ubos",
-        "outsourced",
-        "liquidators",
-        "due_diligence_checklist",
-        "shareholder_register",
-    }
-)
-_SNAPSHOT_IDENTITY_FIELDS = frozenset(
-    {
-        "full_name",
-        "counterparty_name",
-        "ubo_name",
-        "contact",
-        "contact_email",
-        "term_of_appointment",
-        "other_responsibilities",
-        "icag_registration",
-    }
-)
-
-
-def _mask_snapshot(value: object, section: str = "") -> object:
-    if isinstance(value, list):
-        return [_mask_snapshot(item, section) for item in cast(list[object], value)]
-    if not isinstance(value, dict):
-        return value
-    entry = cast(dict[str, object], value)
-    if "rows" in entry or "lines" in entry:
-        section = str(entry.get("code", "")).rsplit("__", 1)[-1]
-    return {
-        key: (
-            LOCKED_TEXT
-            if (
-                key in _SNAPSHOT_IDENTITY_FIELDS
-                or (key == "description" and section in _SNAPSHOT_IDENTITY_SECTIONS)
-                or (
-                    section == "auditors"
-                    and key
-                    in {
-                        "value",
-                        "base_value",
-                        "target_value",
-                        "delta",
-                        "delta_pct",
-                    }
-                )
-            )
-            and item is not None
-            else _mask_snapshot(item, section)
-        )
-        for key, item in entry.items()
-    }
-
-
-def present_snapshot(db: Session, bank_id: str, snapshot: dict[str, object]) -> dict[str, object]:
+def support_presentation(db: Session, bank_id: str) -> bool:
     presentation = db.info.get(SESSION_STATE)
-    if not db.info.get(SESSION_SUPPORT) and not (
+    support = bool(db.info.get(SESSION_SUPPORT)) or (
         isinstance(presentation, PresentationState) and presentation.support
-    ):
-        return snapshot
-    if isinstance(presentation, PresentationState):
+    )
+    if support and isinstance(presentation, PresentationState):
         presentation.record(bank_id, "support")
-    return cast(dict[str, object], _mask_snapshot(snapshot))
+    return support
 
 
 def read_package(db: Session, package: RegulatoryPackage) -> RegulatoryPackageRead:
+    if support_presentation(db, package.bank_id):
+        summary = read_summary(db, package)
+        return RegulatoryPackageRead.model_validate(
+            {
+                **summary.model_dump(),
+                "snapshot": {LOCKED_JSON: "support"},
+                "source_runs": [],
+                "validation_report": None,
+                "approvals": [],
+                "declared_methodologies": [],
+            }
+        )
     approvals = list(
         db.scalars(
             select(RegulatoryPackageApproval)
@@ -297,8 +248,8 @@ def read_package(db: Session, package: RegulatoryPackage) -> RegulatoryPackageRe
     if report_payload is not None and LOCKED_JSON in report_payload:
         report_payload = None
     return RegulatoryPackageRead(
-        **read_summary(package).model_dump(),
-        snapshot=present_snapshot(db, package.bank_id, package.snapshot),
+        **read_summary(db, package).model_dump(),
+        snapshot=package.snapshot,
         source_runs=[PackageSourceRunRead(**entry) for entry in package.source_runs],
         validation_report=(
             ValidationReportRead(**report_payload) if report_payload is not None else None
