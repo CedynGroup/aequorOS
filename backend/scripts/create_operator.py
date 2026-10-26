@@ -20,10 +20,11 @@ surface) or ``POST /operator/v1/operators`` so the action is audit-logged.
 Locally, dev-token sessions carry ``operator_admin`` and can create the first
 operator through the API instead.
 
-Connects with the operator database resolution order (OPERATOR_DATABASE_URL →
-WORKER_DATABASE_URL → DATABASE_URL, from the environment or ``backend/.env``)
-— on the RLS-forced primary the operator/worker BYPASSRLS role is the natural
-fit, though ``operator_users`` itself is not RLS-forced.
+This bootstrap CLI uses OPERATOR_DATABASE_URL → DATABASE_URL, from the
+environment or ``backend/.env``.
+Set OPERATOR_DATABASE_URL explicitly to a credential authorized to provision
+operator accounts; the tenant-scoped worker cannot write ``operator_users``.
+Deployment activation follows ``docs/ops/database-roles.md``.
 
 The generated password (or ``--password`` value) is printed ONCE. Only the
 hash is stored.
@@ -46,16 +47,11 @@ from app.models.operator import OPERATOR_ROLES, OperatorUser  # noqa: E402
 
 
 def _database_url() -> str | None:
-    """OPERATOR_DATABASE_URL → WORKER_DATABASE_URL → DATABASE_URL (the
-    operator app's own resolution order, minus the HTTP error envelope)."""
+    """Resolve the bootstrap credential using the operator configuration."""
     from app.core.config import get_operator_settings, get_settings  # noqa: PLC0415
 
     settings = get_settings()
-    return (
-        get_operator_settings().operator_database_url
-        or settings.worker.worker_database_url
-        or settings.database.database_url
-    )
+    return get_operator_settings().operator_database_url or settings.database.database_url
 
 
 def provision(session: Session, args: argparse.Namespace) -> tuple[OperatorUser, str | None]:
@@ -109,7 +105,7 @@ def main() -> int:
     database_url = _database_url()
     if not database_url:
         print(
-            "No database configured (set OPERATOR_DATABASE_URL, WORKER_DATABASE_URL, "
+            "No database configured (set OPERATOR_DATABASE_URL "
             "or DATABASE_URL in the environment or backend/.env).",
             file=sys.stderr,
         )

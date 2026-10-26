@@ -134,7 +134,7 @@ def activate_mapping(client: TestClient, bank_id: str, mapping: MappingConfig) -
         },
     )
     assert response.status_code == 200, response.text
-    return response.json()["id"]
+    return cast(str, response.json()["id"])
 
 
 def start_batch(
@@ -151,7 +151,7 @@ def start_batch(
         },
     )
     assert response.status_code == 201, response.text
-    return response.json()
+    return cast(dict[str, Any], response.json())
 
 
 def create_scoped_mapping(

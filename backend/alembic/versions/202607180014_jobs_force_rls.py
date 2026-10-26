@@ -8,8 +8,9 @@ un-forced RLS does not apply to it at all — it could read every tenant's job
 rows without an organization context, violating the tenant-isolation invariant
 (the API filters explicitly, so this was defense-in-depth, not an open door).
 
-The worker now runs on a BYPASSRLS role (``WORKER_DATABASE_URL``), so nothing
-legitimate depends on the drift. Re-assert FORCE; idempotent if already set.
+At this revision the worker ran on a separate BYPASSRLS role, so no legitimate
+operation depended on the drift. Re-assert FORCE; idempotent if already set.
+Current worker access follows ``docs/ops/database-roles.md``.
 
 Revision ID: 202607180014
 Revises: 202607180013

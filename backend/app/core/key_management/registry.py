@@ -23,6 +23,7 @@ from app.core.key_management.types import (
     KeyUnavailableError,
 )
 from app.db.base import utc_now
+from app.db.worker_access import KEY_SIGNATURE, has_worker_function
 
 type ProviderFactory = Callable[[str], KeyProvider]
 
@@ -196,7 +197,22 @@ class DatabaseEnvelopeStore:
         self._providers = providers
 
     @staticmethod
+    def resolve_bank(db: Session, slug: str) -> BankEncryptionKey | None:
+        """Resolve only a key belonging to the current worker job context."""
+        return db.scalars(
+            select(BankEncryptionKey).from_statement(
+                text("SELECT * FROM aqs_worker_bank_key(:slug)")
+            ),
+            {"slug": slug},
+        ).first()
+
+    @staticmethod
     def _bank(db: Session, slug: str, *, read: bool = False) -> BankEncryptionKey:
+        if db.info.get("worker_context") is True and has_worker_function(db, KEY_SIGNATURE):
+            row = DatabaseEnvelopeStore.resolve_bank(db, slug)
+            if row is None:
+                raise KeyUnavailableError("The bank encryption key is not connected to this job.")
+            return row
         row = db.scalar(
             select(BankEncryptionKey)
             .where(BankEncryptionKey.storage_slug == slug)

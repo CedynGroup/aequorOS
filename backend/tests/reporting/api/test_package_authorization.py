@@ -395,7 +395,9 @@ def test_regulatory_viewer_cannot_send_back_but_approver_can(
     )
     assert refused.status_code == 403, refused.text
     with get_sessionmaker()() as session:
-        assert session.get(RegulatoryPackage, package_id).status == "pending_approval"
+        stored_package = session.get(RegulatoryPackage, package_id)
+        assert stored_package is not None
+        assert stored_package.status == "pending_approval"
 
     approver_version = _grant(
         role_bundle=RoleBundle.APPROVER,
@@ -409,7 +411,9 @@ def test_regulatory_viewer_cannot_send_back_but_approver_can(
     )
     assert sent_back.status_code == 200, sent_back.text
     with get_sessionmaker()() as session:
-        assert session.get(RegulatoryPackage, package_id).status == "generated"
+        stored_package = session.get(RegulatoryPackage, package_id)
+        assert stored_package is not None
+        assert stored_package.status == "generated"
 
 
 def test_binding_only_signer_queue_filters_by_whole_institution_family(
