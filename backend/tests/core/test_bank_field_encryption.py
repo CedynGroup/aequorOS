@@ -29,7 +29,7 @@ from app.bi.service.execution import execute
 from app.bi.service.identity_policy import IDENTITY_REASON
 from app.core.ids import new_uuid7
 from app.core.key_management import registry
-from app.core.key_management.fields import Normalization, blind_index
+from app.core.key_management.fields import Normalization, blind_index, observe_bank_key
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.presentation import (
@@ -1645,22 +1645,140 @@ def test_profile_recovery_unwraps_each_required_version_once(
     assert len(calls) == 1 + int(rotated)
 
 
-def test_empty_rotated_profile_combines_prerequisite_failure_severity(
-    db_client: TestClient, db_session: Session, provider: LocalKeyProvider
+@pytest.mark.parametrize("populated", [False, True])
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        (KeyStatus.UNAVAILABLE, KeyStatus.DISABLED, NEXT),
+        (KeyStatus.DISABLED, KeyStatus.UNAVAILABLE, KEY_A),
+    ],
+)
+def test_rotated_profiles_combine_prerequisite_failure_severity(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    populated: bool,
+    scenario: tuple[KeyStatus, KeyStatus, KeyReference],
+) -> None:
+    connect(db_session, provider)
+    if populated:
+        institution_profile.create_related_party(
+            db_session,
+            CTX,
+            BANK_A,
+            RelatedPartyCreate(
+                reason="Synthetic historical field failure",
+                party_type="individual",
+                full_name=NAME,
+                contact={"email": "synthetic@example.test"},
+                roles=[],
+            ),
+        )
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, NEXT, lambda _name: provider)
+    db_session.commit()
+    index_status, current_status, first_restored = scenario
+    provider.set_status(NEXT, current_status)
+    provider.set_status(KEY_A, index_status)
+    url = f"/api/v1/banks/{BANK_A}/institution-profile"
+    for expected in ("revoked", "unavailable", "available"):
+        response = db_client.get(url, headers=headers())
+        assert response.status_code == 200, response.text
+        parties = InstitutionProfileFullRead.model_validate_json(response.content).related_parties
+        assert len(parties) == int(populated)
+        if populated:
+            assert parties[0].full_name == (
+                NAME
+                if expected == "available" or first_restored == KEY_A and expected == "unavailable"
+                else LOCKED_TEXT
+            )
+        assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: expected}
+        provider.set_status(first_restored if expected == "revoked" else KEY_A, KeyStatus.ACTIVE)
+        if expected == "unavailable":
+            provider.set_status(NEXT, KeyStatus.ACTIVE)
+
+
+@pytest.mark.parametrize("observe_first", [False, True])
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        (KeyStatus.ACTIVE, KeyStatus.UNAVAILABLE, KeyStatus.DISABLED, "revoked"),
+        (KeyStatus.DISABLED, KeyStatus.ACTIVE, KeyStatus.UNAVAILABLE, "revoked"),
+        (KeyStatus.UNAVAILABLE, KeyStatus.DISABLED, KeyStatus.ACTIVE, "revoked"),
+        (KeyStatus.ACTIVE, KeyStatus.UNAVAILABLE, KeyStatus.ACTIVE, "unavailable"),
+        (KeyStatus.UNAVAILABLE, KeyStatus.ACTIVE, KeyStatus.ACTIVE, "unavailable"),
+        (KeyStatus.ACTIVE, KeyStatus.ACTIVE, KeyStatus.UNAVAILABLE, "unavailable"),
+        (KeyStatus.ACTIVE, KeyStatus.ACTIVE, KeyStatus.ACTIVE, "available"),
+    ],
+)
+def test_prerequisite_observation_is_independent_of_historical_read_order(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    observe_first: bool,
+    scenario: tuple[KeyStatus, KeyStatus, KeyStatus, str],
 ) -> None:
     connect(db_session, provider)
     row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
     registry.rotate(db_session, row, NEXT, lambda _name: provider)
     db_session.commit()
-    provider.set_status(NEXT, KeyStatus.UNAVAILABLE)
-    provider.set_status(KEY_A, KeyStatus.DISABLED)
-    url = f"/api/v1/banks/{BANK_A}/institution-profile"
-    for expected in ("revoked", "unavailable", "available"):
-        response = db_client.get(url, headers=headers())
-        assert response.status_code == 200, response.text
-        assert response.json()["related_parties"] == []
-        assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: expected}
-        provider.set_status(KEY_A if expected == "revoked" else NEXT, KeyStatus.ACTIVE)
+    institution_profile.create_related_party(
+        db_session,
+        CTX,
+        BANK_A,
+        RelatedPartyCreate(
+            reason="Synthetic independent historical key",
+            party_type="individual",
+            full_name=NAME,
+            contact={"email": "synthetic@example.test"},
+            roles=[RelatedPartyRoleInput(role="director", sitting_allowance=Decimal(45))],
+        ),
+    )
+    current_key = KeyReference("aws_kms", "synthetic-current-v3", "us-east-1", "111122223333")
+    provider.add_key(current_key)
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, current_key, lambda _name: provider)
+    db_session.commit()
+    index_status, historical_status, current_status, expected = scenario
+    for key, status in (
+        (KEY_A, index_status),
+        (NEXT, historical_status),
+        (current_key, current_status),
+    ):
+        provider.set_status(key, status)
+    calls: list[KeyReference] = []
+    unwrap = provider.unwrap
+
+    def observed(key: KeyReference, wrapped: bytes, context: dict[str, str]) -> bytes:
+        calls.append(key)
+        return unwrap(key, wrapped, context)
+
+    monkeypatch.setattr(provider, "unwrap", observed)
+    with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+        presentation = PresentationState()
+        fresh.info[SESSION_STATE] = presentation
+        if observe_first:
+            observe_bank_key(fresh, ORG_1, BANK_A)
+        profile = institution_profile.get_full_profile(fresh, CTX, BANK_A)
+        observe_bank_key(fresh, ORG_1, BANK_A)
+        assert presentation.banks == {BANK_A: expected}
+        assert profile.related_parties[0].full_name == (
+            NAME if historical_status == KeyStatus.ACTIVE else LOCKED_TEXT
+        )
+        assert profile.related_parties[0].roles[0].sitting_allowance == Decimal(45)
+        assert all(calls.count(key) == 1 for key in (KEY_A, NEXT, current_key))
+        assert len(calls) == 3
+    for key in (KEY_A, NEXT, current_key):
+        provider.set_status(key, KeyStatus.ACTIVE)
+    calls.clear()
+    with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+        presentation = PresentationState()
+        fresh.info[SESSION_STATE] = presentation
+        profile = institution_profile.get_full_profile(fresh, CTX, BANK_A)
+        assert presentation.banks == {BANK_A: "available"}
+        assert profile.related_parties[0].full_name == NAME
+        assert all(calls.count(key) == 1 for key in (KEY_A, NEXT, current_key))
+        assert len(calls) == 3
 
 
 @pytest.mark.parametrize("connected", [False, True])

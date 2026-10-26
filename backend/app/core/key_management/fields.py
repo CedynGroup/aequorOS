@@ -567,15 +567,17 @@ def _presentation_locked(
 
 def observe_bank_key(db: Session, organization: str, bank: str) -> None:
     presentation = db.info.get(SESSION_STATE)
-    if not isinstance(presentation, PresentationState) or bank in presentation.banks:
+    if not isinstance(presentation, PresentationState) or bank in presentation.observed_banks:
         return
     if presentation.support or db.info.get(SESSION_SUPPORT):
         presentation.record(bank, "support")
+        presentation.observed_banks.add(bank)
         return
     registry.lock_bank_version(db, organization, bank, read=True)
     row = registry.bank_key(db, organization, bank)
     if row is None and get_key_settings().bank_key_required:
         presentation.record(bank, "unavailable")
+        presentation.observed_banks.add(bank)
         return
     if row is not None:
         versions = {row.current_version_id: _envelope_context(organization, bank)}
@@ -596,6 +598,7 @@ def observe_bank_key(db: Session, organization: str, bank: str) -> None:
                 if version is not None:
                     presentation.read_locks[version] = reason
     presentation.record(bank, "available")
+    presentation.observed_banks.add(bank)
 
 
 def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
@@ -609,6 +612,7 @@ def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
     if isinstance(presentation, PresentationState) and (
         reason := presentation.read_locks.get(value.envelope_id)
     ):
+        observe_bank_key(db, row.organization_id, row.bank_id)
         _lock_field(instance, col, reason)
         return None
     try:
@@ -627,6 +631,7 @@ def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
         reason = "revoked" if exc.revoked else "unavailable"
         presentation.record(row.bank_id, reason)
         presentation.read_locks[value.envelope_id] = reason
+        observe_bank_key(db, row.organization_id, row.bank_id)
         _lock_field(instance, col, reason)
         return None
     observe_bank_key(db, row.organization_id, row.bank_id)

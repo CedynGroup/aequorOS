@@ -21,6 +21,7 @@ LOCKED_JSON = "_aequoros_protected_data"
 class PresentationState:
     support: bool = False
     banks: dict[str, LockReason] = field(default_factory=dict)
+    observed_banks: set[str] = field(default_factory=set)
     read_locks: dict[UUID, Literal["revoked", "unavailable"]] = field(default_factory=dict)
 
     def record(self, bank: str, reason: LockReason) -> None:
