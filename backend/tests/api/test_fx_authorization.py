@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any, cast
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -11,7 +11,6 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from loguru import logger
 from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import (
@@ -979,7 +978,7 @@ def test_queued_official_run_mints_authorized_fx_results(
         role_bundle=RoleBundle.ANALYST,
         sensitivity_scope=SensitivityScope.CONFIDENTIAL,
     )
-    with cast(Session, get_sessionmaker()()) as session:
+    with get_sessionmaker()() as session:
         period = session.get(BankReportingPeriod, period_id)
         assert period is not None
         seed_canonical_fixture(

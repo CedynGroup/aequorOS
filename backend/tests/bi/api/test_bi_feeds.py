@@ -32,7 +32,7 @@ import datetime as dt
 import json
 from collections.abc import Iterator
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -254,7 +254,7 @@ def _reader(
     Feed behavior remains exercised for future BI release work. This fixture
     deliberately creates historical state without the issuance service.
     """
-    with cast(Session, get_sessionmaker()()) as db:
+    with get_sessionmaker()() as db:
         db.info["organization_id"] = ORG_1
         service = User(
             organization_id=ORG_1,
@@ -293,7 +293,7 @@ def _reader(
         )
     reader = {"Authorization": f"Bearer {raw}"}
     if data_scope is not DataScope.ALL:
-        with cast(Session, get_sessionmaker()()) as db:
+        with get_sessionmaker()() as db:
             db.info["organization_id"] = ORG_1
             binding = db.scalar(
                 select(AuthorizationBinding).where(
@@ -500,7 +500,7 @@ def test_a_revoked_key_is_refused(db_client: TestClient, mart: Bank, bi_on: None
     reader = _reader()
     assert _pull(db_client, reader).status_code == 200
     raw = reader["Authorization"].removeprefix("Bearer ")
-    with cast(Session, get_sessionmaker()()) as db:
+    with get_sessionmaker()() as db:
         db.info["organization_id"] = ORG_1
         key = db.scalar(
             select(IntegrationKey).where(
@@ -525,7 +525,7 @@ def test_revocation_ends_the_reader_binding_and_its_identity(
 
     reader = _reader()
     raw = reader["Authorization"].removeprefix("Bearer ")
-    with cast(Session, get_sessionmaker()()) as db:
+    with get_sessionmaker()() as db:
         db.info["organization_id"] = ORG_1
         key = db.scalar(
             select(IntegrationKey).where(
@@ -677,7 +677,7 @@ def _service_identity(reader: dict[str, str]) -> Any:
     """The machine principal behind an issued key, found the way the route finds it."""
 
     raw = reader["Authorization"].removeprefix("Bearer ")
-    with cast(Session, get_sessionmaker()()) as db:
+    with get_sessionmaker()() as db:
         db.info["organization_id"] = ORG_1
         key = db.scalar(
             select(IntegrationKey).where(
@@ -708,7 +708,7 @@ def _add_reader_sentence(  # noqa: PLR0913 - one keyword per binding dimension
     before the route does.
     """
 
-    with cast(Session, get_sessionmaker()()) as db:
+    with get_sessionmaker()() as db:
         db.info["organization_id"] = ORG_1
         authorization.create_role_binding(
             db,
