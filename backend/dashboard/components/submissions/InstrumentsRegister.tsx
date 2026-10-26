@@ -157,7 +157,7 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
           </div>
         )}
         <div
-          className="hidden lg:grid lg:grid-cols-[2fr_1fr_1.5fr_1fr_1.5fr] gap-4 px-4 text-caption font-medium text-slate"
+          className="hidden lg:grid lg:grid-cols-[2fr_minmax(10rem,1fr)_1.5fr_1fr_1.5fr] gap-4 px-4 text-caption font-medium text-slate"
           aria-hidden="true"
         >
           <span>Instrument</span>
@@ -202,7 +202,7 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
                 key={item.code}
                 className="border-b border-border px-4 py-3 space-y-3 scroll-mt-6"
               >
-                <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1.5fr_1fr_1.5fr] items-start gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-[2fr_minmax(10rem,1fr)_1.5fr_1fr_1.5fr] items-start gap-4">
                   <div>
                     <h2 className="text-body font-medium text-navy">
                       {item.title}
