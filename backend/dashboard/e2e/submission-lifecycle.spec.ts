@@ -146,6 +146,10 @@ test.describe("submission pipeline", () => {
   test("journey 3: history renders the package/version ledger", async ({
     page,
   }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "returns.ledger-identity",
+    });
     // Generate at least one package first so history is non-empty.
     await page.goto(RETURNS);
     const minted = page.waitForResponse(
@@ -238,6 +242,10 @@ test.describe("submission pipeline", () => {
   test("journey 5: analyst cannot approve; viewer cannot generate", async ({
     browser,
   }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "returns.authority-denials",
+    });
     const analyst = await browser.newContext({ storageState: analystState });
     const viewer = await browser.newContext({ storageState: viewerState });
     try {

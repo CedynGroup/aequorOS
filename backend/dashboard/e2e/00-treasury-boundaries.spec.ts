@@ -31,6 +31,10 @@ test("zero uploaded cash produces a real zero HQLA and red 0% coverage", async (
   treasury,
   page,
 }) => {
+  test.info().annotations.push({
+    type: "critical-outcome",
+    description: "treasury.zero-hqla",
+  });
   const result = await treasury.upload({
     ...base,
     cash: "0",
@@ -46,6 +50,10 @@ test("correcting cash across the 100% LCR threshold changes amber to green at th
   treasury,
   page,
 }) => {
+  test.info().annotations.push({
+    type: "critical-outcome",
+    description: "treasury.lcr-threshold",
+  });
   // Corporate funding: 60,000 at 25% + 40,000 at 40% = 31,000 outflow.
   for (const point of [
     {
@@ -118,6 +126,10 @@ test("Level 2A and 2B holdings receive haircuts and both caps before the 50,000 
   treasury,
   page,
 }) => {
+  test.info().annotations.push({
+    type: "critical-outcome",
+    description: "treasury.hqla-haircuts-caps",
+  });
   const result = await treasury.upload({
     ...base,
     cash: "30000",
@@ -202,6 +214,10 @@ test.describe("savings and loans capital regime", () => {
     page,
     request,
   }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "treasury.sdi-capital",
+    });
     await treasury.refresh(base);
     const capital = await treasury.read<{
       net_own_funds_ghs: string;

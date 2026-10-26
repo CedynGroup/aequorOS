@@ -37,6 +37,7 @@ import { requireObjectStorage } from "./support/object-storage";
 import { generateCurrentVersion } from "./support/generate";
 import {
   currentFilingPackage,
+  expectFilingCash,
   expectFreshFilingSignatures,
   expectPriorFilingFrozen,
   expectRepeatedApprovalSafe,
@@ -48,6 +49,8 @@ import {
   filingPackage,
   filingSignatures,
   generateCorrectedFiling,
+  uploadFilingBook,
+  withdrawFilingBook,
 } from "./support/filing-correction";
 import {
   approveAndSignAsChecker,
@@ -301,12 +304,28 @@ async function correctAndRefile(
   control: Locator,
 ): Promise<void> {
   const priorEvents = await filingEvents(request, prior.id);
+  expectFilingCash(prior, 2_000_000);
+  const sourceRunId = await uploadFilingBook(
+    request,
+    date,
+    "3000000",
+    test.info().outputPath("corrected-filing-book.xlsx"),
+  );
   const corrected = await generateCorrectedFiling(
     page,
     request,
     prior,
     control,
   );
+  expectFilingCash(corrected, 3_000_000);
+  expect(corrected.sourceRuns).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ module: "liquidity", run_id: sourceRunId }),
+    ]),
+  );
+  expect(corrected.sourceRuns).not.toEqual(prior.sourceRuns);
+  expect(corrected.snapshotSha256).not.toBe(prior.snapshotSha256);
+  await expectPriorFilingFrozen(request, prior, signatures);
   await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
   await expectStaleReviewRefused(request, corrected.id, staleReview);
   await approveAndSignAsChecker(browser, approverState, date);
@@ -326,13 +345,16 @@ async function correctAndRefile(
     await expect(
       filing.page.getByText("Acknowledged", { exact: true }).first(),
     ).toBeVisible();
-    expect(await filingPackage(request, corrected.id)).toMatchObject({
+    const acknowledged = await filingPackage(request, corrected.id);
+    expect(acknowledged).toMatchObject({
       id: corrected.id,
       version: prior.version + 1,
       supersedesId: prior.id,
       status: "acknowledged",
       submissionRevision: "1.0",
     });
+    expectFilingCash(acknowledged, 3_000_000);
+    expect(acknowledged.snapshot).toEqual(corrected.snapshot);
     const events = (await filingEvents(request, corrected.id)).events;
     expect(events.filter((event) => event.event === "submitted")).toHaveLength(
       1,
@@ -635,9 +657,19 @@ test.describe("full lifecycle", () => {
     browser,
     request,
   }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "filing.rejected-correction",
+    });
     const date = journeyDates.reject;
     await setSandboxConfig({ sandbox_behavior: "reject" });
     try {
+      await uploadFilingBook(
+        request,
+        date,
+        "2000000",
+        test.info().outputPath("original-filing-book.xlsx"),
+      );
       await certifyAndApprove(page, browser, LIQUIDITY_RETURN, date);
       const original = await currentFilingPackage(request, date);
       const filing = await openFilingSession(browser, date);
@@ -658,6 +690,9 @@ test.describe("full lifecycle", () => {
         await filing.close();
       }
       const prior = await filingPackage(request, original.id);
+      expect(prior.snapshot).toEqual(original.snapshot);
+      expect(prior.snapshotSha256).toBe(original.snapshotSha256);
+      expect(prior.sourceRuns).toEqual(original.sourceRuns);
       expect(prior).toMatchObject({
         status: "rejected",
         submissionRevision: "1.0",
@@ -689,7 +724,11 @@ test.describe("full lifecycle", () => {
         rework,
       );
     } finally {
-      await setSandboxConfig({ sandbox_behavior: "ack" });
+      try {
+        await withdrawFilingBook(request, date);
+      } finally {
+        await setSandboxConfig({ sandbox_behavior: "ack" });
+      }
     }
   });
 
@@ -698,10 +737,20 @@ test.describe("full lifecycle", () => {
     browser,
     request,
   }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "filing.sent-back-correction",
+    });
     const date = journeyDates.sendBack;
-    const note = "Line 12 double-counts the placement maturing 2 April.";
+    const note = "Cash vault omits a GHS 1M contribution to share capital.";
     await setSandboxConfig({ sandbox_behavior: "ack" });
     try {
+      await uploadFilingBook(
+        request,
+        date,
+        "2000000",
+        test.info().outputPath("original-filing-book.xlsx"),
+      );
       await generateAndClearChecks(page, LIQUIDITY_RETURN, date);
       await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
       const original = await currentFilingPackage(request, date);
@@ -735,6 +784,9 @@ test.describe("full lifecycle", () => {
       });
       expect(filingSignatures(original.id)).toEqual(signatures);
       const prior = await filingPackage(request, original.id);
+      expect(prior.snapshot).toEqual(original.snapshot);
+      expect(prior.snapshotSha256).toBe(original.snapshotSha256);
+      expect(prior.sourceRuns).toEqual(original.sourceRuns);
       expect(prior.workflowRound).toBe(staleReview.round + 1);
       const regenerate = page
         .getByRole("button", { name: /^regenerate$/i })
@@ -751,7 +803,11 @@ test.describe("full lifecycle", () => {
         regenerate,
       );
     } finally {
-      await setSandboxConfig({ sandbox_behavior: "ack" });
+      try {
+        await withdrawFilingBook(request, date);
+      } finally {
+        await setSandboxConfig({ sandbox_behavior: "ack" });
+      }
     }
   });
 

@@ -6,5 +6,10 @@ import journeys from "./playwright.config";
 export default defineConfig({
   ...journeys,
   testDir: "./contracts",
-  reporter: [["./e2e/support/contract-reporter.ts"], ["list"]],
+  reporter: [
+    ["./e2e/support/artifact-reporter.ts"],
+    ["./e2e/support/contract-reporter.ts"],
+    ["./e2e/support/critical-outcome-reporter.ts", { layer: "contract" }],
+    ["list"],
+  ],
 });

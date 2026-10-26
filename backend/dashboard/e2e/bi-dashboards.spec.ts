@@ -27,12 +27,6 @@ const REFUSED_VIEW = "Loan book total";
 const REFUSED_MEMBER = "loans.balance_rc";
 
 /**
- * Titles and captions the `alco` pack carries for the widgets a
- * Liquidity-only reader is refused. Every one must be absent from that reader's
- * response: each names a figure, and naming the figure is the disclosure.
- */
-
-/**
  * Titles, captions and members the `credit` pack carries for the widgets a
  * Liquidity-only reader is refused. Every one must be absent from that reader's
  * SCREEN, for the same reason it is absent from the payload.

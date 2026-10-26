@@ -36,6 +36,10 @@ test.describe("bi-ask HTTP contracts", () => {
   });
 
   test("do not serve one reader's question to another", async ({ request }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "question.ownership",
+    });
     const id = randomUUID();
     const db = new DatabaseSync(path.join(E2E_TMP, "e2e.db"));
     try {

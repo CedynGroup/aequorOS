@@ -691,7 +691,11 @@ The contract suite reports every collected test and its final result through
 `e2e/support/contract-reporter.ts`, alongside the list reporter. Skips, missing
 results and expected failures fail the suite. `PLAYWRIGHT_CONTRACT_REPORT` selects
 the JSON destination (by default, `contracts.json` in the test-results directory).
-This report is separate from journey accounting.
+This report is separate from journey accounting. The aggregate gate requires the
+exact names in `.github/scripts/dashboard_contracts.json`; removing, renaming or
+adding a contract requires a reviewed manifest change, just as the journey floor
+does. A passing critical ownership outcome cannot replace other contracts.
+
 Navigation/recovery remains in `e2e/navigation-recovery.spec.ts`; macro read-only
 UI checks live together in `e2e/default-macro-scenarios.spec.ts`. Settings authority
 and preference persistence use fresh actors, while shell presentation is checked
@@ -718,11 +722,13 @@ Canonical balances, batch lineage and absence of sibling writes are checked
 before finally-based credential and tenant cleanup.
 
 The full filing lifecycle (`e2e/full-lifecycle.spec.ts`) takes both a regulator
-rejection and a checker send-back through a replacement package, renewed maker
-and checker signatures, and acknowledgement. It preserves the superseded
-snapshot, withdrawn signatures and earlier receipt history; a previous version's
-review basis is refused, repeated Validator approval is idempotent, and duplicate
-transmission cannot add a receipt. Package versions advance independently of the
+rejection and a checker send-back through correction of a synthetic source book
+via the Data Engine, a replacement package, renewed maker and checker signatures,
+and acknowledgement. It pins the replacement cash figure and its new source run
+while preserving the superseded snapshot and hash, withdrawn signatures and
+earlier receipt history. A previous version's review basis is refused, repeated
+Validator approval is idempotent, and duplicate transmission cannot add a receipt.
+Package versions advance independently of the
 ORASS revision, which counts regulator-granted resubmissions.
 
 The T24 journey configures a core in the browser, stages and ingests
@@ -857,7 +863,15 @@ Tests in one spec stay together; no mutable bank or storage is shared between sh
 installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
-counts. The aggregate requires all four reports, unique journey identities,
+counts. Complete Playwright output directories, including failure traces, worker
+logs and screenshots, are uploaded even after failure as
+`dashboard-journey-results-<shard>` and `dashboard-browser-contract-results`.
+`e2e/support/artifact-reporter.ts` persists inline attachment bodies (including
+screenshots) inside those output directories; list and outcome reporters alone
+keep those bytes only in memory. Separate output directories preserve journey
+attachments when contracts start.
+The full contract inventory is uploaded as `dashboard-browser-contract-report`.
+The aggregate requires all four reports, unique journey identities,
 and the executed-journey floor defined in the
 [gate script](../../.github/scripts/assert_dashboard_journeys.mjs), with zero skips. It verifies the
 reported counters against the named results and prints every skipped journey
@@ -865,6 +879,17 @@ in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
 fail the gate even when the remaining reports pass. Raise the floor when adding
 coverage; reducing it requires a reviewed suite change.
+
+The [critical-outcome catalogue](../../.github/scripts/dashboard_critical_outcomes.json)
+beside the numeric gate names a small set of required business outcomes. Each
+owning test declares its stable ID as a `critical-outcome` Playwright annotation.
+The outcome reporter records actual final results separately for journeys and
+contracts. The aggregate requires all four journey reports and the unsharded
+contract report, and rejects missing, duplicate, unknown, failed or wrongly
+layered outcomes even when the numeric floor passes. Keep IDs stable when
+renaming or splitting stories; changes to the catalogue require review. These
+IDs guard scenario presence and passing execution; meaningful assertions and
+code review still determine whether each story proves its declared outcome.
 
 Screenshot diagnostics are separate from the required suite; see the visual-tour
 capture command and output under [End-to-end (Playwright)](#end-to-end-playwright).
