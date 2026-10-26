@@ -538,6 +538,19 @@ def test_compute_binding_classifies_by_source_runs() -> None:
     assert workflow.compute_binding(master).binding_class == "master_data"
 
 
+def test_engine_binding_covers_register_and_engine_provenance_independently() -> None:
+    package = _package(register_state_digest="register-before")
+    original = workflow.compute_binding(package)
+    assert original.binding_class == "engine_run"
+    assert original.source_runs == package.source_runs
+    assert original.register_state_digest == "register-before"
+    package.register_state_digest = "register-after"
+    assert workflow.compute_binding(package).certification_digest != original.certification_digest
+    package.register_state_digest = "register-before"
+    package.source_runs = [{**package.source_runs[0], "input_hash": "changed"}]
+    assert workflow.compute_binding(package).certification_digest != original.certification_digest
+
+
 def test_master_data_package_without_register_state_is_refused() -> None:
     package = _package(source_runs=[], register_state_digest=None, return_code="LRT-PROFILE")
     with pytest.raises(workflow.AttestationConflict) as excinfo:

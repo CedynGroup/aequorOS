@@ -26,16 +26,15 @@ Three digests, each with a distinct job (docs/attestation_esignature.md §3.1):
     trade a real record for a hash. See :func:`strip_volatile_fields`.
 
 ``register_state_digest``
-    The complete-register commitment for returns with no engine run
-    (``source_runs = []``). It binds stable register record IDs, update
-    timestamps, stored values including ciphertext, and the current bank
+    The complete-register commitment for every return. It binds stable register
+    record IDs, update timestamps, stored values including ciphertext, and the current bank
     key version. Rotation, re-encryption and register edits change it. Weaker
     than ``input_hash``: it proves state, not derivation (legal register L16).
 
 ``certification_digest``
     What every signer signs. Binds institution + return identity + the
-    content digest + whichever provenance the class has. Both the PDF
-    signature and the detached attestation cover this one value, so it is
+    content digest + engine provenance + the complete-register commitment. Both
+    the PDF signature and the detached attestation cover this one value, so it is
     provable that every signer signed the same figures.
 
 Canonicalisation is the engines' recipe EXACTLY (``regulatory_capital.py``
@@ -222,8 +221,6 @@ def certification_digest(  # noqa: PLR0913 - keyword-only by design; positional
                 "binding_class 'engine_run' requires at least one source run; "
                 "a package with no engine run must bind as 'master_data'."
             )
-        if register_state_digest_value is not None:
-            raise ValueError("engine_run bindings must not carry a register-state digest.")
     else:
         if source_runs:
             raise ValueError(

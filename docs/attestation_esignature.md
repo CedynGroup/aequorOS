@@ -483,8 +483,7 @@ certification_digest = sha256(canonical_json({
     "binding_class": "engine_run" | "master_data",
     # Class A only — the reproducible engine inputs:
     "source_runs": sorted([{"module", "run_id", "input_hash"}], key=canonical_json),
-    # Class B only — the master-data provenance analogue (see below):
-    "register_state_digest": ... | None,
+    "register_state_digest": ...,
 }))
 ```
 
@@ -522,6 +521,11 @@ Protected values enter this commitment as stored ciphertext, without key access.
 Stable record IDs, update timestamps and the current bank key version are bound.
 Rotation or re-encryption makes an in-review commitment stale; certification,
 approval and first submission refuse it until the return is regenerated.
+
+Every newly generated package binds this complete-register commitment independently
+of its engine source runs, including frozen ICAAP reports. Forward certification,
+review and first transmission refuse a changed commitment and require regeneration.
+An already submitted filing retains its original commitment.
 
 This binds _which register state_ produced the pack, so a later mutation of a
 shareholding or an outlet is detectable against a signed pack even though the
@@ -1159,7 +1163,7 @@ earlier section's detail.
   locked field), and `Sig_Preparer` carries a FieldMDP `/Exclude` lock over everything but
   the approver's fields.
 - **Three digests, all value-based like `input_hash`:** `content_digest` (strips volatile
-  `generated_at`), `register_state_digest` (master-data returns), `certification_digest`
+  `generated_at`), `register_state_digest` (every newly generated return), `certification_digest`
   (what every signer signs) — `app/attestation/service/digests.py`; never add volatile
   fields. Signer IDs (`SGN-` + 16 Crockford) are HMAC-derived from the user UUID under
   `SIGNER_ID_PEPPER` then **persisted as the authority** — rotating the pepper must never

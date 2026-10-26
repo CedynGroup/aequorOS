@@ -126,7 +126,7 @@ def compute_binding(package: RegulatoryPackage) -> BindingInputs:
         content_digest_value=content,
         binding_class=binding_class,
         source_runs=source_runs if binding_class == "engine_run" else None,
-        register_state_digest_value=register_state if binding_class == "master_data" else None,
+        register_state_digest_value=register_state,
     )
     return BindingInputs(
         binding_class=binding_class,

@@ -442,16 +442,8 @@ def _generate_package(
         basis=payload.basis,
     )
 
-    # Attestation binding, sealed with the snapshot (docs/attestation_esignature.md
-    # §3.1). Every return gets a content_digest — snapshot_sha256 embeds
-    # metadata.generated_at and therefore seals a VERSION, not content (gap G13).
-    # Packs that bind no engine run additionally get the master-data provenance
-    # analogue, without which a signature over them would bind figures with
-    # nothing behind them (gap G16).
-    register_digest = (
-        digests.register_state_digest(register_state.project_register_state(db, ctx, bank.id))
-        if not generated.source_runs
-        else None
+    register_digest = digests.register_state_digest(
+        register_state.project_register_state(db, ctx, bank.id)
     )
     package = RegulatoryPackage(
         organization_id=ctx.organization_id,
@@ -639,10 +631,8 @@ def generate_frozen_package(  # noqa: PLR0913 - the mint key is its named parts
         basis=basis,
         rehearsal=rehearsal,
     )
-    register_digest = (
-        digests.register_state_digest(register_state.project_register_state(db, ctx, bank.id))
-        if not built.source_runs
-        else None
+    register_digest = digests.register_state_digest(
+        register_state.project_register_state(db, ctx, bank.id)
     )
     package = RegulatoryPackage(
         organization_id=ctx.organization_id,

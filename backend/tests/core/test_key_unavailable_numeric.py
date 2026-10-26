@@ -175,16 +175,22 @@ def test_numeric_classification_consumers_survive_key_loss(
         )
 
 
+@pytest.mark.parametrize("return_code", ["LRT-OUTLET", "LCR-NSFR"])
 def test_rotation_refuses_review_of_sealed_register_until_regeneration(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, return_code: str
 ) -> None:
     db = db_session
-    materialize_canonical_test_book(db)
+    if return_code == "LCR-NSFR":
+        review._seed(db)  # pyright: ignore[reportPrivateUsage]
+    else:
+        materialize_canonical_test_book(db)
     provider = connect(db, monkeypatch)
     register(db)
-    relax_signing(db, organization_id=ORG_1, return_code="LRT-OUTLET")
+    relax_signing(db, organization_id=ORG_1, return_code=return_code)
     review._officer(db, review.APPROVER, "key-review@example.test", "Key Reviewer")  # pyright: ignore[reportPrivateUsage]
-    package = lrt._generate(db, "LRT-OUTLET")  # pyright: ignore[reportPrivateUsage]
+    package = lrt._generate(db, return_code)  # pyright: ignore[reportPrivateUsage]
+    assert bool(package.source_runs) == (return_code == "LCR-NSFR")
+    assert package.register_state_digest is not None
     validation.validate_package(db, lrt.MAKER, SAMPLE_BANK_ID, package.id)
     workflow.request_approval(
         db, lrt.MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate()
@@ -206,14 +212,20 @@ def test_rotation_refuses_review_of_sealed_register_until_regeneration(
         register_state.project_register_state(db, lrt.MAKER, SAMPLE_BANK_ID)
     )
     assert current != sealed
-    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
-        review._decide(db, review.APPROVER, package)  # pyright: ignore[reportPrivateUsage]
-    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
-        attestation.ensure_submittable(db, lrt.MAKER, package)
+    assert_stale_register_refuses_forward_actions(db, package)
     assert package.register_state_digest == sealed
-    db.rollback()
-    regenerated = lrt._generate(db, "LRT-OUTLET")  # pyright: ignore[reportPrivateUsage]
+    review._decide(  # pyright: ignore[reportPrivateUsage]
+        db,
+        review.APPROVER,
+        package,
+        decision="returned",
+        return_to_seq=1,
+        comment="Regenerate this return after the bank encryption key rotation.",
+    )
+    assert package.status == "generated"
+    regenerated = lrt._generate(db, return_code)  # pyright: ignore[reportPrivateUsage]
     assert regenerated.register_state_digest == current
+    assert regenerated.source_runs == package.source_runs
     validation.validate_package(db, lrt.MAKER, SAMPLE_BANK_ID, regenerated.id)
     workflow.request_approval(
         db, lrt.MAKER, SAMPLE_BANK_ID, regenerated.id, PackageApprovalRequestCreate()
