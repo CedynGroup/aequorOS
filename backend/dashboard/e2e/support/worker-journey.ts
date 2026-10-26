@@ -1,4 +1,10 @@
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import {
+  execFile,
+  execFileSync,
+  spawn,
+  type ChildProcess,
+} from "node:child_process";
+import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { closeSync, openSync } from "node:fs";
 import { once } from "node:events";
@@ -114,7 +120,24 @@ with sqlite3.connect(database) as db:
   );
 }
 
-export function writeWorkerWorkbook(filename: string, asOf: string) {
+export type WorkerBookVariant = {
+  cash?: string;
+  deposits?: string;
+  equity?: string;
+  loanMaturityDays?: number;
+  securitiesBalance?: string;
+  securities?: {
+    reference: string;
+    amount: string;
+    level?: "L1" | "L2A" | "L2B";
+  }[];
+};
+
+export async function writeWorkerWorkbook(
+  filename: string,
+  asOf: string,
+  variant: WorkerBookVariant = {},
+) {
   const dateOffset = (days: number) => {
     const date = new Date(`${asOf}T00:00:00Z`);
     date.setUTCDate(date.getUTCDate() + days);
@@ -128,7 +151,7 @@ export function writeWorkerWorkbook(filename: string, asOf: string) {
         name: "Cash vault",
         account_class: "ASSET",
         currency: "GHS",
-        balance: "2000000",
+        balance: variant.cash ?? "2000000",
       },
       {
         source_reference: "WORKER-DEPOSITS",
@@ -136,7 +159,7 @@ export function writeWorkerWorkbook(filename: string, asOf: string) {
         name: "Corporate deposits",
         account_class: "LIABILITY",
         currency: "GHS",
-        balance: "1000000",
+        balance: variant.deposits ?? "1000000",
       },
       {
         source_reference: "WORKER-EQUITY",
@@ -144,7 +167,7 @@ export function writeWorkerWorkbook(filename: string, asOf: string) {
         name: "Share capital",
         account_class: "EQUITY",
         currency: "GHS",
-        balance: "1200000",
+        balance: variant.equity ?? "1200000",
       },
       {
         source_reference: "WORKER-LOANS",
@@ -182,7 +205,7 @@ export function writeWorkerWorkbook(filename: string, asOf: string) {
         source_reference: "WORKER-CURRENT-DEPOSIT",
         position_type: "DEPOSIT",
         currency: "GHS",
-        balance: "1000000",
+        balance: variant.deposits ?? "1000000",
         interest_rate: "0.05",
         rate_type: "FIXED",
         counterparty_reference: "WORKER-CORPORATE",
@@ -197,7 +220,7 @@ export function writeWorkerWorkbook(filename: string, asOf: string) {
         balance: "20000",
         interest_rate: "0.05",
         rate_type: "FIXED",
-        contractual_maturity: dateOffset(365),
+        contractual_maturity: dateOffset(variant.loanMaturityDays ?? 365),
         origination_date: dateOffset(-365),
         ifrs9_stage: "1",
         counterparty_reference: "WORKER-CORPORATE",
@@ -229,7 +252,7 @@ export function writeWorkerWorkbook(filename: string, asOf: string) {
     capital_structure: [
       {
         capital_component: "CET1_SHARE_CAPITAL",
-        amount_ghs: "1200000",
+        amount_ghs: variant.equity ?? "1200000",
         tier: "CET1",
       },
       {
@@ -287,6 +310,48 @@ export function writeWorkerWorkbook(filename: string, asOf: string) {
       };
     }),
   };
+  if (variant.securities?.length) {
+    if (variant.securitiesBalance === undefined)
+      throw new Error("Declare the securities control-account balance");
+    sheets.gl_accounts.push({
+      source_reference: "WORKER-SECURITIES",
+      account_code: "1201",
+      name: "Public-sector securities",
+      account_class: "ASSET",
+      currency: "GHS",
+      balance: variant.securitiesBalance,
+    });
+    sheets.counterparties.push({
+      source_reference: "WORKER-PUBLIC-ISSUER",
+      name: "Synthetic Public Issuer",
+      counterparty_type: "GOVERNMENT_ENTITY",
+      country_code: "GH",
+    });
+    sheets.products.push({
+      source_reference: "SEC.PUBLIC",
+      product_code: "SEC.PUBLIC",
+      name: "Public-sector holding",
+      regulatory_category: "CORPORATE_UNRATED",
+    });
+    sheets.positions.push(
+      ...variant.securities.map((holding) => ({
+        source_reference: holding.reference,
+        position_type: "SECURITY_HOLDING",
+        currency: "GHS",
+        balance: holding.amount,
+        interest_rate: "0.05",
+        rate_type: "FIXED",
+        contractual_maturity: dateOffset(730),
+        origination_date: dateOffset(-365),
+        counterparty_reference: "WORKER-PUBLIC-ISSUER",
+        product_code: "SEC.PUBLIC",
+        gl_account_code: "1201",
+        "attributes.issuer_class": "public_enterprise",
+        "attributes.hqla_level": holding.level ?? "",
+        "attributes.branch_id": "WORKER-BRANCH",
+      })),
+    );
+  }
   const core = {
     gl_account: "gl_accounts",
     counterparty: "counterparties",
@@ -310,6 +375,9 @@ export function writeWorkerWorkbook(filename: string, asOf: string) {
     product_mappings: {
       "DEP.CORP.CUR": "CORPORATE_DEPOSIT",
       "LN.CORP.1Y": "CORPORATE_UNRATED",
+      ...(variant.securities?.length
+        ? { "SEC.PUBLIC": "CORPORATE_UNRATED" }
+        : {}),
     },
     reference_mappings: Object.fromEntries(
       Object.keys(sheets)
@@ -317,15 +385,15 @@ export function writeWorkerWorkbook(filename: string, asOf: string) {
         .map((table) => [table, { source_table: table, dataset_kind: table }]),
     ),
   };
-  writeWorkbook(filename, sheets);
+  await writeWorkbook(filename, sheets);
   return { config };
 }
 
-export function writeWorkerMarketWorkbook(
+export async function writeWorkerMarketWorkbook(
   filename: string,
   asOf: string,
-): void {
-  writeWorkbook(filename, {
+): Promise<void> {
+  await writeWorkbook(filename, {
     yield_curves: ["GHS", "USD"].flatMap((currency) =>
       [1, 3, 6, 12, 24, 36, 60, 120, 180, 240, 300, 360].map((months) => ({
         currency,
@@ -348,11 +416,11 @@ export function writeWorkerMarketWorkbook(
   });
 }
 
-function writeWorkbook(
+async function writeWorkbook(
   filename: string,
   sheets: Record<string, Record<string, string>[]>,
-): void {
-  execFileSync(
+): Promise<void> {
+  await promisify(execFile)(
     PYTHON,
     [
       "-c",
@@ -390,6 +458,7 @@ export type RefreshJob = {
 /** Read durable worker evidence; never complete, enqueue or dispatch work here. */
 export function readWorkerJob(
   jobType: "pipeline_refresh" | "official_run" = "pipeline_refresh",
+  bankId = WORKER_BANK,
 ): RefreshJob | undefined {
   const db = new DatabaseSync(DATABASE, { readOnly: true });
   try {
@@ -398,14 +467,14 @@ export function readWorkerJob(
       .prepare(
         "SELECT id, status, claimed_by, started_at, completed_at, payload, progress, error FROM jobs WHERE bank_id=? AND job_type=? ORDER BY queued_at DESC LIMIT 1",
       )
-      .get(WORKER_BANK, jobType) as RefreshJob | undefined;
+      .get(bankId, jobType) as RefreshJob | undefined;
   } finally {
     db.close();
   }
 }
 
 /** The worker must not consume another story's shared-fixture mutations. */
-export function unrelatedWorkerJobs(): number {
+export function unrelatedWorkerJobs(bankId = WORKER_BANK): number {
   const db = new DatabaseSync(DATABASE, { readOnly: true });
   try {
     db.exec("PRAGMA busy_timeout = 5000");
@@ -414,14 +483,17 @@ export function unrelatedWorkerJobs(): number {
         .prepare(
           "SELECT COUNT(*) AS total FROM jobs WHERE job_type IN ('pipeline_refresh','official_run') AND status IN ('queued', 'running') AND bank_id<>?",
         )
-        .get(WORKER_BANK)?.total,
+        .get(bankId)?.total,
     );
   } finally {
     db.close();
   }
 }
 
-export function startJourneyWorker(log: string): {
+export function startJourneyWorker(
+  log: string,
+  workerId = WORKER_ID,
+): {
   process: ChildProcess;
   stop: () => Promise<void>;
 } {
@@ -435,7 +507,7 @@ export function startJourneyWorker(log: string): {
       APP_ENV: "test",
       TLS_ALLOW_PLAINTEXT: "1",
       WORKER_JOB_TYPES: "pipeline_refresh,official_run",
-      WORKER_ID,
+      WORKER_ID: workerId,
       WORKER_POLL_SECONDS: "0.2",
       RUN_INPROCESS_WORKER: "0",
     },

@@ -98,7 +98,7 @@ test("an uploaded book becomes fresh 645.16% liquidity coverage and the BSD2 cas
   expect(asOf).toBeDefined();
   const reportingDate = asOf!;
   const workbook = testInfo.outputPath("worker-bank.xlsx");
-  const { config } = writeWorkerWorkbook(workbook, reportingDate);
+  const { config } = await writeWorkerWorkbook(workbook, reportingDate);
   const mapping = await biApi(
     request,
     WORKER_ROLE,
@@ -225,7 +225,7 @@ test("an uploaded book becomes fresh 645.16% liquidity coverage and the BSD2 cas
   await test.step("upload the market curves through the bank's manual source", async () => {
     const queuedId = readWorkerJob()!.id;
     const marketWorkbook = testInfo.outputPath("worker-market.xlsx");
-    writeWorkerMarketWorkbook(marketWorkbook, reportingDate);
+    await writeWorkerMarketWorkbook(marketWorkbook, reportingDate);
     await page.goto("/data-engine/market-data");
     await page.locator('input[type="file"]').setInputFiles(marketWorkbook);
     await page.locator('input[type="date"]').fill(reportingDate);

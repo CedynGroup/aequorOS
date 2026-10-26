@@ -76,6 +76,7 @@ class StoryRequest(BaseModel):
     signing: bool = False
     bindings: list[ScopedBinding] = Field(default_factory=list)
     owner_read_modules: list[ModuleScope] | None = None
+    institution_type: str = "universal_bank"
 
 
 class ActorRead(BaseModel):
@@ -180,15 +181,13 @@ def _configure_owner_read(db: Session, request: StoryRequest, users: dict[str, U
         _grant(db, owner, RoleBundle.VIEWER, module)
 
 
-def provision(db: Session, request: StoryRequest) -> StoryRead:
-    """Create identities and setup only; never prepare financial facts."""
-    source = db.get(User, SOURCE_ADMIN)
-    if source is None or source.organization_id != SOURCE_ORG or source.password_hash is None:
-        raise ValueError("The synthetic bootstrap identity is required")
+def _prepare_story_bank(db: Session, request: StoryRequest) -> None:
     if not request.owned_tenant and (
         request.organization_id != SOURCE_ORG or request.bank_id != SOURCE_BANK
     ):
         raise ValueError("Shared story actors must target the disposable sample bank")
+    if not request.owned_tenant and request.institution_type != "universal_bank":
+        raise ValueError("Institution variants require a fresh story tenant")
     if request.owned_tenant:
         if request.organization_id == SOURCE_ORG or request.bank_id == SOURCE_BANK:
             raise ValueError("A story tenant must have distinct institution identities")
@@ -201,12 +200,24 @@ def provision(db: Session, request: StoryRequest) -> StoryRead:
             short_name="Sample",
             currency="GHS",
             jurisdiction_code="GH",
-            license_type="universal",
-            institution_type="universal_bank",
+            license_type=(
+                "universal"
+                if request.institution_type == "universal_bank"
+                else request.institution_type
+            ),
+            institution_type=request.institution_type,
         )
         db.add(bank)
         db.flush()
         seed_tenant_register(db, bank=bank, approved_by="e2e-story", approved_at=utc_now())
+
+
+def provision(db: Session, request: StoryRequest) -> StoryRead:
+    """Create identities and setup only; never prepare financial facts."""
+    source = db.get(User, SOURCE_ADMIN)
+    if source is None or source.organization_id != SOURCE_ORG or source.password_hash is None:
+        raise ValueError("The synthetic bootstrap identity is required")
+    _prepare_story_bank(db, request)
 
     users: list[tuple[ActorSpec, User]] = []
     # The sole owner must exist before another account administrator is added.
