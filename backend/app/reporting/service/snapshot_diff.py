@@ -27,7 +27,9 @@ one uniform row-level rendering for all three cases.
 from __future__ import annotations
 
 from decimal import Decimal, DivisionByZero, InvalidOperation
-from typing import Any
+from typing import Any, cast
+
+from sqlalchemy.orm import Session
 
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import (
@@ -36,6 +38,7 @@ from app.reporting.schemas.packages import (
     SnapshotLineDiffRead,
     SnapshotSectionDiffRead,
 )
+from app.reporting.service.common import present_snapshot
 
 #: The snapshot's top-level ``totals`` are the stable headline figures (the
 #: prior-period movement check compares them across reporting dates), so they
@@ -224,14 +227,16 @@ def _side(package: RegulatoryPackage) -> PackageComparisonSideRead:
     )
 
 
-def build_comparison(base: RegulatoryPackage, target: RegulatoryPackage) -> PackageComparisonRead:
+def build_comparison(
+    db: Session, base: RegulatoryPackage, target: RegulatoryPackage
+) -> PackageComparisonRead:
     """Assemble the wire comparison from two ``RegulatoryPackage`` rows."""
     sections, unchanged_sections = diff_snapshots(base.snapshot or {}, target.snapshot or {})
     counts = {"added": 0, "removed": 0, "changed": 0}
     for section in sections:
         for line in section.lines:
             counts[line.change] += 1
-    return PackageComparisonRead(
+    comparison = PackageComparisonRead(
         base=_side(base),
         target=_side(target),
         identical=not sections,
@@ -240,6 +245,9 @@ def build_comparison(base: RegulatoryPackage, target: RegulatoryPackage) -> Pack
         removed_count=counts["removed"],
         sections=sections,
         unchanged_section_count=unchanged_sections,
+    )
+    return PackageComparisonRead.model_validate(
+        present_snapshot(db, base.bank_id, cast(dict[str, object], comparison.model_dump()))
     )
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -11,7 +11,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.key_management.presentation import LOCKED_JSON
+from app.core.key_management.presentation import (
+    LOCKED_JSON,
+    LOCKED_TEXT,
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+)
 from app.data_engine.public import CanonicalGlAccount, CanonicalPositionSnapshot
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity.public import Bank
@@ -202,6 +208,77 @@ def read_summary(
     )
 
 
+_SNAPSHOT_IDENTITY_SECTIONS = frozenset(
+    {
+        "shareholders",
+        "directors",
+        "key_management",
+        "auditors",
+        "ubos",
+        "outsourced",
+        "liquidators",
+        "due_diligence_checklist",
+        "shareholder_register",
+    }
+)
+_SNAPSHOT_IDENTITY_FIELDS = frozenset(
+    {
+        "full_name",
+        "counterparty_name",
+        "ubo_name",
+        "contact",
+        "contact_email",
+        "term_of_appointment",
+        "other_responsibilities",
+        "icag_registration",
+    }
+)
+
+
+def _mask_snapshot(value: object, section: str = "") -> object:
+    if isinstance(value, list):
+        return [_mask_snapshot(item, section) for item in cast(list[object], value)]
+    if not isinstance(value, dict):
+        return value
+    entry = cast(dict[str, object], value)
+    if "rows" in entry or "lines" in entry:
+        section = str(entry.get("code", "")).rsplit("__", 1)[-1]
+    return {
+        key: (
+            LOCKED_TEXT
+            if (
+                key in _SNAPSHOT_IDENTITY_FIELDS
+                or (key == "description" and section in _SNAPSHOT_IDENTITY_SECTIONS)
+                or (
+                    section == "auditors"
+                    and key
+                    in {
+                        "value",
+                        "base_value",
+                        "target_value",
+                        "delta",
+                        "delta_pct",
+                    }
+                )
+            )
+            and item is not None
+            else _mask_snapshot(item, section)
+        )
+        for key, item in entry.items()
+    }
+
+
+def present_snapshot(db: Session, bank_id: str, snapshot: dict[str, object]) -> dict[str, object]:
+    presentation = db.info.get(SESSION_STATE)
+    if not db.info.get(SESSION_SUPPORT) and not (
+        isinstance(presentation, PresentationState) and presentation.support
+    ):
+        return snapshot
+    if isinstance(presentation, PresentationState):
+        presentation.record(bank_id, "support")
+    return cast(dict[str, object], _mask_snapshot(snapshot))
+
+
 def read_package(db: Session, package: RegulatoryPackage) -> RegulatoryPackageRead:
     approvals = list(
         db.scalars(
@@ -221,7 +298,7 @@ def read_package(db: Session, package: RegulatoryPackage) -> RegulatoryPackageRe
         report_payload = None
     return RegulatoryPackageRead(
         **read_summary(package).model_dump(),
-        snapshot=package.snapshot,
+        snapshot=present_snapshot(db, package.bank_id, package.snapshot),
         source_runs=[PackageSourceRunRead(**entry) for entry in package.source_runs],
         validation_report=(
             ValidationReportRead(**report_payload) if report_payload is not None else None
