@@ -67,12 +67,16 @@ function party(name = "Synthetic owner") {
   };
 }
 
-function profileResponse(state = "available", name = "Synthetic owner") {
+function profileResponse(
+  state = "available",
+  name = "Synthetic owner",
+  relatedParties?: unknown[],
+) {
   return new Response(
     JSON.stringify({
       bank_id: BANK,
       profile: null,
-      related_parties: [
+      related_parties: relatedParties ?? [
         party(state === "available" ? name : "🔒 Protected data"),
       ],
       name_history: [],
@@ -185,6 +189,178 @@ it.each(["party", "shareholding"] as const)(
         PARTY,
       );
     }
+  },
+);
+
+it.each(["revoked", "unavailable", "support"] as const)(
+  "refuses to start editing a %s party until its protected baseline is restored",
+  async (reason) => {
+    let state = "available";
+    let name = "Synthetic owner";
+    let holdRead = false;
+    let finishRead: ((response: Response) => void) | undefined;
+    const contact = { email: "synthetic-owner@example.test" };
+    const role = {
+      id: "00000000-0000-4000-8000-000000000018",
+      role: "external_auditor",
+      appointed_on: null,
+      term_of_appointment: "Synthetic term",
+      sitting_allowance: "125",
+      travel_allowance: "50",
+      annual_fees: "500",
+      icag_registration: "Synthetic registration",
+      other_responsibilities: "Synthetic review",
+    };
+    const response = () => profileResponse(state, name, [{
+      ...party(state === "available" ? name : "🔒 Protected data"),
+      contact: state === "available" ? contact : { _aequoros_protected_data: state },
+      roles: [{
+        ...role,
+        ...(state === "available" ? {} : {
+          term_of_appointment: "🔒 Protected data",
+          icag_registration: "🔒 Protected data",
+          other_responsibilities: "🔒 Protected data",
+        }),
+      }],
+    }]);
+    const writes: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          const payload = JSON.parse(String(init.body)) as { full_name: string };
+          writes.push(payload);
+          name = payload.full_name;
+          return Response.json(party(name));
+        }
+        if (holdRead) {
+          return new Promise<Response>((resolve) => { finishRead = resolve; });
+        }
+        return response();
+      }),
+    );
+    mount(<RelatedPartiesPage />);
+    await screen.findByRole("cell", { name: "Synthetic owner" });
+    state = reason;
+    await act(async () => {
+      await observeProtectedData(response());
+    });
+    await userEvent.click(
+      await screen.findByRole("cell", { name: "🔒 Protected data" }),
+    );
+    expect(screen.getByRole("button", { name: "Edit", exact: true })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Edit", exact: true }));
+    expect(screen.queryByLabelText(/Full name/)).toBeNull();
+
+    holdRead = true;
+    await act(async () => {
+      await observeProtectedData(profileResponse("available"));
+    });
+    await waitFor(() => expect(finishRead).toBeTypeOf("function"));
+    expect(protectedDataState(BANK)).toBe("available");
+    expect(screen.getByRole("button", { name: "Edit", exact: true })).toBeDisabled();
+    state = "available";
+    holdRead = false;
+    await act(async () => {
+      finishRead?.(response());
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Edit", exact: true })).toBeEnabled(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Edit", exact: true }));
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Synthetic owner");
+    await userEvent.clear(screen.getByLabelText(/Full name/));
+    await userEvent.type(
+      screen.getByLabelText(/Full name/), "Synthetic recovered owner",
+    );
+    await userEvent.type(
+      screen.getByLabelText(/Reason for change/), "Synthetic recovery",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() => expect(screen.queryByLabelText(/Full name/)).toBeNull());
+    await screen.findByRole("cell", { name: "Synthetic recovered owner" });
+    expect(writes).toEqual([expect.objectContaining({
+      full_name: "Synthetic recovered owner",
+      contact,
+      roles: [expect.objectContaining({
+        term_of_appointment: "Synthetic term",
+        icag_registration: "Synthetic registration",
+        other_responsibilities: "Synthetic review",
+        sitting_allowance: "125",
+      })],
+    })]);
+  },
+);
+
+it.each(
+  (["create", "edit"] as const).flatMap((mode) =>
+    (["revoked", "unavailable", "support"] as const).map((reason) => ({
+      mode, reason,
+    })),
+  ),
+)(
+  "refreshes the $mode shareholding's $reason candidate labels while retaining numeric drafts",
+  async ({ mode, reason }) => {
+    let state = "available";
+    const holding = {
+      id: "00000000-0000-4000-8000-000000000019",
+      share_type: "ordinary",
+      share_subtype: null,
+      shareholder_rights: "voting",
+      number_of_shares: "100",
+      pct_shareholding: "10",
+      ubo_party_id: PARTY,
+    };
+    const response = () => profileResponse(state, "Synthetic owner", [{
+      ...party(state === "available" ? "Synthetic owner" : "🔒 Protected data"),
+      shareholdings: [holding],
+    }]);
+    vi.stubGlobal("fetch", vi.fn(async () => response()));
+    mount(<RelatedPartiesPage />);
+    await screen.findByRole("cell", { name: "Synthetic owner" });
+    state = reason;
+    await act(async () => {
+      await observeProtectedData(response());
+    });
+    await userEvent.click(
+      await screen.findByRole("cell", { name: "🔒 Protected data" }),
+    );
+    if (mode === "create") {
+      await userEvent.click(screen.getByRole("button", { name: "Add shareholding" }));
+    } else {
+      await userEvent.click(
+        within(screen.getByText("100 shares").closest("li")!)
+          .getByRole("button", { name: "Edit" }),
+      );
+    }
+    await userEvent.clear(screen.getByLabelText(/Number of shares/));
+    await userEvent.type(screen.getByLabelText(/Number of shares/), "125");
+    await userEvent.clear(screen.getByLabelText(/% shareholding/));
+    await userEvent.type(screen.getByLabelText(/% shareholding/), "12.5");
+    await userEvent.type(
+      screen.getByLabelText(/Reason for change/), "Synthetic holding draft",
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Ultimate beneficial owner/), PARTY,
+    );
+    expect(screen.getByRole("option", { name: "🔒 Protected data" })).toBeVisible();
+    state = "available";
+    if (reason === "support") {
+      expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+      await act(async () => {
+        await observeProtectedData(profileResponse("available"));
+      });
+    } else {
+      await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    }
+    await screen.findByRole("option", { name: "Synthetic owner", exact: true });
+    expect(screen.queryByRole("option", { name: "🔒 Protected data" })).toBeNull();
+    expect(screen.getByLabelText(/Ultimate beneficial owner/)).toHaveValue(PARTY);
+    expect(screen.getByLabelText(/Number of shares/)).toHaveValue(125);
+    expect(screen.getByLabelText(/% shareholding/)).toHaveValue(12.5);
+    expect(screen.getByLabelText(/Reason for change/)).toHaveValue(
+      "Synthetic holding draft",
+    );
   },
 );
 

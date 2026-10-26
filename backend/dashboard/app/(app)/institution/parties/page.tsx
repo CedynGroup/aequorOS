@@ -10,6 +10,7 @@
 
 import { useMemo, useState, useSyncExternalStore } from "react";
 import {
+  containsLockedData,
   protectedDataState,
   subscribeProtectedData,
 } from "@/lib/api/protectedData";
@@ -342,6 +343,13 @@ function PartyDetail({
   parties: RelatedPartyRead[];
   query: ReturnType<typeof useInstitutionProfile>;
 }) {
+  const locked =
+    useSyncExternalStore(
+      subscribeProtectedData,
+      () => protectedDataState(bankId),
+      () => "available",
+    ) !== "available";
+  const canEdit = !locked && !containsLockedData(party);
   const [editing, setEditing] = useState<RelatedPartyRead | null>(null);
   const [holdingFormFor, setHoldingFormFor] = useState<{
     holding: ShareholdingRead | null;
@@ -400,8 +408,11 @@ function PartyDetail({
               </button>
               <button
                 type="button"
-                onClick={() => setEditing(party)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
+                onClick={() => {
+                  if (canEdit) setEditing(party);
+                }}
+                disabled={!canEdit}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface disabled:opacity-60"
               >
                 <Pencil size={13} aria-hidden />
                 Edit
@@ -538,7 +549,7 @@ function PartyDetail({
             bankId={bankId}
             partyId={party.id}
             holding={holdingFormFor.holding}
-            parties={holdingFormFor.parties}
+            parties={query.data?.relatedParties ?? holdingFormFor.parties}
             onClose={() => setHoldingFormFor(null)}
           />
         </div>

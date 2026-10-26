@@ -164,6 +164,11 @@ test.describe("Bank-held encryption: service outage", () => {
       await expect(
         page.getByRole("cell", { name: LOCKED, exact: true }),
       ).toBeVisible();
+      await page.getByRole("cell", { name: LOCKED, exact: true }).click();
+      await expect(
+        page.getByRole("button", { name: "Edit", exact: true }),
+      ).toBeDisabled();
+      await expect(page.getByLabel("Full name")).toHaveCount(0);
       const retry = page.waitForResponse((response) =>
         response.url().endsWith("/institution-profile"),
       );
@@ -178,6 +183,25 @@ test.describe("Bank-held encryption: service outage", () => {
         page.getByRole("cell", { name: NAME, exact: true }),
       ).toBeVisible({ timeout: 20_000 });
       await expect(page.getByText(OUTAGE, { exact: true })).toHaveCount(0);
+      await page.getByRole("button", { name: "Edit", exact: true }).click();
+      await expect(page.getByLabel("Full name")).toHaveValue(NAME);
+      const edited = "Synthetic Recovered Director Ñ";
+      await page.getByLabel("Full name").fill(edited);
+      await page.getByLabel("Reason for change").fill("Synthetic recovered edit");
+      const saved = page.waitForResponse(
+        (response) =>
+          response.url().includes("/related-parties/") &&
+          response.request().method() === "PUT",
+      );
+      await page.getByRole("button", { name: "Save party", exact: true }).click();
+      expect((await saved).ok()).toBe(true);
+      await expect(
+        page.getByRole("cell", { name: edited, exact: true }),
+      ).toBeVisible();
+      await page.reload();
+      await expect(
+        page.getByRole("cell", { name: edited, exact: true }),
+      ).toBeVisible();
       await encryptionEvidence(page, "outage-recovered");
     } finally {
       keyService(true);
