@@ -157,13 +157,19 @@ export async function certifyAsPreparer(
 export async function approveAndSignAsChecker(
   browser: Browser,
   storageState: string,
+  code: string,
   date: string,
 ): Promise<void> {
   const context = await browser.newContext({ storageState });
   try {
     const page = await context.newPage();
     await page.goto("/submissions/approvals");
-    const row = page.getByRole("row", { name: new RegExp(fmtDateGB(date)) });
+    const row = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name: code, exact: true }) })
+      .filter({
+        has: page.getByRole("cell", { name: fmtDateGB(date), exact: true }),
+      });
     await expect(row.first()).toBeVisible({ timeout: 30_000 });
     await row.first().click();
 

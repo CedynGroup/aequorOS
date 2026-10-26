@@ -502,6 +502,9 @@ existing **Full suite on Postgres**, **Postgres schema, RLS and locks**, and
 collection manifests and JUnit reports; the aggregates verify that their union
 contains every expected test exactly once, preserve the full-suite execution
 floor, and reject any skipped schema/RLS or live OpenBao test.
+Failed schema and suite shards also upload `postgres.log` as
+`pg-schema-server-log-<shard>` or `pg-suite-server-log-<shard>` when the log
+exists, retained for seven days.
 
 Main pushes and queued merge results always run the full suite. On pull requests,
 only changes confined to the
