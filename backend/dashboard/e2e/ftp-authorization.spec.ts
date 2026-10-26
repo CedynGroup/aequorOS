@@ -1,5 +1,7 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/story-identities";
+import { currentBankPeriod, expectBankStatus } from "./support/real-authority";
 import path from "path";
 import { writeFile } from "node:fs/promises";
 import { E2E_TMP } from "../playwright.config";
@@ -11,9 +13,16 @@ test.afterEach(async ({ page }) => {
 });
 
 test.describe("unbound FTP user", () => {
-  test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [{ bundle: "viewer", module: "liq", sensitivity: "all" }],
+    },
+  });
 
   test("denies deep links without FTP requests", async ({ page }) => {
+    await expectBankStatus("/ftp/dashboard", 403);
     const ftpRequests: string[] = [];
     page.on("request", (request) => {
       if (/\/banks\/[^/]+\/ftp(?:\/|$)/.test(request.url())) {
@@ -41,31 +50,26 @@ test.describe("unbound FTP user", () => {
 });
 
 test.describe("FTP reader without run permission", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [
+        { bundle: "viewer", module: "ftp", sensitivity: "aggregated" },
+        { bundle: "viewer", module: "ftp", sensitivity: "confidential" },
+      ],
+    },
+  });
 
   test("keeps the run action visible, disabled, and explained", async ({
     page,
   }) => {
-    await page.route("**/auth/me", async (route) => {
-      const response = await route.fetch();
-      const profile = await response.json();
-      profile.effective_authority.organization_capabilities = [];
-      for (const institution of profile.effective_authority
-        .institution_capabilities) {
-        institution.capabilities = institution.capabilities.filter(
-          (capability: {
-            module: string;
-            sensitivity: string;
-            permission: string;
-          }) =>
-            capability.module === "ftp" &&
-            capability.permission === "view" &&
-            ["aggregated", "confidential"].includes(capability.sensitivity),
-        );
-      }
-      await route.fulfill({ response, json: profile });
+    await expectBankStatus("/ftp/dashboard", 200);
+    await expectBankStatus("/capital/dashboard", 403);
+    await expectBankStatus("/ftp/run-all-scenarios", 403, {
+      method: "POST",
+      data: { reporting_period_id: await currentBankPeriod() },
     });
-
     await page.goto("/ftp");
     await expect(
       page.getByRole("heading", { name: "Transfer Curve" }),
@@ -105,7 +109,10 @@ test.describe("FTP reader without run permission", () => {
 });
 
 test.describe("FTP analyst", () => {
-  test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "analyst.json"),
+    storyConfig: { roles: ["analyst"] },
+  });
 
   test("executes scenarios with effective authority", async ({ page }) => {
     const dashboardPeriodIds: string[] = [];
@@ -157,58 +164,50 @@ test.describe("FTP analyst", () => {
 });
 
 test.describe("FTP Reports summary permissions", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
-
   for (const sensitivity of ["aggregated", "confidential"]) {
-    test(`${sensitivity} view controls saved-analysis requests`, async ({
-      page,
-    }) => {
-      let authorityApplied = false;
-      await page.route("**/auth/me", async (route) => {
-        const response = await route.fetch();
-        const profile = await response.json();
-        profile.effective_authority.organization_capabilities = [];
-        for (const institution of profile.effective_authority
-          .institution_capabilities) {
-          institution.capabilities = institution.capabilities.filter(
-            (capability: {
-              module: string;
-              sensitivity: string;
-              permission: string;
-            }) =>
-              capability.permission === "view" &&
-              (capability.module === "reg" ||
-                (capability.module === "ftp" &&
-                  capability.sensitivity === sensitivity)),
-          );
-        }
-        await route.fulfill({ response, json: profile });
-        authorityApplied = true;
+    test.describe(`${sensitivity} authority`, () => {
+      test.use({
+        storageState: path.join(E2E_TMP, "viewer.json"),
+        storyConfig: {
+          roles: ["viewer"],
+          bindings: [
+            { bundle: "viewer", module: "reg", sensitivity: "all" },
+            { bundle: "viewer", module: "ftp", sensitivity },
+          ],
+        },
       });
-
-      const summaries: string[] = [];
-      page.on("request", (request) => {
-        if (/\/scenario-workbench\/ftp\/analyses(?:\?|$)/.test(request.url())) {
-          summaries.push(request.url());
-        }
-      });
-      await page.goto("/reports/analyses");
-      await expect(
-        page.getByRole("heading", { name: "Saved Analyses", exact: true }),
-      ).toBeVisible();
-      await expect.poll(() => authorityApplied).toBe(true);
-      if (sensitivity === "aggregated") {
-        await expect.poll(() => summaries.length).toBeGreaterThan(0);
-      } else {
-        expect(summaries).toEqual([]);
-      }
-
-      if (evidenceDir) {
-        await page.screenshot({
-          path: path.join(evidenceDir, `ftp-reports-${sensitivity}.png`),
-          fullPage: true,
+      test(`${sensitivity} view controls saved-analysis requests`, async ({
+        page,
+      }) => {
+        await expectBankStatus(
+          "/scenario-workbench/ftp/analyses",
+          sensitivity === "aggregated" ? 200 : 403,
+        );
+        const summaries: string[] = [];
+        page.on("request", (request) => {
+          if (
+            /\/scenario-workbench\/ftp\/analyses(?:\?|$)/.test(request.url())
+          ) {
+            summaries.push(request.url());
+          }
         });
-      }
+        await page.goto("/reports/analyses");
+        await expect(
+          page.getByRole("heading", { name: "Saved Analyses", exact: true }),
+        ).toBeVisible();
+        if (sensitivity === "aggregated") {
+          await expect.poll(() => summaries.length).toBeGreaterThan(0);
+        } else {
+          expect(summaries).toEqual([]);
+        }
+
+        if (evidenceDir) {
+          await page.screenshot({
+            path: path.join(evidenceDir, `ftp-reports-${sensitivity}.png`),
+            fullPage: true,
+          });
+        }
+      });
     });
   }
 });

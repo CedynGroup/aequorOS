@@ -24,7 +24,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
-import { E2E_PASSWORD } from "./mint";
+import { E2E_PASSWORD, E2E_USERS } from "./mint";
 
 /** How long a ceremony may take: pyHanko signs and re-renders the document. */
 const CEREMONY_TIMEOUT = 120_000;
@@ -120,7 +120,7 @@ export async function certifyAsPreparer(
   page: Page,
   code: string,
   date: string,
-  approverLabel = "E2E Approver (approver)",
+  approverLabel = `${E2E_USERS.approver.displayName ?? "E2E Approver"} (approver)`,
 ): Promise<void> {
   await page.goto(returnsUrl(code, date));
   const certify = page.getByRole("button", { name: "Certify and freeze" });
@@ -236,11 +236,14 @@ export async function sendBackAsChecker(
     await send.click();
     await expect(workspace).toBeHidden({ timeout: CEREMONY_TIMEOUT });
 
-    // Off the checker queue: it is the preparer's again.
+    // This return leaves the checker queue; other filed returns stay reachable.
     await page.goto("/submissions/approvals");
-    await expect(page.getByText("Queue is clear")).toBeVisible({
+    await expect(
+      page.getByRole("heading", { name: "In review", exact: true }),
+    ).toBeVisible({
       timeout: 30_000,
     });
+    await expect(row).toHaveCount(0);
   } finally {
     await context.close();
   }

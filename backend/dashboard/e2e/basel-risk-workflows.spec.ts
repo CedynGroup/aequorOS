@@ -1,10 +1,8 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
 /**
- * Basel capital, worked end to end by an analyst: read the fixture's capital
- * ratios, RWA build-up and capital structure back off the Basel tabs, drive an
- * enterprise stress via the Scenarios tab, then plan: move the what-if planner
- * and refresh the ILAAP evidence, and confirm both the stress run and the ILAAP
- * snapshot are what the platform kept.
+ * Independent capital outcomes reconcile ratios, RWA and capital structure,
+ * persist enterprise-stress erosion, and retain planning and ILAAP evidence.
+ * Each story opens its own module view and creates the evidence it checks.
  *
  * The expectations are the FIXTURE's, not the screen's. Capital is the
  * canonical book's components (`tests/fixtures/canonical_bank_fixture.py`
@@ -67,18 +65,22 @@ const TOTAL_RWA_M = CREDIT_RWA_M + MARKET_RWA_M + OPERATIONAL_RWA_M;
 /** The engine's leverage ratio: Tier 1 over its exposure measure. */
 const LEVERAGE_PCT = 10.9375;
 
-test.describe("Basel capital functional workflow", () => {
+test.describe("Capital reconciliation, stress and planning outcomes", () => {
   test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
 
-  test("reads the fixture's ratios, RWA and capital, stresses, plans and persists", async ({
-    page,
-  }) => {
-    test.setTimeout(150_000);
-    // ---- Overview: the four headline ratios.
+  test.describe.configure({ timeout: 150_000 });
+  test.beforeEach(async ({ page }) => {
     await page.goto("/basel");
     await expect(
       page.getByRole("heading", { name: "Basel Capital" }).first(),
     ).toBeVisible();
+  });
+
+  test("capital ratios reconcile tiers and risk-weighted exposures", async ({
+    page,
+  }) => {
+    // ---- Overview: the four headline ratios.
+
     await expectKpi(
       page,
       "Capital Adequacy Ratio",
@@ -169,7 +171,11 @@ test.describe("Basel capital functional workflow", () => {
     await expect(
       page.getByText(`Tier 1 = CET1 + AT1 = ${full(TIER1_M)}.`),
     ).toBeVisible();
+  });
 
+  test("adverse stress persists capital erosion and minimum headroom", async ({
+    page,
+  }) => {
     // ---- Stress: a governed adverse path through every engine.
     await openTab(page, "Scenarios");
     await expect(
@@ -196,7 +202,11 @@ test.describe("Basel capital functional workflow", () => {
     await expectKpi(page, "Stays above minima", "Yes", "All minima held");
     await expectKpi(page, "Capital gap", "GHS'000 0", "Worst-year, pre-action");
     await expectPersistedStressRun(page, run, "34.47%");
+  });
 
+  test("capital planning preserves pro-forma ratios and refreshed ILAAP evidence", async ({
+    page,
+  }) => {
     // ---- Planning: the what-if planner, then refresh and persist ILAAP evidence.
     await page.goto("/basel/planning");
     await expect(
