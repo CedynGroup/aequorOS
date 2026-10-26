@@ -36,7 +36,7 @@ export default function InstrumentStatusBadge({
     >
       <summary
         title={disclosure.tooltip}
-        className={`block w-fit max-w-full whitespace-normal break-words list-none cursor-help rounded-sm border px-2 py-0.5 font-medium [&::-webkit-details-marker]:hidden ${tones[status ?? ""] ?? "border-slate-300 bg-slate-100 text-slate-800"}`}
+        className={`block w-max whitespace-nowrap list-none cursor-help rounded-sm border px-2 py-0.5 font-medium [&::-webkit-details-marker]:hidden ${tones[status ?? ""] ?? "border-slate-300 bg-slate-100 text-slate-800"}`}
       >
         {disclosure.label}
       </summary>
