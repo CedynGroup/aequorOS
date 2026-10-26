@@ -254,44 +254,49 @@ it.each([
   "Rotate bank key",
   "Test connected key",
   "Record schedule confirmation",
-] as const)("reports request errors and releases controls for %s", async (action) => {
-  const connectedAction = !["Test connection", "Connect bank key"].includes(
-    action,
-  );
-  boundary.status.mockResolvedValue(connectedAction ? connected : disconnected);
-  mount();
-  await fill();
-  if (action === "Rotate bank key") {
-    fireEvent.change(
-      screen.getByLabelText("Reason for replacement-key rotation"),
-      { target: { value: "Scheduled key replacement." } },
+] as const)(
+  "reports request errors and releases controls for %s",
+  async (action) => {
+    const connectedAction = !["Test connection", "Connect bank key"].includes(
+      action,
     );
-  }
-  if (action === "Connect bank key" || action === "Rotate bank key") {
-    fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
-    await screen.findByText("Synthetic round trip passed.");
-  }
-  if (action === "Record schedule confirmation") {
-    fireEvent.click(screen.getByRole("checkbox"));
-  }
-  const request = {
-    "Test connection": boundary.probe,
-    "Connect bank key": boundary.connect,
-    "Rotate bank key": boundary.rotate,
-    "Test connected key": boundary.probe,
-    "Record schedule confirmation": boundary.confirm,
-  }[action];
-  request.mockRejectedValueOnce(
-    new Error("AWS request unavailable. Retry shortly."),
-  );
-  const button = screen.getByRole("button", { name: action });
-  expect(button).toBeEnabled();
-  fireEvent.click(button);
-  expect(await screen.findByRole("alert")).toHaveTextContent(
-    "AWS request unavailable. Retry shortly.",
-  );
-  expect(button).toBeEnabled();
-});
+    boundary.status.mockResolvedValue(
+      connectedAction ? connected : disconnected,
+    );
+    mount();
+    await fill();
+    if (action === "Rotate bank key") {
+      fireEvent.change(
+        screen.getByLabelText("Reason for replacement-key rotation"),
+        { target: { value: "Scheduled key replacement." } },
+      );
+    }
+    if (action === "Connect bank key" || action === "Rotate bank key") {
+      fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+      await screen.findByText("Synthetic round trip passed.");
+    }
+    if (action === "Record schedule confirmation") {
+      fireEvent.click(screen.getByRole("checkbox"));
+    }
+    const request = {
+      "Test connection": boundary.probe,
+      "Connect bank key": boundary.connect,
+      "Rotate bank key": boundary.rotate,
+      "Test connected key": boundary.probe,
+      "Record schedule confirmation": boundary.confirm,
+    }[action];
+    request.mockRejectedValueOnce(
+      new Error("AWS request unavailable. Retry shortly."),
+    );
+    const button = screen.getByRole("button", { name: action });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "AWS request unavailable. Retry shortly.",
+    );
+    expect(button).toBeEnabled();
+  },
+);
 it("reports a retry instruction when a request rejects without an Error", async () => {
   boundary.probe.mockRejectedValueOnce(null);
   mount();

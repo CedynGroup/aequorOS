@@ -712,7 +712,9 @@ def test_frozen_engine_package_requires_regeneration_after_key_rotation(
     icaap = cast(Mapping[str, object], metadata["icaap"])
     profile = cast(Mapping[str, object], icaap["institution_profile"])
     assert profile["register_state_digest"] == sealed
-    key = registry.scoped_key(db, bank_id=access.bank.id, organization_id=access.ctx.organization_id)
+    key = registry.scoped_key(
+        db, bank_id=access.bank.id, organization_id=access.ctx.organization_id
+    )
     registry.rotate(db, key, NEXT, providers=lambda _name: provider)
     db.commit()
     db.expire_all()
@@ -743,7 +745,10 @@ def test_frozen_engine_package_requires_regeneration_after_key_rotation(
     decide(db, approver, cycle.id, 3, "approved")
     digest = workflow.get_stages(db, access, cycle.id).review_digest
     regenerated = freeze.freeze_cycle(
-        db, access, cycle.id, IcaapFreezeCreate(review_digest=digest, reason="Seal the updated report.")
+        db,
+        access,
+        cycle.id,
+        IcaapFreezeCreate(review_digest=digest, reason="Seal the updated report."),
     )
     updated = db.get(RegulatoryPackage, regenerated.package.id)
     assert updated is not None

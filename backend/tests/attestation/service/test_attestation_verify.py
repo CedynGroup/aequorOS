@@ -1431,7 +1431,7 @@ def test_offline_cli_canonicalisation_matches_the_platform(
     bundle = _write_bundle(db_session, package, record)
     root = tmp_path / "root.pem"
     root.write_bytes(pki.ca_pem)
-    assert cli.main(["--record", str(record), "--trust-root", str(root)]) == 0
+    assert offline_verifier.main(["--record", str(record), "--trust-root", str(root)]) == 0
 
     payload = {"z": [3, 2, 1], "a": {"nested": "ünïcode", "n": None}, "b": True}
     assert cli.canonical_json(payload) == digests.canonical_json(payload)

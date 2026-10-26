@@ -134,13 +134,17 @@ it.each(["manual", "automatic"] as const)(
       vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
         if (init?.method === "POST") {
           if (!available) return refusal("unavailable");
-          expect(JSON.parse(String(init.body))).toMatchObject({ full_name: draft });
+          expect(JSON.parse(String(init.body))).toMatchObject({
+            full_name: draft,
+          });
           created = true;
           return Response.json(party(draft));
         }
         reads++;
         if (created) return profileResponse("available", draft);
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
         if (reads > 2) {
           headers["X-Aequoros-Protected-Data"] = JSON.stringify({
             [BANK]: available ? "available" : "unavailable",
@@ -161,9 +165,14 @@ it.each(["manual", "automatic"] as const)(
       }),
     );
     const client = mount(<RelatedPartiesPage />);
-    await userEvent.click(screen.getByRole("button", { name: "Add related party" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Add related party" }),
+    );
     await userEvent.type(screen.getByLabelText(/Full name/), draft);
-    await userEvent.type(screen.getByLabelText(/Reason for change/), "Synthetic new party");
+    await userEvent.type(
+      screen.getByLabelText(/Reason for change/),
+      "Synthetic new party",
+    );
     available = false;
     await userEvent.click(screen.getByRole("button", { name: "Add party" }));
     await waitFor(() => expect(reads).toBe(2));
@@ -175,7 +184,9 @@ it.each(["manual", "automatic"] as const)(
     });
     await waitFor(() => expect(reads).toBe(3));
     expect(protectedDataState(BANK)).toBe("unavailable");
-    expect(screen.getAllByText(protectedDataMessages.unavailable).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(protectedDataMessages.unavailable).length,
+    ).toBeGreaterThan(0);
     available = true;
     if (retry === "manual") {
       await userEvent.click(screen.getByRole("button", { name: "Retry" }));
@@ -189,7 +200,9 @@ it.each(["manual", "automatic"] as const)(
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
     expect(screen.getByLabelText(/Full name/)).toHaveValue(draft);
     await userEvent.click(screen.getByRole("button", { name: "Add party" }));
-    await waitFor(() => expect(screen.queryByLabelText(/Full name/)).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/Full name/)).toBeNull(),
+    );
     expect(await screen.findByText(draft)).toBeVisible();
   },
 );
