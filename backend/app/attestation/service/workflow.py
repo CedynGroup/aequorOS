@@ -233,7 +233,7 @@ def verify_chain(db: Session, ctx: TenantContext) -> tuple[bool, str | None]:
 
 def ensure_register_current(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> None:
     """Refuse forward review or first submission of a stale register commitment."""
-    if package.register_state_digest is None or package.status == "submitted":
+    if package.status == "submitted":
         return
     current = digests.register_state_digest(
         register_state.project_register_state(db, ctx, package.bank_id)

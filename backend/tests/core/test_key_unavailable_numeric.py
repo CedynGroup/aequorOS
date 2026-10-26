@@ -175,9 +175,12 @@ def test_numeric_classification_consumers_survive_key_loss(
         )
 
 
-@pytest.mark.parametrize("return_code", ["LRT-OUTLET", "LCR-NSFR"])
+@pytest.mark.parametrize(
+    ("return_code", "legacy"),
+    [("LRT-OUTLET", False), ("LCR-NSFR", False), ("LCR-NSFR", True)],
+)
 def test_rotation_refuses_review_of_sealed_register_until_regeneration(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch, return_code: str
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, return_code: str, legacy: bool
 ) -> None:
     db = db_session
     if return_code == "LCR-NSFR":
@@ -195,6 +198,9 @@ def test_rotation_refuses_review_of_sealed_register_until_regeneration(
     workflow.request_approval(
         db, lrt.MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate()
     )
+    if legacy:
+        package.register_state_digest = None
+        assert_stale_register_refuses_forward_actions(db, package)
     package_id = package.id
     sealed = package.register_state_digest
     db.commit()

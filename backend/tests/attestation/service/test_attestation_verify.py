@@ -54,9 +54,11 @@ from pyhanko.sign import signers as pyhanko_signers
 from pyhanko_certvalidator.registry import SimpleCertificateStore
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.requests import Request
 
 from app.api.deps import TenantContext
-from app.attestation.schemas import VerificationReportRead
+from app.attestation.schemas import StepUpRequest, VerificationReportRead
+from app.attestation.service import api as attestation_api
 from app.attestation.service import digests, pdf_signing, signing, stepup, verify, workflow
 from app.attestation.service.identity import ensure_signer_identity
 from app.core.authorization import RoleBundle
@@ -500,8 +502,9 @@ def test_engine_attestation_preserves_register_binding_offline_without_key(
     assert _status(_report(db, package, pki=pki), verify.CHECK_CONTENT_BINDING) == "failed"
 
 
+@pytest.mark.parametrize("legacy", [False, True])
 def test_engine_package_rotation_refuses_certification(
-    db_session: Session, pki: _Pki, monkeypatch: pytest.MonkeyPatch
+    db_session: Session, pki: _Pki, monkeypatch: pytest.MonkeyPatch, legacy: bool
 ) -> None:
     db = db_session
     _seed(db)
@@ -515,12 +518,24 @@ def test_engine_package_rotation_refuses_certification(
     validation.validate_package(db, MAKER, SAMPLE_BANK_ID, read.id)
     package = db.get(RegulatoryPackage, read.id)
     assert package is not None and package.source_runs and package.register_state_digest
+    if legacy:
+        package.register_state_digest = None
     key = registry.scoped_key(db, bank_id=SAMPLE_BANK_ID, organization_id=DEMO_ORG_ID)
     registry.rotate(db, key, NEXT, providers=lambda _name: provider)
     db.commit()
     with pytest.raises(workflow.AttestationConflict, match="register_state_changed"):
         _certify(db, MAKER, package, pki, role="preparer", key_ref="softkey:preparer")
+    with pytest.raises(workflow.AttestationConflict, match="register_state_changed"):
+        attestation_api.step_up(
+            db,
+            MAKER,
+            SAMPLE_BANK_ID,
+            package.id,
+            StepUpRequest(signing_role="preparer", password="synthetic-reauth-proof"),
+            Request({"type": "http"}),
+        )
     assert workflow.current_signatures(db, MAKER, package) == []
+    assert (package.register_state_digest is None) == legacy
 
 
 def test_verification_never_writes(db_session: Session, pki: _Pki) -> None:
@@ -1317,14 +1332,44 @@ def test_offline_cli_refuses_unknown_inputs_with_a_distinct_exit_code(
 
 @pytest.mark.parametrize("legacy", [False, True])
 def test_offline_cli_canonicalisation_matches_the_platform(
-    db_session: Session, pki: _Pki, legacy: bool
+    db_session: Session, pki: _Pki, legacy: bool, tmp_path: Path
 ) -> None:
     """The CLI duplicates the recipe on purpose; this is what stops it drifting."""
     package = _seed(db_session)
+    _fully_certify(db_session, pki, package)
     if legacy:
         package.register_state_digest = None
-    _fully_certify(db_session, pki, package)
-    bundle = verify.export_verification_bundle(db_session, MAKER, package)
+        binding = workflow.compute_binding(package)
+        package.certification_digest = binding.certification_digest
+        previous = workflow.GENESIS_HASH
+        for stored in workflow.current_signatures(db_session, MAKER, package):
+            stored.register_state_digest = None
+            stored.certification_digest = binding.certification_digest
+            stored.attestation_payload = {
+                **stored.attestation_payload,
+                "certification_digest": binding.certification_digest,
+            }
+            stored.payload_digest = digests.digest_of(stored.attestation_payload)
+            stored.signature_value = _SoftSigner(pki).sign_digest(
+                bytes.fromhex(stored.payload_digest), key_ref=f"softkey:{stored.signing_role}"
+            )
+            stored.prev_hash = previous
+            stored.entry_hash = workflow.chain_entry_hash(
+                prev_hash=previous,
+                payload_digest=stored.payload_digest,
+                signature_value=stored.signature_value,
+            )
+            previous = stored.entry_hash
+        db_session.flush()
+    assert (
+        VerificationReportRead.model_validate(_report(db_session, package, pki=pki)).overall_passed
+        is True
+    )
+    record = tmp_path / "attestation.json"
+    bundle = _write_bundle(db_session, package, record)
+    root = tmp_path / "root.pem"
+    root.write_bytes(pki.ca_pem)
+    assert cli.main(["--record", str(record), "--trust-root", str(root)]) == 0
 
     payload = {"z": [3, 2, 1], "a": {"nested": "ünïcode", "n": None}, "b": True}
     assert cli.canonical_json(payload) == digests.canonical_json(payload)
