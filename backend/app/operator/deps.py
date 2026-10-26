@@ -19,7 +19,8 @@ necessary identity evidence but grants no role by itself.
 
 The DB session here is CROSS-TENANT: it deliberately sets no
 ``organization_id`` on the session, so on the RLS-forced primary it must run
-as a BYPASSRLS role (``OPERATOR_DATABASE_URL``, the worker-role precedent).
+as an existing BYPASSRLS role until the separate metadata-view cutover
+(``docs/ops/database-roles.md``).
 Consequently EVERY query issued through it must carry an explicit
 ``organization_id`` filter — that is the #1 cross-tenant risk the staff
 console spec calls out, and the read services in this package are written to
@@ -49,7 +50,7 @@ from app.core.config import (
     get_settings,
     is_undeployed_environment,
 )
-from app.db.session import get_engine
+from app.db.session import RlsBlindError, get_cross_tenant_engine
 from app.identity.public import Bank
 from app.models import OperatorAuditLog, OperatorInspectorSession, OperatorUser
 from app.models.operator import OPERATOR_ROLE_RANK
@@ -214,31 +215,30 @@ def require_operator_admin(
 
 # -- database ------------------------------------------------------------------
 def resolve_operator_database_url() -> str | None:
-    """OPERATOR_DATABASE_URL → WORKER_DATABASE_URL → DATABASE_URL.
+    """OPERATOR_DATABASE_URL → DATABASE_URL.
 
     Real deployments set OPERATOR_DATABASE_URL to the operator's own
-    BYPASSRLS role; the fallbacks keep local/hermetic runs zero-config (the
-    tenant-scoped app role would simply see zero rows on RLS-forced tables).
+    BYPASSRLS role; the fallback preserves pre-cutover and local/hermetic runs.
+    Restricted PostgreSQL credentials are refused at the session boundary.
     """
     settings = get_settings()
-    return (
-        get_operator_settings().operator_database_url
-        or settings.worker.worker_database_url
-        or settings.database.database_url
-    )
+    return get_operator_settings().operator_database_url or settings.database.database_url
 
 
-def get_operator_sessionmaker() -> sessionmaker:
+def get_operator_sessionmaker() -> sessionmaker[Session]:
     url = resolve_operator_database_url()
     if url is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Operator database is not configured "
-            "(OPERATOR_DATABASE_URL / WORKER_DATABASE_URL / DATABASE_URL).",
+            detail="Operator database is not configured (OPERATOR_DATABASE_URL / DATABASE_URL).",
         )
-    return sessionmaker(
-        bind=get_engine(url, "aequoros-operator"), autoflush=False, expire_on_commit=False
-    )
+    try:
+        engine = get_cross_tenant_engine(url, "aequoros-operator", "OPERATOR_DATABASE_URL")
+    except RlsBlindError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
 def get_operator_db_session(

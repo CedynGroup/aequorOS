@@ -91,7 +91,7 @@ import sys  # noqa: E402
 import time  # noqa: E402
 from collections.abc import Iterator, Sequence  # noqa: E402
 from dataclasses import dataclass, field  # noqa: E402
-from datetime import date, timedelta  # noqa: E402
+from datetime import date, datetime, timedelta  # noqa: E402
 from pathlib import Path  # noqa: E402
 from typing import Any  # noqa: E402
 
@@ -1088,41 +1088,47 @@ def recorded_builds(tenant: Tenant) -> list[BuildMeasurement]:
     session = get_sessionmaker()()
     try:
         session.info["organization_id"] = tenant.organization_id
-        rows = session.execute(
-            select(
-                BiMartBuild.as_of_date,
-                BiMartBuild.scope,
-                BiMartBuild.status,
-                BiMartBuild.started_at,
-                BiMartBuild.finished_at,
-                BiMartBuild.row_counts,
+        rows = (
+            session.execute(
+                select(
+                    BiMartBuild.as_of_date,
+                    BiMartBuild.scope,
+                    BiMartBuild.status,
+                    BiMartBuild.started_at,
+                    BiMartBuild.finished_at,
+                    BiMartBuild.row_counts,
+                )
+                .where(
+                    BiMartBuild.organization_id == tenant.organization_id,
+                    BiMartBuild.bank_id == tenant.bank_id,
+                )
+                .order_by(BiMartBuild.as_of_date)
             )
-            .where(
-                BiMartBuild.organization_id == tenant.organization_id,
-                BiMartBuild.bank_id == tenant.bank_id,
-            )
-            .order_by(BiMartBuild.as_of_date)
-        ).all()
+            .tuples()
+            .all()
+        )
     finally:
         session.close()
-    by_date: dict[date, list[Any]] = {}
+    by_date: dict[
+        date, list[tuple[date, str, str, datetime | None, datetime | None, dict[str, int]]]
+    ] = {}
     for row in rows:
-        by_date.setdefault(row.as_of_date, []).append(row)
+        by_date.setdefault(row[0], []).append(row)
     measurements: list[BuildMeasurement] = []
     for as_of in sorted(by_date):
         scoped = by_date[as_of]
-        starts = [r.started_at for r in scoped if r.started_at is not None]
-        ends = [r.finished_at for r in scoped if r.finished_at is not None]
+        starts = [r[3] for r in scoped if r[3] is not None]
+        ends = [r[4] for r in scoped if r[4] is not None]
         wall = (max(ends) - min(starts)).total_seconds() if starts and ends else 0.0
         counts: dict[str, int] = {}
         scope_seconds: dict[str, float] = {}
         for r in scoped:
-            payload = r.row_counts or {}
-            scope_seconds[r.scope] = round(payload.get("elapsed_ms", 0) / 1000, 3)
+            payload = r[5] or {}
+            scope_seconds[r[1]] = round(payload.get("elapsed_ms", 0) / 1000, 3)
             for table, count in payload.items():
                 if table != "elapsed_ms":
                     counts[table] = count
-        statuses = {r.status for r in scoped}
+        statuses = {r[2] for r in scoped}
         outcome = "succeeded" if statuses == {"succeeded"} else "/".join(sorted(statuses))
         measurements.append(
             BuildMeasurement(
@@ -1147,13 +1153,17 @@ def _scope_seconds(tenant: Tenant, as_of: date) -> dict[str, float]:
     session = get_sessionmaker()()
     try:
         session.info["organization_id"] = tenant.organization_id
-        rows = session.execute(
-            select(BiMartBuild.scope, BiMartBuild.row_counts).where(
-                BiMartBuild.organization_id == tenant.organization_id,
-                BiMartBuild.bank_id == tenant.bank_id,
-                BiMartBuild.as_of_date == as_of,
+        rows = (
+            session.execute(
+                select(BiMartBuild.scope, BiMartBuild.row_counts).where(
+                    BiMartBuild.organization_id == tenant.organization_id,
+                    BiMartBuild.bank_id == tenant.bank_id,
+                    BiMartBuild.as_of_date == as_of,
+                )
             )
-        ).all()
+            .tuples()
+            .all()
+        )
     finally:
         session.close()
     return {scope: round((counts or {}).get("elapsed_ms", 0) / 1000, 3) for scope, counts in rows}

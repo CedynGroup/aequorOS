@@ -342,6 +342,7 @@ def test_financial_workspace_map_creates_cash_flows_with_traceability(
     assert cash_flow.currency == "GHS"
     assert cash_flow.direction == "inflow"
     assert cash_flow.category == "customer deposit"
+    assert cash_flow.cash_flow_date is not None
     assert cash_flow.cash_flow_date.isoformat() == "2026-04-15"
     assert {
         (link.record_table, link.field_name, link.source_field)

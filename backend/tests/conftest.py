@@ -203,11 +203,6 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # The worker lane selection: unset means the core lane, which never claims
     # AI work. Pinned so a developer's WORKER_JOB_TYPES cannot change it.
     monkeypatch.setenv("WORKER_JOB_TYPES", "")
-    monkeypatch.setenv("OFFICIAL_RUN_ENABLED", "0")
-    monkeypatch.setenv("MARKET_DATA_PULL_ENABLED", "0")
-    monkeypatch.setenv("TEMENOS_PULL_ENABLED", "0")
-    monkeypatch.setenv("DATABASE_DIRECT_HEALTH_ENABLED", "0")
-    monkeypatch.setenv("LIVE_REFRESH_ENABLED", "0")
     # Same .env-leak guard for every BI switch (D-008). All three ship OFF; a
     # developer who has enabled BI locally would otherwise flip the run-gate
     # "skipped" assertions, the feature-flags projection, and — once the
@@ -543,6 +538,7 @@ def _rollback_sessionmaker_lifecycle(
 ) -> Iterator[sessionmaker[Session]]:
     import app.api.deps as deps_mod  # noqa: PLC0415
     import app.db.session as session_mod  # noqa: PLC0415
+    import app.identity.api.auth as auth_mod  # noqa: PLC0415
 
     monkeypatch.setenv("DATABASE_URL", database.database_url)
     get_settings.cache_clear()
@@ -574,6 +570,7 @@ def _rollback_sessionmaker_lifecycle(
         return original_sessionmaker(*args, **kwargs)
 
     monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
+    monkeypatch.setattr(auth_mod, "get_sessionmaker", lambda: bound_sessionmaker)
     monkeypatch.setattr(session_mod, "get_engine", shared_engine)
     monkeypatch.setattr(session_mod, "sessionmaker", shared_sessionmaker)
     try:
@@ -651,6 +648,8 @@ def _committing_test_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[_TestDatabase]:
     """Point one test whose writes must really commit at the reset shared schema."""
+    import app.identity.api.auth as auth_mod  # noqa: PLC0415
+
     database_url = _shared_committing_database.database_url
     monkeypatch.setenv("DATABASE_URL", database_url)
     get_settings.cache_clear()
@@ -658,6 +657,7 @@ def _committing_test_database(
     # The engine the application resolves for this test; the session fixture's
     # own engine only outlives it so the schema can be dropped at the end.
     engine = get_engine(database_url)
+    monkeypatch.setattr(auth_mod, "get_sessionmaker", get_sessionmaker)
     if engine.dialect.name == "sqlite":
         _enable_sqlite_foreign_keys(engine)
     database = _TestDatabase(

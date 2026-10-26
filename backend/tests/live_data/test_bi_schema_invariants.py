@@ -18,15 +18,14 @@ re-checks afterwards, each named by audit A360-4:
   tenant tables, FORCE RLS with RESTRICTIVE ``_no_update`` / ``_no_delete``
   policies. The table owner can undo all of it in three DDL statements
   (``DISABLE TRIGGER``, ``NO FORCE ROW LEVEL SECURITY``, ``GRANT UPDATE``) — that
-  is inherent to the app role owning its tables, so DETECTION is the control.
+  is why ownership and runtime grants follow
+  ``backend/docs/tamper_evident_records.md#required-deployment-follow-up``.
 
-* **The cross-tenant worker may call the partition functions.** ``202609220066``
-  grants EXECUTE to the migrating role and to every BYPASSRLS login role present
-  at migration time. A worker role created afterwards holds no grant, and the
-  first thing it does with it — ``bi_ensure_month_partition`` before a build, or
-  ``query_log.record`` on an export — fails with ``permission denied for
-  function``. Documented in a migration docstring and in no runbook; asserted here
-  over the roles that actually exist.
+* **Legacy partition-function grants remain present.** Credential rollout and
+  the restricted worker wrappers follow
+  ``docs/ops/database-roles.md#worker-compatibility-migration``. This check covers
+  the original helpers for existing bypass logins and this session; restricted
+  worker grants are covered by ``backend/tests/db/test_worker_database_access.py``.
 
 Skips, with the revision named, only when the BI foundation has not been applied
 to the database under test — an invariant over partitions that do not exist would
@@ -356,11 +355,11 @@ def test_every_bypassrls_login_role_and_this_session_may_call_the_partition_func
 ) -> None:
     """The deployment landmine, asserted over the roles that exist.
 
-    The cross-tenant worker (``WORKER_DATABASE_URL``) is BYPASSRLS by requirement
-    and is what calls ``bi_ensure_month_partition`` before every build and
-    ``query_log.record`` on every export and delivery. A worker role created
-    after ``202609220066`` ran has no EXECUTE and fails on first use. The session
-    running this suite is expected to BE that worker, so it is asserted too.
+    This check expects the original helper grants for existing bypass logins
+    and this session. It does not check the restricted worker's wrappers;
+    their activation follows ``docs/ops/database-roles.md#worker-compatibility-migration``.
+    Live-data credentials follow
+    ``backend/README.md#test-databases-and-the-primary-database``.
     """
     workers = [
         str(name)

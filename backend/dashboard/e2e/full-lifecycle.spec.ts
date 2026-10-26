@@ -244,7 +244,7 @@ async function certifyAndApprove(
 ): Promise<void> {
   await generateAndClearChecks(page, code, date);
   await certifyAsPreparer(page, code, date);
-  await approveAndSignAsChecker(browser, approverState, date);
+  await approveAndSignAsChecker(browser, approverState, code, date);
 }
 
 type FilingSession = { page: Page; close: () => Promise<void> };
@@ -273,7 +273,13 @@ async function openFilingSession(
     const page = await context.newPage();
     await page.goto("/submissions/approvals");
     await page
-      .getByRole("row", { name: new RegExp(fmtDateGB(date)) })
+      .getByRole("row")
+      .filter({
+        has: page.getByRole("cell", { name: LIQUIDITY_RETURN, exact: true }),
+      })
+      .filter({
+        has: page.getByRole("cell", { name: fmtDateGB(date), exact: true }),
+      })
       .first()
       .click();
     await expect(page.getByTestId("validator-surface")).toBeVisible({
@@ -328,7 +334,7 @@ async function correctAndRefile(
   await expectPriorFilingFrozen(request, prior, signatures);
   await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
   await expectStaleReviewRefused(request, corrected.id, staleReview);
-  await approveAndSignAsChecker(browser, approverState, date);
+  await approveAndSignAsChecker(browser, approverState, LIQUIDITY_RETURN, date);
   await expectFreshFilingSignatures(request, corrected.id, signatures);
 
   const filing = await openFilingSession(browser, date);
@@ -758,7 +764,25 @@ test.describe("full lifecycle", () => {
       const signatures = filingSignatures(original.id);
       expect(signatures).toHaveLength(1);
       const staleReview = await filingChain(request, original.id);
-      await sendBackAsChecker(browser, approverState, date, note);
+      // A different return on the same date must keep its place in the queue.
+      // BSD2's landscape document needs the same viewport as the artifact journey.
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      await generateAndClearChecks(page, BOG_FORM, date);
+      await certifyAsPreparer(page, BOG_FORM, date);
+      await sendBackAsChecker(
+        browser,
+        approverState,
+        LIQUIDITY_RETURN,
+        date,
+        note,
+      );
+      const companion = await api(
+        await mintBackendToken("admin"),
+        "GET",
+        `/banks/${SAMPLE_BANK_ID}/regulatory-packages?return_code=${BOG_FORM}&reporting_date=${date}&include_superseded=false`,
+      );
+      expect(companion.packages).toHaveLength(1);
+      expect(companion.packages[0].status).toBe("pending_approval");
 
       await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
       await expect(page.getByText("Unsigned").first()).toBeVisible();

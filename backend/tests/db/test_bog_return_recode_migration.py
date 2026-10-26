@@ -117,7 +117,7 @@ def test_suspension_raises_loudly_when_it_cannot_see_the_rows() -> None:
     ):
         raise AssertionError("body must not run")
 
-    assert "WORKER_DATABASE_URL" in str(excinfo.value)
+    assert "MIGRATION_DATABASE_URL" in str(excinfo.value)
     assert "regulatory_packages" in str(excinfo.value)
 
 

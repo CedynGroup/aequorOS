@@ -584,6 +584,12 @@ async function runIrrScenarioBatch(page: Page): Promise<IrrScenarioBaseline> {
 async function runParallelIrrStress(page: Page) {
   await openTab(page, "Scenarios");
   await expect(
+    page.getByRole("heading", { name: "IRRBB Scenarios", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "Open enterprise stress workbench" })
+    .click();
+  await expect(
     page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
   ).toBeVisible();
 

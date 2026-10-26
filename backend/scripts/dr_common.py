@@ -240,7 +240,9 @@ def assert_dump_role_sees_all_rows(*, role: str, superuser: bool, bypassrls: boo
     msg = (
         f"Role {role!r} has neither SUPERUSER nor BYPASSRLS. Every tenant table is "
         "FORCE ROW LEVEL SECURITY, so this role reads zero rows and the resulting "
-        "backup would be silently empty. Use the BYPASSRLS role (WORKER_DATABASE_URL)."
+        "backup would be silently empty. Set BACKUP_SOURCE_DATABASE_URL to an authorized "
+        "all-tenant backup credential; see "
+        "docs/ops/database-roles.md#worker-compatibility-migration."
     )
     raise DisasterRecoveryError(msg)
 

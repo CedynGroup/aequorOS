@@ -92,13 +92,10 @@ services:
     depends_on:
       risk-migrate:
         condition: service_completed_successfully
-    # The worker had no healthcheck at all, and its worst failure is silent:
-    # `jobs` is FORCE-RLS and the claim query runs with no tenant set, so a role
-    # without BYPASSRLS matches zero rows for every tenant forever — no error, no
-    # log, and a process that looks perfectly alive while every scheduled
-    # refresh, official run and vendor pull stops (audit finding P0-16). This
-    # asserts the role can claim AND that the poll loop wrote a heartbeat within
-    # WORKER_STALE_JOB_SECONDS.
+    # Fail visibly when the credential cannot claim across the FORCE-RLS queue;
+    # process liveness alone cannot detect stranded jobs. The probe also checks
+    # a poll-loop heartbeat within WORKER_STALE_JOB_SECONDS. Credential rollout:
+    # docs/ops/database-roles.md#worker-compatibility-migration.
     healthcheck:
       test:
         [
@@ -184,8 +181,8 @@ services:
   # Same image, third entrypoint (api/worker/operator). Attach a dedicated
   # domain to container port 8100 (e.g. op.aequoros.com); the console app's
   # OPERATOR_API_URL points at it. Auth accepts password sessions and workforce
-  # OIDC (dev auth is hard-refused), and OPERATOR_DATABASE_URL falls back to
-  # WORKER_DATABASE_URL from the shared .env when unset.
+  # OIDC (dev auth is hard-refused). Operator credential resolution and
+  # activation follow docs/ops/database-roles.md#worker-compatibility-migration.
   risk-operator:
     build: .
     command: ["python", "-m", "app.core.serve", "operator"]
