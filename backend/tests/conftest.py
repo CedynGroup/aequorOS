@@ -598,6 +598,7 @@ def _rollback_sessionmaker_lifecycle(
 
 # Shared primitives for feature-local API fixtures backed by migrated schemas.
 ApiTestDatabase = _TestDatabase
+ApiTestApp = _LazyTestApp
 seed_demo_tenants = _seed_demo_tenants
 rollback_sessionmaker_lifecycle = _rollback_sessionmaker_lifecycle
 
