@@ -29,8 +29,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Queue entries retain the required gate; per-PR checks have already run.
 jobs:
   changes:
+    if: github.event_name != 'merge_group'
     name: Detect changes
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -50,7 +52,7 @@ jobs:
   frontend:
     name: Marketing site
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: github.event_name != 'merge_group' && needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -69,7 +71,7 @@ jobs:
   console:
     name: Operator console
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: github.event_name != 'merge_group' && needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
