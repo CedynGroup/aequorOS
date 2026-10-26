@@ -13,7 +13,8 @@
     "e2e:visual": "uv run --project .. python ../scripts/local_services.py run --storage -- node node_modules/@playwright/test/cli.js test --config playwright.visual.config.ts",
     "test:legacy": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test scripts/*.test.mjs && node scripts/run-unit-tests.mjs",
     "test:coverage": "node scripts/run-unit-coverage.mjs",
-    "coverage:ratchet": "node scripts/run-unit-coverage.mjs --update"
+    "coverage:ratchet": "node scripts/run-unit-coverage.mjs --update",
+    "e2e:contracts": "uv run --project .. python ../scripts/local_services.py run --storage -- node node_modules/@playwright/test/cli.js test --config playwright.contracts.config.ts"
   },
   "dependencies": {
     "@aequoros/risk-service-api": "workspace:*",

@@ -386,7 +386,7 @@ NextAuth session-cookie variants, including secure/host-prefixed names and
 received numeric chunks. The auth response boundary also clears these variants
 for an empty session or successful sign-out, and removes stale siblings when
 issuing a session. Sign-out still invokes backend refresh-token revocation.
-See `lib/authCookies.ts` and `e2e/session-cookie-hygiene.spec.ts`.
+See `lib/authCookies.ts` and the [browser coverage guidance](#end-to-end-playwright).
 
 Login, sign-out, and session redirects retain the request's origin; a callback
 on another origin returns to the current origin instead. In the dashboard,
@@ -546,8 +546,8 @@ three servers use OS-selected free ports (optional `E2E_BACKEND_PORT`,
 `E2E_DASHBOARD_PORT` and `E2E_IDP_PORT` preferences fall back when occupied),
 then `e2e/global-setup.ts` seeds through the API and mints per-role session
 cookies. The Next.js server uses `.next-e2e`, so it cannot contaminate the
-normal development cache. Because every journey shares the disposable database
-and session files, a worktree-local lock rejects a second concurrent E2E run.
+normal development cache. Both browser suites use the worktree's disposable
+database and session files, so a worktree-local lock rejects concurrent E2E runs.
 The stack never touches the primary database.
 
 The disposable Next.js server uses `NEXT_FONT_GOOGLE_MOCKED_RESPONSES` with
@@ -569,10 +569,11 @@ without the explicit opt-in, startup refuses SQLite with "Database transport
 requires PostgreSQL with a hostname." Exception limits are governed by
 [the transport contract](../docs/transport_security.md#local-development-and-narrowly-bounded-exceptions).
 
-`session-cookie-hygiene.spec.ts` deliberately sends a cookie encrypted with a
-foreign secret and malformed cookie chunks. Auth.js reports `JWTSessionError`
-and "no matching decryption secret" during those refusal journeys; their
-assertions prove the cookie is cleared and a subsequent real login succeeds.
+`e2e/session-cookie-hygiene.spec.ts` deliberately sends a cookie encrypted with a
+foreign secret, verifies it is cleared and completes a subsequent real login.
+Auth.js reports `JWTSessionError` and "no matching decryption secret" during that
+refusal. `contracts/session-http.spec.ts` checks malformed cookie families and
+runtime host warnings.
 The server configuration imports the minting helper's test secret constants, and
 `session-lifecycle.spec.ts` decrypts a real login cookie and verifies rotation.
 
@@ -673,9 +674,27 @@ retain the canonical spine's figures. Capital and stress expectations for the
 latest period therefore use the position book's net CRD credit basis.
 
 ```bash
-pnpm --filter @aequoros/dashboard e2e            # the journeys
+pnpm --filter @aequoros/dashboard e2e            # functional journeys
+pnpm --filter @aequoros/dashboard e2e:contracts  # browser presentation and HTTP contracts
 AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual
 ```
+
+Functional outcomes live in `e2e/`: source ingestion, computed figures,
+navigation and recovery, scoped authority, and persisted user actions.
+`contracts/` owns presentation and HTTP contracts: header geometry and metadata,
+Settings section placement, authentication/cookie protocols, grant/access-request
+contracts, BI authorization/privacy/governance, and the exhaustive macro-scenario
+API catalogue. Both commands boot the same
+disposable product stack with one worker and no retries, on separate invocations.
+The contract suite reports every collected test and its final result through
+`e2e/support/contract-reporter.ts`, alongside the list reporter. Skips, missing
+results and expected failures fail the suite. `PLAYWRIGHT_CONTRACT_REPORT` selects
+the JSON destination (by default, `contracts.json` in the test-results directory).
+This report is separate from journey accounting.
+Navigation/recovery remains in `e2e/navigation-recovery.spec.ts`; macro read-only
+UI checks live together in `e2e/default-macro-scenarios.spec.ts`. Settings authority
+and preference persistence use fresh actors, while shell presentation is checked
+once in the contract suite.
 
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run the commands from the repository
@@ -824,8 +843,11 @@ successful detection of an ignored-only PR.
 
 Four runners use Playwright `--shard=1/4` through `--shard=4/4`, each with one
 worker and its own disposable SQLite database, fixture bank, loopback MinIO
-with built-in KMS and local OIDC issuer. Tests in one spec stay together; no
-mutable bank or storage is shared between shards. Each runner restores or
+with built-in KMS and local OIDC issuer. Shard 1 then runs the browser contracts
+serially on a fresh database with a separate results directory. A contract
+failure fails that shard job and the required gate even when every journey
+report meets the numeric floor. Contracts never contribute to that floor.
+Tests in one spec stay together; no mutable bank or storage is shared between shards. Each runner restores or
 installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined

@@ -1,17 +1,16 @@
 import { expect } from "@playwright/test";
-import { test } from "./support/story-identities";
+import { test } from "../e2e/support/story-identities";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { E2E_API_ORIGIN } from "../playwright.config";
-import { E2E_USERS, mintBackendToken, mintSessionCookie } from "./support/mint";
+import { E2E_USERS, mintBackendToken } from "../e2e/support/mint";
 
 const evidence = process.env.E2E_EVIDENCE_DIR;
 const bank = "/banks/BK-SAMP0001";
 test.use({ storyConfig: { roles: ["analyst", "approver", "macro_viewer"] } });
 
-test("system contracts, governed clones, and real denied authority", async ({
+test("default scenario API contracts, governed clones and immutable run identity", async ({
   request,
-  page,
 }) => {
   test.setTimeout(120_000);
   const transcript: unknown[] = [];
@@ -263,58 +262,4 @@ test("system contracts, governed clones, and real denied authority", async ({
     ).status,
   ).toBe(201);
   expect((await run(system.id, "macro_viewer")).status).toBe(403);
-  await page.context().addCookies([
-    {
-      name: "authjs.session-token",
-      value: await mintSessionCookie("macro_viewer"),
-      domain: "127.0.0.1",
-      path: "/",
-    },
-  ]);
-  await page.goto("/irr/scenarios");
-  const control = page.getByRole("button", {
-    name: "Run enterprise stress",
-    exact: true,
-  });
-  await expect(control).toBeVisible();
-  await expect(control).toBeDisabled();
-  await control.hover({ force: true });
-  await expect(page.getByRole("tooltip")).toHaveText(
-    "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.",
-  );
-  const cloneControls = page.getByRole("button", {
-    name: "Cloning requires the Analyst role or higher.",
-    exact: true,
-  });
-  await expect(cloneControls).toHaveCount(9);
-  for (const cloneControl of await cloneControls.all()) {
-    await expect(cloneControl).toBeVisible();
-    await expect(cloneControl).toBeDisabled();
-  }
-  if (evidence)
-    await page.screenshot({
-      path: path.join(evidence, "real-denied-authority.png"),
-      fullPage: true,
-    });
-  for (const [lens, explanation] of [
-    [
-      "ftp",
-      "Requires Funds Transfer Pricing · Confidential · Run. Ask your organization owner or admin to grant it.",
-    ],
-    [
-      "fx",
-      "Requires FX run permission at confidential sensitivity. An organization owner can grant it.",
-    ],
-  ]) {
-    await page.goto(`/${lens}/scenarios`);
-    await expect(control).toBeVisible();
-    await expect(control).toBeDisabled();
-    await control.hover({ force: true });
-    await expect(page.getByRole("tooltip")).toHaveText(explanation);
-    if (evidence)
-      await page.screenshot({
-        path: path.join(evidence, `${lens}-denial-precedence.png`),
-        fullPage: true,
-      });
-  }
 });
