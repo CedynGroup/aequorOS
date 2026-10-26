@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
 from app.core.key_management.fields import blind_index
+from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.domain.credit.concentration_monitor import (
@@ -174,6 +175,10 @@ def active_limits(
         db, ctx.organization_id, bank.jurisdiction_code, ParamConcentrationLimit, as_of
     )
     limits: list[ConcentrationLimit] = []
+    presentation = db.info.get(SESSION_STATE)
+    support = bool(db.info.get(SESSION_SUPPORT)) or (
+        isinstance(presentation, PresentationState) and presentation.support
+    )
     for row in rows:
         key = row.bucket_key
         locked = False
@@ -184,18 +189,26 @@ def active_limits(
             and not key.startswith("pos:")
         ):
             try:
-                key = blind_index(
-                    db,
-                    organization_id=ctx.organization_id,
-                    bank_id=bank.id,
-                    domain="counterparty.group",
-                    value=key,
-                )
+                if support:
+                    if isinstance(presentation, PresentationState):
+                        presentation.record(bank.id, "support")
+                    key = None
+                    locked = True
+                else:
+                    key = blind_index(
+                        db,
+                        organization_id=ctx.organization_id,
+                        bank_id=bank.id,
+                        domain="counterparty.group",
+                        value=key,
+                    )
             except KeyIntegrityError:
                 raise
-            except KeyUnavailableError:
+            except KeyUnavailableError as exc:
                 key = None
                 locked = True
+                if isinstance(presentation, PresentationState):
+                    presentation.record(bank.id, "revoked" if exc.revoked else "unavailable")
         limits.append(
             ConcentrationLimit(
                 dimension=row.dimension,

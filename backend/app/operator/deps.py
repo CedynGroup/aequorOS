@@ -49,6 +49,7 @@ from app.core.config import (
     get_settings,
     is_undeployed_environment,
 )
+from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
 from app.db.session import get_engine
 from app.identity.public import Bank
 from app.models import OperatorAuditLog, OperatorInspectorSession, OperatorUser
@@ -116,6 +117,8 @@ def _dev_context(token: str, operator_settings: OperatorSettings) -> OperatorCon
 def _load_operator_user(email: str) -> OperatorUser | None:
     """Fetch one staff row on a short-lived session (global table, no RLS)."""
     session = get_operator_sessionmaker()()
+    cast(Session, session).info[SESSION_SUPPORT] = True
+    cast(Session, session).info[SESSION_STATE] = PresentationState(support=True)
     try:
         return session.scalar(select(OperatorUser).where(OperatorUser.email == email))
     finally:
@@ -248,6 +251,8 @@ def get_operator_db_session(
     authenticated operator. No ``organization_id`` is set on the session —
     every query MUST scope itself explicitly."""
     session = get_operator_sessionmaker()()
+    cast(Session, session).info[SESSION_SUPPORT] = True
+    cast(Session, session).info[SESSION_STATE] = PresentationState(support=True)
     try:
         yield session
     except Exception:

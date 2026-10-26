@@ -33,7 +33,7 @@ from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.schemas.push import PushBatchOpen, PushRecordsPage
 from app.services import ingestion, push_ingestion
 from app.storage import encryption
-from app.storage.client import StorageAccessError, StorageError, StorageLocation
+from app.storage.client import StorageError, StorageLocation
 from app.storage.config import StorageEngineSettings
 from app.storage.encryption import ObjectEncryption
 from app.storage.s3_compatible import S3CompatibleStorageClient
@@ -476,7 +476,7 @@ def test_bulk_fields_and_objects_unwrap_once_per_version_and_discard_on_boundary
     with pytest.raises(KeyUnavailableError):
         _ = loaded[0].name
     db_session.rollback()
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError):
         bank_storage.storage.for_session(db_session).read(location)
 
 
@@ -595,7 +595,7 @@ def test_uncommitted_key_version_cannot_publish_objects(
     location = StorageLocation(SLUG, "raw", "synthetic/uncommitted.csv")
     row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
     registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider)
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError):
         bank_storage.storage.for_session(db_session).write(
             location,
             io.BytesIO(b"synthetic"),

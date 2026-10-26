@@ -88,3 +88,25 @@ and writes, cross-bank isolation, exact matching, old-version reads after
 rotation, numeric BI and identity refusals. PostgreSQL/storage tests exercise
 concurrent ingestion, push, exports, attachments and downloads, bounded unwrap
 counts and published-manifest readability after rollback.
+
+
+## Protected presentation reads
+
+Tenant GET/HEAD sessions disclose protected identity fields as locked placeholders
+when a bank key is revoked or unreachable. Staff and Inspector presentation sessions
+hide those fields even for optional, unconnected banks. Numeric projections still
+use their stored values and indexes. Structured executable BI configuration refuses
+with a locked panel instead of substituting an empty query.
+
+The response header `X-Aequoros-Protected-Data` reports bank-scoped availability and
+protected responses use `Cache-Control: no-store`. Revocation displays “Your bank
+has turned off aequorOS access to protected data. Contact your bank administrator.”
+An outage displays “Can't reach your bank's key service. Retrying.” The dashboard
+clears affected cached data, rejects older in-flight disclosures, retries and
+refetches locked data after recovery. Form drafts remain mounted through refusal.
+Integrity failures remain verification errors, outside the key-outage presentation.
+
+Writes use strict sessions and never persist placeholders. A presentation session
+with locked fields cannot flush protected edits. Concentration displays configured
+locked limits as not evaluated and withholds a clean breach indicator while any
+configured evaluation is incomplete; independent numeric limits still evaluate.

@@ -47,7 +47,8 @@ def require_active(description: KeyDescription) -> KeyReference:
     if description.status == KeyStatus.DISABLED:
         raise KeyUnavailableError(
             "The bank encryption key is disabled or pending deletion. "
-            "Enable the key in AWS KMS, then retry."
+            "Enable the key in AWS KMS, then retry.",
+            revoked=True,
         )
     if description.status != KeyStatus.ACTIVE:
         raise KeyUnavailableError(

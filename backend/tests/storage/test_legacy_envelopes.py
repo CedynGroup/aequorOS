@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.key_management import registry, sdk
 from app.core.key_management.models import ObjectKeyEnvelope
-from app.core.key_management.types import KeyStatus
+from app.core.key_management.types import KeyStatus, KeyUnavailableError
 from app.storage.client import StorageAccessError, StorageLocation, Tier
 from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption, object_context
 from tests.storage.contract import metadata_for
@@ -63,7 +63,7 @@ def test_legacy_object_keys_keep_original_derivation_through_rotation(
         wrong = StorageLocation(SLUG, tier, "legacy/other.bin")
         with pytest.raises(StorageAccessError):
             encryption.decrypt(wrong, io.BytesIO(ciphertext), metadata, headers)
-        with pytest.raises(StorageAccessError):
+        with pytest.raises(KeyUnavailableError):
             encryption.decrypt(
                 StorageLocation("other-bank", tier, location.object_path),
                 io.BytesIO(ciphertext),
@@ -82,5 +82,6 @@ def test_legacy_object_keys_keep_original_derivation_through_rotation(
         location, io.BytesIO(new_ciphertext), metadata, new_headers
     ) as restored:
         assert restored.read() == content
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError) as refused:
         encryption.decrypt(location, io.BytesIO(ciphertext), metadata, headers)
+    assert refused.value.revoked

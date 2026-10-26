@@ -27,7 +27,13 @@ from aws_cryptographic_material_providers.mpl.references import (
 )
 from botocore.client import BaseClient
 from botocore.config import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import (
+    ClientError,
+    ConnectionClosedError,
+    ConnectTimeoutError,
+    EndpointConnectionError,
+    ReadTimeoutError,
+)
 from pydantic import BaseModel, ConfigDict
 
 from app.core.config import get_settings, is_undeployed_environment
@@ -131,6 +137,11 @@ def _provider_errors(exc: Exception) -> Iterator[BaseException]:
 
 def _failure(exc: Exception, permission: str) -> KeyUnavailableError:
     for current in _provider_errors(exc):
+        if isinstance(
+            current,
+            (ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, ReadTimeoutError),
+        ):
+            return KeyUnavailableError("The bank key service is unreachable.")
         operation = ""
         if isinstance(current, ClientError):
             failure = cast(_ClientFailure, cast(object, current))
@@ -158,17 +169,26 @@ def _failure(exc: Exception, permission: str) -> KeyUnavailableError:
         if code in {"AccessDeniedException", "AccessDenied"}:
             return KeyUnavailableError(
                 f"Access denied for {permission}. Add this permission to the bank key policy "
-                "and the aequorOS workload role, then test again."
+                "and the aequorOS workload role, then test again.",
+                revoked=True,
             )
         if code in {"DisabledException", "KMSInvalidStateException"}:
             return KeyUnavailableError(
                 "The key is disabled or pending deletion. "
-                "Enable the key in AWS KMS, then test again."
+                "Enable the key in AWS KMS, then test again.",
+                revoked=True,
             )
         if code == "NotFoundException":
             return KeyUnavailableError(
-                "Key not found. Check the exact key ARN, bank AWS account and region."
+                "Key not found. Check the exact key ARN, bank AWS account and region.", revoked=True
             )
+        if code in {
+            "DependencyTimeoutException",
+            "ThrottlingException",
+            "KMSInternalException",
+            "ServiceUnavailableException",
+        }:
+            return KeyUnavailableError("The bank key service is unavailable.")
     error = KeyIntegrityError if permission == "kms:Decrypt" else KeyUnavailableError
     return error(
         f"The key operation {permission} failed. Check KMS connectivity, key state "
@@ -207,7 +227,10 @@ class AwsKmsKeyProvider(KeyProvider):
     def _keyring(self, key: KeyReference) -> IKeyring:
         description = self.describe(key)
         if description.status != KeyStatus.ACTIVE:
-            raise KeyUnavailableError("The bank encryption key is disabled or pending deletion.")
+            raise KeyUnavailableError(
+                "The bank encryption key is disabled or pending deletion.",
+                revoked=description.status == KeyStatus.DISABLED,
+            )
         return sdk.materials().create_aws_kms_keyring(
             CreateAwsKmsKeyringInput(
                 kms_key_id=key.key_id,
