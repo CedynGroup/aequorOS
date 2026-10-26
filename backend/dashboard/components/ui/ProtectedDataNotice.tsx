@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { LockKeyhole } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBankContext } from "@/components/shell/BankContext";
+import { banksApi } from "@/lib/api/client";
 import {
   containsLockedData,
   isLockedBankQuery,
@@ -22,7 +23,11 @@ export default function ProtectedDataNotice() {
     () => "available" as const,
   );
   const locked = state !== "available";
-  const retry = () => {
+  const bankId = bank?.id;
+  const retry = useCallback(() => {
+    if (!bankId || ["available", "support"].includes(protectedDataState(bankId)))
+      return;
+    void banksApi.getBankRaw({ bankId }).catch(() => undefined);
     void client.refetchQueries({
       type: "active",
       predicate: (query) =>
@@ -30,20 +35,12 @@ export default function ProtectedDataNotice() {
         containsLockedData(query.state.data) ||
         (isLockedBankQuery(query.queryKey) && query.state.isInvalidated),
     });
-  };
+  }, [bankId, client]);
   useEffect(() => {
     if (!locked || state === "support") return;
-    const timer = setInterval(() => {
-      void client.refetchQueries({
-        type: "active",
-        predicate: (query) =>
-          isProtectedDataError(query.state.error) ||
-          containsLockedData(query.state.data) ||
-          (isLockedBankQuery(query.queryKey) && query.state.isInvalidated),
-      });
-    }, 5_000);
+    const timer = setInterval(retry, 5_000);
     return () => clearInterval(timer);
-  }, [client, locked, state]);
+  }, [locked, retry, state]);
 
   if (!locked) return null;
   return (

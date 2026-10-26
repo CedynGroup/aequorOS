@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { renderToString } from "react-dom/server";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -14,6 +14,7 @@ import { createAuthorityQueryClient } from "../lib/api/QueryAuthorityBoundary";
 import ProtectedDataNotice from "../components/ui/ProtectedDataNotice";
 import QueryBoundary from "../components/ui/QueryBoundary";
 import ProtectedDataPlaceholder from "../components/ui/ProtectedDataPlaceholder";
+import { setAccessToken } from "../lib/api/token";
 import {
   bindProtectedDataCache,
   clearProtectedData,
@@ -27,10 +28,17 @@ vi.mock("../components/shell/BankContext", () => ({
   useBankContext: () => ({ bank: { id: "BK-SAMP0001" } }),
 }));
 
+beforeEach(() => {
+  setAccessToken("synthetic-session");
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({})));
+});
+
 afterEach(() => {
   cleanup();
   clearProtectedData();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
+  setAccessToken(null);
 });
 
 function notify(state: string, bank = "BK-SAMP0001") {

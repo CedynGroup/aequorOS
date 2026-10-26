@@ -52,7 +52,7 @@ from app.identity.schemas.institution_profile import (
     RelatedPartyRoleInput,
     RelatedPartyUpdate,
 )
-from app.identity.service import institution_profile
+from app.identity.service import banks, institution_profile
 from app.ml.behavioral import deposit_stability, nmd_duration
 from app.ml.behavioral.config import BehavioralTrainingConfig
 from app.ml.behavioral.history import load_deposit_month_aggregates
@@ -67,7 +67,7 @@ from app.services import canonical_withdrawal, credit_concentration, credit_expo
 from app.services.behavioral_liquidity import get_behavioral_liquidity_report
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.bi.fixtures import materialize_bi_plane
-from tests.support.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 BANK_A = "BK-SAMP0001"
@@ -2040,6 +2040,85 @@ def test_profile_http_locked_read_write_and_recovery(
     assert restored.status_code == 200, restored.text
     assert restored.json()["related_parties"][0]["full_name"] == NAME
     assert json.loads(restored.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_empty_register_recovers_after_first_protected_write_refuses(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    payload: dict[str, object] = {
+        "reason": "Synthetic first entry",
+        "party_type": "individual",
+        "full_name": NAME,
+        "contact": {},
+        "roles": [],
+    }
+    profile_url = f"/api/v1/banks/{BANK_A}/institution-profile"
+    parties_url = f"/api/v1/banks/{BANK_A}/related-parties"
+    provider.set_status(KEY_A, status)
+    refused = db_client.post(parties_url, headers=headers(), json=payload)
+    assert refused.status_code == 503, refused.text
+    reason = "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    assert refused.json()["error"]["code"] == f"bank_key_{reason}"
+    empty = db_client.get(profile_url, headers=headers())
+    assert empty.status_code == 200, empty.text
+    assert empty.json()["related_parties"] == []
+    assert "X-Aequoros-Protected-Data" not in empty.headers
+
+    unavailable = db_client.get(f"/api/v1/banks/{BANK_A}", headers=headers())
+    assert unavailable.status_code == 200, unavailable.text
+    assert json.loads(unavailable.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
+    unauthorized = db_client.get(f"/api/v1/banks/{BANK_A}", headers=headers(org_id=ORG_2))
+    assert unauthorized.status_code == 404, unauthorized.text
+    assert "X-Aequoros-Protected-Data" not in unauthorized.headers
+
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    recovered = db_client.get(f"/api/v1/banks/{BANK_A}", headers=headers())
+    assert recovered.status_code == 200, recovered.text
+    assert json.loads(recovered.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+    assert "no-store" in recovered.headers["cache-control"]
+    still_empty = db_client.get(profile_url, headers=headers())
+    assert still_empty.json()["related_parties"] == []
+    saved = db_client.post(parties_url, headers=headers(), json=payload)
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["full_name"] == NAME
+
+
+def test_unconnected_bank_read_does_not_confirm_key_availability(
+    db_client: TestClient, provider: LocalKeyProvider
+) -> None:
+    response = db_client.get(f"/api/v1/banks/{BANK_A}", headers=headers())
+    assert response.status_code == 200, response.text
+    assert "X-Aequoros-Protected-Data" not in response.headers
+
+
+@pytest.mark.parametrize("presentation_support", [False, True])
+def test_bank_recovery_read_does_not_unwrap_for_support(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    presentation_support: bool,
+) -> None:
+    connect(db_session, provider)
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Support recovery must not unwrap bank data")
+
+    monkeypatch.setattr(provider, "unwrap", refuse_unwrap)
+    presentation = PresentationState(support=presentation_support)
+    db_session.info[SESSION_STATE] = presentation
+    ctx = TenantContext(
+        organization_id=ORG_1,
+        impersonation_context="synthetic-support",
+        actor_operator="synthetic-operator@example.test",
+    )
+    assert banks.get_bank(db_session, ctx, BANK_A).id == BANK_A
+    assert presentation.banks == {BANK_A: "support"}
+    db_session.info.pop(SESSION_STATE)
 
 
 @pytest.mark.parametrize("status", ["deferred", "failed", "completed", None])

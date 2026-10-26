@@ -47,6 +47,7 @@ afterEach(() => {
   clearProtectedData();
   setAccessToken(null);
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function party(name = "Synthetic owner") {
@@ -242,6 +243,111 @@ it.each(["revoked", "unavailable"] as const)(
       expect(screen.queryByLabelText(/Full name/)).toBeNull(),
     );
     expect(screen.getAllByText("Unsaved new name").length).toBeGreaterThan(0);
+  },
+);
+
+it.each(
+  (["revoked", "unavailable"] as const).flatMap((reason) =>
+    (["manual", "automatic"] as const).map((recovery) => ({ reason, recovery })),
+  ),
+)(
+  "recovers a first party draft after $reason using $recovery retry with an empty register",
+  async ({ reason, recovery }) => {
+    vi.useFakeTimers();
+    let available = true;
+    const saved: ReturnType<typeof party>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST" && url.endsWith("/related-parties")) {
+          if (!available) return refusal(reason);
+          const payload = JSON.parse(String(init.body)) as { full_name: string };
+          const created = party(payload.full_name);
+          saved.push(created);
+          return Response.json(created, { status: 201 });
+        }
+        if (url.endsWith(`/banks/${BANK}`)) {
+          return Response.json(
+            { id: BANK },
+            {
+              headers: {
+                "X-Aequoros-Protected-Data": JSON.stringify({
+                  [BANK]: available ? "available" : reason,
+                }),
+              },
+            },
+          );
+        }
+        if (url.endsWith("/institution-profile")) {
+          return Response.json({
+            bank_id: BANK,
+            profile: null,
+            related_parties: saved,
+            name_history: [],
+            outlets: [],
+            licenses: [],
+            products: [],
+          });
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    const client = mount(<RelatedPartiesPage />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add related party" }));
+    fireEvent.change(screen.getByLabelText(/Full name/), {
+      target: { value: "Synthetic first party" },
+    });
+    fireEvent.change(screen.getByLabelText(/Reason for change/), {
+      target: { value: "Synthetic first entry" },
+    });
+    available = false;
+    fireEvent.click(screen.getByRole("button", { name: "Add party" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(protectedDataState(BANK)).toBe(reason);
+    expect(client.getQueryData(profileKey)).toMatchObject({ relatedParties: [] });
+    expect(client.getQueryState(profileKey)?.isInvalidated).toBe(false);
+    expect(screen.getByLabelText(/Full name/)).toBeDisabled();
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Synthetic first party");
+    expect(screen.getByRole("button", { name: "Add party" })).toBeDisabled();
+    expect(saved).toEqual([]);
+
+    const retry = async () => {
+      if (recovery === "manual") {
+        fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      } else {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5_100);
+        });
+      }
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+    };
+    await retry();
+    expect(protectedDataState(BANK)).toBe(reason);
+    expect(screen.getByRole("button", { name: "Add party" })).toBeDisabled();
+    available = true;
+    await retry();
+    expect(protectedDataState(BANK)).toBe("available");
+    expect(screen.getByLabelText(/Full name/)).toBeEnabled();
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Synthetic first party");
+    expect(screen.getByLabelText(/Reason for change/)).toHaveValue(
+      "Synthetic first entry",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add party" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(saved.map((entry) => entry.full_name)).toEqual([
+      "Synthetic first party",
+    ]);
+    expect(screen.queryByLabelText(/Full name/)).toBeNull();
   },
 );
 
