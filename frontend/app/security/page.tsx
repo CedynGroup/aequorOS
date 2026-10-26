@@ -13,10 +13,11 @@ const facts = [
     title: "Tenant isolation",
     body: (
       <>
-        PostgreSQL row-level security isolates tenant sessions by organization.
-        Queries also scope records to the bank. Background workers and staff
-        tools have cross-organization access. Tighter staff access and
-        bank-visible auditing are{" "}
+        The database keeps each organization&apos;s data apart, so a bank
+        user&apos;s session sees only their own organization. Searches are also
+        limited to the bank&apos;s own records. Our background processes and
+        staff tools can reach across organizations. Tighter limits on staff
+        access, and audit records the bank can see, are{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/351"
@@ -100,17 +101,17 @@ const facts = [
     title: "Encryption",
     body: (
       <>
-        Stored integration credentials use an encrypted vault. Object storage
-        supports server-side encryption with a configured key. Optional
-        bank-held key encryption is implemented for{" "}
+        Login details for connected services are kept in an encrypted vault.
+        Stored files can be encrypted with a key we configure. A bank can also
+        choose to encrypt its{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/352"
         >
           files
         </a>{" "}
-        when a bank connects its own key. Active key custody requires deployment
-        confirmation. Planned work covers bank-held keys for{" "}
+        with its own key; this is built. Who holds the keys in practice must be
+        confirmed for each deployment. Planned work extends bank-held keys to{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/353"
@@ -131,8 +132,8 @@ const facts = [
         >
           signatures and credentials
         </a>
-        . Database encryption and TLS 1.3 on every connection require deployment
-        evidence.
+        . Encryption of the database, and of every connection with the current
+        standard (TLS 1.3), must be shown with evidence from each deployment.
       </>
     ),
     icon: (
@@ -154,23 +155,24 @@ const facts = [
     title: "Access control",
     body: (
       <>
-        Scoped access controls and a read-only examiner view are built. Selected
-        business actions write append-only audit events; staff actions use a
-        separate internal log. Complete bank-readable{" "}
+        Access limited to each user&apos;s assigned scope is built, and so is a
+        read-only view for examiners. Selected business actions are recorded in
+        an audit log that can be added to but never changed. Staff actions are
+        recorded in a separate internal log. A complete{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/297"
         >
-          login history
+          sign-in history
         </a>{" "}
-        and{" "}
+        the bank can read, and{" "}
         <a
           className="underline"
           href="https://github.com/CedynGroup/aequorOS/issues/351"
         >
-          staff-access auditing
-        </a>{" "}
-        are planned.
+          auditing of staff access
+        </a>
+        , are planned.
       </>
     ),
     icon: (

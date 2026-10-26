@@ -51,7 +51,7 @@ const ledger = [
       "Data Engine with file upload and secure API push",
       "Seven calculation engines on one canonical book",
       "Bank of Ghana BSD returns, generated and export-ready",
-      "Governed audit events, lineage, and reproducible runs",
+      "Audit records for key actions, traceable data, and repeatable runs",
     ],
   },
   {
