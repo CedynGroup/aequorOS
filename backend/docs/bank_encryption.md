@@ -68,7 +68,7 @@ Example key-policy statements (all identifiers are synthetic):
     "Sid": "AllowAequorOSBankCryptography",
     "Effect": "Allow",
     "Principal": { "AWS": "arn:aws:iam::444455556666:role/aequoros-bank-data" },
-    "Action": ["kms:GenerateDataKey", "kms:Decrypt"],
+    "Action": ["kms:GenerateDataKey", "kms:Encrypt", "kms:Decrypt"],
     "Resource": "*",
     "Condition": {
       "StringEquals": { "kms:EncryptionContext:bank_id": "BK-SAMP0001" }
@@ -90,8 +90,8 @@ key ARN instead of `*`, and retain the same actions and context condition.
 [AWS least-privilege permissions](https://docs.aws.amazon.com/kms/latest/developerguide/least-privilege.html).
 No `CreateKey`, `PutKeyPolicy`, `CreateGrant`, `ScheduleKeyDeletion` or
 key-export permission is required by the application. These SDK keyrings
-generate data keys and decrypt their wrappers; wrapper rotation does not require
-`ReEncrypt`.
+require data-key generation, encryption and decryption permissions for connection
+probes and custody operations; wrapper rotation does not require `ReEncrypt`.
 
 KMS context contains the public bank ID, a context digest and an operation
 purpose. It contains no customer filename or financial value. The bank can
@@ -178,10 +178,10 @@ S3 URLs; document transfer under bank keys remains follow-up work.
 
 The bank grants access to its replacement key while retaining the old grant.
 Rotation verifies the replacement and publishes a new immutable data-key
-version in the existing envelope catalogue. Only rotation bookkeeping locks the
-registry. Encryption and downloads use lock-free version lookups; an admitted
-unit of work may finish with its previous version while later work uses the new
-one. Ciphertext records its version UUID, and old versions keep their exact KMS
+version in the existing envelope catalogue. Rotation bookkeeping locks the
+registry. Object encryption and downloads use lock-free version lookups; an
+admitted unit of work may finish with its previous version while later work uses
+the new one. Ciphertext records its version UUID, and old versions keep their exact KMS
 references. Failed rotation rolls back the new pointer/version. Object writes
 reference committed versions, so business rollback cannot orphan published
 ciphertext. See [the field design](bank_field_encryption.md#keys-and-storage)

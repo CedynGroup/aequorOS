@@ -133,7 +133,8 @@ export function isProtectedRecoveryQuery(query: Query): boolean {
     isProtectedDataError(query.state.error) ||
     containsLockedData(query.state.data) ||
     (isLockedBankQuery(query.queryKey) &&
-      (query.state.isInvalidated || query.queryKey[0] === "institution-profile"))
+      (query.state.isInvalidated ||
+        query.queryKey[0] === "institution-profile"))
   );
 }
 

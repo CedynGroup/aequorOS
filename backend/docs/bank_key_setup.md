@@ -99,9 +99,8 @@ Configure `ENCRYPTION_WORKLOAD_ROLE_ARN` with the deployed workload's exact AWS
 role ARN before onboarding. The guided flow renders a copyable statement for
 that principal, to add to the bank key's existing policy without removing its
 administrator statements. The workload's IAM policy must separately authorize
-`kms:DescribeKey`, `kms:GenerateDataKey`, `kms:Encrypt` and `kms:Decrypt` on the
-exact bank key ARN. Cross-account use requires both policies; see
-[AWS cross-account key permissions](https://docs.aws.amazon.com/kms/latest/developerguide/key-policy-modifying-external-accounts.html).
+the permissions in [bank-side AWS setup](bank_encryption.md#bank-side-aws-setup)
+on the exact bank key ARN. Cross-account use requires both policies.
 No bank key material or AWS credentials are entered into aequorOS.
 
 **Test connection** describes the proposed key, wraps and unwraps random synthetic

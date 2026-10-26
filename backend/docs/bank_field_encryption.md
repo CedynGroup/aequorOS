@@ -34,8 +34,9 @@ A unit of work resolves the current version once and unwraps each required versi
 once. Request-bound storage shares the session cache; standalone storage operations
 own short-lived sessions. Plaintext material is session-local and excluded from
 logs. Root transaction completion, rollback or session close discards plaintext
-key material. Encryption takes no
-key-row or advisory locks. There is no persistent or process-wide plaintext cache.
+key material. Field encryption itself takes no key-row or advisory locks;
+presentation readiness checks take the shared bank-version transaction lock.
+There is no persistent or process-wide plaintext cache.
 Revocation refuses the next unit once KMS enforces the permission change; an
 already admitted unit may complete. Rotation creates a new current version;
 earlier versions remain available to read earlier ciphertext. There is no
@@ -88,7 +89,6 @@ rotation, numeric BI and identity refusals. PostgreSQL/storage tests exercise
 concurrent ingestion, push, exports, attachments and downloads, bounded unwrap
 counts and published-manifest readability after rollback.
 
-
 ## Protected presentation reads
 
 Tenant GET/HEAD sessions disclose protected identity fields as locked placeholders
@@ -108,7 +108,22 @@ clears affected cached data, rejects older in-flight disclosures, retries and
 refetches locked data after recovery. Form drafts remain mounted through refusal.
 Integrity failures remain verification errors, outside the key-outage presentation.
 
-Writes use strict sessions and never persist placeholders. A presentation session
-with locked fields cannot flush protected edits. Concentration displays configured
-locked limits as not evaluated and withholds a clean breach indicator while any
-configured evaluation is incomplete; independent numeric limits still evaluate.
+Bank-wide readiness checks both the current payload key and the retained identity
+index key, including on empty registers and after failed historical field reads.
+Each prerequisite is observed once per request, with shared versions deduplicated.
+Readable historical fields remain readable, but their successful decryption cannot
+clear a prerequisite failure. Revocation takes precedence over an outage, and a
+later successful observation cannot clear either within the same response.
+
+Protected writes require usable keys and never persist placeholders. Related-party
+`PUT /api/v1/banks/{bank_id}/related-parties/{party_id}` updates only supplied fields;
+omitted protected fields remain unchanged, so non-protected updates can succeed
+while keys are unavailable. Its response can contain locked placeholders. Supplying
+`roles` replaces the role list; `role_updates` changes supplied fields on existing
+role IDs scoped to this bank and party, preserving their IDs and omitted values.
+The two role update forms cannot be combined. Protected changes still fail with
+the appropriate key message. Other mutation sessions remain strict.
+
+Concentration displays configured locked limits as not evaluated and withholds a
+clean breach indicator while any configured evaluation is incomplete; independent
+numeric limits still evaluate.

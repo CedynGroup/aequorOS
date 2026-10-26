@@ -519,13 +519,11 @@ register_state_digest = sha256(canonical_json({
 
 Protected values enter this commitment as stored ciphertext, without key access.
 Stable record IDs, update timestamps and the current bank key version are bound.
-Rotation or re-encryption makes an in-review commitment stale; certification,
-approval and first submission refuse it until the return is regenerated.
 
 Every newly generated package binds this complete-register commitment independently
-of its engine source runs, including frozen ICAAP reports. Forward certification,
-review and first transmission refuse a changed commitment and require regeneration.
-An already submitted filing retains its original commitment.
+of its engine source runs, including frozen ICAAP reports. Register edits, rotation
+and re-encryption make it stale; forward certification, review and first transmission
+then require regeneration. An already submitted filing retains its original commitment.
 
 Commitment projection takes a shared transaction lock on the bank's key version;
 version creation takes the exclusive lock. Minting, certification, forward review
@@ -967,7 +965,7 @@ Seeded defaults **per class**, all deliberately conservative until confirmed:
 | --------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | A — engine-backed periodic        | BSD3, LMT, BSD2, IRRBB-PILOT, FX-NOP, LE-MONTHLY | 1 `preparer` + 1 `approver`, distinct; `require_signed_pdf=false`                                                       |
 | A — annual with board attestation | ICAAP-STRESS                                     | 1 `preparer` + 1 `approver` + board slot **disabled pending C4**; `required_attachments` empty pending C4               |
-| B — master data                   | the five `LRT-*`                                 | 1 `preparer` + 1 `approver`; `binding_class='master_data'` so the register-state digest is mandatory                    |
+| B — master data                   | the five `LRT-*`                                 | 1 `preparer` + 1 `approver`; `binding_class='master_data'`; digest binding follows §3.1                                 |
 | C — daily                         | DBK-DAILY                                        | **`require_signature = false`** pending C3 — the platform will not impose an infeasible daily ceremony on an assumption |
 
 The submission gate reads the policy **in force at the reporting date**, so a
@@ -1065,15 +1063,15 @@ authentication evidence.
 
 ## 6. Build sequence
 
-| Phase                                                          | Content                                                                                                                                                                                                                                                                                                     | Gates closed                               |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| **0 — Evidential foundation** _(prerequisite; no signing yet)_ | DB-enforced append-only + hash chains; artifact versioning with `version_id`; `snapshot_sha256` verification; **`content_digest` (volatile metadata excluded)**; **`register_state_digest` for master-data packs**; TSA integration; pin reportlab; fix the consolidated-basis defect; fix `create_user.py` | G1, G2, G3, G4, G8, G9, G12, G13, G15, G16 |
-| **1 — Signee identity**                                        | `signer_identities`, derivation, provisioning hooks, backfill, UI display                                                                                                                                                                                                                                   | G7, G10                                    |
-| **2 — Step-up authentication**                                 | OIDC re-auth, signing authorisations, `auth_evidence`                                                                                                                                                                                                                                                       | G5                                         |
-| **3 — Signing policy + workflow**                              | `return_signing_policies` with per-class defaults and most-specific-first resolution; attestation states; freeze; extended maker-checker; attachment requirements                                                                                                                                           | G6, G11, G18                               |
-| **4 — Cryptographic signing**                                  | PKCS#11 custody, pyHanko PAdES B-LTA, detached attestation, key lifecycle                                                                                                                                                                                                                                   | —                                          |
-| **5 — Verification**                                           | Five-check verifier, report, in-app panel, offline CLI                                                                                                                                                                                                                                                      | —                                          |
-| **6 — Counsel review**                                         | §7 register answered; §8 confirmed; configuration set per bank and per return                                                                                                                                                                                                                               | —                                          |
+| Phase                                                          | Content                                                                                                                                                                                                                                                                                      | Gates closed                               |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| **0 — Evidential foundation** _(prerequisite; no signing yet)_ | DB-enforced append-only + hash chains; artifact versioning with `version_id`; `snapshot_sha256` verification; **`content_digest` (volatile metadata excluded)**; **`register_state_digest` (§3.1)**; TSA integration; pin reportlab; fix the consolidated-basis defect; fix `create_user.py` | G1, G2, G3, G4, G8, G9, G12, G13, G15, G16 |
+| **1 — Signee identity**                                        | `signer_identities`, derivation, provisioning hooks, backfill, UI display                                                                                                                                                                                                                    | G7, G10                                    |
+| **2 — Step-up authentication**                                 | OIDC re-auth, signing authorisations, `auth_evidence`                                                                                                                                                                                                                                        | G5                                         |
+| **3 — Signing policy + workflow**                              | `return_signing_policies` with per-class defaults and most-specific-first resolution; attestation states; freeze; extended maker-checker; attachment requirements                                                                                                                            | G6, G11, G18                               |
+| **4 — Cryptographic signing**                                  | PKCS#11 custody, pyHanko PAdES B-LTA, detached attestation, key lifecycle                                                                                                                                                                                                                    | —                                          |
+| **5 — Verification**                                           | Five-check verifier, report, in-app panel, offline CLI                                                                                                                                                                                                                                       | —                                          |
+| **6 — Counsel review**                                         | §7 register answered; §8 confirmed; configuration set per bank and per return                                                                                                                                                                                                                | —                                          |
 
 Phases 0–2 have standalone value even if the attestation capability were never
 switched on: they harden the evidence the platform already produces.
@@ -1173,11 +1171,10 @@ earlier section's detail.
   separate earlier revision makes pyHanko's in-place-appearance rule convict an untouched
   locked field), and `Sig_Preparer` carries a FieldMDP `/Exclude` lock over everything but
   the approver's fields.
-- **Three digests, all value-based like `input_hash`:** `content_digest` (strips volatile
-  `generated_at`), `register_state_digest` (every newly generated return), `certification_digest`
-  (what every signer signs) — `app/attestation/service/digests.py`; never add volatile
-  fields. Signer IDs (`SGN-` + 16 Crockford) are HMAC-derived from the user UUID under
-  `SIGNER_ID_PEPPER` then **persisted as the authority** — rotating the pepper must never
+- **Digest bindings** follow [§3.1](#31-what-gets-signed--two-artefacts-per-signature)
+  and `app/attestation/service/digests.py`. Signer IDs (`SGN-` + 16 Crockford) are
+  HMAC-derived from the user UUID under `SIGNER_ID_PEPPER` then **persisted as the
+  authority** — rotating the pepper must never
   re-derive an existing identity.
 - **Database evidence protection:** audit ownership, permissions and filing seals
   are governed by [the tamper-evident records contract](../backend/docs/tamper_evident_records.md).
