@@ -654,6 +654,14 @@ sibling bank, and loses push and batch-read access after browser revocation.
 Canonical balances, batch lineage and absence of sibling writes are checked
 before finally-based credential and tenant cleanup.
 
+The full filing lifecycle (`e2e/full-lifecycle.spec.ts`) takes both a regulator
+rejection and a checker send-back through a replacement package, renewed maker
+and checker signatures, and acknowledgement. It preserves the superseded
+snapshot, withdrawn signatures and earlier receipt history; a previous version's
+review basis is refused, repeated Validator approval is idempotent, and duplicate
+transmission cannot add a receipt. Package versions advance independently of the
+ORASS revision, which counts regulator-granted resubmissions.
+
 The T24 journey configures a core in the browser, stages and ingests
 a recorded OFS extract through the API, then checks its batch and positions in
 the browser; live transport remains unavailable. Set `E2E_EVIDENCE_DIR` to retain
@@ -784,7 +792,8 @@ installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
 counts. The aggregate requires all four reports, unique journey identities,
-and at least **245 executed journeys**, with zero skips. It verifies the
+and the executed-journey floor defined in the
+[gate script](../../.github/scripts/assert_dashboard_journeys.mjs), with zero skips. It verifies the
 reported counters against the named results and prints every skipped journey
 in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
