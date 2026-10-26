@@ -27,8 +27,8 @@ What is pinned, and why each part:
 Bytes are deliberately NOT hashed. ``IncrementalPdfFileWriter`` writes a random
 second ``/ID`` per update and ECDSA signatures are randomised, so a whole-file
 digest would be a flaky test rather than a strict one (P3-DESIGN §1.2.5). The
-prepared revision's bytes ARE compared for equality under a patched
-``os.urandom``, which is the strongest byte-level statement this layer supports;
+prepared revision's bytes ARE compared for equality under a fixed random source
+and metadata clock, which is the strongest byte-level statement this layer supports;
 :func:`test_prepared_bytes_are_identical_when_the_signing_order_is_passed_explicitly`
 extends it to the redesign's new argument.
 
@@ -42,7 +42,7 @@ from __future__ import annotations
 import io
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from decimal import Decimal
 from typing import Any
 
@@ -601,23 +601,33 @@ def test_signature_layer_structure_is_unchanged(pki: _Pki, signed_pdf: bytes) ->
     )
 
 
-def test_prepared_bytes_are_reproducible_under_a_fixed_random_source(
-    monkeypatch: pytest.MonkeyPatch, unsigned_pdf: bytes
-) -> None:
-    """Two preparations of one artifact differ only in the document ``/ID``.
+@pytest.fixture
+def fixed_pdf_update_sources(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hold the document ID and modification timestamp constant for byte comparisons."""
 
-    ``IncrementalPdfFileWriter`` mints a random second ``/ID`` element per
-    update, which is why no test in this repository hashes a prepared or signed
-    file. Pinning the random source removes that one source of variation and
-    leaves a genuine byte comparison — the strongest form the "unchanged"
-    claim can take at this layer.
-    """
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> FixedDatetime:
+            return cls(2026, 7, 31, 14, 2, 11, tzinfo=UTC).astimezone(tz)
+
     # Patched by dotted path: ``os`` is an implementation detail of that module
     # rather than part of its public surface, and importing it as one would be a
     # claim this test has no business making.
     monkeypatch.setattr(
         "pyhanko.pdf_utils.incremental_writer.os.urandom", lambda size: b"\0" * size
     )
+    monkeypatch.setattr("pyhanko.pdf_utils.metadata.info.datetime", FixedDatetime)
+    monkeypatch.setattr("pyhanko.pdf_utils.metadata.xmp_xml.datetime", FixedDatetime)
+
+
+def test_prepared_bytes_are_reproducible_under_fixed_update_sources(
+    fixed_pdf_update_sources: None, unsigned_pdf: bytes
+) -> None:
+    """Two preparations have identical bytes when randomness and time are fixed.
+
+    Each incremental update writes a random second ``/ID`` and a current
+    modification timestamp. Pinning both leaves a genuine byte comparison.
+    """
     first = prepare_signature_fields(unsigned_pdf, placements=DEFAULT_PLACEMENTS)
     second = prepare_signature_fields(unsigned_pdf, placements=DEFAULT_PLACEMENTS)
     assert first == second
@@ -625,7 +635,7 @@ def test_prepared_bytes_are_reproducible_under_a_fixed_random_source(
 
 
 def test_prepared_bytes_are_identical_when_the_signing_order_is_passed_explicitly(
-    monkeypatch: pytest.MonkeyPatch, unsigned_pdf: bytes
+    fixed_pdf_update_sources: None, unsigned_pdf: bytes
 ) -> None:
     """The redesign's new argument, at its default, changes nothing at all.
 
@@ -639,12 +649,6 @@ def test_prepared_bytes_are_identical_when_the_signing_order_is_passed_explicitl
     function signature until the redesign landed, and the guard was deleted the
     moment it went green rather than left behind as a permanent escape hatch.
     """
-    # Patched by dotted path: ``os`` is an implementation detail of that module
-    # rather than part of its public surface, and importing it as one would be a
-    # claim this test has no business making.
-    monkeypatch.setattr(
-        "pyhanko.pdf_utils.incremental_writer.os.urandom", lambda size: b"\0" * size
-    )
     implicit = prepare_signature_fields(unsigned_pdf, placements=DEFAULT_PLACEMENTS)
     explicit = prepare_signature_fields(
         unsigned_pdf,

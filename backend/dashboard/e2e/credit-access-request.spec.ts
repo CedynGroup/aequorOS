@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/story-identities";
 import path from "node:path";
 import { writeFileSync } from "node:fs";
 import { decodeJwt } from "jose";
@@ -6,11 +7,15 @@ import { E2E_API_ORIGIN, E2E_BASE_URL } from "../playwright.config";
 import {
   E2E_PASSWORD,
   E2E_USERS,
+  e2eEmail,
   mintBackendToken,
   mintSessionCookie,
 } from "./support/mint";
 
-test.use({ screenshot: "on" });
+test.use({
+  screenshot: "on",
+  storyConfig: { roles: ["viewer", "access_extra_member"] },
+});
 
 test("partial Credit grants expose exact missing requirements and approval unlocks the loan book", async ({
   browser,
@@ -42,13 +47,13 @@ test("partial Credit grants expose exact missing requirements and approval unloc
   });
   expect(created.status()).toBe(201);
   const member = {
-    Authorization: `Bearer ${await mintBackendToken("viewer", 3)}`,
+    Authorization: `Bearer ${await mintBackendToken("viewer")}`,
   };
   const context = await browser.newContext();
   await context.addCookies([
     {
       name: "authjs.session-token",
-      value: await mintSessionCookie("viewer", 3),
+      value: await mintSessionCookie("viewer"),
       url: E2E_BASE_URL,
     },
   ]);
@@ -125,7 +130,7 @@ test("partial Credit grants expose exact missing requirements and approval unloc
   await context.addCookies([
     {
       name: "authjs.session-token",
-      value: await mintSessionCookie("viewer", 4),
+      value: await mintSessionCookie("viewer"),
       url: E2E_BASE_URL,
     },
   ]);
@@ -161,7 +166,7 @@ test("unsupported Capital narrowing leaves the whole-institution access request 
   const owner = { Authorization: `Bearer ${await mintBackendToken("admin")}` };
   const signedIn = await request.post(`${api}/auth/login`, {
     data: {
-      email: "e2e.access_extra_member@aequoros.example",
+      email: e2eEmail("access_extra_member"),
       password: E2E_PASSWORD,
     },
   });
