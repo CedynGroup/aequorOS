@@ -11,22 +11,7 @@ export const metadata: Metadata = {
 const facts = [
   {
     title: "Tenant isolation",
-    body: (
-      <>
-        The database keeps each organization&apos;s data apart, so a bank
-        user&apos;s session sees only their own organization. Searches are also
-        limited to the bank&apos;s own records. Our background processes and
-        staff tools can reach across organizations. Tighter limits on staff
-        access, and audit records the bank can see, are{" "}
-        <a
-          className="underline"
-          href="https://github.com/CedynGroup/aequorOS/issues/351"
-        >
-          planned
-        </a>
-        .
-      </>
-    ),
+    body: "The database keeps each organization's data apart, so a bank user's session sees only their own organization. Searches are also limited to the bank's own records.",
     icon: (
       <svg
         width="24"
@@ -102,7 +87,7 @@ const facts = [
     body: (
       <>
         Login details for connected services are kept in an encrypted vault.
-        Stored files can be encrypted with a key we configure. A bank can also
+        Stored files can be encrypted with a key we configure, and a bank can
         choose to encrypt its{" "}
         <a
           className="underline"
@@ -110,30 +95,7 @@ const facts = [
         >
           files
         </a>{" "}
-        with its own key; this is built. Who holds the keys in practice must be
-        confirmed for each deployment. Planned work extends bank-held keys to{" "}
-        <a
-          className="underline"
-          href="https://github.com/CedynGroup/aequorOS/issues/353"
-        >
-          sensitive fields
-        </a>
-        ,{" "}
-        <a
-          className="underline"
-          href="https://github.com/CedynGroup/aequorOS/issues/354"
-        >
-          key monitoring
-        </a>
-        , and{" "}
-        <a
-          className="underline"
-          href="https://github.com/CedynGroup/aequorOS/issues/355"
-        >
-          signatures and credentials
-        </a>
-        . Encryption of the database, and of every connection with the current
-        standard (TLS 1.3), must be shown with evidence from each deployment.
+        with its own key.
       </>
     ),
     icon: (
@@ -153,28 +115,7 @@ const facts = [
   },
   {
     title: "Access control",
-    body: (
-      <>
-        Access limited to each user&apos;s assigned scope is built, and so is a
-        read-only view for examiners. Selected business actions are recorded in
-        an audit log that can be added to but never changed. Staff actions are
-        recorded in a separate internal log. A complete{" "}
-        <a
-          className="underline"
-          href="https://github.com/CedynGroup/aequorOS/issues/297"
-        >
-          sign-in history
-        </a>{" "}
-        the bank can read, and{" "}
-        <a
-          className="underline"
-          href="https://github.com/CedynGroup/aequorOS/issues/351"
-        >
-          auditing of staff access
-        </a>
-        , are planned.
-      </>
-    ),
+    body: "Each user can reach only their assigned scope, and examiners get a read-only view. Selected business actions are recorded in an audit log that can be added to but never changed. Staff actions are recorded in a separate internal log.",
     icon: (
       <svg
         width="24"
