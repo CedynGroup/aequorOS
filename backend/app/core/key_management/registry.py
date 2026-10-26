@@ -309,7 +309,26 @@ def _new_version(
     row.last_successful_use_at = utc_now()
     row.current_version_id = version.id
     if row.index_version_id is None:
-        row.index_version_id = version.id
+        row.index_version_id = (
+            db.scalar(
+                select(ObjectKeyEnvelope.id)
+                .where(
+                    ObjectKeyEnvelope.organization_id == row.organization_id,
+                    ObjectKeyEnvelope.bank_id == row.bank_id,
+                    ObjectKeyEnvelope.context_digest
+                    == context_digest(
+                        {
+                            "purpose": "bank-sensitive-index-v1",
+                            "organization_id": row.organization_id,
+                            "bank_id": row.bank_id,
+                        }
+                    ),
+                )
+                .order_by(ObjectKeyEnvelope.created_at, ObjectKeyEnvelope.id)
+                .limit(1)
+            )
+            or version.id
+        )
     unit = _unit(db)
     unit.envelopes[version.id] = version
     unit.material[version.id] = data.plaintext
@@ -324,6 +343,18 @@ def current_version(db: Session, row: BankEncryptionKey) -> UUID:
             raise KeyUnavailableError("The bank data-key version is unavailable.")
         unit.current[scope] = row.current_version_id
     return unit.current[scope]
+
+
+def initialize_version(
+    db: Session, row: BankEncryptionKey, providers: ProviderFactory = provider_for
+) -> None:
+    if row.current_version_id is not None:
+        return
+    _new_version(
+        db, row, require_active(providers(row.provider).describe(reference(row))), providers
+    )
+    db.flush()
+    _unit(db).current.pop((row.organization_id, row.bank_id), None)
 
 
 def prepare_envelope(
@@ -355,11 +386,13 @@ def open_envelope(
         if envelope is None:
             raise KeyIntegrityError("The data key does not belong to this bank and record.")
         unit.envelopes[envelope_id] = envelope
+    versioned = envelope.context_digest == context_digest(
+        version_context(row.organization_id, row.bank_id)
+    )
     if (
         envelope.bank_id != row.bank_id
         or envelope.organization_id != row.organization_id
-        or envelope.context_digest
-        != context_digest(version_context(row.organization_id, row.bank_id))
+        or not (versioned or envelope.context_digest == context_digest(context))
     ):
         raise KeyIntegrityError("The data key does not belong to this bank and record.")
     plaintext = unit.material.get(envelope_id)
@@ -371,9 +404,10 @@ def open_envelope(
         )
         unit.usage[(row.organization_id, row.bank_id, envelope_id)] = utc_now()
         unit.material[envelope_id] = plaintext
-    plaintext = hmac.new(
-        plaintext, ("bank-payload:" + context_digest(context)).encode(), hashlib.sha256
-    ).digest()
+    if versioned:
+        plaintext = hmac.new(
+            plaintext, ("bank-payload:" + context_digest(context)).encode(), hashlib.sha256
+        ).digest()
     return ObjectKey(envelope_id, envelope.key_id, plaintext)
 
 

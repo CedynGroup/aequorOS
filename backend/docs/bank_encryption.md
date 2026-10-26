@@ -101,6 +101,16 @@ that role.
 
 ## Onboarding and operator API
 
+For banks connected before data-key versions, the version migration copies each
+legacy envelope's wrapping reference from its scoped bank registry without KMS
+calls or payload changes. Legacy objects remain readable with their original
+context and payload key. Before new protected writes, an administrator runs the
+existing connection test for the connected key; a successful test creates and
+commits the current version and preserves any existing index envelope. Rotation
+also preserves that index. Version initialization is idempotent and refuses an
+unavailable key. Downgrade refuses populated envelope catalogues rather than
+discarding the metadata needed to read encrypted data.
+
 Apply all migrations through the current head (including `202610100088` and
 `202610100089`), then set `ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` to the platform
 workload account. Deployed environments require this setting when connecting or

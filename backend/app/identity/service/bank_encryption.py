@@ -100,6 +100,17 @@ def test_connection(
                 "The key failed authentication. Check the key ARN and encryption context, "
                 "then test again."
             )
+        connected = db.scalar(
+            select(BankEncryptionKey)
+            .where(
+                BankEncryptionKey.bank_id == bank_id,
+                BankEncryptionKey.organization_id == ctx.organization_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if connected is not None and registry.reference(connected) == key:
+            registry.initialize_version(db, connected, registry.provider_for)
         passed = True
         observed = KeyStatus.ACTIVE
         message = "Connection passed: aequorOS wrapped and unwrapped a synthetic data key."

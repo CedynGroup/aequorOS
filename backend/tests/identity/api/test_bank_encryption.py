@@ -18,6 +18,7 @@ from app.core.authorization import (
 )
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.schemas import BankKeyConnect, BankKeyRotate
 from app.core.key_management.types import (
     KeyDescription,
@@ -277,3 +278,30 @@ def test_connection_observation_stays_bound_to_tested_key(
     )
     assert len(events) == 1
     assert events[0].details["key_id"] == KEY.key_id
+
+
+def test_connection_initializes_legacy_bank_without_object_envelopes(
+    db_session: Session, local_keys: LocalKeyProvider
+) -> None:
+    key = KEY.reference()
+    row = BankEncryptionKey(
+        bank_id=BANK,
+        organization_id=ORG_1,
+        storage_slug="legacy-empty-bank",
+        provider=key.provider,
+        key_id=key.key_id,
+        region=key.region,
+        owner_account=key.owner_account,
+        status=KeyStatus.ACTIVE.value,
+    )
+    db_session.add(row)
+    db_session.commit()
+    local_keys.set_status(key, KeyStatus.DISABLED)
+    assert not bank_encryption.test_connection(db_session, CTX, BANK, KEY).passed
+    assert row.current_version_id is None and row.index_version_id is None
+    local_keys.set_status(key, KeyStatus.ACTIVE)
+    assert bank_encryption.test_connection(db_session, CTX, BANK, KEY).passed
+    assert row.current_version_id is not None and row.index_version_id == row.current_version_id
+    current = row.current_version_id
+    assert bank_encryption.test_connection(db_session, CTX, BANK, KEY).passed
+    assert row.current_version_id == current
