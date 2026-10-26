@@ -65,6 +65,8 @@
             "enum": [
               "viewer",
               "auditor",
+              "security_officer",
+              "compliance_officer",
               "analyst",
               "approver",
               "validator",
@@ -1902,6 +1904,193 @@
           "can_submit"
         ],
         "title": "AttestationStatusRead",
+        "type": "object"
+      },
+      "AuditEventRead": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "actor_kind": {
+            "enum": [
+              "bank_user",
+              "aequoros_staff",
+              "system"
+            ],
+            "title": "Actor Kind",
+            "type": "string"
+          },
+          "after": {
+            "$ref": "#/components/schemas/pydantic__types__JsonValue"
+          },
+          "before": {
+            "$ref": "#/components/schemas/pydantic__types__JsonValue"
+          },
+          "details": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/pydantic__types__JsonValue"
+            },
+            "title": "Details",
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "integrity": {
+            "default": "unavailable",
+            "enum": [
+              "verified",
+              "failed",
+              "unavailable"
+            ],
+            "title": "Integrity",
+            "type": "string"
+          },
+          "integrity_scope": {
+            "const": "event_payload_and_previous_link",
+            "default": "event_payload_and_previous_link",
+            "title": "Integrity Scope",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "stream": {
+            "enum": [
+              "audit_events",
+              "operator_audit_log"
+            ],
+            "title": "Stream",
+            "type": "string"
+          },
+          "support_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Reference"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "target_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Type"
+          }
+        },
+        "required": [
+          "id",
+          "stream",
+          "actor",
+          "actor_kind",
+          "action",
+          "target_type",
+          "target_id",
+          "occurred_at",
+          "source",
+          "outcome",
+          "details"
+        ],
+        "title": "AuditEventRead",
+        "type": "object"
+      },
+      "AuditLogRead": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEventRead"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "AuditLogRead",
         "type": "object"
       },
       "AwaitingSignatureListRead": {
@@ -8322,6 +8511,8 @@
             "enum": [
               "viewer",
               "auditor",
+              "security_officer",
+              "compliance_officer",
               "analyst",
               "approver",
               "validator",
@@ -8474,6 +8665,8 @@
             "enum": [
               "viewer",
               "auditor",
+              "security_officer",
+              "compliance_officer",
               "analyst",
               "approver",
               "validator",
@@ -14407,6 +14600,12 @@
             "title": "Approval Reference",
             "type": "string"
           },
+          "expected_revision": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Expected Revision",
+            "type": "string"
+          },
           "reason": {
             "maxLength": 2000,
             "minLength": 1,
@@ -14415,6 +14614,7 @@
           }
         },
         "required": [
+          "expected_revision",
           "approval_reference",
           "reason"
         ],
@@ -15150,6 +15350,10 @@
             ],
             "title": "Prepared By"
           },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          },
           "status": {
             "$ref": "#/components/schemas/CfpStatus"
           },
@@ -15167,6 +15371,7 @@
           "id",
           "bank_id",
           "version",
+          "revision",
           "status",
           "content",
           "created_at",
@@ -22329,14 +22534,14 @@
             "type": "string"
           },
           "new_value": {
-            "$ref": "#/components/schemas/JsonValue-Output"
+            "$ref": "#/components/schemas/app__schemas__common__JsonValue-Output"
           },
           "organization_id": {
             "title": "Organization Id",
             "type": "string"
           },
           "previous_value": {
-            "$ref": "#/components/schemas/JsonValue-Output"
+            "$ref": "#/components/schemas/app__schemas__common__JsonValue-Output"
           },
           "reason": {
             "anyOf": [
@@ -26791,9 +26996,16 @@
             "type": "boolean"
           },
           "var_99_1d_ghs": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Var 99 1D Ghs",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Trend Var"
           }
         },
         "required": [
@@ -41354,7 +41566,7 @@
       },
       "JsonObject-Output": {
         "additionalProperties": {
-          "$ref": "#/components/schemas/JsonValue-Output"
+          "$ref": "#/components/schemas/app__schemas__common__JsonValue-Output"
         },
         "type": "object"
       },
@@ -41381,37 +41593,6 @@
           {
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue-Input"
-            },
-            "type": "object"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "JsonValue-Output": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "integer"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "items": {
-              "$ref": "#/components/schemas/JsonValue-Output"
-            },
-            "type": "array"
-          },
-          {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue-Output"
             },
             "type": "object"
           },
@@ -57295,6 +57476,8 @@
             "enum": [
               "viewer",
               "auditor",
+              "security_officer",
+              "compliance_officer",
               "analyst",
               "approver",
               "validator",
@@ -60495,7 +60678,39 @@
         ],
         "title": "YieldCurveViewRead",
         "type": "object"
-      }
+      },
+      "app__schemas__common__JsonValue-Output": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "items": {
+              "$ref": "#/components/schemas/app__schemas__common__JsonValue-Output"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/app__schemas__common__JsonValue-Output"
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pydantic__types__JsonValue": {}
     },
     "securitySchemes": {
       "HTTPBearer": {
@@ -64795,6 +65010,218 @@
         "summary": "Compute Window Analytics",
         "tags": [
           "window-analytics"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/audit-log": {
+      "get": {
+        "description": "Newest first, with an inclusive start and exclusive end in UTC.\n\nVerification covers the event payload and its stored predecessor link;\na bank feed cannot certify the full platform stream or its global head.",
+        "operationId": "readBankAuditLog",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 320,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "event_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Outcome"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2048,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Bank Audit Log",
+        "tags": [
+          "audit-log"
         ]
       }
     },

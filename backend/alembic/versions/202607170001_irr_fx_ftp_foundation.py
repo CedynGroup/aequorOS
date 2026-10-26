@@ -15,6 +15,7 @@ restoring the narrower constraints so the reversal never violates them.
 """
 
 from alembic import op
+from app.db.session import force_rls_suspended
 
 revision = "202607170001"
 down_revision = "202607160003"
@@ -97,11 +98,14 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Delete rows using the widened values before narrowing the constraints so
     # the restored CHECKs are never violated by pre-existing data.
-    op.execute(f"DELETE FROM {RUNS_TABLE} WHERE module IN ('irr', 'fx', 'ftp')")
-    op.execute(f"DELETE FROM {FACTS_TABLE} WHERE fact_group IN ({FACTS_NEW_GROUPS})")
-    op.execute(f"DELETE FROM {LINES_TABLE} WHERE section IN ({LINES_NEW_SECTIONS})")
-    op.execute(f"DELETE FROM {SHOCK_TABLE} WHERE module IN ('irr', 'fx', 'ftp')")
-    op.execute(f"DELETE FROM {UNIT_TABLE} WHERE unit = 'years'")
+    with force_rls_suspended(
+        op.get_bind(), RUNS_TABLE, FACTS_TABLE, LINES_TABLE, SHOCK_TABLE, UNIT_TABLE
+    ):
+        op.execute(f"DELETE FROM {RUNS_TABLE} WHERE module IN ('irr', 'fx', 'ftp')")
+        op.execute(f"DELETE FROM {FACTS_TABLE} WHERE fact_group IN ({FACTS_NEW_GROUPS})")
+        op.execute(f"DELETE FROM {LINES_TABLE} WHERE section IN ({LINES_NEW_SECTIONS})")
+        op.execute(f"DELETE FROM {SHOCK_TABLE} WHERE module IN ('irr', 'fx', 'ftp')")
+        op.execute(f"DELETE FROM {UNIT_TABLE} WHERE unit = 'years'")
 
     _swap_check(UNIT_TABLE, UNIT_CONSTRAINT, UNIT_ORIGINAL)
     _swap_check(SHOCK_TABLE, SHOCK_CONSTRAINT, SHOCK_ORIGINAL)

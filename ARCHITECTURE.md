@@ -191,8 +191,9 @@ Invariants every new engine must copy (verified in `app/services/calculations.py
     order. `fact.id` must **never** enter the snapshot: the live engine re-derives facts on every
     refresh (`fact_derivation` deletes and re-inserts each row with a fresh UUID), so an
     id-dependent hash would make a filed official run non-reproducible after the next data change.
-    The `bank-facts-v2` input schema (all six regulatory modules) encodes this rule; `-v1`
-    embedded `fact.id` and predates the live engine.
+    Regulatory input schemas preserve this rule across versions; FX calendar policy
+    evidence is described in §3b. The legacy `bank-facts-v1` schema embedded `fact.id`
+    and predates the live engine.
 - **Versions as module-level constants**, stored per row:
   `ENGINE_VERSION = "balance-sheet-v1.0.0"`, `INPUT_SCHEMA_VERSION = "calculation-input-v1"`,
   `OUTPUT_SCHEMA_VERSION = "balance-sheet-output-v1"` (calculations);
@@ -308,6 +309,12 @@ semantics follow the plane, never the other way round:
    (`no_computed_position`, 409) with the nearest earlier date named for the
    message only.
 
+   Official form fact inputs read `BankFinancialFact` for that exact snapshot.
+   Live refresh publishes `CurrentFinancialFact`; the Data Engine's **Mint
+   official run** action queues the worker to prepare the official fact set.
+   Missing-source handling follows the
+   [official BSD engine rules](docs/bog_returns/00_full_return_registry.md#6-as-built-engine-rules).
+
 Growth path: denser ingestion (daily/streaming) makes plane 2 denser and the
 live edge fresher without any architectural change — QRM-cadence to
 MORS-cadence on the same model.
@@ -340,8 +347,10 @@ on one canonical store — the live tier for intraday awareness, the official ti
   `regulatory_forecasting.compute_live`, independently of saved official runs.
 - **Official tier** — `pipeline.run_official` (`job_type=official_run`): reuses
   `data_activation.run_official_modules` to mint the immutable 22-scenario + forecast run set for
-  filing. Facts are re-derived only when the period has none, so repeat official runs on unchanged
-  facts reproduce the same `input_hash` per run (see the value-based hash invariant in §3).
+  filing. Every mint re-derives the reporting period's facts from the accepted canonical book,
+  including same-date corrections. Prior runs and generated packages retain their frozen evidence;
+  unchanged financial values reproduce the same `input_hash` per run (see §3). Regression:
+  `backend/tests/services/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
 - **Freshness** (`app/services/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
   live `input_hash` to the latest official run's `input_hash`. Because the hash is value-based, a
   bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as
@@ -364,10 +373,29 @@ on one canonical store — the live tier for intraday awareness, the official ti
   changes. Only an exception raised by a module retries the same job after 10, 20, then 40 seconds
   (default three-attempt cap); `retry_classification`, `retry_attempt_count`, and `next_retry_at`
   on `live_metrics` expose that state, and successful recovery clears it.
-- **Robustness note.** Live compute degrades rather than fails on thin data: FX
-  `compute_stressed_var` clamps the cedi-crisis window to the available return history when a bank
-  has fewer observations than the configured window, so a short upload still yields a best-effort
-  stress instead of killing the whole FX module. On full history the window is used unchanged.
+- **FX VaR calendar and sample policy (aequorOS #582).**
+  `exact-interval-intersection-v1` preserves consecutive spot observations as dated
+  start/end return intervals and intersects both endpoints across every measured currency.
+  No filling, country-calendar inference, or positional truncation is permitted. A closure
+  spanning several days matches only that same interval in other currencies. After joining,
+  use the latest 250 shared intervals; standalone and portfolio VaR use the identical sample.
+  A nonempty shorter sample is an indicative management estimate, explicitly insufficient
+  for pilot risk evidence. An empty intersection, invalid/duplicate interval or undated legacy
+  history refuses computation. Re-derive old facts and rerun; old saved results remain immutable
+  audit records but cannot supply FX dashboard headlines or VaR trend values without calendar
+  evidence. Shared trend points retain NOP values; VaR is null without the governed 250-interval
+  sample, and the VaR chart omits those values while NOP comparisons retain the prior period.
+  Inline trends compute NOP independently of return-history availability; full FX analysis
+  still refuses an empty calendar intersection, and NOP coverage and valuation refusals apply.
+  The input snapshot seals the policy version/target and dated values; output metrics retain
+  exact effective intervals. FX tabs and saved validations disclose sample count and date span.
+  Stress retains its configured index window (and available-tail fallback) **after** alignment,
+  disclosing the actual intervals and its indicative status; selecting a dated stress regime
+  remains the separate follow-up. Regression journeys cover unequal starts, interior gaps,
+  currency closures, order changes and opposite exposures, mapping this defect to
+  [#330](https://github.com/CedynGroup/aequorOS/issues/330),
+  [#293](https://github.com/CedynGroup/aequorOS/issues/293), and journey diversity
+  [#537](https://github.com/CedynGroup/aequorOS/issues/537). Synthetic fixtures only.
 - **NOP currency coverage.** Notice BG/FMD/2026/07 ¶1(a)–(b): derivation retains every
   foreign currency in the on-balance and FX-hedge NOP book independently of return history.
   Valuing an exposure without history needs an ingested current FX quote; the implied
@@ -1135,16 +1163,16 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 
 ## 8. Validation commands
 
-| Target                   | Commands                                                                                                                                                                                                                                                                                                        |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/type_check_baseline.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                       |
-| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                                                |
-| risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                |
-| dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
-| marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                                                                                                                               |
-| operator console         | `pnpm --filter @aequoros/console typecheck` · `lint` · `test` · `build`                                                                                                                                                                                                                                         |
-| generated client         | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`)                                                                                                                                                                                                                                              |
-| client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean)                                                                                                                                                                                                            |
+| Target                   | Commands                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/type_check_baseline.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                                         |
+| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                                                                  |
+| risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                                  |
+| dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` · `e2e:contracts` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
+| marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                                                                                                                                                 |
+| operator console         | `pnpm --filter @aequoros/console typecheck` · `lint` · `test` · `build`                                                                                                                                                                                                                                                           |
+| generated client         | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`)                                                                                                                                                                                                                                                                |
+| client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean)                                                                                                                                                                                                                              |
 
 All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 
@@ -1152,12 +1180,13 @@ All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 appeared in no workflow at all, and the dashboard workflow ran neither `lint` nor `test`, so
 the regulatory fail-open guard and the browser-runtime SSRF guard were unenforced):
 
-| Workflow                                   | Jobs                                                                                                                                                                                                                     |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.github/workflows/risk-service.yml`       | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests)   |
-| `.github/workflows/dashboard.yml`          | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection) |
-| `.github/workflows/web.yml`                | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                            |
-| `.github/workflows/dashboard-journeys.yml` | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                               |
+| Workflow                                                                               | Jobs                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/risk-service.yml`                                                   | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests)        |
+| [`.github/workflows/risk-service-image.yml`](.github/workflows/risk-service-image.yml) | `build` — independent production image check, outside the Risk service gate; run manually with **Run workflow** in GitHub Actions, or automatically for image-input pushes selected by the workflow's branch and path filters |
+| `.github/workflows/dashboard.yml`                                                      | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection)      |
+| `.github/workflows/web.yml`                                                            | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                                 |
+| `.github/workflows/dashboard-journeys.yml`                                             | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                                    |
 
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.
@@ -1180,7 +1209,7 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
 - **CI enforces every surface.** `risk-service.yml` gates the backend; `dashboard.yml`
   enforces the dashboard gates listed above; `web.yml` gates `frontend` lint+build
   and `console` typecheck+test+build, and `dashboard-journeys.yml` gates browser
-  journeys. [Dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)
+  journeys and browser contracts. [Dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)
   owns journey selection, runner isolation, the required check, quarantine and
   fixture setup. These gates are what enforce the dashboard's
   fail-open guard, SSRF egress guard, and browser journeys, and they cover `frontend/`
@@ -1244,13 +1273,14 @@ remains architectural debt; the Command Center contract and polling policy are u
 | 7   | FTP            | matched-maturity curve / product & branch P&L / NMD  | `/banks/{id}/ftp/*`                            |
 
 The shared migration `202607170001_irr_fx_ftp_foundation` widened the run-module, fact-group,
-and line-section CHECK constraints for IRR/FX/FTP; those modules add no further migrations.
+and line-section CHECK constraints for IRR/FX/FTP. Bank stress-default provisioning and
+backfill are described in the [quick start](README.md#quick-start).
 
 ### Liquidity, stress and capital extensions
 
 - **product.md §Phase 2 is fully built.** All 11 LMTD appendix tables; per-currency gaps +
-  `usd_funding_stress` (snapshot `bank-facts-v3`); server-side EWI/CFP with the ¶74
-  notification (`/banks/{id}/liquidity/ewis|cfp`); reverse stress (module
+  `usd_funding_stress` (snapshot `bank-facts-v3`); server-side EWI/CFP
+  (`/banks/{id}/liquidity/ewis|cfp`; [dashboard lifecycle and notification behavior](backend/dashboard/README.md#contingency-funding-plan-lifecycle)); reverse stress (module
   `reverse_stress`); STRESS-PACK return (family `stress`, event-driven); IFRS 9 ECL
   ([assumption and coverage contract](#ecl-assumption-and-coverage-contract)) +
   CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +

@@ -40,10 +40,10 @@ thirteen) run four stages. **Master-data packs** (Class B, the five `LRT-*`
 corporate returns) **skip stages 1 and 2 entirely** and start at stage 3. The
 full inventory and the class definitions are in §1.7.
 
-**Stage 1 — canonical facts** _(Class A/C only)_. Ingested data is normalised
-into `bank_financial_facts`, re-derived from canonical state on every pipeline
-refresh (`app/services/fact_derivation.py`). Fact rows get fresh UUIDs on every
-re-derivation; this matters enormously (see 1.2).
+**Stage 1 — canonical facts** _(Class A/C only)_. The
+[time-plane contract](../ARCHITECTURE.md#3a-bis-the-three-time-planes-adopted-2026-08-09)
+owns the live and official fact stores and their materialisation. Fact row
+identities are not stable evidence (see §1.2).
 
 **Stage 2 — the engine run** _(Class A/C only)_. `POST /banks/{bank_id}/regulatory-runs`
 (per module) creates a `RegulatoryRun` (`app/models/regulatory_run.py:28`) — the
@@ -58,7 +58,7 @@ for ICAAP-STRESS (`:965`, with liquidity and capital headlines at `:1001`).
 Several returns therefore bind **more than one** run, and the signature must
 cover all of them — which the digest in §3.1 does. The run persists
 `inputs` (the full snapshot), `input_hash`, `engine_version`,
-`input_schema_version` (`bank-facts-v2`), plus child `RegulatoryLineItem`,
+`input_schema_version` (see the [calculation-run versioning contract](../ARCHITECTURE.md#3-the-calculation-run-pattern-reuse-this-for-every-new-engine)), plus child `RegulatoryLineItem`,
 `RegulatoryMetricResult`, and `RegulatoryValidation` rows.
 
 **Stage 3 — the package.** `POST /banks/{bank_id}/regulatory-packages`
@@ -117,9 +117,8 @@ return hashlib.sha256(payload.encode()).hexdigest()
 by each entry's own canonical JSON, so neither row identity nor DB return order
 can influence the hash. This is deliberate and executably enforced:
 `test_official_input_hash_survives_fact_rederivation`
-(`tests/services/test_pipeline.py:181`) refreshes facts — destroying and
-re-inserting every row with new UUIDs — and asserts the per-module baseline
-hash set is unchanged.
+(`backend/tests/services/test_pipeline.py`) remints official runs with fresh
+fact rows and asserts the per-module baseline hash set is unchanged.
 
 **Immutability in practice.** After a run reaches `succeeded` or `failed`,
 nothing writes to it. There is no `run.inputs =` or `run.input_hash =`

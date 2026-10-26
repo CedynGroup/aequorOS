@@ -575,7 +575,7 @@ export default function CommandPalette({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-xs"
       />
       <div className="relative w-full max-w-xl bg-surface-raised border border-border rounded-lg shadow-pop overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border-light">
@@ -586,9 +586,9 @@ export default function CommandPalette({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search modules, screens, reports…"
-            className="flex-1 bg-transparent outline-none text-body text-navy placeholder:text-slate"
+            className="flex-1 bg-transparent outline-hidden text-body text-navy placeholder:text-slate"
           />
-          <kbd className="text-[10px] font-mono text-slate bg-surface border border-border-light rounded px-1.5 py-0.5">
+          <kbd className="text-[10px] font-mono text-slate bg-surface border border-border-light rounded-sm px-1.5 py-0.5">
             ESC
           </kbd>
         </div>
@@ -661,13 +661,13 @@ export default function CommandPalette({
 
         <div className="border-t border-border-light px-4 py-2 flex items-center gap-4 text-caption text-slate">
           <span className="inline-flex items-center gap-1">
-            <kbd className="text-[10px] font-mono bg-surface border border-border-light rounded px-1.5 py-0.5">
+            <kbd className="text-[10px] font-mono bg-surface border border-border-light rounded-sm px-1.5 py-0.5">
               ↑↓
             </kbd>
             navigate
           </span>
           <span className="inline-flex items-center gap-1">
-            <kbd className="text-[10px] font-mono bg-surface border border-border-light rounded px-1.5 py-0.5">
+            <kbd className="text-[10px] font-mono bg-surface border border-border-light rounded-sm px-1.5 py-0.5">
               ↵
             </kbd>
             select

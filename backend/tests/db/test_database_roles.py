@@ -200,7 +200,14 @@ def role_engines(administrator: Engine) -> Iterator[dict[str, Engine]]:
         for engine in engines.values():
             engine.dispose()
         with administrator.begin() as connection:
+            schema = connection.dialect.identifier_preparer.quote_identifier(
+                cast(str, connection.execute(text("SELECT current_schema()")).scalar_one())
+            )
             for name in names:
+                # Migration replay can grant scoped read helpers to these runtime logins.
+                connection.execute(
+                    text(f"REVOKE ALL ON ALL FUNCTIONS IN SCHEMA {schema} FROM {name}")
+                )
                 connection.execute(text(f"DROP ROLE {name}"))
 
 

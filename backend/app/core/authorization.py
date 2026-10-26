@@ -188,6 +188,8 @@ class RoleBundle(StrEnum):
     MEMBER = "member"
     VIEWER = "viewer"
     AUDITOR = "auditor"
+    SECURITY_OFFICER = "security_officer"
+    COMPLIANCE_OFFICER = "compliance_officer"
     ANALYST = "analyst"
     APPROVER = "approver"
     #: The officer who transmits a return to the regulator. Named for the third
@@ -226,6 +228,8 @@ ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingPro
         # Sensitivity remains a binding dimension: this does not make raw data
         # visible unless the binding explicitly covers that classification.
         RoleBundle.AUDITOR: frozenset({Permission.VIEW}),
+        RoleBundle.SECURITY_OFFICER: frozenset({Permission.VIEW, Permission.EXPORT}),
+        RoleBundle.COMPLIANCE_OFFICER: frozenset({Permission.VIEW, Permission.EXPORT}),
         RoleBundle.ANALYST: frozenset(
             {
                 Permission.VIEW,

@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.fx.engine import FxPosition, compute_stressed_var, compute_var
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -26,6 +27,7 @@ from app.models import (
 )
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
+from app.services import regulatory_fx
 from app.services.fact_derivation import (
     DerivationError,
     DerivationResult,
@@ -785,6 +787,57 @@ def test_canonical_fx_spot_and_history_override_reference(db_session: Session) -
     # 40 canonical observations replace the 150-row legacy reference history.
     assert len(history.attributes["returns"]) == _MARKET_FX_DAYS - 1
     assert "canonical market data spot history" in history.attributes["derived_from"]
+
+
+def test_canonical_fx_history_is_capped_only_after_calendar_alignment(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    meta = _market_meta(db_session)
+    start = FIXTURE_AS_OF - timedelta(days=600)
+    for currency in ("USD", "EUR"):
+        rate = Decimal("100")
+        for offset in range(601):
+            if currency == "EUR" and offset == 590:
+                continue
+            if currency == "USD" and offset in (349, 350, 351):
+                rate *= Decimal("0.9")
+            day = start + timedelta(days=offset)
+            db_session.add(
+                CanonicalFxRate(
+                    **{**meta, "as_of_date": day},
+                    source_reference=f"BLOOMBERG/{currency}GHS/{day.isoformat()}",
+                    base_currency=currency,
+                    quote_currency="GHS",
+                    rate_type="spot",
+                    rate=rate,
+                )
+            )
+    db_session.flush()
+    derived = derive_facts(db_session, _ctx(), SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    histories = regulatory_fx._returns_from_facts(_facts(db_session, derived))  # pyright: ignore[reportPrivateUsage]
+    assert len(histories["USD"]) == 600
+    assert len(histories["EUR"]) == 599
+    positions = [
+        FxPosition(
+            currency,
+            Decimal(net),
+            Decimal("1"),
+            Decimal(net),
+            Decimal("0"),
+            Decimal("0"),
+            Decimal("0"),
+        )
+        for currency, net in [("USD", "100"), ("EUR", "-100")]
+    ]
+    result = compute_var(positions, histories, Decimal("99"))
+    assert result.observations == 250
+    assert result.intervals[0] == (start + timedelta(days=348), start + timedelta(days=349))
+    assert result.intervals[-1][1] == FIXTURE_AS_OF
+    assert result.portfolio_var == Decimal("10.0000")
+    assert result.standalone_total == Decimal("10.0000")
+    assert compute_stressed_var(
+        positions, histories, Decimal("99"), (0, 2), Decimal("1")
+    ) == Decimal("20.0000")
 
 
 def test_legacy_reference_path_without_canonical_market_data(db_session: Session) -> None:

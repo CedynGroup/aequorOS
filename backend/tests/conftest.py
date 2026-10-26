@@ -535,7 +535,7 @@ def _shared_app() -> _LazyTestApp:
 def _rollback_sessionmaker_lifecycle(
     database: _TestDatabase,
     monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[sessionmaker]:
+) -> Iterator[sessionmaker[Session]]:
     import app.api.deps as deps_mod  # noqa: PLC0415
     import app.db.session as session_mod  # noqa: PLC0415
     import app.identity.api.auth as auth_mod  # noqa: PLC0415
@@ -591,6 +591,12 @@ def _rollback_sessionmaker_lifecycle(
                 "Mark this test with @pytest.mark.committing_db when its writes must really "
                 "commit for DDL, independent connections, or database locks."
             )
+
+
+# Shared primitives for feature-local API fixtures backed by migrated schemas.
+ApiTestDatabase = _TestDatabase
+seed_demo_tenants = _seed_demo_tenants
+rollback_sessionmaker_lifecycle = _rollback_sessionmaker_lifecycle
 
 
 @pytest.fixture

@@ -943,8 +943,7 @@
  "app.operator.services.operator_views": {
   "reportAny": 1,
   "reportMissingParameterType": 1,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 5,
+  "reportUnknownArgumentType": 1,
   "reportUnknownParameterType": 1
  },
  "app.operator.services.regulatory_parameters": {
@@ -1760,7 +1759,7 @@
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_fx": {
-  "reportAny": 44,
+  "reportAny": 43,
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_irr": {
@@ -1856,7 +1855,7 @@
   "reportUnusedFunction": 8
  },
  "app.services.regulatory_reporting.bog_forms.sources_ext.bsd1": {
-  "reportAny": 30,
+  "reportAny": 26,
   "reportUnknownArgumentType": 2,
   "reportUnknownVariableType": 5,
   "reportUnusedFunction": 2
@@ -2963,12 +2962,12 @@
   "reportAny": 1,
   "reportDeprecated": 4,
   "reportMissingParameterType": 4,
-  "reportMissingTypeArgument": 8,
+  "reportMissingTypeArgument": 7,
   "reportUnknownArgumentType": 4,
   "reportUnknownLambdaType": 4,
   "reportUnknownMemberType": 8,
-  "reportUnknownParameterType": 12,
-  "reportUnknownVariableType": 7,
+  "reportUnknownParameterType": 11,
+  "reportUnknownVariableType": 6,
   "reportUnusedFunction": 10
  },
  "tests.core.test_error_boundary": {
@@ -3587,14 +3586,13 @@
   "reportMissingTypeArgument": 3,
   "reportMissingTypeStubs": 1,
   "reportPrivateUsage": 3,
-  "reportUnknownLambdaType": 2,
   "reportUnknownMemberType": 1,
   "reportUnknownParameterType": 3,
-  "reportUnknownVariableType": 3,
+  "reportUnknownVariableType": 2,
   "reportUnusedFunction": 3
  },
  "tests.operator.test_audit_api": {
-  "reportAny": 19
+  "reportAny": 13
  },
  "tests.operator.test_audit_log": {
   "reportAny": 1
@@ -3887,13 +3885,13 @@
   "reportAny": 47
  },
  "tests.services.bog_forms.test_bsd2_annexes": {
-  "reportAny": 61,
-  "reportUnknownMemberType": 21,
+  "reportAny": 59,
+  "reportUnknownMemberType": 20,
   "reportUnknownVariableType": 1
  },
  "tests.services.bog_forms.test_bsd2a": {
-  "reportAny": 55,
-  "reportUnknownMemberType": 15,
+  "reportAny": 51,
+  "reportUnknownMemberType": 14,
   "reportUnknownVariableType": 1
  },
  "tests.services.bog_forms.test_bsd3": {
@@ -3910,7 +3908,6 @@
  "tests.services.bog_forms.test_bsd6": {
   "reportAny": 73,
   "reportPrivateUsage": 1,
-  "reportUnknownArgumentType": 1,
   "reportUnknownMemberType": 2,
   "reportUnknownVariableType": 3
  },
@@ -4225,8 +4222,8 @@
  "tests.services.test_attestation_signing_structure_pin": {
   "reportAny": 1,
   "reportMissingTypeStubs": 2,
-  "reportUnknownArgumentType": 14,
-  "reportUnknownLambdaType": 4,
+  "reportUnknownArgumentType": 13,
+  "reportUnknownLambdaType": 2,
   "reportUnknownMemberType": 14,
   "reportUnknownVariableType": 15
  },
@@ -4822,9 +4819,7 @@
   "reportUnknownVariableType": 5
  },
  "tests.test_database_fixture_isolation": {
-  "reportPrivateUsage": 5,
-  "reportUnknownMemberType": 4,
-  "reportUnknownVariableType": 4
+  "reportPrivateUsage": 5
  },
  "tests.test_health": {
   "reportAny": 8,

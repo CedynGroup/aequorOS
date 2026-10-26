@@ -12,12 +12,12 @@ import weakref
 from calendar import monthrange
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Engine, delete, select
+from sqlalchemy import Connection, Engine, delete, select
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
@@ -285,16 +285,7 @@ _FX_CRISIS_END = 110
 # FX position sums are checked against their scaled canonical totals within this
 # tolerance to absorb 4-dp rounding of the individually scaled per-currency rows.
 _FX_TIE_TOLERANCE = Decimal("1")
-_FX_STRESS: dict[str, dict[str, str]] = {
-    "mild_depreciation": {"ghs_usd_shock_pct": "10"},
-    "severe_depreciation": {"ghs_usd_shock_pct": "20"},
-    "cedi_crisis": {
-        "ghs_usd_shock_pct": "30",
-        "correlation_uplift": "0.2",
-        "crisis_window_start": str(_FX_CRISIS_START),
-        "crisis_window_end": str(_FX_CRISIS_END),
-    },
-}
+_FX_STRESS = parameter_register.BANK_FX_SHOCKS
 
 # FTP matched-maturity transfer curve (rates, period-invariant — no scaling).
 # (tenor_label, tenor_years, base_yield_pct, liquidity_premium_bps,
@@ -364,10 +355,7 @@ _FTP_SOURCE_FACTOR: dict[str, str] = {
 # FTP balances are checked against their scaled canonical totals within this
 # tolerance to absorb 4-dp rounding of the individually scaled rows.
 _FTP_TIE_TOLERANCE = Decimal("1")
-_FTP_STRESS: dict[str, dict[str, str]] = {
-    "rates_up_200": {"curve_shift_bp": "200"},
-    "funding_stress": {"funding_spread_add_bps": "100"},
-}
+_FTP_STRESS = parameter_register.BANK_FTP_SHOCKS
 
 _LIQUIDITY_IDIOSYNCRATIC: dict[str, str] = {
     "runoff:retail_deposits_stable": "15",
@@ -693,10 +681,13 @@ _DEPENDENT_COLUMNS: weakref.WeakKeyDictionary[Engine, dict[str, frozenset[str]]]
 )
 
 
-def _dependent_table_columns(engine: Engine) -> dict[str, frozenset[str]]:
+def _dependent_table_columns(connection: Connection) -> dict[str, frozenset[str]]:
+    engine = connection.engine
     columns = _DEPENDENT_COLUMNS.get(engine)
     if columns is None:
-        inspector = sql_inspect(engine)
+        # Read through the fixture transaction: larger dated histories can spill
+        # SQLite pages and lock a second reflection connection.
+        inspector = sql_inspect(connection)
         existing = set(inspector.get_table_names())
         columns = {
             table: frozenset(column["name"] for column in inspector.get_columns(table))
@@ -708,7 +699,7 @@ def _dependent_table_columns(engine: Engine) -> dict[str, frozenset[str]]:
 
 
 def _delete_bank_dependents(session: Session) -> None:
-    dependent_columns = _dependent_table_columns(session.get_bind().engine)
+    dependent_columns = _dependent_table_columns(session.connection())
     if session.get_bind().dialect.name == "postgresql":
         # Migration 202608220031 makes approvals/submission events append-only.
         # This fixture is the sole test-only reset path and runs in a disposable
@@ -1090,7 +1081,18 @@ def _fx_return_fact(
         "fx_return_history",
         currency,
         Decimal(_FX_RETURN_WINDOW),
-        attributes={"currency": currency, "returns": _fx_return_series(seed_index)},
+        attributes={
+            "currency": currency,
+            "returns": _fx_return_series(seed_index),
+            "intervals": [
+                {
+                    "start_date": (period.period_end - timedelta(days=250 - i)).isoformat(),
+                    "end_date": (period.period_end - timedelta(days=249 - i)).isoformat(),
+                    "value": str(value),
+                }
+                for i, value in enumerate(_fx_return_series(seed_index))
+            ],
+        },
     )
 
 

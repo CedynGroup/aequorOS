@@ -49,7 +49,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               type="button"
               aria-label="Close menu"
               onClick={() => setMobileOpen(false)}
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/50 backdrop-blur-xs"
             />
             <div className="relative">
               <Sidebar />

@@ -33,13 +33,17 @@ import secrets
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, cast
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from pydantic import BaseModel, JsonValue, TypeAdapter
+from sqlalchemy import JSON, String, bindparam, select, text
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core import security
+from app.core.audit_attribution import staff_bank_sql
 from app.core.config import (
     OperatorSettings,
     get_operator_settings,
@@ -47,9 +51,11 @@ from app.core.config import (
     is_undeployed_environment,
 )
 from app.db.session import RlsBlindError, get_cross_tenant_engine
-from app.models import OperatorAuditLog, OperatorUser
+from app.identity.public import Bank
+from app.models import OperatorAuditLog, OperatorInspectorSession, OperatorUser
 from app.models.operator import OPERATOR_ROLE_RANK
 from app.operator.services import operator_auth
+from app.policy.public import InstitutionType
 
 _bearer_scheme = HTTPBearer(
     auto_error=False,
@@ -257,13 +263,14 @@ OperatorDb = Annotated[Session, Depends(get_operator_db_session)]
 
 
 # -- audit -----------------------------------------------------------------------
-def record_operator_action(
+def record_operator_action(  # noqa: PLR0913 - actor, scope, evidence and accessed resources
     db: Session,
     operator: OperatorContext,
     *,
     action: str,
     target_org: str | None = None,
     detail: dict[str, Any] | None = None,
+    resources: BaseModel | list[dict[str, JsonValue]] | None = None,
 ) -> OperatorAuditLog:
     """Queue an operator_audit_log row on the CURRENT transaction.
 
@@ -272,12 +279,172 @@ def record_operator_action(
     Never put credential material — one-time passwords included — in
     ``detail``: the row is append-only and readable by every operator.
     """
-    entry = OperatorAuditLog(
-        operator_email=operator.email,
-        auth_mode=operator.auth_mode,
-        action=action,
-        target_org=target_org,
-        detail=detail or {},
+    evidence: dict[str, JsonValue] = dict(detail or {})
+    session_id = evidence.get("session_id")
+    if target_org is not None and isinstance(session_id, str):
+        try:
+            inspection_id = UUID(session_id)
+        except ValueError:
+            inspection_id = None
+        if inspection_id is not None:
+            inspection = db.scalar(
+                select(OperatorInspectorSession).where(
+                    OperatorInspectorSession.id == inspection_id,
+                    OperatorInspectorSession.organization_id == target_org,
+                    OperatorInspectorSession.started_by == operator.email,
+                )
+            )
+            if inspection is not None:
+                evidence.setdefault("reason", evidence.get("note") or inspection.reason)
+                evidence.setdefault("support_reference", inspection.support_reference)
+    if target_org is not None:
+        bank_id = _retained_staff_bank(db, target_org, evidence)
+        if bank_id is not None:
+            evidence.setdefault("bank_id", bank_id)
+    evidence.setdefault(
+        "reason", evidence.get("note") or action.replace(".", " ").replace("_", " ")
     )
-    db.add(entry)
-    return entry
+    evidence.setdefault("support_reference", None)
+    evidence.setdefault("outcome", "failure" if evidence.get("succeeded") is False else "success")
+    owners = _accessed_banks(db, action, target_org, evidence, resources)
+    entries: list[OperatorAuditLog] = []
+    marker = evidence.get("bank_id")
+    targets: list[tuple[str | None, str | None]] = list(sorted(owners)) or [
+        (target_org, marker if isinstance(marker, str) else None)
+    ]
+    for org, bank_id in targets:
+        scoped = dict(evidence)
+        if bank_id is not None:
+            scoped["bank_id"] = bank_id
+        if action in {
+            "desk.determination.publish",
+            "desk.curve.publish",
+            "desk.operating_environment.publish",
+        }:
+            delivery_status = owners.get((org, bank_id)) if org and bank_id else None
+            scoped["status"] = delivery_status
+            scoped["outcome"] = {
+                "complete": "success",
+                "failed": "failure",
+                "skipped": "skipped",
+            }.get(delivery_status or "", "unspecified")
+        entry = OperatorAuditLog(
+            operator_email=operator.email,
+            auth_mode=operator.auth_mode,
+            action=action,
+            target_org=org,
+            detail=scoped,
+        )
+        db.add(entry)
+        entries.append(entry)
+    return entries[0]
+
+
+def _organization_surface(action: str, evidence: dict[str, JsonValue]) -> bool:
+    """Operations that access shared tenant configuration or identity."""
+    return (
+        action
+        in {
+            "inspector.read.users",
+            "inspector.read.entitlements",
+            "inspector.read.storage",
+            "inspector.session.start",
+            "inspector.session.end",
+            "inspector.act_token.mint",
+            "inspector.sessions.read",
+        }
+        or action.startswith("inspector.entitlement.")
+        or (action == "inspector.fix.config" and evidence.get("kind") == "threshold_value")
+    )
+
+
+def _resource_banks(
+    db: Session, value: JsonValue, organization: str | None
+) -> Iterator[tuple[str | None, str, str | None]]:
+    """Collect identities from response resources, never copy their data to the log."""
+    if isinstance(value, list):
+        for item in value:
+            yield from _resource_banks(db, item, organization)
+    elif isinstance(value, dict):
+        org = value.get("organization_id") or value.get("target_org") or organization
+        org = org if isinstance(org, str) else organization
+        bank = value.get("bank_id")
+        if (
+            bank is None
+            and org is not None
+            and (isinstance(value.get("batch_id"), str) or value.get("kind") == "mapping_active")
+        ):
+            bank = _retained_staff_bank(db, org, value)
+        if isinstance(bank, str):
+            status = value.get("status")
+            yield org, bank, status if isinstance(status, str) else None
+        for key, item in value.items():
+            if key not in {"metrics", "config", "raw_record", "validation_report", "etl_report"}:
+                yield from _resource_banks(db, item, org)
+
+
+def _accessed_banks(
+    db: Session,
+    action: str,
+    target_org: str | None,
+    evidence: dict[str, JsonValue],
+    resources: BaseModel | list[dict[str, JsonValue]] | None,
+) -> dict[tuple[str, str], str | None]:
+    owners: dict[tuple[str, str], str | None] = {}
+    if resources is not None:
+        payload: JsonValue = TypeAdapter[JsonValue](JsonValue).validate_python(
+            resources.model_dump(mode="json") if isinstance(resources, BaseModel) else resources
+        )
+        identities = {
+            (org, bank_id): status
+            for org, bank_id, status in _resource_banks(db, payload, target_org)
+        }
+        bank_ids = {bank_id for _, bank_id in identities}
+        if bank_ids:
+            banks = {
+                bank.id: bank for bank in db.scalars(select(Bank).where(Bank.id.in_(bank_ids)))
+            }
+            for (org, bank_id), status in identities.items():
+                bank = banks.get(bank_id)
+                if bank is not None and (org is None or bank.organization_id == org):
+                    owners[(bank.organization_id, bank.id)] = status
+    elif (
+        target_org is not None
+        and evidence.get("bank_id") is None
+        and _organization_surface(action, evidence)
+    ):
+        stmt = select(Bank).where(Bank.organization_id == target_org)
+        after = evidence.get("after")
+        if action == "inspector.fix.config" and isinstance(after, dict):
+            jurisdiction = after.get("jurisdiction_code")
+            if isinstance(jurisdiction, str):
+                stmt = stmt.where(Bank.jurisdiction_code == jurisdiction)
+            institution_class = after.get("institution_class")
+            if isinstance(institution_class, str):
+                stmt = stmt.join(
+                    InstitutionType, InstitutionType.type_code == Bank.institution_type
+                ).where(InstitutionType.institution_class == institution_class)
+        owners.update(((bank.organization_id, bank.id), None) for bank in db.scalars(stmt))
+    return owners
+
+
+def _retained_staff_bank(
+    db: Session, organization: str, evidence: dict[str, JsonValue]
+) -> str | None:
+    return db.scalar(
+        select(
+            sql_cast(
+                text(
+                    staff_bank_sql(
+                        ":org",
+                        "CAST(:detail AS jsonb)"
+                        if db.get_bind().dialect.name == "postgresql"
+                        else ":detail",
+                        postgresql=db.get_bind().dialect.name == "postgresql",
+                    )
+                ).bindparams(bindparam("detail", type_=JSON)),
+                String,
+            )
+        ),
+        {"org": organization, "detail": evidence},
+    )

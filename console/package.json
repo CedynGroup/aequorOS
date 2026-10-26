@@ -8,27 +8,27 @@
     "start": "next start -p 3002",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test .test-out/lib/parameter-shapes.test.js && node --test .test-out/lib/regulatory-parameters.test.js && node --test .test-out/lib/bi-backfill.test.js && node --test .test-out/lib/onboarding.test.js && rm -rf .test-out"
+    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test .test-out/lib/parameter-shapes.test.js && node --test .test-out/lib/regulatory-parameters.test.js && node --test .test-out/lib/bi-backfill.test.js && node --test .test-out/lib/onboarding.test.js && node --test .test-out/lib/inspector-duration.test.js && node --test .test-out/lib/audit-pagination.test.js && rm -rf .test-out"
   },
   "dependencies": {
     "lucide-react": "^1.49.0",
-    "next": "16.4.0",
+    "next": "16.4.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",
-    "@types/node": "^24.19.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "autoprefixer": "^10.6.1",
     "eslint": "^10.12.0",
-    "eslint-config-next": "16.3.6",
+    "eslint-config-next": "16.4.2",
     "postcss": "^8.5.28",
-    "tailwindcss": "^3.4.13",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.6.2",
-    "typescript-eslint": "^8.70.0"
+    "typescript-eslint": "^8.71.2"
   },
   "license": "SEE LICENSE IN LICENSE"
 }
