@@ -102,7 +102,16 @@ test.describe("exactly bound Liquidity user", () => {
           aggregateRequests.push(request.url());
         }
       });
+      const periodsLoaded = page.waitForResponse(
+        (response) =>
+          /\/banks\/[^/]+\/reporting-periods$/.test(
+            new URL(response.url()).pathname,
+          ) && response.request().method() === "GET",
+      );
       await page.goto("/liquidity/monitoring?preparing=1");
+      const periodsResponse = await periodsLoaded;
+      expect(periodsResponse.ok()).toBeTruthy();
+      await periodsResponse.finished();
       for (const label of ["FX funding gap", "FX share of liabilities"]) {
         const card = page.locator(".card").filter({
           has: page.getByText(label, { exact: true }),
@@ -119,10 +128,6 @@ test.describe("exactly bound Liquidity user", () => {
       await expect(liquidity).toHaveAttribute("aria-disabled", "true");
       const reason =
         "Requires Liquidity Monitoring · Aggregated · View. Ask your organization owner or admin to grant it.";
-      await liquidity.hover();
-      await expect(
-        page.getByRole("tooltip").filter({ hasText: reason }),
-      ).toBeVisible();
       await liquidity.focus();
       await expect(liquidity).toBeFocused();
       await expect(
@@ -182,13 +187,30 @@ test.describe("exactly bound Liquidity user", () => {
     await expect(fx).not.toHaveAttribute("href", /.+/);
     await fx.click({ force: true });
     await expect(page).toHaveURL(/\/liquidity\?preparing=1$/);
-    const stress = page.getByRole("link", { name: "Stress" });
-    await expect(stress).toHaveAttribute("aria-disabled", "true");
-    await stress.hover();
+    const scenarios = page.getByRole("link", {
+      name: "Scenarios",
+      exact: true,
+    });
+    await expect(scenarios).toHaveAttribute(
+      "href",
+      "/liquidity/stress?preparing=1",
+    );
+    await scenarios.click();
+    await expect(
+      page.getByRole("heading", { name: "Liquidity Scenarios", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Liquidity scenario definitions" }),
+    ).toBeVisible();
+    const enterprise = page.getByRole("link", {
+      name: "Open enterprise stress workbench",
+    });
+    await expect(enterprise).toHaveAttribute("aria-disabled", "true");
+    await enterprise.hover();
     await expect(
       page.getByRole("tooltip").filter({
         hasText:
-          "Requires Risk & Limits · Confidential · View. Ask your organization owner or admin to grant it.",
+          "Requires IRRBB · Confidential · View. Ask your organization owner or admin to grant it.",
       }),
     ).toBeVisible();
     await link.click();

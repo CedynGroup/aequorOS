@@ -2,7 +2,22 @@ import assert from "node:assert/strict";
 import NodeModule from "node:module";
 import path from "node:path";
 import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryAuthorityScopeProvider } from "../../lib/api/useQueryScope";
+import { queryAuthorityScope } from "../../lib/api/queryPolicy";
+const queryClient = new QueryClient();
+function renderToStaticMarkup(node: React.ReactNode): string {
+  return renderMarkup(
+    <QueryClientProvider client={queryClient}>
+      <QueryAuthorityScopeProvider
+        scope={queryAuthorityScope("fixture", "fixture", 1)}
+      >
+        {node}
+      </QueryAuthorityScopeProvider>
+    </QueryClientProvider>,
+  );
+}
 import type {
   LiquidityDashboardRead,
   RegulatoryRunRead,
@@ -69,6 +84,11 @@ loader._load = (request, parent, isMain) => {
       useBankContext: () => ({
         bank: { id: "fixture", name: "Fixture Bank" },
         moduleScope: scope,
+        institutionCapabilities: [],
+        authorityPending: false,
+        period: null,
+        periods: [],
+        setPeriodId: () => {},
       }),
       useModuleScope: () => scope,
     };

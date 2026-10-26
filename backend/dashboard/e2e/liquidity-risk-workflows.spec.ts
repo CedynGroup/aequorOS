@@ -320,7 +320,13 @@ test.describe("Liquidity coverage, funding and stress outcomes", () => {
     page,
   }) => {
     // ---- Stress: drive the adverse scenario through every engine.
-    await openTab(page, "Stress");
+    await openTab(page, "Scenarios");
+    await expect(
+      page.getByRole("heading", { name: "Liquidity Scenarios", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("link", { name: "Open enterprise stress workbench" })
+      .click();
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
     ).toBeVisible();

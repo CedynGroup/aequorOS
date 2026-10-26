@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { preparationHref } from "@/lib/regulatoryInstruments";
+import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
 import PageContainer from "@/components/ui/PageContainer";
 import { ArrowUpRight } from "lucide-react";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
@@ -209,11 +210,18 @@ export default function LiquidityCockpit() {
         title="Liquidity Cockpit"
         action={
           data ? (
-            <LiveEngineNote live={data.live} stored={data.stored} />
+            <LiveEngineNote
+              live={data.live}
+              stored={data.stored}
+              dataAsOf={data.period.periodEnd}
+            />
           ) : undefined
         }
       />
 
+      <PageContainer className="py-4">
+        <RunModuleScenarios module="liquidity" />
+      </PageContainer>
       <QueryBoundary
         isLoading={dashboard.isLoading}
         error={dashboard.error}
@@ -525,14 +533,14 @@ export default function LiquidityCockpit() {
               />
             </div>
 
-            {/* Regulatory floors — LCR & NSFR are floor limits (direction above) */}
+            {/* Regulatory floors. LCR & NSFR are floor limits (direction above) */}
             {lcrMin !== null &&
               lcrRedFloor !== undefined &&
               nsfrMin !== null &&
               nsfrRedFloor !== null && (
                 <SectionCard
                   title="Liquidity floors"
-                  subtitle={`Basel LCR/NSFR minimums from the active parameter set — ${centralBankName()} has published no LCR requirement and none on NSFR (green ≥ minimum, amber down to the red floor)`}
+                  subtitle={`Basel LCR/NSFR minimums from the active parameter set. ${centralBankName()} has published no LCR requirement and none on NSFR (green ≥ minimum, amber down to the red floor)`}
                   computedAt={computedAt}
                   footer={provenance}
                 >
@@ -579,7 +587,7 @@ export default function LiquidityCockpit() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <ChartFrame
                 className="lg:col-span-2"
-                title="LCR & NSFR — reporting-period trend"
+                title="LCR & NSFR. reporting-period trend"
                 subtitle={`Ratios across ${data.trend.length} reporting periods`}
                 height={260}
                 actions={
@@ -599,7 +607,7 @@ export default function LiquidityCockpit() {
                 footer={
                   hasInlineTrendPoints ? (
                     <span>
-                      Hollow points are live computations — they solidify once
+                      Hollow points are live computations. they solidify once
                       those periods’ results are stored.
                     </span>
                   ) : (
@@ -646,7 +654,7 @@ export default function LiquidityCockpit() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <SectionCard
                 title="Cash outflows"
-                subtitle="30-day stressed runoff per Basel III run-off weights (BCBS 238) — no run-off table is prescribed locally"
+                subtitle="30-day stressed runoff per Basel III run-off weights (BCBS 238). no run-off table is prescribed locally"
                 noPadding
                 computedAt={computedAt}
                 footer={provenance}

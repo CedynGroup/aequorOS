@@ -16,7 +16,7 @@ test.describe("default macro scenarios", () => {
   test("shows system defaults and runs one on a fresh scenario library", async ({
     page,
   }) => {
-    await page.goto("/irr/scenarios?preparing=1");
+    await page.goto("/irr/enterprise-stress?preparing=1");
 
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
@@ -80,7 +80,7 @@ test.describe("default macro scenarios", () => {
     test("read-only grants refuse execution and explain the missing authority in IRRBB, FTP and FX", async ({
       page,
     }) => {
-      await page.goto("/irr/scenarios?preparing=1");
+      await page.goto("/irr/enterprise-stress?preparing=1");
       const scenario = page.getByLabel("Approved scenario");
       await expect(scenario).not.toHaveValue("");
       await expectBankStatus("/enterprise-stress/runs", 403, {
@@ -100,32 +100,34 @@ test.describe("default macro scenarios", () => {
         await expect(clone).toBeVisible();
         await expect(clone).toBeDisabled();
       }
-      for (const [lens, reason] of [
-        [
-          "irr",
-          "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.",
-        ],
-        [
-          "ftp",
-          "Requires Funds Transfer Pricing · Confidential · Run. Ask your organization owner or admin to grant it.",
-        ],
-        [
-          "fx",
-          "Requires FX run permission at confidential sensitivity. An organization owner can grant it.",
-        ],
-      ]) {
-        await page.goto(
-          `/${lens}/scenarios${lens === "irr" ? "?preparing=1" : ""}`,
-        );
-        const run = page.getByRole("button", {
-          name: "Run enterprise stress",
-          exact: true,
-        });
-        await expect(run).toBeVisible();
-        await expect(run).toBeDisabled();
-        await run.hover({ force: true });
-        await expect(page.getByRole("tooltip")).toHaveText(reason);
-      }
+      const run = page.getByRole("button", {
+        name: "Run enterprise stress",
+        exact: true,
+      });
+      await expect(run).toBeVisible();
+      await expect(run).toBeDisabled();
+      await run.hover({ force: true });
+      await expect(page.getByRole("tooltip")).toHaveText(
+        "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.",
+      );
+
+      await page.goto("/ftp/scenarios");
+      const preview = page.getByRole("button", { name: "Preview FTP what-if" });
+      await expect(preview).toBeDisabled();
+      await preview.locator("..").hover();
+      await expect(page.getByRole("tooltip")).toHaveText(
+        "Requires FTP · Confidential · Run authority.",
+      );
+      await expect(
+        page.getByRole("button", { name: "Save FTP analysis" }),
+      ).toBeDisabled();
+      await expect(run).toHaveCount(0);
+
+      await page.goto("/fx/scenarios");
+      await expect(
+        page.getByRole("heading", { name: "FX scenario definitions" }),
+      ).toBeVisible();
+      await expect(run).toHaveCount(0);
 
       if (evidenceDir) {
         await page.screenshot({

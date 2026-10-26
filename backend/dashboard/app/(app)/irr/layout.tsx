@@ -5,6 +5,7 @@ const tabs = [
   { href: "/irr/sensitivity", label: "EVE & NII" },
   { href: "/irr/gaps", label: "Gap Analysis" },
   { href: "/irr/scenarios", label: "Scenarios" },
+  { href: "/irr/enterprise-stress", label: "Enterprise stress" },
   { href: "/irr/limits", label: "Limits" },
   // The prescribed standardised framework. A separate tab, not a mode of the
   // others: it is a different scenario set with its own outlier test, and the

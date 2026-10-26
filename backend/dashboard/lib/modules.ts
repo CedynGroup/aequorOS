@@ -809,9 +809,6 @@ function liquidityRequirements(
   } else if (scope.liquidityAggregatedView !== true) {
     missing.push(LIQUIDITY_AGGREGATED_VIEW);
   }
-  if (stress && scope.riskConfidentialView !== true) {
-    missing.push(RISK_CONFIDENTIAL_VIEW);
-  }
   return missing;
 }
 
@@ -871,7 +868,7 @@ const SCOPED_MODULE_ROUTES: readonly ScopedModuleRoutePolicy[] = [
     confidential: {
       view: "irrbbConfidentialView",
       requirement: IRRBB_CONFIDENTIAL_VIEW,
-      routes: ["/irr/scenarios"],
+      routes: ["/irr/scenarios", "/irr/enterprise-stress"],
     },
   },
   {
@@ -1282,6 +1279,7 @@ export const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
   "/irr/gaps",
   "/irr/limits",
   "/irr/scenarios",
+  "/irr/enterprise-stress",
   "/irr/sensitivity",
   "/irr/standardised",
   "/liquidity",

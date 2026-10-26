@@ -1199,11 +1199,20 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
 
 ### CI enforcement
 
-- **Merge-queue checks run on the queued merge result.** The backend, dashboard,
+- **Merge-queue checks focus on integration risk.** The backend, dashboard,
   web, dashboard-journey and secret-scan workflows trigger on pull requests,
   pushes to `main`, and `merge_group` events of type `checks_requested`.
-  Merge groups select every CI area rather than applying PR path filters;
+  On the queued merge result, backend preflight, architecture/CI guards,
+  migration/schema/RLS shards, the full Postgres suite and concurrency locks,
+  and dashboard journeys/browser contracts run without PR path filtering;
   [Postgres suite selection](backend/README.md#run-tests) governs shard coverage.
+  Backend lint/typecheck, storage contracts, generated-client freshness and the
+  conditional real-data job skip in the queue, as do the dashboard checks and
+  marketing/console jobs. Secret scanning reports the required `gitleaks`
+  context successfully without repeating its PR scans. The Risk service,
+  Dashboard and Web aggregate gates still report, accepting intentional skips
+  and rejecting failed or cancelled dependencies. Pull requests retain their
+  change-based selection, and checks on pushes to `main` remain enabled.
   [The merge-queue guard](backend/tests/architecture/test_merge_queue.py) pins
   the triggers and required-check names. Enabling the queue and configuring
   required checks on `main` remain repository-settings work.

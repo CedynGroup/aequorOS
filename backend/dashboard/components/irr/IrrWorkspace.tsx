@@ -89,7 +89,11 @@ export default function IrrWorkspace({
         action={
           data ? (
             <div className="flex items-center gap-2">
-              <LiveEngineNote live={data.live} stored={data.stored} />
+              <LiveEngineNote
+                live={data.live}
+                stored={data.stored}
+                dataAsOf={data.period.periodEnd}
+              />
               {canRun ? (
                 runButton()
               ) : (

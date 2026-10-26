@@ -280,6 +280,12 @@ test.describe("FX exposure, hedge and stress outcomes", () => {
     // ---- Scenarios: a governed macro path through every engine, FX leg included.
     await openTab(page, "Scenarios");
     await expect(
+      page.getByRole("heading", { name: "FX Scenarios", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("link", { name: "Open enterprise stress workbench" })
+      .click();
+    await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
     ).toBeVisible();
     const run = (await runEnterpriseStress(

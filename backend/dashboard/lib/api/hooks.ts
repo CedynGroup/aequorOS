@@ -29,7 +29,8 @@ import type {
   ReturnTemplateListRead,
   AnalysisRunCreate,
   SavedAnalysisCreate,
-  StressScenarioCreate,
+  SavedAnalysisSummaryRead,
+  SavedAnalysisListRead,
   StressScenarioUpdate,
   WorkbenchModule,
   AdoptSignatureRequest,
@@ -385,6 +386,7 @@ export function useRegulatoryRuns(
     scenarioCode?: string;
     limit?: number;
     offset?: number;
+    allPages?: boolean;
   } = {},
 ) {
   const scope = useQueryAuthorityScope();
@@ -396,11 +398,11 @@ export function useRegulatoryRuns(
       filters.module ?? null,
       filters.reportingPeriodId ?? null,
       filters.scenarioCode ?? null,
-      filters.limit ?? 25,
+      filters.allPages ? "all" : (filters.limit ?? 25),
       filters.offset ?? 0,
     ),
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      const first = await apiCall(() =>
         regulatoryLiquidityApi.listRegulatoryRuns({
           bankId: bankId!,
           module: filters.module,
@@ -409,7 +411,28 @@ export function useRegulatoryRuns(
           limit: filters.limit,
           offset: filters.offset,
         }),
-      ),
+      );
+      if (!filters.allPages) return first;
+      const runs = [...first.runs];
+      let page = first;
+      while (
+        page.offset + page.runs.length < page.total &&
+        page.runs.length > 0
+      ) {
+        page = await apiCall(() =>
+          regulatoryLiquidityApi.listRegulatoryRuns({
+            bankId: bankId!,
+            module: filters.module,
+            reportingPeriodId: filters.reportingPeriodId,
+            scenarioCode: filters.scenarioCode,
+            limit: filters.limit,
+            offset: page.offset + page.runs.length,
+          }),
+        );
+        runs.push(...page.runs);
+      }
+      return { ...first, runs, limit: runs.length, hasMore: false };
+    },
     enabled: Boolean(bankId),
   });
 }
@@ -4428,32 +4451,6 @@ export function useRunScenarioAnalysis(
   });
 }
 
-export function useCreateStressScenario(
-  bankId: string | undefined,
-  module: WorkbenchModule,
-) {
-  const queryClient = useQueryClient();
-  const scope = useQueryAuthorityScope();
-  return useMutation({
-    mutationFn: (payload: StressScenarioCreate) =>
-      apiCall(() =>
-        scenarioWorkbenchApi.createStressScenario({
-          bankId: bankId!,
-          module,
-          stressScenarioCreate: payload,
-        }),
-      ),
-    onSuccess: () => {
-      void invalidateScopedPrefixes(
-        queryClient,
-        ["scenario-catalogue"],
-        scope,
-        bankId,
-      );
-    },
-  });
-}
-
 export function useUpdateStressScenario(
   bankId: string | undefined,
   module: WorkbenchModule,
@@ -4532,11 +4529,50 @@ export function useSavedAnalyses(
       bankId ?? null,
       module,
     ),
+    queryFn: async () => {
+      const analyses: SavedAnalysisSummaryRead[] = [];
+      let offset = 0;
+      let page: SavedAnalysisListRead;
+      do {
+        page = await apiCall(() =>
+          scenarioWorkbenchApi.listScenarioAnalyses({
+            bankId: bankId!,
+            module,
+            offset,
+          }),
+        );
+        analyses.push(...page.analyses);
+        offset += page.analyses.length;
+      } while (offset < page.total && page.analyses.length > 0);
+      return { analyses };
+    },
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useSavedScenarioAnalysis(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+  analysisId: string | undefined,
+) {
+  const scope = useQueryAuthorityScope();
+  return useQuery({
+    queryKey: scopedQueryKey(
+      "scenario-analysis",
+      scope,
+      bankId ?? null,
+      module,
+      analysisId ?? null,
+    ),
     queryFn: () =>
       apiCall(() =>
-        scenarioWorkbenchApi.listScenarioAnalyses({ bankId: bankId!, module }),
+        scenarioWorkbenchApi.getScenarioAnalysis({
+          bankId: bankId!,
+          module,
+          analysisId: analysisId!,
+        }),
       ),
-    enabled: Boolean(bankId),
+    enabled: Boolean(bankId && analysisId),
   });
 }
 

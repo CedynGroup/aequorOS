@@ -9,7 +9,7 @@ const tabs = [
   { href: "/liquidity/buffer", ruleCode: "LCR-NSFR", label: "Buffer" },
   { href: "/liquidity/nsfr", ruleCode: "LCR-NSFR", label: "NSFR" },
   { href: "/liquidity/forecast", label: "Cash Flow Forecast" },
-  { href: "/liquidity/stress", ruleCode: "LCR-NSFR", label: "Stress" },
+  { href: "/liquidity/stress", ruleCode: "LCR-NSFR", label: "Scenarios" },
   { href: "/liquidity/monitoring", ruleCode: "LMT", label: "Monitoring Tools" },
   { href: "/liquidity/cfp", label: "CFP" },
 ];
