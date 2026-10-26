@@ -195,8 +195,8 @@ gateway, model and processing locations. No Power BI region is inferred from
 geographic proximity. Operations must also establish AequorOS' own locations;
 the built-in dashboard is not proof that hosting is in Ghana. Sources:
 `backend/docker-compose.prod.yml:6`, `backend/app/models/operator.py:127`.
-See the [BoG evidence draft](../../docs/compliance/bog-evidence-pack.md),
-especially questions Q02–Q07. **Planned:** residency arrangements under
+See owner questions Q02 to Q07 in [#645](https://github.com/CedynGroup/aequorOS/issues/645) and the hosting items in
+[#646](https://github.com/CedynGroup/aequorOS/issues/646). **Planned:** residency arrangements under
 [#209](https://github.com/CedynGroup/aequorOS/issues/209).
 
 ### What is recommended

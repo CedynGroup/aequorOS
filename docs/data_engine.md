@@ -632,7 +632,7 @@ period.
 [#297](https://github.com/CedynGroup/aequorOS/issues/297) and
 [#131](https://github.com/CedynGroup/aequorOS/issues/131).
 **To confirm:** the security owner must provide the log coverage, SIEM delivery
-plan and retention schedule. See the [BoG evidence pack](compliance/bog-evidence-pack.md).
+plan and retention schedule. Tracked in [#647](https://github.com/CedynGroup/aequorOS/issues/647) and [#645](https://github.com/CedynGroup/aequorOS/issues/645).
 
 ---
 
@@ -970,8 +970,8 @@ boundary and bank query scope. Canonical metadata follows
 [§4.3](#43-mandatory-metadata-columns); database parent ownership follows the
 [composite-FK contract](../CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern).
 Staff access is not an aggregated-only interface; deployment confirmations and
-bank-visible access evidence are requested in the
-[BoG evidence pack §4](compliance/bog-evidence-pack.md#4-staff-and-bank-user-access).
+bank-visible access evidence are tracked in
+[#647](https://github.com/CedynGroup/aequorOS/issues/647).
 
 ### 14.2 Encryption
 
@@ -980,11 +980,10 @@ bank-key object access and the optional rollout boundary.
 [The transport control and evidence contract](../backend/docs/transport_security.md)
 owns service transport enforcement and required deployment evidence. These
 implementations do not establish active pilot key custody, backup coverage or
-TLS 1.3 on every connection. The
-[BoG evidence pack §5](compliance/bog-evidence-pack.md#5-encryption-and-key-custody)
-records the dated baseline and the asset-by-asset confirmations still required.
+TLS 1.3 on every connection. The asset-by-asset confirmations still required
+are tracked in [#648](https://github.com/CedynGroup/aequorOS/issues/648).
 Environment isolation and masking evidence remain owner confirmations; see
-[§9](compliance/bog-evidence-pack.md#9-supporting-assurance-documents).
+[#650](https://github.com/CedynGroup/aequorOS/issues/650).
 
 ### 14.3 Access Control
 
@@ -992,29 +991,26 @@ The [SSO onboarding guide](sso-onboarding.md#security-notes-your-reviewers-will-
 owns bank sign-in guidance, including local password fallback and IdP MFA.
 Universal MFA is not established. The
 [authorization foundation](../backend/docs/authorization_foundation.md#standing-rules-at-a-glance)
-owns scoped authority; the
-[BoG evidence pack §4](compliance/bog-evidence-pack.md#4-staff-and-bank-user-access)
-records staff access gaps and planned controls.
+owns scoped authority; staff access gaps and planned controls are tracked in
+[#647](https://github.com/CedynGroup/aequorOS/issues/647).
 
 ### 14.4 Data Residency
 
 Ghana residency and per-bank region selection are not established. Deployment
-locations, transfer questions and planned residency work are owned by the
-[BoG evidence pack §2](compliance/bog-evidence-pack.md#2-hosting-backups-and-sub-processors).
+locations, transfer questions and planned residency work are tracked in
+[#646](https://github.com/CedynGroup/aequorOS/issues/646).
 
 ### 14.5 Compliance Certifications
 
 [README, “License & security”](../README.md#license--security) owns the public
-certification status. The
-[BoG evidence pack §9](compliance/bog-evidence-pack.md#9-supporting-assurance-documents)
-records planned independent assessment, privacy and counsel work and the
+certification status. [#650](https://github.com/CedynGroup/aequorOS/issues/650)
+tracks planned independent assessment, privacy and counsel work and the
 outstanding registration and assurance evidence. Compliance is not asserted.
 
 ### 14.6 Business Continuity
 
-The [BoG evidence pack §8](compliance/bog-evidence-pack.md#8-recovery-evidence-and-service-objectives)
-owns recovery evidence, its limits and the planned restore, backup and failover
-issues. A one-hour RPO, four-hour service RTO, 99.9% SLA, Multi-AZ failover and
+[#649](https://github.com/CedynGroup/aequorOS/issues/649) tracks recovery evidence limits and the planned restore, backup
+and failover issues. A one-hour RPO, four-hour service RTO, 99.9% SLA, Multi-AZ failover and
 quarterly drills are not achieved guarantees.
 
 ---
