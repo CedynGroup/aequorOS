@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.authorization import BindingStatus
+from app.core.authorization import BindingStatus, ModuleScope, RoleBundle, SensitivityScope
 from app.core.security import hash_password
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.schemas.auth import MeResponse, TokenResponse
@@ -18,12 +18,68 @@ from scripts.e2e_story_identities import (
     SOURCE_BANK,
     SOURCE_ORG,
     ActorSpec,
+    ScopedBinding,
     StoryRequest,
     provision,
     retire,
 )
 
 PASSWORD = "synthetic-story-step-up-not-production"
+
+
+def test_scoped_story_credentials_enforce_real_backend_permission_boundaries(
+    db_session: Session, db_client: TestClient
+) -> None:
+    _ = prepare_source(db_session)
+    request = StoryRequest(
+        organization_id="OR-STORY003",
+        bank_id="BK-STORY003",
+        owned_tenant=True,
+        actors=[
+            ActorSpec(role="admin", user_id=uuid4()),
+            ActorSpec(role="viewer", user_id=uuid4()),
+        ],
+        bindings=[
+            ScopedBinding(
+                role_bundle=RoleBundle.VIEWER,
+                module_scope=ModuleScope.FTP,
+                sensitivity_scope=SensitivityScope.AGGREGATED,
+            )
+        ],
+    )
+    try:
+        actor = next(
+            actor for actor in provision(db_session, request).actors if actor.role == "viewer"
+        )
+        login = db_client.post(
+            "/api/v1/auth/login", json={"email": actor.email, "password": PASSWORD}
+        )
+        assert login.status_code == 200, login.text
+        token = TokenResponse.model_validate_json(login.text)
+        headers = {"Authorization": f"Bearer {token.access_token}"}
+        response = db_client.get("/api/v1/auth/me", headers=headers)
+        assert response.status_code == 200, response.text
+        authority = MeResponse.model_validate_json(response.text).effective_authority
+        assert authority.organization_capabilities == []
+        assert len(authority.institution_capabilities) == 1
+        institution = authority.institution_capabilities[0]
+        assert institution.institution_id == request.bank_id
+        assert [
+            (capability.module, capability.sensitivity, capability.permission)
+            for capability in institution.capabilities
+        ] == [("ftp", "aggregated", "view")]
+        denied = db_client.post(
+            f"/api/v1/banks/{request.bank_id}/ftp/run-all-scenarios",
+            headers=headers,
+            json={"reporting_period_id": str(uuid4())},
+        )
+        assert denied.status_code == 403, denied.text
+        denied = db_client.get(
+            f"/api/v1/banks/{request.bank_id}/capital/dashboard", headers=headers
+        )
+        assert denied.status_code == 403, denied.text
+    finally:
+        retire(db_session, request)
 
 
 def prepare_source(db: Session) -> User:

@@ -2,8 +2,13 @@
 //
 // Ordered on purpose (workers: 1): the analyst journey uploads the market data
 // the reader journeys then inspect, so it runs first.
-import { expect, test, type Page } from "@playwright/test";
-import { execFileSync } from "node:child_process";
+import { expect, type Page } from "@playwright/test";
+import { test } from "./support/story-identities";
+import { expectBankStatus } from "./support/real-authority";
+import { MarketDataOverlayListReadFromJSON } from "@aequoros/risk-service-api";
+import { biApi, SAMPLE_BANK_ID } from "./support/bi";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { writeFile } from "node:fs/promises";
 import path from "path";
 import { E2E_TMP } from "../playwright.config";
@@ -16,11 +21,9 @@ const MARKET_DATA_REQUEST =
 // The as-of date the shared full-coverage workbook fixture is built for.
 const UPLOAD_AS_OF = "2026-06-30";
 
-type Capability = { module: string; sensitivity: string; permission: string };
-
 /** Build the four-sheet upload workbook the backend's own fixture produces. */
-function fullCoverageWorkbook(): Buffer {
-  return execFileSync(
+async function fullCoverageWorkbook(): Promise<Buffer> {
+  const { stdout } = await promisify(execFile)(
     "uv",
     [
       "run",
@@ -32,33 +35,10 @@ function fullCoverageWorkbook(): Buffer {
       cwd: BACKEND_DIR,
       env: { ...process.env, PYTHONPATH: "." },
       maxBuffer: 16 * 1024 * 1024,
+      encoding: "buffer",
     },
   );
-}
-
-/**
- * Narrow the signed-in admin's projected authority to exactly `keep`, so the
- * dashboard renders the surface for a user who holds those grants and nothing
- * else. Organization capabilities are dropped entirely.
- */
-async function projectAuthority(
-  page: Page,
-  keep: (capability: Capability) => boolean,
-): Promise<void> {
-  await page.route("**/auth/me", async (route) => {
-    const response = await route.fetch();
-    const profile = await response.json();
-    profile.effective_authority.organization_capabilities = [];
-    for (const institution of profile.effective_authority
-      .institution_capabilities) {
-      institution.capabilities = institution.capabilities.filter(keep);
-    }
-    await route.fulfill({ response, json: profile });
-  });
-}
-
-function dataEngineReader(capability: Capability): boolean {
-  return capability.module === "data" && capability.permission === "view";
+  return stdout;
 }
 
 async function expectDisabledWithReason(
@@ -81,11 +61,14 @@ test.afterEach(async ({ page }) => {
 });
 
 test.describe("Markets analyst", () => {
-  test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "analyst.json"),
+    storyConfig: { roles: ["analyst"], bindings: [] },
+  });
 
   test("uploads market data through the Data Engine", async ({ page }) => {
     requireObjectStorage();
-    const workbook = fullCoverageWorkbook();
+    const workbook = await fullCoverageWorkbook();
 
     await page.goto("/data-engine/market-data");
     await expect(
@@ -180,7 +163,13 @@ test.describe("Markets analyst", () => {
 });
 
 test.describe("unbound Markets user", () => {
-  test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [{ bundle: "viewer", module: "liq", sensitivity: "all" }],
+    },
+  });
 
   test("disables navigation, denies deep links, and sends no Markets requests", async ({
     page,
@@ -224,19 +213,22 @@ test.describe("unbound Markets user", () => {
 });
 
 test.describe("Markets published reader", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [
+        { bundle: "viewer", module: "markets", sensitivity: "published" },
+        { bundle: "viewer", module: "data", sensitivity: "all" },
+      ],
+    },
+  });
 
   test("reads the hub but cannot open spreads, list connections, or upload", async ({
     page,
   }) => {
-    await projectAuthority(
-      page,
-      (capability) =>
-        dataEngineReader(capability) ||
-        (capability.module === "markets" &&
-          capability.sensitivity === "published" &&
-          capability.permission === "view"),
-    );
+    await expectBankStatus("/market-data/overlays", 403);
+    await expectBankStatus("/market-data/connections", 403);
     const confidentialRequests: string[] = [];
     page.on("request", (request) => {
       if (
@@ -287,19 +279,43 @@ test.describe("Markets published reader", () => {
 });
 
 test.describe("Markets confidential reader", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [
+        { bundle: "viewer", module: "markets", sensitivity: "published" },
+        { bundle: "viewer", module: "markets", sensitivity: "confidential" },
+      ],
+    },
+  });
 
   test("opens the spread editor with save and end disabled", async ({
     page,
   }) => {
-    await projectAuthority(
-      page,
-      (capability) =>
-        capability.module === "markets" &&
-        capability.permission === "view" &&
-        ["published", "confidential"].includes(capability.sensitivity),
+    const observed = await biApi(
+      page.request,
+      "viewer",
+      `/banks/${SAMPLE_BANK_ID}/market-data/overlays`,
     );
-
+    expect(observed.status).toBe(200);
+    const overlays = MarketDataOverlayListReadFromJSON(observed.body).overlays;
+    expect(overlays.length).toBeGreaterThan(0);
+    await expectBankStatus(`/market-data/overlays/${overlays[0].id}/end`, 403, {
+      method: "POST",
+      data: { effective_to: new Date().toISOString().slice(0, 10) },
+    });
+    await expectBankStatus("/market-data/overlays", 403, {
+      method: "POST",
+      data: {
+        base_ref_kind: "curve",
+        base_curve_name: "GHS_GOV",
+        adjustment_type: "additive_bps",
+        value: "10",
+        component_tag: "funding_spread",
+        effective_from: UPLOAD_AS_OF,
+      },
+    });
     await page.goto("/markets");
     await page.getByRole("button", { name: "Curves", exact: true }).click();
     const editSpreads = page

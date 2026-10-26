@@ -584,7 +584,7 @@ access token share one captured version. Pass an explicit version only when a
 journey deliberately needs a captured or invalid authorization generation;
 minting a token does not alter the principal's persisted bindings or status.
 
-Access-request, baseline-membership, live-grant, grant-administration,
+Authorization, access-request, baseline-membership, live-grant, grant-administration,
 macro-contract and full-filing stories use `e2e/support/story-identities.ts` to
 provision fresh tested actors. Declare the required profiles with `storyConfig`;
 owner stories also request an isolated setup tenant. Shared-bank stories keep
@@ -595,6 +595,14 @@ the actors, revoking refresh families while retaining audit and signed evidence.
 Selected identity aliases and storage-state files are restored even after failure.
 The Python helper refuses any database except this worktree's disposable fixture
 and provisions no financial facts.
+
+`storyConfig.bindings` gives baseline actors complete, exact-bank grants with
+explicit bundles, modules and sensitivities. Credit grants can also name a branch
+slice; the journeys compare actual rows with a whole-book reader and check that
+client filters cannot widen it. Permission stories pair visible UI restrictions
+with direct API refusals using the same actor's credential. An isolated owner
+story can set `ownerReadModules` to revoke its initial broad read grant through
+the grant service and replace it with module-specific read grants.
 
 Three prerequisites are not obvious, and each one has already cost a long
 diagnosis:

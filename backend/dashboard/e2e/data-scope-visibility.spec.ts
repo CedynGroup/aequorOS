@@ -1,58 +1,30 @@
 /**
- * A reader whose grant covers part of a book is TOLD SO, on every surface that
- * shows them a figure.
- *
- * Phase 4 gave `authorization_bindings` a data scope and the backend honours it
- * everywhere: a branch- or region-scoped reader's rows, totals, pages, facets and
- * counts are all computed over their slice, and the three credit payloads disclose
- * which slice. Until P4-I nothing in the browser said so, so a scoped total was
- * drawn exactly as the institution's own book would be — and a number on a screen
- * is what gets quoted into a board paper.
- *
- * WHY THIS SPEC INTERCEPTS, AND WHY THAT IS HONEST. Every grant
- * `scripts/e2e_bootstrap.py` writes is institution-wide: there is no
- * branch-scoped fixture identity, and `scripts/e2e_bootstrap.py` is not this
- * track's file. A spec that only asserted "no notice appears" would then be
- * exactly the shape AGENTS.md warns about — a green test that proves nothing,
- * because a notice that can never render also never renders wrongly.
- *
- * So each journey runs BOTH halves against the same live stack:
- *
- *  * the NEGATIVE — the real payload, every grant institution-wide, and no
- *    coverage notice anywhere. This is the half that would catch a notice that
- *    cried wolf at every reader in the product.
- *  * the POSITIVE — the same request, answered by the same server, with the scope
- *    field rewritten in flight to the narrowed shape the server WILL send once an
- *    owner composes such a grant. Nothing else about the response is touched:
- *    `route.fetch()` gets the real answer and only the scope is edited, so the
- *    figures, the rows and the counts on screen are the platform's own.
- *
- * The interception is a FIXTURE FOR A GRANT THAT CANNOT YET BE WRITTEN, not a
- * substitute for the server's behaviour — which `backend/tests/api/
- * test_data_scope_grants.py` and `tests/bi/service/test_data_scope.py` own.
- *
- * WIRE SPELLING. The generated client is stale, and `<Model>FromJSON` spreads
- * `...json` before overwriting the fields it knows, so `data_scope` arrives under
- * its snake_case wire name today and becomes `dataScope` the day the client is
- * regenerated. These journeys inject the SNAKE_CASE name — the one a browser
- * actually receives — and `lib/api/dataScope.test.ts` proves both spellings
- * produce identical copy.
+ * Real Credit bindings restrict rows, counts and figures to the same declared
+ * branch slice that the browser names. Institution-wide readers see no coverage
+ * notice; scoped readers receive qualified labels on the loan book, activity,
+ * Explore, certified packs and Insights. An empty authorized slice is distinct
+ * from an empty institution book. Every story uses fresh principals; scoped
+ * stories compare their response with a whole-book control on the same bank.
  */
 
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test as identityTest } from "./support/story-identities";
+import { CreditLoansPageReadFromJSON } from "@aequoros/risk-service-api";
 import path from "node:path";
 import { E2E_TMP } from "../playwright.config";
-import { SAMPLE_BANK_ID } from "./support/bi";
+import { SAMPLE_BANK_ID, biApi, FIXTURE_FIGURES } from "./support/bi";
 
-/** The branch codes the injected grant names. Arbitrary tokens, as a code is. */
-const BRANCHES = ["ACC-001", "TEM-002"];
-
-const NARROWED_SCOPE = {
-  kind: "branch",
-  branches: BRANCHES,
-  regions: [],
-  unresolved_regions: [],
-};
+const BRANCHES = ["BR-001"];
+const test = identityTest.extend<{
+  sliceBranches: string[];
+  sliceReferences: string[];
+}>({
+  sliceBranches: [BRANCHES, { option: true }],
+  sliceReferences: [
+    ["LOAN/1", "LOAN/4", "LOAN/6", "LOAN/USD"],
+    { option: true },
+  ],
+});
 
 /** The opening clause of every narrowed sentence (`lib/api/dataScope.ts`). */
 const QUALIFIED_OPENER = "You are seeing part of this institution's book.";
@@ -60,77 +32,82 @@ const QUALIFIED_OPENER = "You are seeing part of this institution's book.";
 /** The whole-book sentence must never appear: there is no such sentence. */
 const NOTICE = "[data-testid='coverage-notice']";
 
-/**
- * Answer a route with the server's own response, with one field edited.
- *
- * `route.fetch()` performs the real request, so the figures on screen are the
- * platform's. Only the scope is rewritten.
- */
-async function withScope(
-  route: Route,
-  edit: (body: Record<string, unknown>) => void,
-): Promise<void> {
-  const response = await route.fetch();
-  const body = (await response.json()) as Record<string, unknown>;
-  edit(body);
-  await route.fulfill({
-    response,
-    json: body,
-    headers: { ...response.headers(), "content-type": "application/json" },
-  });
-}
-
-/** Narrow every CREDIT view capability `/auth/me` projects for the sample bank. */
-async function narrowCreditAuthority(page: Page): Promise<void> {
-  await page.route("**/api/v1/auth/me", (route) =>
-    withScope(route, (body) => {
-      const authority = body.effective_authority as {
-        institution_capabilities: {
-          institution_id: string;
-          capabilities: Record<string, unknown>[];
-        }[];
-      };
-      let narrowed = 0;
-      for (const entry of authority.institution_capabilities) {
-        if (entry.institution_id !== SAMPLE_BANK_ID) continue;
-        for (const capability of entry.capabilities) {
-          if (capability.module !== "credit") continue;
-          capability.data_scope = NARROWED_SCOPE;
-          narrowed += 1;
-        }
-      }
-      // A fixture that narrowed NOTHING would make every assertion below vacuous.
-      expect(
-        narrowed,
-        "the projection must carry credit capabilities to narrow",
-      ).toBeGreaterThan(0);
-    }),
-  );
-}
-
 test.describe("a reader whose grant covers the whole book", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "analyst.json"),
+    storyConfig: { roles: ["analyst"] },
+  });
 
   /**
    * THE NEGATIVE HALF, and it is the one that protects every other reader in the
-   * product. `admin` holds organization-wide Analyst with the default
+   * product. The fresh Analyst holds the default
    * institution-wide scope, so a coverage notice here would be a false statement
    * shown to everybody.
    */
-  for (const [surface, route] of [
-    ["the loan blotter", "/credit/book"],
-    ["loan-book activity", "/credit/activity"],
-    ["Explore", "/explore"],
-    ["Insights", "/insights"],
+  for (const [surface, route, dataRoute] of [
+    ["the loan blotter", "/credit/book", /\/credit\/loans\?/],
+    ["loan-book activity", "/credit/activity", /\/credit\/activity(?:\?|$)/],
+    ["Explore", "/explore", /\/bi\/catalogue(?:\?|$)/],
+    ["Insights", "/insights", /\/bi\/insights(?:\?|$)/],
     // A certified pack: authored by the platform but ANSWERED under the reader's
     // own scope, which is why this screen carries the notice at all.
-    ["a certified pack", "/dashboards/credit"],
+    ["a certified pack", "/dashboards/credit", /\/bi\/query(?:\?|$)/],
   ] as const) {
     test(`is told nothing about coverage on ${surface}`, async ({ page }) => {
+      const ready = page.waitForResponse((response) =>
+        dataRoute.test(response.url()),
+      );
       await page.goto(route);
-      // Wait for the surface to have actually drawn something, so the absence is
-      // an absence on a rendered page rather than on an empty one.
+      expect((await ready).status()).toBe(200);
+      if (route === "/explore") {
+        const figures = page.waitForResponse((response) =>
+          /\/bi\/query$/.test(response.url()),
+        );
+        await page
+          .locator("section.card")
+          .filter({
+            has: page.getByRole("heading", { name: "Measure", level: 3 }),
+          })
+          .locator("label")
+          .filter({
+            has: page.getByText("Gross loans", { exact: true }),
+          })
+          .first()
+          .locator('input[type="checkbox"]')
+          .check();
+        expect((await figures).status()).toBe(200);
+        const grouped = page.waitForResponse((response) =>
+          /\/bi\/query$/.test(response.url()),
+        );
+        await page
+          .locator("section.card")
+          .filter({
+            has: page.getByRole("heading", { name: "Break down by", level: 3 }),
+          })
+          .locator("label")
+          .filter({
+            has: page.getByText("Classification grade", { exact: true }),
+          })
+          .first()
+          .locator('input[type="checkbox"]')
+          .check();
+        expect((await grouped).status()).toBe(200);
+        const answer = page.locator("section.card").filter({
+          has: page.getByRole("heading", { name: "Your question", level: 3 }),
+        });
+        await expect(
+          answer.getByText(FIXTURE_FIGURES.standardGradeOnScreen, {
+            exact: true,
+          }),
+        ).toBeVisible();
+        await expect(
+          answer.getByText(FIXTURE_FIGURES.substandardGradeOnScreen, {
+            exact: true,
+          }),
+        ).toBeVisible();
+      }
       await expect(page.locator("h1").first()).toBeVisible();
+      await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
       await expect(page.locator(NOTICE)).toHaveCount(0);
       const text = (await page.locator("body").innerText()).replace(
         /\s+/g,
@@ -143,18 +120,63 @@ test.describe("a reader whose grant covers the whole book", () => {
 });
 
 test.describe("a reader whose grant covers some branches", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer", "analyst"],
+      bindings: [
+        {
+          bundle: "viewer",
+          module: "credit",
+          sensitivity: "all",
+          branches: BRANCHES,
+        },
+      ],
+    },
+  });
+  test.beforeEach(async ({ request, sliceBranches, sliceReferences }) => {
+    const route = `/banks/${SAMPLE_BANK_ID}/credit/loans?limit=100`;
+    const whole = await biApi(request, "analyst", route);
+    const narrowed = await biApi(request, "viewer", route);
+    expect(whole.status).toBe(200);
+    expect(narrowed.status).toBe(200);
+    const fullBook = CreditLoansPageReadFromJSON(whole.body);
+    const slice = CreditLoansPageReadFromJSON(narrowed.body);
+    expect(fullBook.total).toBe(7);
+    expect(
+      fullBook.rows.filter((loan) => loan.branchId === "BR-002"),
+    ).toHaveLength(3);
+    expect(fullBook.rows.map((loan) => loan.sourceReference)).toContain(
+      "LOAN/2",
+    );
+    expect(fullBook.dataScope.kind).toBe("all");
+    expect(slice.total).toBe(sliceReferences.length);
+    expect(slice.filtered).toBe(sliceReferences.length);
+    expect(slice.rows.map((loan) => loan.sourceReference).sort()).toEqual(
+      [...sliceReferences].sort(),
+    );
+    expect(slice.dataScope).toMatchObject({
+      kind: "branch",
+      branches: sliceBranches,
+    });
+    expect(
+      slice.rows.every((loan) => sliceBranches.includes(loan.branchId ?? "")),
+    ).toBe(true);
+    const escape = await biApi(request, "viewer", `${route}&branch=BR-002`);
+    expect(escape.status).toBe(200);
+    const deniedSlice = CreditLoansPageReadFromJSON(escape.body);
+    expect(deniedSlice.total).toBe(sliceReferences.length);
+    expect(deniedSlice.filtered).toBe(0);
+    expect(deniedSlice.rows).toEqual([]);
+    expect(deniedSlice.dataScope).toMatchObject({
+      kind: "branch",
+      branches: sliceBranches,
+    });
+  });
 
   test("the loan blotter says so, names the branches, and qualifies the totals", async ({
     page,
   }) => {
-    await page.route("**/api/v1/banks/*/credit/loans?**", (route) =>
-      withScope(route, (body) => {
-        expect(body.total, "the real payload must carry a total").toBeDefined();
-        body.data_scope = NARROWED_SCOPE;
-      }),
-    );
-
     await page.goto("/credit/book");
     const notice = page.locator(NOTICE);
     await expect(notice).toBeVisible();
@@ -190,69 +212,89 @@ test.describe("a reader whose grant covers some branches", () => {
     ).toBeVisible();
   });
 
-  test("an EMPTY blotter under that grant is not reported as an empty book", async ({
-    page,
-  }) => {
-    // THE DEFECT THIS CLOSES. Before P4-I a scoped reader whose branches hold no
-    // loans was told "No loans in the canonical book yet" and sent to the Data
-    // Engine — a claim about the institution that they are in no position to make,
-    // and an instruction to fix a problem that is not theirs.
-    await page.route("**/api/v1/banks/*/credit/loans?**", (route) =>
-      withScope(route, (body) => {
-        body.data_scope = NARROWED_SCOPE;
-        body.total = 0;
-        body.filtered = 0;
-        body.rows = [];
-      }),
-    );
-
-    await page.goto("/credit/book");
-    // `EmptyState` typesets its title as a `<p class="text-h3">` and not as a
-    // heading element, so this is addressed as text. (Measured: the first run of
-    // this journey looked for a heading role and found none while the page was
-    // rendering the sentence perfectly.)
-    await expect(
-      page.getByText("No loans in the part of the book you can see", {
-        exact: true,
-      }),
-    ).toBeVisible();
-    await expect(
-      page.getByText(
-        /Nothing was returned for the branches your access covers/,
-      ),
-    ).toBeVisible();
-    // The ingestion call to action is WITHHELD: it is not this reader's problem.
-    await expect(
-      page.getByRole("link", { name: "Open the Data Engine" }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByText("No loans in the canonical book yet"),
-    ).toHaveCount(0);
+  test.describe("a branch with no loans", () => {
+    test.use({
+      sliceBranches: ["BR-NOLOANS"],
+      sliceReferences: [],
+      storyConfig: {
+        roles: ["viewer", "analyst"],
+        bindings: [
+          {
+            bundle: "viewer",
+            module: "credit",
+            sensitivity: "all",
+            branches: ["BR-NOLOANS"],
+          },
+        ],
+      },
+    });
+    test("an EMPTY blotter under that grant is not reported as an empty book", async ({
+      page,
+    }) => {
+      // THE DEFECT THIS CLOSES. Before P4-I a scoped reader whose branches hold no
+      // loans was told "No loans in the canonical book yet" and sent to the Data
+      // Engine — a claim about the institution that they are in no position to make,
+      // and an instruction to fix a problem that is not theirs.
+      await page.goto("/credit/book");
+      // `EmptyState` typesets its title as a `<p class="text-h3">` and not as a
+      // heading element, so this is addressed as text. (Measured: the first run of
+      // this journey looked for a heading role and found none while the page was
+      // rendering the sentence perfectly.)
+      await expect(
+        page.getByText("No loans in the part of the book you can see", {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        page.getByText(
+          /Nothing was returned for the branches your access covers/,
+        ),
+      ).toBeVisible();
+      // The ingestion call to action is WITHHELD: it is not this reader's problem.
+      await expect(
+        page.getByRole("link", { name: "Open the Data Engine" }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByText("No loans in the canonical book yet"),
+      ).toHaveCount(0);
+    });
   });
 
-  test("loan-book activity says so, and its counts are qualified", async ({
-    page,
-  }) => {
-    await page.route("**/api/v1/banks/*/credit/activity**", (route) =>
-      withScope(route, (body) => {
-        expect(
-          body.disbursement_count,
-          "the real payload must carry the event counts",
-        ).toBeDefined();
-        body.data_scope = NARROWED_SCOPE;
-      }),
-    );
-
-    await page.goto("/credit/activity");
-    await expect(page.locator(NOTICE)).toBeVisible();
-    await expect(
-      page.getByText("Restructures (12m) in your branches", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Disbursements / repayments in your branches", {
-        exact: true,
-      }),
-    ).toBeVisible();
+  test.describe("whole-summary and scoped activity grants", () => {
+    test.use({
+      storyConfig: {
+        roles: ["viewer", "analyst"],
+        bindings: [
+          { bundle: "viewer", module: "credit", sensitivity: "aggregated" },
+          {
+            bundle: "viewer",
+            module: "credit",
+            sensitivity: "confidential",
+            branches: BRANCHES,
+          },
+          {
+            bundle: "viewer",
+            module: "credit",
+            sensitivity: "restricted",
+            branches: BRANCHES,
+          },
+        ],
+      },
+    });
+    test("loan-book activity says so, and its counts are qualified", async ({
+      page,
+    }) => {
+      await page.goto("/credit/activity");
+      await expect(page.locator(NOTICE)).toBeVisible();
+      await expect(
+        page.getByText("Restructures (12m) in your branches", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Disbursements / repayments in your branches", {
+          exact: true,
+        }),
+      ).toBeVisible();
+    });
   });
 
   /**
@@ -265,7 +307,6 @@ test.describe("a reader whose grant covers some branches", () => {
   test("Explore says nothing until a narrowed figure is in the question, and then says it exactly", async ({
     page,
   }) => {
-    await narrowCreditAuthority(page);
     await page.goto("/explore");
     await expect(page.getByRole("heading", { name: "Explore" })).toBeVisible();
     // No figure chosen: nothing is on screen to qualify, so nothing is claimed.
@@ -281,6 +322,10 @@ test.describe("a reader whose grant covers some branches", () => {
       .locator('input[type="checkbox"]')
       .check();
 
+    const answer = page.locator("section.card").filter({
+      has: page.getByRole("heading", { name: "Your question", level: 3 }),
+    });
+    await expect(answer.getByText("GHS 57.9M", { exact: true })).toBeVisible();
     const notice = page.locator(NOTICE);
     await expect(notice).toBeVisible();
     await expect(
@@ -302,7 +347,6 @@ test.describe("a reader whose grant covers some branches", () => {
     // reader's whole catalogue, so a pack built only from institution-wide figures
     // would say nothing even for this reader. `credit` is a CREDIT pack, so it is
     // covered by the narrowed capability and the notice is earned.
-    await narrowCreditAuthority(page);
     await page.goto("/dashboards/credit");
     const notice = page.locator(NOTICE);
     await expect(notice).toBeVisible();
@@ -323,7 +367,6 @@ test.describe("a reader whose grant covers some branches", () => {
   test("Insights says part of the page is narrowed, and does not invent which part", async ({
     page,
   }) => {
-    await narrowCreditAuthority(page);
     await page.goto("/insights");
     const notice = page.locator(NOTICE);
     await expect(notice).toBeVisible();

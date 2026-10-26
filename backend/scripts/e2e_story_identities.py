@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,7 @@ from app.attestation.service.identity import ensure_signer_identity
 from app.attestation.service.keys import SignerKeyService
 from app.core.authorization import (
     BindingStatus,
+    DataScope,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -26,7 +27,7 @@ from app.core.authorization import (
 )
 from app.db.base import utc_now
 from app.identity.models.authorization import AuthorizationAccessRequest, AuthorizationBinding
-from app.identity.service import authentication, authorization, membership
+from app.identity.service import authentication, authorization, grant_administration, membership
 from app.identity.service.organization_ownership import assign_initial_owner
 from app.models import Bank, Job, MacroScenario, Organization, User
 from app.schemas.stress import MacroScenarioTransition
@@ -45,6 +46,7 @@ BASELINE_ROLES = frozenset(
         "forecast_summary_member",
         "access_extra_member",
         "macro_viewer",
+        "legacy_account_admin",
     }
 )
 
@@ -55,6 +57,16 @@ class ActorSpec(BaseModel):
     user_id: UUID
 
 
+class ScopedBinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    actor_role: str = "viewer"
+    role_bundle: RoleBundle
+    module_scope: ModuleScope
+    sensitivity_scope: SensitivityScope
+    data_scope_kind: DataScope = DataScope.ALL
+    data_scope_values: list[str] = Field(default_factory=list)
+
+
 class StoryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     organization_id: str
@@ -62,6 +74,8 @@ class StoryRequest(BaseModel):
     actors: list[ActorSpec]
     owned_tenant: bool = False
     signing: bool = False
+    bindings: list[ScopedBinding] = Field(default_factory=list)
+    owner_read_modules: list[ModuleScope] | None = None
 
 
 class ActorRead(BaseModel):
@@ -103,9 +117,67 @@ def _scalar_role(role: str, owned_tenant: bool) -> str:
         raise ValueError(f"Unknown story profile: {role}")
     if role in {"admin", "analyst"}:
         return "account_admin" if owned_tenant and role == "admin" else "analyst"
+    if role == "legacy_account_admin":
+        return "account_admin"
     if role in {"approver", "account_admin"}:
         return role
     return "viewer"
+
+
+def _apply_scoped_bindings(db: Session, request: StoryRequest, users: dict[str, User]) -> None:
+    for binding in request.bindings:
+        if binding.actor_role not in BASELINE_ROLES or binding.actor_role not in users:
+            raise ValueError("Scoped story bindings require a baseline-only actor")
+        if binding.role_bundle not in {RoleBundle.VIEWER, RoleBundle.ANALYST, RoleBundle.APPROVER}:
+            raise ValueError("Scoped story bindings must use an operational human bundle")
+        user = users[binding.actor_role]
+        _ = authorization.create_role_binding(
+            db,
+            organization_id=request.organization_id,
+            principal_user_id=user.id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=binding.role_bundle,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                request.bank_id,
+                binding.module_scope,
+                binding.sensitivity_scope,
+                binding.data_scope_kind,
+                tuple(binding.data_scope_values),
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "e2e-story"),
+            reason="Exact scoped authority for one synthetic dashboard story",
+            commit=False,
+        )
+
+
+def _configure_owner_read(db: Session, request: StoryRequest, users: dict[str, User]) -> None:
+    if request.owner_read_modules is None:
+        return
+    if not request.owned_tenant or "admin" not in users:
+        raise ValueError("Owner read changes require the story's own initial owner")
+    owner = users["admin"]
+    defaults = list(
+        db.scalars(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.principal_user_id == owner.id,
+                AuthorizationBinding.status == BindingStatus.ACTIVE.value,
+                AuthorizationBinding.role_bundle == RoleBundle.VIEWER.value,
+                AuthorizationBinding.module_scope == ModuleScope.ALL.value,
+            )
+        )
+    )
+    assert len(defaults) == 1
+    _ = grant_administration.revoke_scoped_grant(
+        db,
+        organization_id=request.organization_id,
+        binding_id=defaults[0].id,
+        actor_user_id=owner.id,
+        reason="Replace the story owner's broad read sentence with exact module grants",
+        commit=False,
+    )
+    for module in request.owner_read_modules:
+        _grant(db, owner, RoleBundle.VIEWER, module)
 
 
 def provision(db: Session, request: StoryRequest) -> StoryRead:
@@ -184,6 +256,9 @@ def provision(db: Session, request: StoryRequest) -> StoryRead:
                 db, user, RoleBundle.ACCOUNT_ADMIN, ModuleScope.ACCOUNT, SensitivityScope.RESTRICTED
             )
         users.append((spec, user))
+    by_role = {spec.role: user for spec, user in users}
+    _apply_scoped_bindings(db, request, by_role)
+    _configure_owner_read(db, request, by_role)
     db.commit()
     if request.signing:
         ctx = TenantContext(organization_id=request.organization_id)
