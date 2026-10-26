@@ -46,6 +46,7 @@ afterEach(() => {
   clearProtectedData();
   setAccessToken(null);
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function party(name = "Synthetic owner") {
@@ -119,6 +120,79 @@ function mount(children: ReactNode) {
   );
   return client;
 }
+
+it.each(["manual", "automatic"] as const)(
+  "recovers an empty register after Add party fails using %s retry without losing its draft",
+  async (retry) => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    let available = true;
+    let created = false;
+    let reads = 0;
+    const draft = "Synthetic new owner";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          if (!available) return refusal("unavailable");
+          expect(JSON.parse(String(init.body))).toMatchObject({ full_name: draft });
+          created = true;
+          return Response.json(party(draft));
+        }
+        reads++;
+        if (created) return profileResponse("available", draft);
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (reads > 2) {
+          headers["X-Aequoros-Protected-Data"] = JSON.stringify({
+            [BANK]: available ? "available" : "unavailable",
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            bank_id: BANK,
+            profile: null,
+            related_parties: [],
+            name_history: [],
+            outlets: [],
+            licenses: [],
+            products: [],
+          }),
+          { headers },
+        );
+      }),
+    );
+    const client = mount(<RelatedPartiesPage />);
+    await userEvent.click(screen.getByRole("button", { name: "Add related party" }));
+    await userEvent.type(screen.getByLabelText(/Full name/), draft);
+    await userEvent.type(screen.getByLabelText(/Reason for change/), "Synthetic new party");
+    available = false;
+    await userEvent.click(screen.getByRole("button", { name: "Add party" }));
+    await waitFor(() => expect(reads).toBe(2));
+    expect(protectedDataState(BANK)).toBe("unavailable");
+    expect(screen.getByLabelText(/Full name/)).toHaveValue(draft);
+    expect(client.getQueryState(profileKey)?.isInvalidated).toBe(false);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    await waitFor(() => expect(reads).toBe(3));
+    expect(protectedDataState(BANK)).toBe("unavailable");
+    expect(screen.getAllByText(protectedDataMessages.unavailable).length).toBeGreaterThan(0);
+    available = true;
+    if (retry === "manual") {
+      await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    } else {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+    }
+    await waitFor(() => expect(protectedDataState(BANK)).toBe("available"));
+    expect(reads).toBe(4);
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.getByLabelText(/Full name/)).toHaveValue(draft);
+    await userEvent.click(screen.getByRole("button", { name: "Add party" }));
+    await waitFor(() => expect(screen.queryByLabelText(/Full name/)).toBeNull());
+    expect(await screen.findByText(draft)).toBeVisible();
+  },
+);
 
 it.each(["party", "shareholding"] as const)(
   "preserves a conditional existing-party %s editor through cache purge and recovery",

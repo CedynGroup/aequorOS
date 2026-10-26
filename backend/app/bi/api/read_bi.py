@@ -812,15 +812,13 @@ def _visible_pairs(
     """
 
     protected = connected(db, access.ctx.organization_id, access.bank.id)
-    pairs = scope_pairs(cat.members())
-    by_representative = {
-        _representative(cat, candidates): pair
-        for pair, member_ids in pairs.items()
-        if (
-            candidates := tuple(
-                member for member in member_ids if not protected or member not in IDENTITY_MEMBERS
-            )
+    pairs = scope_pairs(
+        tuple(
+            member for member in cat.members() if not protected or member.id not in IDENTITY_MEMBERS
         )
+    )
+    by_representative = {
+        _representative(cat, member_ids): pair for pair, member_ids in pairs.items()
     }
     denied, scopes = _probe(db, access, cat, list(by_representative), surface=surface)
     allowed = dict.fromkeys(pairs, False)

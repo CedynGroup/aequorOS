@@ -25,6 +25,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.key_management.fields import observe_bank_key
 from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.models.bank import Bank
@@ -336,7 +337,7 @@ def get_full_profile(db: Session, ctx: TenantContext, bank_id: str) -> Instituti
     profile = _profile_row(db, ctx, bank.id)
     parties = _bank_children(db, RelatedParty, ctx, bank.id)
     roles_by_party, holdings_by_party = _party_children(db, [party.id for party in parties])
-    return InstitutionProfileFullRead(
+    result = InstitutionProfileFullRead(
         bank_id=bank.id,
         profile=_profile_read(profile) if profile is not None else None,
         related_parties=[
@@ -350,6 +351,8 @@ def get_full_profile(db: Session, ctx: TenantContext, bank_id: str) -> Instituti
             _name_history_read(row) for row in _bank_children(db, BankNameHistory, ctx, bank.id)
         ],
     )
+    observe_bank_key(db, ctx.organization_id, bank.id)
+    return result
 
 
 # --- institution profile ----------------------------------------------------------

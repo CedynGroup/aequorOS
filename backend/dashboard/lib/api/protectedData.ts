@@ -128,6 +128,15 @@ export function isLockedBankQuery(queryKey: QueryKey): boolean {
   );
 }
 
+export function isProtectedRecoveryQuery(query: Query): boolean {
+  return (
+    isProtectedDataError(query.state.error) ||
+    containsLockedData(query.state.data) ||
+    (isLockedBankQuery(query.queryKey) &&
+      (query.state.isInvalidated || query.queryKey[0] === "institution-profile"))
+  );
+}
+
 const protectedBiIdentityMembers = new Set([
   "counterparty.id",
   "counterparty.name",

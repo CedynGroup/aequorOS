@@ -1483,6 +1483,45 @@ def test_profile_http_locked_read_write_and_recovery(
     assert json.loads(restored.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
 
 
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_empty_profile_observes_key_recovery_after_a_refused_party_create(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    url = f"/api/v1/banks/{BANK_A}/institution-profile"
+    provider.set_status(KEY_A, status)
+    payload: dict[str, object] = {
+        "reason": "Synthetic retained draft",
+        "party_type": "individual",
+        "full_name": NAME,
+        "contact": {},
+        "roles": [],
+    }
+    refused = db_client.post(
+        f"/api/v1/banks/{BANK_A}/related-parties", headers=headers(), json=payload
+    )
+    assert refused.status_code == 503, refused.text
+    reason = "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    for _ in range(2):
+        empty = db_client.get(url, headers=headers())
+        assert empty.status_code == 200, empty.text
+        assert empty.json()["related_parties"] == []
+        assert json.loads(empty.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    restored = db_client.get(url, headers=headers())
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["related_parties"] == []
+    assert json.loads(restored.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+    saved = db_client.post(
+        f"/api/v1/banks/{BANK_A}/related-parties", headers=headers(), json=payload
+    )
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["full_name"] == NAME
+
+
 @pytest.mark.parametrize("connected", [False, True])
 def test_inspector_profile_read_never_releases_protected_identity(
     db_client: TestClient,

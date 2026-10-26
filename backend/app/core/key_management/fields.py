@@ -559,6 +559,30 @@ def _presentation_locked(
     return True
 
 
+def observe_bank_key(db: Session, organization: str, bank: str) -> None:
+    presentation = db.info.get(SESSION_STATE)
+    if not isinstance(presentation, PresentationState) or bank in presentation.banks:
+        return
+    if presentation.support or db.info.get(SESSION_SUPPORT):
+        presentation.record(bank, "support")
+        return
+    registry.lock_bank_version(db, organization, bank, read=True)
+    row = registry.bank_key(db, organization, bank)
+    try:
+        if row is not None:
+            registry.prepare_envelope(
+                db, row, _envelope_context(organization, bank), registry.provider_for
+            )
+        elif get_key_settings().bank_key_required:
+            raise KeyUnavailableError("The bank encryption key is not connected.")
+    except KeyIntegrityError:
+        raise
+    except KeyUnavailableError as exc:
+        presentation.record(bank, "revoked" if exc.revoked else "unavailable")
+        return
+    presentation.record(bank, "available")
+
+
 def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
     db: Session,
     row: BankEncryptionKey,

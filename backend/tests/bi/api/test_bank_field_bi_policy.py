@@ -117,6 +117,76 @@ def test_connected_bank_refusal_explains_capability_and_keeps_numeric_concentrat
     assert "loans.largest_single_name_share_pct" in {measure.id for measure in catalogue.measures}
 
 
+@pytest.mark.parametrize("granted", [False, True])
+@pytest.mark.usefixtures("bi_on")
+def test_connected_bank_catalogue_and_packs_agree_with_query_authority(
+    db_client: TestClient,
+    db_session: Session,
+    mart: Bank,
+    monkeypatch: pytest.MonkeyPatch,
+    granted: bool,
+) -> None:
+    grants = (routes.Grant(ModuleScope.ALL, SensitivityScope.ALL),) if granted else ()
+    authv = routes.grant_only(db_session, grants)
+    request_headers = headers(authorization_version=authv)
+    provider = LocalKeyProvider()
+    key = KeyReference("aws_kms", "synthetic-bi-probe", "us-east-1", "111122223333")
+    provider.add_key(key)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    registry.register(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=mart.id,
+        storage_slug="synthetic-bi-probe",
+        key=key,
+        providers=providers,
+    )
+    db_session.commit()
+    response = db_client.get(routes.BASE + "/catalogue", headers=request_headers)
+    assert response.status_code == 200, response.text
+    visible = BiCatalogueRead.model_validate_json(response.content)
+    assert ("loans.balance_rc" in {member.id for member in visible.measures}) == granted
+    assert "counterparty.id" not in {member.id for member in visible.dimensions}
+    if not granted:
+        assert visible.measures == visible.dimensions == visible.hierarchies == []
+        assert visible.withheld_members == len(catalogue().members())
+    query = {
+        "measures": ["loans.balance_rc"],
+        "time": {"as_of": routes.AS_OF.isoformat()},
+    }
+    numeric = db_client.post(routes.BASE + "/query", json=query, headers=request_headers)
+    assert numeric.status_code == (200 if granted else 403), numeric.text
+    identity = db_client.post(
+        routes.BASE + "/query", json=routes.OBLIGOR_QUERY, headers=request_headers
+    )
+    assert identity.status_code == 403, identity.text
+    for listing in (False, True):
+        path = routes.BASE + ("/packs" if listing else "/packs/cro")
+        response = db_client.get(
+            path, params={"as_of": routes.AS_OF.isoformat()}, headers=request_headers
+        )
+        assert response.status_code == 200, response.text
+        packs = (
+            BiPackListRead.model_validate_json(response.content).packs
+            if listing
+            else [BiPackRead.model_validate_json(response.content)]
+        )
+        for pack in packs:
+            if not granted:
+                assert pack.restricted_widgets == pack.readable_widgets
+                assert all(widget.query is None for widget in pack.widgets)
+        cro = next(pack for pack in packs if pack.id == "cro")
+        numeric_widget = next(widget for widget in cro.widgets if widget.id == "npl_by_sector")
+        assert (numeric_widget.access == "granted") == granted
+        assert (numeric_widget.query is not None) == granted
+        identity_widget = next(widget for widget in cro.widgets if widget.id == "large_exposures")
+        assert identity_widget.access == "restricted" and identity_widget.query is None
+
+
 def _saved_alerts(db_session: Session, mart: Bank, identity_first: bool) -> dict[bool, UUID]:
     identity_filters: list[dict[str, object]] = [
         {"member": "counterparty.id", "op": "eq", "values": [str(routes.CP_ONE)]}
