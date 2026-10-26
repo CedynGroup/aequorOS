@@ -30,7 +30,10 @@ vi.mock("../components/shell/BankContext", () => ({
 
 beforeEach(() => {
   setAccessToken("synthetic-session");
-  vi.stubGlobal("fetch", vi.fn(async () => Response.json({})));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({})),
+  );
 });
 
 afterEach(() => {

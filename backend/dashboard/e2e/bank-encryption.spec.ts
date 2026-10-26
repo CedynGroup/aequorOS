@@ -187,13 +187,17 @@ test.describe("Bank-held encryption: service outage", () => {
       await expect(page.getByLabel("Full name")).toHaveValue(NAME);
       const edited = "Synthetic Recovered Director Ñ";
       await page.getByLabel("Full name").fill(edited);
-      await page.getByLabel("Reason for change").fill("Synthetic recovered edit");
+      await page
+        .getByLabel("Reason for change")
+        .fill("Synthetic recovered edit");
       const saved = page.waitForResponse(
         (response) =>
           response.url().includes("/related-parties/") &&
           response.request().method() === "PUT",
       );
-      await page.getByRole("button", { name: "Save party", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Save party", exact: true })
+        .click();
       expect((await saved).ok()).toBe(true);
       await expect(
         page.getByRole("cell", { name: edited, exact: true }),
