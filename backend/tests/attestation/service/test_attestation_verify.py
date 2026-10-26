@@ -52,7 +52,7 @@ from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import fields as pyhanko_fields
 from pyhanko.sign import signers as pyhanko_signers
 from pyhanko_certvalidator.registry import SimpleCertificateStore
-from sqlalchemy import select
+from sqlalchemy import Engine, event, select
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 
@@ -61,6 +61,7 @@ from app.attestation.schemas import StepUpRequest, VerificationReportRead
 from app.attestation.service import api as attestation_api
 from app.attestation.service import digests, pdf_signing, signing, stepup, verify, workflow
 from app.attestation.service.identity import ensure_signer_identity
+from app.core import security
 from app.core.authorization import RoleBundle
 from app.core.key_management import registry
 from app.core.key_management.types import KeyStatus
@@ -73,6 +74,7 @@ from app.models import (
     RegulatoryRun,
     ReturnSigningPolicy,
     SignerKey,
+    SigningAuthorization,
     User,
 )
 from app.reporting.schemas.packages import RegulatoryPackageCreate
@@ -536,6 +538,66 @@ def test_engine_package_rotation_refuses_certification(
         )
     assert workflow.current_signatures(db, MAKER, package) == []
     assert (package.register_state_digest is None) == legacy
+
+
+@pytest.mark.committing_db
+def test_step_up_rechecks_rotation_after_committed_authentication(
+    db_session: Session, pki: _Pki, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = db_session
+    engine = db.get_bind()
+    if not isinstance(engine, Engine) or engine.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL independent transactions are required.")
+    _seed(db)
+    provider = encrypted.connect(db, monkeypatch)
+    read = generation.generate_package(
+        db,
+        MAKER,
+        SAMPLE_BANK_ID,
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
+    )
+    validation.validate_package(db, MAKER, SAMPLE_BANK_ID, read.id)
+    _enrol(db, MAKER, pki, "softkey:preparer")
+    user = db.get(User, DEMO_USER_ID)
+    assert user is not None
+    password = "synthetic-authentication-rotation-proof"
+    user.password_hash = security.hash_password(password)
+    db.commit()
+    rotated = False
+
+    def rotate_after_authentication(_session: Session) -> None:
+        nonlocal rotated
+        if rotated:
+            return
+        rotated = True
+        with Session(engine) as writer, writer.begin():
+            writer.info["organization_id"] = DEMO_ORG_ID
+            key = registry.scoped_key(writer, bank_id=SAMPLE_BANK_ID, organization_id=DEMO_ORG_ID)
+            registry.rotate(writer, key, NEXT, lambda _name: provider)
+
+    event.listen(db, "after_commit", rotate_after_authentication)
+    try:
+        with pytest.raises(workflow.AttestationConflict, match="register_state_changed"):
+            attestation_api.step_up(
+                db,
+                MAKER,
+                SAMPLE_BANK_ID,
+                read.id,
+                StepUpRequest(signing_role="preparer", password=password),
+                Request({"type": "http", "headers": []}),
+            )
+    finally:
+        event.remove(db, "after_commit", rotate_after_authentication)
+    assert rotated
+    assert (
+        db.scalar(
+            select(SigningAuthorization.id).where(
+                SigningAuthorization.package_id == read.id,
+                SigningAuthorization.organization_id == DEMO_ORG_ID,
+            )
+        )
+        is None
+    )
 
 
 def test_verification_never_writes(db_session: Session, pki: _Pki) -> None:

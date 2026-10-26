@@ -284,9 +284,18 @@ def version_context(organization: str, bank: str) -> dict[str, str]:
     return {"purpose": "bank-data-key-version-v1", "organization_id": organization, "bank_id": bank}
 
 
+def lock_bank_version(db: Session, organization: str, bank: str, *, read: bool = False) -> None:
+    if db.get_bind().dialect.name == "postgresql":
+        identity = json.dumps(["bank-data-key-version-v1", organization, bank])
+        value = int.from_bytes(hashlib.sha256(identity.encode()).digest()[:8], signed=True)
+        function = "pg_advisory_xact_lock_shared" if read else "pg_advisory_xact_lock"
+        _ = db.execute(text(f"SELECT {function}(:key)"), {"key": value})
+
+
 def _new_version(
     db: Session, row: BankEncryptionKey, key: KeyReference, providers: ProviderFactory
 ) -> ObjectKeyEnvelope:
+    lock_bank_version(db, row.organization_id, row.bank_id)
     digest = context_digest(version_context(row.organization_id, row.bank_id))
     provider = providers(key.provider)
     context = wrapping_context(row.bank_id, digest)

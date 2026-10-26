@@ -527,6 +527,12 @@ of its engine source runs, including frozen ICAAP reports. Forward certification
 review and first transmission refuse a changed commitment and require regeneration.
 An already submitted filing retains its original commitment.
 
+Commitment projection takes a shared transaction lock on the bank's key version;
+version creation takes the exclusive lock. Minting, certification, forward review
+and transmission retain that lock through commit, including the external send
+and its local receipt. Step-up rechecks freshness after authentication commits
+and before issuing authorization. Ordinary object decryption remains lock-free.
+
 This binds _which register state_ produced the pack, so a later mutation of a
 shareholding or an outlet is detectable against a signed pack even though the
 register itself is mutable. It is weaker than `input_hash` — it proves state,
