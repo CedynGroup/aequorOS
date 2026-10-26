@@ -16,16 +16,23 @@ from app.attestation.service import workflow as attestation
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey
+from app.core.key_management.schemas import BankKeyConnect, BankKeyRotate
 from app.icaap.schemas.workspace import IcaapFreezeCreate
 from app.icaap.service import freeze
 from app.icaap.service import workflow as icaap_workflow
+from app.identity.public import Bank
+from app.identity.service import bank_encryption
+from app.reporting.models.filing_workflow import PackageStageDecision
 from app.reporting.models.packages import RegulatoryPackage, RegulatorySubmissionEvent
-from app.reporting.schemas.packages import PackageApprovalRequestCreate, RegulatoryPackageCreate
+from app.reporting.schemas.packages import (
+    PackageApprovalDecisionCreate,
+    PackageApprovalRequestCreate,
+    RegulatoryPackageCreate,
+)
 from app.reporting.service import generation, validation, workflow
 from app.reporting.service.channels import OrassSandboxChannel
 from app.reporting.service.channels.base import FiledArtifact
 from tests.core import test_key_unavailable_numeric as encrypted
-from tests.core.test_bank_field_encryption import NEXT
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.icaap.service import test_p3_freeze as freezing
 from tests.icaap.service.p3_support import access_for
@@ -35,6 +42,17 @@ from tests.support.helpers import ORG_1
 
 pytestmark = [pytest.mark.committing_db, pytest.mark.usefixtures("return_generation_authority")]
 exporter_calls = channels.exporter_calls
+ADMIN_KEY = BankKeyConnect(
+    key_id="arn:aws:kms:us-east-1:111122223333:key/synthetic-register-source",
+    region="us-east-1",
+    owner_account="111122223333",
+)
+ADMIN_ROTATION = BankKeyRotate(
+    key_id="arn:aws:kms:us-east-1:111122223333:key/synthetic-register-destination",
+    region="us-east-1",
+    owner_account="111122223333",
+    reason="Synthetic administrator rotation during filing.",
+)
 
 
 @pytest.fixture
@@ -49,12 +67,32 @@ def _pid(db: Session) -> int:
     return cast(int, db.scalar(text("SELECT pg_backend_pid()")))
 
 
-def _rotate(engine: Engine, provider: LocalKeyProvider, started: Queue[int]) -> None:
-    with Session(engine) as writer, writer.begin():
+def _prepare_key(db: Session, monkeypatch: pytest.MonkeyPatch, *, connected: bool) -> None:
+    provider = LocalKeyProvider()
+    provider.add_key(ADMIN_KEY.reference())
+    provider.add_key(ADMIN_ROTATION.reference())
+
+    def resolve(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", resolve)
+    bank = db.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    bank.storage_slug = "synthetic-admin-concurrency"
+    db.commit()
+    if connected:
+        bank_encryption.connect(db, channels.MAKER, SAMPLE_BANK_ID, ADMIN_KEY)
+        db.commit()
+
+
+def _change_key(engine: Engine, started: Queue[int], action: Literal["connect", "rotate"]) -> None:
+    with Session(engine) as writer:
         writer.info["organization_id"] = ORG_1
         started.put(_pid(writer))
-        row = registry.scoped_key(writer, bank_id=SAMPLE_BANK_ID, organization_id=ORG_1)
-        registry.rotate(writer, row, NEXT, lambda _name: provider)
+        if action == "connect":
+            bank_encryption.connect(writer, channels.MAKER, SAMPLE_BANK_ID, ADMIN_KEY)
+        else:
+            bank_encryption.rotate(writer, channels.MAKER, SAMPLE_BANK_ID, ADMIN_ROTATION)
 
 
 def _assert_blocked(engine: Engine, blocker: int, waiter: int, rotation: Future[None]) -> None:
@@ -75,15 +113,17 @@ def _assert_blocked(engine: Engine, blocker: int, waiter: int, rotation: Future[
 
 
 @pytest.mark.parametrize("kind", ["ordinary", "icaap"])
+@pytest.mark.parametrize("action", ["connect", "rotate"])
+@pytest.mark.usefixtures("extra_frameworks")
 def test_register_projection_pins_rotation_through_package_mint(
     canonical_book: Session,
     postgres: Engine,
-    extra_frameworks: None,
     monkeypatch: pytest.MonkeyPatch,
     kind: Literal["ordinary", "icaap"],
+    action: Literal["connect", "rotate"],
 ) -> None:
     db = canonical_book
-    provider = encrypted.connect(db, monkeypatch)
+    _prepare_key(db, monkeypatch, connected=action == "rotate")
     encrypted.register(db)
     access = access_for(db)
     cycle = None
@@ -95,7 +135,7 @@ def test_register_projection_pins_rotation_through_package_mint(
     reader = _pid(db)
     started: Queue[int] = Queue()
     with ThreadPoolExecutor(max_workers=1) as pool:
-        rotation = pool.submit(_rotate, postgres, provider, started)
+        rotation = pool.submit(_change_key, postgres, started, action)
         try:
             _assert_blocked(postgres, reader, started.get(timeout=5), rotation)
             if cycle is None:
@@ -138,11 +178,11 @@ def test_register_projection_pins_rotation_through_package_mint(
         attestation.ensure_register_current(db, access.ctx, package)
 
 
-def _approved_submission(
-    db: Session, monkeypatch: pytest.MonkeyPatch
-) -> tuple[LocalKeyProvider, RegulatoryPackage]:
+def _prepared_submission(
+    db: Session, monkeypatch: pytest.MonkeyPatch, *, connected: bool
+) -> RegulatoryPackage:
     channels._seed_approved_package(db)  # pyright: ignore[reportPrivateUsage]
-    provider = encrypted.connect(db, monkeypatch)
+    _prepare_key(db, monkeypatch, connected=connected)
     read = generation.generate_package(
         db,
         channels.MAKER,
@@ -150,11 +190,16 @@ def _approved_submission(
         RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=channels.REPORTING_DATE),
     )
     validation.validate_package(db, channels.MAKER, SAMPLE_BANK_ID, read.id)
-    workflow.request_approval(
-        db, channels.MAKER, SAMPLE_BANK_ID, read.id, PackageApprovalRequestCreate()
-    )
     package = db.get(RegulatoryPackage, read.id)
     assert package is not None
+    return package
+
+
+def _approved_submission(db: Session, monkeypatch: pytest.MonkeyPatch) -> RegulatoryPackage:
+    package = _prepared_submission(db, monkeypatch, connected=True)
+    workflow.request_approval(
+        db, channels.MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate()
+    )
     complete_chain(
         db,
         package,
@@ -162,7 +207,58 @@ def _approved_submission(
         validator=channels.VALIDATOR.actor_user_id,
     )
     db.commit()
-    return provider, package
+    return package
+
+
+@pytest.mark.parametrize("stage", ["start", "approve"])
+@pytest.mark.parametrize("action", ["connect", "rotate"])
+def test_admin_key_change_waits_for_guarded_stage_insert(
+    canonical_book: Session,
+    postgres: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: Literal["start", "approve"],
+    action: Literal["connect", "rotate"],
+) -> None:
+    db = canonical_book
+    package = _prepared_submission(db, monkeypatch, connected=action == "rotate")
+    package_id = package.id
+    if stage == "approve":
+        workflow.request_approval(
+            db, channels.MAKER, SAMPLE_BANK_ID, package_id, PackageApprovalRequestCreate()
+        )
+    attestation.ensure_register_current(db, channels.MAKER, package)
+    reader = _pid(db)
+    started: Queue[int] = Queue()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        change = pool.submit(_change_key, postgres, started, action)
+        try:
+            _assert_blocked(postgres, reader, started.get(timeout=5), change)
+            if stage == "start":
+                workflow.request_approval(
+                    db, channels.MAKER, SAMPLE_BANK_ID, package_id, PackageApprovalRequestCreate()
+                )
+            else:
+                workflow.decide_approval(
+                    db,
+                    channels.CHECKER,
+                    SAMPLE_BANK_ID,
+                    package_id,
+                    PackageApprovalDecisionCreate(action="approved"),
+                )
+        finally:
+            db.rollback()
+        change.result(timeout=5)
+    decision = db.scalar(
+        select(PackageStageDecision).where(
+            PackageStageDecision.organization_id == ORG_1,
+            PackageStageDecision.package_id == package_id,
+            PackageStageDecision.stage_seq == (1 if stage == "start" else 2),
+        )
+    )
+    assert decision is not None
+    assert decision.decision == ("submitted" if stage == "start" else "approved")
+    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
+        attestation.ensure_register_current(db, channels.MAKER, package)
 
 
 def test_rotation_waits_for_remote_receipt_and_local_submission_commit(
@@ -172,7 +268,7 @@ def test_rotation_waits_for_remote_receipt_and_local_submission_commit(
     exporter_calls: list[str],
 ) -> None:
     db = canonical_book
-    provider, package = _approved_submission(db, monkeypatch)
+    package = _approved_submission(db, monkeypatch)
     package_id = package.id
     version = db.scalar(
         select(BankEncryptionKey.current_version_id).where(
@@ -215,7 +311,7 @@ def test_rotation_waits_for_remote_receipt_and_local_submission_commit(
             if not accepted.wait(5):
                 sending.result(timeout=5)
                 pytest.fail("The sandbox did not accept the filing.")
-            rotation = pool.submit(_rotate, postgres, provider, rotation_pid)
+            rotation = pool.submit(_change_key, postgres, rotation_pid, "rotate")
             _assert_blocked(
                 postgres, sender_pid.get(timeout=5), rotation_pid.get(timeout=5), rotation
             )

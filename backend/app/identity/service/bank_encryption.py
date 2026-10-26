@@ -24,6 +24,8 @@ from app.services.audit import record_event
 
 
 def _bank(db: Session, ctx: TenantContext, bank_id: str, *, lock: bool = False) -> Bank:
+    if lock:
+        registry.lock_bank_version(db, ctx.organization_id, bank_id)
     query = select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
     bank = db.scalar(query.with_for_update() if lock else query)
     if bank is None:
