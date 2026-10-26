@@ -204,11 +204,6 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # The worker lane selection: unset means the core lane, which never claims
     # AI work. Pinned so a developer's WORKER_JOB_TYPES cannot change it.
     monkeypatch.setenv("WORKER_JOB_TYPES", "")
-    monkeypatch.setenv("OFFICIAL_RUN_ENABLED", "0")
-    monkeypatch.setenv("MARKET_DATA_PULL_ENABLED", "0")
-    monkeypatch.setenv("TEMENOS_PULL_ENABLED", "0")
-    monkeypatch.setenv("DATABASE_DIRECT_HEALTH_ENABLED", "0")
-    monkeypatch.setenv("LIVE_REFRESH_ENABLED", "0")
     # Same .env-leak guard for every BI switch (D-008). All three ship OFF; a
     # developer who has enabled BI locally would otherwise flip the run-gate
     # "skipped" assertions, the feature-flags projection, and — once the
