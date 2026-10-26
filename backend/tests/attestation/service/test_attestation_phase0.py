@@ -461,8 +461,8 @@ def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
 
 def test_register_state_rows_carry_business_fields_only(db_session: Session) -> None:
     _seed_full_register(db_session)
-    rows = register_state.register_state_rows(db_session, MAKER, SAMPLE_BANK_ID)
-    tables = {row["table"] for row in rows}
+    rows = register_state.project_register_state(db_session, MAKER, SAMPLE_BANK_ID)
+    tables = {row["table"] for row in rows["rows"]}
     assert tables == {
         "institution_profiles",
         "related_parties",
@@ -475,11 +475,9 @@ def test_register_state_rows_carry_business_fields_only(db_session: Session) -> 
     }
     # The declared table list must match what the projection actually emits.
     assert set(register_state.REGISTER_TABLES) == tables
-    for row in rows:
+    for row in rows["rows"]:
         assert set(row) == {"table", "id", "updated_at", "values"}
         values: dict[str, Any] = row["values"]
-        # Bookkeeping must not ride in ``values``: the digest has to move only
-        # when reportable data moves.
         assert not {"id", "organization_id", "bank_id", "created_at", "updated_at"} & set(values)
     # Every projected value is JSON-native — canonical_json has no default=.
     assert digests.register_state_digest(rows)
@@ -494,7 +492,7 @@ def test_projection_covers_every_business_column_of_every_register_table(
     addition fails here rather than silently weakening a signature."""
     _seed_full_register(db_session)
     projected: dict[str, set[str]] = {}
-    for row in register_state.register_state_rows(db_session, MAKER, SAMPLE_BANK_ID):
+    for row in register_state.project_register_state(db_session, MAKER, SAMPLE_BANK_ID)["rows"]:
         projected.setdefault(str(row["table"]), set()).update(row["values"])
 
     # Blind indexes depend on key material, not reportable register values.
@@ -527,7 +525,7 @@ def test_register_state_digest_tracks_reportable_register_changes(db_session: Se
     sealed = pack.register_state_digest
     assert sealed is not None
     assert sealed == digests.register_state_digest(
-        register_state.register_state_rows(db_session, MAKER, SAMPLE_BANK_ID)
+        register_state.project_register_state(db_session, MAKER, SAMPLE_BANK_ID)
     )
 
     outlet_id = db_session.scalar(
@@ -556,7 +554,7 @@ def test_register_state_digest_tracks_reportable_register_changes(db_session: Se
     # provenance Class B otherwise lacks entirely.
     assert (
         digests.register_state_digest(
-            register_state.register_state_rows(db_session, MAKER, SAMPLE_BANK_ID)
+            register_state.project_register_state(db_session, MAKER, SAMPLE_BANK_ID)
         )
         != sealed
     )
@@ -566,9 +564,9 @@ def test_register_state_digest_ignores_row_order_and_covers_new_rows(
     db_session: Session,
 ) -> None:
     _seed_full_register(db_session)
-    rows = register_state.register_state_rows(db_session, MAKER, SAMPLE_BANK_ID)
+    rows = register_state.project_register_state(db_session, MAKER, SAMPLE_BANK_ID)
     assert digests.register_state_digest(rows) == digests.register_state_digest(
-        list(reversed(rows))
+        {**rows, "rows": list(reversed(rows["rows"]))}
     )
 
     before = digests.register_state_digest(rows)
@@ -586,7 +584,7 @@ def test_register_state_digest_ignores_row_order_and_covers_new_rows(
         ),
     )
     after = digests.register_state_digest(
-        register_state.register_state_rows(db_session, MAKER, SAMPLE_BANK_ID)
+        register_state.project_register_state(db_session, MAKER, SAMPLE_BANK_ID)
     )
     assert after != before
 
@@ -596,7 +594,10 @@ def test_register_state_rows_are_tenant_scoped(db_session: Session) -> None:
     other_tenant = TenantContext(
         organization_id="OR-NOSUCH1", actor_user_id=DEMO_USER_ID, authorization_version=1
     )
-    assert register_state.register_state_rows(db_session, other_tenant, SAMPLE_BANK_ID) == []
+    assert (
+        register_state.project_register_state(db_session, other_tenant, SAMPLE_BANK_ID)["rows"]
+        == []
+    )
 
 
 def test_master_data_pack_binds_as_master_data_class(db_session: Session) -> None:

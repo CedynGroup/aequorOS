@@ -309,6 +309,12 @@ semantics follow the plane, never the other way round:
    (`no_computed_position`, 409) with the nearest earlier date named for the
    message only.
 
+   Official form fact inputs read `BankFinancialFact` for that exact snapshot.
+   Live refresh publishes `CurrentFinancialFact`; the Data Engine's **Mint
+   official run** action queues the worker to prepare the official fact set.
+   Missing-source handling follows the
+   [official BSD engine rules](docs/bog_returns/00_full_return_registry.md#6-as-built-engine-rules).
+
 Growth path: denser ingestion (daily/streaming) makes plane 2 denser and the
 live edge fresher without any architectural change — QRM-cadence to
 MORS-cadence on the same model.
@@ -337,8 +343,10 @@ on one canonical store — the live tier for intraday awareness, the official ti
   `regulatory_forecasting.compute_live`, independently of saved official runs.
 - **Official tier** — `pipeline.run_official` (`job_type=official_run`): reuses
   `data_activation.run_official_modules` to mint the immutable 22-scenario + forecast run set for
-  filing. Facts are re-derived only when the period has none, so repeat official runs on unchanged
-  facts reproduce the same `input_hash` per run (see the value-based hash invariant in §3).
+  filing. Every mint re-derives the reporting period's facts from the accepted canonical book,
+  including same-date corrections. Prior runs and generated packages retain their frozen evidence;
+  unchanged financial values reproduce the same `input_hash` per run (see §3). Regression:
+  `backend/tests/services/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
 - **Freshness** (`app/services/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
   live `input_hash` to the latest official run's `input_hash`. Because the hash is value-based, a
   bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as
@@ -1260,13 +1268,14 @@ remains architectural debt; the Command Center contract and polling policy are u
 | 7   | FTP            | matched-maturity curve / product & branch P&L / NMD  | `/banks/{id}/ftp/*`                            |
 
 The shared migration `202607170001_irr_fx_ftp_foundation` widened the run-module, fact-group,
-and line-section CHECK constraints for IRR/FX/FTP; those modules add no further migrations.
+and line-section CHECK constraints for IRR/FX/FTP. Bank stress-default provisioning and
+backfill are described in the [quick start](README.md#quick-start).
 
 ### Liquidity, stress and capital extensions
 
 - **product.md §Phase 2 is fully built.** All 11 LMTD appendix tables; per-currency gaps +
-  `usd_funding_stress` (snapshot `bank-facts-v3`); server-side EWI/CFP with the ¶74
-  notification (`/banks/{id}/liquidity/ewis|cfp`); reverse stress (module
+  `usd_funding_stress` (snapshot `bank-facts-v3`); server-side EWI/CFP
+  (`/banks/{id}/liquidity/ewis|cfp`; [dashboard lifecycle and notification behavior](backend/dashboard/README.md#contingency-funding-plan-lifecycle)); reverse stress (module
   `reverse_stress`); STRESS-PACK return (family `stress`, event-driven); IFRS 9 ECL
   ([assumption and coverage contract](#ecl-assumption-and-coverage-contract)) +
   CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +

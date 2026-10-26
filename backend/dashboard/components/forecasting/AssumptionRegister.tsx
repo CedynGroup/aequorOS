@@ -537,7 +537,7 @@ function VersionEditor({
             required
             value={effectiveFrom}
             onChange={(e) => setEffectiveFrom(e.target.value)}
-            className="mt-1 w-full px-2 py-1.5 text-body text-navy border border-border rounded bg-surface-raised"
+            className="mt-1 w-full px-2 py-1.5 text-body text-navy border border-border rounded-sm bg-surface-raised"
           />
           <span className="mt-1 block font-normal text-slate">
             A run resolves the approved version with the latest effective-from
@@ -587,7 +587,7 @@ function VersionEditor({
                           }))
                         }
                         aria-label={`${scenarioLabel(p.code)} ${field.label}`}
-                        className="w-24 px-2 py-1 text-caption font-mono text-navy border border-border rounded bg-surface-raised tnum text-right"
+                        className="w-24 px-2 py-1 text-caption font-mono text-navy border border-border rounded-sm bg-surface-raised tnum text-right"
                       />
                     </td>
                   ))}

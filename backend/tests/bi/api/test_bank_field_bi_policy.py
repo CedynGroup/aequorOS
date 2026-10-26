@@ -17,14 +17,21 @@ from app.bi.schemas.notifications import (
     BiAlertRead,
     BiSubscriptionDeliveryListRead,
 )
-from app.bi.schemas.query import BiCatalogueRead, BiFilter, BiQuery, BiQueryResult
+from app.bi.schemas.query import (
+    BiCatalogueRead,
+    BiFilter,
+    BiPackListRead,
+    BiPackRead,
+    BiQuery,
+    BiQueryResult,
+)
 from app.bi.service import alerts, subscriptions
 from app.bi.service.authorization import query_members
 from app.bi.service.identity_policy import IDENTITY_MESSAGE, IDENTITY_REASON
 from app.core.authorization import ModuleScope, SensitivityScope
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.types import KeyReference
+from app.core.key_management.types import KeyReference, KeyStatus
 from app.identity.public import Bank
 from app.models import Job
 from tests.bi.api import test_bi_routes as routes
@@ -317,3 +324,166 @@ def test_saved_subscription_delivery_history_explains_bank_key_capability(
     delivery = history.deliveries[0]
     assert delivery.detail == "Not sent. " + IDENTITY_MESSAGE
     assert delivery.reason == IDENTITY_REASON and delivery.row_count is None
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_numeric_saved_content_remains_available_without_identity_key(  # noqa: PLR0913
+    db_client: TestClient,
+    db_session: Session,
+    mart: Bank,
+    bi_on: None,
+    monkeypatch: pytest.MonkeyPatch,
+    status: KeyStatus,
+) -> None:
+    authv = routes.grant_only(db_session, (routes.Grant(ModuleScope.ALL, SensitivityScope.ALL),))
+    request_headers = headers(authorization_version=authv)
+    provider = LocalKeyProvider()
+    key = KeyReference("aws_kms", "synthetic-numeric-content", "us-east-1", "111122223333")
+    provider.add_key(key)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    registry.register(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=mart.id,
+        storage_slug="synthetic-numeric-content",
+        key=key,
+        providers=providers,
+    )
+    db_session.commit()
+    canvas = {
+        "widgets": [
+            {
+                "id": "numeric",
+                "kind": "kpi",
+                "title": "Numeric loan book",
+                "query": {"measures": ["loans.balance_rc"], "window": "as_of"},
+            }
+        ],
+        "layout": [{"i": "numeric", "x": 0, "y": 0, "w": 6, "h": 4}],
+    }
+    created = db_client.post(
+        routes.BASE + "/dashboards",
+        json={"title": "Numeric dashboard", "visibility": "private", "spec": canvas},
+        headers=request_headers,
+    )
+    assert created.status_code == 201, created.text
+    dashboard_id = cast(dict[str, object], created.json())["id"]
+    alert = BiAlert(
+        organization_id=ORG_1,
+        bank_id=mart.id,
+        owner_user_id=USER_1,
+        name="Numeric alert",
+        measure_id="loans.balance_rc",
+        filters=[],
+        direction="above",
+        threshold_basis="stated",
+        threshold=Decimal(100),
+        notify_user_ids=[],
+    )
+    subscription = BiSubscription(
+        organization_id=ORG_1,
+        bank_id=mart.id,
+        owner_user_id=USER_1,
+        name="Numeric subscription",
+        query={"measures": ["loans.balance_rc"], "time": {"as_of": routes.AS_OF.isoformat()}},
+        artifact_format="csv",
+        cadence="daily",
+        hour=7,
+        minute=30,
+        recipient_user_ids=[str(USER_1)],
+    )
+    db_session.add_all([alert, subscription])
+    db_session.flush()
+    alert_id, subscription_id = alert.id, subscription.id
+    db_session.commit()
+    provider.set_status(key, status)
+    db_session.expunge_all()
+    for suffix in (
+        "/dashboards",
+        f"/dashboards/{dashboard_id}?as_of={routes.AS_OF.isoformat()}",
+        f"/dashboards/{dashboard_id}/versions",
+        "/alerts",
+        f"/alerts/{alert_id}",
+        "/subscriptions",
+        f"/subscriptions/{subscription_id}",
+    ):
+        response = db_client.get(routes.BASE + suffix, headers=request_headers)
+        assert response.status_code == 200, (suffix, response.text)
+        assert "Numeric" in response.text
+    response = db_client.post(
+        routes.BASE + "/query",
+        json={"measures": ["loans.balance_rc"], "time": {"as_of": routes.AS_OF.isoformat()}},
+        headers=request_headers,
+    )
+    assert response.status_code == 200, response.text
+    assert BiQueryResult.model_validate(cast(object, response.json())).rows
+
+
+def _cro_pack(payload: object, listing: bool) -> BiPackRead:
+    if listing:
+        return next(
+            pack for pack in BiPackListRead.model_validate(payload).packs if pack.id == "cro"
+        )
+    return BiPackRead.model_validate(payload)
+
+
+@pytest.mark.parametrize("listing", [False, True])
+def test_pack_etags_change_when_key_connection_restricts_identity_widgets(  # noqa: PLR0913
+    db_client: TestClient,
+    db_session: Session,
+    mart: Bank,
+    bi_on: None,
+    monkeypatch: pytest.MonkeyPatch,
+    listing: bool,
+) -> None:
+    authv = routes.grant_only(db_session, (routes.Grant(ModuleScope.ALL, SensitivityScope.ALL),))
+    request_headers = headers(authorization_version=authv)
+    path = routes.BASE + ("/packs" if listing else "/packs/cro")
+    url = f"{path}?as_of={routes.AS_OF.isoformat()}"
+    before = db_client.get(url, headers=request_headers)
+    assert before.status_code == 200, before.text
+    pack = _cro_pack(cast(object, before.json()), listing)
+    identity = next(widget for widget in pack.widgets if widget.id == "large_exposures")
+    assert identity.access == "granted" and identity.query is not None
+    old_etag = before.headers["etag"]
+    cached_headers = {**request_headers, "If-None-Match": old_etag}
+    unchanged = db_client.get(url, headers=cached_headers)
+    assert unchanged.status_code == 304 and not unchanged.content
+    assert unchanged.headers["etag"] == old_etag
+
+    provider = LocalKeyProvider()
+    key = KeyReference("aws_kms", "synthetic-bi-pack", "us-east-1", "111122223333")
+    provider.add_key(key)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    registry.register(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=mart.id,
+        storage_slug="synthetic-bi-pack",
+        key=key,
+        providers=providers,
+    )
+    db_session.commit()
+    db_session.expunge_all()
+    refreshed = db_client.get(url, headers=cached_headers)
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.headers["etag"] != old_etag
+    restricted = _cro_pack(cast(object, refreshed.json()), listing)
+    identity = next(widget for widget in restricted.widgets if widget.id == "large_exposures")
+    assert identity.access == "restricted" and identity.query is None and identity.title is None
+    assert restricted.message == IDENTITY_MESSAGE
+    numeric = next(widget for widget in restricted.widgets if widget.id == "npl_by_sector")
+    assert numeric.access == "granted" and numeric.query is not None
+    again = db_client.get(
+        url, headers={**request_headers, "If-None-Match": refreshed.headers["etag"]}
+    )
+    assert again.status_code == 304 and not again.content
+    assert again.headers["etag"] == refreshed.headers["etag"]

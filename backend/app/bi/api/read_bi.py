@@ -1552,6 +1552,7 @@ def list_bi_packs(  # noqa: PLR0913 - FastAPI injects db/access/response/header
         # of the same pairs, so an institution-wide representation must not revalidate
         # for them (nor theirs for an institution-wide reader).
         allowed.whole_institution,
+        allowed.identity_restricted,
         *sorted(
             f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.pairs.items() if ok
         ),
@@ -1628,6 +1629,7 @@ def get_bi_pack(  # noqa: PLR0913 - FastAPI injects db/access/response/header
         # of the same pairs, so an institution-wide representation must not revalidate
         # for them (nor theirs for an institution-wide reader).
         allowed.whole_institution,
+        allowed.identity_restricted,
         *sorted(
             f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.pairs.items() if ok
         ),

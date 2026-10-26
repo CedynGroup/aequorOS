@@ -80,6 +80,7 @@ from sqlalchemy import (
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.bi.domain.identity import IDENTITY_MEMBERS
 from app.core.key_management.fields import ProtectedJSON
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
 
@@ -230,7 +231,7 @@ class BiAlert(UuidV4PrimaryKeyMixin, _TenantKeys, TimestampMixin, Base):
     #: (``MEMBER_ID_MAX_LENGTH``).
     measure_id: Mapped[str] = mapped_column(String(120), nullable=False)
     filters: Mapped[list[dict[str, object]]] = mapped_column(
-        ProtectedJSON(empty_list=True),
+        ProtectedJSON(empty_list=True, protected_members=IDENTITY_MEMBERS),
         default=list,
         server_default=sql_text("'[]'"),
         nullable=False,
@@ -388,7 +389,9 @@ class BiSubscription(UuidV4PrimaryKeyMixin, _TenantKeys, TimestampMixin, Base):
     #: A ``BiQuery`` payload as authored. The reporting date is REBOUND at
     #: delivery time (D-179): a date frozen at authoring would mail the same
     #: month for ever.
-    query: Mapped[dict[str, object]] = mapped_column(ProtectedJSON(), nullable=False)
+    query: Mapped[dict[str, object]] = mapped_column(
+        ProtectedJSON(protected_members=IDENTITY_MEMBERS), nullable=False
+    )
     artifact_format: Mapped[str] = mapped_column(String(8), nullable=False)
     cadence: Mapped[str] = mapped_column(String(16), nullable=False)
     hour: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)

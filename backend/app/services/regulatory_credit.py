@@ -38,7 +38,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Load, Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
@@ -718,6 +718,17 @@ def compute_live(
                     metric="largest_single_name_share_pct",
                 )
                 for breach in concentration.breaches
+            ),
+        )
+    if concentration is not None and concentration.locked_limits:
+        findings = (
+            *findings,
+            LiveFindingSpec(
+                rule_id="concentration_limits_locked",
+                severity="medium",
+                message="Named concentration limits are locked and have not been evaluated "
+                "because the bank identity matching key is unavailable.",
+                metric="largest_single_name_share_pct",
             ),
         )
     return LiveModuleResult(
@@ -1421,7 +1432,7 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     scope = resolve_data_scope(db, ctx, bank, resolved_as_of, data_scope)
     rows = [
         entry.row
-        for entry in _classified_loan_rows(db, ctx, bank, resolved_as_of)
+        for entry in _classified_loan_rows(db, ctx, bank, resolved_as_of, include_identity=True)
         if scope.admits(entry.row.branch_id)
     ]
     total = len(rows)
@@ -1510,7 +1521,7 @@ def _loan_key(source_system: str, source_reference: str) -> str:
 
 
 def _classified_loan_rows(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date, *, include_identity: bool = False
 ) -> list[ClassifiedLoanRow]:
     """The classified blotter, ordered by reference, one entry per current LOAN.
 
@@ -1527,6 +1538,13 @@ def _classified_loan_rows(
     records = db.execute(
         select(
             CanonicalPositionSnapshot, CanonicalPosition, CanonicalCounterparty, CanonicalProduct
+        )
+        .options(
+            *(
+                [Load(CanonicalCounterparty).undefer_group("bank_identity")]
+                if include_identity
+                else []
+            )
         )
         .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
         .outerjoin(
@@ -1556,7 +1574,9 @@ def _classified_loan_rows(
         attributes = snapshot.attributes or {}
         row = CreditLoanRead(
             source_reference=snapshot.source_reference,
-            counterparty_name=counterparty.name if counterparty is not None else None,
+            counterparty_name=(
+                counterparty.name if include_identity and counterparty is not None else None
+            ),
             product_code=product_row.product_code if product_row is not None else None,
             branch_id=_str_or_none(attributes.get("branch_id")),
             sector=_str_or_none(attributes.get("sector")),

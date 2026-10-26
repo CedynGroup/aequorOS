@@ -621,18 +621,9 @@ After acceptance, every attempted identity-field change produces a non-configura
 
 ### 8.4 Audit Log
 
-Separate from the lineage graph, a linear audit log records every user action:
-
-- Login and logout
-- Report generation
-- Configuration changes (mapping, validation rules, assumptions)
-- Manual overrides
-- Data acceptance decisions (accepting a batch with warnings, forcing through an error, etc.)
-- Model retraining events
-- Any change to a canonical record
-
-Database audit-chain enforcement and verification are governed by
-[the tamper-evident records contract](../backend/docs/tamper_evident_records.md).
+Audit evidence is separate from the lineage graph. Event coverage, bank
+attribution, access and verification are governed by
+[the bank audit contract](../backend/docs/tamper_evident_records.md#bank-audit-read-api).
 
 ---
 

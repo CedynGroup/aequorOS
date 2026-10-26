@@ -195,15 +195,37 @@ def test_canonicalisation_refuses_non_json_native_values() -> None:
 
 
 def test_register_state_digest_tracks_values_not_row_order() -> None:
-    rows = [
-        {"table": "shareholdings", "id": "a", "updated_at": "t1", "values": {"pct": "50.00"}},
-        {"table": "outlets", "id": "b", "updated_at": "t2", "values": {"city": "Accra"}},
-    ]
-    assert digests.register_state_digest(rows) == digests.register_state_digest(
-        list(reversed(rows))
+    state: digests.RegisterState = {
+        "organization_id": "OR-TEST0001",
+        "bank_id": "BK-TEST0001",
+        "key_version": None,
+        "rows": [
+            {"table": "shareholdings", "id": "a", "updated_at": "t1", "values": {"pct": "50.00"}},
+            {"table": "outlets", "id": "b", "updated_at": "t2", "values": {"city": "Accra"}},
+        ],
+    }
+    assert digests.register_state_digest(state) == digests.register_state_digest(
+        {**state, "rows": list(reversed(state["rows"]))}
     )
-    mutated = [{**rows[0], "values": {"pct": "51.00"}}, rows[1]]
-    assert digests.register_state_digest(rows) != digests.register_state_digest(mutated)
+    mutated: digests.RegisterState = {
+        **state,
+        "rows": [{**state["rows"][0], "values": {"pct": "51.00"}}, state["rows"][1]],
+    }
+    assert digests.register_state_digest(state) != digests.register_state_digest(mutated)
+
+
+def test_empty_register_commitment_binds_bank_scope_and_key_version() -> None:
+    state: digests.RegisterState = {
+        "organization_id": "OR-TEST0001",
+        "bank_id": "BK-TEST0001",
+        "key_version": "version-one",
+        "rows": [],
+    }
+    sealed = digests.register_state_digest(state)
+    assert sealed == digests.register_state_digest({**state})
+    assert sealed != digests.register_state_digest({**state, "key_version": "version-two"})
+    assert sealed != digests.register_state_digest({**state, "organization_id": "OR-TEST0002"})
+    assert sealed != digests.register_state_digest({**state, "bank_id": "BK-TEST0002"})
 
 
 # --- identity --------------------------------------------------------------

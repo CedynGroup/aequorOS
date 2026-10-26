@@ -78,7 +78,7 @@ Same as BSD5A (Explanatory Notes + Composition of Capital), plus the group items
 
 Template formulas (BoG's, evaluated — never bound): `D12` `=SUM(D8:D11)`; `D20` `=D12-SUM(D14:D19)`; `D29` `=SUM(D21:D28)`; `D30` `=D20+D29`; `D46` `=D14`; `D47` `=D16`; `D48` `=D17`; `D49` `=D19`; `D50` `=D20`; `D55` `=D32-SUM(D34:D54)`; `D65` `=SUM(D58:D64)`; `D73` `=D55+D65-D67-D68`; `D74` `=D30/D73%`; `D75` `=D30-(D73*10%)`
 
-**CAR FORMAT-GROUP totals:** 98 cells declared (94 captured + 4 blank data cells) — by declaration 98 bound / 0 input_required (rows 3, 18 read the `subsidiaries` register since 2026-08-16 and are blank at runtime until it is ingested); at runtime the 12 links to BSD5A input_required cells (D35, D38, D44, D53, D54, D60–D64, D67, D68) resolve blank → on the hermetic book **84 mapped / 14 input_required / 0 unmapped**. Values (¢'Million, after a capital baseline run): D8 150.0 · D9 150.0 · D11 20.0 · D12 320.0 · D14 25.0 · D20 295.0 · D28 45.0 · D29 45.0 · **D30 340.0** (= BSD5A E25) · D32 2,400.0 · D50 295.0 (BoG's `=D20`) · D55 1,070.0 · D65 320.0 · **D73 1,390.0** · D74 24.46 · D75 201.0.
+**CAR FORMAT-GROUP totals:** 98 cells declared (94 captured + 4 blank data cells) — by declaration 98 bound / 0 input_required (rows 3, 18 read the `subsidiaries` register since 2026-08-16 and are blank at runtime until it is ingested). Runtime availability of BSD5A links follows the [official BSD engine rules](00_full_return_registry.md#6-as-built-engine-rules); fixture status counts and values are pinned in `backend/tests/reporting/service/bog_forms/test_bsd5.py`.
 
 ## Residual unmapped lines — data the bank must supply
 

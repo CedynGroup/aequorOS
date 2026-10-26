@@ -40,10 +40,10 @@ thirteen) run four stages. **Master-data packs** (Class B, the five `LRT-*`
 corporate returns) **skip stages 1 and 2 entirely** and start at stage 3. The
 full inventory and the class definitions are in §1.7.
 
-**Stage 1 — canonical facts** _(Class A/C only)_. Ingested data is normalised
-into `bank_financial_facts`, re-derived from canonical state on every pipeline
-refresh (`app/services/fact_derivation.py`). Fact rows get fresh UUIDs on every
-re-derivation; this matters enormously (see 1.2).
+**Stage 1 — canonical facts** _(Class A/C only)_. The
+[time-plane contract](../ARCHITECTURE.md#3a-bis-the-three-time-planes-adopted-2026-08-09)
+owns the live and official fact stores and their materialisation. Fact row
+identities are not stable evidence (see §1.2).
 
 **Stage 2 — the engine run** _(Class A/C only)_. `POST /banks/{bank_id}/regulatory-runs`
 (per module) creates a `RegulatoryRun` (`app/models/regulatory_run.py:28`) — the
@@ -117,9 +117,8 @@ return hashlib.sha256(payload.encode()).hexdigest()
 by each entry's own canonical JSON, so neither row identity nor DB return order
 can influence the hash. This is deliberate and executably enforced:
 `test_official_input_hash_survives_fact_rederivation`
-(`tests/services/test_pipeline.py:181`) refreshes facts — destroying and
-re-inserting every row with new UUIDs — and asserts the per-module baseline
-hash set is unchanged.
+(`backend/tests/services/test_pipeline.py`) remints official runs with fresh
+fact rows and asserts the per-module baseline hash set is unchanged.
 
 **Immutability in practice.** After a run reaches `succeeded` or `failed`,
 nothing writes to it. There is no `run.inputs =` or `run.input_hash =`
@@ -509,14 +508,20 @@ adds the master-data analogue, computed at generation and stored on the package:
 
 ```python
 register_state_digest = sha256(canonical_json({
-    "schema": "aequoros-register-state-v1",
-    "rows": sorted([                # only the register rows that fed this pack
+    "schema": "aequoros-register-state-v3",
+    "organization_id": ..., "bank_id": ..., "key_version": ...,
+    "rows": sorted([                # complete bank register
         {"table": "shareholdings", "id": ..., "updated_at": ...,
-         "values_digest": sha256(canonical_json(row_business_fields))}
-        for row in contributing_rows
+         "values_digest": sha256(canonical_json(row_stored_values))}
+        for row in complete_register_rows
     ], key=canonical_json),
 }))
 ```
+
+Protected values enter this commitment as stored ciphertext, without key access.
+Stable record IDs, update timestamps and the current bank key version are bound.
+Rotation or re-encryption makes an in-review commitment stale; certification,
+approval and first submission refuse it until the return is regenerated.
 
 This binds _which register state_ produced the pack, so a later mutation of a
 shareholding or an outlet is detectable against a signed pack even though the

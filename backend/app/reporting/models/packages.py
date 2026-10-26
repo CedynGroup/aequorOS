@@ -31,7 +31,6 @@ from sqlalchemy import (
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.key_management.fields import ProtectedJSON, ProtectedText
 from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin, utc_now
 
 PACKAGE_STATUSES = (
@@ -223,7 +222,7 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     )
     supersedes_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     snapshot: Mapped[dict[str, Any]] = mapped_column(
-        ProtectedJSON(empty_object=True),
+        JSON,
         default=dict,
         server_default=sql_text("'{}'"),
         nullable=False,
@@ -231,7 +230,7 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     source_runs: Mapped[list[Any]] = mapped_column(
         JSON, default=list, server_default=sql_text("'[]'"), nullable=False
     )
-    validation_report: Mapped[dict[str, Any] | None] = mapped_column(ProtectedJSON(), nullable=True)
+    validation_report: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     #: Did the MACHINE checks pass? This is the attribute that replaced the
     #: ``validated`` status as the authority on machine validation
     #: (``docs/filing_workflow_redesign.md`` §3.1). Validation is a rules-engine
@@ -257,7 +256,7 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
-    notes: Mapped[str | None] = mapped_column(ProtectedText(), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # SHA-256 over the canonical-JSON snapshot, sealed at generation; exports
     # verify against it so a drifted snapshot can never silently render.
     snapshot_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)

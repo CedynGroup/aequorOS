@@ -11,14 +11,27 @@ lifecycle/status/expiry metadata only.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import Annotated, cast
+from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from pydantic import AwareDatetime, BaseModel
+from sqlalchemy import JSON, Boolean, String, bindparam, func, literal, select, text, tuple_
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.audit_attribution import (
+    SHARED_REGISTER_SUBJECTS,
+    SUBJECT_TABLES,
+    organization_binding_sql,
+    shared_register_sql,
+    subject_bank_sql,
+)
 from app.db.base import utc_now
 from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, STUCK_DEDUP_STATUSES
 from app.identity.public import Bank, SsoConnection, User
@@ -253,6 +266,12 @@ def _audit_log_read(row: OperatorAuditLog) -> OperatorAuditLogRead:
     )
 
 
+class _AuditCursor(BaseModel):
+    created_at: Annotated[datetime, AwareDatetime]
+    event_id: UUID
+    as_of: Annotated[datetime, AwareDatetime]
+
+
 def read_operator_audit_log(  # noqa: PLR0913 - one filter per query parameter
     db: Session,
     *,
@@ -261,10 +280,22 @@ def read_operator_audit_log(  # noqa: PLR0913 - one filter per query parameter
     action: str | None = None,
     from_ts: datetime | None = None,
     to_ts: datetime | None = None,
+    as_of: datetime | None = None,
     limit: int = 100,
-    offset: int = 0,
+    cursor: str | None = None,
 ) -> OperatorAuditLogListRead:
-    filters = []
+    after = None
+    if cursor is not None:
+        try:
+            after = _AuditCursor.model_validate_json(
+                base64.b64decode(cursor, altchars=b"-_", validate=True)
+            )
+        except (ValueError, binascii.Error) as exc:
+            raise HTTPException(422, "Invalid audit cursor.") from exc
+    now = utc_now()
+    requested = after.as_of if after is not None else as_of
+    bound = min(requested, now) if requested is not None else now
+    filters = [OperatorAuditLog.created_at < bound]
     if operator_email is not None:
         filters.append(OperatorAuditLog.operator_email == operator_email)
     if target_org is not None:
@@ -277,16 +308,39 @@ def read_operator_audit_log(  # noqa: PLR0913 - one filter per query parameter
     if to_ts is not None:
         filters.append(OperatorAuditLog.created_at <= to_ts)
     total = db.scalar(select(func.count()).select_from(OperatorAuditLog).where(*filters)) or 0
+    if after is not None:
+        filters.append(
+            tuple_(OperatorAuditLog.created_at, OperatorAuditLog.id)
+            < tuple_(literal(after.created_at), literal(after.event_id))
+        )
     rows = list(
         db.scalars(
             select(OperatorAuditLog)
             .where(*filters)
             .order_by(OperatorAuditLog.created_at.desc(), OperatorAuditLog.id.desc())
-            .limit(limit)
-            .offset(offset)
+            .limit(limit + 1)
         )
     )
-    return OperatorAuditLogListRead(items=[_audit_log_read(row) for row in rows], total=total)
+    next_cursor = None
+    if len(rows) > limit:
+        last = rows[limit - 1]
+        next_cursor = base64.urlsafe_b64encode(
+            _AuditCursor(
+                created_at=last.created_at.replace(tzinfo=UTC)
+                if last.created_at.tzinfo is None
+                else last.created_at,
+                event_id=last.id,
+                as_of=bound,
+            )
+            .model_dump_json()
+            .encode()
+        ).decode()
+    return OperatorAuditLogListRead(
+        items=[_audit_log_read(row) for row in rows[:limit]],
+        total=total,
+        as_of=bound,
+        next_cursor=next_cursor,
+    )
 
 
 # -- fleet overview --------------------------------------------------------------
@@ -544,6 +598,7 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
             ActivityItemRead(
                 ts=batch.completed_at or batch.created_at,
                 kind="ingestion_batch",
+                bank_id=batch.bank_id,
                 summary=(
                     f"{batch.source_system} ingestion for {batch.bank_id} "
                     f"as of {batch.as_of_date.isoformat()} — "
@@ -563,6 +618,7 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
             ActivityItemRead(
                 ts=job.completed_at or job.started_at or job.queued_at,
                 kind="job",
+                bank_id=job.bank_id,
                 summary=(
                     f"{job.job_type} job"
                     + (f" for {job.bank_id}" if job.bank_id else "")
@@ -582,6 +638,7 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
             ActivityItemRead(
                 ts=run.completed_at or run.created_at,
                 kind="official_run",
+                bank_id=run.bank_id,
                 summary=(f"official {run.module} run ({run.scenario_code}) for {run.bank_id}"),
                 status=run.status,
             )
@@ -597,6 +654,7 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
             ActivityItemRead(
                 ts=package.generated_at,
                 kind="package",
+                bank_id=package.bank_id,
                 summary=(
                     f"{package.return_code} v{package.version} "
                     f"({package.reporting_date.isoformat()}, {package.basis}) "
@@ -612,15 +670,17 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
         .order_by(AuditEvent.created_at.desc())
         .limit(limit)
     ):
-        items.append(
-            ActivityItemRead(
-                ts=event.created_at,
-                kind="audit_event",
-                summary=f"{event.event_type}"
-                + (f" ({event.entity_type} {event.entity_id})" if event.entity_type else ""),
-                status="recorded",
+        for bank_id in _activity_event_banks(db, event):
+            items.append(
+                ActivityItemRead(
+                    ts=event.created_at,
+                    kind="audit_event",
+                    bank_id=bank_id,
+                    summary=f"{event.event_type}"
+                    + (f" ({event.entity_type} {event.entity_id})" if event.entity_type else ""),
+                    status="recorded",
+                )
             )
-        )
 
     items.sort(key=_activity_sort_key, reverse=True)
     return TenantActivityRead(organization_id=organization_id, items=items[:limit])
@@ -829,3 +889,73 @@ def list_data_engine_connections(db: Session) -> DataEnginesRead:
                 )
             )
     return DataEnginesRead(connections=connections)
+
+
+def _activity_event_banks(db: Session, event: AuditEvent) -> list[str | None]:
+    details = event.details or {}
+    if event.entity_type in SHARED_REGISTER_SUBJECTS:
+        predicate = text(
+            shared_register_sql(
+                ":org",
+                ":kind",
+                ":id",
+                "CAST(:details AS jsonb)"
+                if db.get_bind().dialect.name == "postgresql"
+                else ":details",
+                "banks.id",
+            )
+        ).bindparams(bindparam("details", type_=JSON))
+        return list(
+            db.scalars(
+                select(Bank.id).where(
+                    Bank.organization_id == event.organization_id,
+                    sql_cast(predicate, Boolean),
+                ),
+                {
+                    "org": event.organization_id,
+                    "kind": event.entity_type,
+                    "id": event.entity_id,
+                    "details": details,
+                },
+            )
+        )
+    marker: object = details.get("bank_id")
+    if isinstance(marker, str) or event.entity_type == "bank":
+        return [marker if isinstance(marker, str) else event.entity_id]
+    scope: object = details.get("scope")
+    institution: object = details.get("institution_id")
+    if isinstance(scope, dict):
+        institution = cast(dict[str, object], scope).get("institution_id") or institution
+    if isinstance(institution, str):
+        return [institution]
+    if event.entity_type not in SUBJECT_TABLES:
+        return [None]
+    organization_binding = organization_binding_sql(
+        ":org", ":kind", ":id", postgresql=db.get_bind().dialect.name == "postgresql"
+    )
+    params: dict[str, object] = {
+        "org": event.organization_id,
+        "kind": event.entity_type,
+        "id": event.entity_id,
+    }
+    if event.entity_type == "authorization_binding" and db.scalar(
+        select(text(organization_binding)), params
+    ):
+        return list(
+            db.scalars(select(Bank.id).where(Bank.organization_id == event.organization_id))
+        )
+    sql = subject_bank_sql(
+        ":org",
+        ":kind",
+        ":id",
+        postgresql=db.get_bind().dialect.name == "postgresql",
+        subject=event.entity_type,
+        details="CAST(:details AS jsonb)"
+        if db.get_bind().dialect.name == "postgresql"
+        else ":details",
+    )
+    statement = text(sql)
+    if ":details" in sql:
+        statement = statement.bindparams(bindparam("details", type_=JSON))
+        params["details"] = details
+    return [db.scalar(select(sql_cast(statement, String)), params)]

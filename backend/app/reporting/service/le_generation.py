@@ -53,7 +53,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Load, Session
 
 from app.api.deps import TenantContext
 from app.capital.public import regulatory_capital, sdi_capital
@@ -344,6 +344,7 @@ def _load_canonical_rows(
                 CanonicalCounterparty,
                 CanonicalProduct,
             )
+            .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
             .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
             .outerjoin(
                 CanonicalCounterparty,

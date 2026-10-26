@@ -26,12 +26,11 @@ Three digests, each with a distinct job (docs/attestation_esignature.md §3.1):
     trade a real record for a hash. See :func:`strip_volatile_fields`.
 
 ``register_state_digest``
-    The master-data analogue of an engine run's ``input_hash``, for the five
-    ``LRT-*`` corporate packs which bind NO engine run (``source_runs = []``,
-    gap G16). It pins which register rows — and which values — produced the
-    pack, so a later mutation of a shareholding or outlet is detectable
-    against a signed pack. Weaker than ``input_hash``: it proves state, not
-    derivation (legal register L16).
+    The complete-register commitment for returns with no engine run
+    (``source_runs = []``). It binds stable register record IDs, update
+    timestamps, stored values including ciphertext, and the current bank
+    key version. Rotation, re-encryption and register edits change it. Weaker
+    than ``input_hash``: it proves state, not derivation (legal register L16).
 
 ``certification_digest``
     What every signer signs. Binds institution + return identity + the
@@ -51,12 +50,27 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Literal
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, TypedDict
 
 ATTESTATION_SCHEMA = "aequoros-attestation-v2"
-REGISTER_STATE_SCHEMA = "aequoros-register-state-v1"
+REGISTER_STATE_SCHEMA = "aequoros-register-state-v3"
 SIGNATURE_PAYLOAD_SCHEMA = "aequoros-signature-v1"
+
+
+class RegisterStateRow(TypedDict):
+    table: str
+    id: str
+    updated_at: str
+    values: dict[str, object]
+
+
+class RegisterState(TypedDict):
+    organization_id: str
+    bank_id: str
+    key_version: str | None
+    rows: list[RegisterStateRow]
+
 
 type BindingClass = Literal["engine_run", "master_data"]
 
@@ -158,13 +172,8 @@ def content_digest(snapshot: Mapping[str, Any]) -> str:
     return digest_of(strip_volatile_fields(snapshot))
 
 
-def register_state_digest(rows: Iterable[Mapping[str, Any]]) -> str:
-    """Pin the master-data register state that produced an ``LRT-*`` pack.
-
-    Each row contributes ``{table, id, updated_at, values_digest}`` where
-    ``values_digest`` covers the row's business fields only — never internal
-    bookkeeping — so the digest changes if and only if reportable data changed.
-    """
+def register_state_digest(state: RegisterState) -> str:
+    """Commit the complete register's stored values, record identity and key version."""
     entries = [
         {
             "table": str(row["table"]),
@@ -172,11 +181,14 @@ def register_state_digest(rows: Iterable[Mapping[str, Any]]) -> str:
             "updated_at": str(row["updated_at"]),
             "values_digest": digest_of(row["values"]),
         }
-        for row in rows
+        for row in state["rows"]
     ]
     return digest_of(
         {
             "schema": REGISTER_STATE_SCHEMA,
+            "organization_id": state["organization_id"],
+            "bank_id": state["bank_id"],
+            "key_version": state["key_version"],
             "rows": sorted(entries, key=canonical_json),
         }
     )
