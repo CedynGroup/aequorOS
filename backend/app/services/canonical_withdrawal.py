@@ -47,7 +47,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import CursorResult, and_, func, select, update
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, undefer_group
 
 from app.api.deps import TenantContext
 from app.bi.service.enqueue import enqueue_mart_refresh
@@ -486,7 +486,9 @@ def _counterparty_reversal_conflicts(db: Session, row: CanonicalWithdrawal) -> i
     live_references = {
         party.source_reference
         for party in db.scalars(
-            select(CanonicalCounterparty).where(
+            select(CanonicalCounterparty)
+            .options(undefer_group("bank_identity"))
+            .where(
                 *scope,
                 CanonicalCounterparty.superseded_by.is_(None),
                 CanonicalCounterparty.withdrawn_at.is_(None),
@@ -496,9 +498,9 @@ def _counterparty_reversal_conflicts(db: Session, row: CanonicalWithdrawal) -> i
     return sum(
         party.source_reference in live_references
         for party in db.scalars(
-            select(CanonicalCounterparty).where(
-                *scope, CanonicalCounterparty.withdrawn_by_batch_id == row.withdrawal_batch_id
-            )
+            select(CanonicalCounterparty)
+            .options(undefer_group("bank_identity"))
+            .where(*scope, CanonicalCounterparty.withdrawn_by_batch_id == row.withdrawal_batch_id)
         )
     )
 

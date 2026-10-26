@@ -14,6 +14,8 @@ from app.models import BankReportingPeriod
 from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
 from app.reporting.service.bog_forms.sources import ResolveContext
 from app.reporting.service.bog_forms.sources_ext.bsd13 import contracts
+from app.services import canonical_withdrawal
+from app.services.canonical_withdrawal import WithdrawalError
 from app.services.etl_dedup_jobs import (
     _load_cross_source_rows,  # pyright: ignore[reportPrivateUsage]
 )
@@ -238,3 +240,67 @@ def test_pending_identity_updates_batch_load_without_overwriting_changes(
         )
     )
     assert all(row.name == f"Synthetic replacement {row.id}" for row in reloaded)
+
+
+@pytest.mark.parametrize("count", [1, 12])
+@pytest.mark.parametrize("connection_timing", ["none", "before", "after_withdrawal"])
+@pytest.mark.parametrize("conflict", [False, True])
+def test_counterparty_reversal_reads_both_books_in_bounded_queries(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    count: int,
+    connection_timing: str,
+    conflict: bool,
+) -> None:
+    if connection_timing == "before":
+        fields.connect(db_session, provider)
+    original_ids = {
+        fields.counterparty(db_session, reference=f"withdrawn-{number}", include_package=False).id
+        for number in range(count)
+    }
+    withdrawal = fields.withdraw_counterparties(db_session, expected_rows=count)
+    withdrawal_id = withdrawal.id
+    if connection_timing == "after_withdrawal":
+        fields.connect(db_session, provider)
+    for number in range(count):
+        fields.counterparty(
+            db_session,
+            reference="withdrawn-0" if conflict and number == 0 else f"live-{number}",
+            include_package=False,
+        )
+    db_session.commit()
+    db_session.expunge_all()
+    bank = db_session.get(Bank, fields.BANK_A)
+    assert bank is not None
+    with counterparty_selects(db_session) as statements:
+        if conflict:
+            with pytest.raises(WithdrawalError, match="1 record.*same.*natural key") as refused:
+                canonical_withdrawal.reverse_withdrawal(
+                    db_session,
+                    fields.CTX,
+                    bank,
+                    withdrawal_id,
+                    reversed_by="Synthetic checker",
+                    reason="Restore book",
+                )
+            assert refused.value.status_code == 409
+        else:
+            restored = canonical_withdrawal.reverse_withdrawal(
+                db_session,
+                fields.CTX,
+                bank,
+                withdrawal_id,
+                reversed_by="Synthetic checker",
+                reason="Restore book",
+            )
+            assert restored.status == "reversed" and restored.rows_restored == count
+    assert len(statements) == 2
+    db_session.flush()
+    db_session.expunge_all()
+    originals = list(
+        db_session.scalars(
+            select(CanonicalCounterparty).where(CanonicalCounterparty.id.in_(original_ids))
+        )
+    )
+    assert len(originals) == count
+    assert all((row.withdrawn_at is not None) == conflict for row in originals)

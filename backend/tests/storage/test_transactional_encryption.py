@@ -12,14 +12,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from sqlalchemy import Connection, Engine, event, select, text
-from sqlalchemy.orm import Session, SessionTransaction
+from sqlalchemy.orm import Session, SessionTransaction, undefer_group
 
 from app.api import deps
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
-from app.data_engine.service.field_search import find_counterparties
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.features import ingest_data
 from app.identity.public import Bank
@@ -307,12 +306,19 @@ def test_transactional_storage_runs_during_version_rotation(
     restored = db_session.get(CanonicalCounterparty, original_id)
     assert restored is not None and restored.name == NAME
     if operation in ("ingestion", "push"):
-        assert (
-            find_counterparties(db_session, CTX, BANK_A, field="source_reference", value=REFERENCE)[
-                0
-            ].name
-            == NAME
+        ingested = list(
+            db_session.scalars(
+                select(CanonicalCounterparty)
+                .options(undefer_group("bank_identity"))
+                .where(
+                    CanonicalCounterparty.organization_id == ORG_1,
+                    CanonicalCounterparty.bank_id == BANK_A,
+                    CanonicalCounterparty.superseded_by.is_(None),
+                    CanonicalCounterparty.withdrawn_at.is_(None),
+                )
+            )
         )
+        assert any(row.source_reference == REFERENCE and row.name == NAME for row in ingested)
     db_session.commit()
     encrypted_objects = [
         *storage.list(SLUG, "raw"),

@@ -14,13 +14,13 @@ from app.core.key_management import registry, sdk
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
 from app.core.key_management.schemas import BankKeyConnect
-from app.core.key_management.types import DataKey, KeyStatus
+from app.core.key_management.types import DataKey, KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.identity.service import bank_encryption
 from app.models.organization import Organization
-from app.storage.client import StorageAccessError, StorageLocation
+from app.storage.client import StorageLocation
 from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption, object_context
 from tests.db import test_postgres_migrations as migrations
 from tests.storage.contract import metadata_for
@@ -74,7 +74,8 @@ def _seed_legacy_envelopes(
         INSERT INTO bank_encryption_keys
         (id, bank_id, organization_id, storage_slug, provider, key_id, region, owner_account,
          status, checked_at, created_at, updated_at)
-        VALUES (:id, :bank, :org, :slug, :provider, :key, :region, :owner, 'active', :now, :now, :now)
+        VALUES
+        (:id, :bank, :org, :slug, :provider, :key, :region, :owner, 'active', :now, :now, :now)
     """),
         dict(
             id=uuid4(),
@@ -119,7 +120,11 @@ def test_populated_legacy_envelopes_upgrade_and_initialize_without_payload_rewri
     provider = LocalKeyProvider()
     provider.add_key(KEY)
     provider.add_key(NEXT_KEY)
-    monkeypatch.setattr(registry, "provider_for", lambda _name: provider)
+
+    def resolve(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", resolve)
     location = StorageLocation(SLUG, "raw", "legacy/synthetic.csv")
     content = b"synthetic migrated payload"
     metadata = metadata_for(SLUG, "raw", content)
@@ -152,7 +157,7 @@ def test_populated_legacy_envelopes_upgrade_and_initialize_without_payload_rewri
         assert result.passed
         row = db.scalar(select(BankEncryptionKey).where(BankEncryptionKey.bank_id == BANK))
         assert row is not None and row.current_version_id is not None
-        assert row.index_version_id == envelopes[1][0]
+        assert row.index_version_id is not None and row.index_version_id == envelopes[1][0]
         assert (
             registry.open_envelope(
                 db, row, row.index_version_id, index_context, lambda _name: provider
@@ -173,5 +178,5 @@ def test_populated_legacy_envelopes_upgrade_and_initialize_without_payload_rewri
     with encryption.encrypt(location, io.BytesIO(content), metadata)[0] as written:
         assert written.read() != ciphertext
     provider.set_status(KEY, KeyStatus.UNAVAILABLE)
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError):
         encryption.decrypt(location, io.BytesIO(ciphertext), metadata, headers)

@@ -53,14 +53,13 @@ remain opaque. Complete-register attestation commitments follow the
 [attestation digest contract](../../docs/attestation_esignature.md#31-what-gets-signed--two-artefacts-per-signature).
 Optional banks without a connected key retain ordinary field storage.
 
-## Exact-match search
+## Identity indexes
 
 Bank-scoped HMAC-SHA-256 indexes support counterparty names, source references,
 external identifiers and related-party names. Names use Unicode normalization,
 case folding and collapsed whitespace; identifiers retain case and punctuation.
-Searches scope by organization and bank and confirm decrypted candidate values.
-A stable index-version pointer keeps exact matches working across payload-key
-rotation. Numeric concentration grouping uses opaque indexes.
+A stable index-version pointer preserves tokens across payload-key rotation.
+Numeric concentration grouping uses opaque indexes.
 
 Name index tokens are 64 characters for both connected and optional banks.
 Optional banks use unkeyed SHA-256 tokens and retain plaintext names.

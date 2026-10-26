@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import Uuid, bindparam, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, undefer_group
 
 from app.attestation.service import register_state
 from app.attestation.service.digests import register_state_digest
@@ -28,7 +28,9 @@ from app.bi.service.execution import execute
 from app.bi.service.identity_policy import IDENTITY_REASON
 from app.core.ids import new_uuid7
 from app.core.key_management import registry
+from app.core.key_management.fields import Normalization, blind_index
 from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.presentation import (
     LOCKED_JSON,
     LOCKED_TEXT,
@@ -36,7 +38,6 @@ from app.core.key_management.presentation import (
     SESSION_SUPPORT,
     PresentationState,
 )
-from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import (
     KeyIntegrityError,
     KeyReference,
@@ -44,7 +45,6 @@ from app.core.key_management.types import (
     KeyUnavailableError,
 )
 from app.core.tenancy import TenantContext
-from app.data_engine.service.field_search import find_counterparties
 from app.db.base import utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
@@ -305,15 +305,15 @@ def test_every_covered_field_is_ciphertext_and_entity_reads_round_trip(
     assert package.validation_report == {"message": NAME} and package.notes == NAME
 
 
-def test_bank_scoped_exact_search_and_master_key_rotation(
+def test_bank_scoped_indexes_and_master_key_rotation(
     db_session: Session,
     provider: LocalKeyProvider,
 ) -> None:
     connect(db_session, provider)
     connect(db_session, provider, BANK_B)
     a = counterparty(db_session)
-    b = counterparty(db_session, BANK_B)
-    a_id, b_id = a.id, b.id
+    counterparty(db_session, BANK_B)
+    a_id = a.id
     db_session.commit()
     before = raw_fields(db_session)
     indexes = cast(
@@ -326,54 +326,54 @@ def test_bank_scoped_exact_search_and_master_key_rotation(
     )
     assert len(set(indexes)) == 2
     assert all(NAME not in str(token) and len(str(token)) == 64 for token in indexes)
-    db_session.expunge_all()
-    assert [
-        row.id
-        for row in find_counterparties(
-            db_session, CTX, BANK_A, field="name", value="  SYNTHETIC   borrower ñ  "
+    tokens: tuple[tuple[str, str, Normalization, object], ...] = (
+        ("counterparty.name", "  SYNTHETIC   borrower ñ  ", "name", a.name_blind_index),
+        ("counterparty.source_reference", IDENTIFIER, "identifier", a.source_reference_blind_index),
+        (
+            "counterparty.identifier:national_id",
+            IDENTIFIER,
+            "identifier",
+            a.external_identifiers_blind_indexes["national_id"],
+        ),
+    )
+    for domain, value, normalization, expected in tokens:
+        assert (
+            blind_index(
+                db_session,
+                organization_id=ORG_1,
+                bank_id=BANK_A,
+                domain=domain,
+                value=value,
+                normalization=normalization,
+            )
+            == expected
         )
-    ] == [a_id]
-    assert [
-        row.id
-        for row in find_counterparties(
-            db_session, CTX, BANK_B, field="source_reference", value=IDENTIFIER
-        )
-    ] == [b_id]
-    assert [
-        row.id
-        for row in find_counterparties(
-            db_session,
-            CTX,
-            BANK_A,
-            field="external_identifier",
-            namespace="national_id",
-            value=IDENTIFIER,
-        )
-    ] == [a_id]
     assert (
-        find_counterparties(
-            db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER.lower()
+        blind_index(
+            db_session,
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            domain="counterparty.source_reference",
+            value=IDENTIFIER.lower(),
         )
-        == []
+        != a.source_reference_blind_index
     )
     assert (
-        find_counterparties(
+        blind_index(
             db_session,
-            CTX,
-            BANK_A,
-            field="external_identifier",
-            namespace="tax_id",
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            domain="counterparty.identifier:tax_id",
             value=IDENTIFIER,
         )
-        == []
+        != a.external_identifiers_blind_indexes["national_id"]
     )
     row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
     registry.rotate(db_session, row, NEXT, lambda _provider: provider)
     db_session.commit()
     db_session.expunge_all()
-    assert [
-        row.id for row in find_counterparties(db_session, CTX, BANK_A, field="name", value=NAME)
-    ] == [a_id]
+    loaded = db_session.get(CanonicalCounterparty, a_id)
+    assert loaded is not None and loaded.name == NAME
     assert raw_fields(db_session) == before
 
 
@@ -435,12 +435,9 @@ def test_bank_a_key_cannot_unwrap_bank_b_and_revocation_refuses_reads(
         loaded = db_session.get(CanonicalCounterparty, b_id)
         assert loaded is not None
         _ = loaded.name
-    db_session.expunge_all()
-    with pytest.raises(KeyUnavailableError):
-        find_counterparties(db_session, CTX, BANK_B, field="name", value=NAME)
 
 
-def test_register_crud_search_and_new_audits_omit_names(
+def test_register_crud_and_new_audits_omit_names(
     db_session: Session,
     provider: LocalKeyProvider,
 ) -> None:
@@ -457,13 +454,6 @@ def test_register_crud_search_and_new_audits_omit_names(
     )
     created = institution_profile.create_related_party(db_session, CTX, BANK_A, payload)
     assert created.full_name == NAME
-    assert (
-        institution_profile.find_related_parties_by_name(db_session, CTX, BANK_A, NAME.lower())[
-            0
-        ].id
-        == created.id
-    )
-    assert institution_profile.find_related_parties_by_name(db_session, CTX, BANK_B, NAME) == []
     db_session.expire_all()
     profile = institution_profile.get_full_profile(db_session, CTX, BANK_A)
     assert profile.related_parties[0].contact == {"national_id": IDENTIFIER}
@@ -485,13 +475,8 @@ def test_register_crud_search_and_new_audits_omit_names(
     )
     assert updated.full_name == "Synthetic replacement"
     db_session.expunge_all()
-    assert institution_profile.find_related_parties_by_name(db_session, CTX, BANK_A, NAME) == []
-    assert (
-        institution_profile.find_related_parties_by_name(
-            db_session, CTX, BANK_A, "SYNTHETIC REPLACEMENT"
-        )[0].id
-        == created.id
-    )
+    profile = institution_profile.get_full_profile(db_session, CTX, BANK_A)
+    assert profile.related_parties[0].full_name == "Synthetic replacement"
     event = db_session.scalar(
         select(AuditEvent).where(AuditEvent.event_type == "related_party.updated")
     )
@@ -526,18 +511,8 @@ def assert_unicode_name_round_trip(db: Session, connected: bool) -> None:
         db.expunge_all()
         loaded = db.get(CanonicalCounterparty, borrower_id)
         assert loaded is not None and loaded.name == name
-        assert [
-            row.name for row in find_counterparties(db, CTX, BANK_A, field="name", value=equivalent)
-        ] == [name]
-        assert [
-            row.full_name
-            for row in institution_profile.find_related_parties_by_name(db, CTX, BANK_A, equivalent)
-        ] == [name]
-        assert find_counterparties(db, CTX, BANK_A, field="name", value=equivalent + "x") == []
-        assert (
-            institution_profile.find_related_parties_by_name(db, CTX, BANK_A, equivalent + "x")
-            == []
-        )
+        profile = institution_profile.get_full_profile(db, CTX, BANK_A)
+        assert profile.related_parties[0].full_name == name
         stored = db.execute(
             text(
                 "SELECT name, name_blind_index FROM canonical_counterparties "
@@ -545,9 +520,18 @@ def assert_unicode_name_round_trip(db: Session, connected: bool) -> None:
             )
         ).all()
         assert len(stored) == 2
-        for record in stored:
+        for record, domain in zip(
+            stored, ("counterparty.name", "related_party.full_name"), strict=True
+        ):
             stored_name, token = cast(object, record[0]), cast(object, record[1])
-            assert isinstance(token, str) and 0 < len(token) <= 255
+            assert token == blind_index(
+                db,
+                organization_id=ORG_1,
+                bank_id=BANK_A,
+                domain=domain,
+                value=equivalent,
+                normalization="name",
+            )
             if connected:
                 assert stored_name != name
             else:
@@ -555,7 +539,7 @@ def assert_unicode_name_round_trip(db: Session, connected: bool) -> None:
 
 
 @pytest.mark.parametrize("connected", [False, True])
-def test_unicode_name_writes_updates_and_normalized_search(
+def test_unicode_name_writes_updates_and_normalized_indexes(
     db_session: Session, provider: LocalKeyProvider, connected: bool
 ) -> None:
     if connected:
@@ -633,7 +617,6 @@ def test_partial_refresh_and_update_preserve_other_encrypted_fields(
     assert loaded.attributes == {"contact_name": NAME}
     assert loaded.group_reference == "SYNTHETIC-GROUP-17"
     assert loaded.external_identifiers == {"national_id": IDENTIFIER}
-    assert find_counterparties(db_session, CTX, BANK_A, field="name", value=NAME) == []
 
 
 def test_failed_sensitive_write_rolls_back_without_a_platform_fallback(
@@ -656,7 +639,7 @@ def test_failed_sensitive_write_rolls_back_without_a_platform_fallback(
     assert raw_fields(db_session) == before
 
 
-def withdraw_counterparties(db: Session) -> CanonicalWithdrawal:
+def withdraw_counterparties(db: Session, *, expected_rows: int = 1) -> CanonicalWithdrawal:
     checker = User(
         id=new_uuid7(),
         organization_id=ORG_1,
@@ -684,7 +667,7 @@ def withdraw_counterparties(db: Session) -> CanonicalWithdrawal:
         requested.id,
         approved_by=checker.email,
     )
-    assert applied.status == "applied" and applied.rows_withdrawn == 1
+    assert applied.status == "applied" and applied.rows_withdrawn == expected_rows
     db.commit()
     return applied
 
@@ -713,7 +696,7 @@ def write_counterparty_workbook(path: Path, name: str) -> None:
     ],
 )
 @pytest.mark.parametrize("initial_name", [NAME, EXPANDING_NAME])
-def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(  # noqa: PLR0913
+def test_ingestion_and_replacement_keep_identity_reads_working(  # noqa: PLR0913
     db_session: Session,
     provider: LocalKeyProvider,
     tmp_path: Path,
@@ -777,20 +760,20 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
         )
         assert result.batch.status in {"accepted", "accepted_with_warnings"}
         db_session.expunge_all()
-        matches = find_counterparties(
-            db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER
+        matches = list(
+            db_session.scalars(
+                select(CanonicalCounterparty)
+                .options(undefer_group("bank_identity"))
+                .where(
+                    CanonicalCounterparty.organization_id == ORG_1,
+                    CanonicalCounterparty.bank_id == BANK_A,
+                    CanonicalCounterparty.superseded_by.is_(None),
+                    CanonicalCounterparty.withdrawn_at.is_(None),
+                )
+            )
         )
         assert len(matches) == 1 and matches[0].name == name
-        assert [
-            row.name
-            for row in find_counterparties(
-                db_session,
-                CTX,
-                BANK_A,
-                field="name",
-                value="FFI" * 130 if name == EXPANDING_NAME else name.swapcase(),
-            )
-        ] == [name]
+        assert matches[0].source_reference == IDENTIFIER
         raw = cast(
             object,
             db_session.execute(
@@ -855,13 +838,6 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
         )
         assert len(matches) == 1 and matches[0].name == initial_name
         assert matches[0].source_reference == IDENTIFIER
-        if connection_timing != "after_withdrawal":
-            assert (
-                find_counterparties(
-                    db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER
-                )
-                == matches
-            )
 
 
 @pytest.mark.parametrize("connection_timing", ["none", "before", "after_withdrawal"])

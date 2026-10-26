@@ -100,7 +100,7 @@ def test_optional_key_keeps_platform_storage_and_required_key_refuses_it(
     get_key_settings.cache_clear()
     with pytest.raises(StorageAccessError):
         storage.read(location)
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError):
         storage.write(
             location, io.BytesIO(b"replacement"), metadata_for(SLUG, "outputs", b"replacement")
         )
@@ -122,7 +122,7 @@ def test_connected_key_never_falls_back_when_enforcement_is_off(
 
     monkeypatch.setattr(AwsKmsKeyProvider, "unwrap", refused)
     location = StorageLocation(SLUG, "outputs", "rollout/connected.bin")
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError):
         storage.write(
             location, io.BytesIO(b"synthetic"), metadata_for(SLUG, "outputs", b"synthetic")
         )
