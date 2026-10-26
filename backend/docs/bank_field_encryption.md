@@ -112,8 +112,10 @@ readable without a key, as do numeric alert and subscription configurations.
 Session-bound staff downloads and download-link issuance return the named support
 refusal without decrypting object contents, including when presentation state is
 missing. Integrity consumers receive that refusal instead of placeholder bytes.
-An encrypted filing snapshot remains protected; its filing status and source-run
-references remain readable.
+An encrypted filing snapshot remains protected; comparison and attestation seal
+recomputation refuse locked snapshots with the named locked-data response before
+producing equality or integrity verdicts. Filing status and source-run references
+remain readable.
 
 The bank UI displays separate messages:
 
@@ -121,7 +123,10 @@ The bank UI displays separate messages:
 - Unreachable: "Can't reach your bank's key service. Retrying."
 
 Both states offer Retry and refetch active locked or failed protected queries
-every five seconds. Staff support placeholders do not poll for recovery.
+every five seconds. Each recovery attempt also reads `GET /banks/{bank_id}` to
+confirm current connected-key access, even when protected collections are empty
+after a refused first save. Its disclosure header reports the result; a headerless
+success cannot clear a lock. Staff support placeholders do not poll for recovery.
 Successful protected reads clear the notice and restore values; cached locked or
 failed reads, including inactive screens, are invalidated so returning to a
 screen refreshes it immediately. Unrelated numeric responses and responses from
@@ -132,9 +137,11 @@ notifications.
 
 Mutation errors and late key-outage or revocation responses preserve unsaved
 editor drafts. The related-party editor disables and greys its fieldset and submit
-button once protected data is locked; Cancel remains usable. Recovery re-enables
-the controls with the draft intact. BI catalogue data and saved dashboard
-definitions without protected identity members remain cached, retaining numeric
+button once protected data is locked; Cancel remains usable. Starting an edit of
+a locked related-party row is disabled until disclosed data returns. Recovery
+re-enables an already-open editor with its draft intact and refreshes shareholding
+candidate labels without discarding numeric drafts. BI catalogue data and saved
+dashboard definitions without protected identity members remain cached, retaining numeric
 dependencies, dashboard title, widgets and change note, and the alert's selected
 threshold basis. Protected cached payloads and read-only labels are still removed or
 replaced by placeholders, scoped to the locked bank. Protected report previews

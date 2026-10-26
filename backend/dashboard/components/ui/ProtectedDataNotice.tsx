@@ -25,7 +25,10 @@ export default function ProtectedDataNotice() {
   const locked = state !== "available";
   const bankId = bank?.id;
   const retry = useCallback(() => {
-    if (!bankId || ["available", "support"].includes(protectedDataState(bankId)))
+    if (
+      !bankId ||
+      ["available", "support"].includes(protectedDataState(bankId))
+    )
       return;
     void banksApi.getBankRaw({ bankId }).catch(() => undefined);
     void client.refetchQueries({
