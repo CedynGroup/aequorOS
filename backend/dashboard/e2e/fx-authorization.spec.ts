@@ -186,7 +186,16 @@ test.describe("bound FX user", () => {
   }) => {
     await signInWithFxGrants(["aggregated", "confidential"], "approver");
 
+    const periodsLoaded = page.waitForResponse(
+      (response) =>
+        /\/banks\/[^/]+\/reporting-periods$/.test(
+          new URL(response.url()).pathname,
+        ) && response.request().method() === "GET",
+    );
     await page.goto("/fx/scenarios");
+    const periodsResponse = await periodsLoaded;
+    expect(periodsResponse.ok()).toBeTruthy();
+    await periodsResponse.finished();
     await expect(
       page.getByRole("heading", { name: "FX Scenarios", exact: true }),
     ).toBeVisible();

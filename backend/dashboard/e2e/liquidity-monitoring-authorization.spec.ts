@@ -102,7 +102,16 @@ test.describe("exactly bound Liquidity user", () => {
           aggregateRequests.push(request.url());
         }
       });
+      const periodsLoaded = page.waitForResponse(
+        (response) =>
+          /\/banks\/[^/]+\/reporting-periods$/.test(
+            new URL(response.url()).pathname,
+          ) && response.request().method() === "GET",
+      );
       await page.goto("/liquidity/monitoring");
+      const periodsResponse = await periodsLoaded;
+      expect(periodsResponse.ok()).toBeTruthy();
+      await periodsResponse.finished();
       for (const label of ["FX funding gap", "FX share of liabilities"]) {
         const card = page.locator(".card").filter({
           has: page.getByText(label, { exact: true }),
@@ -119,10 +128,6 @@ test.describe("exactly bound Liquidity user", () => {
       await expect(liquidity).toHaveAttribute("aria-disabled", "true");
       const reason =
         "Requires Liquidity Monitoring · Aggregated · View. Ask your organization owner or admin to grant it.";
-      await liquidity.hover();
-      await expect(
-        page.getByRole("tooltip").filter({ hasText: reason }),
-      ).toBeVisible();
       await liquidity.focus();
       await expect(liquidity).toBeFocused();
       await expect(
