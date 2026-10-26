@@ -180,7 +180,7 @@ test.describe("unbound FX user", () => {
 test.describe("bound FX user", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
-  test("keeps the FX run action visible with an exact grant reason", async ({
+  test("keeps FX scenarios separate from enterprise stress", async ({
     page,
     signInWithFxGrants,
   }) => {
@@ -196,18 +196,12 @@ test.describe("bound FX user", () => {
     const periodsResponse = await periodsLoaded;
     expect(periodsResponse.ok()).toBeTruthy();
     await periodsResponse.finished();
-    await page
-      .getByRole("button", { name: "Scenarios & run", exact: true })
-      .click();
-    const run = page.getByRole("button", { name: "Run enterprise stress" });
-    await expect(run).toBeVisible();
-    await expect(run).toBeDisabled();
-    await run.locator("..").focus();
-    await expect(run.locator("..")).toBeFocused();
-    await expect(page.getByRole("tooltip")).toHaveText(
-      "Requires FX run permission at confidential sensitivity. An organization owner can grant it.",
-    );
-
+    await expect(
+      page.getByRole("heading", { name: "FX Scenarios", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Run enterprise stress" }),
+    ).toHaveCount(0);
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "fx-run-disabled.png"),

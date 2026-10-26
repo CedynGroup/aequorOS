@@ -1002,3 +1002,28 @@ regulator-notification records; aequorOS does not transmit them externally.
 Draft and approval audit records remain in the audit trail; the activation log
 contains activation and stand-down events. This workflow does not create or
 replace official regulatory runs. Related journeys and guards: #289, #315, #323.
+
+### Treasury scenario workspaces
+
+Each treasury module's **Scenarios** tab contains its own effective-dated
+scenario definitions and latest stored results for the selected reporting period:
+IRRBB `/irr/scenarios`, Liquidity `/liquidity/stress`, FX `/fx/scenarios`, FTP
+`/ftp/scenarios`, and Capital `/basel/stress`. Opening a tab creates no runs.
+Liquidity scenario definitions require Liquidity confidential view; they no
+longer require the unrelated Risk & Limits view. Definitions require the owning
+module's confidential view; result summaries retain the server's existing
+sensitivity-specific projection.
+
+The enterprise stress workbench remains at `/irr/enterprise-stress`, with its
+own IRRBB tab and links from the module workspaces. It runs a governed macro
+scenario across engines. Module scenario tabs never dispatch enterprise stress.
+Its IRRBB correctness dependency remains #306.
+
+FTP what-if compares baseline with a chosen module scenario and optional curve
+shift, funding-spread addition, product margin floor and NMD core policy-band
+overrides. Preview requires FTP/Confidential/Run. Saving an analysis
+requires FTP/Confidential/Create. Each request is checked by the server;
+readers see disabled controls and grant reasons. Saving recomputes and snapshots
+the supplied inputs and results. Reopening reads the stored snapshot. Parameter
+registers and official regulatory runs are unchanged. Related work: #314, #316
+(module run controls), #309 (full stored-run/history views), #289 (journeys).

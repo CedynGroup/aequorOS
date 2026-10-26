@@ -177,7 +177,16 @@ test.describe("Capital reconciliation, stress and planning outcomes", () => {
     page,
   }) => {
     // ---- Stress: a governed adverse path through every engine.
-    await openTab(page, "Stress");
+    await openTab(page, "Scenarios");
+    await expect(
+      page.getByRole("heading", { name: "Capital Scenarios", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("link", { name: "Open enterprise stress workbench" })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
+    ).toBeVisible();
     const run = await runEnterpriseStress(
       page,
       "Adverse domestic downturn (moderate)",
@@ -199,7 +208,7 @@ test.describe("Capital reconciliation, stress and planning outcomes", () => {
     page,
   }) => {
     // ---- Planning: the what-if planner, then refresh and persist ILAAP evidence.
-    await openTab(page, "Planning");
+    await page.goto("/basel/planning");
     await expect(
       page.getByRole("heading", { name: "Capital Planning" }),
     ).toBeVisible();

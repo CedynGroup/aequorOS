@@ -187,13 +187,27 @@ test.describe("exactly bound Liquidity user", () => {
     await expect(fx).not.toHaveAttribute("href", /.+/);
     await fx.click({ force: true });
     await expect(page).toHaveURL(/\/liquidity$/);
-    const stress = page.getByRole("link", { name: "Stress" });
-    await expect(stress).toHaveAttribute("aria-disabled", "true");
-    await stress.hover();
+    const scenarios = page.getByRole("link", {
+      name: "Scenarios",
+      exact: true,
+    });
+    await expect(scenarios).toHaveAttribute("href", "/liquidity/stress");
+    await scenarios.click();
+    await expect(
+      page.getByRole("heading", { name: "Liquidity Scenarios", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Liquidity scenario definitions" }),
+    ).toBeVisible();
+    const enterprise = page.getByRole("link", {
+      name: "Open enterprise stress workbench",
+    });
+    await expect(enterprise).toHaveAttribute("aria-disabled", "true");
+    await enterprise.hover();
     await expect(
       page.getByRole("tooltip").filter({
         hasText:
-          "Requires Risk & Limits · Confidential · View. Ask your organization owner or admin to grant it.",
+          "Requires IRRBB · Confidential · View. Ask your organization owner or admin to grant it.",
       }),
     ).toBeVisible();
     await link.click();

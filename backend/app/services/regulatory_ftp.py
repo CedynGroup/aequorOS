@@ -23,7 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -124,6 +124,9 @@ _REQUIRED_THRESHOLDS = (
     NMD_CORE_MAX,
 )
 
+SHOCK_MIN_MARGIN_PCT = "min_product_margin_pct"
+SHOCK_NMD_CORE_MIN_PCT = "nmd_core_min_pct"
+SHOCK_NMD_CORE_MAX_PCT = "nmd_core_max_pct"
 SHOCK_CURVE_SHIFT_BP = "curve_shift_bp"
 SHOCK_FUNDING_ADD_BP = "funding_spread_add_bps"
 _HUNDRED = Decimal("100")
@@ -187,6 +190,10 @@ class _FtpAnalysis:
     # None when no committed-facility facts or no stressed-draw parameters
     # exist — the LTP block is absent, never fabricated.
     ltp: LtpResult | None = None
+
+
+# Shared typed result for the compute-only scenario adapter.
+type FtpScenarioAnalysis = _FtpAnalysis
 
 
 def run_all_ftp_scenarios(
@@ -1141,6 +1148,19 @@ def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its f
     facts = _load_facts(db, ctx, bank, period)
     active = _load_ftp_params_or_none(db, ctx, bank, period.period_end)
     draws = _load_ltp_draws(db, ctx, bank, period.period_end)
+    # What-if rule overrides live only in this analysis; governed parameters
+    # and the official-run path are never changed.
+    if active is not None:
+        active = replace(
+            active,
+            min_product_margin_pct=shocks.get(SHOCK_MIN_MARGIN_PCT, active.min_product_margin_pct),
+            nmd_core_min_pct=shocks.get(SHOCK_NMD_CORE_MIN_PCT, active.nmd_core_min_pct),
+            nmd_core_max_pct=shocks.get(SHOCK_NMD_CORE_MAX_PCT, active.nmd_core_max_pct),
+        )
+        if active.nmd_core_min_pct > active.nmd_core_max_pct:
+            raise FtpRunError(
+                "invalid_nmd_policy_band", "NMD core minimum must not exceed its maximum."
+            )
     if not shocks:
         return _run_analysis(scenario_code, facts, active, draws, shift_override=Decimal(0))
     shift_bp = shocks.get(SHOCK_CURVE_SHIFT_BP, Decimal(0)) + shocks.get(
