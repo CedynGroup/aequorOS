@@ -29,6 +29,7 @@ from __future__ import annotations
 from decimal import Decimal, DivisionByZero, InvalidOperation
 from typing import Any
 
+from app.core.key_management.presentation import require_disclosed
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import (
     PackageComparisonRead,
@@ -196,6 +197,8 @@ def diff_snapshots(
     base_snapshot: dict[str, Any], target_snapshot: dict[str, Any]
 ) -> tuple[list[SnapshotSectionDiffRead], int]:
     """Section-by-section, line-by-line diff. Returns (differing, unchanged count)."""
+    require_disclosed(base_snapshot)
+    require_disclosed(target_snapshot)
     base_sections = {_section_key(item): item for item in _comparable_sections(base_snapshot)}
     target_sections = {_section_key(item): item for item in _comparable_sections(target_snapshot)}
     keys = list(target_sections) + [key for key in base_sections if key not in target_sections]

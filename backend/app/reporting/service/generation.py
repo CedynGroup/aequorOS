@@ -38,6 +38,7 @@ from app.api.deps import TenantContext
 from app.attestation.public import digests, register_state
 from app.capital.public import regulatory_capital
 from app.core import observability
+from app.core.key_management.presentation import require_disclosed
 from app.data_engine.public import withdrawal_impact
 from app.domain.authority.outcomes import NotComputable
 from app.domain.policy import Direction, direction_for
@@ -102,6 +103,7 @@ def snapshot_content_hash(snapshot: dict[str, Any]) -> str:
     discipline: identical content always hashes identically regardless of
     insertion order.
     """
+    require_disclosed(snapshot)
     canonical = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
