@@ -19,6 +19,9 @@ are always welcome.
   [type-check baseline](CODEBASE_CONVENTIONS.md#type-check-baseline), and
   `CASHFLOW_FAST_TEST=1 pytest` must be green; tests are hermetic (no ambient
   database) and Postgres-gated tests opt in via `TEST_DATABASE_URL`.
+- Backend suites: `mise run unit` refuses database connections; `mise run integration`
+  provisions disposable Postgres. Register new modules and mixed-module overrides in
+  `backend/scripts/test_suites.json`; every test has exactly one suite.
 - Backend database fixture isolation and parallel execution are documented in the
   [backend test database guide](backend/README.md#test-databases-and-the-primary-database).
   `db_client` and `db_session` are the defaults.

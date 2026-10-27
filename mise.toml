@@ -72,6 +72,26 @@ description = "Run risk service pytest"
 dir = "backend"
 run = "mise run risk-service:test"
 
+[tasks.unit]
+description = "Run backend unit suite"
+dir = "backend"
+run = "mise run unit"
+
+[tasks.integration]
+description = "Run backend integration suite"
+dir = "backend"
+run = "mise run integration"
+
+[tasks."risk-service:test-unit"]
+description = "Run the backend unit suite"
+dir = "backend"
+run = "mise run risk-service:test-unit"
+
+[tasks."risk-service:test-integration"]
+description = "Run the backend integration suite"
+dir = "backend"
+run = "mise run risk-service:test-integration"
+
 [tasks."risk-service:test-fast"]
 description = "Run local affected risk service tests with four workers"
 dir = "backend"

@@ -76,23 +76,36 @@ def test_pure_owner_refuses_connections_and_requires_execution(
 
 
 def test_pure_owner_paths_and_job_are_explicit() -> None:
+    from scripts.test_suites import owner  # noqa: PLC0415
+
+    assert all(owner(module) == "unit" for module in PURE_MODULES)
     tasks = cast(
         dict[str, dict[str, str]],
         tomllib.loads((BACKEND / "mise.toml").read_text())["tasks"],
     )
-    command = shlex.split(tasks["risk-service:test-pure"]["run"])
-    assert frozenset(token for token in command if token.startswith("tests/")) == PURE_MODULES
-    assert command[:5] == ["uv", "run", "pytest", "-p", "scripts.ci_pure_plugin"]
+    assert shlex.split(tasks["unit"]["run"]) == [
+        "uv",
+        "run",
+        "pytest",
+        "-m",
+        "unit",
+        "-n",
+        "4",
+        "--dist",
+        "loadfile",
+    ]
     document = cast(
         dict[str, dict[str, dict[str, object]]],
         yaml.safe_load((BACKEND.parent / ".github/workflows/risk-service.yml").read_text()),
     )
     job = document["jobs"]["architecture"]
+    assert job["name"] == "Unit tests"
     steps = cast(list[dict[str, object]], job["steps"])
-    pure = next(step for step in steps if step.get("run") == "mise run risk-service:test-pure")
-    assert "CI_PURE_REPORT_DIR" in cast(dict[str, str], pure["env"])
+    pure = next(step for step in steps if step.get("run") == "mise run risk-service:test-unit")
+    assert "CI_UNIT_REPORT_DIR" in cast(dict[str, str], pure["env"])
     assert not any("setup-postgres" in str(step.get("uses", "")) for step in steps)
     assert job["if"] == "needs.preflight.outputs.guards == 'true'"
+    assert document["jobs"]["postgres-suite"]["name"] == "Integration tests"
 
 
 @pytest.mark.parametrize("arguments", [["-k", "test_kept"], ["--keep-duplicates", "test_probe.py"]])

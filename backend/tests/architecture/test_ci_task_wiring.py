@@ -234,7 +234,7 @@ def test_ci_actually_runs_every_required_gate() -> None:
     required = {
         "risk-service:lint",
         "risk-service:typecheck",
-        "risk-service:test-architecture",
+        "risk-service:test-unit",
         # Supersedes test-postgres-migrations: the same chain plus the RLS
         # policies and server defaults it installs.
         "risk-service:test-postgres-schema",
@@ -418,60 +418,22 @@ def test_every_pytest_path_a_task_names_exists() -> None:
 
 
 def test_the_full_suite_ignores_exactly_what_its_sibling_tasks_run() -> None:
-    """`risk-service:test-postgres-suite` skips the Postgres-only suites because
-    `test-postgres-schema` and `test-postgres-locks` already run them in the
-    same CI run, on the same image and role, and skips `tests/architecture`
-    because `test-architecture` runs it without a database at all. Explicit pure
-    files belong to `test-pure` in that same non-database job. That is only
-    a de-duplication while the sets match: an `--ignore` with no owner drops
-    coverage from every job, and a lock file added to the locks task but not
-    ignored here just runs twice again. Pinning equality keeps it
-    moved-not-dropped.
-    """
+    """Only integration siblings are ignored; markers own unit selection."""
     tasks = _tasks(BACKEND_TASKS)
-
-    def pytest_arguments(task: str) -> list[str]:
-        arguments: list[str] = []
-        for command in _run_commands(tasks[task]):
-            tokens = shlex.split(command, comments=True)
-            if tokens[:4] == ["uv", "run", "python", "scripts/local_services.py"]:
-                # Local provisioning lends the environment to the same pytest
-                # command; CI bypasses it when its test URL is already supplied.
-                assert tokens[4] == "run", task
-                tokens = tokens[tokens.index("--") + 1 :]
-            assert tokens[:3] == ["uv", "run", "pytest"], task
-            assert not ({";", "&&", "||", "|", "&", ">", "<"} & set(tokens)), task
-            arguments.extend(tokens[3:])
-        assert arguments, task
-        return arguments
-
-    ignored: set[str] = set()
-    arguments = iter(pytest_arguments("risk-service:test-postgres-suite"))
-    for argument in arguments:
-        if argument == "--ignore":
-            ignored.add(next(arguments))
-        elif argument.startswith("--ignore="):
-            ignored.add(argument.partition("=")[2])
+    suite = shlex.split(_run_commands(tasks["risk-service:test-postgres-suite"])[0])
+    assert suite[suite.index("-m") + 1] == "integration"
+    ignored = {token.partition("=")[2] for token in suite if token.startswith("--ignore=")}
     owned: set[str] = set()
     for task in (
         "risk-service:test-postgres-schema",
         "risk-service:test-postgres-locks",
-        "risk-service:test-architecture",
-        "risk-service:test-pure",
+        "risk-service:test-storage",
     ):
-        for argument in pytest_arguments(task):
-            # A path inside one already owned (the architecture task's single
-            # tests/db module) is covered by that owner's `--ignore`.
-            if argument.startswith("tests/") and not any(
-                argument.startswith(f"{path}/") for path in owned
-            ):
-                owned.add(argument)
-
-    assert ignored == owned, (
-        f"Ignored by the full suite but run by no sibling task: {sorted(ignored - owned)}; "
-        f"run by a sibling task but still duplicated in the full suite: "
-        f"{sorted(owned - ignored)}"
-    )
+        tokens = shlex.split(_run_commands(tasks[task])[0])
+        assert tokens[tokens.index("-m") + 1] == "integration"
+        owned.update(token for token in tokens if token.startswith("tests/"))
+    owned = {path for path in owned if not any(path.startswith(other + "/") for other in owned)}
+    assert ignored == owned
     assert all((TESTS.parent / path).exists() for path in ignored)
 
 

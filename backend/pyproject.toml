@@ -95,6 +95,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-p scripts.test_suites_plugin"
 pythonpath = ["."]
 markers = [
   "requirement(citation): behavioral regression against a cited external requirement",

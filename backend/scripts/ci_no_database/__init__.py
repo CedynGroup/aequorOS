@@ -1,7 +1,8 @@
-"""Connection refusal inherited by Python subprocesses in the pure CI owner."""
+"""Connection refusal inherited by Python subprocesses in database-free test runs."""
 
 from __future__ import annotations
 
+import importlib
 import os
 import sqlite3
 import sqlite3.dbapi2 as sqlite_dbapi
@@ -13,6 +14,8 @@ from typing import NoReturn, cast
 import psycopg
 from sqlalchemy import Engine
 
+_ORIGINAL_POPEN = cast(Callable[..., None], subprocess.Popen.__init__)
+
 
 def install(patch: Callable[[object, str, object], None] = setattr) -> None:
     """Record before raising so catching a refusal cannot make the run pass."""
@@ -21,18 +24,29 @@ def install(patch: Callable[[object, str, object], None] = setattr) -> None:
     def refuse(*_args: object, **_kwargs: object) -> NoReturn:
         with Path(attempts).open("a") as stream:
             stream.write(f"Database connection attempted by process {os.getpid()}\n")
-        raise AssertionError("Database connections are forbidden in the pure CI owner")
+        raise AssertionError("Database connections are forbidden in unit tests")
 
     patch(Engine, "connect", refuse)
+    patch(Engine, "raw_connection", refuse)
     patch(psycopg, "connect", refuse)
     patch(psycopg.Connection, "connect", refuse)
     patch(psycopg.AsyncConnection, "connect", refuse)
     patch(sqlite3, "connect", refuse)
     patch(sqlite_dbapi, "connect", refuse)
 
+    # Database-direct adapters have DBAPI entry points outside SQLAlchemy.
+    # Optional drivers remain optional; installed drivers share the refusal.
+    for name in ("oracledb", "pyodbc", "jaydebeapi", "snowflake.connector", "asyncpg"):
+        try:
+            driver = importlib.import_module(name)
+        except ModuleNotFoundError:
+            continue
+        for attribute in ("connect", "connect_async", "create_pool", "create_pool_async"):
+            if hasattr(driver, attribute):
+                patch(driver, attribute, refuse)
+
     # Import checks deliberately supply fresh environments. Carry the guard
     # through those too, without changing their programs or assertions.
-    original = cast(Callable[..., None], subprocess.Popen.__init__)
     backend = Path(__file__).resolve().parents[2]
     guard = str(Path(__file__).resolve().parent)
 
@@ -44,6 +58,6 @@ def install(patch: Callable[[object, str, object], None] = setattr) -> None:
             [guard, str(backend), environment.get("PYTHONPATH", "")]
         )
         kwargs["env"] = environment
-        original(*args, **kwargs)
+        _ORIGINAL_POPEN(*args, **kwargs)
 
     patch(subprocess.Popen, "__init__", guarded_popen)

@@ -437,6 +437,43 @@ The [workflow inventory and stateful-test guide](docs/state_machine_testing.md)
 records transition guards, coverage boundaries, and bounded Hypothesis profiles.
 
 ```bash
+mise run unit         # database-free tests; any database connection fails
+mise run integration  # database/external-service tests on disposable Postgres
+```
+
+Both commands work at the repository root or in `backend/`. Their explicit
+pytest selectors are `-m unit` and `-m integration`; the corresponding
+`risk-service:test-unit` and `risk-service:test-integration` aliases are available.
+Feature-local paths stay in place, preserving imports and fixture/data paths.
+[`scripts/test_suites.json`](scripts/test_suites.json) declares every module's
+suite and explicit function/class overrides for mixed modules. Add a declaration
+when adding a test module; change an override when a unit test starts using a
+database. Collection fails for unclassified modules, duplicate collection, or
+conflicting/double suite markers, before either selector deselects tests.
+
+Unit tests include the original eleven database-free files (367 cases), further
+files and mixed-module functions verified with connection refusal. SQLite is a
+database too: SQL/schema tests that open SQLite belong to integration. External
+service contracts that need MinIO or OpenBao also belong to integration. Optional
+real-data checks remain integration tests with their existing explicit opt-in;
+classifying them does not enable access to a primary database.
+
+A dedicated unit run uses four workers with `--dist loadfile` and refuses
+database connections before collection. Each process records attempts separately;
+the controller requires identical worker classifications and exact combined JUnit
+coverage. Combined
+local runs also refuse connections for each unit test, before fixture setup.
+SQLAlchemy, psycopg (including async), SQLite and installed database-direct driver
+entry points are guarded, including Python subprocesses with fresh environments.
+Attempts fail the run even when caught. The unit CI owner compares the complete
+classified collection with JUnit identities and permits no dropped, duplicated,
+skipped, failed or errored unit case. It uploads `unit-tests` classification,
+connection-attempt and execution evidence. The full-tree module collection check
+also remains enforced.
+
+`mise run risk-service:test` remains the combined compatibility run:
+
+```bash
 mise run risk-service:test
 ```
 
@@ -501,26 +538,25 @@ credential-vault encryption tests need no vault server. The live storage and
 OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
 
-The **Architecture and CI guards** job also runs `risk-service:test-pure`:
-11 explicitly listed database-free files (367 cases at the ownership change).
-Their paths stay in place; the Postgres suite excludes exactly the files owned
-by this task. `scripts/ci_pure.py` records this ownership and prevents affected-test
-planning from routing these files back into a Postgres shard. Changes to them
-use the conservative full Postgres fallback; the non-database owner always runs.
-The opt-in `scripts.ci_pure_plugin` refuses SQLAlchemy, psycopg (including async)
-and SQLite connections, including in Python subprocesses with fresh environments.
-A recorded attempt fails the session even if caught. Collection and JUnit
-identities must match exactly with no skips, failures or errors; the job uploads
-`pure-tests` collection, connection-attempt and JUnit evidence. The full-tree
-collection equality check and Postgres execution floors remain unchanged.
+The integration aggregate also joins the lock and storage execution reports with
+unit and Postgres shard evidence. Their selected union must match the classified
+collection exactly once. Storage integration cases run only in the storage job,
+except key-rotation concurrency, which belongs to locks. The storage job also
+runs for merge groups. A conservative affected-module run excludes only the
+explicitly unselected suite cases from this cross-owner comparison.
+
+The **Unit tests** job runs `risk-service:test-unit`, including database-free
+architecture guards. Database-using architecture cases run in the integration
+shards. The compatibility `risk-service:test-pure` task still selects the original
+eleven files; CI selects the complete unit suite instead.
 
 CI runs the remaining PostgreSQL suite in four duration-balanced module shards,
 and the schema/RLS suite in two hash-based shards; lock tests retain their own job.
 Longest-first packing uses the committed `scripts/ci_postgres_durations.json`
 baseline, excluding files with a non-Postgres owner. Each file stays together, including OpenBao's shared AppRole fixtures.
 New modules use stable hashing until the baseline is refreshed. The
-existing **Full suite on Postgres**, **Postgres schema, RLS and locks**, and
-**Risk service gate** check names stay stable. Shards upload their complete
+**Integration tests** aggregate joins the suite shards; **Postgres schema, RLS and locks**
+and the always-reported **Risk service gate** remain enforced. Shards upload their complete
 collection manifests and JUnit reports; the aggregates verify that their union
 contains every expected test exactly once, preserve the full-suite execution
 floor, and reject any skipped schema/RLS or live OpenBao test.
@@ -534,7 +570,7 @@ bodies of existing, unreferenced `tests/domain/test_*.py` tests owned by the
 Postgres suite (including nested domain directories), or comments and formatting
 in those modules, select their affected modules. Changes to fixtures, decorators, production code, new/deleted
 tests, configuration or an uncertain diff select the full suite. Schema/RLS,
-locks, architecture and storage gates keep their coverage. The stdlib planner/coverage verifier is
+locks, unit and storage gates keep their coverage. The stdlib planner/coverage verifier is
 [`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via
 [`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py). Default local test
 tasks continue to run their complete suites; `risk-service:test-fast` uses the
