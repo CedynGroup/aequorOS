@@ -20,7 +20,7 @@ import pytest
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import InstanceOf, TypeAdapter
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app import worker
 from app.api.deps import TenantContext
@@ -57,6 +57,7 @@ from app.services import (
 )
 from app.services.fact_derivation import evaluate_balance_identity
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.database import managed_session_factory
 from tests.support.factories.canonical import (
     FIXTURE_AS_OF,
     seed_canonical_fixture,
@@ -312,6 +313,7 @@ def test_completed_refresh_does_not_reopen_on_unchanged_summary_read(
 def test_transient_module_failure_obeys_bounded_backoff_then_recovers(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     _seed(db_session)
     real_scoped_modules = pipeline._scoped_modules  # pyright: ignore[reportPrivateUsage]
@@ -338,7 +340,9 @@ def test_transient_module_failure_obeys_bounded_backoff_then_recovers(
     clock = [start]
     monkeypatch.setattr(worker, "utc_now", lambda: clock[0])
     monkeypatch.setattr(job_queue, "utc_now", lambda: clock[0])
-    worker_sessions = sessionmaker(bind=db_session.get_bind(), expire_on_commit=False)
+    worker_sessions = managed_session_factory(
+        request, db_session.get_bind(), expire_on_commit=False
+    )
 
     def new_worker_session(organization_id: str | None = None) -> Session:
         session = worker_sessions()
@@ -913,7 +917,9 @@ def test_pipelines_enqueue_no_bi_job_when_the_switch_is_off(db_session: Session)
 
 
 def test_run_refresh_enqueues_one_bi_job_inside_its_commit(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
     get_settings.cache_clear()
@@ -930,11 +936,8 @@ def test_run_refresh_enqueues_one_bi_job_inside_its_commit(
         assert job.payload["bank_id"] == SAMPLE_BANK_ID
         assert isinstance(job.payload["builder_version"], int)
         # Committed with the live rows: a fresh session sees it.
-        other = sessionmaker(bind=db_session.get_bind())()
-        try:
+        with managed_session_factory(request, db_session.get_bind())() as other:
             assert other.get(Job, job.id) is not None
-        finally:
-            other.close()
     finally:
         get_settings.cache_clear()
 
