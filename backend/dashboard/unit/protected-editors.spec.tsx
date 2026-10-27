@@ -379,6 +379,59 @@ async function openPartyEditor() {
 }
 
 it.each(["revoked", "unavailable"] as const)(
+  "locks protected controls while preserving an editable numeric save during %s",
+  async (lockedState) => {
+    let state = "available";
+    const writes: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          writes.push(JSON.parse(String(init.body)));
+          return Response.json(editableParty(state));
+        }
+        return profileResponse(state, undefined, editableParty(state));
+      }),
+    );
+    mount(<RelatedPartiesPage />);
+    await openPartyEditor();
+    state = lockedState;
+    await act(async () => {
+      await observeProtectedData(profileResponse(state));
+    });
+    await waitFor(() => expect(protectedDataState(BANK)).toBe(lockedState));
+    for (const label of [
+      /Full name/,
+      "Term",
+      "ICAG registration",
+      "Other responsibilities",
+    ]) {
+      expect(screen.getByLabelText(label)).toBeDisabled();
+    }
+    expect(
+      screen.getAllByTitle(protectedDataMessages[lockedState]).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Annual fees")).toBeEnabled();
+    expect(screen.getByLabelText("Status")).toBeEnabled();
+    expect(screen.getByLabelText(/Reason for change/)).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    await userEvent.clear(screen.getByLabelText("Annual fees"));
+    await userEvent.type(screen.getByLabelText("Annual fees"), "250", {
+      delay: null,
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() =>
+      expect(writes).toEqual([
+        {
+          reason: "Synthetic edit",
+          role_updates: [{ role_id: ROLE, annual_fees: "250" }],
+        },
+      ]),
+    );
+  },
+);
+
+it.each(["revoked", "unavailable"] as const)(
   "saves only supplied numeric fields and scoped role IDs while %s",
   async (lockedState) => {
     let state = "available";
