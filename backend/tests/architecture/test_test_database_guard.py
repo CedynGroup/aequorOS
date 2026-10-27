@@ -1,4 +1,4 @@
-"""Exercise the test connection lint consumer, including its temporary ratchet."""
+"""Exercise unconditional test connection enforcement and lexical binding resolution."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 from scripts import test_database_guard as guard
 
 
-def test_repository_connection_allowlist_is_current() -> None:
+def test_repository_uses_only_shared_database_construction() -> None:
     assert guard.main([]) == 0
 
 
@@ -28,18 +28,25 @@ def test_repository_connection_allowlist_is_current() -> None:
         "from psycopg import connect as raw\nraw(url)",
         "from psycopg import AsyncConnection as C\nC.connect(url)",
         "import sqlalchemy as sa\nmake = sa.create_engine\nother = make\nother(url)",
+        "from sqlalchemy.orm import sessionmaker, Session\nsessionmaker[Session]()",
+        "from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession\n"
+        "async_sessionmaker[AsyncSession]()",
+        "import psycopg as pg\npg.Connection[tuple[int]].connect(url)",
+        "from psycopg import AsyncConnection as C\nC[tuple[int]].connect(url)",
+        "import sqlite3 as db\ndb.connect(':memory:')",
+        "from sqlite3.dbapi2 import connect as make\nmake(':memory:')",
+        "import sqlite3 as db\ndb.Connection(':memory:')",
+        "from sqlite3.dbapi2 import Connection as C\nC(':memory:')",
     ],
 )
 def test_guard_rejects_new_direct_constructors(tmp_path: Path, source: str) -> None:
     tests = tmp_path / "tests"
     tests.mkdir()
     (tests / "test_example.py").write_text(source)
-    allowlist = tmp_path / "allowlist.json"
-    allowlist.write_text("{}")
-    assert guard.main(["--root", str(tmp_path), "--allowlist", str(allowlist)]) == 1
+    assert guard.main(["--root", str(tmp_path)]) == 1
 
 
-def test_guard_warns_for_legacy_calls_and_rejects_growth_or_stale_entries(
+def test_exception_file_cannot_suppress_a_direct_constructor(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     tests = tmp_path / "tests"
@@ -49,14 +56,11 @@ def test_guard_warns_for_legacy_calls_and_rejects_growth_or_stale_entries(
     module.write_text(source)
     allowlist = tmp_path / "allowlist.json"
     allowlist.write_text(json.dumps(guard.inventory(tmp_path)))
-    args = ["--root", str(tmp_path), "--allowlist", str(allowlist)]
-    assert guard.main(args) == 0
-    assert "WARNING: 1 legacy DB constructor" in capsys.readouterr().out
-    assert guard.main([*args, "--strict"]) == 1
-    module.write_text(source + "sa.create_engine('sqlite://')\n")
-    assert guard.main(args) == 1
-    module.write_text("pass")
-    assert guard.main(args) == 1
+    assert guard.main(["--root", str(tmp_path)]) == 1
+    assert "sqlalchemy.create_engine" in capsys.readouterr().out
+    with pytest.raises(SystemExit) as rejected:
+        _ = guard.main(["--root", str(tmp_path), "--allowlist", str(allowlist)])
+    assert rejected.value.code == 2
 
 
 def test_guard_accepts_support_layer_and_unrelated_connect_calls(tmp_path: Path) -> None:
@@ -68,10 +72,7 @@ def test_guard_accepts_support_layer_and_unrelated_connect_calls(tmp_path: Path)
         "# create_engine('unused')\ntext = 'psycopg.connect(url)'\n"
         "client.connect()\nget_sessionmaker()\n"
     )
-    allowlist = tmp_path / "allowlist.json"
-    allowlist.write_text("{}")
-    assert guard.main(["--root", str(tmp_path), "--allowlist", str(allowlist)]) == 0
-    assert guard.main(["--root", str(tmp_path), "--strict"]) == 0
+    assert guard.main(["--root", str(tmp_path)]) == 0
 
 
 @pytest.mark.parametrize(
@@ -103,6 +104,14 @@ def test_guard_accepts_support_layer_and_unrelated_connect_calls(tmp_path: Path)
                 sessionmaker()
             """,
             1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker, Session
+            def shadowed(sessionmaker):
+                sessionmaker[Session]()
+            """,
+            0,
         ),
         (
             """
@@ -297,15 +306,7 @@ def test_guard_counts_only_bound_constructors(tmp_path: Path, source: str, count
     tests.mkdir()
     module = tests / "test_example.py"
     module.write_text(dedent(source))
-    allowlist = tmp_path / "allowlist.json"
-    allowlist.write_text(
-        json.dumps(
-            {"tests/test_example.py": {"sqlalchemy.orm.sessionmaker": count}} if count else {}
-        )
-    )
-    args = ["--root", str(tmp_path), "--allowlist", str(allowlist)]
-    assert guard.main(args) == 0
-    assert guard.main([*args, "--strict"]) == (1 if count else 0)
+    assert guard.main(["--root", str(tmp_path)]) == (1 if count else 0)
 
 
 @pytest.mark.parametrize("filename", ["helpers.py", "test_database.py", "nested/database.py"])
@@ -315,11 +316,4 @@ def test_guard_rejects_constructors_outside_support_owner(tmp_path: Path, filena
     module.parent.mkdir(parents=True)
     module.write_text("import psycopg\npsycopg.connect(url)\n")
     (support / "database.py").write_text("import psycopg\npsycopg.connect(url)\n")
-    allowlist = tmp_path / "allowlist.json"
-    allowlist.write_text("{}")
-    args = ["--root", str(tmp_path), "--allowlist", str(allowlist)]
-    assert guard.main(args) == 1
-    assert guard.main([*args, "--strict"]) == 1
-    allowlist.write_text(json.dumps({f"tests/support/{filename}": {"psycopg.connect": 1}}))
-    assert guard.main(args) == 0
-    assert guard.main([*args, "--strict"]) == 1
+    assert guard.main(["--root", str(tmp_path)]) == 1
