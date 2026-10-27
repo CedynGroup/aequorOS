@@ -27,17 +27,20 @@ class MigratedPostgresSchema:
     runtime_role: str | None = None
 
     def constraints(self, names: set[str]) -> set[str]:
-        placeholders = ", ".join(f"'{name}'" for name in sorted(names))
         with self.app_engine.connect() as connection:
             return set(
                 connection.execute(
                     text(
-                        f"""
-                        SELECT conname
-                        FROM pg_constraint
-                        WHERE conname IN ({placeholders})
                         """
-                    )
+                        SELECT c.conname
+                        FROM pg_constraint c
+                        JOIN pg_class t ON t.oid = c.conrelid
+                        JOIN pg_namespace n ON n.oid = t.relnamespace
+                        WHERE n.nspname = :schema_name
+                          AND c.conname = ANY(:names)
+                        """
+                    ),
+                    {"schema_name": self.schema_name, "names": sorted(names)},
                 ).scalars()
             )
 
@@ -134,6 +137,39 @@ def catalog_postgres_schema() -> Iterator[MigratedPostgresSchema]:
         monkeypatch.setenv("APP_ENV", "test")
         monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "1")
         yield from migrate_isolated_postgres_schema(monkeypatch, downgrade=False)
+
+
+@pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
+def test_constraint_lookup_cannot_borrow_a_name_from_another_schema(
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    target = forward_migrated_postgres_schema
+    shadow = f"constraint_shadow_{uuid4().hex}"
+    with target.app_engine.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{shadow}"'))
+    try:
+        with target.app_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE TABLE constraint_lookup_probe "
+                    "(value integer CONSTRAINT ck_lookup_probe CHECK (value > 0))"
+                )
+            )
+            connection.execute(
+                text(
+                    f'CREATE TABLE "{shadow}".constraint_lookup_probe '
+                    "(value integer CONSTRAINT ck_lookup_probe CHECK (value > 0))"
+                )
+            )
+        assert target.constraints({"ck_lookup_probe"}) == {"ck_lookup_probe"}
+        with target.app_engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE constraint_lookup_probe DROP CONSTRAINT ck_lookup_probe")
+            )
+        assert target.constraints({"ck_lookup_probe"}) == set()
+    finally:
+        with target.app_engine.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA "{shadow}" CASCADE'))
 
 
 def migrate_isolated_postgres_schema(
