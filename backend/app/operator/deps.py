@@ -251,8 +251,6 @@ def get_operator_db_session(
     authenticated operator. No ``organization_id`` is set on the session —
     every query MUST scope itself explicitly."""
     session = get_operator_sessionmaker()()
-    session.info[SESSION_SUPPORT] = True
-    session.info[SESSION_STATE] = PresentationState(support=True)
     try:
         yield session
     except Exception:
