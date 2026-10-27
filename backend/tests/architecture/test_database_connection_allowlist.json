@@ -1,12 +1,4 @@
 {
-  "tests/api/test_authorization_object_reference_coverage.py": {
-    "sqlalchemy.create_engine": 1,
-    "sqlalchemy.orm.sessionmaker": 1
-  },
-  "tests/api/test_liquidity.py": {
-    "sqlalchemy.create_engine": 1,
-    "sqlalchemy.orm.sessionmaker": 1
-  },
   "tests/architecture/test_bi_compiler_injection.py": {
     "sqlalchemy.create_engine": 1
   },
@@ -21,8 +13,7 @@
     "sqlalchemy.orm.sessionmaker": 1
   },
   "tests/conftest.py": {
-    "sqlalchemy.create_engine": 2,
-    "sqlalchemy.orm.sessionmaker": 2
+    "sqlalchemy.orm.sessionmaker": 1
   },
   "tests/identity/api/test_audit_log.py": {
     "sqlalchemy.create_engine": 1

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import os
+import weakref
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import replace
@@ -269,3 +271,51 @@ def test_alembic_factory_keeps_database_hooks_and_ownership(tmp_path: Path) -> N
             )
     with pytest.raises(RuntimeError, match="already been closed"), migrated.connect():
         pass
+
+
+def test_closed_resources_can_be_collected_before_owner_exits(tmp_path: Path) -> None:
+    with isolated_database(f"sqlite:///{tmp_path / 'lifetime.db'}") as db:
+        engine = db.engine()
+        with engine.connect() as connection:
+            _ = connection.execute(text("SELECT 1"))
+        connection_ref = weakref.ref(connection)
+        maker = db.session_factory()
+        with maker() as session:
+            _ = session.execute(text("SELECT 1"))
+        session_ref = weakref.ref(session)
+        del connection, session
+        _ = gc.collect()
+        assert connection_ref() is None
+        assert session_ref() is None
+        with maker() as another:
+            assert another.scalar(text("SELECT 2")) == 2
+
+
+def test_adoption_preserves_application_engine_identity(tmp_path: Path) -> None:
+    from app.db.session import get_engine  # noqa: PLC0415
+
+    url = f"sqlite+pysqlite:///{tmp_path / 'adopted.db'}"
+    engine = get_engine(url)
+    hooks: list[Engine] = []
+    try:
+        with database_connections(url, hooks=(hooks.append,)) as owner:
+            assert owner.adopt_engine(engine) is engine
+            with pytest.raises(ValueError, match="already belongs"):
+                _ = owner.adopt_engine(engine)
+            wrong = get_engine(f"sqlite+pysqlite:///{tmp_path / 'other.db'}")
+            try:
+                with pytest.raises(ValueError, match="owning database URL"):
+                    _ = owner.adopt_engine(wrong)
+            finally:
+                wrong.dispose()
+            assert get_engine(url) is engine
+            with managed_session_factory(None, engine)() as session:
+                assert session.info == {}
+                assert session.scalar(text("PRAGMA foreign_keys")) == 1
+            leaked = engine.connect()
+            assert hooks == [engine]
+        assert leaked.closed
+        with pytest.raises(RuntimeError, match="already been closed"), engine.connect():
+            pass
+    finally:
+        get_engine.cache_clear()
