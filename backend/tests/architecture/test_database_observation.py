@@ -96,6 +96,48 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     with pytest.raises(ValueError, match="ownership drift"):
         check(evidence, catalogue)
 
+    jobs = tmp_path / "jobs"
+    for job, database in (("unit", False), ("integration", True)):
+        job_dir = jobs / job
+        job_dir.mkdir(parents=True)
+        node = f"test_{job}.py::test_case"
+        events: list[dict[str, object]] = [
+            {"kind": "session_start", "pid": 1},
+            {"kind": "selected", "pid": 1, "nodeids": [node]},
+            {"kind": "consumes", "pid": 1, "nodeid": node, "fixtures": ["same-fixture"]},
+            *[
+                {"kind": "report", "pid": 1, "nodeid": node, "when": when, "outcome": "passed"}
+                for when in ("setup", "call", "teardown")
+            ],
+            {"kind": "session_finish", "pid": 1},
+        ]
+        if database:
+            events.append({"kind": "database", "pid": 1, "fixtures": ["same-fixture"]})
+        _ = (job_dir / "events-1.jsonl").write_text(
+            "\n".join(json.dumps(event) for event in events) + "\n"
+        )
+    assert classify(jobs)[0] == {
+        "test_unit.py::test_case": "unit",
+        "test_integration.py::test_case": "integration",
+    }
+    supplement = tmp_path / "supplement"
+    supplement.mkdir()
+    node = "test_probe.py::test_skipped"
+    events = [
+        {"kind": "session_start", "pid": 1},
+        {"kind": "selected", "pid": 1, "nodeids": [node]},
+        *[
+            {"kind": "report", "pid": 1, "nodeid": node, "when": when, "outcome": "passed"}
+            for when in ("setup", "call", "teardown")
+        ],
+        {"kind": "session_finish", "pid": 1},
+    ]
+    _ = (supplement / "events-1.jsonl").write_text(
+        "\n".join(json.dumps(event) for event in events) + "\n"
+    )
+    generate(evidence, catalogue, supplement)
+    assert json.loads(catalogue.read_text())["cases"][node] == "unit"
+
 
 @pytest.mark.parametrize(
     "mutation", ["missing-session", "missing-report", "duplicate", "orphan", "child"]

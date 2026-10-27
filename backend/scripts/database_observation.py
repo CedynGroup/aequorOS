@@ -13,6 +13,7 @@ import os
 import sqlite3
 import sqlite3.dbapi2 as sqlite_dbapi
 import subprocess
+import uuid
 from collections.abc import Callable, Mapping
 from functools import wraps
 from pathlib import Path
@@ -23,6 +24,7 @@ from sqlalchemy import Engine
 
 DIRECTORY_ENV = "CI_DATABASE_OBSERVATIONS"
 CONTEXT_ENV = "CI_DATABASE_CONTEXT"
+RUN_ENV = "CI_DATABASE_OBSERVATION_RUN"
 _installed = False
 
 
@@ -36,7 +38,7 @@ def emit(kind: str, **values: object) -> None:
         return
     path = Path(directory)
     path.mkdir(parents=True, exist_ok=True)
-    event = {"kind": kind, "pid": os.getpid(), **context(), **values}
+    event = {"kind": kind, "pid": os.getpid(), "run": os.getenv(RUN_ENV, ""), **context(), **values}
     descriptor = os.open(
         path / f"events-{os.getpid()}.jsonl", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
     )
@@ -52,6 +54,7 @@ def install() -> None:
     if _installed or not os.getenv(DIRECTORY_ENV):
         return
     _installed = True
+    _ = os.environ.setdefault(RUN_ENV, uuid.uuid4().hex)
 
     def instrument(target: object, name: str) -> None:
         original = cast(Callable[..., object], getattr(target, name))
@@ -95,6 +98,7 @@ def install() -> None:
         _ = environment.pop("CI_DATABASE_CENSUS", None)
         environment[DIRECTORY_ENV] = os.environ[DIRECTORY_ENV]
         environment[CONTEXT_ENV] = os.getenv(CONTEXT_ENV, "{}")
+        environment[RUN_ENV] = os.environ[RUN_ENV]
         environment["PYTHONPATH"] = os.pathsep.join(
             [bootstrap, str(backend), environment.get("PYTHONPATH", "")]
         )

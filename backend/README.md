@@ -459,13 +459,18 @@ mise run risk-service:refresh-test-suites /absolute/path/to/empty/census-evidenc
 ```
 
 This runs the entire test tree serially with disposable native PostgreSQL 17 and
-MinIO, clearing ambient database and primary-data URLs. See the local-services
+MinIO plus its own loopback OpenBao, clearing ambient database and primary-data URLs.
+Install OpenBao or set `AQS_OPENBAO_BIN` to its verified binary. See the local-services
 guide below for installing the native binaries. To use disposable Docker instead,
 run `uv run python -m scripts.test_suite_census refresh <evidence-dir> --mode docker`
 from `backend/`. Keep the evidence directory outside the repository. The full run
 can take substantially longer than the unit suite; retain its log and let fixture
 teardown and child processes finish before generation. Commit the regenerated
-catalogue. A failing run returns nonzero and reports its inconclusive cases;
+catalogue. For a service-gated case requiring another applicable profile, collect
+that profile with `CI_DATABASE_CENSUS=1` and `CI_DATABASE_OBSERVATIONS=<separate-dir>`,
+then run `scripts/test_suite_census.py generate <full-dir> --supplement <profile-dir>`.
+The supplement must contain only identities from the full census, and conflicting
+proven ownership across profiles is rejected. A failing run returns nonzero and reports its inconclusive cases;
 fix failures before claiming full validation.
 
 The observer records driver connection attempts and SQLAlchemy pooled checkouts
