@@ -19,7 +19,9 @@ import { E2E_AUTH_SECRET, E2E_JWT_SECRET } from "./e2e/support/mint";
 import { acquireE2ERunLock } from "./e2e/support/runtime-lock";
 import { selectE2ERuntimePorts } from "./e2e/support/runtime-ports";
 
-export const E2E_TMP = path.join(__dirname, "e2e", ".tmp");
+export const E2E_TMP = process.env.E2E_RUNTIME_DIR
+  ? path.resolve(process.env.E2E_RUNTIME_DIR)
+  : path.join(__dirname, "e2e", ".tmp");
 acquireE2ERunLock(E2E_TMP);
 const runtimePorts = selectE2ERuntimePorts();
 export const E2E_BACKEND_PORT = runtimePorts.backend;
@@ -42,22 +44,51 @@ const E2E_VAULT_KEY = Buffer.from(
 
 const BACKEND_DIR = path.join(__dirname, "..");
 const E2E_DB = path.join(E2E_TMP, "e2e.db");
+export const E2E_KMS_UPSTREAM = process.env.BANK_KMS_ENDPOINT_URL ?? "";
+export const E2E_KMS_STATE = path.join(E2E_TMP, "kms-service-state");
+const kmsProxy = `http://127.0.0.1:${runtimePorts.kms}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  outputDir: path.join(E2E_TMP, "test-results"),
   globalSetup: "./e2e/global-setup.ts",
   timeout: 60_000,
   expect: { timeout: 15_000 },
   retries: 0,
   workers: 1, // journeys share one disposable canonical test bank; keep them ordered + isolated
   reporter: process.env.CI
-    ? [["./e2e/support/quarantine-reporter.ts"], ["list"]]
-    : [["list"]],
+    ? [
+        ["./e2e/support/artifact-reporter.ts"],
+        ["./e2e/support/quarantine-reporter.ts"],
+        ["./e2e/support/critical-outcome-reporter.ts", { layer: "journey" }],
+        ["list"],
+      ]
+    : [
+        ["./e2e/support/artifact-reporter.ts"],
+        ["./e2e/support/critical-outcome-reporter.ts", { layer: "journey" }],
+        ["list"],
+      ],
   use: {
     baseURL: E2E_BASE_URL,
     trace: "retain-on-failure",
   },
   webServer: [
+    ...(E2E_KMS_UPSTREAM
+      ? [
+          {
+            command: "node e2e/support/kms-proxy.cjs",
+            cwd: __dirname,
+            url: `${kmsProxy}/health`,
+            reuseExistingServer: false,
+            env: {
+              APP_ENV: "test",
+              BANK_KMS_ENDPOINT_URL: E2E_KMS_UPSTREAM,
+              E2E_KMS_STATE,
+              E2E_KMS_PROXY_PORT: String(runtimePorts.kms),
+            },
+          },
+        ]
+      : []),
     {
       // Started first: the bootstrap below registers its issuer URL, and the
       // dashboard's NextAuth discovers it on the first SSO sign-in.
@@ -85,6 +116,7 @@ export default defineConfig({
       timeout: 300_000,
       env: {
         DATABASE_URL: `sqlite+pysqlite:///${E2E_DB}`,
+        BANK_KMS_ENDPOINT_URL: E2E_KMS_UPSTREAM ? kmsProxy : "",
         WORKER_DATABASE_URL: "",
         // Signer identities need a pepper even with disposable software keys.
         SIGNER_ID_PEPPER: "e2e-signer-pepper-not-production-000",
@@ -127,8 +159,8 @@ export default defineConfig({
         //
         // The other four BI flags stay OFF, which is the production-shaped
         // configuration and deliberate. `BI_MART_ENQUEUE_ENABLED` would enqueue
-        // `bi_mart_refresh` into the `bi` worker lane, and this stack runs no
-        // worker at all — the marts are materialised synchronously by
+        // `bi_mart_refresh` into the `bi` worker lane, and the shared fixture has
+        // no BI-lane worker — the marts are materialised synchronously by
         // `tests/bi/fixtures.py` during bootstrap, exactly as the live
         // plane is, so an enqueue flag here would only orphan jobs in `queued`.
         // `BI_SCHEDULER_ENABLED` / `BI_SUBSCRIPTIONS_ENABLED` add tick branches
@@ -140,8 +172,8 @@ export default defineConfig({
         // and the shell hides the Explore "Ask a question" tab, and `bi-ask.spec.ts`
         // would navigate to a walled-up door and pass on an empty state. Setting it
         // sends nothing to any vendor: the AI gates are separate and all shut here
-        // (no approved configuration, no credential, no `ai`-lane worker), which is
-        // precisely the refusal the wire half of that spec asserts. It is set HERE
+        // (no approved configuration, no credential, no `ai`-lane worker). HTTP
+        // refusals and ownership live in `contracts/bi-ask.spec.ts`. It is set HERE
         // rather than in `backend/.env` so a developer's own flag state cannot change
         // what the journeys see, and the flag-OFF shell is asserted by intercepting
         // `/feature-flags`, as the BI flag's own journey does.

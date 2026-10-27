@@ -1,14 +1,19 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version
 // control:
 // E2E_CAPABILITY_ONLY=1 E2E_EVIDENCE_DIR=<path> pnpm exec playwright test e2e/account-administration-authorization.spec.ts
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/story-identities";
+import { expectBankStatus } from "./support/real-authority";
 import path from "path";
 import { E2E_TMP } from "../playwright.config";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
 test.describe("explicit Account administrator", () => {
-  test.use({ storageState: path.join(E2E_TMP, "account_admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "account_admin.json"),
+    storyConfig: { roles: ["account_admin"] },
+  });
 
   test("can manage authentication without gaining operational modules", async ({
     page,
@@ -17,7 +22,9 @@ test.describe("explicit Account administrator", () => {
     // the Command Center, so the guard routes to Access — not 404.
     await page.goto("/");
     await expect(page).toHaveURL(/\/access(?:[/?#]|$)/);
-    await expect(page.getByText(/404|not found/i)).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Access control", exact: true }),
+    ).toBeVisible();
     await page.goto("/access/authentication");
     await expect(
       page.getByRole("heading", { name: "Authentication (SSO)" }),
@@ -75,6 +82,7 @@ test.describe("explicit Account administrator", () => {
 test.describe("legacy scalar Account administrator", () => {
   test.use({
     storageState: path.join(E2E_TMP, "legacy_account_admin.json"),
+    storyConfig: { roles: ["legacy_account_admin"] },
   });
 
   test("cannot open account administration without a binding", async ({
@@ -109,7 +117,10 @@ test.describe("legacy scalar Account administrator", () => {
 });
 
 test.describe("operational Analyst", () => {
-  test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "analyst.json"),
+    storyConfig: { roles: ["analyst"] },
+  });
 
   test("can use API Push without administering integration keys", async ({
     page,
@@ -138,49 +149,55 @@ test.describe("operational Analyst", () => {
 });
 
 test.describe("Organization Owner", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "admin.json"),
+    storyConfig: { roles: ["admin"], ownedTenant: true },
+  });
 
-  test("signing policies use the registry when Capital reads are unavailable", async ({
-    page,
-  }) => {
-    await page.route("**/auth/me", async (route) => {
-      const response = await route.fetch();
-      const profile = await response.json();
-      for (const institution of profile.effective_authority
-        .institution_capabilities) {
-        institution.capabilities = institution.capabilities.filter(
-          (capability: { module: string }) => capability.module !== "cap",
-        );
-      }
-      await route.fulfill({ response, json: profile });
+  test.describe("Regulatory-only read grants", () => {
+    test.use({
+      storyConfig: {
+        roles: ["admin"],
+        ownedTenant: true,
+        ownerReadModules: ["reg"],
+      },
     });
-    await page.route("**/regulatory-reporting/templates*", async (route) => {
-      const response = await route.fetch();
-      const catalogue = await response.json();
-      if (new URL(route.request().url()).searchParams.has("bank_id")) {
-        catalogue.templates = catalogue.templates.filter(
-          (template: { family: string }) => template.family !== "icaap",
-        );
-      }
-      await route.fulfill({ response, json: catalogue });
-    });
-    await page.goto("/submissions/settings");
-    const selector = page.getByLabel("Return code", { exact: true });
-    await expect(selector).toBeVisible();
-    await expect(selector.locator('option[value="ICAAP-REPORT"]')).toHaveCount(
-      1,
-    );
-    await selector.selectOption("ICAAP-REPORT");
-    await expect(selector).toHaveValue("ICAAP-REPORT");
-    if (evidenceDir) {
-      await page.screenshot({
-        path: path.join(
-          evidenceDir,
-          "owner-signing-policy-without-capital-read.png",
-        ),
-        fullPage: true,
+    test("signing policies use the registry when Capital reads are unavailable", async ({
+      page,
+      storyIdentity,
+    }) => {
+      await expectBankStatus("/capital/dashboard", 403, {
+        role: "admin",
+        bankId: storyIdentity.bankId,
       });
-    }
+      await page.route("**/regulatory-reporting/templates*", async (route) => {
+        const response = await route.fetch();
+        const catalogue = await response.json();
+        if (new URL(route.request().url()).searchParams.has("bank_id")) {
+          catalogue.templates = catalogue.templates.filter(
+            (template: { family: string }) => template.family !== "icaap",
+          );
+        }
+        await route.fulfill({ response, json: catalogue });
+      });
+      await page.goto("/submissions/settings");
+      const selector = page.getByLabel("Return code", { exact: true });
+      await expect(selector).toBeVisible();
+      await expect(
+        selector.locator('option[value="ICAAP-REPORT"]'),
+      ).toHaveCount(1);
+      await selector.selectOption("ICAAP-REPORT");
+      await expect(selector).toHaveValue("ICAAP-REPORT");
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(
+            evidenceDir,
+            "owner-signing-policy-without-capital-read.png",
+          ),
+          fullPage: true,
+        });
+      }
+    });
   });
 
   test("can administer integration keys from Access", async ({ page }) => {

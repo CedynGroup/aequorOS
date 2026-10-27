@@ -20,8 +20,8 @@ _VERSION = "1"
 
 
 def _digest(rc: ResolveContext) -> tuple[str, int]:
-    rows = register_state.register_state_rows(rc.db, rc.access.ctx, rc.access.bank.id)
-    return register_state_digest(rows), len(rows)
+    state = register_state.project_register_state(rc.db, rc.access.ctx, rc.access.bank.id)
+    return register_state_digest(state), len(state["rows"])
 
 
 class InstitutionProfileResolver:

@@ -48,7 +48,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import CursorResult, and_, func, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, undefer_group
 
 from app.api.deps import TenantContext
 from app.bi.service.enqueue import enqueue_mart_refresh
@@ -89,24 +89,14 @@ _ENTITY_MODELS: dict[str, type[CanonicalMetadataMixin]] = {
     "product": CanonicalProduct,
 }
 
-#: Each entity's natural key among the current generation — the same columns its
-#: partial unique index covers. Used to refuse a reversal that would resurrect a
-#: duplicate after the withdrawn book was re-ingested.
 _NATURAL_KEYS: dict[str, tuple[str, ...]] = {
     "position": ("organization_id", "position_id", "as_of_date"),
     "gl_account": ("organization_id", "bank_id", "account_code", "as_of_date"),
-    "counterparty": (
-        "organization_id",
-        "bank_id",
-        "source_system",
-        "source_reference_blind_index",
-        "as_of_date",
-    ),
     "product": ("organization_id", "bank_id", "product_code", "as_of_date"),
 }
 
 assert set(_ENTITY_MODELS) == set(WITHDRAWABLE_ENTITIES)
-assert set(_NATURAL_KEYS) == set(WITHDRAWABLE_ENTITIES)
+assert set(_NATURAL_KEYS) == set(WITHDRAWABLE_ENTITIES) - {"counterparty"}
 
 
 class WithdrawalError(HTTPException):
@@ -488,6 +478,35 @@ def approve_withdrawal(
 # ---------------------------------------------------------------------------
 
 
+def _counterparty_reversal_conflicts(db: Session, row: CanonicalWithdrawal) -> int:
+    scope = (
+        CanonicalCounterparty.organization_id == row.organization_id,
+        CanonicalCounterparty.bank_id == row.bank_id,
+        CanonicalCounterparty.source_system == row.source_system,
+        CanonicalCounterparty.as_of_date == row.as_of_date,
+    )
+    live_references = {
+        party.source_reference
+        for party in db.scalars(
+            select(CanonicalCounterparty)
+            .options(undefer_group("bank_identity"))
+            .where(
+                *scope,
+                CanonicalCounterparty.superseded_by.is_(None),
+                CanonicalCounterparty.withdrawn_at.is_(None),
+            )
+        )
+    }
+    return sum(
+        party.source_reference in live_references
+        for party in db.scalars(
+            select(CanonicalCounterparty)
+            .options(undefer_group("bank_identity"))
+            .where(*scope, CanonicalCounterparty.withdrawn_by_batch_id == row.withdrawal_batch_id)
+        )
+    )
+
+
 def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explicit
     db: Session,
     ctx: TenantContext,
@@ -523,34 +542,36 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
         model.organization_id == row.organization_id,
         model.withdrawn_by_batch_id == row.withdrawal_batch_id,
     ]
-    # Refuse a reversal that would resurrect a duplicate: if the withdrawn book
-    # was re-ingested, its replacement holds the natural key and restoring would
-    # violate the current-generation unique index (or, on SQLite, silently
-    # double-count).
-    key = _NATURAL_KEYS[row.entity]
-    withdrawn_rows = aliased(model)
-    live_rows = aliased(model)
-    conflicts = int(
-        db.scalar(
-            select(func.count())
-            .select_from(withdrawn_rows)
-            .join(
-                live_rows,
-                and_(
-                    *[
-                        getattr(live_rows, column) == getattr(withdrawn_rows, column)
-                        for column in key
-                    ],
-                    *is_current_generation(live_rows),
-                ),
+    # Refuse restoration when a replacement already holds the financial natural
+    # key. Counterparty references must be compared after decryption because
+    # first key connection changes their index representation from raw to HMAC.
+    if model is CanonicalCounterparty:
+        conflicts = _counterparty_reversal_conflicts(db, row)
+    else:
+        key = _NATURAL_KEYS[row.entity]
+        withdrawn_rows = aliased(model)
+        live_rows = aliased(model)
+        conflicts = int(
+            db.scalar(
+                select(func.count())
+                .select_from(withdrawn_rows)
+                .join(
+                    live_rows,
+                    and_(
+                        *[
+                            getattr(live_rows, column) == getattr(withdrawn_rows, column)
+                            for column in key
+                        ],
+                        *is_current_generation(live_rows),
+                    ),
+                )
+                .where(
+                    withdrawn_rows.organization_id == row.organization_id,
+                    withdrawn_rows.withdrawn_by_batch_id == row.withdrawal_batch_id,
+                )
             )
-            .where(
-                withdrawn_rows.organization_id == row.organization_id,
-                withdrawn_rows.withdrawn_by_batch_id == row.withdrawal_batch_id,
-            )
+            or 0
         )
-        or 0
-    )
     if conflicts:
         raise WithdrawalError(
             status_code=status.HTTP_409_CONFLICT,

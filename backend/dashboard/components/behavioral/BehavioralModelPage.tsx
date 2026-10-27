@@ -387,7 +387,7 @@ export default function BehavioralModelPage({
                     assumptions.
                   </p>
                   {applied ? (
-                    <div className="flex items-start gap-3 rounded border border-success/30 bg-success-light/40 p-3">
+                    <div className="flex items-start gap-3 rounded-sm border border-success/30 bg-success-light/40 p-3">
                       <CheckCircle2
                         size={18}
                         className="text-success shrink-0 mt-0.5"

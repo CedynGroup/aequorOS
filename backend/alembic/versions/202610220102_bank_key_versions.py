@@ -4,10 +4,12 @@ Revision ID: 202610220102
 Revises: 202610220101
 """
 
+from typing import cast
+
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import Connection
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from alembic import op
 from app.core.key_management import registry
@@ -38,7 +40,27 @@ def backfill_references(connection: Connection) -> None:
 
 def backfill_versions(connection: Connection) -> None:
     with Session(bind=connection) as db:
-        for key in db.scalars(sa.select(BankEncryptionKey)).all():
+        for key in db.scalars(
+            sa.select(BankEncryptionKey).options(
+                load_only(
+                    BankEncryptionKey.id,
+                    BankEncryptionKey.bank_id,
+                    BankEncryptionKey.organization_id,
+                    BankEncryptionKey.storage_slug,
+                    BankEncryptionKey.provider,
+                    BankEncryptionKey.key_id,
+                    BankEncryptionKey.region,
+                    BankEncryptionKey.owner_account,
+                    BankEncryptionKey.status,
+                    BankEncryptionKey.current_version_id,
+                    BankEncryptionKey.index_version_id,
+                    BankEncryptionKey.checked_at,
+                    BankEncryptionKey.created_at,
+                    BankEncryptionKey.updated_at,
+                    raiseload=True,
+                )
+            )
+        ).all():
             db.info["organization_id"] = key.organization_id
             if connection.dialect.name == "postgresql":
                 _ = db.execute(
@@ -77,6 +99,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    with force_rls_suspended(op.get_bind(), "object_key_envelopes"):
+        if cast(
+            bool,
+            op.get_bind().scalar(sa.text("SELECT EXISTS (SELECT 1 FROM object_key_envelopes)")),
+        ):
+            raise RuntimeError("Bank-encrypted data prohibits schema downgrade.")
     for name in ("current", "index"):
         op.drop_constraint(f"fk_bank_{name}_version", "bank_encryption_keys", type_="foreignkey")
         op.drop_column("bank_encryption_keys", f"{name}_version_id")

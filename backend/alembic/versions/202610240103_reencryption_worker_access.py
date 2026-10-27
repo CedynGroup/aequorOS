@@ -1,7 +1,7 @@
 """Authorize narrow worker key maintenance and audit retention counts.
 
 Revision ID: 202610240103
-Revises: 202610220102
+Revises: 202610270001
 """
 
 from typing import cast
@@ -9,7 +9,7 @@ from typing import cast
 from alembic import op
 
 revision = "202610240103"
-down_revision = "202610220102"
+down_revision = "202610270001"
 branch_labels = None
 depends_on = None
 

@@ -23,12 +23,7 @@ IMMUTABLE_FIELDS = {"bi_dashboard_versions": {"spec"}, "regulatory_packages": {"
 
 def lock_bank(db: Session, organization: str, bank: str, *, exclusive: bool = False) -> None:
     """Drain admitted units for a cutover; ordinary units share the same lock."""
-    if db.get_bind().dialect.name == "postgresql":
-        function = "pg_advisory_xact_lock" if exclusive else "pg_advisory_xact_lock_shared"
-        _ = db.execute(
-            text(f"SELECT {function}(hashtextextended(:scope, 0))"),
-            {"scope": f"bank-encryption-maintenance:{organization}:{bank}"},
-        )
+    registry.lock_bank_version(db, organization, bank, read=not exclusive)
 
 
 def protected_tables() -> list[Table]:

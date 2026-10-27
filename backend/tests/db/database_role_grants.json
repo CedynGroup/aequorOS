@@ -112,6 +112,34 @@
     ["aequoros_signed_package_guard", "", "aqs_bi"],
     ["aequoros_signed_package_guard", "", "aqs_operator"],
     ["aequoros_signed_package_guard", "", "aqs_worker"],
+    ["aqs_worker_audit_check", "timestamp with time zone", "aqs_worker"],
+    ["aqs_worker_bank_key", "text", "aqs_worker"],
+    [
+      "aqs_worker_claim_job",
+      "timestamp with time zone, text[], text",
+      "aqs_worker"
+    ],
+    ["aqs_worker_desk_schema", "", "aqs_worker"],
+    ["aqs_worker_drop_daily_partition", "regclass, date", "aqs_worker"],
+    ["aqs_worker_enqueue_platform_daily", "text, date, jsonb", "aqs_worker"],
+    ["aqs_worker_ensure_month_partition", "regclass, date", "aqs_worker"],
+    ["aqs_worker_ensure_year_partition", "regclass, date", "aqs_worker"],
+    [
+      "aqs_worker_overdue_jobs",
+      "double precision, text[], boolean",
+      "aqs_worker"
+    ],
+    [
+      "aqs_worker_reclaim_jobs",
+      "timestamp with time zone, jsonb",
+      "aqs_worker"
+    ],
+    ["aqs_worker_seed_ticks", "timestamp with time zone", "aqs_worker"],
+    ["aqs_worker_storage_key_required", "text", "aqs_worker"],
+    ["bank_audit_inspection_context", "text, uuid", "aqs_api"],
+    ["bank_audit_inspection_context", "text, uuid", "aqs_audit_verifier"],
+    ["bank_audit_previous_link", "text, bigint, text", "aqs_api"],
+    ["bank_audit_previous_link", "text, bigint, text", "aqs_audit_verifier"],
     ["bi_ensure_month_partition", "regclass, date", "aqs_api"]
   ],
   "sequences": [],
@@ -130,7 +158,8 @@
       "aqs_worker": ["INSERT", "SELECT"]
     },
     "audit_chain_entries": {
-      "aqs_audit_verifier": ["SELECT"]
+      "aqs_audit_verifier": ["SELECT"],
+      "aqs_api": ["SELECT"]
     },
     "audit_chain_heads": {
       "aqs_audit_verifier": ["SELECT"]
@@ -150,7 +179,7 @@
       "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
     },
     "bank_encryption_keys": {
-      "aqs_api": ["SELECT"],
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["SELECT"]
     },
     "bank_financial_facts": {
@@ -681,7 +710,8 @@
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
     "operator_audit_log": {
-      "aqs_audit_verifier": ["SELECT"]
+      "aqs_audit_verifier": ["SELECT"],
+      "aqs_api": ["SELECT"]
     },
     "operator_inspector_sessions": {},
     "operator_users": {},
@@ -835,7 +865,9 @@
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
-    "retained_bank_keys": {},
+    "retained_bank_keys": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"]
+    },
     "return_signature_placements": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
@@ -937,6 +969,30 @@
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
-    "worker_heartbeats": {}
+    "worker_heartbeats": {
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    }
+  },
+  "worker_views": {
+    "columns": [],
+    "functions": [],
+    "sequences": [],
+    "tables": {
+      "desk_curve_definitions": {
+        "aqs_worker": ["SELECT"]
+      },
+      "desk_determinations": {
+        "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+      },
+      "desk_methodologies": {
+        "aqs_worker": ["SELECT"]
+      },
+      "desk_observations": {
+        "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+      },
+      "desk_source_captures": {
+        "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+      }
+    }
   }
 }

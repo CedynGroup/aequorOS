@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * "Connect a database" — the onboarding form: backend + endpoint + schemas +
@@ -8,24 +8,24 @@
  * fingerprint on the connection card.
  */
 
-import { useState } from 'react';
-import { CheckCircle2, Loader2, Plug, XCircle } from 'lucide-react';
+import { useState } from "react";
+import { CheckCircle2, Loader2, Plug, XCircle } from "lucide-react";
 import type {
   DatabaseConnectionRead,
   DatabaseConnectionTestResult,
-} from '@aequoros/risk-service-api';
-import { isApiError } from '@/lib/api/client';
+} from "@aequoros/risk-service-api";
+import { isApiError } from "@/lib/api/client";
 import {
   useCreateDatabaseConnection,
   useTestDatabaseConnection,
-} from '@/lib/api/database-direct';
+} from "@/lib/api/database-direct";
 import ConnectionForm, {
   type DbFormState,
   buildCreatePayload,
   emptyFormState,
-} from './ConnectionForm';
-import { ConnectionStatusPill, extraIsValid } from './shared';
-import { fmtLocale } from '@/lib/format';
+} from "./ConnectionForm";
+import { ConnectionStatusPill, extraIsValid } from "./shared";
+import { fmtLocale } from "@/lib/format";
 
 export default function AddConnectionPanel({
   bankId,
@@ -39,13 +39,14 @@ export default function AddConnectionPanel({
   const create = useCreateDatabaseConnection(bankId);
   const test = useTestDatabaseConnection(bankId);
 
-  const [form, setForm] = useState<DbFormState>(() => emptyFormState('oracle'));
+  const [form, setForm] = useState<DbFormState>(() => emptyFormState("oracle"));
   const [created, setCreated] = useState<DatabaseConnectionRead | null>(null);
-  const [testResult, setTestResult] = useState<DatabaseConnectionTestResult | null>(null);
+  const [testResult, setTestResult] =
+    useState<DatabaseConnectionTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
-  const isSnowflake = form.backend === 'snowflake';
+  const isSnowflake = form.backend === "snowflake";
   const nameTaken =
     form.displayName.trim().length > 0 &&
     existingNames.includes(form.displayName.trim());
@@ -57,7 +58,7 @@ export default function AddConnectionPanel({
   const snowflakeConfigIncomplete =
     isSnowflake &&
     (!form.snowflake.account.trim() || !form.snowflake.warehouse.trim());
-  const extraInvalid = !extraIsValid(form.cred.extra ?? '');
+  const extraInvalid = !extraIsValid(form.cred.extra ?? "");
   const canSubmit =
     Boolean(form.displayName.trim()) &&
     !nameTaken &&
@@ -72,7 +73,7 @@ export default function AddConnectionPanel({
     try {
       const connection = await create.mutateAsync(buildCreatePayload(form));
       setCreated(connection);
-      if (!connection.validationError && connection.status !== 'TESTING') {
+      if (!connection.validationError && connection.status !== "TESTING") {
         setTestResult(await test.mutateAsync(connection.id));
       }
     } catch (caught) {
@@ -81,7 +82,7 @@ export default function AddConnectionPanel({
           ? caught.message
           : caught instanceof Error
             ? caught.message
-            : 'Could not create the connection.',
+            : "Could not create the connection.",
       );
     } finally {
       setRunning(false);
@@ -94,9 +95,9 @@ export default function AddConnectionPanel({
         <div>
           <h2 className="text-h2 text-navy">Connect a database</h2>
           <p className="mt-1 text-body text-slate">
-            A read-only connection to a bank-hosted reporting replica. AequorOS connects
-            from the deployment, never the browser. Credentials are encrypted at rest and
-            never displayed again.
+            A read-only connection to a bank-hosted reporting replica. AequorOS
+            connects from the deployment, never the browser. Credentials are
+            encrypted at rest and never displayed again.
           </p>
         </div>
         <button
@@ -112,7 +113,9 @@ export default function AddConnectionPanel({
         <>
           <ConnectionForm
             form={form}
-            onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+            onChange={(patch) =>
+              setForm((current) => ({ ...current, ...patch }))
+            }
             idPrefix="add-db"
             credentialsMode="required"
           />
@@ -128,7 +131,7 @@ export default function AddConnectionPanel({
               type="button"
               onClick={() => void createAndTest()}
               disabled={!canSubmit}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {running ? (
                 <Loader2 size={15} className="animate-spin" aria-hidden />
@@ -140,8 +143,8 @@ export default function AddConnectionPanel({
             {(credentialsIncomplete || snowflakeConfigIncomplete) && (
               <span className="text-caption text-slate">
                 {isSnowflake
-                  ? 'A service user, private key, account, and warehouse are required to create the connection.'
-                  : 'A service user and password are required to create the connection.'}
+                  ? "A service user, private key, account, and warehouse are required to create the connection."
+                  : "A service user and password are required to create the connection."}
               </span>
             )}
           </div>
@@ -151,14 +154,14 @@ export default function AddConnectionPanel({
           <div className="flex items-center gap-2">
             <ConnectionStatusPill status={created.status} />
             <p className="text-body text-navy">
-              {created.status === 'TESTING'
-                ? 'Connection stored, but credential validation failed — fix it from the connection card (Edit).'
+              {created.status === "TESTING"
+                ? "Connection stored, but credential validation failed — fix it from the connection card (Edit)."
                 : `${created.displayName} created.`}
             </p>
           </div>
 
           {created.validationError && (
-            <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+            <div className="rounded-sm border border-warning/30 bg-warning-light/50 px-4 py-3">
               <p className="text-body text-navy">{created.validationError}</p>
             </div>
           )}
@@ -167,25 +170,31 @@ export default function AddConnectionPanel({
             <div
               className={`rounded border px-4 py-3 space-y-2 ${
                 testResult.reachable
-                  ? 'border-success/30 bg-success-light/50'
-                  : 'border-critical/30 bg-critical-light/40'
+                  ? "border-success/30 bg-success-light/50"
+                  : "border-critical/30 bg-critical-light/40"
               }`}
             >
               <div className="flex items-center gap-2">
                 {testResult.reachable ? (
-                  <CheckCircle2 size={15} className="text-success" aria-hidden />
+                  <CheckCircle2
+                    size={15}
+                    className="text-success"
+                    aria-hidden
+                  />
                 ) : (
                   <XCircle size={15} className="text-critical" aria-hidden />
                 )}
                 <p className="text-body font-medium text-navy">
-                  {testResult.reachable ? 'Reachable' : 'Not reachable'}
+                  {testResult.reachable ? "Reachable" : "Not reachable"}
                 </p>
               </div>
               {testResult.reachable ? (
                 <ul className="space-y-0.5 text-body text-navy font-mono">
                   {testResult.latencyMs != null && (
                     <li>
-                      latency: {Number(testResult.latencyMs).toLocaleString(fmtLocale())} ms
+                      latency:{" "}
+                      {Number(testResult.latencyMs).toLocaleString(fmtLocale())}{" "}
+                      ms
                     </li>
                   )}
                   {testResult.tablesPulled != null && (
@@ -195,7 +204,8 @@ export default function AddConnectionPanel({
               ) : (
                 <>
                   <p className="text-body text-navy">
-                    {testResult.error ?? 'The connection could not be established.'}
+                    {testResult.error ??
+                      "The connection could not be established."}
                   </p>
                   {testResult.errorCode && (
                     <p className="text-caption font-mono text-slate">
@@ -210,7 +220,7 @@ export default function AddConnectionPanel({
           <button
             type="button"
             onClick={onDone}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded text-body font-medium bg-action text-white hover:bg-action-hover"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover"
           >
             Done
           </button>
@@ -218,7 +228,7 @@ export default function AddConnectionPanel({
       )}
 
       {error && (
-        <div className="rounded border border-critical/30 bg-critical-light/40 px-4 py-3">
+        <div className="rounded-sm border border-critical/30 bg-critical-light/40 px-4 py-3">
           <p className="text-body text-critical">{error}</p>
         </div>
       )}

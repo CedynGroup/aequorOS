@@ -65,6 +65,8 @@
             "enum": [
               "viewer",
               "auditor",
+              "security_officer",
+              "compliance_officer",
               "analyst",
               "approver",
               "validator",
@@ -1904,6 +1906,193 @@
         "title": "AttestationStatusRead",
         "type": "object"
       },
+      "AuditEventRead": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "actor_kind": {
+            "enum": [
+              "bank_user",
+              "aequoros_staff",
+              "system"
+            ],
+            "title": "Actor Kind",
+            "type": "string"
+          },
+          "after": {
+            "$ref": "#/components/schemas/pydantic__types__JsonValue"
+          },
+          "before": {
+            "$ref": "#/components/schemas/pydantic__types__JsonValue"
+          },
+          "details": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/pydantic__types__JsonValue"
+            },
+            "title": "Details",
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "integrity": {
+            "default": "unavailable",
+            "enum": [
+              "verified",
+              "failed",
+              "unavailable"
+            ],
+            "title": "Integrity",
+            "type": "string"
+          },
+          "integrity_scope": {
+            "const": "event_payload_and_previous_link",
+            "default": "event_payload_and_previous_link",
+            "title": "Integrity Scope",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "stream": {
+            "enum": [
+              "audit_events",
+              "operator_audit_log"
+            ],
+            "title": "Stream",
+            "type": "string"
+          },
+          "support_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Reference"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "target_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Type"
+          }
+        },
+        "required": [
+          "id",
+          "stream",
+          "actor",
+          "actor_kind",
+          "action",
+          "target_type",
+          "target_id",
+          "occurred_at",
+          "source",
+          "outcome",
+          "details"
+        ],
+        "title": "AuditEventRead",
+        "type": "object"
+      },
+      "AuditLogRead": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEventRead"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "AuditLogRead",
+        "type": "object"
+      },
       "AwaitingSignatureListRead": {
         "additionalProperties": false,
         "properties": {
@@ -2334,6 +2523,270 @@
           "is_stale"
         ],
         "title": "BankFreshnessRead",
+        "type": "object"
+      },
+      "BankKeyConnect": {
+        "additionalProperties": false,
+        "properties": {
+          "key_id": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "pattern": "^arn:aws[^:]*:kms:",
+            "title": "Key Id",
+            "type": "string"
+          },
+          "owner_account": {
+            "pattern": "^\\d{12}$",
+            "title": "Owner Account",
+            "type": "string"
+          },
+          "provider": {
+            "const": "aws_kms",
+            "default": "aws_kms",
+            "title": "Provider",
+            "type": "string"
+          },
+          "region": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Region",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "region",
+          "owner_account"
+        ],
+        "title": "BankKeyConnect",
+        "type": "object"
+      },
+      "BankKeyRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "key_id": {
+            "title": "Key Id",
+            "type": "string"
+          },
+          "owner_account": {
+            "title": "Owner Account",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "region": {
+            "title": "Region",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/KeyStatus"
+          }
+        },
+        "required": [
+          "bank_id",
+          "provider",
+          "key_id",
+          "region",
+          "owner_account",
+          "status",
+          "checked_at"
+        ],
+        "title": "BankKeyRead",
+        "type": "object"
+      },
+      "BankKeyRotate": {
+        "additionalProperties": false,
+        "properties": {
+          "key_id": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "pattern": "^arn:aws[^:]*:kms:",
+            "title": "Key Id",
+            "type": "string"
+          },
+          "owner_account": {
+            "pattern": "^\\d{12}$",
+            "title": "Owner Account",
+            "type": "string"
+          },
+          "provider": {
+            "const": "aws_kms",
+            "default": "aws_kms",
+            "title": "Provider",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          },
+          "region": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Region",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "region",
+          "owner_account",
+          "reason"
+        ],
+        "title": "BankKeyRotate",
+        "type": "object"
+      },
+      "BankKeyScheduleConfirm": {
+        "additionalProperties": false,
+        "properties": {
+          "key_id": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Key Id",
+            "type": "string"
+          },
+          "period_days": {
+            "maximum": 2560.0,
+            "minimum": 90.0,
+            "title": "Period Days",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "period_days",
+          "reason"
+        ],
+        "title": "BankKeyScheduleConfirm",
+        "type": "object"
+      },
+      "BankKeyStatusRead": {
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "current_version": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankKeyRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_rotated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Rotated At"
+          },
+          "last_successful_use_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Successful Use At"
+          },
+          "rotation_confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotation Confirmed At"
+          },
+          "rotation_period_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotation Period Days"
+          },
+          "workload_role_arn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workload Role Arn"
+          }
+        },
+        "required": [
+          "connected"
+        ],
+        "title": "BankKeyStatusRead",
+        "type": "object"
+      },
+      "BankKeyTestRead": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "passed",
+          "message"
+        ],
+        "title": "BankKeyTestRead",
         "type": "object"
       },
       "BankLicenseCreate": {
@@ -8322,6 +8775,8 @@
             "enum": [
               "viewer",
               "auditor",
+              "security_officer",
+              "compliance_officer",
               "analyst",
               "approver",
               "validator",
@@ -8474,6 +8929,8 @@
             "enum": [
               "viewer",
               "auditor",
+              "security_officer",
+              "compliance_officer",
               "analyst",
               "approver",
               "validator",
@@ -14407,6 +14864,12 @@
             "title": "Approval Reference",
             "type": "string"
           },
+          "expected_revision": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Expected Revision",
+            "type": "string"
+          },
           "reason": {
             "maxLength": 2000,
             "minLength": 1,
@@ -14415,6 +14878,7 @@
           }
         },
         "required": [
+          "expected_revision",
           "approval_reference",
           "reason"
         ],
@@ -15150,6 +15614,10 @@
             ],
             "title": "Prepared By"
           },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          },
           "status": {
             "$ref": "#/components/schemas/CfpStatus"
           },
@@ -15167,6 +15635,7 @@
           "id",
           "bank_id",
           "version",
+          "revision",
           "status",
           "content",
           "created_at",
@@ -15945,6 +16414,13 @@
             "title": "Limit Count",
             "type": "integer"
           },
+          "locked_limits": {
+            "items": {
+              "$ref": "#/components/schemas/LockedConcentrationLimitRead"
+            },
+            "title": "Locked Limits",
+            "type": "array"
+          },
           "total_book_ghs": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Total Book Ghs",
@@ -15957,7 +16433,8 @@
           "capital_basis",
           "dimensions",
           "breaches",
-          "limit_count"
+          "limit_count",
+          "locked_limits"
         ],
         "title": "CreditConcentrationRead",
         "type": "object"
@@ -22329,14 +22806,14 @@
             "type": "string"
           },
           "new_value": {
-            "$ref": "#/components/schemas/JsonValue-Output"
+            "$ref": "#/components/schemas/app__schemas__common__JsonValue-Output"
           },
           "organization_id": {
             "title": "Organization Id",
             "type": "string"
           },
           "previous_value": {
-            "$ref": "#/components/schemas/JsonValue-Output"
+            "$ref": "#/components/schemas/app__schemas__common__JsonValue-Output"
           },
           "reason": {
             "anyOf": [
@@ -41361,7 +41838,7 @@
       },
       "JsonObject-Output": {
         "additionalProperties": {
-          "$ref": "#/components/schemas/JsonValue-Output"
+          "$ref": "#/components/schemas/app__schemas__common__JsonValue-Output"
         },
         "type": "object"
       },
@@ -41388,37 +41865,6 @@
           {
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue-Input"
-            },
-            "type": "object"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "JsonValue-Output": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "integer"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "items": {
-              "$ref": "#/components/schemas/JsonValue-Output"
-            },
-            "type": "array"
-          },
-          {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue-Output"
             },
             "type": "object"
           },
@@ -41506,6 +41952,15 @@
         ],
         "title": "JurisdictionRead",
         "type": "object"
+      },
+      "KeyStatus": {
+        "enum": [
+          "active",
+          "disabled",
+          "unavailable"
+        ],
+        "title": "KeyStatus",
+        "type": "string"
       },
       "LicenseStatus": {
         "enum": [
@@ -43348,6 +43803,37 @@
           "non_performing"
         ],
         "title": "LoanGradeBucketRead",
+        "type": "object"
+      },
+      "LockedConcentrationLimitRead": {
+        "additionalProperties": false,
+        "properties": {
+          "dimension": {
+            "title": "Dimension",
+            "type": "string"
+          },
+          "limit_kind": {
+            "title": "Limit Kind",
+            "type": "string"
+          },
+          "limit_status": {
+            "const": "locked",
+            "default": "locked",
+            "title": "Limit Status",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dimension",
+          "limit_kind",
+          "value"
+        ],
+        "title": "LockedConcentrationLimitRead",
         "type": "object"
       },
       "LoginRequest": {
@@ -47238,23 +47724,56 @@
         "description": "A line-item figures diff between two versions of the same return.",
         "properties": {
           "added_count": {
-            "title": "Added Count",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added Count"
           },
           "base": {
             "$ref": "#/components/schemas/PackageComparisonSideRead"
           },
           "changed_count": {
-            "title": "Changed Count",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed Count"
           },
-          "identical": {
-            "title": "Identical",
+          "content_locked": {
+            "default": false,
+            "title": "Content Locked",
             "type": "boolean"
           },
+          "identical": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identical"
+          },
           "removed_count": {
-            "title": "Removed Count",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed Count"
           },
           "sections": {
             "items": {
@@ -47267,8 +47786,15 @@
             "$ref": "#/components/schemas/PackageComparisonSideRead"
           },
           "unchanged_section_count": {
-            "title": "Unchanged Section Count",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unchanged Section Count"
           }
         },
         "required": [
@@ -52085,23 +52611,165 @@
         "title": "RelatedPartyRoleRead",
         "type": "object"
       },
-      "RelatedPartyUpdate": {
+      "RelatedPartyRoleUpdate": {
         "additionalProperties": false,
-        "description": "Full replacement; ``roles`` is replace-on-write.",
         "properties": {
-          "contact": {
-            "additionalProperties": true,
-            "title": "Contact",
-            "type": "object"
+          "annual_fees": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Fees"
           },
-          "full_name": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Full Name",
+          "appointed_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Appointed On"
+          },
+          "icag_registration": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icag Registration"
+          },
+          "other_responsibilities": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other Responsibilities"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelatedPartyRoleCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role_id": {
+            "format": "uuid",
+            "title": "Role Id",
             "type": "string"
           },
+          "sitting_allowance": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sitting Allowance"
+          },
+          "term_of_appointment": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Of Appointment"
+          },
+          "travel_allowance": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travel Allowance"
+          }
+        },
+        "required": [
+          "role_id"
+        ],
+        "title": "RelatedPartyRoleUpdate",
+        "type": "object"
+      },
+      "RelatedPartyUpdate": {
+        "additionalProperties": false,
+        "description": "Supplied fields change; explicit roles replace, role_updates retain IDs.",
+        "properties": {
+          "contact": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
           "party_type": {
-            "$ref": "#/components/schemas/PartyType"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartyType"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reason": {
             "maxLength": 500,
@@ -52110,9 +52778,15 @@
             "type": "string"
           },
           "regulated_elsewhere": {
-            "default": false,
-            "title": "Regulated Elsewhere",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulated Elsewhere"
           },
           "regulated_jurisdiction": {
             "anyOf": [
@@ -52126,6 +52800,13 @@
             ],
             "title": "Regulated Jurisdiction"
           },
+          "role_updates": {
+            "items": {
+              "$ref": "#/components/schemas/RelatedPartyRoleUpdate"
+            },
+            "title": "Role Updates",
+            "type": "array"
+          },
           "roles": {
             "items": {
               "$ref": "#/components/schemas/RelatedPartyRoleInput"
@@ -52134,14 +52815,18 @@
             "type": "array"
           },
           "status": {
-            "$ref": "#/components/schemas/PartyStatus",
-            "default": "active"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartyStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
-          "reason",
-          "party_type",
-          "full_name"
+          "reason"
         ],
         "title": "RelatedPartyUpdate",
         "type": "object"
@@ -57302,6 +57987,8 @@
             "enum": [
               "viewer",
               "auditor",
+              "security_officer",
+              "compliance_officer",
               "analyst",
               "approver",
               "validator",
@@ -60502,7 +61189,39 @@
         ],
         "title": "YieldCurveViewRead",
         "type": "object"
-      }
+      },
+      "app__schemas__common__JsonValue-Output": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "items": {
+              "$ref": "#/components/schemas/app__schemas__common__JsonValue-Output"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/app__schemas__common__JsonValue-Output"
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pydantic__types__JsonValue": {}
     },
     "securitySchemes": {
       "HTTPBearer": {
@@ -64802,6 +65521,218 @@
         "summary": "Compute Window Analytics",
         "tags": [
           "window-analytics"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/audit-log": {
+      "get": {
+        "description": "Newest first, with an inclusive start and exclusive end in UTC.\n\nVerification covers the event payload and its stored predecessor link;\na bank feed cannot certify the full platform stream or its global head.",
+        "operationId": "readBankAuditLog",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 320,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "event_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Outcome"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2048,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Bank Audit Log",
+        "tags": [
+          "audit-log"
         ]
       }
     },
@@ -75946,6 +76877,529 @@
         "summary": "Update Ecl Assumption Register",
         "tags": [
           "credit-params"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/encryption-key": {
+      "get": {
+        "operationId": "getBankKeyStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankKeyStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Status",
+        "tags": [
+          "bank-encryption"
+        ]
+      },
+      "put": {
+        "operationId": "connectBankKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BankKeyConnect"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankKeyStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Connect",
+        "tags": [
+          "bank-encryption"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/encryption-key/rotate": {
+      "post": {
+        "operationId": "rotateBankKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BankKeyRotate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankKeyStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rotate",
+        "tags": [
+          "bank-encryption"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/encryption-key/schedule-confirmation": {
+      "post": {
+        "operationId": "confirmBankKeyRotationSchedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BankKeyScheduleConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankKeyStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm Schedule",
+        "tags": [
+          "bank-encryption"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/encryption-key/test": {
+      "post": {
+        "operationId": "testBankKeyConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BankKeyConnect"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankKeyTestRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Test Connection",
+        "tags": [
+          "bank-encryption"
         ]
       }
     },

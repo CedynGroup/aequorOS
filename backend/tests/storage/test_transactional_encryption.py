@@ -12,14 +12,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from sqlalchemy import Connection, Engine, event, select, text
-from sqlalchemy.orm import Session, SessionTransaction
+from sqlalchemy.orm import Session, SessionTransaction, undefer_group
 
 from app.api import deps
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
-from app.data_engine.service.field_search import find_counterparties
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.features import ingest_data
 from app.identity.public import Bank
@@ -33,7 +32,7 @@ from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.schemas.push import PushBatchOpen, PushRecordsPage
 from app.services import ingestion, push_ingestion
 from app.storage import encryption
-from app.storage.client import StorageAccessError, StorageError, StorageLocation
+from app.storage.client import StorageError, StorageLocation
 from app.storage.config import StorageEngineSettings
 from app.storage.encryption import ObjectEncryption
 from app.storage.s3_compatible import S3CompatibleStorageClient
@@ -307,12 +306,19 @@ def test_transactional_storage_runs_during_version_rotation(
     restored = db_session.get(CanonicalCounterparty, original_id)
     assert restored is not None and restored.name == NAME
     if operation in ("ingestion", "push"):
-        assert (
-            find_counterparties(db_session, CTX, BANK_A, field="source_reference", value=REFERENCE)[
-                0
-            ].name
-            == NAME
+        ingested = list(
+            db_session.scalars(
+                select(CanonicalCounterparty)
+                .options(undefer_group("bank_identity"))
+                .where(
+                    CanonicalCounterparty.organization_id == ORG_1,
+                    CanonicalCounterparty.bank_id == BANK_A,
+                    CanonicalCounterparty.superseded_by.is_(None),
+                    CanonicalCounterparty.withdrawn_at.is_(None),
+                )
+            )
         )
+        assert any(row.source_reference == REFERENCE and row.name == NAME for row in ingested)
     db_session.commit()
     encrypted_objects = [
         *storage.list(SLUG, "raw"),
@@ -466,13 +472,17 @@ def test_bulk_fields_and_objects_unwrap_once_per_version_and_discard_on_boundary
     assert calls == 1
     provider.set_status(KEY, KeyStatus.DISABLED)
     db_session.expunge_all()
-    assert len(list(db_session.scalars(select(CanonicalCounterparty)))) == 30
+    cached = list(db_session.scalars(select(CanonicalCounterparty)))
+    assert len(cached) == 30 and all(row.name == NAME for row in cached)
+    assert calls == 1
     db_session.commit()
     db_session.expunge_all()
+    loaded = list(db_session.scalars(select(CanonicalCounterparty)))
+    assert len(loaded) == 30
     with pytest.raises(KeyUnavailableError):
-        list(db_session.scalars(select(CanonicalCounterparty)))
+        _ = loaded[0].name
     db_session.rollback()
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError):
         bank_storage.storage.for_session(db_session).read(location)
 
 
@@ -591,7 +601,7 @@ def test_uncommitted_key_version_cannot_publish_objects(
     location = StorageLocation(SLUG, "raw", "synthetic/uncommitted.csv")
     row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
     registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider)
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError):
         bank_storage.storage.for_session(db_session).write(
             location,
             io.BytesIO(b"synthetic"),

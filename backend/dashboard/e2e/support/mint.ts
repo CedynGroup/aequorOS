@@ -13,6 +13,7 @@ import { encode } from "@auth/core/jwt";
 import { mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import identities from "./identities.json";
+import { currentAuthorizationVersion } from "./current-authorization";
 
 export const E2E_ORG_ID = "OR-DEM00001";
 export const E2E_JWT_SECRET = "e2e-backend-jwt-secret-not-production-000";
@@ -30,9 +31,17 @@ export const E2E_AUTH_SECRET = "e2e-nextauth-secret-not-production-000";
  */
 export const E2E_PASSWORD = "e2e-step-up-password-not-production-000";
 
+/** Bootstrap versions describe initial state; default minting reads current persisted authority. */
 export const E2E_USERS: Record<
   string,
-  { id: string; roles: string[]; authv: number; organizationId?: string }
+  {
+    id: string;
+    roles: string[];
+    authv: number;
+    organizationId?: string;
+    email?: string;
+    displayName?: string;
+  }
 > = {
   // Bootstrap gives every human baseline membership. Admin then receives two
   // initial-ownership grants (owner and read access) and an organization-wide
@@ -50,6 +59,21 @@ export const E2E_USERS: Record<
   },
   analyst: {
     id: identities.bootstrap.analyst,
+    roles: ["analyst"],
+    authv: 3,
+  },
+  encryption_revocation: {
+    ...identities.journey.encryption_revocation,
+    roles: ["analyst"],
+    authv: 3,
+  },
+  encryption_outage: {
+    ...identities.journey.encryption_outage,
+    roles: ["analyst"],
+    authv: 3,
+  },
+  encryption_rotation: {
+    ...identities.journey.encryption_rotation,
     roles: ["analyst"],
     authv: 3,
   },
@@ -192,6 +216,9 @@ export const E2E_STORAGE_ROLES = [
   "validator",
 ] as const satisfies readonly (keyof typeof E2E_USERS)[];
 
+export const e2eEmail = (role: string): string =>
+  E2E_USERS[role].email ?? `e2e.${role}@aequoros.example`;
+
 export async function mintBackendToken(
   role: keyof typeof E2E_USERS,
   authorizationVersion?: number,
@@ -202,9 +229,11 @@ export async function mintBackendToken(
     org: user.organizationId ?? E2E_ORG_ID,
     roles: user.roles,
     type: "access",
-    authv: authorizationVersion ?? user.authv,
-    email: `e2e.${String(role)}@aequoros.example`,
-    name: `E2E ${String(role)}`,
+    authv:
+      authorizationVersion ??
+      currentAuthorizationVersion(user.id, user.organizationId ?? E2E_ORG_ID),
+    email: e2eEmail(role),
+    name: user.displayName ?? `E2E ${String(role)}`,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
@@ -220,18 +249,23 @@ export async function mintSessionCookie(
   authorizationVersion?: number,
 ): Promise<string> {
   const user = E2E_USERS[role];
-  const accessToken = await mintBackendToken(role, authorizationVersion);
+  // One generation binds the outer session and its embedded access token.
+  // An explicit override remains available for deliberately stale sessions.
+  const version =
+    authorizationVersion ??
+    currentAuthorizationVersion(user.id, user.organizationId ?? E2E_ORG_ID);
+  const accessToken = await mintBackendToken(role, version);
   return encode({
     token: {
       sub: user.id,
-      name: `E2E ${String(role)}`,
-      email: `e2e.${String(role)}@aequoros.example`,
+      name: user.displayName ?? `E2E ${String(role)}`,
+      email: e2eEmail(role),
       accessToken,
       refreshToken: accessToken,
       accessTokenExpires: Date.now() + 2 * 60 * 60 * 1000,
       organizationId: user.organizationId ?? E2E_ORG_ID,
       roles: user.roles,
-      authorizationVersion: authorizationVersion ?? user.authv,
+      authorizationVersion: version,
     },
     secret: E2E_AUTH_SECRET,
     salt: "authjs.session-token",

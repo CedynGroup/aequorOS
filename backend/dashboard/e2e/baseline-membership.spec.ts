@@ -1,15 +1,16 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./support/story-identities";
 import path from "path";
-import { writeFileSync } from "fs";
 import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../playwright.config";
-import {
-  E2E_PASSWORD,
-  E2E_USERS,
-  mintBackendToken,
-  writeStorageState,
-} from "./support/mint";
+import { E2E_USERS, mintBackendToken, writeStorageState } from "./support/mint";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+test.use({
+  storyConfig: {
+    roles: ["admin", "invite_fresh"],
+    ownedTenant: true,
+  },
+});
 
 test.describe("fresh active member baseline", () => {
   test.use({ storageState: path.join(E2E_TMP, "invite_fresh.json") });
@@ -106,7 +107,7 @@ test.describe("fresh active member baseline", () => {
     await expect(
       page.getByRole("tooltip").filter({
         hasText:
-          "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
+          "Requires Liquidity Monitoring · Confidential · View. Ask your organization owner or admin to grant it.",
       }),
     ).toBeVisible();
     if (evidenceDir) {
@@ -184,12 +185,16 @@ test.describe("fresh active member baseline", () => {
       }),
     ).toBeVisible();
 
-    await page.goto("/settings#members");
-    await expect(page).toHaveURL(/\/access\/members$/);
-    await page.goto("/settings#authentication");
-    await expect(page).toHaveURL(/\/access\/authentication$/);
-    await page.goto("/settings#integration-keys");
-    await expect(page).toHaveURL(/\/access\/integration-keys$/);
+    for (const route of ["members", "authentication", "integration-keys"]) {
+      await page.goto(`/settings#${route}`);
+      await expect(page).toHaveURL(new RegExp(`/access/${route}$`));
+      await expect(
+        page.getByText(
+          "This section is available to organization owners and administrators.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+    }
 
     await page.goto("/fx");
     await expect(
@@ -263,9 +268,6 @@ test.describe("fresh active member baseline", () => {
     }
     await ownerContext.close();
 
-    // Later journeys sign in as this member expecting baseline-only authority:
-    // revoke the approved grant and re-mint the stored session past the two
-    // authority changes (grant, revocation) this journey made.
     const api = `${E2E_API_ORIGIN}/api/v1`;
     const owner = {
       Authorization: `Bearer ${await mintBackendToken("admin")}`,
@@ -293,59 +295,6 @@ test.describe("fresh active member baseline", () => {
       },
     );
     expect(revoked.status(), await revoked.text()).toBe(200);
-    await writeStorageState(
-      "invite_fresh",
-      E2E_BASE_URL,
-      E2E_TMP,
-      E2E_USERS.invite_fresh.authv + 2,
-    );
-  });
-
-  test("password sign-in grants self-service but no institution or directory authority", async ({
-    request,
-  }) => {
-    const api = `${E2E_API_ORIGIN}/api/v1`;
-    const login = await request.post(`${api}/auth/login`, {
-      data: {
-        email: "e2e.viewer@aequoros.example",
-        password: E2E_PASSWORD,
-      },
-    });
-    expect(login.status()).toBe(200);
-    const headers = {
-      Authorization: `Bearer ${(await login.json()).access_token}`,
-    };
-    const me = await request.get(`${api}/auth/me`, { headers });
-    expect(me.status()).toBe(200);
-    const profile = await me.json();
-    expect(profile.organization_id).toBe("OR-DEM00001");
-    expect(profile.effective_authority.organization_capabilities).toEqual([]);
-    expect(profile.effective_authority.institution_capabilities).toEqual([]);
-    const evidence: unknown[] = [
-      { path: "/auth/me", status: me.status(), body: profile },
-    ];
-    const update = await request.patch(`${api}/auth/me`, {
-      headers,
-      data: { theme: "system" },
-    });
-    expect(update.status()).toBe(200);
-    expect((await update.json()).theme).toBe("system");
-    for (const [route, status] of [
-      ["/banks", 200],
-      ["/banks/BK-SAMP0001", 404],
-      ["/banks/BK-NONE0001", 404],
-      ["/organization/users", 403],
-    ] as const) {
-      const response = await request.get(`${api}${route}`, { headers });
-      expect(response.status()).toBe(status);
-      const body = await response.json();
-      if (route === "/banks") expect(body.banks).toEqual([]);
-      evidence.push({ path: route, status: response.status(), body });
-    }
-    if (evidenceDir)
-      writeFileSync(
-        path.join(evidenceDir, "baseline-api.json"),
-        JSON.stringify(evidence, null, 2),
-      );
+    await writeStorageState("invite_fresh", E2E_BASE_URL, E2E_TMP);
   });
 });

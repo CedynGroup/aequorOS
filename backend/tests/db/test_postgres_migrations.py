@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 from alembic.config import Config
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine, make_url
+from sqlalchemy.engine import Connection, Engine, make_url
 
 from alembic import command
 from app.core.config import get_settings
@@ -138,6 +138,40 @@ def migrate_isolated_postgres_schema(
     schema_name = f"risk_service_migration_{uuid4().hex}"
     alembic_config = alembic_config_for_app()
     admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
+    migration_role = _prepare_migration_role(admin_engine)
+    database_url = postgres_schema_url(test_database_url, schema_name, role=migration_role)
+    app_engine = create_engine(database_url)
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    clear_database_caches()
+
+    with admin_engine.connect() as connection:
+        authorization = f' AUTHORIZATION "{migration_role}"' if migration_role is not None else ""
+        connection.execute(text(f'CREATE SCHEMA "{schema_name}"{authorization}'))
+
+    try:
+        command.upgrade(alembic_config, revision)
+        yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
+        if downgrade:
+            command.downgrade(alembic_config, "base")
+    finally:
+        clear_database_caches()
+        app_engine.dispose()
+        with admin_engine.connect() as connection:
+            _drop_worker_view_schema(connection, schema_name)
+            connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
+            if migration_role is not None:
+                database_name = cast(str, connection.scalar(text("SELECT current_database()")))
+                quoted_database = connection.dialect.identifier_preparer.quote_identifier(
+                    database_name
+                )
+                connection.execute(
+                    text(f'REVOKE CREATE ON DATABASE {quoted_database} FROM "{migration_role}"')
+                )
+                connection.execute(text(f'DROP ROLE "{migration_role}"'))
+        admin_engine.dispose()
+
+
+def _prepare_migration_role(admin_engine: Engine) -> str | None:
     with admin_engine.connect() as connection:
         is_superuser = connection.scalar(
             text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
@@ -163,12 +197,6 @@ def migrate_isolated_postgres_schema(
                         .read_text()
                     )
                 )
-                connection.execute(
-                    text(
-                        f'CREATE ROLE "{migration_role}" NOLOGIN NOSUPERUSER NOBYPASSRLS '
-                        "NOINHERIT NOCREATEDB NOREPLICATION CREATEROLE"
-                    )
-                )
                 # The per-grant ADMIN/INHERIT/SET options are PostgreSQL 16+. CI
                 # runs 17 and production 15.13, so a fixture pinned to the newer
                 # syntax cannot catch a migration that uses it — which is how one
@@ -176,10 +204,28 @@ def migrate_isolated_postgres_schema(
                 server_version = cast(
                     int, connection.exec_driver_sql("SHOW server_version_num").scalar_one()
                 )
+                # Match the effective inherited owner grants on PostgreSQL 15,
+                # where inheritance is a role attribute rather than a grant
+                # option. Ownership handoffs in the historical audit migrations
+                # need these rights after ALTER TABLE ... OWNER.
+                inheritance = "NOINHERIT" if int(server_version) >= 160000 else "INHERIT"
+                connection.execute(
+                    text(
+                        f'CREATE ROLE "{migration_role}" NOLOGIN NOSUPERUSER NOBYPASSRLS '
+                        f"{inheritance} NOCREATEDB NOREPLICATION CREATEROLE"
+                    )
+                )
                 admin_grant_options = (
                     "WITH ADMIN TRUE, INHERIT TRUE, SET TRUE"
                     if int(server_version) >= 160000
                     else "WITH ADMIN OPTION"
+                )
+                database_name = cast(str, connection.scalar(text("SELECT current_database()")))
+                quoted_database = connection.dialect.identifier_preparer.quote_identifier(
+                    database_name
+                )
+                connection.execute(
+                    text(f'GRANT CREATE ON DATABASE {quoted_database} TO "{migration_role}"')
                 )
                 connection.execute(
                     text(f"""
@@ -196,28 +242,29 @@ def migrate_isolated_postgres_schema(
                 )
             finally:
                 connection.execute(text("SELECT pg_advisory_unlock(4130901)"))
-    database_url = postgres_schema_url(test_database_url, schema_name, role=migration_role)
-    app_engine = create_engine(database_url)
-    monkeypatch.setenv("DATABASE_URL", database_url)
-    clear_database_caches()
+    return migration_role
 
-    with admin_engine.connect() as connection:
-        authorization = f' AUTHORIZATION "{migration_role}"' if migration_role is not None else ""
-        connection.execute(text(f'CREATE SCHEMA "{schema_name}"{authorization}'))
 
-    try:
-        command.upgrade(alembic_config, revision)
-        yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
-        if downgrade:
-            command.downgrade(alembic_config, "base")
-    finally:
-        clear_database_caches()
-        app_engine.dispose()
-        with admin_engine.connect() as connection:
-            connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
-            if migration_role is not None:
-                connection.execute(text(f'DROP ROLE "{migration_role}"'))
-        admin_engine.dispose()
+def _drop_worker_view_schema(connection: Connection, schema_name: str) -> None:
+    # The worker's dedicated views live outside the tenant schema;
+    # remove their disposable namespace before dropping its function.
+    function = cast(
+        str | None,
+        connection.scalar(
+            text("SELECT to_regprocedure(:signature)"),
+            {"signature": f'"{schema_name}".aqs_worker_desk_schema()'},
+        ),
+    )
+    if function is not None:
+        worker_schema = cast(
+            str | None,
+            connection.scalar(text(f'SELECT "{schema_name}".aqs_worker_desk_schema()')),
+        )
+        if isinstance(worker_schema, str):
+            quoted_worker_schema = connection.dialect.identifier_preparer.quote_identifier(
+                worker_schema
+            )
+            connection.execute(text(f"DROP SCHEMA IF EXISTS {quoted_worker_schema} CASCADE"))
 
 
 def alembic_config_for_app() -> Config:

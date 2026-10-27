@@ -37,6 +37,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import Settings, get_settings
+from app.core.key_management.settings import get_key_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
 from app.features.ingest_data import get_ingestion_storage
@@ -82,8 +83,7 @@ pytest_plugins = [
 ]
 
 
-@pytest.fixture(autouse=True)
-def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def _isolate_test_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "1")
     monkeypatch.setenv("TLS_CA_BUNDLE", "")
@@ -203,11 +203,6 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # The worker lane selection: unset means the core lane, which never claims
     # AI work. Pinned so a developer's WORKER_JOB_TYPES cannot change it.
     monkeypatch.setenv("WORKER_JOB_TYPES", "")
-    monkeypatch.setenv("OFFICIAL_RUN_ENABLED", "0")
-    monkeypatch.setenv("MARKET_DATA_PULL_ENABLED", "0")
-    monkeypatch.setenv("TEMENOS_PULL_ENABLED", "0")
-    monkeypatch.setenv("DATABASE_DIRECT_HEALTH_ENABLED", "0")
-    monkeypatch.setenv("LIVE_REFRESH_ENABLED", "0")
     # Same .env-leak guard for every BI switch (D-008). All three ship OFF; a
     # developer who has enabled BI locally would otherwise flip the run-gate
     # "skipped" assertions, the feature-flags projection, and — once the
@@ -231,11 +226,21 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # /health/ready reads that list; a developer's SIGNING_BACKEND=openbao would
     # otherwise add gaps to suites that have nothing to do with signing.
     monkeypatch.setenv("SIGNING_BACKEND", "software")
+    monkeypatch.setenv("BANK_KMS_ENDPOINT_URL", "")
+
+
+def _clear_cached_settings() -> None:
     get_settings.cache_clear()
+    get_key_settings.cache_clear()
     get_engine.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    _isolate_test_settings(monkeypatch)
+    _clear_cached_settings()
     yield
-    get_settings.cache_clear()
-    get_engine.cache_clear()
+    _clear_cached_settings()
 
 
 @pytest.fixture(autouse=True)
@@ -554,9 +559,10 @@ def _shared_app() -> _LazyTestApp:
 def _rollback_sessionmaker_lifecycle(
     database: _TestDatabase,
     monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[sessionmaker]:
+) -> Iterator[sessionmaker[Session]]:
     import app.api.deps as deps_mod  # noqa: PLC0415
     import app.db.session as session_mod  # noqa: PLC0415
+    import app.identity.api.auth as auth_mod  # noqa: PLC0415
 
     monkeypatch.setenv("DATABASE_URL", database.database_url)
     get_settings.cache_clear()
@@ -588,6 +594,7 @@ def _rollback_sessionmaker_lifecycle(
         return original_sessionmaker(*args, **kwargs)
 
     monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
+    monkeypatch.setattr(auth_mod, "get_sessionmaker", lambda: bound_sessionmaker)
     monkeypatch.setattr(session_mod, "get_engine", shared_engine)
     monkeypatch.setattr(session_mod, "sessionmaker", shared_sessionmaker)
     try:
@@ -608,6 +615,12 @@ def _rollback_sessionmaker_lifecycle(
                 "Mark this test with @pytest.mark.committing_db when its writes must really "
                 "commit for DDL, independent connections, or database locks."
             )
+
+
+# Shared primitives for feature-local API fixtures backed by migrated schemas.
+ApiTestDatabase = _TestDatabase
+seed_demo_tenants = _seed_demo_tenants
+rollback_sessionmaker_lifecycle = _rollback_sessionmaker_lifecycle
 
 
 @pytest.fixture
@@ -659,6 +672,8 @@ def _committing_test_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[_TestDatabase]:
     """Point one test whose writes must really commit at the reset shared schema."""
+    import app.identity.api.auth as auth_mod  # noqa: PLC0415
+
     database_url = _shared_committing_database.database_url
     monkeypatch.setenv("DATABASE_URL", database_url)
     get_settings.cache_clear()
@@ -666,6 +681,7 @@ def _committing_test_database(
     # The engine the application resolves for this test; the session fixture's
     # own engine only outlives it so the schema can be dropped at the end.
     engine = get_engine(database_url)
+    monkeypatch.setattr(auth_mod, "get_sessionmaker", get_sessionmaker)
     if engine.dialect.name == "sqlite":
         _enable_sqlite_foreign_keys(engine)
     database = _TestDatabase(

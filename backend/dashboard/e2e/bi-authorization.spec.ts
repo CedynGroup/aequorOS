@@ -1,26 +1,5 @@
-/**
- * Who may see what in Business Intelligence, and what a refusal is allowed to say.
- *
- * Four readers, each proving a different half of the rule that BI has no grant of
- * its own: every measure and dimension carries the module and sensitivity of the
- * thing it reports on, and the query route requires every one the submitted
- * question touches.
- *
- *  1. A DEPLOYMENT WITHOUT BI offers no door at all. The flag is not a grant, so
- *     the three Intelligence entries are HIDDEN rather than disabled-with-a-
- *     sentence, and a deep link refuses. Driven by intercepting `/feature-flags`,
- *     which is the one BI route that is mounted unconditionally.
- *  2. A BASELINE MEMBER with no binding is offered the door, disabled, with the
- *     sentence an owner would act on — because here there IS a grant to ask for.
- *  3. A LIQUIDITY-ONLY READER holds catalogue access but no certified headline
- *     figure. Insights refuses rather than making a statement about advisory
- *     liquidity figures. Neither withheld member labels nor loan-book figures
- *     reach the document; the reader sees the explicit refusal.
- *  4. THE SAME READER'S CATALOGUE is filtered member by member, and what is kept
- *     back is reported as a COUNT. The count is asserted, and so is the fact that
- *     the ids behind it never reach the page.
- */
-
+/** Browser disclosure and navigation boundaries for actual scoped BI readers.
+ * HTTP query refusals live in contracts/bi-authorization.spec.ts. */
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
 import { E2E_TMP } from "../playwright.config";
@@ -305,34 +284,5 @@ test.describe("a reader whose access does not cover the view", () => {
       ["loans.balance_rc", "counterparty.name", "loan.employer", "Gross loans"],
       "a withheld member must never be named on the catalogue surface",
     );
-  });
-
-  test("is refused a query it could not have built, and gets no partial answer", async ({
-    request,
-  }) => {
-    const asOf = await fixtureAsOf(request);
-    // The catalogue never offered this member to this reader, so the only way
-    // to ask is to construct the request — which is exactly what an attacker
-    // would do, and the route decides again rather than trusting the surface.
-    const { status, body } = await biApi(
-      request,
-      "liquidity_viewer",
-      `/banks/${SAMPLE_BANK_ID}/bi/query`,
-      {
-        method: "POST",
-        data: {
-          measures: ["loans.balance_rc"],
-          dimensions: ["counterparty.name"],
-          time: { as_of: asOf },
-          filters: [],
-        },
-      },
-    );
-    expect(status).toBe(403);
-    const text = JSON.stringify(body);
-    expect(text).toContain("bi_authorization_denied");
-    // No rows, no total, no partial column set.
-    expect(text).not.toContain("84850000");
-    expect(text).not.toContain('"rows"');
   });
 });

@@ -10,7 +10,7 @@ that could not be translated.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import (
@@ -27,7 +27,7 @@ from sqlalchemy import (
     Uuid,
 )
 from sqlalchemy import text as sql_text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from app.core.key_management.fields import ProtectedJSON, ProtectedText
 from app.db.base import (
@@ -133,6 +133,20 @@ class IngestionBatch(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     # produced by app.etl.run_etl between extraction and translation. Null for batches
     # ingested before the ETL layer, or that failed before the ETL pass.
     etl_report: Mapped[dict[str, Any] | None] = mapped_column(ProtectedJSON(), nullable=True)
+    # Public lifecycle metadata remains usable when the report is redacted.
+    dedup_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    @validates("etl_report")
+    def _sync_dedup_status(self, _key: str, value: object) -> object:
+        if value is None or isinstance(value, dict):
+            status = (
+                cast(dict[str, object], value).get("dedup_status")
+                if isinstance(value, dict)
+                else None
+            )
+            self.dedup_status = status if isinstance(status, str) else None
+        return cast(object, value)
+
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)

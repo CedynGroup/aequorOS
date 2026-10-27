@@ -59,7 +59,7 @@ from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
 from app.models import DeskObservation, DeskSourceCapture, Job
-from app.services import job_queue
+from app.services.job_queue import enqueue_platform_daily
 from app.services.market_desk import calculation, determinations, register, snippets
 from app.services.market_desk.sources import SOURCE_REGISTRY, ingest_capture
 from app.services.market_desk.sources.fetch import (
@@ -140,24 +140,10 @@ def enqueue_due_desk_capture(
     if now.hour < settings.desk_capture_hour_utc:
         return None
     day = now.date()
-    coalesce_key = f"desk_capture:{day.isoformat()}"
-    existing = session.scalar(
-        select(Job.id)
-        .where(Job.job_type == DESK_CAPTURE, Job.coalesce_key == coalesce_key)
-        .limit(1)
-    )
-    if existing is not None:
-        return None
-    payload: dict[str, Any] = {"cob_date": day.isoformat()}
+    payload: dict[str, object] = {"cob_date": day.isoformat()}
     if day.weekday() == _FRIDAY:
         payload["auction_pass"] = True
-    return job_queue.enqueue(
-        session,
-        organization_id,
-        DESK_CAPTURE,
-        payload=payload,
-        coalesce_key=coalesce_key,
-    )
+    return enqueue_platform_daily(session, organization_id, DESK_CAPTURE, day, payload)
 
 
 def run_desk_capture(session: Session, job: Job) -> None:

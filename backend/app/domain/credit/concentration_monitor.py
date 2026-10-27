@@ -64,6 +64,7 @@ STATUS_WITHIN = "within_limit"
 STATUS_ABOVE = "above_limit"
 STATUS_NOT_SET = "not_set"
 STATUS_NOT_COMPUTABLE = "not_computable"
+STATUS_LOCKED = "locked"
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ class ConcentrationLimit:
     #: A named bucket (one employer, one sector) or None = the dimension's
     #: largest bucket.
     bucket_key: str | None = None
+    locked: bool = False
 
 
 @dataclass(frozen=True)
@@ -117,6 +119,8 @@ class ConcentrationMonitorResult:
     dimensions: tuple[DimensionReading, ...]
     #: Every bucket currently above a Board limit, across dimensions.
     breaches: tuple[BucketReading, ...]
+    locked_limits: tuple[ConcentrationLimit, ...]
+    limit_count: int
 
     def dimension(self, name: str) -> DimensionReading | None:
         return next((d for d in self.dimensions if d.dimension == name), None)
@@ -147,7 +151,8 @@ def _limit_for(
         (
             limit.value
             for limit in limits
-            if limit.dimension == dimension
+            if not limit.locked
+            and limit.dimension == dimension
             and limit.limit_kind == kind
             and limit.bucket_key == bucket_key
         ),
@@ -176,6 +181,22 @@ def _assess_bucket(  # noqa: PLR0913 - one argument per assessment input
         if capital_base is not None and capital_base > _ZERO
         else None
     )
+    if (
+        dimension == DIM_SINGLE_NAME
+        and not key.startswith("pos:")
+        and any(limit.locked and limit.dimension == dimension for limit in limits)
+    ):
+        return BucketReading(
+            key=key,
+            exposure_ghs=exposure,
+            loan_count=count,
+            share_of_book_pct=share_book,
+            share_of_capital_pct=share_capital,
+            limit_value=None,
+            limit_kind=None,
+            limit_status=STATUS_LOCKED,
+            utilization_pct=None,
+        )
     # Capital-basis limits outrank book-basis ones when both exist: the
     # Guidelines' §30 names capital first as the reference for limits.
     capital_limit = _limit_for(limits, dimension, LIMIT_SHARE_OF_CAPITAL, key)
@@ -294,4 +315,6 @@ def monitor_concentration(
         capital_base_ghs=capital_base_ghs,
         dimensions=tuple(dimensions),
         breaches=tuple(breaches),
+        locked_limits=tuple(limit for limit in limits if limit.locked),
+        limit_count=len(limits),
     )

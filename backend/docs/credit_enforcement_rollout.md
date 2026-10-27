@@ -79,9 +79,11 @@ cannot disagree):
    (precedent `202609160053`). It verifies NO row counts: `_mirror_organization`
    and `_invalidate_mirrored_principals` discard `rowcount`. What prevents the
    silent zero-row no-op of a tenant-scoped Alembic role is
-   `force_rls_suspended` itself, which raises `RlsBlindError` naming
-   `WORKER_DATABASE_URL` when the role can neither bypass RLS nor lift FORCE
-   (`app/db/session.py`). The before/after
+   `force_rls_suspended` itself, which raises `RlsBlindError` when the role
+   can neither bypass RLS nor lift FORCE (`app/db/session.py`). Migration
+   credentials and owner membership follow the
+   [role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order).
+   The before/after
    `authorization_access_impact.py` diff in the release record is the count
    check; the migration does not perform one.
 
@@ -367,18 +369,22 @@ The reasoning, route by route:
   rates; vintages are cohort PAR30+ curves; PD is a pooled hazard. Aggregate
   figures are `aggregated`.
 - **Concentration — `restricted`, and it resolves Phase 4 open decision 1.** The
-  `single_name` dimension buckets on `cp:<counterparty name>` /
-  `group:<reference>` (`credit_concentration._group_key`) and the `breaches` list
-  carries those keys, so the payload names obligors. The platform's own member
-  rule says a single obligor is `restricted`; the older route line said
-  `aggregated`. **Decided: `restricted`** — the narrower of the two, taken because
-  the alternative (projecting `single_name` buckets and single-name breaches out
+  `single_name` dimension and `breaches` list use persisted opaque group tokens
+  (`credit_exposure_book.canonical_group_key`), with literal `pos:<reference>`
+  keys for positions without a counterparty. The route retains its `restricted`
+  permission; tokenization does not widen authority. **Decided: `restricted`**,
+  because the alternative (projecting `single_name` buckets and single-name breaches out
   for aggregated viewers) changes the numbers on a supervisory screen, which is a
   product decision and not one an authorization cutover may make silently. The
   consequence is stated plainly: **a reader holding only CREDIT/`aggregated`
-  loses the concentration monitor** and needs the blotter sentence for it. If the
-  institution wants an obligor-free aggregated monitor, that is a catalogue change
-  to design, not a sensitivity to widen.
+  loses the concentration monitor** and needs the blotter sentence for it.
+  Opening this monitor to aggregated-only readers requires a catalogue decision.
+  Named `group:` and `cp:` Board limits use the same token boundary as exposures.
+  If the bank's identity matching key is unavailable, numeric concentration still
+  loads, but those limits appear in `locked_limits` without identity values and
+  non-positional single-name buckets are `locked` and unevaluated. Literal
+  `pos:` limits remain evaluable. The live engine emits
+  `concentration_limits_locked` rather than silently treating named limits as unset.
 - **Blotter and facets — `restricted`.** The rows carry `counterparty_name`. The
   facets are the blotter's own filter counts over the same rows, so they carry the
   same sensitivity: a facet at a lower sensitivity would be a count of names.

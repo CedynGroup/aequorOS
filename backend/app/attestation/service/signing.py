@@ -352,6 +352,7 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
     binding = workflow.compute_binding(package)
     signatures = workflow.current_signatures(db, ctx, package)
 
+    workflow.ensure_register_current(db, ctx, package)
     workflow.ensure_certifiable(package, policy, role, signatures)
     workflow.ensure_digest_unchanged(package, binding)
     workflow.ensure_maker_checker(

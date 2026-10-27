@@ -4,9 +4,9 @@ Run as a process (``python -m app.worker``) or in-process alongside the API
 (``start_inprocess_worker`` gated by ``RUN_INPROCESS_WORKER``). Tests never run
 the poll loop; they call the handlers directly.
 
-RLS note: ``claim_next`` reads the jobs table across tenants, so on Postgres the
-worker connection needs to see all tenants (a BYPASSRLS worker role). Per-job
-work then runs on a session scoped to that job's organization.
+PostgreSQL claims cross-tenant work through narrowly granted queue functions.
+Each handler transaction carries its job's organization and bank context.
+Legacy credentials remain supported during the deployment transition.
 """
 
 from __future__ import annotations
@@ -16,11 +16,13 @@ import os
 import socket
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from datetime import timedelta
+from typing import cast
 from uuid import uuid4
 
-from sqlalchemy import func
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.bi.jobs import (
@@ -40,14 +42,30 @@ from app.core.logging import configure_logging, get_request_id, reset_request_id
 from app.core.observability import Condition, emit
 from app.core.tls import validate_service_transports
 from app.db.base import utc_now
-from app.db.session import assert_worker_database_access, get_worker_sessionmaker
+from app.db.session import (
+    apply_worker_tenant_context,
+    assert_worker_database_access,
+    get_worker_sessionmaker,
+    worker_tenant_context,
+)
+from app.db.worker_access import DESK_SIGNATURE, has_worker_function
 from app.icaap.service import ai_jobs as icaap_ai_jobs
 from app.identity.public import run_session_purge
-from app.models import Job, WorkerHeartbeat
+from app.models import (
+    Bank,
+    DeskCurveDefinition,
+    DeskDetermination,
+    DeskMethodology,
+    DeskObservation,
+    DeskSourceCapture,
+    Job,
+    WorkerHeartbeat,
+)
 from app.services import (
     database_direct_jobs,
     documents,
     etl_dedup_jobs,
+    ingestion,
     job_queue,
     market_data_jobs,
     notification_email_mirror,
@@ -156,7 +174,29 @@ def _new_session(organization_id: str | None = None) -> Session:
     session = get_worker_sessionmaker()()
     if organization_id is not None:
         session.info["organization_id"] = organization_id
+    apply_worker_tenant_context(session)
+    if has_worker_function(session, DESK_SIGNATURE):
+        session.info["worker_access"] = True
+        view_schema = cast(str | None, session.scalar(text("SELECT aqs_worker_desk_schema()")))
+        if not isinstance(view_schema, str):
+            raise WorkerConfigurationError("The worker desk view schema is unavailable.")
+        view_bind = session.get_bind().execution_options(schema_translate_map={None: view_schema})
+        for model in (
+            DeskSourceCapture,
+            DeskObservation,
+            DeskMethodology,
+            DeskDetermination,
+            DeskCurveDefinition,
+        ):
+            session.bind_mapper(model, view_bind)
     return session
+
+
+@contextmanager
+def job_session(organization_id: str, bank_id: str | None = None) -> Generator[Session]:
+    """Open a handler session with transaction and storage tenant context."""
+    with worker_tenant_context(organization_id, bank_id), _new_session(organization_id) as session:
+        yield session
 
 
 def _runtime_identity() -> str:
@@ -220,14 +260,36 @@ def run_once(
             return False
         organization_id = job.organization_id
         job_id = job.id
+        payload_bank_id = (job.payload or {}).get("bank_id")
+        bank_id = job.bank_id or (payload_bank_id if isinstance(payload_bank_id, str) else None)
 
-    with _new_session(organization_id) as session:
+    with job_session(organization_id, bank_id) as session:
         claimed = session.get(Job, job_id)
         if claimed is None:  # pragma: no cover - claimed row must exist
             return True
         token = set_request_id(str(uuid4())) if get_request_id() == "-" else None
         try:
             try:
+                if (
+                    claimed.bank_id
+                    and isinstance(payload_bank_id, str)
+                    and claimed.bank_id != payload_bank_id
+                ):
+                    raise ValueError("Job bank envelope and payload disagree.")
+                if bank_id is not None:
+                    bank = session.scalar(
+                        select(Bank).where(
+                            Bank.id == bank_id,
+                            Bank.organization_id == organization_id,
+                        )
+                    )
+                    if bank is None:
+                        raise ValueError("Job bank does not belong to its organization.")
+                    if session.info.get("worker_access") is True and bank.storage_slug is None:
+                        # A storage session opens its own connection. Publish the
+                        # stable setup metadata before any handler work begins.
+                        ingestion.bank_slug(session, bank)
+                        session.commit()
                 HANDLERS[claimed.job_type](session, claimed)
                 job_queue.complete(session, claimed)
             except Exception as exc:  # noqa: BLE001 - any handler failure retries

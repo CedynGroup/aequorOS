@@ -1,5 +1,6 @@
 "use client";
 
+import ProtectedDataNotice from "@/components/ui/ProtectedDataNotice";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
@@ -69,7 +70,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               !isPersonalSettingsPath(pathname) ? (
                 <NoAuthorizedInstitutionsPanel />
               ) : (
-                children
+                <>
+                  <ProtectedDataNotice />
+                  {children}
+                </>
               )}
             </ModuleGuard>
           </main>

@@ -107,13 +107,13 @@ mirrored on `live_metrics` as classification, attempt count, and `next_retry_at`
 
 ### Worker visibility is now a health signal, not an assumption (`P0-16`)
 
-`jobs` is FORCE-RLS, and the worker claims across tenants with no organization set — so a
-role without `BYPASSRLS` matched zero rows forever, with no error and no log. Now:
+Worker credential resolution and cross-tenant claim access follow the
+[worker compatibility contract](../ops/database-roles.md#worker-compatibility-migration).
+The health guards expose an unusable claim credential before jobs strand:
 
 - `assert_worker_database_access` guards both the process worker and
   `start_inprocess_worker` **before the thread starts** (an exception on a daemon thread is
   as silent as the bug it replaces).
-- Production and staging require `WORKER_DATABASE_URL` (`app/core/config.py` validators).
 - `worker_visibility()` surfaces a `worker` component in `/health/ready`
   (`app/api/health.py:_worker_health`), including a starvation signal derived from
   `_overdue_job_count`.

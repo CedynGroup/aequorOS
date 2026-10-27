@@ -131,7 +131,7 @@ assert.deepEqual(
   {
     state: "disabled",
     reason:
-      "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
+      "Requires Liquidity Monitoring · Confidential · View. Ask your organization owner or admin to grant it.",
   },
 );
 for (const moduleCase of [
@@ -230,11 +230,9 @@ const liquidityOnly = {
   modules: new Set(["liquidity"] as const),
   riskConfidentialView: false,
 };
-assert.equal(isHrefVisible("/liquidity/stress", liquidityOnly), false);
+assert.equal(isHrefVisible("/liquidity/stress", liquidityOnly), true);
 assert.deepEqual(hrefAccess("/liquidity/stress", liquidityOnly), {
-  state: "disabled",
-  reason:
-    "Requires Risk & Limits · Confidential · View. Ask your organization owner or admin to grant it.",
+  state: "enabled",
 });
 assert.equal(
   hasEffectiveCapability(
@@ -710,7 +708,7 @@ for (const route of [
 assert.deepEqual(hrefAccess("/liquidity/stress", memberOnly), {
   state: "disabled",
   reason:
-    "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
+    "Requires Liquidity Monitoring · Confidential · View. Ask your organization owner or admin to grant it.",
 });
 assert.deepEqual(hrefAccess("/basel/planning", memberOnly), {
   state: "hidden",

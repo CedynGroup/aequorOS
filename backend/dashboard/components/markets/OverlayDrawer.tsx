@@ -281,7 +281,7 @@ export default function OverlayDrawer({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1.5 rounded text-slate hover:text-navy hover:bg-surface"
+            className="p-1.5 rounded-sm text-slate hover:text-navy hover:bg-surface"
           >
             <X size={16} aria-hidden />
           </button>
@@ -298,7 +298,7 @@ export default function OverlayDrawer({
               usedTags={usedTags}
             />
             {arithmetic && (
-              <p className="text-caption text-navy font-mono bg-surface border border-border-light rounded px-3 py-2">
+              <p className="text-caption text-navy font-mono bg-surface border border-border-light rounded-sm px-3 py-2">
                 {arithmetic}
               </p>
             )}
@@ -389,7 +389,7 @@ export default function OverlayDrawer({
                       componentTag: event.target.value as ComponentTag,
                     }))
                   }
-                  className="w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded text-navy"
+                  className="w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded-sm text-navy"
                 >
                   {COMPONENT_TAGS.map((tag) => (
                     <option key={tag} value={tag}>
@@ -410,7 +410,7 @@ export default function OverlayDrawer({
                       tenorKey: event.target.value,
                     }))
                   }
-                  className="w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded text-navy"
+                  className="w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded-sm text-navy"
                 >
                   <option value="flat">All tenors (flat)</option>
                   {curve.points.map((point) => (
@@ -438,7 +438,7 @@ export default function OverlayDrawer({
                     }))
                   }
                   placeholder="25"
-                  className="w-full px-2.5 py-1.5 text-body font-mono bg-surface border border-border rounded text-navy"
+                  className="w-full px-2.5 py-1.5 text-body font-mono bg-surface border border-border rounded-sm text-navy"
                 />
               </label>
               <label className="block space-y-1">
@@ -454,7 +454,7 @@ export default function OverlayDrawer({
                       effectiveFrom: event.target.value,
                     }))
                   }
-                  className="w-full px-2.5 py-1.5 text-body font-mono bg-surface border border-border rounded text-navy"
+                  className="w-full px-2.5 py-1.5 text-body font-mono bg-surface border border-border rounded-sm text-navy"
                 />
               </label>
               <label className="block space-y-1 col-span-2">
@@ -471,7 +471,7 @@ export default function OverlayDrawer({
                     }))
                   }
                   placeholder="Why this spread exists"
-                  className="w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded text-navy"
+                  className="w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded-sm text-navy"
                 />
               </label>
             </div>

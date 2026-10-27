@@ -13,10 +13,17 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import HTTPException, status
+from pydantic import JsonValue
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.key_management.presentation import (
+    LOCKED_TEXT,
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+)
 from app.db.base import utc_now
 from app.domain.capital.ecl import ALL_SEGMENTS, normalize_segment
 from app.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
@@ -141,6 +148,8 @@ def update_ecl_register(
     bank = _get_bank_or_404(db, ctx, bank_id)
     jurisdiction = bank.jurisdiction_code
     seen: set[tuple[str, int]] = set()
+    previous_assumptions: list[dict[str, JsonValue]] = []
+    written: list[ParamEclAssumption] = []
     now = utc_now()
     for entry in payload.assumptions:
         segment = _require_ecl_segment(entry.segment)
@@ -169,22 +178,32 @@ def update_ecl_register(
                         f"{row.effective_from} already starts on or after the requested date."
                     ),
                 )
-            row.effective_to = payload.effective_from
-        db.add(
-            ParamEclAssumption(
-                organization_id=ctx.organization_id,
-                jurisdiction_code=jurisdiction,
-                segment=segment,
-                stage=entry.stage,
-                pd_pct=entry.pd_pct,
-                lgd_pct=entry.lgd_pct,
-                effective_from=payload.effective_from,
-                approved_by=payload.approved_by,
-                approval_timestamp=now,
-                notes=payload.notes,
+            previous_assumptions.append(
+                {
+                    "segment": row.segment,
+                    "stage": row.stage,
+                    "pd_pct": str(row.pd_pct),
+                    "lgd_pct": str(row.lgd_pct),
+                }
             )
+            row.effective_to = payload.effective_from
+        created = ParamEclAssumption(
+            organization_id=ctx.organization_id,
+            jurisdiction_code=jurisdiction,
+            segment=segment,
+            stage=entry.stage,
+            pd_pct=entry.pd_pct,
+            lgd_pct=entry.lgd_pct,
+            effective_from=payload.effective_from,
+            approved_by=payload.approved_by,
+            approval_timestamp=now,
+            notes=payload.notes,
         )
+        db.add(created)
+        written.append(created)
     db.flush()
+    for created in written:
+        db.refresh(created)
     record_event(
         db,
         ctx,
@@ -195,6 +214,23 @@ def update_ecl_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "entries": sorted(f"{segment}:stage{stage}" for segment, stage in seen),
+            "before": {
+                "assumptions": sorted(
+                    previous_assumptions,
+                    key=lambda item: (str(item["segment"]), str(item["stage"])),
+                )
+            },
+            "after": {
+                "assumptions": [
+                    {
+                        "segment": entry.segment,
+                        "stage": entry.stage,
+                        "pd_pct": str(entry.pd_pct),
+                        "lgd_pct": str(entry.lgd_pct),
+                    }
+                    for entry in sorted(written, key=lambda item: (item.segment, item.stage))
+                ]
+            },
             "reason": payload.reason,
         },
     )
@@ -274,6 +310,8 @@ def update_crm_register(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Haircut percentages must be within [0, 100]: {', '.join(out_of_range)}.",
         )
+    previous_haircuts: dict[str, JsonValue] = {}
+    written: list[ParamCrmHaircut] = []
     now = utc_now()
     for collateral_class, pct in payload.haircuts.items():
         normalized = collateral_class.strip().upper()
@@ -294,20 +332,23 @@ def update_crm_register(
                         "already starts on or after the requested effective date."
                     ),
                 )
+            previous_haircuts[row.collateral_class] = str(row.haircut_pct)
             row.effective_to = payload.effective_from
-        db.add(
-            ParamCrmHaircut(
-                organization_id=ctx.organization_id,
-                jurisdiction_code=jurisdiction,
-                collateral_class=normalized,
-                haircut_pct=pct,
-                effective_from=payload.effective_from,
-                approved_by=payload.approved_by,
-                approval_timestamp=now,
-                notes=payload.notes,
-            )
+        created = ParamCrmHaircut(
+            organization_id=ctx.organization_id,
+            jurisdiction_code=jurisdiction,
+            collateral_class=normalized,
+            haircut_pct=pct,
+            effective_from=payload.effective_from,
+            approved_by=payload.approved_by,
+            approval_timestamp=now,
+            notes=payload.notes,
         )
+        db.add(created)
+        written.append(created)
     db.flush()
+    for created in written:
+        db.refresh(created)
     record_event(
         db,
         ctx,
@@ -318,6 +359,10 @@ def update_crm_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "collateral_classes": sorted(cls.strip().upper() for cls in payload.haircuts),
+            "before": {"haircuts": previous_haircuts},
+            "after": {
+                "haircuts": {entry.collateral_class: str(entry.haircut_pct) for entry in written}
+            },
             "reason": payload.reason,
         },
     )
@@ -363,19 +408,35 @@ def get_concentration_limit_register(
     rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamConcentrationLimit, as_of
     )
-    return ConcentrationLimitRegisterRead(
-        as_of=as_of.isoformat(),
-        limits=[
+    presentation = db.info.get(SESSION_STATE)
+    support = bool(db.info.get(SESSION_SUPPORT)) or (
+        isinstance(presentation, PresentationState) and presentation.support
+    )
+    limits: list[ConcentrationLimitRead] = []
+    for row in rows:
+        key = row.bucket_key
+        if (
+            support
+            and row.dimension == "single_name"
+            and key is not None
+            and not key.startswith("pos:")
+        ):
+            key = LOCKED_TEXT
+            if isinstance(presentation, PresentationState):
+                presentation.record(bank.id, "support")
+        limits.append(
             ConcentrationLimitRead(
                 dimension=row.dimension,
                 limit_kind=row.limit_kind,
-                bucket_key=row.bucket_key,
+                bucket_key=key,
                 value=row.value,
                 effective_from=row.effective_from.isoformat(),
                 approved_by=row.approved_by,
             )
-            for row in rows
-        ],
+        )
+    return ConcentrationLimitRegisterRead(
+        as_of=as_of.isoformat(),
+        limits=limits,
     )
 
 
@@ -411,6 +472,7 @@ def update_concentration_limit_register(
                 detail=f"Duplicate limit row: {entry.dimension}/{entry.limit_kind}.",
             )
         seen.add(key)
+    written: list[ParamConcentrationLimit] = []
     now = utc_now()
     open_rows = db.scalars(
         select(ParamConcentrationLimit).where(
@@ -419,6 +481,7 @@ def update_concentration_limit_register(
             ParamConcentrationLimit.effective_to.is_(None),
         )
     ).all()
+    previous_limits: list[dict[str, JsonValue]] = []
     for row in open_rows:
         if row.effective_from >= payload.effective_from:
             raise HTTPException(
@@ -428,22 +491,32 @@ def update_concentration_limit_register(
                     "on or after the requested effective date."
                 ),
             )
+        previous_limits.append(
+            {
+                "dimension": row.dimension,
+                "limit_kind": row.limit_kind,
+                "bucket_key": row.bucket_key,
+                "value": str(row.value),
+            }
+        )
         row.effective_to = payload.effective_from
     for entry in payload.limits:
-        db.add(
-            ParamConcentrationLimit(
-                organization_id=ctx.organization_id,
-                jurisdiction_code=jurisdiction,
-                dimension=entry.dimension,
-                limit_kind=entry.limit_kind,
-                bucket_key=entry.bucket_key,
-                value=entry.value,
-                effective_from=payload.effective_from,
-                approved_by=payload.approved_by,
-                approval_timestamp=now,
-            )
+        created = ParamConcentrationLimit(
+            organization_id=ctx.organization_id,
+            jurisdiction_code=jurisdiction,
+            dimension=entry.dimension,
+            limit_kind=entry.limit_kind,
+            bucket_key=entry.bucket_key,
+            value=entry.value,
+            effective_from=payload.effective_from,
+            approved_by=payload.approved_by,
+            approval_timestamp=now,
         )
+        db.add(created)
+        written.append(created)
     db.flush()
+    for created in written:
+        db.refresh(created)
     record_event(
         db,
         ctx,
@@ -454,6 +527,36 @@ def update_concentration_limit_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "rows": len(payload.limits),
+            "before": {
+                "limits": sorted(
+                    previous_limits,
+                    key=lambda item: (
+                        str(item["dimension"]),
+                        str(item["limit_kind"]),
+                        item["bucket_key"] is not None,
+                        str(item["bucket_key"] or ""),
+                    ),
+                )
+            },
+            "after": {
+                "limits": [
+                    {
+                        "dimension": entry.dimension,
+                        "limit_kind": entry.limit_kind,
+                        "bucket_key": entry.bucket_key,
+                        "value": str(entry.value),
+                    }
+                    for entry in sorted(
+                        written,
+                        key=lambda item: (
+                            item.dimension,
+                            item.limit_kind,
+                            item.bucket_key is not None,
+                            item.bucket_key or "",
+                        ),
+                    )
+                ]
+            },
             "reason": payload.reason,
         },
     )
@@ -505,6 +608,8 @@ def update_credit_threshold_register(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Threshold values must be non-negative: {', '.join(negative)}.",
         )
+    previous_thresholds: dict[str, JsonValue] = {}
+    written: list[ParamCreditThreshold] = []
     now = utc_now()
     for code, pct in payload.thresholds.items():
         open_rows = db.scalars(
@@ -524,19 +629,22 @@ def update_credit_threshold_register(
                         "already starts on or after the requested effective date."
                     ),
                 )
+            previous_thresholds[row.threshold_code] = str(row.value_pct)
             row.effective_to = payload.effective_from
-        db.add(
-            ParamCreditThreshold(
-                organization_id=ctx.organization_id,
-                jurisdiction_code=jurisdiction,
-                threshold_code=code,
-                value_pct=pct,
-                effective_from=payload.effective_from,
-                approved_by=payload.approved_by,
-                approval_timestamp=now,
-            )
+        created = ParamCreditThreshold(
+            organization_id=ctx.organization_id,
+            jurisdiction_code=jurisdiction,
+            threshold_code=code,
+            value_pct=pct,
+            effective_from=payload.effective_from,
+            approved_by=payload.approved_by,
+            approval_timestamp=now,
         )
+        db.add(created)
+        written.append(created)
     db.flush()
+    for created in written:
+        db.refresh(created)
     record_event(
         db,
         ctx,
@@ -547,6 +655,10 @@ def update_credit_threshold_register(
             "effective_from": payload.effective_from.isoformat(),
             "approved_by": payload.approved_by,
             "codes": sorted(payload.thresholds),
+            "before": {"thresholds": previous_thresholds},
+            "after": {
+                "thresholds": {entry.threshold_code: str(entry.value_pct) for entry in written}
+            },
             "reason": payload.reason,
         },
     )

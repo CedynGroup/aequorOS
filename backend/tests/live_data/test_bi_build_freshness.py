@@ -13,8 +13,8 @@ Skips, with the reason named, only when NO BI mart has ever been built here:
 database that has never run a build there is nothing to be stale and the suite
 must say so rather than pass over an empty table.
 
-Uses the BYPASSRLS worker URL so every tenant's marts are visible; with a
-tenant-scoped role and ``LIVE_DATA_ORG_ID`` it certifies that one tenant.
+Credential selection and tenant visibility follow
+``backend/README.md#test-databases-and-the-primary-database``.
 """
 
 from __future__ import annotations

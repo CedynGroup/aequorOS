@@ -10,11 +10,12 @@ checksum before releasing bytes. Unavailable connected keys, legacy plaintext
 for a connected bank, and corrupt objects refuse access without a platform-key
 fallback. Bank keys are optional during rollout: `BANK_KEY_REQUIRED=false`
 preserves the existing platform storage path for tenants without keys in every
-environment. Enable it once the key-management UI ships; then onboarding and
-storage require a bank key. Encrypted objects also refuse reads when their
-bank-key record is missing. Missing bank keys alone never prevent startup. Local
-evaluation uses the existing platform/MinIO path without an AWS KMS account. No
-persistent local provider mode is introduced.
+environment. Set `BANK_KEY_REQUIRED=true` at the deployment's enforcement cutover;
+then onboarding, covered field access and storage require a bank key. Encrypted
+objects also refuse reads when their bank-key record is missing. Missing bank
+keys alone never prevent startup. Local evaluation uses the existing platform/MinIO
+path without an AWS KMS account. The synthetic revocation walkthrough below
+provides a separate, environment-restricted demo provider.
 
 The bank creates and administers a customer-managed symmetric KMS key in its own
 AWS account. AequorOS uses its workload role to request cryptographic
@@ -37,8 +38,8 @@ owns the encryption format and integrity checks. Only the wrapped version and
 its exact KMS reference are persisted in `object_key_envelopes`; S3 metadata
 holds the version UUID.
 
-Key reuse, revocation boundaries and plaintext-material lifetime follow the
-[key unit-of-work contract](bank_field_encryption.md#keys-and-storage).
+Field and object operations share the
+[unit-of-work key lifetime and revocation boundary](bank_field_encryption.md#keys-and-storage).
 
 ## Bank-side AWS setup
 
@@ -68,7 +69,7 @@ Example key-policy statements (all identifiers are synthetic):
     "Sid": "AllowAequorOSBankCryptography",
     "Effect": "Allow",
     "Principal": { "AWS": "arn:aws:iam::444455556666:role/aequoros-bank-data" },
-    "Action": ["kms:GenerateDataKey", "kms:Decrypt"],
+    "Action": ["kms:GenerateDataKey", "kms:Encrypt", "kms:Decrypt"],
     "Resource": "*",
     "Condition": {
       "StringEquals": { "kms:EncryptionContext:bank_id": "BK-SAMP0001" }
@@ -90,8 +91,8 @@ key ARN instead of `*`, and retain the same actions and context condition.
 [AWS least-privilege permissions](https://docs.aws.amazon.com/kms/latest/developerguide/least-privilege.html).
 No `CreateKey`, `PutKeyPolicy`, `CreateGrant`, `ScheduleKeyDeletion` or
 key-export permission is required by the application. These SDK keyrings
-generate data keys and decrypt their wrappers; wrapper rotation does not require
-`ReEncrypt`.
+require data-key generation, encryption and decryption permissions for connection
+probes and custody operations; wrapper rotation does not require `ReEncrypt`.
 
 KMS context contains the public bank ID, a context digest and an operation
 purpose. It contains no customer filename or financial value. The bank can
@@ -100,6 +101,16 @@ the role from the key policy. Ensure no other policy or grant still authorizes
 that role.
 
 ## Onboarding and operator API
+
+For banks connected before data-key versions, the version migration copies each
+legacy envelope's wrapping reference from its scoped bank registry without KMS
+calls or payload changes. Legacy objects remain readable with their original
+context and payload key. Before new protected writes, an administrator runs the
+existing connection test for the connected key; a successful test creates and
+commits the current version and preserves any existing index envelope. Rotation
+also preserves that index. Version initialization is idempotent and refuses an
+unavailable key. Downgrade refuses populated envelope catalogues rather than
+discarding the metadata needed to read encrypted data.
 
 Apply all migrations through the current head (including `202610100088` and
 `202610100089`), then set `ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` to the platform
@@ -144,8 +155,10 @@ active inspector session uses these routes on the separate operator API:
 Rotation accepts the same key fields plus a meaningful `reason` and must retain
 the bank's ownership account. Changing providers requires an explicit migration.
 Routes verify the bank belongs to the organization, require staff inspection
-authority and write operator audit events in their transaction. The tenant API
-mounts none of these routes. Status observations do not authorize access; provider
+authority and write operator audit events in their transaction. Bank administrators
+use separate Account-administration endpoints and the guided Settings flow in
+[bank key setup](bank_key_setup.md#bank-administrator-self-service); retirement
+remains a staff operation. Status observations do not authorize access; provider
 checks and key reuse follow the
 [unit-of-work boundary](bank_field_encryption.md#keys-and-storage).
 
@@ -166,17 +179,17 @@ S3 URLs; document transfer under bank keys remains follow-up work.
 
 The bank grants access to its replacement key while retaining the old grant.
 Rotation verifies the replacement and publishes a new immutable data-key
-version in the existing envelope catalogue. Key-version mutations lock the
-registry. Ordinary encryption and downloads use version lookups without key-row
-locks; an admitted unit of work may finish with its previous version while later
-work uses the new one. Ciphertext records its version UUID, and old versions keep their exact KMS
+version in the existing envelope catalogue. Rotation bookkeeping locks the
+registry. Object encryption and downloads use lock-free version lookups; an
+admitted unit of work may finish with its previous version while later work uses
+the new one. Ciphertext records its version UUID, and old versions keep their exact KMS
 references. Failed rotation rolls back the new pointer/version. Object writes
 reference committed versions, so business rollback cannot orphan published
 ciphertext. See [the field design](bank_field_encryption.md#keys-and-storage)
 for bounded key-cache lifetime and versioned encryption.
 
-Keep the old key decrypt-capable until every backup with its old wrappers has
-aged out, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
+Keep the old key decrypt-capable while retained data or any backup requires its
+versions, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
 Set `ENCRYPTION_BACKUP_RETENTION_DAYS` to at least the longest database
 or object backup retention window before rotation. Rotation records a per-bank
 retention hold; an unset setting keeps that hold indefinitely. Reusing a key
@@ -236,16 +249,16 @@ Existing-data migration and retained-record reporting follow
 Signing keys and credential custody remain
 [issue 355](https://github.com/CedynGroup/aequorOS/issues/355). Scheduled
 key-health monitoring, alerting and support workflows remain
-[issue 354](https://github.com/CedynGroup/aequorOS/issues/354); this change
-supplies the provider `describe` contract, onboarding probe results and checked
-timestamps. No standalone health-probe endpoint is exposed. These follow-ups are
-required before claiming regulatory approval of the complete service.
+[issue 354](https://github.com/CedynGroup/aequorOS/issues/354). The provider
+`describe` contract, onboarding probes, and administrator-triggered
+`POST /api/v1/banks/{bank_id}/encryption-key/test` supply explicit observations,
+not scheduled monitoring. These follow-ups are required before claiming
+regulatory approval of the complete service.
 
 `LocalKeyProvider` supports injected hermetic tests and the provider conformance
-suite. Local evaluation without an AWS KMS account uses the existing platform
-storage path described in [bank key setup](bank_key_setup.md). There is no
-persistent per-tenant local provider and no fallback for an unavailable
-connected bank-owned key.
+suite. The [synthetic revocation walkthrough](encryption_demo.md) owns the
+file-controlled demo provider's setup and environment restrictions. It is not a
+fallback for an unavailable connected bank-owned key.
 
 Evidence lives in `tests/storage/test_key_providers.py` (local and moto AWS KMS
 conformance, grant denial and outage), `test_bank_encryption.py` (all S3 tiers,
@@ -254,5 +267,84 @@ retained versions, substitution, revocation, downloads and backup recovery),
 `test_bank_key_rollout.py` (optional platform storage, required-key refusal and
 connected-key failures in every environment),
 `tests/operator/test_bank_encryption.py` (staff and bank scoping), and
-`tests/db/test_tenant_rls_completeness.py` (migrated envelope RLS). CI uses fake
-providers and moto, never real AWS KMS calls.
+`tests/db/test_tenant_rls_completeness.py` (migrated envelope RLS). The HTTP
+provider contract and its CI service are documented in
+[Local KMS emulator and CI](#local-kms-emulator-and-ci).
+
+## Local KMS emulator and CI
+
+The opt-in `encryption` profile in `backend/docker-compose.yml` runs
+[local-kms](https://github.com/nsmithuk/local-kms), pinned by image digest. It is
+for synthetic keys and disposable data only. Start just the emulator with:
+
+```sh
+docker compose -f backend/docker-compose.yml --profile encryption up -d risk-kms
+```
+
+For a locally launched API/worker, set `APP_ENV=local`,
+`TLS_ALLOW_PLAINTEXT=1` and
+`BANK_KMS_ENDPOINT_URL=http://127.0.0.1:18080`. A process inside the local compose
+network may use `http://risk-kms:8080`. Restart long-lived processes after changing
+configuration. The endpoint is optional: without it the provider uses real AWS
+KMS. With it, the **same** `AwsKmsKeyProvider` and AWS Encryption SDK use the
+emulator with hardcoded synthetic credentials, ignoring ambient AWS credentials
+and SDK endpoint overrides. No fallback to AWS occurs when the emulator fails.
+
+The override refuses deployed application startup and provider construction;
+only `local`/`test` and loopback or the local compose service host are accepted.
+Plain HTTP still requires the transport policy's explicit local opt-in. The
+emulator service is absent from deployment compose files and application images.
+Never connect retained bank data or real credentials to it. The local named
+volume retains synthetic keys across restarts; keep it as long as its encrypted
+disposable data is needed.
+
+Run the provider's HTTP contract from the repository root:
+
+```sh
+TEST_KMS_ENDPOINT_URL=http://127.0.0.1:18080 mise -C backend exec -- uv run \
+  pytest tests/storage/test_kms_emulator.py -q
+```
+
+The storage contract job and every dashboard journey CI shard own ephemeral
+emulator services and run this contract; JUnit assertions disallow skipping it.
+Journey shards run it before starting the browser stack. It covers real SDK
+wrap/unwrap, authenticated context, disabled-key refusal, recovery, and data-key
+rewrapping to a second key. AWS cross-account
+policy and grant enforcement are outside the emulator's model and remain covered
+by mocked provider tests. Guided key setup and historical re-encryption journeys
+belong to their separate feature stacks.
+
+### Browser encryption journeys
+
+`backend/dashboard/e2e/bank-encryption.spec.ts` exercises the real AWS provider
+through a loopback HTTP fault proxy. Set `BANK_KMS_ENDPOINT_URL` to the emulator
+above before running `pnpm --filter @aequoros/dashboard e2e bank-encryption.spec.ts`.
+A missing emulator fails the stories; they never silently substitute the local
+in-memory provider. CI supplies one emulator per shard and keeps a single browser
+worker, just like the other journeys.
+
+Each story creates its own synthetic tenant, institution and analyst, using the
+shared identity catalogue. The fixture ingests a synthetic identifier through
+the Data Engine, copies the canonical test book's platform-derived current facts and numeric live
+metrics with their analysis periods and parameter register into the isolated institution, and connects fresh emulator keys through
+the operator key service. It refuses a disabled key before connecting the active
+key. It accepts only the fixed disposable `e2e.db` file and `APP_ENV=test`.
+Finally-based cleanup restores the fault proxy, restores key access, removes only
+that story's tenant rows, and schedules its synthetic keys for deletion.
+
+The journeys save and reread protected related-party names through the browser;
+raw SQLite reads separately verify ciphertext envelopes and blind indexes, then
+the exact-identifier search service checks the ingested identifier. They cover
+bank revocation, retained drafts after a rejected write, disabled inputs and
+save buttons, numeric liquidity continuity, outage-specific Retry and automatic
+recovery, old and new records after master-key rotation, and staff-only
+placeholders. Rotation leaves existing field ciphertext unchanged and retains
+the old key for historical reads; it does not test the separate re-encryption
+job.
+
+Use `E2E_RUNTIME_DIR` for an external disposable runtime directory and
+`E2E_EVIDENCE_DIR` for screenshots. Traces and failure artifacts live under the
+runtime directory. Screenshots are review attachments, never repository assets.
+The guided setup screen and historical re-encryption job remain follow-ups on
+their sibling feature stacks; AWS cross-account grants remain mocked-test
+coverage because the emulator does not implement their enforcement.

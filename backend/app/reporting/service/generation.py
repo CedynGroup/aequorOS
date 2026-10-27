@@ -38,6 +38,7 @@ from app.api.deps import TenantContext
 from app.attestation.public import digests, register_state
 from app.capital.public import regulatory_capital
 from app.core import observability
+from app.core.key_management.presentation import require_disclosed
 from app.data_engine.public import withdrawal_impact
 from app.domain.authority.outcomes import NotComputable
 from app.domain.policy import Direction, direction_for
@@ -102,6 +103,7 @@ def snapshot_content_hash(snapshot: dict[str, Any]) -> str:
     discipline: identical content always hashes identically regardless of
     insertion order.
     """
+    require_disclosed(snapshot)
     canonical = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -442,16 +444,8 @@ def _generate_package(
         basis=payload.basis,
     )
 
-    # Attestation binding, sealed with the snapshot (docs/attestation_esignature.md
-    # §3.1). Every return gets a content_digest — snapshot_sha256 embeds
-    # metadata.generated_at and therefore seals a VERSION, not content (gap G13).
-    # Packs that bind no engine run additionally get the master-data provenance
-    # analogue, without which a signature over them would bind figures with
-    # nothing behind them (gap G16).
-    register_digest = (
-        digests.register_state_digest(register_state.register_state_rows(db, ctx, bank.id))
-        if not generated.source_runs
-        else None
+    register_digest = digests.register_state_digest(
+        register_state.project_register_state(db, ctx, bank.id)
     )
     package = RegulatoryPackage(
         organization_id=ctx.organization_id,
@@ -639,10 +633,8 @@ def generate_frozen_package(  # noqa: PLR0913 - the mint key is its named parts
         basis=basis,
         rehearsal=rehearsal,
     )
-    register_digest = (
-        digests.register_state_digest(register_state.register_state_rows(db, ctx, bank.id))
-        if not built.source_runs
-        else None
+    register_digest = digests.register_state_digest(
+        register_state.project_register_state(db, ctx, bank.id)
     )
     package = RegulatoryPackage(
         organization_id=ctx.organization_id,

@@ -2,6 +2,7 @@
 import React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -220,6 +221,9 @@ it("zero is a measured point while null stays a gap and an unmeasured series say
       isLoading={false}
     />,
   );
+  await act(async () => {
+    await vi.dynamicImportSettled();
+  });
   await screen.findByRole("img");
   await waitFor(() => expect(chart.setOption).toHaveBeenCalled());
   const option = chart.setOption.mock.calls.at(-1)![0];
@@ -645,6 +649,9 @@ it("complete stress inputs produce the real scaled headroom bridge", async () =>
   render(
     <DriverWaterfall run={stressRun() as unknown as EnterpriseStressRead} />,
   );
+  await act(async () => {
+    await vi.dynamicImportSettled();
+  });
   await screen.findByRole("img");
   await waitFor(() => expect(chart.setOption).toHaveBeenCalled());
   const option = chart.setOption.mock.calls.at(-1)![0];

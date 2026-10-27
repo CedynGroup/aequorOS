@@ -442,6 +442,7 @@ class LocalServices:
             connection.execute(
                 "GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test"
             )
+            connection.execute("GRANT CREATE ON DATABASE risk_service TO aqs_owner")
         return self.postgres_environment(role_admin)
 
     def postgres_environment(self, role_admin: bool = False) -> dict[str, str]:

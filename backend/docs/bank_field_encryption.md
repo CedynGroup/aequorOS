@@ -7,23 +7,23 @@ is explicitly reported as retained; it is never silently treated as migrated.
 
 ## Covered fields
 
-| Table                      | Fields                                                                              |
-| -------------------------- | ----------------------------------------------------------------------------------- |
-| `canonical_counterparties` | `name`, `source_reference`, `group_reference`, `external_identifiers`, `attributes` |
-| `related_parties`          | `full_name`, `contact`                                                              |
-| `related_party_roles`      | `other_responsibilities`, `term_of_appointment`, `icag_registration`                |
-| `ingestion_batches`        | `validation_report`, `etl_report`, `error_message`                                  |
-| `translation_failures`     | `raw_record`, `error_message`                                                       |
-| `lineage_records`          | `details` for bank-scoped records                                                   |
-| `regulatory_packages`      | `snapshot`, `validation_report`, `notes`                                            |
-| `bi_dashboard_versions`    | `spec`                                                                              |
-| `bi_subscriptions`         | `query`                                                                             |
-| `bi_alerts`                | `filters`                                                                           |
+| Table                      | Fields                                                                |
+| -------------------------- | --------------------------------------------------------------------- |
+| `canonical_counterparties` | `name`, `source_reference`, `group_reference`, `external_identifiers` |
+| `related_parties`          | `full_name`, `contact`                                                |
+| `related_party_roles`      | `other_responsibilities`, `term_of_appointment`, `icag_registration`  |
+| `ingestion_batches`        | `validation_report`, `etl_report`, `error_message`                    |
+| `translation_failures`     | `raw_record`, `error_message`                                         |
+| `lineage_records`          | `details` for bank-scoped records                                     |
+| `bi_dashboard_versions`    | identity-filter values in `spec`                                      |
+| `bi_subscriptions`         | identity-filter values in `query`                                     |
+| `bi_alerts`                | identity-filter values in `filters`                                   |
 
-Numeric balances, positions, ownership percentages and calculation inputs retain
-ordinary database encryption at rest. Foreign keys, status codes and dates remain
-queryable. New audit events use opaque record references instead of copying names
-or whole reports; existing audit records are unchanged.
+Numeric balances, positions, counterparty calculation attributes, filing payloads,
+ownership percentages and calculation inputs retain ordinary database encryption
+at rest. Foreign keys, status codes and dates remain queryable. New audit events
+use opaque record references instead of copying names or whole reports; existing
+audit records are unchanged.
 
 ## Keys and storage
 
@@ -53,11 +53,13 @@ bank, table, record and column, and objects to their storage context. Key
 unavailability, damaged ciphertext and cross-bank substitution are rejected.
 
 The ORM encrypts new records and changed covered columns before flush, then
-restores their application values. Entity loads decrypt covered ciphertext;
-scalar SQL ciphertext projections remain opaque. Optional banks without a
-connected key retain ordinary field storage.
+restores their application values. Counterparty identity fields load on demand;
+other entity loads decrypt covered ciphertext. Scalar SQL ciphertext projections
+remain opaque. Complete-register attestation commitments follow the
+[attestation digest contract](../../docs/attestation_esignature.md#31-what-gets-signed--two-artefacts-per-signature).
+Optional banks without a connected key retain ordinary field storage.
 
-## Exact-match search
+## Identity indexes
 
 Bank-scoped HMAC-SHA-256 indexes support counterparty names, source references,
 external identifiers and related-party names. Names use Unicode normalization,
@@ -83,8 +85,9 @@ ingestion and before persistence for both optional-key and connected-key banks.
 Connected-key banks retain numeric BI. The builder stores opaque UUID aliases
 instead of readable counterparty identity. Identity dimensions and filters,
 including saved dashboard and notification queries, return an explanation asking
-the reader to remove those fields. Saved payloads written after key connection
-use the same field encryption. Secured identity BI is tracked in
+the reader to remove those fields. Only identity-filter values in saved BI
+payloads use field encryption. Numeric configuration remains readable when the
+identity key is unavailable. Secured identity BI is tracked in
 [issue 595](https://github.com/CedynGroup/aequorOS/issues/595).
 
 ## Dedicated database option
@@ -202,3 +205,47 @@ expires. The job does not destroy keys. The worker can update only the key-versi
 pointers and timestamp; operator audit retention is counted through a read-only
 audit-owner function without direct worker access to operator audit rows.
 Guard changes and audit-chain migrations are outside this workflow.
+
+## Protected presentation reads
+
+Tenant GET/HEAD sessions disclose protected identity fields as locked placeholders
+when a bank key is revoked or unreachable. Staff and Inspector presentation sessions
+hide those fields even for optional, unconnected banks. Support filing reads expose
+only filing metadata: snapshot and comparison bodies are locked, and validation,
+approval and methodology details are withheld. Bank-user filing reads retain their
+complete content. Numeric projections still
+use their stored values and indexes. Structured executable BI configuration refuses
+with a locked panel instead of substituting an empty query.
+
+The response header `X-Aequoros-Protected-Data` reports bank-scoped availability and
+protected responses use `Cache-Control: no-store`. Revocation displays “Your bank
+has turned off aequorOS access to protected data. Contact your bank administrator.”
+An outage displays “Can't reach your bank's key service. Retrying.” The dashboard
+clears affected cached data, rejects older in-flight disclosures, retries and
+refetches locked data after recovery. Form drafts remain mounted through refusal.
+Integrity failures remain verification errors, outside the key-outage presentation.
+
+Bank-wide readiness checks both the current payload key and the retained identity
+index key, including on empty registers and after failed historical field reads.
+Each prerequisite is observed once per request, with shared versions deduplicated.
+Readable historical fields remain readable, but their successful decryption cannot
+clear a prerequisite failure. Revocation takes precedence over an outage, and a
+later successful observation cannot clear either within the same response.
+
+Protected writes require usable keys and never persist placeholders. Related-party
+`PUT /api/v1/banks/{bank_id}/related-parties/{party_id}` updates only supplied fields;
+omitted protected fields remain unchanged, so non-protected updates can succeed
+while keys are unavailable. Its response can contain locked placeholders. Supplying
+`roles` replaces the role list; `role_updates` changes supplied fields on existing
+role IDs scoped to this bank and party, preserving their IDs and omitted values.
+The two role update forms cannot be combined. Protected changes still fail with
+the appropriate key message. Other mutation sessions remain strict.
+
+Concentration displays configured locked limits as not evaluated and withholds a
+clean breach indicator while any configured evaluation is incomplete; independent
+numeric limits still evaluate.
+
+Recovery retries also read `GET /banks/{bank_id}` to observe the connected key
+when protected collections are empty after a refused first save. A headerless
+successful response does not clear an existing lock. Support reads never unwrap
+a bank key or poll for recovery.

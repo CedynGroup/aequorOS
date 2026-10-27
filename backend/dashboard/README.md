@@ -319,7 +319,8 @@ and explicit-period dashboard reads have distinct stable keys. The root
 authority changes, including entry to or exit from staff inspection; ordinary
 access-token rotation deliberately keeps the same cache.
 
-Heavy liquidity, capital, IRRBB, FX, FTP, regulatory calendar, and live-snapshot
+Outside [protected-data recovery](../docs/bank_field_encryption.md#locked-presentation-reads),
+heavy liquidity, capital, IRRBB, FX, FTP, regulatory calendar, and live-snapshot
 payloads do not use fixed polling. They refresh on mount/window focus, after a
 relevant accepted mutation or completed pipeline job, and when the cheap
 live-summary generation or freshness official-run signal changes for that
@@ -386,7 +387,7 @@ NextAuth session-cookie variants, including secure/host-prefixed names and
 received numeric chunks. The auth response boundary also clears these variants
 for an empty session or successful sign-out, and removes stale siblings when
 issuing a session. Sign-out still invokes backend refresh-token revocation.
-See `lib/authCookies.ts` and `e2e/session-cookie-hygiene.spec.ts`.
+See `lib/authCookies.ts` and the [browser coverage guidance](#end-to-end-playwright).
 
 Login, sign-out, and session redirects retain the request's origin; a callback
 on another origin returns to the current origin instead. In the dashboard,
@@ -408,6 +409,7 @@ pnpm --filter @aequoros/dashboard test        # legacy + Vitest behavior suites
 pnpm --filter @aequoros/dashboard test:coverage # CI coverage and shrink-only ratchet
 pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
 pnpm --filter @aequoros/dashboard e2e         # Playwright; package journeys need S3/MinIO
+pnpm --filter @aequoros/dashboard e2e:contracts # browser presentation and HTTP contracts
 ```
 
 Regenerate the API client after any backend contract change:
@@ -546,8 +548,8 @@ three servers use OS-selected free ports (optional `E2E_BACKEND_PORT`,
 `E2E_DASHBOARD_PORT` and `E2E_IDP_PORT` preferences fall back when occupied),
 then `e2e/global-setup.ts` seeds through the API and mints per-role session
 cookies. The Next.js server uses `.next-e2e`, so it cannot contaminate the
-normal development cache. Because every journey shares the disposable database
-and session files, a worktree-local lock rejects a second concurrent E2E run.
+normal development cache. Both browser suites use the worktree's disposable
+database and session files, so a worktree-local lock rejects concurrent E2E runs.
 The stack never touches the primary database.
 
 The disposable Next.js server uses `NEXT_FONT_GOOGLE_MOCKED_RESPONSES` with
@@ -569,12 +571,41 @@ without the explicit opt-in, startup refuses SQLite with "Database transport
 requires PostgreSQL with a hostname." Exception limits are governed by
 [the transport contract](../docs/transport_security.md#local-development-and-narrowly-bounded-exceptions).
 
-`session-cookie-hygiene.spec.ts` deliberately sends a cookie encrypted with a
-foreign secret and malformed cookie chunks. Auth.js reports `JWTSessionError`
-and "no matching decryption secret" during those refusal journeys; their
-assertions prove the cookie is cleared and a subsequent real login succeeds.
+`e2e/session-cookie-hygiene.spec.ts` deliberately sends a cookie encrypted with a
+foreign secret, verifies it is cleared and completes a subsequent real login.
+Auth.js reports `JWTSessionError` and "no matching decryption secret" during that
+refusal. `contracts/session-http.spec.ts` checks malformed cookie families and
+runtime host warnings.
 The server configuration imports the minting helper's test secret constants, and
 `session-lifecycle.spec.ts` decrypts a real login cookie and verifies rotation.
+
+The credential helpers in `e2e/support/mint.ts` read the principal's current
+authorization version from the disposable SQLite fixture on each default mint.
+After a real grant, revocation or status change, mint a new token or storage
+state instead of counting version increments. A session cookie and its embedded
+access token share one captured version. Pass an explicit version only when a
+journey deliberately needs a captured or invalid authorization generation;
+minting a token does not alter the principal's persisted bindings or status.
+
+Authorization, access-request, baseline-membership, live-grant, grant-administration,
+macro-contract and full-filing stories use `e2e/support/story-identities.ts` to
+provision fresh tested actors. Declare the required profiles with `storyConfig`;
+owner stories also request an isolated setup tenant. Shared-bank stories keep
+the bootstrap owner only for fixture administration. The fixture installs each actor's real scoped bindings
+and current session before browser creation. Its `finally` cleanup closes story
+contexts, rejects their pending requests, archives governed clones and deactivates
+the actors, revoking refresh families while retaining audit and signed evidence.
+Selected identity aliases and storage-state files are restored even after failure.
+The Python helper refuses any database except this worktree's disposable fixture
+and provisions no financial facts.
+
+`storyConfig.bindings` gives baseline actors complete, exact-bank grants with
+explicit bundles, modules and sensitivities. Credit grants can also name a branch
+slice; the journeys compare actual rows with a whole-book reader and check that
+client filters cannot widen it. Permission stories pair visible UI restrictions
+with direct API refusals using the same actor's credential. An isolated owner
+story can set `ownerReadModules` to revoke its initial broad read grant through
+the grant service and replace it with module-specific read grants.
 
 Three prerequisites are not obvious, and each one has already cost a long
 diagnosis:
@@ -585,7 +616,8 @@ diagnosis:
    `S3_ENDPOINT` is exported. Existing exported S3 configuration is reused in
    auto mode; `AQS_LOCAL_SERVICES=external` also permits the backend to read its
    untracked `.env` without starting a service. The `attestation`, `full-lifecycle`,
-   `submission-lifecycle`, `data-engine-ingestion`, and opt-in `visual-tour`
+   `submission-lifecycle`, `data-engine-ingestion`, `integration-key-use`,
+   `grant-administration`, `00-ingestion-worker`, `00-treasury-boundaries`, and opt-in `visual-tour`
    specs, plus the SSO attestation journey, refuse immediately without it rather
    than letting storage-dependent assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The
@@ -603,13 +635,38 @@ diagnosis:
    it to `reference_data.py`, and nothing else.
 3. **The live fact plane.** Every Treasury/ALM cockpit reads
    `current_financial_facts`, which in the product only the background worker
-   writes (`pipeline_refresh`), and the e2e stack runs no worker
+   writes (`pipeline_refresh`), and the shared fixture runs no worker
    (`RUN_INPROCESS_WORKER=0`; `POST /banks/{id}/refresh` merely enqueues a job).
    The bootstrap therefore stands in for the refresh via
    `tests/fixtures/live_plane.py`, mirroring the latest period's facts into the
    live plane and running the product's own `pipeline.recompute_modules`.
    Without it `/basel`, `/liquidity`, `/ftp/*`, `/irr/*` and `/fx/*` all open on
    the "no computed data yet" envelope.
+4. **Bank-held keys.** The full suite requires the bank-key emulator described in
+   [the encryption journey setup](../docs/bank_encryption.md#browser-encryption-journeys).
+   Start it and export `BANK_KMS_ENDPOINT_URL` before the commands below. The local
+   service runner provisions Postgres and MinIO; it does not start this emulator.
+
+`00-ingestion-worker.spec.ts` exercises the worker path separately. It provisions
+an empty tenant and real analyst/approver bindings, uploads a balanced synthetic
+book and market data through the bank UI, and approves forecast assumptions
+through the bank API. A standalone `app.worker` claims the queued refresh and
+makes all eight modules current. The journey pins treasury's GHS 2 million HQLA,
+GHS 310,000 net outflows and 645.16% coverage, then uses Mint official run through
+the same worker and generates BSD2 with the matching cash amount. It refuses to
+start with another bank's queued work, stops its own worker in `finally`, and
+removes its tenant and session state. Keep this story ahead of shared-bank
+mutation stories and keep Playwright at one worker.
+
+`00-treasury-boundaries.spec.ts` uses the same upload and worker path with a
+fresh setup tenant and fresh analyst/approver identities per story. It pins zero
+cash, the 100% LCR threshold, the 75% inflow cap, Level 2A/2B haircuts and both
+HQLA caps, and exclusion of public-sector securities lacking HQLA classification.
+A savings-and-loans variant checks its own capital floor, omits Basel sub-tier
+ratios and refuses a bank forecast for its regime. `storyConfig.institutionType` selects the institution
+regime only for an owned tenant. Securities declare their issuer class separately
+from the bank's HQLA classification. The fixture stops its owned worker before
+identity retirement; it neither completes jobs nor writes financial facts itself.
 
 The canonical fixture ends at a fixed month. Bootstrap first carries it forward
 (`extend_canonical_test_book`) one month-end snapshot at a time through the last
@@ -623,9 +680,36 @@ retain the canonical spine's figures. Capital and stress expectations for the
 latest period therefore use the position book's net CRD credit basis.
 
 ```bash
-pnpm --filter @aequoros/dashboard e2e            # the journeys
+pnpm --filter @aequoros/dashboard e2e            # functional journeys
+pnpm --filter @aequoros/dashboard e2e:contracts  # browser presentation and HTTP contracts
 AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual
 ```
+
+Functional outcomes live in `e2e/`: source ingestion, computed figures,
+navigation and recovery, scoped authority, and persisted user actions.
+`contracts/` owns presentation and HTTP contracts: header geometry and metadata,
+Settings section placement, authentication/cookie protocols, grant/access-request
+contracts, BI authorization/privacy/governance, and the exhaustive macro-scenario
+API catalogue. Both commands boot the same
+disposable product stack with one worker and no retries, on separate invocations.
+The contract suite reports every collected test and its final result through
+`e2e/support/contract-reporter.ts`, alongside the list reporter. Skips, missing
+results and expected failures fail the suite. `PLAYWRIGHT_CONTRACT_REPORT` selects
+the JSON destination (by default, `contracts.json` in the test-results directory).
+This report is separate from journey accounting. The aggregate gate requires the
+exact names in `.github/scripts/dashboard_contracts.json`; removing, renaming or
+adding a contract requires a reviewed manifest change, just as the journey floor
+does. A passing critical ownership outcome cannot replace other contracts.
+
+Navigation/recovery remains in `e2e/navigation-recovery.spec.ts`; macro read-only
+UI checks live together in `e2e/default-macro-scenarios.spec.ts`. Settings authority
+and preference persistence use fresh actors, while shell presentation is checked
+once in the contract suite.
+
+Treasury risk stories are separated by observable outcome. Each opens its module
+afresh; scenario history and board-pack stories execute their own prerequisite
+run, so they can be selected without running an earlier story first. The coherent
+ingestion-to-worker-to-generated-return journey stays together.
 
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run the commands from the repository
@@ -635,7 +719,24 @@ root; the tour writes full-page screenshots of every route to
 The Data Engine journeys (`e2e/data-engine-ingestion.spec.ts`) use the fixtures in
 `e2e/fixtures/data-engine/` to cover Excel/CSV upload, legacy `.xls` refusal,
 batch findings, correction by re-upload, downstream positions, and manual market
-data upload. The T24 journey configures a core in the browser, stages and ingests
+data upload. The machine-key journey (`e2e/integration-key-use.spec.ts`)
+provisions its own two-bank tenant with real scoped bindings. A key issued in the browser pushes a
+balanced synthetic book through the Data Engine, is refused by the existing
+sibling bank, and loses push and batch-read access after browser revocation.
+Canonical balances, batch lineage and absence of sibling writes are checked
+before finally-based credential and tenant cleanup.
+
+The full filing lifecycle (`e2e/full-lifecycle.spec.ts`) takes both a regulator
+rejection and a checker send-back through correction of a synthetic source book
+via the Data Engine, a replacement package, renewed maker and checker signatures,
+and acknowledgement. It pins the replacement cash figure and its new source run
+while preserving the superseded snapshot and hash, withdrawn signatures and
+earlier receipt history. A previous version's review basis is refused, repeated
+Validator approval is idempotent, and duplicate transmission cannot add a receipt.
+Package versions advance independently of the
+ORASS revision, which counts regulator-granted resubmissions.
+
+The T24 journey configures a core in the browser, stages and ingests
 a recorded OFS extract through the API, then checks its batch and positions in
 the browser; live transport remains unavailable. Set `E2E_EVIDENCE_DIR` to retain
 their screenshots.
@@ -759,18 +860,41 @@ successful detection of an ignored-only PR.
 
 Four runners use Playwright `--shard=1/4` through `--shard=4/4`, each with one
 worker and its own disposable SQLite database, fixture bank, loopback MinIO
-with built-in KMS and local OIDC issuer. Tests in one spec stay together; no
-mutable bank or storage is shared between shards. Each runner restores or
+with built-in KMS and local OIDC issuer. Shard 1 then runs the browser contracts
+serially on a fresh database with a separate results directory. A contract
+failure fails that shard job and the required gate even when every journey
+report meets the numeric floor. Contracts never contribute to that floor.
+Tests in one spec stay together; no mutable bank or storage is shared between shards. Each runner restores or
 installs Chromium and installs its system dependencies. Evidence screenshots
 are uploaded as `dashboard-journey-evidence-<shard>` and machine-readable
 reports as `dashboard-journey-report-<shard>`; the gate summarizes the combined
-counts. The aggregate requires all four reports, unique journey identities,
-and at least **243 executed journeys**, with zero skips. It verifies the
+counts. Complete Playwright output directories, including failure traces, worker
+logs and screenshots, are uploaded even after failure as
+`dashboard-journey-results-<shard>` and `dashboard-browser-contract-results`.
+`e2e/support/artifact-reporter.ts` persists inline attachment bodies (including
+screenshots) inside those output directories; list and outcome reporters alone
+keep those bytes only in memory. Separate output directories preserve journey
+attachments when contracts start.
+The full contract inventory is uploaded as `dashboard-browser-contract-report`.
+The aggregate requires all four reports, unique journey identities,
+and the executed-journey floor defined in the
+[gate script](../../.github/scripts/assert_dashboard_journeys.mjs), with zero skips. It verifies the
 reported counters against the named results and prints every skipped journey
 in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
 fail the gate even when the remaining reports pass. Raise the floor when adding
 coverage; reducing it requires a reviewed suite change.
+
+The [critical-outcome catalogue](../../.github/scripts/dashboard_critical_outcomes.json)
+beside the numeric gate names a small set of required business outcomes. Each
+owning test declares its stable ID as a `critical-outcome` Playwright annotation.
+The outcome reporter records actual final results separately for journeys and
+contracts. The aggregate requires all four journey reports and the unsharded
+contract report, and rejects missing, duplicate, unknown, failed or wrongly
+layered outcomes even when the numeric floor passes. Keep IDs stable when
+renaming or splitting stories; changes to the catalogue require review. These
+IDs guard scenario presence and passing execution; meaningful assertions and
+code review still determine whether each story proves its declared outcome.
 
 Screenshot diagnostics are separate from the required suite; see the visual-tour
 capture command and output under [End-to-end (Playwright)](#end-to-end-playwright).
@@ -835,9 +959,9 @@ are described under [Sign-in and session recovery](#sign-in-and-session-recovery
 ## Design system
 
 Palette, typography scale, density rules and the traffic-light semantics are in
-`docs/DASHBOARD_DESIGN_SYSTEM.md` and `tailwind.config.ts`. Color is functional:
-green/amber/red map to regulatory thresholds, never to branding. Numerical cells
-are right-aligned with tabular numerals.
+`docs/DASHBOARD_DESIGN_SYSTEM.md` and the `@theme` block in `app/globals.css`.
+Color is functional: green/amber/red map to regulatory thresholds, never to
+branding. Numerical cells are right-aligned with tabular numerals.
 
 **No table may overflow silently (NEW-54).** `DataTable` has always been
 `overflow-x-auto`, which scrolls but says nothing, so at 1280px the FTP Line
@@ -852,3 +976,87 @@ the overflow you cannot remove, remove the one you can. **Design changes are
 reviewed as pixels**: follow the visual-tour capture instructions under
 [End-to-end (Playwright)](#end-to-end-playwright) and compare the screenshots
 before and after. Type-checking cannot see a clipped column.
+
+### Encryption journeys with local KMS
+
+Follow [the browser encryption journey guide](../docs/bank_encryption.md#browser-encryption-journeys)
+for emulator setup, the focused command, fixture isolation, recovery coverage and
+evidence paths. Its [emulator contract](../docs/bank_encryption.md#local-kms-emulator-and-ci)
+owns endpoint restrictions and the cross-account-grant limitation.
+
+### Contingency funding plan lifecycle
+
+Liquidity → CFP authors each of the seven required plan-content blocks and
+optional behavioral overlays. Every command requires a reason; Board approval
+also requires an approval reference and an independent checker. The server
+remains authoritative for the complete Liquidity/Confidential binding and
+maker-checker decision. Readers see disabled controls with permission reasons.
+
+Save any content changes before recording Board approval. Saving makes you the
+preparer, so an independent checker must review the saved draft. Approval is
+bound to the revision the checker loaded: if another session saves a revision,
+the server refuses approval with HTTP 409. Use **Reload latest plan**, review
+the revised contents, then record approval again.
+
+| Source             | Command               | Authority and guard                                    | Result                                             |
+| ------------------ | --------------------- | ------------------------------------------------------ | -------------------------------------------------- |
+| No plan / approved | Save draft            | Create                                                 | New draft version; previous approval retained      |
+| Draft              | Save draft            | Edit                                                   | Draft revised; preparer updated                    |
+| Draft              | Record Board approval | Approve, independent of preparer, complete contents    | Approved version; prior approval superseded        |
+| Approved, inactive | Activate              | Approve, unexpired approval, selected reporting period | Active; append-only event and indicator snapshot   |
+| Approved, active   | Stand down            | Approve, selected reporting period, reason             | Inactive; append-only event and indicator snapshot |
+
+Activation without approval, expired approval and duplicate activation are
+refused. Stand-down without an active plan is refused; an active plan can still
+be stood down after its annual approval expires. Each accepted command reloads
+plan, event and indicator reads. Activation and stand-down produce internal
+regulator-notification records; aequorOS does not transmit them externally.
+Draft and approval audit records remain in the audit trail; the activation log
+contains activation and stand-down events. This workflow does not create or
+replace official regulatory runs. Related journeys and guards: #289, #315, #323.
+
+### Treasury scenario workspaces
+
+Each treasury module's **Scenarios** tab contains its own effective-dated
+scenario definitions and latest stored results for the selected reporting period:
+IRRBB `/irr/scenarios`, Liquidity `/liquidity/stress`, FX `/fx/scenarios`, FTP
+`/ftp/scenarios`, and Capital `/basel/stress`. Opening a tab creates no runs.
+Liquidity scenario definitions require Liquidity confidential view; they no
+longer require the unrelated Risk & Limits view. Definitions require the owning
+module's confidential view with whole-institution coverage; result summaries
+retain the server's existing sensitivity-specific projection.
+
+The enterprise stress workbench remains at `/irr/enterprise-stress`, with its
+own IRRBB tab and links from the module workspaces. It runs a governed macro
+scenario across engines. Module scenario tabs never dispatch enterprise stress.
+Its IRRBB correctness dependency remains #306.
+
+FTP what-if compares baseline with a chosen module scenario and optional curve
+shift, funding-spread addition, product margin floor and NMD core policy-band
+overrides. Blank overrides retain the scenario's values and governed rules.
+Rule percentages must be between 0 and 100, and the NMD core minimum cannot
+exceed its maximum. Preview requires FTP/Confidential/Run. Saving an analysis
+requires FTP/Confidential/Create. Both require whole-institution coverage.
+Each request is checked by the server; readers see disabled controls and grant
+reasons. Saving recomputes and snapshots
+the supplied inputs and results. Reopening reads the stored snapshot. Parameter
+registers and official regulatory runs are unchanged. Related work: #314, #316
+(module run controls), #309 (full stored-run/history views), #289 (journeys).
+
+### Running treasury regulatory scenario sets
+
+Liquidity, Basel Capital, FX and Credit expose **Run all … scenarios** from their
+workspaces; the Liquidity, Capital and FX Scenarios tabs offer the same action.
+The shell's selected reporting period is the explicit as-of period sent to the
+server. The control requires the owning module's Confidential/Run capability
+with whole-institution coverage. Readers, missing grants and partial scopes see
+a disabled control with a reason. The server independently enforces authority.
+
+The command persists the module's supported regulatory scenario set and shows
+success or failure per scenario in the backend's returned order. Credit currently
+returns its baseline scenario. A failure in one scenario remains visible beside
+successful scenarios. Accepted batches reload the module reads and stored-run
+registry; the scenario definitions also refresh. No page read, tab navigation or
+period selection mints a run. The current live view stays current; these actions
+do not select or promote a stored run. Full stored-history work remains #309;
+browser journeys are tracked by #289 and pilot qualification by #330/#331.

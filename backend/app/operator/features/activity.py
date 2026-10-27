@@ -33,6 +33,7 @@ def get_tenant_activity(
         db,
         operator,
         action="inspector.read.activity",
+        resources=result,
         target_org=organization_id,
         detail={"session_id": str(session.id)},
     )

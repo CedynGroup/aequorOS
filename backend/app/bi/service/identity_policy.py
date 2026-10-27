@@ -8,18 +8,11 @@ from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.bi.domain.catalogue import Catalogue
+from app.bi.domain.identity import IDENTITY_MEMBERS
 from app.bi.schemas.query import BiQuery
 from app.bi.service.errors import BiQueryError
 from app.core.key_management.models import BankEncryptionKey
 
-IDENTITY_MEMBERS = frozenset(
-    {
-        "counterparty.id",
-        "counterparty.name",
-        "counterparty.source_reference",
-        "counterparty.group",
-    }
-)
 IDENTITY_REASON = "bank_key_identity_bi_unavailable"
 IDENTITY_MESSAGE = (
     "This bank uses bank-held encryption. Identity dimensions and identity filters "
