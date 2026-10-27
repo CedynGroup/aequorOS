@@ -31,13 +31,11 @@ pytestmark = [
     ),
 ]
 
-#: Derived, never restated: a table added to either module joins this list by
-#: being declared, so it cannot be built without Postgres coverage.
 PHASE3_TABLES: tuple[str, ...] = (*BI_CONTENT_TABLES, *BI_NOTIFICATION_TABLES)
 
 
 def test_the_table_list_is_not_empty() -> None:
-    """A parity suite over an empty list passes while proving nothing."""
+    """The behavioral regressions rely on Phase 3 table registration."""
     assert len(PHASE3_TABLES) == 8, PHASE3_TABLES
     assert all(name.startswith("bi_") for name in PHASE3_TABLES)
 
