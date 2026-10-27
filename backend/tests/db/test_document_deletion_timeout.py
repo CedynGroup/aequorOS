@@ -114,6 +114,7 @@ class UploadDeletionRace:
 
 def build_upload_deletion_race(
     timeout_role_engines: dict[str, Engine],
+    setup_engine: Engine,
     monkeypatch: pytest.MonkeyPatch,
     expire_on_commit: bool,
 ) -> UploadDeletionRace:
@@ -122,7 +123,9 @@ def build_upload_deletion_race(
     settings = get_settings()
     storage = BlockingHeadStorage()
     monkeypatch.setattr(documents, "get_object_storage", lambda: storage)
-    with Session(api_engine, expire_on_commit=False) as setup:
+    # Fixture preparation is outside the accelerated idle-budget scenario.
+    # Keep real API authority without timing synthetic case construction.
+    with Session(setup_engine, expire_on_commit=False) as setup:
         setup.info["organization_id"] = ORG_1
         upload = ServiceFactories(setup, storage, settings, ctx).documents.request_upload()
         document = documents.get_document_or_404(setup, ORG_1, upload.document_id)
@@ -206,14 +209,17 @@ def assert_upload_deletion_outcome(scenario: UploadDeletionRace) -> None:
 
 @pytest.mark.parametrize("cleanup_during_head", [False, True])
 @pytest.mark.parametrize("expire_on_commit", [False, True])
-def test_upload_completion_cannot_resurrect_deletion_during_head(
+def test_upload_completion_cannot_resurrect_deletion_during_head(  # noqa: PLR0913
     administrator: Engine,
     timeout_role_engines: dict[str, Engine],
+    role_engines: dict[str, Engine],
     monkeypatch: pytest.MonkeyPatch,
     cleanup_during_head: bool,
     expire_on_commit: bool,
 ) -> None:
-    scenario = build_upload_deletion_race(timeout_role_engines, monkeypatch, expire_on_commit)
+    scenario = build_upload_deletion_race(
+        timeout_role_engines, role_engines["aqs_api"], monkeypatch, expire_on_commit
+    )
 
     delete_during_upload_head(scenario, administrator, cleanup_during_head)
 
