@@ -35,7 +35,7 @@ and dynamic detail routes. The route groups under `app/(app)/`:
 | Risk / Alerts      | `/risk`, `/alerts` | limit wall, findings, pipeline alerts                                                       |
 | Reports            | `/reports/*`       | ALCO, board pack, ICAAP stress pack, comparisons                                            |
 | Access control     | `/access/*`        | Members and scoped grants; SSO and access requests; integration keys; My access placeholder |
-| Settings           | `/settings/*`      | appearance, profile/account, data and compute status, and About                             |
+| Settings           | `/settings/*`      | appearance, profile/account, bank key administration, data and compute status, and About    |
 
 `app/inspect` is the tenant inspector; `app/api/*` holds the server-only route
 handlers for attestation step-up, auth, and impersonation cookies.
@@ -44,6 +44,8 @@ Capital navigation, planning, and ILAAP access requirements are documented in
 [Capital dashboard access](../docs/capital_enforcement_rollout.md#dashboard-access).
 FX navigation, dashboard queries, run actions, and report projections are
 documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-access).
+Bank key administration follows [the setup guide](../docs/bank_key_setup.md#bank-administrator-self-service).
+Locked fields and editor recovery follow [the protected presentation contract](../docs/bank_field_encryption.md#protected-presentation-reads).
 
 ### Unavailable liquidity figures
 

@@ -2,8 +2,8 @@
 
 /**
  * Institution Profile — Related parties: directors, key management, external
- * auditors, shareholders, UBOs, and outsourced providers, each carrying a
- * replace-on-write roles list and (for shareholders) shareholding rows with
+ * auditors, shareholders, UBOs, and outsourced providers, each carrying
+ * roles and (for shareholders) shareholding rows with
  * optional UBO linkage. Selecting a row expands the full detail; every
  * mutation records a required audit reason.
  */

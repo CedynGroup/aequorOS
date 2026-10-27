@@ -124,6 +124,15 @@ role IDs scoped to this bank and party, preserving their IDs and omitted values.
 The two role update forms cannot be combined. Protected changes still fail with
 the appropriate key message. Other mutation sessions remain strict.
 
+The related-party editor retains unsaved changes separately from refreshed server
+records. Refetch and key recovery refresh untouched fields without overwriting
+drafts; locked placeholders never become draft values. Routine saves send only
+edited fields and scoped role updates, allowing numeric-only edits while locked.
+Failed saves retain the draft, including protected edits that must wait for key
+recovery. Adding or removing a role requires the server membership baseline to
+be present; saving that replacement list also requires readable protected values.
+An explicitly empty replacement still removes every role.
+
 Concentration displays configured locked limits as not evaluated and withholds a
 clean breach indicator while any configured evaluation is incomplete; independent
 numeric limits still evaluate.
