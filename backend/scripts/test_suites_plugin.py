@@ -39,6 +39,9 @@ def _install(config: pytest.Config) -> None:
     _ = attempts.write_text("")
     patches = pytest.MonkeyPatch()
     patches.setenv("CI_NO_DATABASE_ATTEMPTS", str(attempts.resolve()))
+    # Mixed migration modules gate even model-only checks on this setting.
+    # Enable their collection with a refused sentinel, never a live endpoint.
+    patches.setenv("TEST_DATABASE_URL", "postgresql+psycopg://unit:unit@127.0.0.1:1/unit_tests")
     patches.setenv("PYTHONPATH", python_path(os.environ.get("PYTHONPATH", "")))
     install(patches.setattr)
     config.stash[_PATCHES] = patches

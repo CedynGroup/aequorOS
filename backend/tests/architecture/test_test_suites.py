@@ -100,6 +100,12 @@ def test_suite_execution_boundary(
             )
         )
     prefix = ""
+    if suite == "unit" and passes:
+        prefix = (
+            "import os, pytest\n"
+            "pytestmark = pytest.mark.skipif(os.getenv('TEST_DATABASE_URL') is None, "
+            "reason='mixed-module database profile gate')\n"
+        )
     if body == "__double__":
         prefix = "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.integration]\n"
         body = "assert True"
@@ -114,6 +120,7 @@ def test_suite_execution_boundary(
     }
     _ = environment.pop("CI_UNIT_REPORT_DIR", None)
     _ = environment.pop("CI_DATABASE_CENSUS", None)
+    _ = environment.pop("TEST_DATABASE_URL", None)
     if suite == "unit":
         environment["CI_UNIT_REPORT_DIR"] = str(tmp_path / "evidence")
     result = subprocess.run(
@@ -248,6 +255,7 @@ def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
     }
     _ = environment.pop("CI_UNIT_REPORT_DIR", None)
     _ = environment.pop("CI_DATABASE_CENSUS", None)
+    _ = environment.pop("TEST_DATABASE_URL", None)
     arguments = []
     if ci:
         environment["CI_UNIT_REPORT_DIR"] = str(tmp_path / "evidence")

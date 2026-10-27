@@ -500,6 +500,11 @@ guard proves the observed selection has exactly one execution owner, including
 conservative affected-module CI runs. Original database-free files remain in
 place; classification never changes test imports or fixtures.
 
+The unit guard supplies a loopback port-1 `TEST_DATABASE_URL` sentinel before
+collection. This enables model-only checks inside mixed migration modules whose
+module-wide skip condition requires that setting. No PostgreSQL service is
+provisioned, and any attempted use of the sentinel fails the connection guard.
+
 A dedicated unit run uses four workers with `--dist loadfile` and refuses
 database connections before collection. Each process records attempts separately;
 the controller requires identical worker classifications and exact combined JUnit
