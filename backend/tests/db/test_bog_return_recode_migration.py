@@ -179,20 +179,14 @@ def test_the_historical_recode_updates_all_tables_and_can_be_reversed(
     with Operations.context(MigrationContext.configure(recode_connection)):
         module.upgrade()
         for table in tables:
-            assert (
-                recode_connection.execute(
-                    text(f"SELECT id, organization_id, return_code FROM {table} ORDER BY id")
-                ).all()
-                == sorted(recoded)
-            )
+            assert recode_connection.execute(
+                text(f"SELECT id, organization_id, return_code FROM {table} ORDER BY id")
+            ).all() == sorted(recoded)
         module.downgrade()
         for table in tables:
-            assert (
-                recode_connection.execute(
-                    text(f"SELECT id, organization_id, return_code FROM {table} ORDER BY id")
-                ).all()
-                == sorted(original)
-            )
+            assert recode_connection.execute(
+                text(f"SELECT id, organization_id, return_code FROM {table} ORDER BY id")
+            ).all() == sorted(original)
 
 
 @pytest.mark.parametrize("has_legacy", [True, False], ids=["repair", "healthy"])
@@ -216,7 +210,7 @@ def test_the_corrective_migration_scopes_legacy_rows_by_family(
             ("BSD2", "CAR-RWA", "capital"),
             ("BSD3", "LCR-NSFR", "liquidity"),
         ):
-            for package_family in ((family, "bsd") if has_legacy else ("bsd",)):
+            for package_family in (family, "bsd") if has_legacy else ("bsd",):
                 row_id = f"{org}-{package_family}-{old}"
                 recode_connection.execute(
                     text(
@@ -226,7 +220,13 @@ def test_the_corrective_migration_scopes_legacy_rows_by_family(
                     {"id": row_id, "org": org, "code": old, "family": package_family},
                 )
                 expected_packages.append(
-                    (row_id, org, old if package_family == "bsd" else new, package_family, "monthly")
+                    (
+                        row_id,
+                        org,
+                        old if package_family == "bsd" else new,
+                        package_family,
+                        "monthly",
+                    )
                 )
             for code in (old, new, "OTHER"):
                 row_id = f"{org}-{old}-{code}"
@@ -240,17 +240,13 @@ def test_the_corrective_migration_scopes_legacy_rows_by_family(
     with Operations.context(MigrationContext.configure(recode_connection)):
         for _ in range(2):
             module.upgrade()
-            assert (
-                recode_connection.execute(
-                    text("SELECT * FROM regulatory_packages ORDER BY id")
-                ).all()
-                == sorted(expected_packages)
-            )
+            assert recode_connection.execute(
+                text("SELECT * FROM regulatory_packages ORDER BY id")
+            ).all() == sorted(expected_packages)
             for table in ("return_signing_policies", "return_signature_placements"):
-                assert (
-                    recode_connection.execute(text(f"SELECT * FROM {table} ORDER BY id")).all()
-                    == sorted(expected_signing)
-                )
+                assert recode_connection.execute(
+                    text(f"SELECT * FROM {table} ORDER BY id")
+                ).all() == sorted(expected_signing)
 
 
 # --- Postgres proof -------------------------------------------------------
