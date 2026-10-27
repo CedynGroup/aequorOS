@@ -20,7 +20,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 CATALOGUE = Path(__file__).with_name("test_suites.json")
 
 
-def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:
+def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:  # noqa: PLR0912, PLR0915
     events: list[dict[str, object]] = []
     for path in sorted(directory.rglob("events-*.jsonl")):
         events.extend(
@@ -63,7 +63,7 @@ def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:
         raise ValueError("Missing selected-test observation manifest")
     # xdist workers each collect the same selection. Execution reports, rather
     # than summing their identical manifests, prove that each case ran once.
-    expected = set().union(*(set(nodes) for nodes in selections.values()))
+    expected = set[str]().union(*(set(nodes) for nodes in selections.values()))
     if set(reports) != expected:
         raise ValueError("Observation reports dropped or added selected test identities")
     if any(len(nodes) != len(set(nodes)) for nodes in selections.values()):
@@ -87,10 +87,10 @@ def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:
 
 def generate(directory: Path, output: Path) -> None:
     cases, inconclusive = classify(directory)
-    output.write_text(json.dumps({"cases": cases}, indent=2, sort_keys=True) + "\n")
+    _ = output.write_text(json.dumps({"cases": cases}, indent=2, sort_keys=True) + "\n")
     print(f"Generated {len(cases)} test owners: {dict(Counter(cases.values()))}")
     print(f"{len(inconclusive)} inconclusive cases conservatively owned by integration")
-    (directory / "inconclusive.json").write_text(json.dumps(inconclusive, indent=2) + "\n")
+    _ = (directory / "inconclusive.json").write_text(json.dumps(inconclusive, indent=2) + "\n")
 
 
 def check(directory: Path, catalogue: Path = CATALOGUE) -> None:
@@ -108,7 +108,8 @@ def check(directory: Path, catalogue: Path = CATALOGUE) -> None:
             "Database ownership drift; refresh the census:\n" + json.dumps(differences, indent=2)
         )
     print(
-        f"Verified observed ownership of {len(observed)} tests; {len(inconclusive)} inconclusive integration cases"
+        f"Verified observed ownership of {len(observed)} tests; "
+        + f"{len(inconclusive)} inconclusive integration cases"
     )
 
 
@@ -122,6 +123,9 @@ def refresh(directory: Path, mode: str) -> int:
         "MIGRATION_DATABASE_URL",
         "WORKER_DATABASE_URL",
         "REAL_DATA_DATABASE_URL",
+        "LIVE_DATA_DATABASE_URL",
+        "OPENBAO_TEST_ADDR",
+        "OPENBAO_TEST_TOKEN",
         "TEST_DATABASE_URL",
         "TEST_DATABASE_ADMIN_URL",
         "CI_UNIT_REPORT_DIR",
@@ -131,7 +135,7 @@ def refresh(directory: Path, mode: str) -> int:
         "CI_POSTGRES_FILES",
         "PYTEST_ADDOPTS",
     ):
-        environment.pop(key, None)
+        _ = environment.pop(key, None)
     environment.update(CI_DATABASE_OBSERVATIONS=str(directory.resolve()), CI_DATABASE_CENSUS="1")
     # Explicit mode provisions disposable services even if CI or a developer's
     # environment carries a database URL. Never use an external/primary URL.
@@ -165,15 +169,16 @@ def refresh(directory: Path, mode: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["refresh", "generate", "check"])
-    parser.add_argument("directory", type=Path)
-    parser.add_argument("--output", type=Path, default=CATALOGUE)
-    parser.add_argument("--mode", choices=["native", "docker"], default="native")
+    _ = parser.add_argument("action", choices=["refresh", "generate", "check"])
+    _ = parser.add_argument("directory", type=Path)
+    _ = parser.add_argument("--output", type=Path, default=CATALOGUE)
+    _ = parser.add_argument("--mode", choices=["native", "docker"], default="native")
     arguments = parser.parse_args()
     directory = cast(Path, arguments.directory)
-    if arguments.action == "refresh":
+    action = cast(str, arguments.action)
+    if action == "refresh":
         return refresh(directory, cast(str, arguments.mode))
-    if arguments.action == "generate":
+    if action == "generate":
         generate(directory, cast(Path, arguments.output))
     else:
         check(directory, cast(Path, arguments.output))

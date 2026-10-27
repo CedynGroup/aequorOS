@@ -445,18 +445,46 @@ Both commands work at the repository root or in `backend/`. Their explicit
 pytest selectors are `-m unit` and `-m integration`; the corresponding
 `risk-service:test-unit` and `risk-service:test-integration` aliases are available.
 Feature-local paths stay in place, preserving imports and fixture/data paths.
-[`scripts/test_suites.json`](scripts/test_suites.json) declares every module's
-suite and explicit function/class overrides for mixed modules. Add a declaration
-when adding a test module; change an override when a unit test starts using a
-database. Collection fails for unclassified modules, duplicate collection, or
-conflicting/double suite markers, before either selector deselects tests.
+[`scripts/test_suites.json`](scripts/test_suites.json) is generated from observed
+connection acquisition for every exact parametrized test ID. There are no module
+defaults or manual function overrides. Collection rejects new/unclassified IDs,
+duplicate collection and conflicting suite markers before marker deselection.
+SQLite counts as a database. Optional primary-data tests retain their explicit
+opt-in; the census never supplies primary-bank data.
 
-Unit tests include the original eleven database-free files (367 cases), further
-files and mixed-module functions verified with connection refusal. SQLite is a
-database too: SQL/schema tests that open SQLite belong to integration. External
-service contracts that need MinIO or OpenBao also belong to integration. Optional
-real-data checks remain integration tests with their existing explicit opt-in;
-classifying them does not enable access to a primary database.
+Refresh ownership after adding tests or changing database use:
+
+```bash
+mise run risk-service:refresh-test-suites /absolute/path/to/empty/census-evidence
+```
+
+This runs the entire test tree serially with disposable native PostgreSQL 17 and
+MinIO, clearing ambient database and primary-data URLs. See the local-services
+guide below for installing the native binaries. To use disposable Docker instead,
+run `uv run python -m scripts.test_suite_census refresh <evidence-dir> --mode docker`
+from `backend/`. Keep the evidence directory outside the repository. The full run
+can take substantially longer than the unit suite; retain its log and let fixture
+teardown and child processes finish before generation. Commit the regenerated
+catalogue. A failing run returns nonzero and reports its inconclusive cases;
+fix failures before claiming full validation.
+
+The observer records driver connection attempts and SQLAlchemy pooled checkouts
+across setup, call, teardown, shared fixtures and inherited Python subprocesses.
+An attempted acquisition counts as database use even when it fails or is caught:
+the unit guard must not replace a driver's expected refusal. A fully passing case
+with no observed use is unit-owned. Skipped/failed cases and Python children that
+do not confirm instrumentation cannot prove database freedom, so they retain
+integration ownership and appear in `inconclusive.json`. A skipped case is not
+proof that an integration test could be moved; run its applicable profile to obtain
+evidence. This preserves explicit ownership without changing product assertions.
+
+Every CI owner emits the same observations alongside its JUnit report. The final
+integration gate invokes `scripts/test_suite_census.py check` on those existing
+executions: observed unit database use and fully executed integration cases with
+no database use both fail with the exact IDs to refresh. The independent partition
+guard proves the observed selection has exactly one execution owner, including
+conservative affected-module CI runs. Original database-free files remain in
+place; classification never changes test imports or fixtures.
 
 A dedicated unit run uses four workers with `--dist loadfile` and refuses
 database connections before collection. Each process records attempts separately;

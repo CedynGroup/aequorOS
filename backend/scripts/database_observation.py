@@ -23,7 +23,7 @@ from sqlalchemy import Engine
 
 DIRECTORY_ENV = "CI_DATABASE_OBSERVATIONS"
 CONTEXT_ENV = "CI_DATABASE_CONTEXT"
-_INSTALLED = False
+_installed = False
 
 
 def context() -> dict[str, object]:
@@ -48,10 +48,10 @@ def emit(kind: str, **values: object) -> None:
 
 def install() -> None:
     """Observe without refusing or replacing connection results/exceptions."""
-    global _INSTALLED  # noqa: PLW0603
-    if _INSTALLED or not os.getenv(DIRECTORY_ENV):
+    global _installed  # noqa: PLW0603
+    if _installed or not os.getenv(DIRECTORY_ENV):
         return
-    _INSTALLED = True
+    _installed = True
 
     def instrument(target: object, name: str) -> None:
         original = cast(Callable[..., object], getattr(target, name))
@@ -92,7 +92,7 @@ def install() -> None:
     def observed_popen(*args: object, **kwargs: object) -> None:
         supplied = kwargs.get("env")
         environment = dict(os.environ if supplied is None else cast(Mapping[str, str], supplied))
-        environment.pop("CI_DATABASE_CENSUS", None)
+        _ = environment.pop("CI_DATABASE_CENSUS", None)
         environment[DIRECTORY_ENV] = os.environ[DIRECTORY_ENV]
         environment[CONTEXT_ENV] = os.getenv(CONTEXT_ENV, "{}")
         environment["PYTHONPATH"] = os.pathsep.join(
@@ -103,13 +103,14 @@ def install() -> None:
         # Python launchers must confirm that sitecustomize was loaded. Isolated
         # Python (-I/-S) is inconclusive rather than proof of database freedom.
         command = args[1] if len(args) > 1 else kwargs.get("args")
-        if isinstance(command, (list, tuple)) and command:
-            executable = Path(str(command[0])).name
-            process = args[0]
+        if isinstance(command, (list, tuple)) and command and args:
+            executable = Path(str(cast(list[object], command)[0])).name
+            process = cast(subprocess.Popen[bytes], args[0])
             if executable.startswith("python") or executable in {"uv", "pytest"}:
-                emit("python_child", child=cast(int, process.pid))
+                emit("python_child", child=process.pid)
             if executable in {"psql", "sqlite3", "mysql", "sqlcmd"}:
                 emit("database", entrypoint=executable)
 
-    subprocess.Popen.__init__ = observed_popen
+    patch: Callable[[object, str, object], None] = setattr
+    patch(subprocess.Popen, "__init__", observed_popen)
     emit("instrumented")

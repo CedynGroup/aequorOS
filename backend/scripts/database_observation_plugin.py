@@ -14,26 +14,27 @@ from scripts import database_observation as trace
 
 _FIXTURES: dict[int, str] = {}
 _STACK: list[str] = []
-_SERIAL = 0
-_NODE = ""
-_NESTED = False
+_serial = 0
+_node = ""
+_nested = False
+_selected = False
 _PATCHES = pytest.MonkeyPatch()
 
 
 def _context() -> None:
-    os.environ[trace.CONTEXT_ENV] = json.dumps({"nodeid": _NODE, "fixtures": list(_STACK)})
+    os.environ[trace.CONTEXT_ENV] = json.dumps({"nodeid": _node, "fixtures": list(_STACK)})
 
 
 def pytest_load_initial_conftests() -> None:
-    global _NESTED  # noqa: PLW0603
+    global _nested  # noqa: PLW0603
     if not os.getenv(trace.DIRECTORY_ENV):
         return
-    _NESTED = bool(trace.context().get("nodeid"))
+    _nested = bool(trace.context().get("nodeid"))
     trace.install()
 
 
 def pytest_configure() -> None:
-    if not os.getenv(trace.DIRECTORY_ENV) or _NESTED:
+    if not os.getenv(trace.DIRECTORY_ENV) or _nested:
         return
     original = cast(Callable[..., None], FixtureDef.finish)
 
@@ -46,15 +47,17 @@ def pytest_configure() -> None:
             original(fixture, request)
         finally:
             if key is not None:
-                _STACK.pop()
+                _ = _STACK.pop()
                 _context()
 
     _PATCHES.setattr(FixtureDef, "finish", finish)
-    trace.emit("session_start")
 
 
 def pytest_collection_finish(session: pytest.Session) -> None:
-    if os.getenv(trace.DIRECTORY_ENV) and not _NESTED:
+    global _selected  # noqa: PLW0603
+    if os.getenv(trace.DIRECTORY_ENV) and not _nested:
+        _selected = True
+        trace.emit("session_start")
         trace.emit("selected", nodeids=[item.nodeid for item in session.items])
 
 
@@ -72,54 +75,56 @@ def _consumers(item: pytest.Item) -> None:
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
-    global _NODE  # noqa: PLW0603
-    if not os.getenv(trace.DIRECTORY_ENV) or _NESTED:
+    global _node  # noqa: PLW0603
+    if not os.getenv(trace.DIRECTORY_ENV) or _nested:
         yield
         return
-    _NODE = item.nodeid
+    _node = item.nodeid
     _context()
     try:
         yield
     finally:
         _consumers(item)
-        _NODE = ""
+        _node = ""
         _context()
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_fixture_setup(fixturedef: FixtureDef[object], request: SubRequest) -> Iterator[None]:
-    if not os.getenv(trace.DIRECTORY_ENV) or _NESTED:
+    if not os.getenv(trace.DIRECTORY_ENV) or _nested:
         yield
         return
-    global _SERIAL  # noqa: PLW0603
-    _SERIAL += 1
-    key = f"{os.getpid()}:{_SERIAL}:{fixturedef.argname}"
+    _ = request
+    global _serial  # noqa: PLW0603
+    _serial += 1
+    key = f"{os.getpid()}:{_serial}:{fixturedef.argname}"
     _FIXTURES[id(fixturedef)] = key
     _STACK.append(key)
     _context()
     try:
         yield
     finally:
-        _STACK.pop()
+        _ = _STACK.pop()
         _context()
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_runtest_call(item: pytest.Item) -> Iterator[None]:
-    if os.getenv(trace.DIRECTORY_ENV) and not _NESTED:
+    if os.getenv(trace.DIRECTORY_ENV) and not _nested:
         _consumers(item)
     yield
-    if os.getenv(trace.DIRECTORY_ENV) and not _NESTED:
+    if os.getenv(trace.DIRECTORY_ENV) and not _nested:
         _consumers(item)
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:
-    if os.getenv(trace.DIRECTORY_ENV) and not _NESTED:
+    if os.getenv(trace.DIRECTORY_ENV) and _selected:
         trace.emit("report", nodeid=report.nodeid, when=report.when, outcome=report.outcome)
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    if os.getenv(trace.DIRECTORY_ENV) and not _NESTED:
+    _ = session
+    if os.getenv(trace.DIRECTORY_ENV) and _selected:
         trace.emit("session_finish", status=exitstatus)
 
 

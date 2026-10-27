@@ -94,14 +94,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         modules, overrides = catalogue()
         if set(modules) != {nodeid.split("::")[0] for nodeid in nodeids}:
             raise pytest.UsageError("Unit CI must collect the entire classified test tree")
-        if any(
-            not any(
-                n.split("[", 1)[0] == key or n.split("[", 1)[0].startswith(key + "::")
-                for n in nodeids
-            )
-            for key in overrides
-        ):
-            raise pytest.UsageError("Stale test suite override")
+        if set(overrides) != set(nodeids):
+            raise pytest.UsageError("Stale or incomplete generated test suite catalogue")
         config.stash[_EXPECTED] = [
             nodeid for nodeid, suite in classified.items() if suite == "unit"
         ]

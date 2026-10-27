@@ -1,7 +1,7 @@
 """Explicit unit/integration ownership without moving feature-local test files.
 
-The catalogue declares every module. Mixed modules can override a test function
-(or class) by its unparametrized node ID. There is no default for new modules.
+The generated catalogue declares every parametrized test by its exact node ID.
+There is no module default or implicit fallback for new tests.
 This module is stdlib-only so CI planning and aggregation share the same owner.
 """
 
@@ -33,38 +33,33 @@ def catalogue() -> tuple[dict[str, Suite], dict[str, Suite]]:
         dict[str, dict[str, str]],
         json.loads(CATALOGUE.read_text(), object_pairs_hook=_unique_object),
     )
-    modules = raw["modules"]
-    overrides = raw["overrides"]
-    if any(
-        value not in ("unit", "integration") for value in [*modules.values(), *overrides.values()]
-    ):
+    # Transitional read while the first full census replaces the old catalogue.
+    if "cases" not in raw:
+        return cast(dict[str, Suite], raw["modules"]), cast(dict[str, Suite], raw["overrides"])
+    cases = raw["cases"]
+    if not cases or any(value not in ("unit", "integration") for value in cases.values()):
         raise ValueError("Test suite must be unit or integration")
-    if any(key.split("::")[0] not in modules or "::" not in key for key in overrides):
-        raise ValueError("Test override must name a classified module and test")
-    return cast(dict[str, Suite], modules), cast(dict[str, Suite], overrides)
+    modules: dict[str, Suite] = {}
+    for nodeid, suite in cases.items():
+        if "::" not in nodeid:
+            raise ValueError("Generated catalogue requires exact test node IDs")
+        module = nodeid.split("::", 1)[0]
+        previous = modules.get(module, "unit")
+        modules[module] = "integration" if "integration" in (previous, suite) else "unit"
+    return modules, cast(dict[str, Suite], cases)
 
 
 def owner(nodeid: str) -> Suite:
-    modules, overrides = catalogue()
-    parts = nodeid.split("[", 1)[0].split("::")
-    for length in range(len(parts), 1, -1):
-        key = "::".join(parts[:length])
-        if key in overrides:
-            return overrides[key]
+    _, cases = catalogue()
     try:
-        return modules[parts[0]]
+        return cases[nodeid]
     except KeyError as error:
-        raise ValueError(
-            f"Unclassified test module: {parts[0]}; update scripts/test_suites.json"
-        ) from error
+        raise ValueError(f"Unclassified test: {nodeid}; refresh the database census") from error
 
 
 def unit_modules() -> frozenset[str]:
-    modules, overrides = catalogue()
-    mixed = {nodeid.split("::")[0] for nodeid, suite in overrides.items() if suite == "integration"}
-    return frozenset(
-        module for module, suite in modules.items() if suite == "unit" and module not in mixed
-    )
+    modules, _ = catalogue()
+    return frozenset(module for module, suite in modules.items() if suite == "unit")
 
 
 def case_key(nodeid: str) -> tuple[str, str]:

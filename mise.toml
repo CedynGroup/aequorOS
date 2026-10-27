@@ -201,3 +201,9 @@ run = 'mise run risk-service:revision "${usage_message?}"'
 description = "Run risk service local smoke checks that do not require Postgres"
 dir = "backend"
 run = "mise run risk-service:smoke"
+
+[tasks."risk-service:refresh-test-suites"]
+description = "Regenerate backend suite ownership from observed database access"
+dir = "backend"
+usage = 'arg "<evidence_dir>" help="Empty directory for census evidence"'
+run = 'mise run risk-service:refresh-test-suites "${usage_evidence_dir?}"' 

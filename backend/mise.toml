@@ -78,6 +78,11 @@ run = "uv run pytest -m unit -n 4 --dist loadfile"
 description = "Run integration tests against disposable local Postgres"
 run = "uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest -m integration"
 
+[tasks."risk-service:refresh-test-suites"]
+description = "Regenerate exact unit/integration owners from a disposable database census"
+usage = 'arg "<evidence_dir>" help="Empty directory for census evidence"'
+run = 'uv run python -m scripts.test_suite_census refresh "${usage_evidence_dir?}"' 
+
 [tasks."risk-service:test-unit"]
 description = "Run the unit suite"
 depends = ["unit"]

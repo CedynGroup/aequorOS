@@ -61,14 +61,22 @@ def test_suite_execution_boundary(
     tmp_path: Path, suite: str, body: str, passes: bool, attempts: bool
 ) -> None:
     catalogue = tmp_path / "suites.json"
-    _ = catalogue.write_text(json.dumps({"modules": {"test_probe.py": suite}, "overrides": {}}))
+    _ = catalogue.write_text(
+        json.dumps(
+            {
+                "cases": {"test_probe.py::test_probe": suite, "test_probe.py::test_other": suite}
+                if body == "__deselect__"
+                else {"test_probe.py::test_probe": suite}
+            }
+        )
+    )
     _ = (tmp_path / "conftest.py").write_text(
         "from pathlib import Path\nfrom scripts import test_suites\n"
         + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
         + "test_suites.catalogue.cache_clear()\n"
     )
     if body == "__unclassified__":
-        _ = catalogue.write_text(json.dumps({"modules": {}, "overrides": {}}))
+        _ = catalogue.write_text(json.dumps({"cases": {}}))
         body = "assert True"
     arguments: list[str] = []
     suffix = ""
@@ -84,8 +92,10 @@ def test_suite_execution_boundary(
         _ = catalogue.write_text(
             json.dumps(
                 {
-                    "modules": {"test_probe.py": suite},
-                    "overrides": {"test_probe.py::test_absent": "unit"},
+                    "cases": {
+                        "test_probe.py::test_probe": suite,
+                        "test_probe.py::test_absent": "unit",
+                    },
                 }
             )
         )
@@ -103,6 +113,7 @@ def test_suite_execution_boundary(
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
     }
     _ = environment.pop("CI_UNIT_REPORT_DIR", None)
+    _ = environment.pop("CI_DATABASE_CENSUS", None)
     if suite == "unit":
         environment["CI_UNIT_REPORT_DIR"] = str(tmp_path / "evidence")
     result = subprocess.run(
@@ -217,7 +228,7 @@ def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
     tmp_path: Path, caught: bool, ci: bool
 ) -> None:
     catalogue = tmp_path / "suites.json"
-    _ = catalogue.write_text(json.dumps({"modules": {"test_probe.py": "unit"}, "overrides": {}}))
+    _ = catalogue.write_text(json.dumps({"cases": {"test_probe.py::test_probe": "unit"}}))
     _ = (tmp_path / "conftest.py").write_text(
         "from pathlib import Path\nfrom scripts import test_suites\n"
         + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
@@ -236,6 +247,7 @@ def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
     }
     _ = environment.pop("CI_UNIT_REPORT_DIR", None)
+    _ = environment.pop("CI_DATABASE_CENSUS", None)
     arguments = []
     if ci:
         environment["CI_UNIT_REPORT_DIR"] = str(tmp_path / "evidence")
@@ -273,7 +285,10 @@ def test_mixed_module_overrides_assign_one_suite_at_node_boundaries(
     from scripts import test_suites  # noqa: PLC0415
 
     def classification() -> tuple[dict[str, test_suites.Suite], dict[str, test_suites.Suite]]:
-        return {"tests/test_mixed.py": "unit"}, {"tests/test_mixed.py::test_db": "integration"}
+        return {"tests/test_mixed.py": "integration"}, {
+            "tests/test_mixed.py::test_db[value::nested]": "integration",
+            "tests/test_mixed.py::test_db_helper": "unit",
+        }
 
     monkeypatch.setattr(test_suites, "catalogue", classification)
     assert test_suites.owner("tests/test_mixed.py::test_db[value::nested]") == "integration"
@@ -281,3 +296,5 @@ def test_mixed_module_overrides_assign_one_suite_at_node_boundaries(
     assert not test_suites.unit_modules()
     with pytest.raises(ValueError, match="Unclassified"):
         test_suites.owner("tests/test_new.py::test_new")
+    with pytest.raises(ValueError, match="Unclassified"):
+        test_suites.owner("tests/test_mixed.py::test_db[new-parameter]")
