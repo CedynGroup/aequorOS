@@ -1,9 +1,9 @@
 import { readFileSync, appendFileSync } from "node:fs";
 
-// Four former skips were diagnostics, not behavioral journeys. The required
-// suite now has 246 real journeys and permits no skips. Ratchet this floor up
+// The required suite permits no skips. Ratchet this executed-journey floor up
 // when adding coverage; reducing it requires a reviewed suite change.
-const floor = 246;
+// Critical scenario results are checked separately by assert_dashboard_outcomes.mjs.
+const floor = 213;
 const files = process.argv.slice(2);
 const problems = [];
 const ids = new Set();

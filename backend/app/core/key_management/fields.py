@@ -14,13 +14,14 @@ import json
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from itertools import batched
 from typing import Literal, cast
 from uuid import UUID
 
 from pydantic import TypeAdapter
 from sqlalchemy import JSON, Table, Text, event, inspect, select
 from sqlalchemy.engine import Dialect
-from sqlalchemy.orm import InstanceState, Session, attributes, object_session
+from sqlalchemy.orm import InstanceState, Mapper, Session, attributes, object_session, undefer
 from sqlalchemy.types import TypeDecorator
 
 from app.core.ids import new_uuid4, new_uuid7
@@ -133,6 +134,16 @@ class ProtectedJSON(ProtectedField):
         if isinstance(value, dict) and FORMAT in value:
             return self.decode(cast(dict[str, object], value)[FORMAT])
         return cast(object, value)
+
+
+def _validate_value(kind: ProtectedField, value: object) -> object:
+    if isinstance(kind, ProtectedText) and not isinstance(value, str):
+        raise KeyIntegrityError("Encrypted text field has an invalid value.")
+    if isinstance(kind, ProtectedJSON):
+        valid_shape = isinstance(value, list) if kind.empty_list else isinstance(value, dict)
+        if not valid_shape:
+            raise KeyIntegrityError("Encrypted JSON field has an invalid value.")
+    return value
 
 
 def _identity_values(
@@ -248,7 +259,7 @@ def _index(  # noqa: PLR0913 - scoped, domain-separated index contract
     normalized = normalize(value, normalization)
     if secret is None:
         # Optional banks retain ordinary field storage before key connection.
-        if normalization == "name" or (domain == "counterparty.group" and len(normalized) > 255):
+        if normalization == "name" or domain == "counterparty.group":
             return hashlib.sha256(normalized.encode()).hexdigest()
         return normalized
     payload = json.dumps(
@@ -334,6 +345,53 @@ class _Restore:
     values: dict[str, object] = field(repr=False)
 
 
+def _pending_columns(state: InstanceState[object]) -> list[FieldColumn]:
+    columns = field_columns(state)
+    if not columns:
+        return []
+    if state.pending or any(state.attrs[col.attribute].history.has_changes() for col in columns):
+        return columns
+    if cast(Table, state.mapper.local_table).name == "canonical_counterparties":
+        history = state.attrs["attributes"].history
+        if history.has_changes():
+            before = cast(dict[str, object], history.deleted[0]) if history.deleted else {}
+            after = cast(dict[str, object], state.dict.get("attributes") or {})
+            if any(
+                before.get(key) != after.get(key) for key in ("group_reference", "group", "parent")
+            ):
+                return columns
+    return []
+
+
+def _load_pending_fields(db: Session, states: list[InstanceState[object]]) -> None:
+    groups: dict[tuple[Mapper[object], str, str | None], list[UUID]] = {}
+    for state in states:
+        columns = field_columns(state)
+        if not state.persistent or all(col.attribute in state.dict for col in columns):
+            continue
+        instance = state.obj()
+        assert instance is not None and state.identity is not None
+        parent = columns[0].kind.parent
+        for attribute in ("organization_id", parent[1] if parent else "bank_id"):
+            if attribute not in state.dict:
+                _ = cast(object, attributes.get_attribute(instance, attribute))
+        organization, bank = _scope(db, state, columns)
+        groups.setdefault((state.mapper, organization, bank), []).append(
+            cast(UUID, state.identity[0])
+        )
+    for (mapper, organization, bank), ids in groups.items():
+        table = cast(Table, mapper.local_table)
+        for batch in batched(ids, 500, strict=False):
+            stmt = (
+                select(mapper.class_)
+                .options(undefer("*"))
+                .where(table.c.organization_id == organization, table.c.id.in_(batch))
+            )
+            if "bank_id" in table.c:
+                stmt = stmt.where(table.c.bank_id == bank)
+            _ = db.scalars(stmt).all()
+
+
 @event.listens_for(Session, "before_flush")
 def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
     db: Session, _flush_context: object, _instances: object
@@ -344,18 +402,15 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
     write_keys: dict[tuple[str, str], registry.ObjectKey] = {}
     index_keys: dict[tuple[str, str], bytes] = {}
     with db.no_autoflush:
-        for instance in cast(list[object], list(db.new) + list(db.dirty)):
-            state = cast(InstanceState[object], inspect(instance))
-            columns = field_columns(state)
-            if not columns or not (
-                state.pending
-                or any(state.attrs[col.attribute].history.has_changes() for col in columns)
-            ):
-                continue
-            if state.persistent:
-                for col in columns:
-                    if col.attribute not in state.dict:
-                        _ = cast(object, attributes.get_attribute(instance, col.attribute))
+        pending = [
+            (instance, state, columns)
+            for instance in cast(list[object], list(db.new) + list(db.dirty))
+            if (
+                columns := _pending_columns(state := cast(InstanceState[object], inspect(instance)))
+            )
+        ]
+        _load_pending_fields(db, [state for _, state, _ in pending])
+        for instance, state, columns in pending:
             for col in columns:
                 if state.dict.get(col.attribute) is None:
                     if col.kind.empty_object:
@@ -381,8 +436,23 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
                 if state.pending or state.attrs[col.attribute].history.has_changes()
             ]
             values = {col.attribute: cast(object, state.dict.get(col.attribute)) for col in changed}
-            if any(contains_placeholder(value) for value in values.values()):
-                raise KeyUnavailableError("Locked placeholders cannot be saved as protected data.")
+            presentation = db.info.get(SESSION_STATE)
+            reason = (
+                presentation.banks.get(bank or "")
+                if isinstance(presentation, PresentationState)
+                else None
+            )
+            if db.info.get(SESSION_SUPPORT) or (
+                isinstance(presentation, PresentationState) and presentation.support
+            ):
+                raise ProtectedSupportAccessError()
+            if reason in {"revoked", "unavailable"} or any(
+                contains_placeholder(state.dict.get(col.attribute)) for col in columns
+            ):
+                raise KeyUnavailableError(
+                    "Locked placeholders cannot be saved as protected data.",
+                    revoked=reason == "revoked",
+                )
             restores.append(_Restore(instance, values))
             if row is None:
                 if bank is not None:
@@ -400,7 +470,7 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
                     index_keys[scope] = _index_key(db, row)
                 _update_indexes(state, organization, row.bank_id, index_keys[scope])
 
-            def seal(  # noqa: PLR0913 - bind this iteration's authenticated context
+            def seal(  # noqa: PLR0913
                 value: object,
                 field_name: str,
                 *,
@@ -466,8 +536,6 @@ def restore_after_failure(db: Session, _previous: object) -> None:
 
 
 def _lock_field(instance: Base, col: FieldColumn, reason: str) -> None:
-    # Structured executable payloads must never become an empty query/filter.
-    # Their readers receive a named refusal, rendered as a locked panel.
     state = cast(InstanceState[object], inspect(instance))
     if cast(Table, state.mapper.local_table).name.startswith("bi_"):
         if reason == "support":
@@ -478,17 +546,59 @@ def _lock_field(instance: Base, col: FieldColumn, reason: str) -> None:
 
 
 def _presentation_locked(
-    instance: Base, col: FieldColumn, presentation: object, bank: str | None
+    instance: Base,
+    col: FieldColumn,
+    presentation: object,
+    bank: str | None,
+    *,
+    missing_key: bool,
 ) -> bool:
     if not isinstance(presentation, PresentationState):
         return False
-    reason = "support" if presentation.support else presentation.banks.get(bank or "")
-    if reason not in {"support", "revoked", "unavailable"}:
+    support = presentation.support or presentation.banks.get(bank or "") == "support"
+    if not support and not missing_key:
         return False
+    reason = "support" if support else "unavailable"
     if bank is not None:
         presentation.record(bank, reason)
     _lock_field(instance, col, reason)
     return True
+
+
+def observe_bank_key(db: Session, organization: str, bank: str) -> None:
+    presentation = db.info.get(SESSION_STATE)
+    if not isinstance(presentation, PresentationState) or bank in presentation.observed_banks:
+        return
+    if presentation.support or db.info.get(SESSION_SUPPORT):
+        presentation.record(bank, "support")
+        presentation.observed_banks.add(bank)
+        return
+    registry.lock_bank_version(db, organization, bank, read=True)
+    row = registry.bank_key(db, organization, bank)
+    if row is None and get_key_settings().bank_key_required:
+        presentation.record(bank, "unavailable")
+        presentation.observed_banks.add(bank)
+        return
+    if row is not None:
+        versions = {row.current_version_id: _envelope_context(organization, bank)}
+        versions.setdefault(row.index_version_id, _index_context(row))
+        for version, context in versions.items():
+            try:
+                if version is None:
+                    raise KeyUnavailableError("The bank data-key version is unavailable.")
+                if reason := presentation.read_locks.get(version):
+                    presentation.record(bank, reason)
+                    continue
+                registry.open_envelope(db, row, version, context, registry.provider_for)
+            except KeyIntegrityError:
+                raise
+            except KeyUnavailableError as exc:
+                reason = "revoked" if exc.revoked else "unavailable"
+                presentation.record(bank, reason)
+                if version is not None:
+                    presentation.read_locks[version] = reason
+    presentation.record(bank, "available")
+    presentation.observed_banks.add(bank)
 
 
 def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
@@ -499,6 +609,12 @@ def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
     instance: Base,
     col: FieldColumn,
 ) -> bytes | None:
+    if isinstance(presentation, PresentationState) and (
+        reason := presentation.read_locks.get(value.envelope_id)
+    ):
+        observe_bank_key(db, row.organization_id, row.bank_id)
+        _lock_field(instance, col, reason)
+        return None
     try:
         secret = registry.open_envelope(
             db,
@@ -514,10 +630,11 @@ def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
             raise
         reason = "revoked" if exc.revoked else "unavailable"
         presentation.record(row.bank_id, reason)
+        presentation.read_locks[value.envelope_id] = reason
+        observe_bank_key(db, row.organization_id, row.bank_id)
         _lock_field(instance, col, reason)
         return None
-    if isinstance(presentation, PresentationState):
-        presentation.record(row.bank_id, "available")
+    observe_bank_key(db, row.organization_id, row.bank_id)
     return secret
 
 
@@ -545,20 +662,26 @@ def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
                 _ = cast(object, attributes.get_attribute(instance, attribute))
         organization, bank = _scope(db, state, columns)
         row = registry.bank_key(db, organization, bank) if bank is not None else None
-        if bank is not None and row is None and get_key_settings().bank_key_required:
-            raise KeyUnavailableError("The bank encryption key is not connected.")
         presentation = db.info.get(SESSION_STATE)
         if db.info.get(SESSION_SUPPORT):
             if not isinstance(presentation, PresentationState):
                 presentation = PresentationState(support=True)
             presentation.support = True
+        missing_key = bank is not None and row is None and get_key_settings().bank_key_required
+        if bank is not None and missing_key:
+            if not isinstance(presentation, PresentationState):
+                raise KeyUnavailableError("The bank encryption key is not connected.")
+            presentation.record(bank, "support" if presentation.support else "unavailable")
         for col in present:
             value = cast(object, state.dict[col.attribute])
             if col.kind.protected_members is not None and not isinstance(value, SealedField):
+                value = _validate_value(col.kind, value)
 
                 def open_values(item: object, path: str, col: FieldColumn = col) -> object:
                     leaf = replace(col, column=col.column + ":" + path)
-                    if _presentation_locked(instance, leaf, presentation, bank):
+                    if _presentation_locked(
+                        instance, leaf, presentation, bank, missing_key=missing_key
+                    ):
                         return None
                     if not isinstance(item, dict) or FORMAT not in item:
                         return cast(object, item)
@@ -581,7 +704,7 @@ def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
                     _identity_values(value, col.kind.protected_members, open_values),
                 )
                 continue
-            if _presentation_locked(instance, col, presentation, bank):
+            if _presentation_locked(instance, col, presentation, bank, missing_key=missing_key):
                 continue
             if not isinstance(value, SealedField):
                 continue
@@ -597,21 +720,8 @@ def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
                 {**context, "field": col.column},
             )
             attributes.set_committed_value(
-                instance, col.attribute, _decode_plaintext(col, plaintext)
+                instance, col.attribute, _validate_value(col.kind, _JSON.validate_json(plaintext))
             )
-
-
-def _decode_plaintext(col: FieldColumn, plaintext: bytes) -> object:
-    decoded = _JSON.validate_json(plaintext)
-    if isinstance(col.kind, ProtectedText) and not isinstance(decoded, str):
-        raise KeyIntegrityError("Encrypted text field has an invalid value.")
-    if isinstance(col.kind, ProtectedJSON):
-        valid_shape = (
-            isinstance(decoded, list) if col.kind.empty_list else isinstance(decoded, dict)
-        )
-        if not valid_shape:
-            raise KeyIntegrityError("Encrypted JSON field has an invalid value.")
-    return decoded
 
 
 @event.listens_for(Base, "load", propagate=True, restore_load_context=True)

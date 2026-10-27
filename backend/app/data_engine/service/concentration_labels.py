@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, load_only
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.core.key_management.concentration_identity import counterparty_group_key, opaque_group_key
+from app.core.key_management.concentration_identity import counterparty_group_key
 from app.core.key_management.presentation import LOCKED_TEXT, contains_placeholder
 from app.core.tenancy import TenantContext
 from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
@@ -61,7 +61,7 @@ def counterparty_group_labels(
     ids = [
         record_id
         for record_id, token in representatives
-        if token is not None and opaque_group_key(token) in group_keys
+        if token is not None and token in group_keys
     ]
     if not ids:
         return {}
@@ -86,7 +86,7 @@ def counterparty_group_labels(
         )
     )
     return {
-        opaque_group_key(party.concentration_group_blind_index): LOCKED_TEXT
+        party.concentration_group_blind_index: LOCKED_TEXT
         if contains_placeholder([party.name, party.group_reference, party.attributes])
         else counterparty_group_key(party.name, party.group_reference, party.attributes or {})
         for party in parties

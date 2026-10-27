@@ -9,7 +9,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -142,6 +142,16 @@ def test_enqueue_one_coalesced_job_per_day(
     assert enqueue_due_desk_capture(db_session, ORG_1, now=WEDNESDAY_EVENING) is None
     assert enqueue_due_desk_capture(db_session, ORG_2, now=WEDNESDAY_EVENING) is None
     assert _count(db_session, "desk_capture") == 1
+    job_queue.complete(db_session, job)
+    assert enqueue_due_desk_capture(db_session, ORG_2, now=WEDNESDAY_EVENING) is None
+    tomorrow = WEDNESDAY_EVENING + timedelta(days=1)
+    next_job = enqueue_due_desk_capture(db_session, ORG_2, now=tomorrow)
+    assert next_job is not None
+    assert next_job.organization_id == ORG_2
+    assert next_job.coalesce_key == f"desk_capture:{tomorrow.date().isoformat()}"
+    assert next_job.payload == {"cob_date": tomorrow.date().isoformat()}
+    db_session.commit()
+    assert _count(db_session, "desk_capture") == 2
     get_settings.cache_clear()
 
 

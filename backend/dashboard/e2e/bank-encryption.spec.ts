@@ -84,7 +84,7 @@ test.describe("Bank-held encryption: revocation", () => {
       ).toBeVisible();
       expect(keyControl("revocation", "assert-storage")).toMatchObject({
         encrypted_parties: 1,
-        exact_identifier_matches: 1,
+        decrypted_counterparties: 1,
       });
       await encryptionEvidence(page, "readable");
       // Keep an unsaved create form mounted while the first rejected POST

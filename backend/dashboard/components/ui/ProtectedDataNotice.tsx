@@ -6,9 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useBankContext } from "@/components/shell/BankContext";
 import { banksApi } from "@/lib/api/client";
 import {
-  containsLockedData,
-  isLockedBankQuery,
-  isProtectedDataError,
+  isProtectedRecoveryQuery,
   protectedDataMessages,
   protectedDataState,
   subscribeProtectedData,
@@ -30,13 +28,16 @@ export default function ProtectedDataNotice() {
       ["available", "support"].includes(protectedDataState(bankId))
     )
       return;
-    void banksApi.getBankRaw({ bankId }).catch(() => undefined);
+    const hasRecoveryQuery = client
+      .getQueryCache()
+      .getAll()
+      .some((query) => query.isActive() && isProtectedRecoveryQuery(query));
+    if (!hasRecoveryQuery) {
+      void banksApi.getBankRaw({ bankId }).catch(() => undefined);
+    }
     void client.refetchQueries({
       type: "active",
-      predicate: (query) =>
-        isProtectedDataError(query.state.error) ||
-        containsLockedData(query.state.data) ||
-        (isLockedBankQuery(query.queryKey) && query.state.isInvalidated),
+      predicate: isProtectedRecoveryQuery,
     });
   }, [bankId, client]);
   useEffect(() => {

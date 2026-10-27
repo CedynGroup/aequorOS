@@ -59,6 +59,7 @@ from decimal import Decimal
 from typing import Any, cast
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Load
 
 from app.data_engine.public import (
     CanonicalCounterparty,
@@ -381,6 +382,7 @@ def contracts(rc: ResolveContext) -> tuple[Contract, ...]:
             CanonicalPositionSnapshot.attributes,
             CanonicalCounterparty,
         )
+        .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
         .select_from(CanonicalPositionSnapshot)
         .join(
             latest,

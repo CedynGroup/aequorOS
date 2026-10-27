@@ -33,6 +33,8 @@ from app.core.authorization import (
 GrantableRoleBundle = Literal[
     "viewer",
     "auditor",
+    "security_officer",
+    "compliance_officer",
     "analyst",
     "approver",
     # The officer who transmits a return to the regulator. Grantable because

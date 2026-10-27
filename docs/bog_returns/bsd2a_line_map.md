@@ -193,8 +193,8 @@ BSD2 foreign-column lines with **no BSD2A row** under the official headings (doc
 ## Critical relationships proved (`tests/reporting/service/bog_forms/test_bsd2a.py`)
 
 - `E13 = BSD2!C7`, `E27 = BSD2!C68` with `N27 = BSD2!C69`, `E30 = BSD2!C34 + C72 + C102`, `E39 = BSD2!C113`, `E66 = C228 + C233` — every category `E` equals its named BSD2 cell(s) on a book with FX cash, an FX loan and an FX cocoa bill;
-- `G = BSD2!D135` on all 24 category rows; `H = 100 × E / D135` (unscaled) on the 21 mapped rows; judgement rows blank;
-- status split 67 mapped / 785 input_required / 0 unmapped, no engine errors, no missing dependency; the values-only xlsx carries the ¢'Million-scaled `E`, the unscaled `H`, and lists every detail cell on the Completion-notes sheet.
+- `G = BSD2!D135` on all 24 category rows; `H = 100 × E / D135` (unscaled) where the source amounts are available; judgement rows blank;
+- fixture status counts are pinned by the test, with no unmapped cells, engine errors or missing dependency; the values-only xlsx carries the ¢'Million-scaled `E`, the unscaled `H`, and lists every detail cell on the Completion-notes sheet.
 
 BSD2A inherits BSD2 amounts under the [reporting-currency amount contract](../API_INTEGRATION.md#34-position).
 

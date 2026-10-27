@@ -33,7 +33,7 @@ name: Risk Service CI
 #   preflight   — the mise task wiring, checked in stdlib Python with no mise
 #                 and no uv, plus the change detection that replaced this
 #                 workflow's `paths:` filter. Every other job needs it.
-#   static      — ruff, basedpyright; production image build on main/release pushes
+#   static      — ruff, basedpyright (image build: risk-service-image.yml)
 #   architecture— CI task wiring, RLS-blind migration scanner, case/regulatory
 #                 dependency boundaries
 #   postgres    — aggregate of schema shards and the lock job: migration chain,
@@ -199,6 +199,8 @@ env:
   POSTGRES_ADMIN_URL: postgresql+psycopg://postgres:postgres@localhost:5432/risk_service
   POSTGRES_TEST_URL: postgresql+psycopg://risk_service_test:risk_service_test@localhost:5432/risk_service
 
+# Merge groups keep preflight, architecture, migration/schema and full Postgres
+# suites (including locks). Per-PR checks skip; the aggregate still reports.
 jobs:
   # Runs on EVERY pull request, needs nothing, installs nothing, and every other
   # job depends on it. Two responsibilities, both cheap:
@@ -268,7 +270,7 @@ jobs:
     name: Lint and typecheck
     runs-on: ubuntu-latest
     needs: preflight
-    if: needs.preflight.outputs.backend == 'true'
+    if: github.event_name != 'merge_group' && needs.preflight.outputs.backend == 'true'
     # No job may outlive this. P0-15's outage was a task that recursed instead of
     # running anything; unbounded, GitHub would have let it burn the 360-minute
     # default. Values are ~3x the measured local wall clock, not tight.
@@ -288,10 +290,6 @@ jobs:
         run: mise exec -- node --test deploy/tls/serve-next.test.cjs
       - name: Typecheck risk service
         run: mise run risk-service:typecheck
-      - name: Build production risk-service image
-        # Registry availability must not block pull-request or merge-queue checks.
-        if: github.event_name == 'push'
-        run: docker build --tag aequoros/risk-service:ci ./backend
 
   architecture:
     name: Architecture and CI guards
@@ -451,6 +449,14 @@ jobs:
           CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-schema
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-schema/report.xml
         run: mise run risk-service:test-postgres-schema
+      - name: Upload failed schema shard PostgreSQL log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pg-schema-server-log-${{ matrix.shard }}
+          path: ${{ runner.temp }}/postgres.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload schema shard evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -559,6 +565,14 @@ jobs:
           CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-suite
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-suite/report.xml
         run: mise run risk-service:test-postgres-suite
+      - name: Upload failed suite shard PostgreSQL log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pg-suite-server-log-${{ matrix.shard }}
+          path: ${{ runner.temp }}/postgres.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload suite shard evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -633,7 +647,7 @@ jobs:
     name: Storage contract
     runs-on: ubuntu-latest
     needs: preflight
-    if: needs.preflight.outputs.backend == 'true'
+    if: github.event_name != 'merge_group' && needs.preflight.outputs.backend == 'true'
     timeout-minutes: 20
     services:
       bank-kms:
@@ -706,7 +720,7 @@ jobs:
     name: Generated API client freshness
     runs-on: ubuntu-latest
     needs: preflight
-    if: needs.preflight.outputs.api_client == 'true'
+    if: github.event_name != 'merge_group' && needs.preflight.outputs.api_client == 'true'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -733,7 +747,7 @@ jobs:
     # rather than deleted: this is the only gate that covers the regulatory
     # return, attestation workspace, authentication and vendor-connection APIs.
     needs: preflight
-    if: ${{ vars.REAL_DATA_CI_ENABLED == 'true' && needs.preflight.outputs.backend == 'true' }}
+    if: ${{ github.event_name != 'merge_group' && vars.REAL_DATA_CI_ENABLED == 'true' && needs.preflight.outputs.backend == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v5

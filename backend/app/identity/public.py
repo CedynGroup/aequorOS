@@ -33,6 +33,7 @@ from app.identity.service.auth_throttle import (
     record_failure_for,
     record_success,
 )
+from app.identity.service.authentication import record_authentication_event
 from app.identity.service.authorization import (
     EffectiveDataScope,
     binding_is_effective,
@@ -120,6 +121,7 @@ __all__ = [
     "principal_locator",
     "record_binding_decision",
     "record_binding_evaluation_failure",
+    "record_authentication_event",
     "record_failure",
     "record_failure_for",
     "record_success",

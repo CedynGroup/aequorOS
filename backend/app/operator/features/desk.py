@@ -19,7 +19,9 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
+from sqlalchemy import select
 
+from app.identity.public import Bank
 from app.models import (
     DeskDetermination,
     DeskMethodology,
@@ -262,6 +264,10 @@ def approve_methodology_version(
         db,
         operator,
         action="desk.methodology.approve_version",
+        resources=[
+            {"organization_id": bank.organization_id, "bank_id": bank.id}
+            for bank in db.scalars(select(Bank))
+        ],
         detail={
             "methodology_code": methodology_code,
             "version": version,
@@ -822,6 +828,7 @@ def publish_determination(
         db,
         operator,
         action="desk.determination.publish",
+        resources=row.results,
         detail={
             "determination_id": str(determination_id),
             "publication_id": str(row.id),
@@ -840,6 +847,9 @@ def list_publications(
     determination_id: UUID | None = None,
 ) -> DeskPublicationListRead:
     rows = publication.list_publications(db, determination_id=determination_id)
-    return DeskPublicationListRead(
+    result = DeskPublicationListRead(
         publications=[_publication_read(row) for row in rows], total=len(rows)
     )
+    record_operator_action(db, _operator, action="desk.publications.read", resources=result)
+    db.commit()
+    return result

@@ -207,6 +207,19 @@ Form × (map ✓ · calc ✓ · export ✓ · test ✓ · governance ✓) matrix
   on Friday close (the Guide fixes cadence, not weekday). Gate:
   `tests/reporting/service/test_bog_forms_framework.py` and `tests/reporting/service/bog_forms/`; matrix
   `scripts/bog_coverage_matrix.py`.
+- **Absent official facts are missing inputs, not mapped zeros.** `facts.sum` leaves
+  an input `input_required` when no row matches the reporting snapshot, category and currency
+  selection; an explicitly stated zero remains mapped. BSD1's reporting-date fact
+  fallback and BSD5's capital constituents, balance-sheet totals and off-balance
+  residual preserve that distinction. A missing official fact component leaves the
+  entire BSD6 row `input_required`, including FROM BSD2, Total and maturity bands,
+  even when another component is available; a wholly unresolved row also stays missing.
+  Template formulas still evaluate by
+  the template's own rules; their roll-ups do not establish that a missing input
+  was supplied. Live refresh alone does not supply official facts; follow the
+  [time-plane contract](../../ARCHITECTURE.md#3a-bis-the-three-time-planes-adopted-2026-08-09)
+  to prepare them. Regression coverage:
+  `backend/tests/reporting/service/bog_forms/test_missing_official_facts.py`.
 - **A refused capital register makes capital-dependent inputs unavailable.**
   `facts.sum` for `capital_component`, `bsd5.capital_facts` and capital-run
   metric resolvers check the register before selecting categories, tiers or

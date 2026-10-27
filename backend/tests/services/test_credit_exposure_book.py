@@ -21,7 +21,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.key_management.concentration_identity import counterparty_group_key
 from app.models import (
     Bank,
     CanonicalCounterparty,
@@ -204,19 +203,29 @@ def test_the_group_key_follows_the_connected_group_then_the_name(
     rows = _rows(db_session, bank)
     # The fixture's corporate counterparty carries no group reference, so the
     # name is the identity, and both of its facilities share it.
+    assert len(rows["LOAN/1"].group_key) == 64
     assert "Volta Agro Ltd" not in rows["LOAN/1"].group_key
     assert rows["LOAN/USD"].group_key == rows["LOAN/1"].group_key
     # A position with no counterparty at all is its own name — never merged.
     assert rows["LOAN/2"].group_key == "pos:LOAN/2"
 
 
-def test_a_connected_group_reference_beats_the_counterparty_name() -> None:
-    assert counterparty_group_key("Subsidiary Ltd", "GRP-7", {}) == "group:GRP-7"
-    assert (
-        counterparty_group_key("Subsidiary Ltd", None, {"parent": "Holdco Plc"})
-        == "group:Holdco Plc"
+def test_a_connected_group_reference_beats_the_counterparty_name(db_session: Session) -> None:
+    bank = _prepare(db_session)
+    snapshot = db_session.scalar(
+        select(CanonicalPositionSnapshot).where(
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPositionSnapshot.source_reference == "LOAN/1",
+        )
     )
-    assert counterparty_group_key("Subsidiary Ltd", None, {}) == "cp:Subsidiary Ltd"
+    assert snapshot is not None
+    party = db_session.get(CanonicalCounterparty, snapshot.counterparty_id)
+    assert party is not None
+    for reference, attributes in (("GRP-7", {}), (None, {"parent": "Holdco Plc"})):
+        party.group_reference = reference
+        party.attributes = attributes
+        db_session.commit()
+        assert _rows(db_session, bank)["LOAN/1"].group_key == party.concentration_group_blind_index
     assert credit_exposure_book.canonical_group_key("LOAN/9", None) == "pos:LOAN/9"
 
 

@@ -12,6 +12,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import PageHeader from "@/components/ui/PageHeader";
+import BankKeyPanel from "@/components/settings/BankKeyPanel";
 import AccessAdministrationLink from "@/components/settings/AccessAdministrationLink";
 import LegacyAccessAnchorRedirect from "@/components/settings/LegacyAccessAnchorRedirect";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -54,6 +55,7 @@ export default function SettingsPage() {
       <PageHeader title="Settings" action={<AccessAdministrationLink />} />
 
       <div className="px-8 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <BankKeyPanel />
         <DataComputePanel bankId={bank?.id} />
         <AboutPanel bankId={bank?.id} />
       </div>

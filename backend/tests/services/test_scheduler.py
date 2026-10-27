@@ -41,7 +41,7 @@ from app.models import (
 from app.schemas.live import OfficialRunRequest
 from app.services import job_queue, live_view, pipeline, regulatory_fx, scheduler
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
-from tests.support.factories.canonical import FIXTURE_AS_OF
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, ORG_2, USER_1
 
 
@@ -85,6 +85,20 @@ def _count(db_session: Session, job_type: str, *, status: str | None = None) -> 
     if status is not None:
         stmt = stmt.where(Job.status == status)
     return db_session.scalar(stmt) or 0
+
+
+def _seed_official_book(db_session: Session) -> date:
+    materialize_canonical_test_book(db_session)
+    period_end = db_session.scalar(
+        select(func.max(BankReportingPeriod.period_end)).where(
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID
+        )
+    )
+    assert period_end is not None
+    seed_canonical_fixture(
+        db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, as_of=period_end
+    )
+    return period_end
 
 
 def test_run_tick_is_inert_when_disabled(db_session: Session) -> None:
@@ -237,7 +251,7 @@ def test_live_refresh_timer_does_not_retry_structural_unavailability(
 
 
 def test_scheduled_fx_uses_later_authorized_analyst(db_session: Session) -> None:
-    materialize_canonical_test_book(db_session)
+    _seed_official_book(db_session)
     owner = db_session.get(User, USER_1)
     assert owner is not None
     owner.created_at = utc_now() - timedelta(days=1)
@@ -368,7 +382,7 @@ def test_official_worker_requires_explicit_actor(db_session: Session) -> None:
 
 
 def test_scheduled_and_requested_official_runs_coalesce_independently(db_session: Session) -> None:
-    materialize_canonical_test_book(db_session)
+    period_end = _seed_official_book(db_session)
     _grant_official_run(db_session, USER_1)
     requester = User(
         id=uuid4(),
@@ -394,12 +408,6 @@ def test_scheduled_and_requested_official_runs_coalesce_independently(db_session
         grantor=authorization.GrantorRef(GrantorType.SYSTEM, "scheduler-test"),
         reason="Authorize requested official execution",
     )
-    period_end = db_session.scalar(
-        select(func.max(BankReportingPeriod.period_end)).where(
-            BankReportingPeriod.bank_id == SAMPLE_BANK_ID
-        )
-    )
-    assert period_end is not None
     ctx = TenantContext(
         organization_id=ORG_1,
         actor_user_id=requester.id,

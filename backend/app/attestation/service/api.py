@@ -301,6 +301,7 @@ def step_up(  # noqa: PLR0913 - request context is part of the evidence
     # Guard BEFORE asking the user to re-authenticate: making someone prove
     # presence only to be told they were never eligible is a poor ceremony.
     signatures = workflow.current_signatures(db, ctx, package)
+    workflow.ensure_register_current(db, ctx, package)
     workflow.ensure_certifiable(package, policy, role, signatures)
     workflow.ensure_digest_unchanged(package, binding)
     workflow.ensure_maker_checker(
@@ -326,6 +327,7 @@ def step_up(  # noqa: PLR0913 - request context is part of the evidence
             "user_agent": request.headers.get("user-agent"),
         },
     )
+    workflow.ensure_register_current(db, ctx, package)
     token, row = stepup.mint_authorization(
         db,
         ctx,

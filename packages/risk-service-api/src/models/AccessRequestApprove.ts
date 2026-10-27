@@ -154,6 +154,8 @@ export interface AccessRequestApprove {
 export const AccessRequestApproveRoleBundleEnum = {
   Viewer: "viewer",
   Auditor: "auditor",
+  SecurityOfficer: "security_officer",
+  ComplianceOfficer: "compliance_officer",
   Analyst: "analyst",
   Approver: "approver",
   Validator: "validator",

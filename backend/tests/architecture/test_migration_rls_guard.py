@@ -73,7 +73,6 @@ LEGACY_UNGUARDED: frozenset[str] = frozenset(
         "202606080001_financial_cash_flows.py",
         "202607120001_financial_covenants.py",
         "202607160002_forecast_runs.py",
-        "202607170001_irr_fx_ftp_foundation.py",
         "202607170003_hedge_swap_position_types.py",
         "202607170004_api_push_source_system.py",
         "202607170006_market_data_entities.py",

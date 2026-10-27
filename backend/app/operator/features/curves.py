@@ -365,9 +365,7 @@ def stage_curve_determination(
     definition = _active_definition(db, payload.curve_code, payload.as_of)
     calendar = curve_construction.resolve_calendar(definition.calendar_name)
     kwargs = (
-        {}
-        if payload.methodology_code is None
-        else {"methodology_code": payload.methodology_code}
+        {} if payload.methodology_code is None else {"methodology_code": payload.methodology_code}
     )
     try:
         row = curve_construction.stage_curve_determination(
@@ -400,9 +398,7 @@ def stage_curve_determination(
     return _determination_read(row)
 
 
-@router.post(
-    "/determinations/{determination_id}/submit", response_model=DeskDeterminationRead
-)
+@router.post("/determinations/{determination_id}/submit", response_model=DeskDeterminationRead)
 def submit_curve_determination(
     determination_id: UUID, db: OperatorDb, operator: Operator
 ) -> DeskDeterminationRead:
@@ -418,9 +414,7 @@ def submit_curve_determination(
     return _determination_read(row)
 
 
-@router.post(
-    "/determinations/{determination_id}/approve", response_model=DeskDeterminationRead
-)
+@router.post("/determinations/{determination_id}/approve", response_model=DeskDeterminationRead)
 def approve_curve_determination(
     determination_id: UUID, db: OperatorDb, operator: Operator
 ) -> DeskDeterminationRead:
@@ -439,21 +433,18 @@ def approve_curve_determination(
     return _determination_read(row)
 
 
-@router.post(
-    "/determinations/{determination_id}/publish", response_model=DeskPublicationRead
-)
+@router.post("/determinations/{determination_id}/publish", response_model=DeskPublicationRead)
 def publish_curve_determination(
     determination_id: UUID, db: OperatorDb, operator: Operator
 ) -> DeskPublicationRead:
     """Publish step: only an APPROVED determination fans out to golden copy
     through the desk determination seam (bitemporal + lineage + audit)."""
-    row = curve_construction.publish_curve_determination(
-        db, determination_id, actor=operator.email
-    )
+    row = curve_construction.publish_curve_determination(db, determination_id, actor=operator.email)
     record_operator_action(
         db,
         operator,
         action="desk.curve.publish",
+        resources=row.results,
         detail={
             "determination_id": str(determination_id),
             "publication_id": str(row.id),

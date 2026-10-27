@@ -14,8 +14,8 @@ from uuid import UUID
 from fastapi import HTTPException
 from openpyxl import Workbook
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Load, Session
 
 from app.core.authorization import (
     DataScope,
@@ -32,10 +32,10 @@ from app.core.key_management.schemas import BankKeyConnect, BankKeyRotate
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import FIELD_FORMAT
 from app.core.tenancy import TenantContext
-from app.data_engine.service.field_search import find_counterparties
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.service import authorization, membership
 from app.models import Bank, Organization, User
+from app.models.canonical import CanonicalCounterparty
 from app.operator.services import bank_encryption
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.services import ingestion
@@ -254,15 +254,19 @@ def _assert_storage(
         )
         assert len(counterparties) == 1
         assert BORROWER not in counterparties[0][0] and IDENTIFIER not in counterparties[0][1]
-    ctx = TenantContext(organization_id=identity.organizationId, actor_user_id=identity.id)
-    matches = find_counterparties(db, ctx, bank, field="source_reference", value=IDENTIFIER)
-    assert len(matches) == 1 and matches[0].name == BORROWER
-    assert (
-        find_counterparties(db, ctx, bank, field="source_reference", value=IDENTIFIER.lower()) == []
-    )
+    matches = db.scalars(
+        select(CanonicalCounterparty)
+        .where(
+            CanonicalCounterparty.organization_id == identity.organizationId,
+            CanonicalCounterparty.bank_id == bank,
+        )
+        .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
+    ).all()
+    assert len(matches) == 1
+    assert matches[0].name == BORROWER and matches[0].source_reference == IDENTIFIER
     return {
         "encrypted_parties": len(parties),
-        "exact_identifier_matches": len(matches),
+        "decrypted_counterparties": len(matches),
         "party_ciphertexts": [name for name, _ in parties],
         "batch_id": str(UUID(batch[0])),
     }

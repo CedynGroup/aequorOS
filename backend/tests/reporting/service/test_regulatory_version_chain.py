@@ -104,7 +104,9 @@ def test_diff_of_a_snapshot_against_itself_is_empty() -> None:
 
 @pytest.mark.parametrize("reason", ["revoked", "unavailable", "support"])
 @pytest.mark.parametrize("locked_side", ["base", "target", "both"])
-def test_comparisons_refuse_locked_snapshots(reason: LockReason, locked_side: str) -> None:
+def test_comparisons_refuse_locked_snapshots(
+    db_session: Session, reason: LockReason, locked_side: str
+) -> None:
     base = _snapshot([{"code": "1.1", "description": "Cash", "value": "100.00"}])
     target = _snapshot([{"code": "1.1", "description": "Cash", "value": "120.00"}])
     if locked_side in {"base", "both"}:
@@ -117,7 +119,7 @@ def test_comparisons_refuse_locked_snapshots(reason: LockReason, locked_side: st
     assert refused.value.revoked is (reason == "revoked")
     with pytest.raises(error):
         snapshot_diff.build_comparison(
-            RegulatoryPackage(snapshot=base), RegulatoryPackage(snapshot=target)
+            db_session, RegulatoryPackage(snapshot=base), RegulatoryPackage(snapshot=target)
         )
 
 
@@ -378,4 +380,5 @@ def test_comparing_a_version_with_itself_yields_no_differences(
     assert comparison.added_count == 0
     assert comparison.removed_count == 0
     assert comparison.sections == []
+    assert comparison.unchanged_section_count is not None
     assert comparison.unchanged_section_count > 0

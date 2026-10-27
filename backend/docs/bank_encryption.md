@@ -10,11 +10,12 @@ checksum before releasing bytes. Unavailable connected keys, legacy plaintext
 for a connected bank, and corrupt objects refuse access without a platform-key
 fallback. Bank keys are optional during rollout: `BANK_KEY_REQUIRED=false`
 preserves the existing platform storage path for tenants without keys in every
-environment. Enable it once the key-management UI ships; then onboarding and
-storage require a bank key. Encrypted objects also refuse reads when their
-bank-key record is missing. Missing bank keys alone never prevent startup. Local
-evaluation without a connected key uses the existing platform/MinIO path without
-an AWS KMS account.
+environment. Set `BANK_KEY_REQUIRED=true` at the deployment's enforcement cutover;
+then onboarding, covered field access and storage require a bank key. Encrypted
+objects also refuse reads when their bank-key record is missing. Missing bank
+keys alone never prevent startup. Local evaluation uses the existing platform/MinIO
+path without an AWS KMS account. The synthetic revocation walkthrough below
+provides a separate, environment-restricted demo provider.
 
 The bank creates and administers a customer-managed symmetric KMS key in its own
 AWS account. AequorOS uses its workload role to request cryptographic
@@ -37,8 +38,8 @@ owns the encryption format and integrity checks. Only the wrapped version and
 its exact KMS reference are persisted in `object_key_envelopes`; S3 metadata
 holds the version UUID.
 
-Key access, revocation and plaintext-cache lifetime for both fields and objects
-follow the [unit-of-work boundary](bank_field_encryption.md#keys-and-storage).
+Field and object operations share the
+[unit-of-work key lifetime and revocation boundary](bank_field_encryption.md#keys-and-storage).
 
 ## Bank-side AWS setup
 
@@ -68,7 +69,7 @@ Example key-policy statements (all identifiers are synthetic):
     "Sid": "AllowAequorOSBankCryptography",
     "Effect": "Allow",
     "Principal": { "AWS": "arn:aws:iam::444455556666:role/aequoros-bank-data" },
-    "Action": ["kms:GenerateDataKey", "kms:Decrypt"],
+    "Action": ["kms:GenerateDataKey", "kms:Encrypt", "kms:Decrypt"],
     "Resource": "*",
     "Condition": {
       "StringEquals": { "kms:EncryptionContext:bank_id": "BK-SAMP0001" }
@@ -90,8 +91,8 @@ key ARN instead of `*`, and retain the same actions and context condition.
 [AWS least-privilege permissions](https://docs.aws.amazon.com/kms/latest/developerguide/least-privilege.html).
 No `CreateKey`, `PutKeyPolicy`, `CreateGrant`, `ScheduleKeyDeletion` or
 key-export permission is required by the application. These SDK keyrings
-generate data keys and decrypt their wrappers; wrapper rotation does not require
-`ReEncrypt`.
+require data-key generation, encryption and decryption permissions for connection
+probes and custody operations; wrapper rotation does not require `ReEncrypt`.
 
 KMS context contains the public bank ID, a context digest and an operation
 purpose. It contains no customer filename or financial value. The bank can
@@ -101,13 +102,18 @@ that role.
 
 ## Onboarding and operator API
 
-This rollout targets fresh or reset demo databases. Apply all migrations through
-the current head before provisioning banks and connecting their keys. Migrations
-`202610220101` and `202610220102` do not backfill existing field indexes, initialize
-versions for previously connected keys, or convert retained object envelopes;
-upgrading an existing bank-key catalogue is outside this rollout.
+For banks connected before data-key versions, the version migration copies each
+legacy envelope's wrapping reference from its scoped bank registry without KMS
+calls or payload changes. Legacy objects remain readable with their original
+context and payload key. Before new protected writes, an administrator runs the
+existing connection test for the connected key; a successful test creates and
+commits the current version and preserves any existing index envelope. Rotation
+also preserves that index. Version initialization is idempotent and refuses an
+unavailable key. Downgrade refuses populated envelope catalogues rather than
+discarding the metadata needed to read encrypted data.
 
-Set `ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` to the platform
+Apply all migrations through the current head (including `202610100088` and
+`202610100089`), then set `ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` to the platform
 workload account. Deployed environments require this setting when connecting or
 using bank keys and reject keys in the platform account. No-key platform storage
 does not require it. Use workload IAM credentials rather than bank access keys.
@@ -149,8 +155,10 @@ active inspector session uses these routes on the separate operator API:
 Rotation accepts the same key fields plus a meaningful `reason` and must retain
 the bank's ownership account. Changing providers requires an explicit migration.
 Routes verify the bank belongs to the organization, require staff inspection
-authority and write operator audit events in their transaction. The tenant API
-mounts none of these routes. Status observations do not authorize access; provider
+authority and write operator audit events in their transaction. Bank administrators
+use separate Account-administration endpoints and the guided Settings flow in
+[bank key setup](bank_key_setup.md#bank-administrator-self-service); retirement
+remains a staff operation. Status observations do not authorize access; provider
 checks and key reuse follow the
 [unit-of-work boundary](bank_field_encryption.md#keys-and-storage).
 
@@ -171,17 +179,17 @@ S3 URLs; document transfer under bank keys remains follow-up work.
 
 The bank grants access to its replacement key while retaining the old grant.
 Rotation verifies the replacement and publishes a new immutable data-key
-version in the existing envelope catalogue. Only rotation bookkeeping locks the
-registry. Encryption and downloads use lock-free version lookups; an admitted
-unit of work may finish with its previous version while later work uses the new
-one. Ciphertext records its version UUID, and old versions keep their exact KMS
+version in the existing envelope catalogue. Rotation bookkeeping locks the
+registry. Object encryption and downloads use lock-free version lookups; an
+admitted unit of work may finish with its previous version while later work uses
+the new one. Ciphertext records its version UUID, and old versions keep their exact KMS
 references. Failed rotation rolls back the new pointer/version. Object writes
 reference committed versions, so business rollback cannot orphan published
 ciphertext. See [the field design](bank_field_encryption.md#keys-and-storage)
 for bounded key-cache lifetime and versioned encryption.
 
-Keep the old key decrypt-capable until every backup with its old wrappers has
-aged out, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
+Keep the old key decrypt-capable while retained data or any backup requires its
+versions, including [write-once database backups](tamper_evident_records.md#write-once-objects-and-backups).
 Set `ENCRYPTION_BACKUP_RETENTION_DAYS` to at least the longest database
 or object backup retention window before rotation. Rotation records a per-bank
 retention hold; an unset setting keeps that hold indefinitely. Reusing a key
@@ -234,17 +242,16 @@ Object artifacts and their object backups use the bank-held hierarchy above.
 [Sensitive-field encryption](bank_field_encryption.md) reuses its `KeyProvider`
 and envelope catalogue for newly written borrower identities and operational
 payloads. That document lists the covered fields and numeric-only BI behavior.
-For dataset preparation, follow the
-[field encryption contract](bank_field_encryption.md) and the
-[deployment prerequisite](#onboarding-and-operator-api). Existing physical backups
-retain their original protection.
+Existing rows are not converted; demo datasets are re-imported after connecting
+the bank key. Existing physical backups retain their original protection.
 Signing keys and credential custody remain
 [issue 355](https://github.com/CedynGroup/aequorOS/issues/355). Scheduled
 key-health monitoring, alerting and support workflows remain
-[issue 354](https://github.com/CedynGroup/aequorOS/issues/354); this change
-supplies the provider `describe` contract, onboarding probe results and checked
-timestamps. No standalone health-probe endpoint is exposed. These follow-ups are
-required before claiming regulatory approval of the complete service.
+[issue 354](https://github.com/CedynGroup/aequorOS/issues/354). The provider
+`describe` contract, onboarding probes, and administrator-triggered
+`POST /api/v1/banks/{bank_id}/encryption-key/test` supply explicit observations,
+not scheduled monitoring. These follow-ups are required before claiming
+regulatory approval of the complete service.
 
 `LocalKeyProvider` supports injected hermetic tests and the provider conformance
 suite. The [synthetic revocation walkthrough](encryption_demo.md) owns the

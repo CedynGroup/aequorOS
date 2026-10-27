@@ -219,6 +219,7 @@ def test_runtime_insert_uses_definer_but_cannot_forge_links(
     role = governance_schema.runtime_role
     assert role is not None
     with Session(bind=connection) as session:
+        session.info["organization_id"] = ORG_1
         before = verify_chains(session)
     connection.execute(text(f'SET LOCAL ROLE "{role}"'))
     connection.execute(text("SET LOCAL row_security = on"))

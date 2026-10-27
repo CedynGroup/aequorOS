@@ -19,7 +19,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
-from app.core.key_management.concentration_identity import opaque_group_key
 from app.data_engine.public import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
@@ -264,15 +263,13 @@ def get_behavioral_liquidity_report(
             CanonicalPositionSnapshot.as_of_date >= history.months_before(as_of, cfg.window_months),
             CanonicalPositionSnapshot.as_of_date <= as_of,
             CanonicalPosition.position_type == "DEPOSIT",
-            group_keys={opaque_group_key(row.concentration_group) for row in rows},
+            group_keys={row.concentration_group for row in rows},
         ).items()
     }
     segments = [
         _segment_metrics(
             dimension,
-            group_labels.get(opaque_group_key(segment), segment)
-            if dimension == "concentration_group"
-            else segment,
+            group_labels.get(segment, segment) if dimension == "concentration_group" else segment,
             points,
             short_rates,
         )
