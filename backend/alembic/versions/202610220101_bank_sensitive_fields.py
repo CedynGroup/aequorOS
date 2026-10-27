@@ -1,7 +1,7 @@
 """Add capacity and bank-scoped blind indexes for sensitive operational fields.
 
 Revision ID: 202610220101
-Revises: 202610260001
+Revises: 202610270002
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from app.core.key_management.fields import index_values
 from app.db.session import force_rls_suspended
 
 revision = "202610220101"
-down_revision = "202610260001"
+down_revision = "202610270002"
 branch_labels = None
 depends_on = None
 

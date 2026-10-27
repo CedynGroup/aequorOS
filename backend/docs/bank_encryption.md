@@ -102,21 +102,32 @@ that role.
 
 ## Onboarding and operator API
 
-For banks connected before data-key versions, the version migration copies each
-legacy envelope's wrapping reference from its scoped bank registry without KMS
-calls or payload changes. Legacy objects remain readable with their original
-context and payload key. Before new protected writes, an administrator runs the
-existing connection test for the connected key; a successful test creates and
-commits the current version and preserves any existing index envelope. Rotation
-also preserves that index. Version initialization is idempotent and refuses an
-unavailable key. Downgrade refuses populated envelope catalogues rather than
-discarding the metadata needed to read encrypted data.
+Before upgrading a deployment with connected banks, configure
+`ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` with the platform workload account and ensure
+that the migration process has workload IAM credentials and network access to
+every connected bank's KMS key. Those keys must be active and permit the
+connection probes and custody operations described above, including unwraps of
+retained index and field envelopes. Deployed environments require the account
+setting when connecting or using bank keys and reject keys in the platform
+account. No-key platform storage does not require it. Use workload IAM
+credentials rather than bank access keys.
 
 Apply all migrations through the current head (including `202610100088` and
-`202610100089`), then set `ENCRYPTION_PLATFORM_AWS_ACCOUNT_ID` to the platform
-workload account. Deployed environments require this setting when connecting or
-using bank keys and reject keys in the platform account. No-key platform storage
-does not require it. Use workload IAM credentials rather than bank access keys.
+`202610100089`). For banks connected before data-key versions, revision
+`202610220102` copies each legacy envelope's wrapping reference from its scoped
+bank registry, checks the active KMS key, generates and probes a current data-key
+version, and reindexes every identity generation under the bank's index key. It
+preserves an existing index envelope or uses the new current version when no
+index envelope exists, including for empty connected banks. The version/index
+pointer changes and keyed reindexing commit atomically; a provider refusal or
+failed probe rolls back the upgrade. A later connection test is not required to
+initialize these versions.
+
+The upgrade does not rewrite protected payloads. Legacy objects retain their
+original context and payload key, and rotation preserves the index secret.
+Version initialization is idempotent. Downgrade refuses populated envelope
+catalogues rather than discarding the metadata needed to read encrypted data.
+
 Set `STORAGE_DOWNLOAD_BASE_URL` to the public HTTPS tenant API origin; download
 capabilities use `AUTH_JWT_SECRET` and expire within fifteen minutes.
 `STORAGE_KMS_KEY_ID` may provide additional bucket SSE, including platform audit

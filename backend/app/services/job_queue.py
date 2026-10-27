@@ -539,7 +539,7 @@ def reclaim_stale(
         window = stale_after_for(job.job_type, stale_after)
         if job.job_type == "bank_reencrypt":
             size = cast(object, job.payload.get("reencryption_bytes"))
-            if isinstance(size, int) and size > 0:
+            if type(size) is int and size > 0:
                 window += timedelta(seconds=8 * size / (1024 * 1024))
         started = _as_aware(job.started_at)
         if started is None or started >= now - window:

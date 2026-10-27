@@ -400,6 +400,8 @@ def test_reversal_refuses_import_committed_after_its_conflict_snapshot(
         db_session, CTX, bank, request.id, approved_by="Checker"
     )
     request_id = request.id
+    withdrawal_batch_id = request.withdrawal_batch_id
+    assert withdrawal_batch_id is not None
     db_session.commit()
     connect(db_session, provider)
     checked, imported = Event(), Event()
@@ -408,21 +410,16 @@ def test_reversal_refuses_import_committed_after_its_conflict_snapshot(
         with Session(database) as peer:
             other_bank = peer.get(Bank, BANK_A)
             assert other_bank is not None
-            connection = peer.connection()
 
-            def after_query(
-                _conn: object,
-                _cursor: object,
-                statement: str,
-                _parameters: object,
-                _context: object,
-                _many: bool,
-            ) -> None:
-                if "count(" in statement and "canonical_counterparties AS" in statement:
+            def after_load(_session: Session, entity: object) -> None:
+                if (
+                    isinstance(entity, CanonicalCounterparty)
+                    and entity.withdrawn_by_batch_id == withdrawal_batch_id
+                ):
                     checked.set()
                     assert imported.wait(15)
 
-            event.listen(connection, "after_cursor_execute", after_query)
+            event.listen(peer, "loaded_as_persistent", after_load)
             with pytest.raises(WithdrawalError, match="concurrently replaced"):
                 canonical_withdrawal.reverse_withdrawal(
                     peer,
