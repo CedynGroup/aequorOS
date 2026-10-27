@@ -25,6 +25,10 @@ def install(patch: Callable[[object, str, object], None] = setattr) -> None:
     os.environ["PYTHONPATH"] = python_path(os.environ.get("PYTHONPATH", ""))
 
     def refuse(*_args: object, **_kwargs: object) -> NoReturn:
+        if os.getenv("CI_DATABASE_OBSERVATIONS"):
+            from scripts.database_observation import emit  # noqa: PLC0415
+
+            emit("database", entrypoint="unit-refusal")
         with Path(attempts).open("a") as stream:
             stream.write(f"Database connection attempted by process {os.getpid()}\n")
         raise AssertionError("Database connections are forbidden in unit tests")
@@ -71,5 +75,17 @@ def install(patch: Callable[[object, str, object], None] = setattr) -> None:
         else:
             kwargs["args"] = replacement
         _ORIGINAL_POPEN(*args, **kwargs)
+        if (
+            os.getenv("CI_DATABASE_OBSERVATIONS")
+            and isinstance(command, (tuple, list))
+            and command
+            and args
+        ):
+            from scripts.database_observation import emit  # noqa: PLC0415
+
+            executable = Path(str(cast(list[object], command)[0])).name
+            if executable.startswith("python") or executable in {"uv", "pytest"}:
+                process = cast(subprocess.Popen[bytes], args[0])
+                emit("python_child", child=process.pid)
 
     patch(subprocess.Popen, "__init__", guarded_popen)

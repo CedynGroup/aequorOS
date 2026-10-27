@@ -168,6 +168,11 @@ def _verify_execution(config: pytest.Config, directory: Path) -> None:
         )
     ):
         raise ValueError("Unit JUnit coverage dropped, duplicated, skipped or failed tests")
+    observations = os.getenv("CI_DATABASE_OBSERVATIONS")
+    if observations and Path(observations).resolve().is_relative_to(directory.resolve()):
+        from scripts.test_suite_census import check  # noqa: PLC0415
+
+        check(Path(observations))
 
 
 @pytest.hookimpl(trylast=True)
