@@ -1,15 +1,8 @@
 """Model↔migration parity for EVERY BI-owned table, with the subject DERIVED.
 
-Audit A360-4 finding M1. Three suites compared the migrated BI schema to the
-models, and each took its subject from a hand-maintained tuple in one model
-module: ``test_bi_foundation_migration.py`` iterates ``app/bi/models/marts.py::BI_TABLES``
-(16 tables), ``test_bi_phase3_migration.py`` iterates ``BI_CONTENT_TABLES`` +
-``BI_NOTIFICATION_TABLES`` (8), and ``test_bi_migration_structural_parity.py`` is
-the only one that also names ``BI_COMMENTARY_TABLES`` — for primary-key order,
-composite foreign keys and indexes ONLY. So ``ai_commentary_drafts``, the 25th
-BI table, had no coverage at all on the two axes that bit this build before:
-column type / length / nullability, and CHECK constraints. A column four
-characters too narrow there would have passed every gate, exactly as A8-01 did.
+The subject must include BI-owned tables without the ``bi_`` prefix, such as
+``ai_commentary_drafts``; a prefix-only census would silently omit their column
+and CHECK parity.
 
 This module closes the CLASS rather than the instance. Its subject is not a
 tuple anybody maintains; it is computed two ways and the two must agree:
@@ -20,7 +13,7 @@ tuple anybody maintains; it is computed two ways and the two must agree:
   some other module joins by its name).
 
 The union is the subject of the four parity axes below. A separate test pins
-that the union of the four hand tuples equals the derived subject, so a 26th
+that the union of the four hand tuples equals the derived subject, so a new
 table that is declared but not registered fails by name — and so does a
 registered table that no module declares.
 
