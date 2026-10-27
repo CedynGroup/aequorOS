@@ -1820,6 +1820,7 @@ hsm = [
 [package.dev-dependencies]
 dev = [
     { name = "basedpyright" },
+    { name = "greenlet" },
     { name = "httpx" },
     { name = "hypothesis" },
     { name = "moto", extra = ["s3"] },
@@ -1877,6 +1878,7 @@ provides-extras = ["hsm", "db-direct"]
 [package.metadata.requires-dev]
 dev = [
     { name = "basedpyright" },
+    { name = "greenlet", specifier = ">=3.5.1" },
     { name = "httpx" },
     { name = "hypothesis" },
     { name = "moto", extras = ["kms", "s3"], specifier = ">=5,<6" },
