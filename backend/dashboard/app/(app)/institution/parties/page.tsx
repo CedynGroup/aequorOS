@@ -671,10 +671,16 @@ function PartyForm({
       [id]: { ...previous[id], ...patch },
     }));
   };
+  const canChangeRoles = !partyId || party !== null;
   const addRole = () => {
+    if (!canChangeRoles) return;
     const id = crypto.randomUUID();
     setRoleEdits((previous) => ({ ...previous, [id]: emptyRole() }));
     setRoleOrder([...roleIds, id]);
+  };
+  const removeRole = (index: number) => {
+    if (!canChangeRoles) return;
+    setRoleOrder(roleIds.filter((_, i) => i !== index));
   };
   const canSubmit =
     reason.trim().length > 0 &&
@@ -831,6 +837,7 @@ function PartyForm({
             <button
               type="button"
               onClick={addRole}
+              disabled={!canChangeRoles}
               className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
             >
               <Plus size={11} aria-hidden />
@@ -971,9 +978,8 @@ function PartyForm({
                   </div>
                   <button
                     type="button"
-                    onClick={() =>
-                      setRoleOrder(roleIds.filter((_, i) => i !== index))
-                    }
+                    onClick={() => removeRole(index)}
+                    disabled={!canChangeRoles}
                     className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-critical hover:border-critical/40"
                   >
                     <X size={11} aria-hidden />

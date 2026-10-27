@@ -490,13 +490,18 @@ it.each(["revoked", "unavailable"] as const)(
     const client = mount(<RelatedPartiesPage />);
     await openPartyEditor();
     await userEvent.clear(screen.getByLabelText(/Full name/));
-    await userEvent.type(screen.getByLabelText(/Full name/), "Unsaved name");
+    await userEvent.type(screen.getByLabelText(/Full name/), "Unsaved name", {
+      delay: null,
+    });
     await userEvent.clear(screen.getByLabelText("Annual fees"));
-    await userEvent.type(screen.getByLabelText("Annual fees"), "250");
+    await userEvent.type(screen.getByLabelText("Annual fees"), "250", {
+      delay: null,
+    });
     await userEvent.clear(screen.getByLabelText("Other responsibilities"));
     await userEvent.type(
       screen.getByLabelText("Other responsibilities"),
       "Unsaved responsibilities",
+      { delay: null },
     );
     refreshed = true;
     await act(async () => {
@@ -521,6 +526,7 @@ it.each(["revoked", "unavailable"] as const)(
     expect(screen.getByLabelText("Annual fees")).toHaveValue(250);
     expect(screen.getByLabelText("Other responsibilities")).toHaveValue(
       "Unsaved responsibilities",
+      { delay: null },
     );
     expect(
       screen.queryByRole("heading", { name: "Edit Refreshed owner" }),
@@ -589,6 +595,104 @@ it.each(["Term", "ICAG registration"])(
         ],
       },
     ]);
+  },
+);
+
+it.each(["revoked", "unavailable"] as const)(
+  "blocks membership edits during a %s cache purge without losing scoped drafts",
+  async (lockedState) => {
+    const secondRole = "00000000-0000-4000-8000-000000000019";
+    let state = "available";
+    let holdRead = false;
+    let refreshed = false;
+    let finishRead: ((response: Response) => void) | undefined;
+    const writes: unknown[] = [];
+    const record = () => {
+      const baseline = editableParty(state, refreshed);
+      return {
+        ...baseline,
+        roles: [
+          ...baseline.roles,
+          { ...baseline.roles[0], id: secondRole, role: "director" },
+        ],
+      };
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          writes.push(JSON.parse(String(init.body)));
+          return Response.json(record());
+        }
+        if (holdRead)
+          return new Promise<Response>((resolve) => {
+            finishRead = resolve;
+          });
+        return profileResponse(state, undefined, record());
+      }),
+    );
+    const client = mount(<RelatedPartiesPage />);
+    await openPartyEditor();
+    await userEvent.clear(screen.getByLabelText(/Full name/));
+    await userEvent.type(screen.getByLabelText(/Full name/), "Unsaved name", {
+      delay: null,
+    });
+    await userEvent.clear(screen.getAllByLabelText("Annual fees")[0]);
+    await userEvent.type(screen.getAllByLabelText("Annual fees")[0], "250", {
+      delay: null,
+    });
+    expect(screen.getAllByRole("button", { name: "Remove role" })).toHaveLength(
+      2,
+    );
+    holdRead = true;
+    state = lockedState;
+    await act(async () => {
+      await observeProtectedData(profileResponse(state));
+    });
+    await waitFor(() => expect(finishRead).toBeTypeOf("function"));
+    expect(client.getQueryData(profileKey)).toBeUndefined();
+    const add = screen.getByRole("button", { name: "Add role" });
+    const remove = screen.getByRole("button", { name: "Remove role" });
+    expect(add).toBeDisabled();
+    expect(remove).toBeDisabled();
+    await userEvent.click(add);
+    await userEvent.click(remove);
+    expect(screen.getAllByLabelText("Annual fees")).toHaveLength(1);
+    expect(screen.getByLabelText("Annual fees")).toHaveValue(250);
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved name");
+    holdRead = false;
+    refreshed = true;
+    state = "available";
+    await act(async () => {
+      finishRead?.(profileResponse(state, undefined, record()));
+    });
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("button", { name: "Remove role" }),
+      ).toHaveLength(2),
+    );
+    expect(screen.getByRole("button", { name: "Add role" })).toBeEnabled();
+    expect(
+      screen
+        .getAllByRole("button", { name: "Remove role" })
+        .every((button) => !button.hasAttribute("disabled")),
+    ).toBe(true);
+    expect(screen.getAllByLabelText("Annual fees")[0]).toHaveValue(250);
+    expect(screen.getAllByLabelText("Term")[1]).toHaveValue("Refreshed term");
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved name");
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/Full name/)).toBeNull(),
+    );
+    expect(writes).toEqual([
+      {
+        reason: "Synthetic edit",
+        full_name: "Unsaved name",
+        role_updates: [{ role_id: ROLE, annual_fees: "250" }],
+      },
+    ]);
+    expect(screen.getAllByText("External Auditor").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Director").length).toBeGreaterThan(0);
   },
 );
 
