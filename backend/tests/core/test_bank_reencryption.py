@@ -1,22 +1,26 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+import json
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select, text, update
+from sqlalchemy import Table, select, text, update
 from sqlalchemy.orm import Session
 
 from app.bi.domain.catalogue import catalogue
+from app.bi.models.content import BiDashboardVersion
 from app.bi.models.marts import BiDimCounterparty, BiFactPositionDaily, BiFactPositionEom
+from app.bi.models.notifications import BiAlert, BiSubscription
 from app.bi.schemas.query import BiQuery
 from app.bi.service.compiler import compile_query
-from app.core.key_management import maintenance, reencryption, registry
-from app.core.key_management.fields import SealedField, blind_index
+from app.core.key_management import maintenance, reencryption, registry, sdk
+from app.core.key_management.fields import FORMAT, SealedField, blind_index
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
+from app.core.key_management.presentation import SESSION_STATE, PresentationState
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
@@ -58,10 +62,6 @@ __all__ = ["provider"]
 
 
 class EmptyStorage(InMemoryStorageClient):
-    def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
-        assert not self._objects
-        return iter(())
-
     def encryption_page(
         self, institution_slug: str, cursor: EncryptionCursor, limit: int
     ) -> EncryptionPage:
@@ -349,8 +349,8 @@ def test_interrupted_batch_reclaims_at_default_window_and_resumes(
     completed = drain(db_session, resumed, EmptyStorage())
     result = reencryption.Progress.model_validate(completed.progress)
     assert result.fields_rewritten == progress.fields_rewritten
-    assert result.retained == {"regulatory_packages": 1}
-    assert result.summary == "complete except 1 retained immutable records"
+    assert result.retained == {}
+    assert result.summary == "complete"
     db_session.expunge_all()
     loaded = db_session.get(CanonicalCounterparty, party_id)
     assert loaded is not None and loaded.name == NAME
@@ -455,8 +455,8 @@ def test_resume_moves_fields_preserves_immutable_bytes_and_is_idempotent(
     assert job is not None
     job = drain(db_session, job, EmptyStorage())
     progress = reencryption.Progress.model_validate(job.progress)
-    assert progress.summary == "complete except 2 retained immutable records"
-    assert progress.retained == {"bi_dashboard_versions": 1, "regulatory_packages": 1}
+    assert progress.summary == "complete"
+    assert progress.retained == {}
     target = db_session.scalar(
         select(BankEncryptionKey.current_version_id).where(BankEncryptionKey.bank_id == BANK_A)
     )
@@ -496,7 +496,7 @@ def test_resume_moves_fields_preserves_immutable_bytes_and_is_idempotent(
     assert loaded is not None and loaded.name == NAME
 
 
-def test_retired_version_referenced_by_locked_snapshot_remains_required(
+def test_plain_snapshot_does_not_retain_retired_encryption_version(
     db_session: Session,
     provider: LocalKeyProvider,
     monkeypatch: pytest.MonkeyPatch,
@@ -507,25 +507,26 @@ def test_retired_version_referenced_by_locked_snapshot_remains_required(
     counterparty(db_session)
     db_session.commit()
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
-    original = registry.reference(key)
+    original, old_version = registry.reference(key), key.current_version_id
+    snapshot_before = db_session.scalar(select(RegulatoryPackage.snapshot))
     registry.rotate(db_session, key, NEXT, lambda _: provider)
     db_session.commit()
     job = reencryption.enqueue(db_session, ORG_1, BANK_A)
     db_session.commit()
     job = drain(db_session, job, EmptyStorage())
-    assert reencryption.Progress.model_validate(job.progress).retained["regulatory_packages"] == 1
+    assert reencryption.Progress.model_validate(job.progress).retained == {}
+    assert db_session.get(ObjectKeyEnvelope, old_version) is None
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
     hold = db_session.scalar(select(RetainedBankKey).where(RetainedBankKey.bank_id == BANK_A))
     assert hold is not None
     hold.rotated_at = utc_now() - timedelta(days=3)
     hold.decrypt_until = utc_now() - timedelta(days=2)
     db_session.flush()
-    with pytest.raises(KeyUnavailableError, match="retained encryption versions"):
-        registry.authorize_retirement(db_session, key, original)
+    registry.authorize_retirement(db_session, key, original)
     snapshot = db_session.scalar(
         select(RegulatoryPackage.snapshot).where(RegulatoryPackage.bank_id == BANK_A)
     )
-    assert isinstance(snapshot, SealedField) and snapshot.envelope_id != key.current_version_id
+    assert snapshot == snapshot_before and isinstance(snapshot, dict)
 
 
 def test_editable_only_migration_releases_unused_versions_but_keeps_backup_hold(
@@ -776,3 +777,246 @@ def test_job_clears_historical_bi_identity_copies_and_keeps_numeric_queries(
         assert {cast(object, row.as_of_date) for row in rows} == {historical, AS_OF}
         assert all(cast(object, row.counterparty_group) is None for row in rows)
     assert numeric_rows() == before
+
+
+def store_whole_bi_values(
+    db_session: Session,
+    records: list[tuple[Table, UUID, str, object]],
+) -> None:
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    secret = registry.prepare_envelope(
+        db_session,
+        key,
+        {
+            "purpose": "bank-sensitive-fields-v1",
+            "organization_id": ORG_1,
+            "bank_id": BANK_A,
+        },
+        registry.provider_for,
+    )
+    for table, record_id, column, value in records:
+        sealed = SealedField(
+            secret.envelope_id,
+            sdk.encrypt(
+                json.dumps(value).encode(),
+                sdk.raw_keyring(secret.plaintext, name=FORMAT),
+                {
+                    "purpose": "bank-sensitive-record-v1",
+                    "organization_id": ORG_1,
+                    "bank_id": BANK_A,
+                    "table": table.name,
+                    "record_id": str(record_id),
+                    "field": column,
+                },
+            ),
+        )
+        _ = db_session.execute(
+            table.update().where(table.c.id == record_id).values(**{column: sealed})
+        )
+    db_session.commit()
+
+
+def assert_bi_key_loss(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    identity: bool,
+    subscription_id: UUID,
+    query: dict[str, object],
+) -> None:
+    db_session.commit()
+    db_session.expunge_all()
+    provider.set_status(NEXT, KeyStatus.DISABLED)
+    if identity:
+        with pytest.raises(KeyUnavailableError):
+            db_session.get(BiSubscription, subscription_id)
+    else:
+        numeric = db_session.get(BiSubscription, subscription_id)
+        assert numeric is not None and numeric.query == query
+        db_session.info[SESSION_STATE] = PresentationState(banks={BANK_A: "revoked"})
+        numeric.query = {**query, "limit": 24}
+        db_session.commit()
+        db_session.expunge_all()
+        reloaded = db_session.get(BiSubscription, subscription_id)
+        assert reloaded is not None and reloaded.query["limit"] == 24
+
+
+@pytest.mark.parametrize("encoding", ["plaintext", "leaves", "whole"])
+@pytest.mark.parametrize("identity", [False, True])
+def test_maintenance_preserves_numeric_bi_and_rewrites_only_identity_leaves(
+    db_session: Session, provider: LocalKeyProvider, encoding: str, identity: bool
+) -> None:
+    if encoding != "plaintext":
+        connect(db_session, provider)
+    filters: list[dict[str, object]] = [{"member": "position.currency", "values": ["GHS"]}]
+    if identity:
+        filters.append({"member": "counterparty.name", "values": [NAME]})
+    query = {"nested": [{"filters": filters}], "limit": 23}
+    alert = BiAlert(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        owner_user_id=CTX.actor_user_id,
+        name="Synthetic selective alert",
+        measure_id="loans.balance_rc",
+        filters=filters,
+        direction="above",
+        threshold_basis="stated",
+        threshold=Decimal(10),
+        notify_user_ids=[],
+    )
+    subscription = BiSubscription(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        owner_user_id=CTX.actor_user_id,
+        name="Synthetic selective subscription",
+        query=query,
+        artifact_format="csv",
+        cadence="daily",
+        hour=7,
+        minute=30,
+        recipient_user_ids=[],
+    )
+    db_session.add_all([alert, subscription])
+    db_session.commit()
+    alert_id, subscription_id = alert.id, subscription.id
+    if encoding == "plaintext":
+        connect(db_session, provider)
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    registry.rotate(db_session, key, NEXT, lambda _: provider)
+    target = key.current_version_id
+    db_session.commit()
+    if encoding == "whole":
+        store_whole_bi_values(
+            db_session,
+            [
+                (BiAlert.__table__, alert_id, "filters", filters),
+                (BiSubscription.__table__, subscription_id, "query", query),
+            ],
+        )
+    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    db_session.commit()
+    _ = drain(db_session, job, EmptyStorage())
+    stored_filters = db_session.scalar(select(BiAlert.filters).where(BiAlert.id == alert_id))
+    stored_query = db_session.scalar(
+        select(BiSubscription.query).where(BiSubscription.id == subscription_id)
+    )
+    assert isinstance(stored_filters, list) and stored_filters[0] == filters[0]
+    assert isinstance(stored_query, dict) and stored_query["limit"] == 23
+    if identity:
+        leaf = cast(dict[str, list[str]], stored_filters[1]["values"])
+        assert leaf[FORMAT][0] == str(target)
+    else:
+        assert stored_filters == filters and stored_query == query
+    db_session.expunge_all()
+    restored_alert = db_session.get(BiAlert, alert_id)
+    restored_subscription = db_session.get(BiSubscription, subscription_id)
+    assert restored_alert is not None and restored_alert.filters == filters
+    assert restored_subscription is not None and restored_subscription.query == query
+    db_session.commit()
+    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    db_session.commit()
+    _ = drain(db_session, job, EmptyStorage())
+    assert (
+        db_session.scalar(select(BiAlert.filters).where(BiAlert.id == alert_id)) == stored_filters
+    )
+    assert (
+        db_session.scalar(select(BiSubscription.query).where(BiSubscription.id == subscription_id))
+        == stored_query
+    )
+    assert_bi_key_loss(db_session, provider, identity, subscription_id, query)
+
+
+def test_nested_immutable_identity_keeps_its_envelope_without_rewriting_bytes(
+    db_session: Session, provider: LocalKeyProvider, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", "1")
+    get_key_settings.cache_clear()
+    connect(db_session, provider)
+    spec = {"tiles": [{"query": {"filters": [{"member": "counterparty.name", "values": [NAME]}]}}]}
+    version = saved_version(db_session, spec)
+    db_session.add(version)
+    db_session.commit()
+    version_id = version.id
+    before = db_session.scalar(
+        select(BiDashboardVersion.spec).where(BiDashboardVersion.id == version_id)
+    )
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    original, old_version = registry.reference(key), key.current_version_id
+    registry.rotate(db_session, key, NEXT, lambda _: provider)
+    db_session.commit()
+    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    db_session.commit()
+    last = drain(db_session, job, EmptyStorage())
+    assert reencryption.Progress.model_validate(last.progress).retained == {
+        "bi_dashboard_versions": 1
+    }
+    assert db_session.get(ObjectKeyEnvelope, old_version) is not None
+    assert (
+        db_session.scalar(
+            select(BiDashboardVersion.spec).where(BiDashboardVersion.id == version_id)
+        )
+        == before
+    )
+    db_session.expunge_all()
+    loaded = db_session.get(BiDashboardVersion, version_id)
+    assert loaded is not None and loaded.spec == spec
+    hold = db_session.scalar(select(RetainedBankKey).where(RetainedBankKey.bank_id == BANK_A))
+    assert hold is not None
+    hold.rotated_at = utc_now() - timedelta(days=3)
+    hold.decrypt_until = utc_now() - timedelta(days=2)
+    db_session.flush()
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+    with pytest.raises(KeyUnavailableError, match="retained encryption versions"):
+        registry.authorize_retirement(db_session, key, original)
+
+
+@pytest.mark.parametrize(
+    "representation", ["name", "group_reference", "group", "parent", "attribute_reference"]
+)
+def test_cutovers_preserve_every_canonical_group_representation(
+    db_session: Session, provider: LocalKeyProvider, representation: str
+) -> None:
+    ids: list[UUID] = []
+    for index in range(2):
+        cp = counterparty(
+            db_session,
+            reference=f"synthetic-{index}",
+            name="G" if representation == "name" else f"Party {index}",
+            include_package=False,
+        )
+        cp.group_reference = "G" if representation == "group_reference" else None
+        cp.attributes = (
+            {"group_reference" if representation == "attribute_reference" else representation: "G"}
+            if representation not in {"name", "group_reference"}
+            else {}
+        )
+        ids.append(cp.id)
+    db_session.commit()
+    assert (
+        len(set(db_session.scalars(select(CanonicalCounterparty.concentration_group_blind_index))))
+        == 1
+    )
+    connect(db_session, provider)
+    for rotate in (False, True):
+        key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
+        if rotate:
+            registry.rotate(db_session, key, NEXT, lambda _: provider)
+        db_session.commit()
+        job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+        db_session.commit()
+        _ = drain(db_session, job, EmptyStorage())
+        tokens = list(
+            db_session.scalars(
+                select(CanonicalCounterparty.concentration_group_blind_index).where(
+                    CanonicalCounterparty.id.in_(ids)
+                )
+            )
+        )
+        expected = blind_index(
+            db_session,
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            domain="counterparty.group",
+            value="cp:G" if representation == "name" else "group:G",
+        )
+        assert tokens == [expected, expected]
+        db_session.commit()

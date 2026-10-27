@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import io
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
 from typing import Literal
@@ -40,6 +40,7 @@ from tests.core.test_bank_field_encryption import AS_OF, BANK_A, CTX, NAME, coun
 from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption import KEY, NEXT_KEY, SLUG, BankStorage, bank_storage
 from tests.support.helpers import ORG_1, USER_1
+from tests.support.key_concurrency import assert_blocked, backend_pid
 
 __all__ = ["bank_storage"]
 pytestmark = pytest.mark.committing_db
@@ -252,7 +253,7 @@ def _register_sibling(db_session: Session, providers: registry.ProviderFactory) 
         for operation in ("ingestion", "push", "export", "attachment")
     ],
 )
-def test_transactional_storage_runs_during_version_rotation(
+def test_transactional_storage_drains_admitted_writer_and_uses_rotated_version(
     bank_storage: BankStorage,
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -277,27 +278,28 @@ def test_transactional_storage_runs_during_version_rotation(
     storage = _rotation_storage(db_session, bank_storage)
     monkeypatch.setattr(exports, "get_storage_client", lambda: storage)
     original_id = counterparty(db_session, include_package=False).id
-    entered, release = Event(), Event()
+    blocker = backend_pid(db_session)
+    waiter: Future[int] = Future()
 
     def rotate() -> int:
         with Session(database) as writer, writer.begin():
             _ = writer.execute(text("SET LOCAL lock_timeout='1s'"))
+            waiter.set_result(backend_pid(writer))
             row = registry.scoped_key(writer, bank_id=rotation_bank, organization_id=ORG_1)
-            count = registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
-            entered.set()
-            assert release.wait(15)
-            return count
+            return registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         rotating = pool.submit(rotate)
         try:
-            assert entered.wait(10)
-            _exercise(operation, db_session, storage, path, package)
-            db_session.commit()
+            if rotation_bank == BANK_A:
+                assert_blocked(database, blocker, waiter.result(timeout=5), rotating)
+            else:
+                assert rotating.result(timeout=10) == 0
         finally:
-            db_session.rollback()
-            release.set()
+            db_session.commit()
         assert rotating.result(timeout=10) == 0
+    _exercise(operation, db_session, storage, path, package)
+    db_session.commit()
     if rotation_bank == SIBLING:
         row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
         assert registry.rotate(db_session, row, NEXT_KEY, lambda _name: bank_storage.provider) == 0
@@ -487,7 +489,7 @@ def test_bulk_fields_and_objects_unwrap_once_per_version_and_discard_on_boundary
 
 
 @pytest.mark.parametrize("download", ["attachment", "email-fallback"])
-def test_package_download_siblings_do_not_wait_for_rotation(
+def test_package_download_siblings_wait_for_rotation(
     bank_storage: BankStorage,
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -524,6 +526,8 @@ def test_package_download_siblings_do_not_wait_for_rotation(
     db_session.commit()
     db_session.expunge_all()
     loaded, rotating, release = Event(), Event(), Event()
+    blocker: Future[int] = Future()
+    waiter: Future[int] = Future()
     app = FastAPI()
     app.include_router(manage_package_attachments.router, prefix="/api/v1")
     app.include_router(manage_regulatory_reporting.router, prefix="/api/v1")
@@ -533,6 +537,7 @@ def test_package_download_siblings_do_not_wait_for_rotation(
         row = db_session.get(RegulatoryPackage, package_id)
         institution = db_session.get(Bank, BANK_A)
         assert row is not None and institution is not None
+        waiter.set_result(backend_pid(db_session))
         loaded.set()
         assert rotating.wait(10)
         return deps.PackageAccess(ctx=CTX, bank=institution, package=row)
@@ -545,6 +550,7 @@ def test_package_download_siblings_do_not_wait_for_rotation(
             _ = writer.execute(text("SET LOCAL lock_timeout='1s'"))
             row = registry.scoped_key(writer, bank_id=BANK_A, organization_id=ORG_1)
             registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
+            blocker.set_result(backend_pid(writer))
             rotating.set()
             assert release.wait(10)
 
@@ -557,12 +563,14 @@ def test_package_download_siblings_do_not_wait_for_rotation(
             client.get, f"/api/v1/banks/{BANK_A}/regulatory-packages/{package_id}/{suffix}"
         )
         try:
-            result = response.result(timeout=8)
-            assert result.status_code == 200, result.text
-            assert result.content
+            assert rotating.wait(5)
+            assert_blocked(database, blocker.result(timeout=5), waiter.result(timeout=5), response)
         finally:
             release.set()
-            db_session.rollback()
+        result = response.result(timeout=8)
+        assert result.status_code == 200, result.text
+        assert result.content
+        db_session.rollback()
         rotation.result(timeout=5)
 
 

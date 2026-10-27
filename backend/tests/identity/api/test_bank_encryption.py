@@ -31,6 +31,7 @@ from app.identity.models.bank import Bank
 from app.identity.schemas.bank_encryption import BankKeyStatusRead
 from app.identity.service import authorization, bank_encryption
 from app.models import AuditEvent, User
+from app.models.job import Job
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
@@ -111,6 +112,10 @@ def test_admin_connect_test_rotate_and_confirm_schedule(
     assert probe.json()["passed"] is True
     connected = db_client.put(url, headers=admin, json=KEY.model_dump())
     assert connected.status_code == 200, connected.text
+    queued = db_session.scalar(
+        select(Job).where(Job.bank_id == BANK, Job.job_type == "bank_reencrypt")
+    )
+    assert queued is not None and queued.status == "queued"
     old_version = cast(str, connected.json()["current_version"])
     assert old_version and connected.json()["last_successful_use_at"]
     assert db_client.put(url, headers=admin, json=NEXT.model_dump()).status_code == 409

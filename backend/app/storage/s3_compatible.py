@@ -225,14 +225,6 @@ class S3CompatibleStorageClient(StorageClient):
         self._log("write", location, version_id=version_id)
         return self._to_storage_object(location, stat, version_id=version_id)
 
-    def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
-        yield from reencryption.inventory(
-            cast(reencryption.S3MaintenanceClient, cast(object, self._s3)),
-            self._env,
-            institution_slug,
-            self._stat_object,
-        )
-
     def reencrypt(self, item: EncryptionInventoryItem) -> bool:
         result = reencryption.reencrypt(
             cast(reencryption.S3MaintenanceClient, cast(object, self._s3)),

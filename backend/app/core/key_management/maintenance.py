@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Iterator, Mapping
 from typing import cast
@@ -125,6 +126,8 @@ def reindex_bank(db: Session, key: BankEncryptionKey) -> None:
                 for c in table.c
                 if isinstance(c.type, fields.ProtectedField)
             }
+            if name == "canonical_counterparties":
+                values["attributes"] = row["attributes"]
             indexes = fields.index_values(name, values, key.organization_id, key.bank_id, secret)
             if "updated_at" in table.c:
                 indexes["updated_at"] = cast(object, row["updated_at"])
@@ -183,35 +186,84 @@ def rewrite_row(
         ):
             continue
         value = row[col.name]
-        if value is None or isinstance(value, fields.SealedField) and value.envelope_id == version:
+        kind = col.type
+        if value is None or (
+            isinstance(value, fields.SealedField)
+            and value.envelope_id == version
+            and kind.protected_members is None
+        ):
             continue
         value = plaintext(db, key, table, row, col.name)
-        secret = registry.prepare_envelope(
-            db,
-            key,
-            {
-                "purpose": "bank-sensitive-fields-v1",
-                "organization_id": key.organization_id,
-                "bank_id": key.bank_id,
-            },
-            registry.provider_for,
-        )
         context = {
             "purpose": "bank-sensitive-record-v1",
             "organization_id": key.organization_id,
             "bank_id": key.bank_id,
             "table": table.name,
             "record_id": str(row["id"]),
-            "field": col.name,
         }
-        changes[col.name] = fields.SealedField(
-            version,
-            sdk.encrypt(
-                json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode(),
-                sdk.raw_keyring(secret.plaintext, name=fields.FORMAT),
-                context,
-            ),
-        )
+
+        def seal(value: object, field_name: str) -> fields.SealedField:
+            secret = registry.prepare_envelope(
+                db,
+                key,
+                {
+                    "purpose": "bank-sensitive-fields-v1",
+                    "organization_id": key.organization_id,
+                    "bank_id": key.bank_id,
+                },
+                registry.provider_for,
+            )
+            return fields.SealedField(
+                version,
+                sdk.encrypt(
+                    json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode(),
+                    sdk.raw_keyring(secret.plaintext, name=fields.FORMAT),
+                    {**context, "field": field_name},
+                ),
+            )
+
+        if kind.protected_members is None:
+            changes[col.name] = seal(value, col.name)
+            continue
+        changed = isinstance(row[col.name], fields.SealedField)
+
+        def rewrite_leaf(item: object, path: str) -> object:
+            nonlocal changed
+            field_name = col.name + ":" + path
+            if isinstance(item, dict) and fields.FORMAT in item:
+                sealed = kind.decode(cast(dict[str, object], item)[fields.FORMAT])
+                if sealed.envelope_id == version:
+                    return item
+                secret = registry.open_envelope(
+                    db,
+                    key,
+                    sealed.envelope_id,
+                    {
+                        "purpose": "bank-sensitive-fields-v1",
+                        "organization_id": key.organization_id,
+                        "bank_id": key.bank_id,
+                    },
+                    registry.provider_for,
+                )
+                item = TypeAdapter(object).validate_json(
+                    sdk.decrypt(
+                        sealed.message,
+                        sdk.raw_keyring(secret.plaintext, name=fields.FORMAT),
+                        {**context, "field": field_name},
+                    )
+                )
+            sealed = seal(item, field_name)
+            changed = True
+            return {
+                fields.FORMAT: [
+                    str(sealed.envelope_id),
+                    base64.b64encode(sealed.message).decode("ascii"),
+                ]
+            }
+
+        rewritten = fields.identity_values(value, kind.protected_members, rewrite_leaf)
+        if changed:
+            changes[col.name] = fields.OptionalPlaintext(rewritten)
     if changes:
         if "updated_at" in table.c:
             changes["updated_at"] = row["updated_at"]

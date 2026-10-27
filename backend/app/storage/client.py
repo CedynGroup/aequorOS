@@ -246,9 +246,6 @@ class StorageClient(ABC):
     @abstractmethod
     def health_check(self) -> StorageHealth: ...
 
-    def encryption_inventory(self, institution_slug: str) -> Iterator[EncryptionInventoryItem]:
-        raise StorageBackendError("This storage backend cannot inventory encryption versions.")
-
     def encryption_page(
         self, institution_slug: str, cursor: EncryptionCursor, limit: int
     ) -> EncryptionPage:

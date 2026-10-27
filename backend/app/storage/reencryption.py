@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Generator
 from contextlib import AbstractContextManager, contextmanager, nullcontext, suppress
 from datetime import UTC, datetime
 from tempfile import SpooledTemporaryFile
@@ -81,16 +81,6 @@ def _locked(stat: dict[str, object]) -> bool:
     if until.tzinfo is None:
         until = until.replace(tzinfo=UTC)
     return until > datetime.now(UTC)
-
-
-def inventory(
-    client: S3MaintenanceClient, env: str, slug: str, stat_object: ObjectStat
-) -> Iterator[EncryptionInventoryItem]:
-    cursor: EncryptionCursor | None = EncryptionCursor()
-    while cursor is not None:
-        result = inventory_page(client, env, slug, stat_object, cursor, 100)
-        yield from result.items
-        cursor = result.cursor
 
 
 def inventory_page(  # noqa: PLR0913

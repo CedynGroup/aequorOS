@@ -13,7 +13,7 @@ from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import TypeAdapter
 from sqlalchemy import Uuid, bindparam, select, text
-from sqlalchemy.orm import Session, undefer_group
+from sqlalchemy.orm import Session, undefer, undefer_group
 
 from app.attestation.service import register_state
 from app.attestation.service.digests import register_state_digest
@@ -1442,13 +1442,16 @@ def test_support_presentation_hides_fields_without_unwrapping(
 
 
 @pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+@pytest.mark.parametrize("legacy", [False, True])
 def test_profile_http_locked_read_write_and_recovery(
     db_client: TestClient,
     db_session: Session,
     provider: LocalKeyProvider,
     status: KeyStatus,
+    legacy: bool,
 ) -> None:
-    connect(db_session, provider)
+    if not legacy:
+        connect(db_session, provider)
     party = institution_profile.create_related_party(
         db_session,
         CTX,
@@ -1462,6 +1465,8 @@ def test_profile_http_locked_read_write_and_recovery(
         ),
     )
     db_session.commit()
+    if legacy:
+        connect(db_session, provider)
     provider.set_status(KEY_A, status)
     db_session.expunge_all()
     response = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
@@ -2763,11 +2768,17 @@ def test_ingested_counterparty_name_bound_preserves_bi_copy_width(
 
 
 @pytest.mark.parametrize("refresh", [False, True])
+@pytest.mark.parametrize("identity", [False, True])
 def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
     db_session: Session,
     provider: LocalKeyProvider,
     refresh: bool,
+    identity: bool,
 ) -> None:
+    filters: list[dict[str, object]] = (
+        [{"member": "counterparty.name", "values": [NAME]}] if identity else [{"borrower": NAME}]
+    )
+    spec = {"filters": filters} if identity else {"borrower": NAME}
     counterparty(db_session)
     party = RelatedParty(
         organization_id=ORG_1,
@@ -2786,14 +2797,14 @@ def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
             other_responsibilities=NAME,
         )
     )
-    db_session.add(saved_version(db_session, {"borrower": NAME}))
+    db_session.add(saved_version(db_session, spec))
     db_session.add(
         BiSubscription(
             organization_id=ORG_1,
             bank_id=BANK_A,
             name="Synthetic legacy subscription",
             owner_user_id=USER_1,
-            query={"borrower": NAME},
+            query=spec,
             artifact_format="csv",
             cadence="daily",
             hour=7,
@@ -2808,7 +2819,7 @@ def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
             owner_user_id=USER_1,
             name="Synthetic legacy alert",
             measure_id="loans.balance_rc",
-            filters=[{"borrower": NAME}],
+            filters=filters,
             direction="above",
             threshold_basis="stated",
             threshold=Decimal(100),
@@ -2842,12 +2853,33 @@ def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
             assert entity is not None
         db_session.commit()
         provider.set_status(KEY_A, KeyStatus.DISABLED)
-        with pytest.raises(KeyUnavailableError):
+        numeric = model is RegulatoryPackage or (
+            not identity and model in {BiDashboardVersion, BiSubscription, BiAlert}
+        )
+        if numeric:
             if refresh:
                 assert entity is not None
                 db_session.refresh(entity)
             else:
-                db_session.scalar(select(model))
+                entity = db_session.scalar(select(model))
+            assert entity is not None
+            if isinstance(entity, RegulatoryPackage):
+                assert isinstance(entity.snapshot, dict)
+            elif isinstance(entity, BiDashboardVersion):
+                assert entity.spec == {"borrower": NAME}
+            elif isinstance(entity, BiSubscription):
+                assert entity.query == {"borrower": NAME}
+            else:
+                assert isinstance(entity, BiAlert) and entity.filters == [{"borrower": NAME}]
+        else:
+            with pytest.raises(KeyUnavailableError):
+                if refresh:
+                    assert entity is not None
+                    db_session.refresh(entity)
+                    if isinstance(entity, CanonicalCounterparty):
+                        _ = entity.name
+                else:
+                    entity = db_session.scalar(select(model).options(undefer("*")))
         db_session.rollback()
     assert raw_fields(db_session) == stored
     assert (

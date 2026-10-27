@@ -27,6 +27,7 @@ from app.services import job_queue
 from app.storage import reencryption as objects
 from app.storage.client import (
     EncryptionCursor,
+    EncryptionInventoryItem,
     EncryptionPage,
     StorageAccessError,
     StorageBackendError,
@@ -52,6 +53,18 @@ ClientError = cast(
     Callable[[dict[str, object], str], Exception],
     import_module("botocore.exceptions").ClientError,
 )
+
+
+def inventory_items(bank_storage: BankStorage) -> list[EncryptionInventoryItem]:
+    cursor: EncryptionCursor | None = EncryptionCursor()
+    items: list[EncryptionInventoryItem] = []
+    while cursor is not None:
+        page = bank_storage.storage.encryption_page(SLUG, cursor, 2)
+        assert len(page.items) <= 2
+        assert page.cursor != cursor
+        items.extend(page.items)
+        cursor = page.cursor
+    return items
 
 
 def claim_large_object_job(db_session: Session, bank_storage: BankStorage) -> Job:
@@ -136,9 +149,7 @@ def test_large_object_copy_runs_alone_and_rechecks_at_atomic_publication(
         assert stream.read() == (replacement if concurrent_write else content)
     finally:
         stream.close()
-    [current] = [
-        item for item in bank_storage.storage.encryption_inventory(SLUG) if item.location == large
-    ]
+    [current] = [item for item in inventory_items(bank_storage) if item.location == large]
     assert current.envelope_id == final.target_version
 
 
@@ -264,7 +275,7 @@ def test_title_cased_metadata_migrates_editable_ciphertext(
     job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.summary == "complete" and progress.objects_rewritten == 1
-    [current] = list(bank_storage.storage.encryption_inventory(SLUG))
+    [current] = list(inventory_items(bank_storage))
     assert current.envelope_id == progress.target_version
     assert current.envelope_id != original_envelope and not current.retained
     descriptor, plaintext = bank_storage.storage.read(location)
@@ -315,7 +326,7 @@ def test_title_cased_deleted_history_keeps_its_envelope_and_retirement_hold(
     assert progress.retained == {"stored_object_versions:raw": 1}
     assert progress.objects_rewritten == 0
     assert db_session.get(ObjectKeyEnvelope, original_envelope) is not None
-    [retained] = list(bank_storage.storage.encryption_inventory(SLUG))
+    [retained] = list(inventory_items(bank_storage))
     assert retained.retained and retained.envelope_id == original_envelope
     assert retained.version_id == stored.version_id
     assert not bank_storage.storage.exists(location)
@@ -348,13 +359,13 @@ def test_legacy_object_conversion_authenticates_checksum_and_retains_source(
     )
     with pytest.raises(StorageAccessError):
         bank_storage.storage.read(location)
-    [item] = list(bank_storage.storage.encryption_inventory(SLUG))
+    [item] = list(inventory_items(bank_storage))
     assert item.envelope_id is None and not item.retained
     assert bank_storage.storage.reencrypt(item)
     _, body = bank_storage.storage.read(location)
     assert body.read() == content
     body.close()
-    versions = list(bank_storage.storage.encryption_inventory(SLUG))
+    versions = list(inventory_items(bank_storage))
     assert len(versions) == 2
     assert sum(v.retained for v in versions) == 1
     current = next(v for v in versions if not v.retained)
@@ -377,7 +388,7 @@ def assert_reencrypted_versions(
         descriptor.metadata.checksum_sha256
         == metadata_for(SLUG, location.tier, content).checksum_sha256
     )
-    versions = list(bank_storage.storage.encryption_inventory(SLUG))
+    versions = list(inventory_items(bank_storage))
     current = next(version for version in versions if not version.retained)
     assert current.envelope_id is not None
     assert len(versions) == (2 if location.tier == "raw" else 1)
@@ -434,7 +445,7 @@ def test_reencryption_uses_head_denied_fallback_and_closes_metadata_streams(
 
     monkeypatch.setattr(bank_storage.s3, "head_object", denied_head)
     monkeypatch.setattr(client, "get_object", tracked_get)
-    [item] = list(bank_storage.storage.encryption_inventory(SLUG))
+    [item] = list(inventory_items(bank_storage))
     assert item.version_id == version_id and item.envelope_id is None and not item.retained
     assert denied == [version_id]
     assert len(responses) == 1
@@ -465,7 +476,7 @@ def test_head_denied_fallback_preserves_new_object_holds(
         Body=b"synthetic held data",
         Metadata=metadata_for(SLUG, "raw", b"synthetic held data").to_object_metadata(),
     )
-    [item] = list(bank_storage.storage.encryption_inventory(SLUG))
+    [item] = list(inventory_items(bank_storage))
     client = cast(objects.S3MaintenanceClient, bank_storage.s3)
     get_object = client.get_object
     bodies: list[BinaryIO] = []
@@ -492,7 +503,7 @@ def test_head_denied_fallback_preserves_new_object_holds(
     monkeypatch.setattr(bank_storage.s3, "head_object", denied_head)
     monkeypatch.setattr(client, "get_object", held_get)
     assert not bank_storage.storage.reencrypt(item)
-    [retained] = list(bank_storage.storage.encryption_inventory(SLUG))
+    [retained] = list(inventory_items(bank_storage))
     assert retained.retained and retained.version_id == stored["VersionId"]
     assert retained.envelope_id is None
     assert len(bodies) == 2 and all(body.closed for body in bodies)
@@ -506,10 +517,10 @@ def test_bad_legacy_checksum_is_not_published(bank_storage: BankStorage) -> None
         Body=b"corrupt",
         Metadata=metadata_for(SLUG, "temp", b"original").to_object_metadata(),
     )
-    [item] = list(bank_storage.storage.encryption_inventory(SLUG))
+    [item] = list(inventory_items(bank_storage))
     with pytest.raises(StorageAccessError, match="checksum"):
         bank_storage.storage.reencrypt(item)
-    assert len(list(bank_storage.storage.encryption_inventory(SLUG))) == 1
+    assert len(list(inventory_items(bank_storage))) == 1
 
 
 def test_object_resume_after_publication_keeps_retained_version_and_retirement_block(
@@ -552,7 +563,7 @@ def test_object_resume_after_publication_keeps_retained_version_and_retirement_b
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.summary == "complete except 1 retained immutable records"
     assert progress.retained == {"stored_object_versions:canonical": 1}
-    versions = list(bank_storage.storage.encryption_inventory(SLUG))
+    versions = list(inventory_items(bank_storage))
     assert len(versions) == 2 and any(v.envelope_id == original and v.retained for v in versions)
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
     with pytest.raises(KeyUnavailableError, match="retention"):
@@ -573,7 +584,7 @@ def test_conditional_publication_preserves_concurrent_new_content(
         Body=original,
         Metadata=metadata_for(SLUG, "temp", original).to_object_metadata(),
     )
-    [item] = list(bank_storage.storage.encryption_inventory(SLUG))
+    [item] = list(inventory_items(bank_storage))
     client = cast(objects.S3MaintenanceClient, bank_storage.s3)
     aborted: list[object] = []
     original_etag = bank_storage.s3.head_object(
@@ -625,7 +636,7 @@ def test_large_object_reencryption_publishes_bounded_parts(
         Body=content,
         Metadata=metadata_for(SLUG, "temp", content).to_object_metadata(),
     )
-    [item] = list(bank_storage.storage.encryption_inventory(SLUG))
+    [item] = list(inventory_items(bank_storage))
     client = cast(objects.S3MaintenanceClient, bank_storage.s3)
     parts: list[int] = []
 
@@ -717,7 +728,7 @@ def test_object_job_uses_bounded_inventory_pages(
     monkeypatch.setattr(objects, "inventory_page", real_inventory_page)
     assert all(
         item.envelope_id == progress.target_version
-        for item in bank_storage.storage.encryption_inventory(SLUG)
+        for item in inventory_items(bank_storage)
         if not item.retained
     )
 
@@ -888,9 +899,7 @@ def test_database_pin_retains_only_its_location_with_a_null_version(
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.retained == {"stored_object_versions:temp": 1}
     assert progress.objects_rewritten == 1
-    inventory = {
-        item.location.object_path: item for item in bank_storage.storage.encryption_inventory(SLUG)
-    }
+    inventory = {item.location.object_path: item for item in inventory_items(bank_storage)}
     assert inventory["pinned.csv"].envelope_id is None
     assert inventory["editable.csv"].envelope_id is not None
 
@@ -968,7 +977,7 @@ def test_versioning_transition_keeps_null_version_envelope_and_blocks_retirement
     assert progress.retained == {"stored_object_versions:temp": 1}
     assert progress.objects_rewritten == 0
     assert db_session.get(ObjectKeyEnvelope, original_envelope) is not None
-    versions = list(bank_storage.storage.encryption_inventory(SLUG))
+    versions = list(inventory_items(bank_storage))
     assert len(versions) == 2
     predecessor = next(item for item in versions if item.version_id == "null")
     assert predecessor.retained and predecessor.envelope_id == original_envelope
@@ -1019,7 +1028,7 @@ def test_versioned_pin_keeps_original_while_current_object_moves(
     job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
     db_session.commit()
     job = drain(db_session, job, bank_storage.storage)
-    versions = list(bank_storage.storage.encryption_inventory(SLUG))
+    versions = list(inventory_items(bank_storage))
     assert len(versions) == 2
     assert any(v.envelope_id == original and v.retained for v in versions)
     assert all(v.envelope_id != original for v in versions if not v.retained)

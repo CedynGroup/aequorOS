@@ -41,6 +41,7 @@ from tests.core.test_bank_field_encryption import (
 )
 from tests.core.test_bank_reencryption import EmptyStorage
 from tests.support.helpers import ORG_1
+from tests.support.key_concurrency import assert_blocked, backend_pid
 from tests.support.reencryption import drain
 
 __all__ = ["provider"]
@@ -303,31 +304,22 @@ def test_duplicate_concurrent_batch_publishes_one_continuation(
 def test_first_connection_waits_for_earlier_plaintext_writer_and_indexes_it(
     db_session: Session,
     provider: LocalKeyProvider,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     database = engine(db_session)
     db_session.commit()
     row_id = counterparty(db_session, include_package=False).id
-    entered = Event()
-    real_lock = maintenance.lock_bank
-
-    def observed_lock(
-        db: Session, organization: str, bank: str, *, exclusive: bool = False
-    ) -> None:
-        if exclusive:
-            entered.set()
-        real_lock(db, organization, bank, exclusive=exclusive)
-
-    monkeypatch.setattr(maintenance, "lock_bank", observed_lock)
+    blocker = backend_pid(db_session)
+    waiter: Future[int] = Future()
 
     def connection() -> None:
         with Session(database) as peer:
+            waiter.set_result(backend_pid(peer))
             connect(peer, provider)
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(connection)
         try:
-            assert entered.wait(5) and not future.done()
+            assert_blocked(database, blocker, waiter.result(timeout=5), future)
         finally:
             db_session.commit()
         future.result(timeout=20)
@@ -353,39 +345,27 @@ def test_first_connection_waits_for_earlier_plaintext_writer_and_indexes_it(
 def test_job_drains_writer_admitted_before_rotation_and_migrates_its_commit(
     db_session: Session,
     provider: LocalKeyProvider,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     database = engine(db_session)
     connect(db_session, provider)
     late = counterparty(db_session, include_package=False)
     late_id = late.id
-    with Session(database) as peer:
-        key = registry.scoped_key(peer, organization_id=ORG_1, bank_id=BANK_A)
-        registry.rotate(peer, key, NEXT, lambda _: provider)
-        job_id = reencryption.enqueue(peer, ORG_1, BANK_A).id
-        peer.commit()
-    entered = Event()
-    real_lock = maintenance.lock_bank
-
-    def observed_lock(
-        db: Session, organization: str, bank: str, *, exclusive: bool = False
-    ) -> None:
-        if exclusive:
-            entered.set()
-        real_lock(db, organization, bank, exclusive=exclusive)
-
-    monkeypatch.setattr(maintenance, "lock_bank", observed_lock)
+    blocker = backend_pid(db_session)
+    waiter: Future[int] = Future()
 
     def migrate() -> None:
         with Session(database) as peer:
-            job = peer.get(Job, job_id)
-            assert job is not None
-            job = drain(peer, job, EmptyStorage())
+            waiter.set_result(backend_pid(peer))
+            key = registry.scoped_key(peer, organization_id=ORG_1, bank_id=BANK_A)
+            registry.rotate(peer, key, NEXT, lambda _: provider)
+            job = reencryption.enqueue(peer, ORG_1, BANK_A)
+            peer.commit()
+            _ = drain(peer, job, EmptyStorage())
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(migrate)
         try:
-            assert entered.wait(5) and not future.done()
+            assert_blocked(database, blocker, waiter.result(timeout=5), future)
         finally:
             db_session.commit()
         future.result(timeout=30)

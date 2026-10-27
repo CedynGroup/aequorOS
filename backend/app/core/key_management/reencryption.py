@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 from sqlalchemy import JSON, ColumnElement, String, delete, or_, select, text
 from sqlalchemy.orm import Session
 
-from app.core.key_management import maintenance, registry
+from app.core.key_management import fields, maintenance, registry
 from app.core.key_management.fields import ProtectedField, SealedField
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
 from app.core.key_management.types import KeyUnavailableError
@@ -180,13 +180,24 @@ def _fields(db: Session, key: BankEncryptionKey, progress: Progress, deadline: f
                 if not isinstance(column.type, ProtectedField):
                     continue
                 value = row[column.name]
+                kind = column.type
                 if column.name in maintenance.IMMUTABLE_FIELDS.get(table.name, set()):
-                    if isinstance(value, SealedField):
-                        references.add(value.envelope_id)
-                    retained |= value is not None and (
-                        not isinstance(value, SealedField)
-                        or value.envelope_id != progress.target_version
-                    )
+
+                    def retain(item: object, _path: str = "") -> object:
+                        nonlocal retained
+                        if isinstance(item, dict) and fields.FORMAT in item:
+                            item = kind.decode(cast(dict[str, object], item)[fields.FORMAT])
+                        if isinstance(item, SealedField):
+                            references.add(item.envelope_id)
+                            retained |= item.envelope_id != progress.target_version
+                        elif item is not None:
+                            retained = True
+                        return item
+
+                    if isinstance(value, SealedField) or kind.protected_members is None:
+                        _ = retain(value)
+                    else:
+                        _ = fields.identity_values(value, kind.protected_members, retain)
             if retained:
                 progress.retained[table.name] = progress.retained.get(table.name, 0) + 1
         progress.after = cast(UUID, row["id"])
