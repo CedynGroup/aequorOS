@@ -370,7 +370,8 @@ def test_redrive_dedup_reenqueues_and_audits_the_failure_it_recovers_from(
     assert batch.dedup_status == dedup_status and batch.etl_report == before
     board = operator_client.get("/operator/v1/jobs/stuck-dedup", headers=operator_headers())
     assert board.status_code == 200, board.text
-    assert str(batch.id) in {row["batch_id"] for row in board.json()["batches"]}
+    board_body = cast(dict[str, list[dict[str, object]]], board.json())
+    assert str(batch.id) in {row["batch_id"] for row in board_body["batches"]}
     session_id = start_inspection(operator_client, organization_id)
 
     response = operator_client.post(

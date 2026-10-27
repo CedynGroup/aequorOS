@@ -5,6 +5,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
 from typing import Literal
+from uuid import UUID
 
 import pytest
 from botocore.exceptions import EndpointConnectionError  # pyright: ignore[reportMissingTypeStubs]
@@ -488,24 +489,7 @@ def test_bulk_fields_and_objects_unwrap_once_per_version_and_discard_on_boundary
         bank_storage.storage.for_session(db_session).read(location)
 
 
-@pytest.mark.parametrize("download", ["attachment", "email-fallback"])
-def test_package_download_siblings_wait_for_rotation(
-    bank_storage: BankStorage,
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-    download: str,
-) -> None:
-
-    database = db_session.get_bind()
-    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
-        pytest.skip("PostgreSQL independent connections are required.")
-
-    def providers(_name: str) -> LocalKeyProvider:
-        return bank_storage.provider
-
-    monkeypatch.setattr(registry, "provider_for", providers)
-    monkeypatch.setattr(ingest_data, "get_storage_client", lambda: bank_storage.storage)
-    monkeypatch.setattr(exports, "get_storage_client", lambda: bank_storage.storage)
+def _download_package(db_session: Session, bank_storage: BankStorage) -> tuple[UUID, UUID]:
     package = _package(db_session)
     exports.export_package(db_session, CTX, package, "csv")
     bank = db_session.get(Bank, BANK_A)
@@ -525,6 +509,28 @@ def test_package_download_siblings_wait_for_rotation(
     package_id = package.id
     db_session.commit()
     db_session.expunge_all()
+    return package_id, attached.id
+
+
+@pytest.mark.parametrize("download", ["attachment", "email-fallback"])
+def test_package_download_siblings_wait_for_rotation(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    download: str,
+) -> None:
+
+    database = db_session.get_bind()
+    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL independent connections are required.")
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return bank_storage.provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    monkeypatch.setattr(ingest_data, "get_storage_client", lambda: bank_storage.storage)
+    monkeypatch.setattr(exports, "get_storage_client", lambda: bank_storage.storage)
+    package_id, attachment_id = _download_package(db_session, bank_storage)
     loaded, rotating, release = Event(), Event(), Event()
     blocker: Future[int] = Future()
     waiter: Future[int] = Future()
@@ -555,7 +561,9 @@ def test_package_download_siblings_wait_for_rotation(
             assert release.wait(10)
 
     suffix = (
-        f"attachments/{attached.id}/download" if download == "attachment" else "email-fallback.eml"
+        f"attachments/{attachment_id}/download"
+        if download == "attachment"
+        else "email-fallback.eml"
     )
     with TestClient(app) as client, ThreadPoolExecutor(max_workers=2) as pool:
         rotation = pool.submit(rotate)
