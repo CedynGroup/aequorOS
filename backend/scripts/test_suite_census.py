@@ -108,7 +108,7 @@ def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:  # noqa:
         if consumers[nodeid] & uncertain_fixtures:
             uncertain.add(nodeid)
         passed = dict(phases) == {"setup": "passed", "call": "passed", "teardown": "passed"}
-        if not passed or nodeid in uncertain:
+        if not database and (not passed or nodeid in uncertain):
             inconclusive[nodeid] = (
                 "unconfirmed Python child" if nodeid in uncertain else str(dict(phases))
             )

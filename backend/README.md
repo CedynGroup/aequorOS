@@ -477,9 +477,11 @@ The observer records driver connection attempts and SQLAlchemy pooled checkouts
 across setup, call, teardown, shared fixtures and inherited Python subprocesses.
 An attempted acquisition counts as database use even when it fails or is caught:
 the unit guard must not replace a driver's expected refusal. A fully passing case
-with no observed use is unit-owned. Skipped/failed cases and Python children that
-do not confirm instrumentation cannot prove database freedom, so they retain
-integration ownership and appear in `inconclusive.json`. A skipped case is not
+with no observed use is unit-owned. Positive acquisition evidence proves integration
+ownership even when execution fails or a child does not confirm instrumentation;
+neither profile may replace it with proven unit ownership. Without an acquisition,
+skipped/failed cases and unconfirmed children retain conservative integration
+ownership and appear in `inconclusive.json`. A skipped case is not
 proof that an integration test could be moved; run its applicable profile to obtain
 evidence. This preserves explicit ownership without changing product assertions.
 
