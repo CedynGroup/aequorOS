@@ -1,9 +1,8 @@
 """Model↔migration parity for the things the column checks do NOT cover.
 
-Audit finding A8-05. Two suites already compare the migrated schema to the model:
-one on column type, length and nullability, one on CHECK constraint names and the
-values each admits. Between them they miss three structural facts, and each has a
-different failure mode when it drifts:
+Column type, length, nullability and CHECK parity live in
+``test_bi_owned_tables_parity.py``. This suite checks three additional structural
+facts, each with a different failure mode when it drifts:
 
 * **Primary key ORDER.** A partitioned table requires its range column to LEAD the
   key, and the model test that asserts that reads the MODEL only. If a migration
