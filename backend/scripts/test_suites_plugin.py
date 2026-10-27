@@ -45,7 +45,7 @@ def _install(config: pytest.Config) -> None:
 
 def pytest_load_initial_conftests(early_config: pytest.Config) -> None:
     if (
-        not os.getenv("CI_DATABASE_CENSUS")
+        os.getenv("CI_DATABASE_CENSUS") != "1"
         and cast(object, early_config.known_args_namespace.markexpr) == "unit"
     ):
         _install(early_config)
@@ -71,7 +71,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    if os.getenv("CI_DATABASE_CENSUS"):
+    if os.getenv("CI_DATABASE_CENSUS") == "1":
         return
     nodeids = [item.nodeid for item in items]
     if len(set(nodeids)) != len(nodeids):
@@ -114,7 +114,7 @@ def pytest_collection_finish(session: pytest.Session) -> None:
 def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
     # Combined/local selections get the same refusal before fixture setup.
     if (
-        os.getenv("CI_DATABASE_CENSUS")
+        os.getenv("CI_DATABASE_CENSUS") == "1"
         or item.get_closest_marker("unit") is None
         or _PATCHES in item.config.stash
     ):
