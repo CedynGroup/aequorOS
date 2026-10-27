@@ -579,16 +579,20 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
   prerequisites (object storage included) are owned by the
   [dashboard end-to-end guide](dashboard/README.md#end-to-end-playwright); for SSO, see its
   [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).
-  **Test databases are built once per pytest process, never per test**
+  **Default shared test databases are built once per pytest process**
   (`backend/tests/conftest.py`): tenant API rollback-isolated tests share one
   schema through a savepoint-bound sessionmaker, and `@pytest.mark.committing_db`
   tests share a second schema that is TRUNCATEd and reseeded before each test.
-  Both tenant fixture families reuse one application per process. Operator tests
-  reuse a separate application and SQLite database, with the same rollback isolation
+  Both default tenant fixture families reuse one application per process. Bank audit
+  API tests reuse a module-scoped migrated schema and lazily constructed application
+  (`tests/identity/api/test_audit_log.py`), with fresh clients, per-test rollback and
+  `aqs_api` authority for HTTP database dependencies; the dependency override is
+  restored at teardown. Operator tests reuse a separate application and SQLite database,
+  with the same rollback isolation
   (`tests/operator/conftest.py`). Each client is function-scoped, with storage
-  dependency overrides removed at teardown. Only `tests/db` migration tests build
-  schemas of their own. A test that needs a fresh schema is the exception to justify,
-  not the default to reach for.
+  dependency overrides removed at teardown. Migration tests and feature-local fixtures
+  requiring migrated DDL build isolated schemas of their own. A test that needs a
+  fresh schema is the exception to justify, not the default to reach for.
   `risk-service:test-postgres-suite` runs under pytest-xdist (`-n 4 --dist loadfile`),
   using at most four workers. Each worker lazily builds its own rollback and
   committing schemas as needed, and a module's tests stay on one worker. CI's
