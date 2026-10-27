@@ -43,6 +43,10 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
         "        \"import sqlite3; sqlite3.connect(':memory:')\"], env={}, check=True)\n"
         "@pytest.mark.parametrize('number', [1, 2])\n"
         "def test_pure(number): assert number > 0\n"
+        "@pytest.fixture(scope='module', params=[0, 1])\n"
+        "def conditional(request):\n    yield request.param\n"
+        "    if request.param == 0: __import__('sqlite3').connect(':memory:').close()\n"
+        "def test_transition(conditional): assert conditional in (0, 1)\n"
         "def test_skipped(): pytest.skip('inapplicable profile')\n"
     )
     evidence = tmp_path / "evidence"
@@ -80,6 +84,8 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
         },
         "test_probe.py::test_pure[1]": "unit",
         "test_probe.py::test_pure[2]": "unit",
+        "test_probe.py::test_transition[0]": "integration",
+        "test_probe.py::test_transition[1]": "unit",
     }
     assert set(inconclusive) == {"test_probe.py::test_skipped"}
     catalogue = tmp_path / "suites.json"

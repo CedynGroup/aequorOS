@@ -57,6 +57,7 @@ def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:  # noqa:
     fixture_database: set[str] = set()
     instrumented = {_process(e) for e in events if e["kind"] == "instrumented"}
     uncertain: set[str] = set()
+    uncertain_fixtures: set[str] = set()
     for event in events:
         kind = event["kind"]
         nodeid = cast(str, event.get("nodeid", ""))
@@ -69,14 +70,18 @@ def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:  # noqa:
         elif kind == "database":
             fixtures = _fixtures(event)
             fixture_database.update(fixtures)
-            if nodeid:
+            if nodeid and not fixtures:
                 direct.add(nodeid)
-            elif not fixtures:
+            elif not nodeid and not fixtures:
                 raise ValueError("Database use outside a test or tracked fixture")
         elif kind == "python_child" and _process(event, "child") not in instrumented:
-            if not nodeid:
+            fixtures = _fixtures(event)
+            if fixtures:
+                uncertain_fixtures.update(fixtures)
+            elif nodeid:
+                uncertain.add(nodeid)
+            else:
                 raise ValueError("Uninstrumented Python child outside a test")
-            uncertain.add(nodeid)
     if set(selections) != sessions:
         raise ValueError("Missing selected-test observation manifest")
     # xdist workers each collect the same selection. Execution reports, rather
@@ -94,6 +99,8 @@ def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:  # noqa:
         if any(count > 1 for count in counts.values()):
             raise ValueError(f"Duplicate execution observation: {nodeid}")
         database = nodeid in direct or bool(consumers[nodeid] & fixture_database)
+        if consumers[nodeid] & uncertain_fixtures:
+            uncertain.add(nodeid)
         passed = dict(phases) == {"setup": "passed", "call": "passed", "teardown": "passed"}
         if not passed or nodeid in uncertain:
             inconclusive[nodeid] = (
