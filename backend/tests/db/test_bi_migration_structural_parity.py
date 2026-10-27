@@ -40,11 +40,11 @@ from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.db.base import Base
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
-    migrated_postgres_schema,
+    catalog_postgres_schema,
     postgres_schema_url,
 )
 
-__all__ = ["migrated_postgres_schema", "postgres_schema_url"]
+__all__ = ["catalog_postgres_schema", "postgres_schema_url"]
 
 pytestmark = [
     pytest.mark.committing_db,
@@ -103,16 +103,16 @@ def test_the_subject_is_not_derived_from_the_bi_prefix_alone() -> None:
 
 
 def test_primary_key_columns_and_their_ORDER_match_the_model(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    inspector = inspect(migrated_postgres_schema.app_engine)
+    inspector = inspect(catalog_postgres_schema.app_engine)
     drift: list[str] = []
     for table_name in ALL_BI_TABLES:
         model = [column.name for column in Base.metadata.tables[table_name].primary_key]
         migrated = list(
-            inspector.get_pk_constraint(
-                table_name, schema=migrated_postgres_schema.schema_name
-            ).get("constrained_columns")
+            inspector.get_pk_constraint(table_name, schema=catalog_postgres_schema.schema_name).get(
+                "constrained_columns"
+            )
             or []
         )
         if model != migrated:
@@ -129,10 +129,10 @@ def test_primary_key_columns_and_their_ORDER_match_the_model(
 
 
 def test_every_foreign_key_is_the_composite_that_pins_the_tenant(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     """The composite is what stops a child pointing at another tenant's parent."""
-    inspector = inspect(migrated_postgres_schema.app_engine)
+    inspector = inspect(catalog_postgres_schema.app_engine)
     drift: list[str] = []
     for table_name in ALL_BI_TABLES:
         table = Base.metadata.tables[table_name]
@@ -150,7 +150,7 @@ def test_every_foreign_key_is_the_composite_that_pins_the_tenant(
                 (fk["referred_table"],) * len(fk["constrained_columns"]),
             )
             for fk in inspector.get_foreign_keys(
-                table_name, schema=migrated_postgres_schema.schema_name
+                table_name, schema=catalog_postgres_schema.schema_name
             )
         }
         if model != migrated:
@@ -166,7 +166,7 @@ def test_every_foreign_key_is_the_composite_that_pins_the_tenant(
 
 
 def test_every_declared_index_exists_in_the_migration(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     """A missing index fails nothing and costs everything.
 
@@ -174,7 +174,7 @@ def test_every_declared_index_exists_in_the_migration(
     planner simply does more work, which is how a twelve-month question came to
     scan sixty partitions this week.
     """
-    inspector = inspect(migrated_postgres_schema.app_engine)
+    inspector = inspect(catalog_postgres_schema.app_engine)
     missing: list[str] = []
     for table_name in ALL_BI_TABLES:
         declared = {index.name for index in Base.metadata.tables[table_name].indexes if index.name}
@@ -183,7 +183,7 @@ def test_every_declared_index_exists_in_the_migration(
         migrated = {
             index["name"]
             for index in inspector.get_indexes(
-                table_name, schema=migrated_postgres_schema.schema_name
+                table_name, schema=catalog_postgres_schema.schema_name
             )
             if index.get("name")
         }
