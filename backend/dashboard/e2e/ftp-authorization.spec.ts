@@ -95,7 +95,13 @@ test.describe("FTP reader without run permission", () => {
     const preview = page.getByRole("button", { name: "Preview FTP what-if" });
     await expect(preview).toBeVisible();
     await expect(preview).toBeDisabled();
+    // Selecting the reporting period remounts the form; focus its ready instance.
+    await expect(page.getByText(/^As of \d/)).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Base FTP scenario" }),
+    ).toHaveValue("system:baseline");
     await preview.locator("..").focus();
+    await expect(preview.locator("..")).toBeFocused();
     await expect(preview.locator("..")).toHaveAccessibleDescription(
       /Requires FTP · Confidential · Run/i,
     );

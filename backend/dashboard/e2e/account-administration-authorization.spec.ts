@@ -22,7 +22,9 @@ test.describe("explicit Account administrator", () => {
     // the Command Center, so the guard routes to Access — not 404.
     await page.goto("/");
     await expect(page).toHaveURL(/\/access(?:[/?#]|$)/);
-    await expect(page.getByText(/404|not found/i)).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Access control", exact: true }),
+    ).toBeVisible();
     await page.goto("/access/authentication");
     await expect(
       page.getByRole("heading", { name: "Authentication (SSO)" }),
