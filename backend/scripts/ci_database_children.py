@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import os
+import subprocess
+import time
 from pathlib import Path
 from typing import cast
 
@@ -34,3 +37,33 @@ def python_path(previous: str) -> str:
     backend = Path(__file__).resolve().parents[1]
     paths = [str(backend / "scripts/ci_no_database"), str(backend), *previous.split(os.pathsep)]
     return os.pathsep.join(dict.fromkeys(paths))
+
+
+def wait_for_startup(
+    process: subprocess.Popen[bytes], environment: dict[str, str], command: object
+) -> None:
+    """Confirm instrumentation before a caller can immediately terminate Python."""
+    directory = environment.get("CI_DATABASE_OBSERVATIONS")
+    if not directory or not isinstance(command, (list, tuple)) or not command:
+        return
+    if not Path(str(cast(list[object], command)[0])).name.startswith("python"):
+        return
+    context = cast(dict[str, object], json.loads(environment.get("CI_DATABASE_CONTEXT", "{}")))
+    path = Path(directory) / f"events-{process.pid}.jsonl"
+    deadline = time.monotonic() + 5
+    while True:
+        if path.exists():
+            for line in path.read_text().splitlines():
+                try:
+                    event = cast(dict[str, object], json.loads(line))
+                except ValueError:
+                    continue
+                if (
+                    event.get("kind") == "instrumented"
+                    and event.get("nodeid", "") == context.get("nodeid", "")
+                    and event.get("fixtures", []) == context.get("fixtures", [])
+                ):
+                    return
+        if process.poll() is not None or time.monotonic() >= deadline:
+            return
+        time.sleep(0.01)

@@ -485,7 +485,11 @@ evidence. This preserves explicit ownership without changing product assertions.
 
 The unit CI owner also starts disposable MinIO and OpenBao for storage/signing
 cases that use those HTTP services without opening a database. PostgreSQL is never
-provisioned there, and connection refusal stays active. Locally, provide the
+provisioned there, and connection refusal stays active. The managed MinIO endpoint
+is scoped to storage/schema packages, matching their existing service owners;
+production-TLS and mocked AWS tests elsewhere retain their ordinary endpoint
+configuration. Tests can still set an explicit endpoint in their own fixtures.
+Locally, provide the
 corresponding S3/OpenBao test settings to exercise those service-gated cases.
 
 Every CI owner emits the same observations alongside its JUnit report. The final

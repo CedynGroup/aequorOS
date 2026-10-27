@@ -33,9 +33,6 @@ def catalogue() -> tuple[dict[str, Suite], dict[str, Suite]]:
         dict[str, dict[str, str]],
         json.loads(CATALOGUE.read_text(), object_pairs_hook=_unique_object),
     )
-    # Transitional read while the first full census replaces the old catalogue.
-    if "cases" not in raw:
-        return cast(dict[str, Suite], raw["modules"]), cast(dict[str, Suite], raw["overrides"])
     cases = raw["cases"]
     if not cases or any(value not in ("unit", "integration") for value in cases.values()):
         raise ValueError("Test suite must be unit or integration")

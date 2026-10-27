@@ -7,7 +7,8 @@ import os
 import tempfile
 import xml.etree.ElementTree as ET
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import cast
 
@@ -112,22 +113,38 @@ def pytest_collection_finish(session: pytest.Session) -> None:
         raise pytest.UsageError("Unit CI owner dropped or duplicated unit tests")
 
 
-@pytest.hookimpl(hookwrapper=True, tryfirst=True)
-def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
-    # Combined/local selections get the same refusal before fixture setup.
-    if (
-        os.getenv("CI_DATABASE_CENSUS") == "1"
-        or item.get_closest_marker("unit") is None
-        or _PATCHES in item.config.stash
-    ):
-        yield
-        return
-    _install(item.config)
+@contextmanager
+def _managed_storage_environment(item: pytest.Item) -> Generator[None]:
+    # MinIO is provisioned for storage/schema contracts in CI. Its HTTP endpoint
+    # must not become ambient application configuration for production-TLS or
+    # mocked AWS provisioning tests elsewhere in the tree.
+    patches = pytest.MonkeyPatch()
+    managed = os.getenv("CI_DATABASE_CENSUS") == "1" or bool(os.getenv("CI_UNIT_REPORT_DIR"))
+    if managed and not item.nodeid.startswith(("tests/storage/", "tests/db/")):
+        patches.delenv("S3_ENDPOINT", raising=False)
     try:
         yield
     finally:
-        item.config.stash[_PATCHES].undo()
-        del item.config.stash[_PATCHES]
+        patches.undo()
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
+    # Combined/local selections get the same refusal before fixture setup.
+    with _managed_storage_environment(item):
+        if (
+            os.getenv("CI_DATABASE_CENSUS") == "1"
+            or item.get_closest_marker("unit") is None
+            or _PATCHES in item.config.stash
+        ):
+            yield
+            return
+        _install(item.config)
+        try:
+            yield
+        finally:
+            item.config.stash[_PATCHES].undo()
+            del item.config.stash[_PATCHES]
 
 
 @pytest.hookimpl(tryfirst=True)

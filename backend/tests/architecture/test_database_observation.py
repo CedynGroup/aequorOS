@@ -123,6 +123,7 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     )
     assert isolated_result.returncode == 0, isolated_result.stdout + isolated_result.stderr
     assert (tmp_path / "isolated-attempts.txt").read_text()
+    _assert_managed_service_scope(tmp_path)
     jobs = tmp_path / "jobs"
     for job, database in (("unit", False), ("integration", True)):
         job_dir = jobs / job
@@ -164,6 +165,41 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     )
     generate(evidence, catalogue, supplement)
     assert json.loads(catalogue.read_text())["cases"][node] == "unit"
+
+
+def _assert_managed_service_scope(tmp_path: Path) -> None:
+    scope_root = tmp_path / "service_scope"
+    (scope_root / "tests/storage").mkdir(parents=True)
+    _ = (scope_root / "tests/test_baseline.py").write_text(
+        "import os\ndef test_baseline(): assert os.getenv('S3_ENDPOINT') is None\n"
+    )
+    _ = (scope_root / "tests/storage/test_contract.py").write_text(
+        "import os\ndef test_contract(): assert os.environ['S3_ENDPOINT'] == 'http://managed.test'\n"
+    )
+    scope_program = (
+        "import os,sys; "
+        + f"os.environ['CI_DATABASE_OBSERVATIONS']={str(scope_root / 'observations')!r}; "
+        + "os.environ['CI_DATABASE_CONTEXT']='{}'; os.environ['CI_DATABASE_CENSUS']='1'; "
+        + "os.environ['S3_ENDPOINT']='http://managed.test'; "
+        + "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
+        + "import pytest; sys.exit(pytest.main(['--rootdir=.', '-p', "
+        + "'scripts.test_suites_plugin', '-p', 'scripts.database_observation_plugin', 'tests']))"
+    )
+    scoped = subprocess.run(
+        [sys.executable, "-c", scope_program],
+        cwd=scope_root,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(BACKEND),
+            "PYTEST_ADDOPTS": "",
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert scoped.returncode == 0, scoped.stdout + scoped.stderr
 
 
 @pytest.mark.parametrize(

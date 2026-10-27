@@ -22,7 +22,7 @@ from typing import cast
 import psycopg
 from sqlalchemy import Engine
 
-from scripts.ci_database_children import instrument_command, python_path
+from scripts.ci_database_children import instrument_command, python_path, wait_for_startup
 
 DIRECTORY_ENV = "CI_DATABASE_OBSERVATIONS"
 CONTEXT_ENV = "CI_DATABASE_CONTEXT"
@@ -109,6 +109,8 @@ def install() -> None:
         else:
             kwargs["args"] = replacement
         original_popen(*args, **kwargs)
+        if args:
+            wait_for_startup(cast(subprocess.Popen[bytes], args[0]), environment, command)
         # Launchers must confirm instrumentation; an unconfirmed child cannot
         # establish database freedom. Isolated inline programs use stdlib tracing.
         command = args[1] if len(args) > 1 else kwargs.get("args")
