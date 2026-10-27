@@ -67,7 +67,6 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
-from sqlalchemy import create_engine
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import Session
 
@@ -76,6 +75,7 @@ from app.bi.schemas.query import BiFilterOp, BiQuery
 from app.bi.service.compiler import CompiledQuery, compile_query
 from app.bi.service.errors import BiQueryError
 from app.db.base import Base
+from tests.support.database import managed_engine, managed_session_factory
 
 BACKEND = Path(__file__).parents[2]
 BI_ROOTS = (BACKEND / "app" / "bi" / "service", BACKEND / "app" / "bi" / "domain")
@@ -506,11 +506,11 @@ queries = st.builds(_with_comparison, base_queries, comparisons)
 
 
 @pytest.fixture(scope="module")
-def probe_session() -> Iterator[Session]:
+def probe_session(request: pytest.FixtureRequest) -> Iterator[Session]:
     """An empty in-memory schema: compile needs a dialect and a pivot probe."""
-    engine = create_engine("sqlite://")
+    engine = managed_engine(request, "sqlite://")
     Base.metadata.create_all(engine)
-    session = Session(engine)
+    session = managed_session_factory(request, engine)()
     yield session
     session.close()
     engine.dispose()

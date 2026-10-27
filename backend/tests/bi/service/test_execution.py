@@ -16,7 +16,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.bi.domain.catalogue import Catalogue, catalogue
 from app.bi.models.marts import BiFactPositionDaily
@@ -26,6 +26,7 @@ from app.bi.service.compiler import CompiledQuery, compile_query
 from app.bi.service.errors import BiQueryError, BiQueryTimeout
 from app.bi.service.execution import QueryResult, execute
 from app.models import Bank
+from tests.support.database import managed_session_factory
 from tests.support.helpers import ORG_1
 
 AS_OF = date(2026, 9, 18)
@@ -162,7 +163,11 @@ def test_sqlite_skips_the_postgres_guards(
 
 
 def test_bi_session_is_used_when_configured_and_carries_the_tenant(
-    db_session: Session, cat: Catalogue, bank: Bank, monkeypatch: pytest.MonkeyPatch
+    db_session: Session,
+    cat: Catalogue,
+    bank: Bank,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     """With a BI pool configured, the statement runs on a session whose
     ``info`` names the CALLER's organization, so the RLS listener fires."""
@@ -173,8 +178,11 @@ def test_bi_session_is_used_when_configured_and_carries_the_tenant(
             seen.append(dict(self.info))
             return super().execute(statement, *args, **kwargs)
 
-    maker = sessionmaker(
-        bind=db_session.connection(), class_=_Recording, join_transaction_mode="create_savepoint"
+    maker = managed_session_factory(
+        request,
+        db_session.connection(),
+        class_=_Recording,
+        join_transaction_mode="create_savepoint",
     )
     monkeypatch.setattr(execution, "get_bi_sessionmaker", lambda: maker)
     result = execute(db_session, _by_sector(db_session, cat, bank), timeout_ms=1_000, row_cap=10)
