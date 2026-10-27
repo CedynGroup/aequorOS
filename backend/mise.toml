@@ -81,7 +81,7 @@ run = "uv run python scripts/local_services.py run --postgres --storage --role-a
 [tasks."risk-service:refresh-test-suites"]
 description = "Regenerate exact unit/integration owners from a disposable database census"
 usage = 'arg "<evidence_dir>" help="Empty directory for census evidence"'
-run = 'uv run python -m scripts.test_suite_census refresh "${usage_evidence_dir?}"' 
+run = 'uv run python -m scripts.test_suite_census refresh "${usage_evidence_dir?}"'
 
 [tasks."risk-service:test-unit"]
 description = "Run the unit suite"

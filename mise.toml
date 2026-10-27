@@ -206,4 +206,4 @@ run = "mise run risk-service:smoke"
 description = "Regenerate backend suite ownership from observed database access"
 dir = "backend"
 usage = 'arg "<evidence_dir>" help="Empty directory for census evidence"'
-run = 'mise run risk-service:refresh-test-suites "${usage_evidence_dir?}"' 
+run = 'mise run risk-service:refresh-test-suites "${usage_evidence_dir?}"'
