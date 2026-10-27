@@ -654,6 +654,7 @@ def _committing_test_database(
     monkeypatch.setattr(auth_mod, "get_sessionmaker", get_sessionmaker)
     owner = database_connections(database_url)
     _ = owner.adopt_engine(engine)
+    owner.install_application_engines(monkeypatch)
     database = _TestDatabase(
         database_url=database_url, engine=engine, seed=_shared_committing_database.seed
     )
@@ -808,25 +809,27 @@ def _real_bound_sessionmaker(monkeypatch: pytest.MonkeyPatch) -> Iterator[sessio
     get_settings.cache_clear()
     get_engine.cache_clear()
 
-    engine = get_engine(REAL_DATA_DATABASE_URL)
-    connection = engine.connect()
-    outer = connection.begin()  # NEVER committed -> the primary is never mutated
-    bound_sessionmaker = sessionmaker(
-        bind=connection,
-        join_transaction_mode="create_savepoint",
-        autoflush=False,
-        expire_on_commit=False,
-    )
-    # deps.py imported get_sessionmaker by name, so patch it there (the API path).
-    monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
-    try:
-        yield bound_sessionmaker
-    finally:
-        outer.rollback()
-        connection.close()
-        engine.dispose()
-        get_settings.cache_clear()
-        get_engine.cache_clear()
+    with database_connections(REAL_DATA_DATABASE_URL, default_schema="public") as owner:
+        engine = owner.adopt_engine(get_engine(REAL_DATA_DATABASE_URL))
+        with engine.connect() as connection:
+            outer = connection.begin()  # NEVER committed -> the primary is never mutated
+            if connection.dialect.name == "sqlite":
+                connection.exec_driver_sql("BEGIN")
+            bound_sessionmaker = managed_session_factory(
+                None,
+                connection,
+                join_transaction_mode="create_savepoint",
+                autoflush=False,
+                expire_on_commit=False,
+            )
+            # deps.py imported get_sessionmaker by name, so patch it there (the API path).
+            monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
+            try:
+                yield bound_sessionmaker
+            finally:
+                outer.rollback()
+                get_settings.cache_clear()
+                get_engine.cache_clear()
 
 
 @pytest.fixture

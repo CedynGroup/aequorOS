@@ -1,14 +1,1 @@
-{
-  "tests/conftest.py": {
-    "sqlalchemy.orm.sessionmaker": 1
-  },
-  "tests/live_data/conftest.py": {
-    "sqlalchemy.create_engine": 1
-  },
-  "tests/models/test_nullable_json_is_sql_null.py": {
-    "sqlalchemy.create_engine": 1
-  },
-  "tests/scripts/test_dr_tooling.py": {
-    "psycopg.connect": 3
-  }
-}
+{}

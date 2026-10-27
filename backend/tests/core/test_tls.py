@@ -457,11 +457,15 @@ def test_listener_runtime_requires_tls12(
 
 
 def test_postgres_plaintext_peer_cannot_receive_startup_credentials(
-    production: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    production: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     from sqlalchemy.exc import OperationalError  # noqa: PLC0415
 
     from app.db.session import get_engine  # noqa: PLC0415
+    from tests.support.database import adopt_application_engine  # noqa: PLC0415
 
     cert, _key = certificate(tmp_path)
     monkeypatch.setenv("TLS_CA_BUNDLE", str(cert))
@@ -481,8 +485,12 @@ def test_postgres_plaintext_peer_cannot_receive_startup_credentials(
 
         thread = threading.Thread(target=refuse_ssl)
         thread.start()
-        engine = get_engine(
-            f"postgresql+psycopg://synthetic:synthetic@localhost:{port}/bank?sslmode=verify-full"
+        engine = adopt_application_engine(
+            request,
+            get_engine(
+                f"postgresql+psycopg://synthetic:synthetic@localhost:{port}/bank?sslmode=verify-full"
+            ),
+            administrative=True,
         )
         try:
             with pytest.raises(OperationalError, match="does not support SSL"):

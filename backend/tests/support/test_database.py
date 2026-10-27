@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import gc
 import os
+import sqlite3
 import weakref
 from collections.abc import Callable
 from contextlib import ExitStack
@@ -22,8 +23,10 @@ from tests.support.database import (
     TestDatabaseConnections,
     adopt_application_engine,
     database_connections,
+    install_application_engines,
     install_migration_engines,
     isolated_database,
+    isolated_postgres_database,
     managed_engine,
     managed_session_factory,
 )
@@ -349,3 +352,120 @@ def test_adopting_managed_engine_preserves_original_fixture_lifetime(tmp_path: P
         shorter.resources.close()
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT 42")) == 42
+
+
+def test_native_sqlite_borrowers_roll_back_and_close_with_owner(tmp_path: Path) -> None:
+    with isolated_database(f"sqlite:///{tmp_path / 'raw.db'}") as owner:
+        with owner.sqlite_connection() as raw:
+            assert raw.execute("PRAGMA foreign_keys").fetchone() == (1,)
+            _ = raw.execute("CREATE TABLE probe (id integer primary key)")
+            _ = raw.execute("INSERT INTO probe VALUES (1)")
+            with pytest.raises(sqlite3.IntegrityError):
+                _ = raw.execute("INSERT INTO probe VALUES (1)")
+        with owner.sqlite_connection() as raw:
+            assert raw.execute("SELECT count(*) FROM probe").fetchone() == (0,)
+            owner.close()
+            with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+                _ = raw.execute("SELECT 1")
+
+
+@postgres_only
+def test_raw_autocommit_is_explicit_and_leaked_borrowers_close() -> None:
+    with isolated_database(os.environ["TEST_DATABASE_URL"]) as owner:
+        with owner.raw_connection(autocommit=True) as raw:
+            assert raw.autocommit
+            autocommit_connection = raw
+            _ = raw.execute("CREATE TABLE raw_probe (value integer)")
+            _ = raw.execute("INSERT INTO raw_probe VALUES (1)")
+        assert not autocommit_connection.autocommit
+        with owner.raw_connection() as raw:
+            assert not raw.autocommit
+            _ = raw.execute("INSERT INTO raw_probe VALUES (2)")
+        with owner.raw_connection() as raw:
+            assert raw.execute("SELECT count(*) FROM raw_probe").fetchone() == (1,)
+            owner.close()
+            assert raw.closed
+
+
+@pytest.mark.skipif(not os.getenv("POSTGRES_ADMIN_URL"), reason="Disposable cluster admin required")
+def test_database_level_fixture_drops_its_database_and_closes_raw_borrowers() -> None:
+    url = os.environ["POSTGRES_ADMIN_URL"]
+    with isolated_postgres_database(url) as owner:
+        name = owner.url.database
+        assert name is not None
+        assert name.startswith("risk_service_test_")
+        with owner.raw_connection(autocommit=True) as raw:
+            assert raw.execute("SELECT current_schema()").fetchone() == ("public",)
+            _ = raw.execute("CREATE TABLE source_probe (value integer)")
+            _ = raw.execute("INSERT INTO source_probe VALUES (1)")
+        lease = owner.raw_connection()
+        borrower = lease.__enter__()
+        assert borrower.execute("SELECT count(*) FROM source_probe").fetchone() == (1,)
+    assert borrower.closed
+    lease.__exit__(None, None, None)
+    with database_connections(url, administrative=True) as observer, observer.connection() as conn:
+        assert (
+            conn.scalar(
+                text("SELECT count(*) FROM pg_database WHERE datname = :name"), {"name": name}
+            )
+            == 0
+        )
+
+
+@pytest.mark.skipif(not os.getenv("POSTGRES_ADMIN_URL"), reason="Disposable cluster admin required")
+def test_real_application_factory_receives_hooks_before_internal_checkout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.db import session as application  # noqa: PLC0415
+
+    url = os.environ.get("POSTGRES_ADMIN_URL", os.environ["TEST_DATABASE_URL"])
+    checkouts: list[str | None] = []
+
+    def hook(engine: Engine) -> None:
+        def checked_out(_raw: object, _record: object, _proxy: object) -> None:
+            checkouts.append(owner.context.schema)
+
+        event.listen(engine, "checkout", checked_out)
+
+    application.get_engine.cache_clear()
+    with isolated_database(
+        url, hooks=(hook,), organization_id="OR-TEST", bank_id="BK-TEST"
+    ) as owner:
+        source = owner.engine()
+        install_application_engines(monkeypatch, source)
+        engine = application.get_cross_tenant_engine(owner.database_url, "aequoros-worker", "TEST")
+        assert checkouts == [owner.context.schema]
+        assert application.get_engine(owner.database_url, "aequoros-worker") is engine
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT current_schema()")) == owner.context.schema
+            assert connection.scalar(text("SHOW application_name")) == "aequoros-worker"
+            assert connection.scalar(text("SHOW statement_timeout")) == "30min"
+            assert (
+                connection.scalar(text("SELECT current_setting('app.organization_id')"))
+                == "OR-TEST"
+            )
+            assert connection.scalar(text("SELECT current_setting('app.bank_id')")) == "BK-TEST"
+        with pytest.raises(ValueError, match="owning test database and schema"):
+            _ = application.get_engine(
+                engine.url.set(database="foreign").render_as_string(hide_password=False)
+            )
+    application.get_engine.cache_clear()
+    with pytest.raises(RuntimeError, match="already been closed"), engine.connect():
+        pass
+
+
+@postgres_only
+def test_plain_postgres_raw_url_keeps_schema_hooks_and_cleanup() -> None:
+    hooks: list[Engine] = []
+    with isolated_database(os.environ["TEST_DATABASE_URL"]) as schema:
+        with (
+            database_connections(
+                schema.url.set(drivername="postgresql"),
+                schema=schema.context.schema,
+                hooks=(hooks.append,),
+            ) as owner,
+            owner.raw_connection() as raw,
+        ):
+            assert raw.execute("SELECT current_schema()").fetchone() == (schema.context.schema,)
+            assert len(hooks) == 1
+        assert raw.closed
