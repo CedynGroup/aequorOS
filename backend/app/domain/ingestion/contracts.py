@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.core.key_management.concentration_identity import counterparty_group_key
 from app.domain.ingestion.constants import (
     CounterpartyType,
     DepositAccountType,
@@ -234,12 +235,17 @@ class CounterpartyData(BaseModel):
     country_code: str | None = None
     rating: str | None = None
     rating_source: str | None = None
-    group_reference: str | None = None
+    group_reference: str | None = Field(default=None, max_length=255)
     # Residency relative to the bank's jurisdiction (LMTD Narrow Liquid
     # Assets legs). None = not stated by the source.
     resident: bool | None = None
     external_identifiers: dict[str, Any] = Field(default_factory=dict)
     attributes: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_group_reference(self) -> CounterpartyData:
+        _ = counterparty_group_key(self.name, self.group_reference, self.attributes)
+        return self
 
 
 class ProductData(BaseModel):

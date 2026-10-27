@@ -23,7 +23,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.db.base import utc_now
 from app.domain.ingestion.constants import STUCK_DEDUP_STATUSES
@@ -192,7 +192,18 @@ def rerun_ingestion(
     still requires re-uploading the file through the Data Engine.
     """
     batch = db.scalar(
-        select(IngestionBatch).where(
+        select(IngestionBatch)
+        .options(
+            load_only(
+                IngestionBatch.id,
+                IngestionBatch.organization_id,
+                IngestionBatch.bank_id,
+                IngestionBatch.as_of_date,
+                IngestionBatch.dedup_status,
+                raiseload=True,
+            )
+        )
+        .where(
             IngestionBatch.id == payload.batch_id,
             IngestionBatch.organization_id == organization_id,
         )
@@ -256,7 +267,18 @@ def redrive_dedup(
     no-op that reports success.
     """
     batch = db.scalar(
-        select(IngestionBatch).where(
+        select(IngestionBatch)
+        .options(
+            load_only(
+                IngestionBatch.id,
+                IngestionBatch.organization_id,
+                IngestionBatch.bank_id,
+                IngestionBatch.as_of_date,
+                IngestionBatch.dedup_status,
+                raiseload=True,
+            )
+        )
+        .where(
             IngestionBatch.id == payload.batch_id,
             IngestionBatch.organization_id == organization_id,
         )

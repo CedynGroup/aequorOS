@@ -444,3 +444,94 @@ it.each(
     );
   },
 );
+
+it.each([
+  "Your bank has turned off aequorOS access to protected data. Contact your bank administrator.",
+  "Can't reach your bank's key service. Retrying.",
+])("keeps a masked saved dashboard out of the editor: %s", async (message) => {
+  const masked = { ...dashboard, widgets: [], access: "restricted", message };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/catalogue")) return json(catalogue);
+      if (url.includes(`/bi/dashboards/${ID}`)) return json(masked);
+      throw new Error(`Unexpected request: ${url}`);
+    }),
+  );
+  const p = setup(masked);
+  const params = Promise.resolve({ id: ID });
+  await params;
+  await act(async () => {
+    render(
+      <Suspense fallback={null}>
+        <EditDashboardPage params={params} />
+      </Suspense>,
+      { wrapper: p.wrapper },
+    );
+  });
+  expect(await screen.findByText(message)).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /save/i }),
+  ).not.toBeInTheDocument();
+});
+
+it("shows locked and numeric alerts together and keeps the numeric editor available", async () => {
+  const message = "Can't reach your bank's key service. Retrying.";
+  const alert = {
+    id: ID,
+    bank_id: BANK,
+    name: "Numeric alert",
+    measure_id: "loans.balance_rc",
+    measure_label: "Loan balance",
+    filters: [],
+    direction: "above",
+    threshold_basis: "stated",
+    threshold: 10,
+    owner_user_id: ID,
+    owner_display_name: "Maker",
+    owned_by_caller: true,
+    notify_user_ids: [],
+    recipients: [],
+    is_active: true,
+    created_at: `${DAY}T00:00:00Z`,
+    updated_at: `${DAY}T00:00:00Z`,
+    latest_state: null,
+    latest_as_of: null,
+    latest_detail: "Waiting for a verdict.",
+    locked_reason: null,
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/catalogue")) return json(catalogue);
+      if (url.endsWith("/feature-flags"))
+        return json({ bi_alerts_enabled: true });
+      if (url.endsWith("/bi/alerts"))
+        return json({
+          alerts: [
+            alert,
+            {
+              ...alert,
+              id: PROTECTED_ID,
+              name: "Protected alert",
+              locked_reason: message,
+              latest_detail: message,
+            },
+          ],
+        });
+      throw new Error(`Unexpected request: ${url}`);
+    }),
+  );
+  const p = setup();
+  render(<BiAlertsPage />, { wrapper: p.wrapper });
+  expect(await screen.findByText("Numeric alert")).toBeInTheDocument();
+  expect(screen.getByText("Protected alert")).toBeInTheDocument();
+  expect(screen.getByText(message)).toBeInTheDocument();
+  const changes = screen.getAllByRole("button", { name: "Change" });
+  expect(changes[0]).toBeEnabled();
+  expect(changes[1]).toBeDisabled();
+  await userEvent.click(changes[0]);
+  expect(await screen.findByDisplayValue("Numeric alert")).toBeInTheDocument();
+});

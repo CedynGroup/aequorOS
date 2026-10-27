@@ -595,11 +595,6 @@ def restore_after_failure(db: Session, _previous: object) -> None:
 
 
 def _lock_field(instance: Base, col: FieldColumn, reason: str) -> None:
-    state = cast(InstanceState[object], inspect(instance))
-    if cast(Table, state.mapper.local_table).name.startswith("bi_"):
-        if reason == "support":
-            raise ProtectedSupportAccessError()
-        raise KeyUnavailableError("Protected configuration is locked.", revoked=reason == "revoked")
     value: object = LOCKED_TEXT if isinstance(col.kind, ProtectedText) else {LOCKED_JSON: reason}
     attributes.set_committed_value(instance, col.attribute, value)
 
@@ -688,11 +683,12 @@ def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
     except KeyIntegrityError:
         raise
     except KeyUnavailableError as exc:
-        if not isinstance(presentation, PresentationState):
-            raise
         reason = "revoked" if exc.revoked else "unavailable"
-        presentation.record(row.bank_id, reason)
-        presentation.read_locks[value.envelope_id] = reason
+        if isinstance(presentation, PresentationState):
+            presentation.record(row.bank_id, reason)
+            presentation.read_locks[value.envelope_id] = reason
+        elif col.kind.protected_members is None:
+            raise
         observe_bank_key(db, row.organization_id, row.bank_id)
         _lock_field(instance, col, reason)
         return None
@@ -713,6 +709,9 @@ def _protect_plaintext(  # noqa: PLR0913
     if _presentation_locked(instance, col, presentation, bank, missing_key=missing_key):
         return
     if missing_key:
+        if col.kind.protected_members is not None:
+            _lock_field(instance, col, "unavailable")
+            return
         raise KeyUnavailableError("The bank encryption key is not connected.")
     if row is None:
         return
@@ -723,10 +722,58 @@ def _protect_plaintext(  # noqa: PLR0913
             _lock_field(instance, col, reason)
             return
     else:
-        _ = registry.prepare_envelope(
-            db, row, _envelope_context(row.organization_id, row.bank_id), registry.provider_for
+        try:
+            _ = registry.prepare_envelope(
+                db, row, _envelope_context(row.organization_id, row.bank_id), registry.provider_for
+            )
+            _ = index_key(db, row)
+        except KeyIntegrityError:
+            raise
+        except KeyUnavailableError as exc:
+            if col.kind.protected_members is None:
+                raise
+            _lock_field(instance, col, "revoked" if exc.revoked else "unavailable")
+
+
+def _open_identity_values(
+    instance: Base,
+    col: FieldColumn,
+    row: BankEncryptionKey | None,
+    presentation: object,
+    missing_key: bool,
+) -> None:
+    db = object_session(instance)
+    assert db is not None
+    state = cast(InstanceState[object], inspect(instance))
+    organization, bank = (row.organization_id, row.bank_id) if row else _scope(db, state, [col])
+    members = col.kind.protected_members
+    assert members is not None
+    value = _validate_value(col.kind, cast(object, state.dict[col.attribute]))
+
+    def open_values(item: object, path: str) -> object:
+        leaf = replace(col, column=col.column + ":" + path)
+        if _presentation_locked(instance, leaf, presentation, bank, missing_key=missing_key):
+            return None
+        if not isinstance(item, dict) or FORMAT not in item:
+            _protect_plaintext(db, row, presentation, instance, leaf, bank, missing_key=missing_key)
+            return cast(object, item)
+        sealed = col.kind.decode(cast(dict[str, object], item)[FORMAT])
+        if row is None:
+            _lock_field(instance, col, "unavailable")
+            return None
+        secret = _field_secret(db, row, sealed, presentation, instance, leaf)
+        if secret is None:
+            return None
+        plaintext = sdk.decrypt(
+            sealed.message,
+            sdk.raw_keyring(secret, name=FORMAT),
+            {**_context(state, organization, row.bank_id), "field": leaf.column},
         )
-        _ = index_key(db, row)
+        return _JSON.validate_json(plaintext)
+
+    opened = identity_values(value, members, open_values)
+    if not contains_placeholder(cast(object, state.dict[col.attribute])):
+        attributes.set_committed_value(instance, col.attribute, opened)
 
 
 def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
@@ -748,7 +795,7 @@ def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
         if col.attribute in state.dict
         and (refreshed is None or col.attribute in refreshed)
         and (
-            has_protected_value(col.kind, state.dict[col.attribute])
+            has_protected_value(col.kind, cast(object, state.dict[col.attribute]))
             or support
             and col.kind.protected_members is None
         )
@@ -765,7 +812,6 @@ def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
         if bank is not None:
             registry.lock_bank_version(db, organization, bank, read=True)
         row = registry.bank_key(db, organization, bank, refresh=True) if bank is not None else None
-        presentation = db.info.get(SESSION_STATE)
         if db.info.get(SESSION_SUPPORT):
             if not isinstance(presentation, PresentationState):
                 presentation = PresentationState(support=True)
@@ -774,37 +820,7 @@ def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
         for col in present:
             value = cast(object, state.dict[col.attribute])
             if col.kind.protected_members is not None and not isinstance(value, SealedField):
-                value = _validate_value(col.kind, value)
-
-                def open_values(item: object, path: str, col: FieldColumn = col) -> object:
-                    leaf = replace(col, column=col.column + ":" + path)
-                    if _presentation_locked(
-                        instance, leaf, presentation, bank, missing_key=missing_key
-                    ):
-                        return None
-                    if not isinstance(item, dict) or FORMAT not in item:
-                        _protect_plaintext(
-                            db, row, presentation, instance, leaf, bank, missing_key=missing_key
-                        )
-                        return cast(object, item)
-                    sealed = col.kind.decode(cast(dict[str, object], item)[FORMAT])
-                    if row is None:
-                        raise KeyUnavailableError("The bank encryption key is not connected.")
-                    secret = _field_secret(db, row, sealed, presentation, instance, leaf)
-                    if secret is None:
-                        return None
-                    plaintext = sdk.decrypt(
-                        sealed.message,
-                        sdk.raw_keyring(secret, name=FORMAT),
-                        {**_context(state, organization, row.bank_id), "field": leaf.column},
-                    )
-                    return _JSON.validate_json(plaintext)
-
-                attributes.set_committed_value(
-                    instance,
-                    col.attribute,
-                    identity_values(value, col.kind.protected_members, open_values),
-                )
+                _open_identity_values(instance, col, row, presentation, missing_key)
                 continue
             if _presentation_locked(instance, col, presentation, bank, missing_key=missing_key):
                 continue
@@ -815,6 +831,9 @@ def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
                     )
                 continue
             if row is None:
+                if col.kind.protected_members is not None:
+                    _lock_field(instance, col, "unavailable")
+                    continue
                 raise KeyUnavailableError("The bank encryption key is not connected.")
             context = _context(state, organization, row.bank_id)
             secret = _field_secret(db, row, value, presentation, instance, col)

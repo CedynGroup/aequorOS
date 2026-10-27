@@ -1339,6 +1339,7 @@ export * from "./LoanGrowthOverride";
 export * from "./LoanGrowthPct";
 export * from "./Locale";
 export * from "./LockedConcentrationLimitRead";
+export * from "./LockedReason";
 export * from "./LoginRequest";
 export * from "./LtpBufferCostPct";
 export * from "./LtpTotalChargeGhs";

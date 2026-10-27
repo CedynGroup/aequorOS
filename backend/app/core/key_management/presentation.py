@@ -44,6 +44,17 @@ def contains_placeholder(value: object) -> bool:
     return False
 
 
+def locked_message(value: object) -> str | None:
+    if not contains_placeholder(value):
+        return None
+    reason = cast(dict[str, object], value).get(LOCKED_JSON) if isinstance(value, dict) else None
+    if reason == "support":
+        return str(ProtectedSupportAccessError())
+    return KeyUnavailableError(
+        "Protected data is locked.", revoked=reason == "revoked"
+    ).public_message
+
+
 def require_disclosed(value: object) -> None:
     if not contains_placeholder(value):
         return

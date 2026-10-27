@@ -1295,11 +1295,9 @@ def test_mixed_bi_filters_protect_only_identity_values(
     db_session.commit()
     if connected:
         provider.set_status(KEY_A, KeyStatus.DISABLED)
-        with (
-            Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh,
-            pytest.raises(KeyUnavailableError),
-        ):
-            fresh.get(BiDashboardVersion, version_id)
+        with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+            locked = fresh.get(BiDashboardVersion, version_id)
+            assert locked is not None and locked.spec == {LOCKED_JSON: "revoked"}
         provider.set_status(KEY_A, KeyStatus.ACTIVE)
         widgets = cast(list[dict[str, object]], stored["widgets"])
         query = cast(dict[str, object], widgets[0]["query"])
@@ -2687,11 +2685,13 @@ def test_plaintext_counterparty_name_bound_applies_before_orm_persistence(
 
 
 @pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("bounded_field", ["name", "group_reference"])
 def test_ingested_counterparty_name_bound_preserves_bi_copy_width(
     db_session: Session,
     provider: LocalKeyProvider,
     tmp_path: Path,
     connected: bool,
+    bounded_field: str,
 ) -> None:
     if connected:
         connect(db_session, provider)
@@ -2726,7 +2726,14 @@ def test_ingested_counterparty_name_bound_preserves_bi_copy_width(
         assert sheet is not None
         sheet.title = "Customers"
         sheet.append(["CustomerId", "CustomerName", "Type", "Group"])
-        sheet.append(["CP1", "A" * length, "RETAIL_INDIVIDUAL", "G"])
+        sheet.append(
+            [
+                "CP1",
+                "A" * length if bounded_field == "name" else "A",
+                "RETAIL_INDIVIDUAL",
+                "G" * length if bounded_field == "group_reference" else "G",
+            ]
+        )
         path = tmp_path / f"synthetic-name-{length}.xlsx"
         workbook.save(path)
         result = ingestion.start_ingestion(
@@ -2758,13 +2765,38 @@ def test_ingested_counterparty_name_bound_preserves_bi_copy_width(
             assert len(failures) == 1 and "255" in failures[0].error_message
         else:
             assert result.batch.status in {"accepted", "accepted_with_warnings"}
-            assert len(parties) == 1 and parties[0].name == "A" * 255
+            assert len(parties) == 1
+            assert (parties[0].name if bounded_field == "name" else parties[0].group_reference) == (
+                "A" if bounded_field == "name" else "G"
+            ) * 255
     outcome = materialize_bi_plane(db_session, organization_id=ORG_1, bank_id=BANK_A, as_of=AS_OF)
     assert outcome is not None and outcome.status == "succeeded"
-    identity = db_session.scalar(
-        select(BiDimCounterparty.name).where(BiDimCounterparty.counterparty_id == parties[0].id)
+    dimension = db_session.scalar(
+        select(BiDimCounterparty).where(BiDimCounterparty.counterparty_id == parties[0].id)
     )
-    assert identity == (str(parties[0].id) if connected else "A" * 255)
+    assert dimension is not None
+    assert dimension.name == (
+        str(parties[0].id) if connected else ("A" * 255 if bounded_field == "name" else "A")
+    )
+    assert dimension.group_reference == (
+        None if connected else ("G" * 255 if bounded_field == "group_reference" else "G")
+    )
+
+
+def assert_legacy_bi_disclosure(entity: Base, *, identity: bool) -> None:
+    if isinstance(entity, BiDashboardVersion):
+        value: object = entity.spec
+    elif isinstance(entity, BiSubscription):
+        value = entity.query
+    else:
+        assert isinstance(entity, BiAlert)
+        value = entity.filters
+    if identity:
+        assert value == {LOCKED_JSON: "revoked"}
+    else:
+        assert value == (
+            [{"borrower": NAME}] if isinstance(entity, BiAlert) else {"borrower": NAME}
+        )
 
 
 @pytest.mark.parametrize("refresh", [False, True])
@@ -2778,7 +2810,7 @@ def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
     filters: list[dict[str, object]] = (
         [{"member": "counterparty.name", "values": [NAME]}] if identity else [{"borrower": NAME}]
     )
-    spec = {"filters": filters} if identity else {"borrower": NAME}
+    spec: dict[str, object] = {"filters": filters} if identity else {"borrower": NAME}
     counterparty(db_session)
     party = RelatedParty(
         organization_id=ORG_1,
@@ -2853,10 +2885,13 @@ def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
             assert entity is not None
         db_session.commit()
         provider.set_status(KEY_A, KeyStatus.DISABLED)
-        numeric = model is RegulatoryPackage or (
-            not identity and model in {BiDashboardVersion, BiSubscription, BiAlert}
-        )
-        if numeric:
+        presentation_read = model in {
+            RegulatoryPackage,
+            BiDashboardVersion,
+            BiSubscription,
+            BiAlert,
+        }
+        if presentation_read:
             if refresh:
                 assert entity is not None
                 db_session.refresh(entity)
@@ -2865,12 +2900,8 @@ def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
             assert entity is not None
             if isinstance(entity, RegulatoryPackage):
                 assert isinstance(entity.snapshot, dict)
-            elif isinstance(entity, BiDashboardVersion):
-                assert entity.spec == {"borrower": NAME}
-            elif isinstance(entity, BiSubscription):
-                assert entity.query == {"borrower": NAME}
             else:
-                assert isinstance(entity, BiAlert) and entity.filters == [{"borrower": NAME}]
+                assert_legacy_bi_disclosure(entity, identity=identity)
         else:
             with pytest.raises(KeyUnavailableError):
                 if refresh:

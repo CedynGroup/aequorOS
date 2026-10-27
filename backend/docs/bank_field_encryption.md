@@ -214,8 +214,13 @@ hide those fields even for optional, unconnected banks. Support filing reads exp
 only filing metadata: snapshot and comparison bodies are locked, and validation,
 approval and methodology details are withheld. Bank-user filing reads retain their
 complete content. Numeric projections still
-use their stored values and indexes. Structured executable BI configuration refuses
-with a locked panel instead of substituting an empty query.
+use their stored values and indexes. Lists of alerts, subscriptions, dashboards and
+versions keep numeric entries available and mark only protected configurations
+with `locked_reason`. Locked subscriptions return no query, and locked dashboards
+return no widgets. Their editors show the reason instead of treating the masked
+configuration as an empty draft. Alert evaluation records the protected item as
+not evaluated while continuing with numeric alerts. Operator ingestion metadata
+and subscription scheduling select no protected report or query payload.
 
 The response header `X-Aequoros-Protected-Data` reports bank-scoped availability and
 protected responses use `Cache-Control: no-store`. Revocation displays “Your bank
