@@ -28,7 +28,7 @@ const EChart = dynamic(() => import("./EChartCanvas"), {
   ssr: false,
   loading: () => (
     <div
-      className="h-full w-full animate-pulse rounded bg-surface"
+      className="h-full w-full animate-pulse rounded-sm bg-surface"
       aria-busy="true"
       aria-label="Drawing the chart"
     />

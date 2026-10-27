@@ -5,9 +5,7 @@ import { LockKeyhole } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
-  containsLockedData,
-  isLockedBankQuery,
-  isProtectedDataError,
+  isProtectedRecoveryQuery,
   protectedDataMessages,
   protectedDataState,
   subscribeProtectedData,
@@ -25,10 +23,7 @@ export default function ProtectedDataNotice() {
   const retry = () => {
     void client.refetchQueries({
       type: "active",
-      predicate: (query) =>
-        isProtectedDataError(query.state.error) ||
-        containsLockedData(query.state.data) ||
-        (isLockedBankQuery(query.queryKey) && query.state.isInvalidated),
+      predicate: isProtectedRecoveryQuery,
     });
   };
   useEffect(() => {
@@ -36,10 +31,7 @@ export default function ProtectedDataNotice() {
     const timer = setInterval(() => {
       void client.refetchQueries({
         type: "active",
-        predicate: (query) =>
-          isProtectedDataError(query.state.error) ||
-          containsLockedData(query.state.data) ||
-          (isLockedBankQuery(query.queryKey) && query.state.isInvalidated),
+        predicate: isProtectedRecoveryQuery,
       });
     }, 5_000);
     return () => clearInterval(timer);

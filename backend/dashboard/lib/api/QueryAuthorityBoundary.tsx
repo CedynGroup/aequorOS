@@ -18,8 +18,6 @@ export function createAuthorityQueryClient(): QueryClient {
   return new QueryClient({
     queryCache: new QueryCache({
       onError: (error, query) => {
-        // A failed protected read must not leave previously decrypted data visible.
-        // Mutation drafts live outside this cache and remain mounted.
         if (isProtectedDataError(error)) query.setState({ data: undefined });
       },
     }),

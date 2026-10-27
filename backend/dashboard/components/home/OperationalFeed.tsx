@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Operational feed — recent ingestion batches and data activations merged
@@ -6,12 +6,12 @@
  * Engine hooks only; every row links back to the Data Engine console.
  */
 
-import Link from 'next/link';
-import { ArrowRight, DatabaseZap } from 'lucide-react';
-import SectionCard from '@/components/ui/SectionCard';
-import { SkeletonLine } from '@/components/ui/Skeleton';
-import { useDataActivations, useIngestionBatches } from '@/lib/api/ingestion';
-import { fmtRelative, labelize } from '@/lib/api/values';
+import Link from "next/link";
+import { ArrowRight, DatabaseZap } from "lucide-react";
+import SectionCard from "@/components/ui/SectionCard";
+import { SkeletonLine } from "@/components/ui/Skeleton";
+import { useDataActivations, useIngestionBatches } from "@/lib/api/ingestion";
+import { fmtRelative, labelize } from "@/lib/api/values";
 
 type FeedEvent = {
   key: string;
@@ -25,15 +25,15 @@ const FEED_LIMIT = 8;
 
 function batchDotClass(status: string): string {
   switch (status) {
-    case 'accepted':
-      return 'bg-success';
-    case 'accepted_with_warnings':
-      return 'bg-warning';
-    case 'rejected':
-    case 'failed':
-      return 'bg-critical';
+    case "accepted":
+      return "bg-success";
+    case "accepted_with_warnings":
+      return "bg-warning";
+    case "rejected":
+    case "failed":
+      return "bg-critical";
     default:
-      return 'bg-slate-light';
+      return "bg-slate-light";
   }
 }
 
@@ -55,7 +55,7 @@ export default function OperationalFeed({
         b.recordsError > 0 ? `${b.recordsError} errors` : null,
       ]
         .filter(Boolean)
-        .join(' · ');
+        .join(" · ");
       return {
         key: `batch-${b.id}`,
         at: b.completedAt ?? b.startedAt ?? b.createdAt,
@@ -67,22 +67,22 @@ export default function OperationalFeed({
     ...(activations.data?.activations ?? []).map((a, idx): FeedEvent => {
       const parts = [
         a.periodLabel ? `period ${a.periodLabel}` : null,
-        typeof a.factsCreated === 'number' ? `${a.factsCreated} facts` : null,
-        typeof a.modulesSucceeded === 'number'
+        typeof a.factsCreated === "number" ? `${a.factsCreated} facts` : null,
+        typeof a.modulesSucceeded === "number"
           ? `${a.modulesSucceeded} modules ok`
           : null,
-        typeof a.modulesFailed === 'number' && a.modulesFailed > 0
+        typeof a.modulesFailed === "number" && a.modulesFailed > 0
           ? `${a.modulesFailed} failed`
           : null,
       ]
         .filter(Boolean)
-        .join(' · ');
-      const failed = typeof a.modulesFailed === 'number' && a.modulesFailed > 0;
+        .join(" · ");
+      const failed = typeof a.modulesFailed === "number" && a.modulesFailed > 0;
       return {
         key: `activation-${a.activatedAt.getTime()}-${idx}`,
         at: a.activatedAt,
-        dotClass: failed ? 'bg-warning' : 'bg-action',
-        title: 'Data activation',
+        dotClass: failed ? "bg-warning" : "bg-action",
+        title: "Data activation",
         meta: parts,
       };
     }),
@@ -102,7 +102,7 @@ export default function OperationalFeed({
       actions={
         <Link
           href="/data-engine"
-          className="text-caption font-medium text-action hover:text-action-hover inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded"
+          className="text-caption font-medium text-action hover:text-action-hover inline-flex items-center gap-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-focus rounded-sm"
         >
           Data Engine <ArrowRight size={12} aria-hidden />
         </Link>
@@ -110,7 +110,7 @@ export default function OperationalFeed({
       noPadding
       footer={
         <span>
-          {batches.data?.batches.length ?? 0} batches ·{' '}
+          {batches.data?.batches.length ?? 0} batches ·{" "}
           {activations.data?.activations.length ?? 0} activations on record
         </span>
       }

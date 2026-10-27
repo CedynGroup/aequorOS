@@ -5,11 +5,15 @@ import type { ReactNode } from "react";
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { CanonicalPositionReadFromJSON } from "@aequoros/risk-service-api";
+import {
+  CanonicalPositionReadFromJSON,
+  PackageComparisonReadFromJSON,
+} from "@aequoros/risk-service-api";
 import CreditConcentrationPage from "../app/(app)/credit/concentration/page";
 import CanonicalPositionsPage from "../app/(app)/data-engine/positions/page";
 import PositionDrawer from "../components/positions/PositionDrawer";
 import SnapshotPreview from "../components/submissions/SnapshotPreview";
+import { ComparisonPanel } from "../components/submissions/PriorVersionsCard";
 import { setAccessToken } from "../lib/api/token";
 import {
   clearProtectedData,
@@ -47,9 +51,12 @@ function view(children: ReactNode, payload: (url: string) => object) {
       ),
     ),
   );
-  return render(
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>,
-  );
+  return {
+    ...render(
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    ),
+    client,
+  };
 }
 
 it("keeps concentration figures visible and discloses locked Board limits as not evaluated", async () => {
@@ -266,4 +273,141 @@ it("renders ordinary snapshot totals, units and changed rows", () => {
   expect(screen.getByText("Changed since review")).toBeVisible();
   expect(screen.getByLabelText("Changed since the last round")).toBeVisible();
   expect(screen.getByText(/GHS '000/)).toBeVisible();
+});
+
+it("retains configured named limits as unevaluated through revocation and restores evaluation", async () => {
+  let locked = false;
+  const { client } = view(<CreditConcentrationPage />, () => ({
+    as_of: "2026-09-30",
+    capital_basis: "tier1",
+    capital_base_ghs: "1000",
+    total_book_ghs: "2500",
+    limit_count: 1,
+    breaches: locked
+      ? []
+      : [
+          {
+            key: "group:Synthetic named group",
+            exposure_ghs: "2500",
+            loan_count: 2,
+            share_of_book_pct: "100",
+            share_of_capital_pct: "250",
+            limit_value: "25",
+            limit_kind: "share_of_capital",
+            limit_status: "above_limit",
+          },
+        ],
+    locked_limits: locked
+      ? [
+          {
+            dimension: "single_name",
+            limit_kind: "share_of_capital",
+            value: "25",
+            limit_status: "locked",
+          },
+        ]
+      : [],
+    dimensions: [
+      {
+        dimension: "single_name",
+        hhi: "1600",
+        bucket_count: 1,
+        coverage_pct: "100",
+        buckets: [
+          {
+            key: locked
+              ? "group:🔒 Protected data"
+              : "group:Synthetic named group",
+            exposure_ghs: "2500",
+            loan_count: 2,
+            share_of_book_pct: "100",
+            share_of_capital_pct: "250",
+            limit_value: locked ? null : "25",
+            limit_kind: "share_of_capital",
+            limit_status: locked ? "locked" : "above_limit",
+            utilization_pct: locked ? null : "1000",
+          },
+        ],
+      },
+    ],
+  }));
+  expect(await screen.findByText("Synthetic named group")).toBeVisible();
+  expect(screen.getByText("Above limit")).toBeVisible();
+  locked = true;
+  await act(async () => {
+    await client.invalidateQueries();
+  });
+  expect(
+    await screen.findByRole("heading", { name: "Locked limits" }),
+  ).toBeVisible();
+  expect(screen.getByText("Not fully evaluated")).toBeVisible();
+  expect(screen.getByText("Locked · not evaluated")).toBeVisible();
+  expect(screen.queryByText("Synthetic named group")).not.toBeInTheDocument();
+  expect(
+    within(screen.getByRole("table")).queryByText("Not set"),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText(/— not evaluated/)).toHaveTextContent("25");
+  locked = false;
+  await act(async () => {
+    await client.invalidateQueries();
+  });
+  expect(await screen.findByText("Synthetic named group")).toBeVisible();
+  expect(screen.getByText("Above limit")).toBeVisible();
+  expect(
+    screen.queryByRole("heading", { name: "Locked limits" }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText("Not fully evaluated")).not.toBeInTheDocument();
+});
+
+it("renders the support comparison lock from the generated contract without exposing diff content", () => {
+  const side = {
+    package_id: "synthetic-package",
+    version: 1,
+    status: "generated",
+    reporting_date: "2026-03-31",
+    basis: "solo",
+    generated_at: "2026-04-01T00:00:00Z",
+    snapshot_sha256: null,
+    content_digest: null,
+  };
+  const comparison = PackageComparisonReadFromJSON({
+    base: side,
+    target: { ...side, version: 2 },
+    content_locked: true,
+    identical: null,
+    changed_count: null,
+    added_count: null,
+    removed_count: null,
+    unchanged_section_count: null,
+    sections: [
+      {
+        code: "exposures",
+        title: "Private exposures",
+        origin: "section",
+        change: "changed",
+        unchanged_line_count: 0,
+        lines: [
+          {
+            code: "1",
+            description: "Private borrower",
+            change: "changed",
+            base_value: "1234567",
+            target_value: "7654321",
+            delta: "6419754",
+            delta_pct: "520",
+            is_total: false,
+          },
+        ],
+      },
+    ],
+  });
+  render(<ComparisonPanel comparison={comparison} currentVersion={2} />);
+  expect(screen.getByRole("status")).toHaveTextContent(
+    protectedDataMessages.support,
+  );
+  expect(screen.getByText("Protected data locked")).toBeVisible();
+  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByText("Private borrower")).toBeNull();
+  expect(screen.queryByText("1234567")).toBeNull();
+  expect(screen.queryByText(/No figure differs/)).toBeNull();
 });

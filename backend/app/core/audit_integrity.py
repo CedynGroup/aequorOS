@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.observability import Condition, emit
 from app.core.tls import TransportSecurityError, require_boto_tls
+from app.db.worker_access import AUDIT_SIGNATURE, has_worker_function
 
 STREAMS = ("audit_events", "operator_audit_log")
 PAGING_RETRY_SECONDS = 300.0
@@ -234,6 +235,30 @@ class AuditIntegrityTask:
         committed = False
         try:
             with new_session() as session:
+                if has_worker_function(session, AUDIT_SIGNATURE) and (
+                    session.info.get("worker_access") is True
+                    or not session.scalar(
+                        text(
+                            "SELECT has_table_privilege(current_user, "
+                            "'audit_integrity_schedule', 'SELECT') AND "
+                            "has_table_privilege(current_user, "
+                            "'audit_integrity_schedule', 'UPDATE')"
+                        )
+                    )
+                ):
+                    epoch, results = TypeAdapter(
+                        tuple[int, list[ChainVerification] | None]
+                    ).validate_python(
+                        tuple(
+                            session.execute(
+                                text("SELECT * FROM aqs_worker_audit_check(:now)"), {"now": now}
+                            ).one()
+                        )
+                    )
+                    session.commit()
+                    self.observe_recovery(epoch)
+                    self.report(results)
+                    return results
                 self.observe_recovery(
                     TypeAdapter(int).validate_python(
                         session.scalar(text("SELECT recovery_epoch FROM audit_integrity_schedule"))

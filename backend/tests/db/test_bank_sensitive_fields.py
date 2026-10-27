@@ -15,17 +15,13 @@ from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session
 
 from app.bi.models.notifications import BiAlert, BiAlertEvent, BiSubscription
-from app.bi.schemas.content import BiDashboardSpec
-from app.bi.schemas.query import BiFilter, BiPackQuery
 from app.bi.service.identity_policy import IDENTITY_REASON
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.presentation import LOCKED_JSON, SESSION_SUPPORT
 from app.core.key_management.types import KeyReference
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
 from app.identity.public import Bank, User
 from app.models.canonical import CanonicalCounterparty
-from app.models.ingestion import IngestionBatch
 from app.models.organization import Organization
 from app.reporting.models.packages import RegulatoryPackage
 from tests.core.test_bank_field_encryption import (
@@ -36,6 +32,7 @@ from tests.core.test_bank_field_encryption import (
     raw_fields,
     saved_version,
 )
+from tests.core.test_bank_field_readers import GroupAxis, assert_long_concentration_tokens
 from tests.db import test_postgres_migrations as migrations
 from tests.support.helpers import ORG_1, USER_1
 
@@ -266,32 +263,14 @@ def test_new_sensitive_fields_are_ciphertext_in_postgres(
             sitting_allowance=Decimal("12.34"),
         )
     )
-    query = BiPackQuery(
-        measures=["loans.balance_rc"],
-        window="as_of",
-        filters=[BiFilter(member="counterparty.name", op="eq", values=[NAME])],
-    )
-    spec = BiDashboardSpec.model_validate(
-        {
-            "widgets": [
-                {
-                    "id": "loans",
-                    "kind": "table",
-                    "title": "Loans",
-                    "query": query.model_dump(mode="json"),
-                }
-            ],
-            "layout": [{"i": "loans", "x": 0, "y": 0, "w": 6, "h": 4}],
-        }
-    )
-    db.add(saved_version(db, spec.model_dump(mode="json")))
+    db.add(saved_version(db, {"filters": [{"member": "counterparty.name", "values": [NAME]}]}))
     db.add(
         BiSubscription(
             organization_id=ORG_1,
             bank_id="BK-SAMP0001",
             owner_user_id=USER_1,
             name="Synthetic",
-            query=query.for_period(date(2026, 6, 30)).model_dump(mode="json"),
+            query={"filters": [{"member": "counterparty.name", "values": [NAME]}]},
             artifact_format="csv",
             cadence="daily",
             hour=7,
@@ -317,41 +296,10 @@ def test_new_sensitive_fields_are_ciphertext_in_postgres(
     assert restored.external_identifiers == {"national_id": IDENTIFIER}
 
 
-def test_dedup_lifecycle_status_survives_redaction_on_the_migrated_schema(
+@pytest.mark.parametrize("axis", ["name", "reference", "group_reference", "group", "parent"])
+def test_optional_concentration_tokens_fit_postgres_columns(
     sensitive_db: tuple[Session, LocalKeyProvider, KeyReference],
+    axis: GroupAxis,
 ) -> None:
-    db, provider, key = sensitive_db
-
-    def providers(_name: str) -> LocalKeyProvider:
-        return provider
-
-    registry.register(
-        db,
-        bank_id="BK-SAMP0001",
-        organization_id=ORG_1,
-        storage_slug="bk-samp0001",
-        key=key,
-        providers=providers,
-    )
-    db.commit()
-    batch = IngestionBatch(
-        organization_id=ORG_1,
-        bank_id="BK-SAMP0001",
-        source_system="EXCEL_CSV",
-        adapter_version="synthetic",
-        extraction_mode="full",
-        status="accepted",
-        as_of_date=date(2026, 9, 30),
-        etl_report={"dedup_status": "deferred", "name": NAME},
-    )
-    db.add(batch)
-    db.commit()
-    batch_id = batch.id
-    db.expunge_all()
-    db.info[SESSION_SUPPORT] = True
-    try:
-        loaded = db.get(IngestionBatch, batch_id)
-        assert loaded is not None and loaded.dedup_status == "deferred"
-        assert loaded.etl_report == {LOCKED_JSON: "support"}
-    finally:
-        db.info.pop(SESSION_SUPPORT)
+    db, _, _ = sensitive_db
+    assert_long_concentration_tokens(db, axis)

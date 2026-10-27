@@ -72,6 +72,7 @@ def start_inspector_session(
         started_by=operator.email,
         mode=payload.mode,
         reason=payload.reason,
+        support_reference=payload.support_reference,
         ttl_minutes=payload.ttl_minutes,
     )
     record_operator_action(
@@ -95,14 +96,14 @@ def start_inspector_session(
 @router.get("/sessions", response_model=InspectorSessionListRead)
 def list_inspector_sessions(
     db: OperatorDb,
-    _operator: Operator,
+    operator: Operator,
     active: bool | None = None,
     organization_id: str | None = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> InspectorSessionListRead:
     """Audit surface, newest-first. ``active=true`` selects sessions that are
     neither ended nor expired."""
-    return inspector.list_sessions(
+    result = inspector.list_sessions(
         db,
         active=active,
         organization_id=(
@@ -110,6 +111,12 @@ def list_inspector_sessions(
         ),
         limit=limit,
     )
+    for org in sorted({item.organization_id for item in result.sessions}):
+        record_operator_action(db, operator, action="inspector.sessions.read", target_org=org)
+    if not result.sessions:
+        record_operator_action(db, operator, action="inspector.sessions.read")
+    db.commit()
+    return result
 
 
 @router.post("/sessions/{session_id}/end", response_model=InspectorSessionRead)
@@ -164,9 +171,7 @@ def mint_inspector_act_token(
     # arithmetic below never trips over a naive/aware comparison (Postgres rows
     # are already aware — the guard is a no-op there).
     session_expires_at = (
-        row.expires_at
-        if row.expires_at.tzinfo is not None
-        else row.expires_at.replace(tzinfo=UTC)
+        row.expires_at if row.expires_at.tzinfo is not None else row.expires_at.replace(tzinfo=UTC)
     )
     if row.ended_at is not None:
         raise HTTPException(

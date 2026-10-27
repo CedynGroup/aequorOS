@@ -36,7 +36,7 @@ import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
@@ -52,15 +52,19 @@ from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import fields as pyhanko_fields
 from pyhanko.sign import signers as pyhanko_signers
 from pyhanko_certvalidator.registry import SimpleCertificateStore
-from sqlalchemy import select
+from sqlalchemy import Engine, event, select
 from sqlalchemy.orm import Session
+from starlette.requests import Request
 
 from app.api.deps import TenantContext
-from app.attestation.schemas import VerificationReportRead
+from app.attestation.schemas import StepUpRequest, VerificationReportRead
+from app.attestation.service import api as attestation_api
 from app.attestation.service import digests, pdf_signing, signing, stepup, verify, workflow
 from app.attestation.service.identity import ensure_signer_identity
+from app.core import security
 from app.core.authorization import RoleBundle
-from app.core.key_management.types import ProtectedSupportAccessError
+from app.core.key_management import registry
+from app.core.key_management.types import KeyStatus
 from app.models import (
     AttestationSignature,
     Bank,
@@ -70,6 +74,7 @@ from app.models import (
     RegulatoryRun,
     ReturnSigningPolicy,
     SignerKey,
+    SigningAuthorization,
     User,
 )
 from app.reporting.schemas.packages import RegulatoryPackageCreate
@@ -78,6 +83,9 @@ from app.reporting.service.exports import export_package
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_liquidity
 from app.storage.client import ObjectMetadata, StorageLocation
+from scripts import verify_attestation as offline_verifier
+from tests.core import test_key_unavailable_numeric as encrypted
+from tests.core.test_bank_field_encryption import KEY_A, NEXT
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -454,6 +462,142 @@ def test_clean_detached_attestation_verifies_and_reports_every_check(
         assert entry["present"] is True
         assert entry["pinned_input_hash"] == entry["stored_input_hash"]
         assert entry["recomputed_input_hash"] == entry["stored_input_hash"]
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_engine_attestation_preserves_register_binding_offline_without_key(
+    db_session: Session, pki: _Pki, monkeypatch: pytest.MonkeyPatch, status: KeyStatus
+) -> None:
+    db = db_session
+    _seed(db)
+    provider = encrypted.connect(db, monkeypatch)
+    encrypted.register(db)
+    read = generation.generate_package(
+        db,
+        MAKER,
+        SAMPLE_BANK_ID,
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
+    )
+    validation.validate_package(db, MAKER, SAMPLE_BANK_ID, read.id)
+    package = db.get(RegulatoryPackage, read.id)
+    assert package is not None and package.source_runs and package.register_state_digest
+    sealed = package.register_state_digest
+    provider.set_status(KEY_A, status)
+    db.expunge_all()
+    package = db.get(RegulatoryPackage, read.id)
+    assert package is not None
+    _fully_certify(db, pki, package)
+    assert _status(_report(db, package, pki=pki), verify.CHECK_CONTENT_BINDING) == "passed"
+    bundle = cast(dict[str, object], verify.export_verification_bundle(db, MAKER, package))
+    identity = cast(dict[str, object], bundle["package"])
+    signatures = cast(list[dict[str, object]], bundle["signatures"])
+    assert identity["register_state_digest"] == sealed
+    assert all(signature["register_state_digest"] == sealed for signature in signatures)
+    assert offline_verifier.check_certification_digest(bundle).status == "PASS"
+    assert offline_verifier.certification_digest(identity) == package.certification_digest
+    identity["register_state_digest"] = "f" * 64
+    assert offline_verifier.check_certification_digest(bundle).status == "FAIL"
+    package.register_state_digest = "f" * 64
+    for signature in workflow.current_signatures(db, MAKER, package):
+        signature.register_state_digest = package.register_state_digest
+    db.flush()
+    assert _status(_report(db, package, pki=pki), verify.CHECK_CONTENT_BINDING) == "failed"
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_engine_package_rotation_refuses_certification(
+    db_session: Session, pki: _Pki, monkeypatch: pytest.MonkeyPatch, legacy: bool
+) -> None:
+    db = db_session
+    _seed(db)
+    provider = encrypted.connect(db, monkeypatch)
+    read = generation.generate_package(
+        db,
+        MAKER,
+        SAMPLE_BANK_ID,
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
+    )
+    validation.validate_package(db, MAKER, SAMPLE_BANK_ID, read.id)
+    package = db.get(RegulatoryPackage, read.id)
+    assert package is not None and package.source_runs and package.register_state_digest
+    if legacy:
+        package.register_state_digest = None
+    key = registry.scoped_key(db, bank_id=SAMPLE_BANK_ID, organization_id=DEMO_ORG_ID)
+    registry.rotate(db, key, NEXT, providers=lambda _name: provider)
+    db.commit()
+    with pytest.raises(workflow.AttestationConflict, match="register_state_changed"):
+        _certify(db, MAKER, package, pki, role="preparer", key_ref="softkey:preparer")
+    with pytest.raises(workflow.AttestationConflict, match="register_state_changed"):
+        attestation_api.step_up(
+            db,
+            MAKER,
+            SAMPLE_BANK_ID,
+            package.id,
+            StepUpRequest(signing_role="preparer", password="synthetic-reauth-proof"),
+            Request({"type": "http"}),
+        )
+    assert workflow.current_signatures(db, MAKER, package) == []
+    assert (package.register_state_digest is None) == legacy
+
+
+@pytest.mark.committing_db
+def test_step_up_rechecks_rotation_after_committed_authentication(
+    db_session: Session, pki: _Pki, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = db_session
+    engine = db.get_bind()
+    if not isinstance(engine, Engine) or engine.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL independent transactions are required.")
+    _seed(db)
+    provider = encrypted.connect(db, monkeypatch)
+    read = generation.generate_package(
+        db,
+        MAKER,
+        SAMPLE_BANK_ID,
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
+    )
+    validation.validate_package(db, MAKER, SAMPLE_BANK_ID, read.id)
+    _enrol(db, MAKER, pki, "softkey:preparer")
+    user = db.get(User, DEMO_USER_ID)
+    assert user is not None
+    password = "synthetic-authentication-rotation-proof"
+    user.password_hash = security.hash_password(password)
+    db.commit()
+    rotated = False
+
+    def rotate_after_authentication(_session: Session) -> None:
+        nonlocal rotated
+        if rotated:
+            return
+        rotated = True
+        with Session(engine) as writer, writer.begin():
+            writer.info["organization_id"] = DEMO_ORG_ID
+            key = registry.scoped_key(writer, bank_id=SAMPLE_BANK_ID, organization_id=DEMO_ORG_ID)
+            registry.rotate(writer, key, NEXT, lambda _name: provider)
+
+    event.listen(db, "after_commit", rotate_after_authentication)
+    try:
+        with pytest.raises(workflow.AttestationConflict, match="register_state_changed"):
+            attestation_api.step_up(
+                db,
+                MAKER,
+                SAMPLE_BANK_ID,
+                read.id,
+                StepUpRequest(signing_role="preparer", password=password),
+                Request({"type": "http", "headers": []}),
+            )
+    finally:
+        event.remove(db, "after_commit", rotate_after_authentication)
+    assert rotated
+    assert (
+        db.scalar(
+            select(SigningAuthorization.id).where(
+                SigningAuthorization.package_id == read.id,
+                SigningAuthorization.organization_id == DEMO_ORG_ID,
+            )
+        )
+        is None
+    )
 
 
 def test_verification_never_writes(db_session: Session, pki: _Pki) -> None:
@@ -1077,22 +1221,6 @@ def test_replaced_artifact_bytes_fail_the_artifact_binding_check(
     assert finding["recomputed_checksum"] != finding["recorded_checksum"]
 
 
-def test_staff_redaction_is_not_reported_as_signature_or_artifact_corruption(
-    db_session: Session,
-    storage: InMemoryStorageClient,
-    pki: _Pki,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    signed = _build_signed_pdf_package(db_session, storage, pki)
-
-    def staff_read(*_args: object, **_kwargs: object) -> None:
-        raise ProtectedSupportAccessError()
-
-    monkeypatch.setattr(storage, "read", staff_read)
-    with pytest.raises(ProtectedSupportAccessError):
-        _report(db_session, signed.package, storage_client=storage, pki=pki)
-
-
 def test_unreadable_artifact_skips_the_pdf_checks_but_fails_artifact_binding(
     db_session: Session, storage: InMemoryStorageClient, pki: _Pki
 ) -> None:
@@ -1264,11 +1392,46 @@ def test_offline_cli_refuses_unknown_inputs_with_a_distinct_exit_code(
     assert cli.main(["--record", str(wrong_schema)]) == 2
 
 
-def test_offline_cli_canonicalisation_matches_the_platform(db_session: Session, pki: _Pki) -> None:
+@pytest.mark.parametrize("legacy", [False, True])
+def test_offline_cli_canonicalisation_matches_the_platform(
+    db_session: Session, pki: _Pki, legacy: bool, tmp_path: Path
+) -> None:
     """The CLI duplicates the recipe on purpose; this is what stops it drifting."""
     package = _seed(db_session)
     _fully_certify(db_session, pki, package)
-    bundle = verify.export_verification_bundle(db_session, MAKER, package)
+    if legacy:
+        package.register_state_digest = None
+        binding = workflow.compute_binding(package)
+        package.certification_digest = binding.certification_digest
+        previous = workflow.GENESIS_HASH
+        for stored in workflow.current_signatures(db_session, MAKER, package):
+            stored.register_state_digest = None
+            stored.certification_digest = binding.certification_digest
+            stored.attestation_payload = {
+                **stored.attestation_payload,
+                "certification_digest": binding.certification_digest,
+            }
+            stored.payload_digest = digests.digest_of(stored.attestation_payload)
+            stored.signature_value = _SoftSigner(pki).sign_digest(
+                bytes.fromhex(stored.payload_digest), key_ref=f"softkey:{stored.signing_role}"
+            )
+            stored.prev_hash = previous
+            stored.entry_hash = workflow.chain_entry_hash(
+                prev_hash=previous,
+                payload_digest=stored.payload_digest,
+                signature_value=stored.signature_value,
+            )
+            previous = stored.entry_hash
+        db_session.flush()
+    assert (
+        VerificationReportRead.model_validate(_report(db_session, package, pki=pki)).overall_passed
+        is True
+    )
+    record = tmp_path / "attestation.json"
+    bundle = _write_bundle(db_session, package, record)
+    root = tmp_path / "root.pem"
+    root.write_bytes(pki.ca_pem)
+    assert offline_verifier.main(["--record", str(record), "--trust-root", str(root)]) == 0
 
     payload = {"z": [3, 2, 1], "a": {"nested": "ünïcode", "n": None}, "b": True}
     assert cli.canonical_json(payload) == digests.canonical_json(payload)

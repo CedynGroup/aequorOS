@@ -1,9 +1,11 @@
 """Authentication routes: login, refresh, current user.
 
 ``users``/``organizations`` are RLS-forced, so a login (which has only an email, no
-tenant context yet) resolves the user through the cross-tenant *system* session (the
-BYPASSRLS worker role). Every authenticated request thereafter carries a verified
-token whose ``org`` claim scopes an ordinary tenant session.
+tenant context yet) resolves the user through the cross-tenant *system* session
+using the API DATABASE_URL sessionmaker. Its least-privilege cutover is separate
+from the worker cutover (``docs/ops/database-roles.md``). Every authenticated
+request thereafter carries a verified token whose ``org`` claim scopes an ordinary
+tenant session.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ from app.api.deps import (
 )
 from app.core.authorization import RoleBundle
 from app.core.config import get_settings
-from app.db.session import get_worker_sessionmaker
+from app.db.session import get_sessionmaker
 from app.identity.api.manage_authorization import binding_response, binding_scope, grant_conflict
 from app.identity.models.bank import Bank
 from app.identity.models.user import User
@@ -52,8 +54,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _system_session() -> Iterator[Session]:
-    """Cross-tenant session for auth lookups (BYPASSRLS worker role)."""
-    session = get_worker_sessionmaker()()
+    session = get_sessionmaker()()
     try:
         yield session
     finally:

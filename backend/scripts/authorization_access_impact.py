@@ -83,8 +83,7 @@ from app.core.authorization import Module, Permission
 from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, Organization, User
 
-ORGANIZATION_MODULES = frozenset({Module.ACCOUNT, Module.AUDIT})
-INSTITUTION_MODULES = tuple(module.value for module in Module if module not in ORGANIZATION_MODULES)
+INSTITUTION_MODULES = tuple(module.value for module in Module if module is not Module.ACCOUNT)
 
 
 @dataclass(frozen=True)

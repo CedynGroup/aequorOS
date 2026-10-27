@@ -1,4 +1,4 @@
-"""Catalogue members carrying counterparty identity."""
+"""Catalogue members that expose counterparty identity."""
 
 IDENTITY_MEMBERS = frozenset(
     {

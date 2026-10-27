@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import UTC, date, datetime
 from threading import Event
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -88,7 +89,9 @@ def test_legacy_successful_run_returns_honest_unavailable_summary(
     run = run_response.json()
     with get_sessionmaker()() as session:
         session.execute(
-            delete(LiquidityAnalysisResult).where(LiquidityAnalysisResult.run_id == UUID(run["id"]))
+            delete(LiquidityAnalysisResult).where(
+                LiquidityAnalysisResult.run_id == UUID(cast(str, run["id"]))
+            )
         )
         session.commit()
 

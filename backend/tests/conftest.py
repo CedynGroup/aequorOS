@@ -539,9 +539,10 @@ def _shared_app() -> _LazyTestApp:
 def _rollback_sessionmaker_lifecycle(
     database: _TestDatabase,
     monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[sessionmaker]:
+) -> Iterator[sessionmaker[Session]]:
     import app.api.deps as deps_mod  # noqa: PLC0415
     import app.db.session as session_mod  # noqa: PLC0415
+    import app.identity.api.auth as auth_mod  # noqa: PLC0415
 
     monkeypatch.setenv("DATABASE_URL", database.database_url)
     get_settings.cache_clear()
@@ -573,6 +574,7 @@ def _rollback_sessionmaker_lifecycle(
         return original_sessionmaker(*args, **kwargs)
 
     monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
+    monkeypatch.setattr(auth_mod, "get_sessionmaker", lambda: bound_sessionmaker)
     monkeypatch.setattr(session_mod, "get_engine", shared_engine)
     monkeypatch.setattr(session_mod, "sessionmaker", shared_sessionmaker)
     try:
@@ -593,6 +595,12 @@ def _rollback_sessionmaker_lifecycle(
                 "Mark this test with @pytest.mark.committing_db when its writes must really "
                 "commit for DDL, independent connections, or database locks."
             )
+
+
+# Shared primitives for feature-local API fixtures backed by migrated schemas.
+ApiTestDatabase = _TestDatabase
+seed_demo_tenants = _seed_demo_tenants
+rollback_sessionmaker_lifecycle = _rollback_sessionmaker_lifecycle
 
 
 @pytest.fixture
@@ -644,6 +652,8 @@ def _committing_test_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[_TestDatabase]:
     """Point one test whose writes must really commit at the reset shared schema."""
+    import app.identity.api.auth as auth_mod  # noqa: PLC0415
+
     database_url = _shared_committing_database.database_url
     monkeypatch.setenv("DATABASE_URL", database_url)
     get_settings.cache_clear()
@@ -651,6 +661,7 @@ def _committing_test_database(
     # The engine the application resolves for this test; the session fixture's
     # own engine only outlives it so the schema can be dropped at the end.
     engine = get_engine(database_url)
+    monkeypatch.setattr(auth_mod, "get_sessionmaker", get_sessionmaker)
     if engine.dialect.name == "sqlite":
         _enable_sqlite_foreign_keys(engine)
     database = _TestDatabase(

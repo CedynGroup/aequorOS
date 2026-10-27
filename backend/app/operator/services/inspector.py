@@ -30,9 +30,7 @@ from app.schemas.operator import InspectorSessionListRead, InspectorSessionRead
 def _require_organization(db: Session, organization_id: str) -> Organization:
     organization = db.scalar(select(Organization).where(Organization.id == organization_id))
     if organization is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
     return organization
 
 
@@ -46,6 +44,7 @@ def session_read(row: OperatorInspectorSession) -> InspectorSessionRead:
         started_at=row.started_at,
         expires_at=row.expires_at,
         reason=row.reason,
+        support_reference=row.support_reference,
         ended_at=row.ended_at,
         ended_by=row.ended_by,
     )
@@ -58,6 +57,7 @@ def start_session(  # noqa: PLR0913 - one argument per session attribute
     started_by: str,
     mode: str,
     reason: str,
+    support_reference: str,
     ttl_minutes: int,
 ) -> OperatorInspectorSession:
     """Open a READ-ONLY inspection window against a tenant (404 if unknown org).
@@ -72,6 +72,7 @@ def start_session(  # noqa: PLR0913 - one argument per session attribute
         started_by=started_by,
         mode=mode,
         reason=reason,
+        support_reference=support_reference,
         read_only=True,
         started_at=now,
         expires_at=now + timedelta(minutes=ttl_minutes),
@@ -100,10 +101,7 @@ def list_sessions(
         )
         filters.append(is_active if active else ~is_active)
     total = (
-        db.scalar(
-            select(func.count()).select_from(OperatorInspectorSession).where(*filters)
-        )
-        or 0
+        db.scalar(select(func.count()).select_from(OperatorInspectorSession).where(*filters)) or 0
     )
     rows = list(
         db.scalars(
@@ -116,9 +114,7 @@ def list_sessions(
             .limit(limit)
         )
     )
-    return InspectorSessionListRead(
-        sessions=[session_read(row) for row in rows], total=total
-    )
+    return InspectorSessionListRead(sessions=[session_read(row) for row in rows], total=total)
 
 
 def get_session(db: Session, session_id: Any) -> OperatorInspectorSession:
@@ -130,9 +126,7 @@ def get_session(db: Session, session_id: Any) -> OperatorInspectorSession:
     return row
 
 
-def end_session(
-    db: Session, session_id: Any, *, ended_by: str
-) -> OperatorInspectorSession:
+def end_session(db: Session, session_id: Any, *, ended_by: str) -> OperatorInspectorSession:
     """Close a session (idempotent: a first close stamps ``ended_at``/``ended_by``;
     re-closing leaves the original stamp untouched). Caller owns commit/audit."""
     row = get_session(db, session_id)

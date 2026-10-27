@@ -181,7 +181,7 @@ export default function CapitalStructurePage() {
               >
                 <div>
                   <div
-                    className="flex h-4 rounded-sm overflow-hidden"
+                    className="flex h-4 rounded-xs overflow-hidden"
                     role="img"
                     aria-label={compositionSegments
                       .map(
@@ -210,7 +210,7 @@ export default function CapitalStructurePage() {
                         className="inline-flex items-center gap-2"
                       >
                         <span
-                          className="w-2 h-2 rounded-sm"
+                          className="w-2 h-2 rounded-xs"
                           style={{ background: cssSeriesColor(s.colorIndex) }}
                           aria-hidden
                         />

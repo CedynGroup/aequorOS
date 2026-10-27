@@ -1,7 +1,7 @@
 """Add capacity and bank-scoped blind indexes for sensitive operational fields.
 
 Revision ID: 202610220101
-Revises: 202610140100
+Revises: 202610260001
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision = "202610220101"
-down_revision = "202610140100"
+down_revision = "202610260001"
 branch_labels = None
 depends_on = None
 

@@ -44,6 +44,8 @@ function statusPill(status: string) {
     return <StatusPill tone="critical">Above limit</StatusPill>;
   if (status === "within_limit")
     return <StatusPill tone="success">Within limit</StatusPill>;
+  if (status === "locked")
+    return <StatusPill tone="amber">Locked · not evaluated</StatusPill>;
   if (status === "not_computable")
     return <StatusPill tone="slate">Not computable</StatusPill>;
   return <StatusPill tone="slate">Not set</StatusPill>;
@@ -66,6 +68,13 @@ export default function CreditConcentrationPage() {
           {concentration.data
             ? (() => {
                 const data = concentration.data;
+                const incomplete =
+                  Boolean(data.lockedLimits?.length) ||
+                  data.dimensions.some((dimension) =>
+                    dimension.buckets.some(
+                      (bucket) => bucket.limitStatus === "locked",
+                    ),
+                  );
                 const active = data.dimensions.find(
                   (d) => d.dimension === dimension,
                 );
@@ -128,9 +137,11 @@ export default function CreditConcentrationPage() {
                     align: "right",
                     numeric: true,
                     render: (r) =>
-                      r.limitValue != null
-                        ? `${num(r.limitValue).toFixed(1)}%`
-                        : "Not set",
+                      r.limitStatus === "locked"
+                        ? "Locked"
+                        : r.limitValue != null
+                          ? `${num(r.limitValue).toFixed(1)}%`
+                          : "Not set",
                   },
                   {
                     key: "util",
@@ -181,17 +192,32 @@ export default function CreditConcentrationPage() {
                       />
                       <KpiStat
                         label="Limits breached"
-                        value={fmtInt(data.breaches.length)}
-                        status={data.breaches.length > 0 ? "crit" : "ok"}
+                        value={
+                          incomplete && data.breaches.length === 0
+                            ? "Not fully evaluated"
+                            : fmtInt(data.breaches.length)
+                        }
+                        status={
+                          data.breaches.length > 0
+                            ? "crit"
+                            : incomplete
+                              ? "warn"
+                              : "ok"
+                        }
+                        hint={
+                          incomplete
+                            ? "Incomplete: configured limits are locked and not evaluated"
+                            : undefined
+                        }
                       />
                     </div>
 
-                    {data.lockedLimits && data.lockedLimits.length > 0 && (
+                    {Boolean(data.lockedLimits?.length) && (
                       <SectionCard title="Locked limits">
                         <ul className="space-y-2 text-body text-slate">
-                          {data.lockedLimits.map((limit, index) => (
+                          {data.lockedLimits!.map((limit, index) => (
                             <li key={index}>
-                              {limit.bucketKey} · {labelize(limit.dimension)} ·{" "}
+                              🔒 Protected data · {labelize(limit.dimension)} ·{" "}
                               {labelize(limit.limitKind)} {String(limit.value)}{" "}
                               — not evaluated
                             </li>
@@ -199,7 +225,6 @@ export default function CreditConcentrationPage() {
                         </ul>
                       </SectionCard>
                     )}
-
                     <SubTabs
                       items={DIMENSIONS}
                       active={dimension}

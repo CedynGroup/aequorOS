@@ -11,13 +11,13 @@ sibling's row, the audit log and the job queue untouched.
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import Table, func, select
 
-from app.db.base import utc_now
+from app.db.base import Base, utc_now
 from app.db.session import get_sessionmaker
 from app.models import AuditEvent, Bank, CanonicalWithdrawal, Job, SystemOfRecordDeclaration
 from app.services.institution_types import FALLBACK_TYPE_CODE
@@ -125,13 +125,15 @@ def _seed_withdrawal(bank_id: str, *, status: str) -> UUID:
         session.close()
 
 
-def _row_state(model: type[Any], row_id: UUID) -> dict[str, Any]:
+def _row_state(model: type[Base], row_id: UUID) -> dict[str, Any]:
     session = get_sessionmaker()()
     session.info["organization_id"] = ORG_1
     try:
         row = session.get(model, row_id)
         assert row is not None
-        return {column.key: getattr(row, column.key) for column in model.__table__.columns}
+        return {
+            column.key: getattr(row, column.key) for column in cast(Table, model.__table__).columns
+        }
     finally:
         session.close()
 
@@ -164,7 +166,7 @@ def _not_found_shape(response, row_id: UUID) -> dict[str, Any]:  # noqa: ANN001 
 
 def _assert_refused_without_side_effects(
     response,  # noqa: ANN001 - httpx.Response
-    model: type[Any],
+    model: type[Base],
     row_id: UUID,
     before: dict[str, Any],
     counts: tuple[int, int],

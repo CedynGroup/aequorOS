@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
+from app.core.key_management.types import KeyStatus
 from app.icaap.domain.blocks import P1_BLOCK_TYPES, BlockStatus
 from app.icaap.schemas.workspace import (
     IcaapCycleRead,
@@ -30,6 +31,8 @@ from app.icaap.service import blocks
 from app.models import BankReportingPeriod
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital
+from tests.core import test_key_unavailable_numeric as encrypted
+from tests.core.test_bank_field_encryption import KEY_A
 from tests.icaap.service.conftest import AS_OF
 
 pytestmark = pytest.mark.usefixtures("capital_run_authority")
@@ -303,3 +306,23 @@ def test_no_resolver_reaches_for_the_live_plane(
         blocks.get_block(canonical_book, access, cycle.id, created.id)
     listing = blocks.list_blocks(canonical_book, access, cycle.id, include_payload=True)
     assert {entry.block_type for entry in listing.blocks} == P1_BLOCK_TYPES
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_profile_resolver_works_with_protected_register_and_no_key(
+    canonical_book: Session,
+    access: IcaapAccess,
+    cycle: IcaapCycleRead,
+    monkeypatch: pytest.MonkeyPatch,
+    status: KeyStatus,
+) -> None:
+    provider = encrypted.connect(canonical_book, monkeypatch)
+    encrypted.register(canonical_book)
+    provider.set_status(KEY_A, status)
+    canonical_book.expunge_all()
+    block = _create(canonical_book, access, cycle, "institution_profile")
+    assert block.status == BlockStatus.FRESH.value
+    binding = block.current_binding
+    assert binding is not None and binding.source_kind == "register"
+    assert binding.source_ref["row_count"] >= 8
+    assert binding.source_key.startswith("register:")

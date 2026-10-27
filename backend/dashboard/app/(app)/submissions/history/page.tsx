@@ -244,7 +244,7 @@ export default function HistoryPage() {
               value={family}
               onChange={(e) => applyFilter(() => setFamily(e.target.value))}
               aria-label="Filter by family"
-              className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
+              className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
             >
               <option value={ALL}>All families</option>
               {Object.entries(FAMILY_LABELS).map(([value, label]) => (
@@ -257,7 +257,7 @@ export default function HistoryPage() {
               value={status}
               onChange={(e) => applyFilter(() => setStatus(e.target.value))}
               aria-label="Filter by status"
-              className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
+              className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
             >
               <option value={ALL}>All statuses</option>
               {STATUS_OPTIONS.map((value) => (
@@ -271,7 +271,7 @@ export default function HistoryPage() {
               value={from}
               onChange={(e) => applyFilter(() => setFrom(e.target.value))}
               aria-label="Reporting date from"
-              className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy tnum"
+              className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy tnum"
             />
             <span className="text-caption text-slate">to</span>
             <input
@@ -279,7 +279,7 @@ export default function HistoryPage() {
               value={to}
               onChange={(e) => applyFilter(() => setTo(e.target.value))}
               aria-label="Reporting date to"
-              className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy tnum"
+              className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy tnum"
             />
           </div>
         }
@@ -310,7 +310,7 @@ export default function HistoryPage() {
                     setOffset((prev) => Math.max(prev - PAGE_SIZE, 0));
                     setSelectedId(null);
                   }}
-                  className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
+                  className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
                 >
                   <ChevronLeft size={11} aria-hidden />
                   Prev
@@ -322,7 +322,7 @@ export default function HistoryPage() {
                     setOffset((prev) => prev + PAGE_SIZE);
                     setSelectedId(null);
                   }}
-                  className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
+                  className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
                 >
                   Next
                   <ChevronRight size={11} aria-hidden />
@@ -445,7 +445,7 @@ function PackageRecord({
             <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
               Supervisor comments
             </p>
-            <p className="text-caption text-navy/80 leading-relaxed whitespace-pre-wrap rounded border border-border-light bg-surface px-3 py-2">
+            <p className="text-caption text-navy/80 leading-relaxed whitespace-pre-wrap rounded-sm border border-border-light bg-surface px-3 py-2">
               {detail.data?.regulatorComments ?? summary.regulatorComments}
             </p>
           </div>
@@ -597,7 +597,7 @@ function PackageRecord({
                               ),
                           );
                         }}
-                        className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                        className="ml-auto inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
                       >
                         <Download size={11} aria-hidden />
                         Download
@@ -621,7 +621,7 @@ function PackageRecord({
                         ),
                     );
                   }}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-sm border border-border px-2.5 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
                 >
                   <Mail size={11} aria-hidden />
                   Download .eml
@@ -765,7 +765,7 @@ function AuditLog({
       <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
         Audit log
       </p>
-      <div className="rounded border border-border-light overflow-hidden">
+      <div className="rounded-sm border border-border-light overflow-hidden">
         <DataTable columns={columns} rows={rows} density="compact" />
       </div>
     </div>
