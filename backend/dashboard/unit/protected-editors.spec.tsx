@@ -66,14 +66,16 @@ function party(name = "Synthetic owner") {
   };
 }
 
-function profileResponse(state = "available", name = "Synthetic owner") {
+function profileResponse(
+  state = "available",
+  name = "Synthetic owner",
+  record: object = party(state === "available" ? name : "🔒 Protected data"),
+) {
   return new Response(
     JSON.stringify({
       bank_id: BANK,
       profile: null,
-      related_parties: [
-        party(state === "available" ? name : "🔒 Protected data"),
-      ],
+      related_parties: [record],
       name_history: [],
       outlets: [],
       licenses: [],
@@ -178,6 +180,8 @@ it.each(["manual", "automatic"] as const)(
     await waitFor(() => expect(reads).toBe(2));
     expect(protectedDataState(BANK)).toBe("unavailable");
     expect(screen.getByLabelText(/Full name/)).toHaveValue(draft);
+    expect(screen.getByLabelText(/Full name/)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add party" })).toBeDisabled();
     expect(client.getQueryState(profileKey)?.isInvalidated).toBe(false);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5_000);
@@ -317,6 +321,8 @@ it.each(["revoked", "unavailable"] as const)(
     );
     expect(client.getQueryData(["de-batch", BANK, "other"])).toBeUndefined();
     expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved new name");
+    expect(screen.getByLabelText(/Full name/)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save party" })).toBeDisabled();
     expect(
       screen.getAllByText(protectedDataMessages[reason]).length,
     ).toBeGreaterThan(0);
@@ -328,6 +334,671 @@ it.each(["revoked", "unavailable"] as const)(
       expect(screen.queryByLabelText(/Full name/)).toBeNull(),
     );
     expect(screen.getAllByText("Unsaved new name").length).toBeGreaterThan(0);
+  },
+);
+
+const ROLE = "00000000-0000-4000-8000-000000000018";
+
+it.each([
+  ["revoked", false],
+  ["unavailable", false],
+  ["revoked", true],
+  ["unavailable", true],
+] as const)(
+  "refreshes shareholding identities after %s with existing=%s while preserving numeric drafts",
+  async (lockedState, existing) => {
+    let state: string = lockedState;
+    let refreshed = false;
+    const otherId = "00000000-0000-4000-8000-000000000019";
+    const newId = "00000000-0000-4000-8000-000000000020";
+    const holdingId = "00000000-0000-4000-8000-000000000021";
+    const writes: unknown[] = [];
+    const record = () => ({
+      ...party(state === "available" ? "Current owner" : "🔒 Protected data"),
+      shareholdings: existing
+        ? [
+            {
+              id: holdingId,
+              share_type: "ordinary",
+              share_subtype: null,
+              shareholder_rights: "voting",
+              number_of_shares: "100",
+              pct_shareholding: "10",
+              ubo_party_id: PARTY,
+            },
+          ]
+        : [],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT" || init?.method === "POST") {
+          writes.push(JSON.parse(String(init.body)));
+          return Response.json(record());
+        }
+        return Response.json(
+          {
+            bank_id: BANK,
+            profile: null,
+            related_parties: [
+              record(),
+              ...(refreshed
+                ? [{ ...party("New candidate"), id: newId }]
+                : [
+                    {
+                      ...party("Old candidate"),
+                      id: otherId,
+                    },
+                  ]),
+            ],
+            name_history: [],
+            outlets: [],
+            licenses: [],
+            products: [],
+          },
+          {
+            headers: {
+              "X-Aequoros-Protected-Data": JSON.stringify({ [BANK]: state }),
+            },
+          },
+        );
+      }),
+    );
+    const client = mount(<RelatedPartiesPage />);
+    await userEvent.click(await screen.findByText("🔒 Protected data"));
+    if (existing) {
+      const holdingRow = screen.getByText("100 shares").closest("li")!;
+      await userEvent.click(
+        within(holdingRow).getByRole("button", { name: "Edit" }),
+      );
+    } else {
+      await userEvent.click(
+        screen.getByRole("button", { name: "Add shareholding" }),
+      );
+      await userEvent.selectOptions(
+        screen.getByLabelText(/Ultimate beneficial owner/),
+        PARTY,
+      );
+    }
+    await userEvent.clear(screen.getByLabelText(/Number of shares/));
+    await userEvent.type(screen.getByLabelText(/Number of shares/), "250", {
+      delay: null,
+    });
+    await userEvent.clear(screen.getByLabelText(/% shareholding/));
+    await userEvent.type(screen.getByLabelText(/% shareholding/), "25", {
+      delay: null,
+    });
+    await userEvent.type(
+      screen.getByLabelText(/Reason for change/),
+      "Numeric holding",
+      { delay: null },
+    );
+    const select = screen.getByLabelText(/Ultimate beneficial owner/);
+    expect(
+      within(select).getByRole("option", { selected: true }),
+    ).toHaveTextContent("🔒 Protected data");
+    state = "available";
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(
+        within(select).getByRole("option", { selected: true }),
+      ).toHaveTextContent("Current owner"),
+    );
+    expect(select).toHaveValue(PARTY);
+    expect(
+      within(select).getByRole("option", { name: "Old candidate" }),
+    ).toBeVisible();
+    refreshed = true;
+    await act(async () => {
+      await client.refetchQueries({ queryKey: profileKey });
+    });
+    await waitFor(() =>
+      expect(
+        within(select).queryByRole("option", { name: "Old candidate" }),
+      ).toBeNull(),
+    );
+    expect(
+      within(select).getByRole("option", { name: "New candidate" }),
+    ).toBeVisible();
+    expect(select).toHaveValue(PARTY);
+    expect(screen.getByLabelText(/Number of shares/)).toHaveValue(250);
+    expect(screen.getByLabelText(/% shareholding/)).toHaveValue(25);
+    state = lockedState;
+    await act(async () => {
+      await observeProtectedData(profileResponse(state));
+    });
+    await waitFor(() =>
+      expect(
+        within(select).getByRole("option", { selected: true }),
+      ).toHaveTextContent("🔒 Protected data"),
+    );
+    await userEvent.click(
+      within(select.closest("form")!).getByRole("button", {
+        name: existing ? "Save shareholding" : "Add shareholding",
+      }),
+    );
+    await waitFor(() =>
+      expect(writes).toEqual([
+        {
+          reason: "Numeric holding",
+          share_type: "ordinary",
+          share_subtype: null,
+          shareholder_rights: "voting",
+          number_of_shares: "250",
+          pct_shareholding: "25",
+          ubo_party_id: PARTY,
+        },
+      ]),
+    );
+  },
+);
+
+function editableParty(state: string, refreshed = false) {
+  const protectedValue = (value: string) =>
+    state === "available" ? value : "🔒 Protected data";
+  return {
+    ...party(protectedValue(refreshed ? "Refreshed owner" : "Synthetic owner")),
+    contact:
+      state === "available"
+        ? { email: refreshed ? "new@example.test" : "old@example.test" }
+        : { _aequoros_protected_data: true },
+    roles: [
+      {
+        id: ROLE,
+        role: "external_auditor",
+        appointed_on: "2026-01-01",
+        term_of_appointment: protectedValue(
+          refreshed ? "Refreshed term" : "Original term",
+        ),
+        icag_registration: protectedValue(
+          refreshed ? "New registration" : "Old registration",
+        ),
+        other_responsibilities: protectedValue(
+          refreshed
+            ? "Refreshed responsibilities"
+            : "Original responsibilities",
+        ),
+        sitting_allowance: refreshed ? "20" : "10",
+        travel_allowance: "30",
+        annual_fees: "100",
+      },
+    ],
+  };
+}
+
+async function openPartyEditor() {
+  await userEvent.click(await screen.findByText("Synthetic owner"));
+  await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+  await userEvent.type(
+    screen.getByLabelText(/Reason for change/),
+    "Synthetic edit",
+    { delay: null },
+  );
+}
+
+it.each(["revoked", "unavailable"] as const)(
+  "locks protected controls while preserving an editable numeric save during %s",
+  async (lockedState) => {
+    let state = "available";
+    const writes: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          writes.push(JSON.parse(String(init.body)));
+          return Response.json(editableParty(state));
+        }
+        return profileResponse(state, undefined, editableParty(state));
+      }),
+    );
+    mount(<RelatedPartiesPage />);
+    await openPartyEditor();
+    state = lockedState;
+    await act(async () => {
+      await observeProtectedData(profileResponse(state));
+    });
+    await waitFor(() => expect(protectedDataState(BANK)).toBe(lockedState));
+    for (const label of [
+      /Full name/,
+      "Term",
+      "ICAG registration",
+      "Other responsibilities",
+    ]) {
+      const input = screen.getByLabelText(label);
+      expect(input).toBeDisabled();
+      expect(input).toHaveAttribute("placeholder", "🔒 Protected data");
+      const wrapper = input.closest("fieldset");
+      expect(wrapper).toHaveAttribute(
+        "title",
+        protectedDataMessages[lockedState],
+      );
+      expect(
+        within(wrapper!).getByRole("img", { name: "Protected data locked" }),
+      ).toBeVisible();
+    }
+    expect(
+      screen.getAllByTitle(protectedDataMessages[lockedState]).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Annual fees")).toBeEnabled();
+    expect(screen.getByLabelText("Status")).toBeEnabled();
+    expect(screen.getByLabelText(/Reason for change/)).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    await userEvent.clear(screen.getByLabelText("Annual fees"));
+    await userEvent.type(screen.getByLabelText("Annual fees"), "250", {
+      delay: null,
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() =>
+      expect(writes).toEqual([
+        {
+          reason: "Synthetic edit",
+          role_updates: [{ role_id: ROLE, annual_fees: "250" }],
+        },
+      ]),
+    );
+  },
+);
+
+it.each(["revoked", "unavailable"] as const)(
+  "saves only supplied numeric fields and scoped role IDs while %s",
+  async (lockedState) => {
+    let state = "available";
+    const writes: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          writes.push(JSON.parse(String(init.body)));
+          return Response.json(editableParty(state));
+        }
+        return profileResponse(state, undefined, editableParty(state));
+      }),
+    );
+    mount(<RelatedPartiesPage />);
+    await openPartyEditor();
+    await userEvent.clear(screen.getByLabelText("Annual fees"));
+    await userEvent.type(screen.getByLabelText("Annual fees"), "250");
+    await userEvent.clear(screen.getByLabelText("Sitting allowance"));
+    await userEvent.clear(screen.getByLabelText("Travel allowance"));
+    await userEvent.type(screen.getByLabelText("Travel allowance"), "35");
+    await userEvent.clear(screen.getByLabelText("Appointed on"));
+    await userEvent.type(screen.getByLabelText("Appointed on"), "2026-02-01");
+    state = lockedState;
+    await act(async () => {
+      await observeProtectedData(profileResponse(state));
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText(/Full name/)).toHaveValue(""),
+    );
+    expect(screen.getByLabelText("Annual fees")).toHaveValue(250);
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/Full name/)).toBeNull(),
+    );
+    expect(writes).toEqual([
+      {
+        reason: "Synthetic edit",
+        role_updates: [
+          {
+            role_id: ROLE,
+            annual_fees: "250",
+            sitting_allowance: null,
+            travel_allowance: "35",
+            appointed_on: "2026-02-01",
+          },
+        ],
+      },
+    ]);
+  },
+);
+
+it.each(["revoked", "unavailable"] as const)(
+  "omits locked baseline markers when opening an editor during %s",
+  async (state) => {
+    const writes: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          writes.push(JSON.parse(String(init.body)));
+          return Response.json(editableParty(state));
+        }
+        return profileResponse(state, undefined, editableParty(state));
+      }),
+    );
+    mount(<RelatedPartiesPage />);
+    await userEvent.click(await screen.findByText("🔒 Protected data"));
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("");
+    expect(screen.getByLabelText("Term")).toHaveValue("");
+    expect(screen.getByLabelText("ICAG registration")).toHaveValue("");
+    expect(screen.getByLabelText("Other responsibilities")).toHaveValue("");
+    await userEvent.selectOptions(screen.getByLabelText("Status"), "inactive");
+    await userEvent.type(
+      screen.getByLabelText(/Reason for change/),
+      "Synthetic edit",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/Full name/)).toBeNull(),
+    );
+    expect(writes).toEqual([{ reason: "Synthetic edit", status: "inactive" }]);
+  },
+);
+
+it.each(["revoked", "unavailable"] as const)(
+  "retains mixed dirty fields through healthy refetch, %s refusal and recovery",
+  async (lockedState) => {
+    let state = "available";
+    let refreshed = false;
+    const writes: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          writes.push(JSON.parse(String(init.body)));
+          return state === "available"
+            ? Response.json(editableParty(state, refreshed))
+            : refusal(lockedState);
+        }
+        return profileResponse(
+          state,
+          undefined,
+          editableParty(state, refreshed),
+        );
+      }),
+    );
+    const client = mount(<RelatedPartiesPage />);
+    await openPartyEditor();
+    await userEvent.clear(screen.getByLabelText(/Full name/));
+    await userEvent.type(screen.getByLabelText(/Full name/), "Unsaved name", {
+      delay: null,
+    });
+    await userEvent.clear(screen.getByLabelText("Annual fees"));
+    await userEvent.type(screen.getByLabelText("Annual fees"), "250", {
+      delay: null,
+    });
+    await userEvent.clear(screen.getByLabelText("Other responsibilities"));
+    await userEvent.type(
+      screen.getByLabelText("Other responsibilities"),
+      "Unsaved responsibilities",
+      { delay: null },
+    );
+    refreshed = true;
+    await act(async () => {
+      await client.refetchQueries({ queryKey: profileKey });
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Term")).toHaveValue("Refreshed term"),
+    );
+    expect(screen.getByLabelText("ICAG registration")).toHaveValue(
+      "New registration",
+    );
+    expect(screen.getByLabelText("Sitting allowance")).toHaveValue(20);
+    expect(
+      screen.getByRole("heading", { name: "Edit Refreshed owner" }),
+    ).toBeVisible();
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved name");
+    state = lockedState;
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() => expect(protectedDataState(BANK)).toBe(lockedState));
+    await waitFor(() => expect(screen.getByLabelText("Term")).toHaveValue(""));
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved name");
+    expect(screen.getByLabelText("Annual fees")).toHaveValue(250);
+    expect(screen.getByLabelText("Other responsibilities")).toHaveValue(
+      "Unsaved responsibilities",
+    );
+    expect(
+      screen.queryByRole("heading", { name: "Edit Refreshed owner" }),
+    ).toBeNull();
+    state = "available";
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Term")).toHaveValue("Refreshed term"),
+    );
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved name");
+    expect(screen.getByLabelText("Annual fees")).toHaveValue(250);
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/Full name/)).toBeNull(),
+    );
+    const expected = {
+      reason: "Synthetic edit",
+      full_name: "Unsaved name",
+      role_updates: [
+        {
+          role_id: ROLE,
+          annual_fees: "250",
+          other_responsibilities: "Unsaved responsibilities",
+        },
+      ],
+    };
+    expect(writes).toEqual([expected, expected]);
+  },
+);
+
+it.each(["Term", "ICAG registration"])(
+  "saves only the dirty protected role field %s with its existing ID",
+  async (label) => {
+    const writes: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          writes.push(JSON.parse(String(init.body)));
+          return Response.json(editableParty("available"));
+        }
+        return profileResponse(
+          "available",
+          undefined,
+          editableParty("available"),
+        );
+      }),
+    );
+    mount(<RelatedPartiesPage />);
+    await openPartyEditor();
+    await userEvent.clear(screen.getByLabelText(label));
+    await userEvent.type(screen.getByLabelText(label), "User value");
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/Full name/)).toBeNull(),
+    );
+    expect(writes).toEqual([
+      {
+        reason: "Synthetic edit",
+        role_updates: [
+          {
+            role_id: ROLE,
+            [label === "Term" ? "term_of_appointment" : "icag_registration"]:
+              "User value",
+          },
+        ],
+      },
+    ]);
+  },
+);
+
+it.each(["revoked", "unavailable"] as const)(
+  "blocks membership edits during a %s cache purge without losing scoped drafts",
+  async (lockedState) => {
+    const secondRole = "00000000-0000-4000-8000-000000000019";
+    let state = "available";
+    let holdRead = false;
+    let refreshed = false;
+    let finishRead: ((response: Response) => void) | undefined;
+    const writes: unknown[] = [];
+    const record = () => {
+      const baseline = editableParty(state, refreshed);
+      return {
+        ...baseline,
+        roles: [
+          ...baseline.roles,
+          { ...baseline.roles[0], id: secondRole, role: "director" },
+        ],
+      };
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          writes.push(JSON.parse(String(init.body)));
+          return Response.json(record());
+        }
+        if (holdRead)
+          return new Promise<Response>((resolve) => {
+            finishRead = resolve;
+          });
+        return profileResponse(state, undefined, record());
+      }),
+    );
+    const client = mount(<RelatedPartiesPage />);
+    await openPartyEditor();
+    await userEvent.clear(screen.getByLabelText(/Full name/));
+    await userEvent.type(screen.getByLabelText(/Full name/), "Unsaved name", {
+      delay: null,
+    });
+    await userEvent.clear(screen.getAllByLabelText("Annual fees")[0]);
+    await userEvent.type(screen.getAllByLabelText("Annual fees")[0], "250", {
+      delay: null,
+    });
+    expect(screen.getAllByRole("button", { name: "Remove role" })).toHaveLength(
+      2,
+    );
+    holdRead = true;
+    state = lockedState;
+    await act(async () => {
+      await observeProtectedData(profileResponse(state));
+    });
+    await waitFor(() => expect(finishRead).toBeTypeOf("function"));
+    expect(client.getQueryData(profileKey)).toBeUndefined();
+    const add = screen.getByRole("button", { name: "Add role" });
+    const remove = screen.getByRole("button", { name: "Remove role" });
+    expect(add).toBeDisabled();
+    expect(remove).toBeDisabled();
+    await userEvent.click(add);
+    await userEvent.click(remove);
+    expect(screen.getAllByLabelText("Annual fees")).toHaveLength(1);
+    expect(screen.getByLabelText("Annual fees")).toHaveValue(250);
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved name");
+    holdRead = false;
+    refreshed = true;
+    state = "available";
+    await act(async () => {
+      finishRead?.(profileResponse(state, undefined, record()));
+    });
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("button", { name: "Remove role" }),
+      ).toHaveLength(2),
+    );
+    expect(screen.getByRole("button", { name: "Add role" })).toBeEnabled();
+    expect(
+      screen
+        .getAllByRole("button", { name: "Remove role" })
+        .every((button) => !button.hasAttribute("disabled")),
+    ).toBe(true);
+    expect(screen.getAllByLabelText("Annual fees")[0]).toHaveValue(250);
+    expect(screen.getAllByLabelText("Term")[1]).toHaveValue("Refreshed term");
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved name");
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/Full name/)).toBeNull(),
+    );
+    expect(writes).toEqual([
+      {
+        reason: "Synthetic edit",
+        full_name: "Unsaved name",
+        role_updates: [{ role_id: ROLE, annual_fees: "250" }],
+      },
+    ]);
+    expect(screen.getAllByText("External Auditor").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Director").length).toBeGreaterThan(0);
+  },
+);
+
+it.each(["empty", "added"] as const)(
+  "retains an explicit %s role replacement and uses refreshed untouched fields",
+  async (replacement) => {
+    let refreshed = false;
+    let state = "available";
+    const writes: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          writes.push(JSON.parse(String(init.body)));
+          return Response.json(editableParty(state, refreshed));
+        }
+        return profileResponse(
+          state,
+          undefined,
+          editableParty(state, refreshed),
+        );
+      }),
+    );
+    mount(<RelatedPartiesPage />);
+    await openPartyEditor();
+    if (replacement === "empty") {
+      await userEvent.click(
+        screen.getByRole("button", { name: "Remove role" }),
+      );
+    } else {
+      await userEvent.click(screen.getByRole("button", { name: "Add role" }));
+      await userEvent.type(screen.getAllByLabelText("Term")[1], "New term", {
+        delay: null,
+      });
+    }
+    state = "revoked";
+    await act(async () => {
+      await observeProtectedData(profileResponse(state));
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save party" })).toBeDisabled(),
+    );
+    refreshed = true;
+    state = "available";
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save party" })).toBeEnabled(),
+    );
+    if (replacement === "added") {
+      expect(screen.getAllByLabelText("Term")[0]).toHaveValue("Refreshed term");
+      expect(screen.getAllByLabelText("Term")[1]).toHaveValue("New term");
+    }
+    await userEvent.click(screen.getByRole("button", { name: "Save party" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/Full name/)).toBeNull(),
+    );
+    expect(writes).toEqual([
+      {
+        reason: "Synthetic edit",
+        roles:
+          replacement === "empty"
+            ? []
+            : [
+                {
+                  role: "external_auditor",
+                  appointed_on: "2026-01-01",
+                  term_of_appointment: "Refreshed term",
+                  icag_registration: "New registration",
+                  other_responsibilities: "Refreshed responsibilities",
+                  sitting_allowance: "20",
+                  travel_allowance: "30",
+                  annual_fees: "100",
+                },
+                {
+                  role: "director",
+                  appointed_on: null,
+                  term_of_appointment: "New term",
+                  icag_registration: null,
+                  other_responsibilities: null,
+                  sitting_allowance: null,
+                  travel_allowance: null,
+                  annual_fees: null,
+                },
+              ],
+      },
+    ]);
   },
 );
 

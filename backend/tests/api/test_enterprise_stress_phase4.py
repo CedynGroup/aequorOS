@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
 from app.db.session import get_sessionmaker
 from app.models import (

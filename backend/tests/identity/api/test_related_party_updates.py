@@ -74,6 +74,97 @@ def protected_storage(db: Session, party_id: UUID) -> list[tuple[object, ...]]:
 
 
 @pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_http_locked_shareholding_mutations_preserve_identity_and_scope(  # noqa: PLR0913
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    party: RelatedPartyRead,
+    status: KeyStatus,
+) -> None:
+    owners = [
+        institution_profile.create_related_party(
+            db_session,
+            fields.CTX,
+            bank_id,
+            RelatedPartyCreate(
+                reason="Synthetic shareholding owner",
+                party_type="individual",
+                full_name="Synthetic UBO",
+            ),
+        )
+        for bank_id in (fields.BANK_A, fields.BANK_B)
+    ]
+    before = protected_storage(db_session, party.id)
+    provider.set_status(fields.KEY_A, status)
+    reason = "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    payload: dict[str, object] = {
+        "reason": "Synthetic numeric holding",
+        "share_type": "ordinary",
+        "shareholder_rights": "voting",
+        "number_of_shares": "100",
+        "pct_shareholding": "10",
+        "ubo_party_id": str(owners[0].id),
+    }
+    url = f"{BASE}/{party.id}/shareholdings"
+    for target, body in (
+        (url, {**payload, "ubo_party_id": str(owners[1].id)}),
+        (url.replace(fields.BANK_A, fields.BANK_B), payload),
+    ):
+        response = db_client.post(target, headers=headers(), json=body)
+        assert response.status_code == 404, response.text
+    response = db_client.post(url, headers=headers(), json=payload)
+    assert response.status_code == 201, response.text
+    created = RelatedPartyRead.model_validate_json(response.text)
+    assert len(created.shareholdings) == 1
+    holding = created.shareholdings[0]
+    assert holding.ubo_party_id == owners[0].id
+    assert holding.number_of_shares == Decimal("100")
+    assert created.full_name == LOCKED_TEXT
+    assert created.contact == {LOCKED_JSON: reason}
+    assert TypeAdapter(dict[str, str]).validate_json(
+        response.headers["X-Aequoros-Protected-Data"]
+    ) == {fields.BANK_A: reason}
+    update_url = f"{url}/{holding.id}"
+    for target, body in (
+        (update_url, {**payload, "ubo_party_id": str(owners[1].id)}),
+        (update_url.replace(fields.BANK_A, fields.BANK_B), payload),
+        (update_url.replace(str(party.id), str(owners[0].id)), payload),
+    ):
+        response = db_client.put(target, headers=headers(), json=body)
+        assert response.status_code == 404, response.text
+    response = db_client.put(
+        update_url,
+        headers=headers(),
+        json={**payload, "number_of_shares": "250", "pct_shareholding": "25"},
+    )
+    assert response.status_code == 200, response.text
+    saved = RelatedPartyRead.model_validate_json(response.text)
+    assert saved.full_name == LOCKED_TEXT
+    assert saved.contact == {LOCKED_JSON: reason}
+    assert saved.roles[0].term_of_appointment == LOCKED_TEXT
+    assert saved.shareholdings[0].number_of_shares == Decimal("250")
+    assert saved.shareholdings[0].pct_shareholding == Decimal("25")
+    assert TypeAdapter(dict[str, str]).validate_json(
+        response.headers["X-Aequoros-Protected-Data"]
+    ) == {fields.BANK_A: reason}
+    assert protected_storage(db_session, party.id) == before
+    response = db_client.put(
+        f"{BASE}/{party.id}",
+        headers=headers(),
+        json={"reason": "Refuse protected edit", "full_name": "Changed identity"},
+    )
+    assert response.status_code == 503, response.text
+    provider.set_status(fields.KEY_A, KeyStatus.ACTIVE)
+    db_session.expunge_all()
+    restored = institution_profile.get_full_profile(db_session, fields.CTX, fields.BANK_A)
+    current = next(record for record in restored.related_parties if record.id == party.id)
+    assert current.full_name == party.full_name
+    assert current.contact == party.contact
+    assert current.roles == party.roles
+    assert current.shareholdings == saved.shareholdings
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
 def test_http_numeric_update_preserves_protected_storage_and_recovers(
     db_client: TestClient,
     db_session: Session,

@@ -103,7 +103,7 @@ def test_retained_filing_stays_encrypted_and_revocation_refuses_read(
     bank_storage.provider.set_status(KEY, KeyStatus.DISABLED)
     with pytest.raises(KeyUnavailableError) as refused:
         bank_storage.storage.read(location, stored.version_id)
-    assert refused.value.revoked is True
+    assert refused.value.revoked
 
 
 def test_output_lock_provisioning_preserves_unversioned_temp_cleanup(
