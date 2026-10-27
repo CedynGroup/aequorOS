@@ -14,32 +14,52 @@ BACKEND = Path(__file__).parents[2]
 
 
 @pytest.mark.parametrize(
-    ("suite", "body", "passes"),
+    ("suite", "body", "passes", "attempts"),
     [
-        ("unit", "assert True", True),
-        ("integration", "assert True", True),
-        ("unknown", "assert True", False),
-        ("unit", "import sqlite3; sqlite3.connect(':memory:')", False),
+        ("unit", "assert True", True, False),
+        ("integration", "assert True", True, False),
+        ("unknown", "assert True", False, False),
+        ("unit", "import sqlite3; sqlite3.connect(':memory:')", False, True),
+        ("unit", "import psycopg; psycopg.connect('')", False, True),
+        ("unit", "import psycopg; psycopg.Connection.connect('')", False, True),
+        (
+            "unit",
+            "from sqlalchemy import create_engine; create_engine('sqlite://').connect()",
+            False,
+            True,
+        ),
         (
             "unit",
             "from sqlalchemy import create_engine; create_engine('sqlite://').raw_connection()",
             False,
+            True,
         ),
-        ("unit", "import oracledb; oracledb.connect(dsn='localhost/unused')", False),
-        ("unit", "__unclassified__", False),
-        ("unit", "__double__", False),
-        ("unit", "__deselect__", False),
-        ("unit", "__duplicate__", False),
-        ("unit", "__stale__", False),
+        ("unit", "import oracledb; oracledb.connect(dsn='localhost/unused')", False, True),
+        ("unit", "__unclassified__", False, False),
+        ("unit", "__double__", False, False),
+        ("unit", "__deselect__", False, False),
+        ("unit", "__duplicate__", False, False),
+        ("unit", "__stale__", False, False),
         (
             "unit",
             "import sqlite3\n    try: sqlite3.connect(':memory:')\n    except AssertionError: pass",
             False,
+            True,
         ),
-        ("unit", "import pytest; pytest.skip('unexpected')", False),
+        ("unit", "import pytest; pytest.skip('unexpected')", False, False),
+        ("unit", "assert False", False, False),
+        (
+            "unit",
+            "import subprocess, sys; subprocess.run([sys.executable, '-c', "
+            "\"import sqlite3; sqlite3.connect(':memory:')\"], env={}, check=False)",
+            False,
+            True,
+        ),
     ],
 )
-def test_suite_execution_boundary(tmp_path: Path, suite: str, body: str, passes: bool) -> None:
+def test_suite_execution_boundary(
+    tmp_path: Path, suite: str, body: str, passes: bool, attempts: bool
+) -> None:
     catalogue = tmp_path / "suites.json"
     _ = catalogue.write_text(json.dumps({"modules": {"test_probe.py": suite}, "overrides": {}}))
     _ = (tmp_path / "conftest.py").write_text(
@@ -58,7 +78,7 @@ def test_suite_execution_boundary(tmp_path: Path, suite: str, body: str, passes:
         arguments = ["-k", "test_probe and not test_other"]
     if body == "__duplicate__":
         body = "assert True"
-        arguments = ["--keep-duplicates", "test_probe.py", "test_probe.py"]
+        arguments = ["--keep-duplicates", "test_probe.py"]
     if body == "__stale__":
         body = "assert True"
         _ = catalogue.write_text(
@@ -90,6 +110,8 @@ def test_suite_execution_boundary(tmp_path: Path, suite: str, body: str, passes:
             sys.executable,
             "-m",
             "pytest",
+            "--rootdir=.",
+            "test_probe.py",
             "-p",
             "scripts.test_suites_plugin",
             "-m",
@@ -104,6 +126,11 @@ def test_suite_execution_boundary(tmp_path: Path, suite: str, body: str, passes:
         check=False,
     )
     assert (result.returncode == 0) == passes, result.stdout + result.stderr
+    logs = (tmp_path / "evidence").glob("connection-attempts-*.txt")
+    assert any(path.read_text() for path in logs) == attempts, result.stdout + result.stderr
+    if suite == "unit" and passes:
+        manifest = tmp_path / "evidence" / "collection.json"
+        assert json.loads(manifest.read_text()) == {"test_probe.py::test_probe": "unit"}
 
 
 @pytest.mark.parametrize("mutation", ["none", "missing", "duplicate", "wrong-suite"])
@@ -218,6 +245,8 @@ def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
             sys.executable,
             "-m",
             "pytest",
+            "--rootdir=.",
+            "test_probe.py",
             "-p",
             "scripts.test_suites_plugin",
             "-p",

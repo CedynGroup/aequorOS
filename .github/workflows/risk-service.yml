@@ -81,7 +81,7 @@ name: Risk Service CI
 # all. Postgres and storage suites write a JUnit report via PYTEST_ADDOPTS,
 # and a following step asserts a floor of tests actually executed
 # (.github/scripts/assert_pytest_ran.py or the shard aggregate verifier).
-# The pure owner's execution guard is documented in backend/README.md#run-tests.
+# The unit owner's execution guard is documented in backend/README.md#run-tests.
 # The storage job, the schema/RLS aggregate
 # and the lock job additionally allow ZERO skips, because the environment each
 # stands up is supposed to satisfy its whole suite — and an RLS proof can

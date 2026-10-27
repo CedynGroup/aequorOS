@@ -547,8 +547,7 @@ explicitly unselected suite cases from this cross-owner comparison.
 
 The **Unit tests** job runs `risk-service:test-unit`, including database-free
 architecture guards. Database-using architecture cases run in the integration
-shards. The compatibility `risk-service:test-pure` task still selects the original
-eleven files; CI selects the complete unit suite instead.
+shards.
 
 CI runs the remaining PostgreSQL suite in four duration-balanced module shards,
 and the schema/RLS suite in two hash-based shards; lock tests retain their own job.

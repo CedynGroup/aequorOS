@@ -86,11 +86,6 @@ depends = ["unit"]
 description = "Run the integration suite"
 depends = ["integration"]
 
-# Compatibility selector for the original eleven verified unit modules; CI runs unit.
-[tasks."risk-service:test-pure"]
-description = "Run explicitly database-free logic tests with connection and execution guards"
-run = "uv run pytest -p scripts.ci_pure_plugin tests/scripts/test_feature_moves.py tests/scripts/test_reporting_reorganization.py tests/scripts/test_fix_api_client_package.py tests/domain/irr/test_sf_properties.py tests/domain/authority/test_registry_completeness.py tests/domain/ingestion/test_reference_row_enforcement.py tests/domain/curves/test_nss.py tests/domain/test_capital_engine.py tests/domain/test_ftp_engine.py tests/domain/test_credit_pd.py tests/domain/test_ingestion_validation.py"
-
 # Compatibility path selector, including explicit SQLite contract checks.
 # Use unit for database-free guards; integration owns database-using cases.
 [tasks."risk-service:test-architecture"]
