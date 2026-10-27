@@ -26,6 +26,9 @@ Binds from another factory are rejected so a session cannot escape its owning
 schema. The shared application fixture family remains on its existing lifecycle
 until its migration stage.
 
+SQLite connections enable foreign-key enforcement on every checkout, so local
+migration fixtures must define the referenced primary or unique keys.
+
 The factory provides:
 
 - `session()` and `session_factory()` for ORM work. Session factories propagate
