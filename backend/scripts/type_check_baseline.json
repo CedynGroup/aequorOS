@@ -2796,7 +2796,7 @@
   "reportAny": 13
  },
  "tests.api.test_refresh_token_concurrency": {
-  "reportAny": 9,
+  "reportAny": 4,
   "reportPrivateUsage": 1
  },
  "tests.api.test_refresh_tokens": {
@@ -3013,10 +3013,10 @@
   "reportUnknownVariableType": 9
  },
  "tests.db.test_bi_foundation_migration": {
-  "reportAny": 26,
-  "reportMissingTypeArgument": 2,
+  "reportAny": 23,
+  "reportMissingTypeArgument": 1,
   "reportUnknownArgumentType": 5,
-  "reportUnknownParameterType": 2,
+  "reportUnknownParameterType": 1,
   "reportUnknownVariableType": 7
  },
  "tests.db.test_bi_owned_tables_parity": {
@@ -3036,11 +3036,6 @@
  },
  "tests.db.test_bi_partition_rls": {
   "reportAny": 6
- },
- "tests.db.test_bi_phase3_migration": {
-  "reportAny": 8,
-  "reportMissingTypeArgument": 1,
-  "reportUnknownParameterType": 1
  },
  "tests.db.test_bi_query_execution": {
   "reportAny": 7,
