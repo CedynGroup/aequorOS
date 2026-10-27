@@ -93,9 +93,14 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     return row
 
 
-def bank_key(db: Session, organization: str, bank: str) -> BankEncryptionKey | None:
+def bank_key(
+    db: Session, organization: str, bank: str, *, refresh: bool = False
+) -> BankEncryptionKey | None:
     scope = (organization, bank)
     unit = _unit(db)
+    if refresh:
+        unit.banks.pop(scope, None)
+        unit.current.pop(scope, None)
     if scope not in unit.banks:
         unit.banks[scope] = db.scalar(
             select(BankEncryptionKey)
@@ -382,7 +387,11 @@ def prepare_envelope(
     context: dict[str, str],
     providers: ProviderFactory = provider_for,
 ) -> ObjectKey:
-    return open_envelope(db, row, current_version(db, row), context, providers)
+    lock_bank_version(db, row.organization_id, row.bank_id, read=True)
+    connected = bank_key(db, row.organization_id, row.bank_id, refresh=True)
+    if connected is None:
+        raise KeyUnavailableError("The bank encryption key is not connected.")
+    return open_envelope(db, connected, current_version(db, connected), context, providers)
 
 
 def open_envelope(
@@ -392,6 +401,7 @@ def open_envelope(
     context: dict[str, str],
     providers: ProviderFactory = provider_for,
 ) -> ObjectKey:
+    lock_bank_version(db, row.organization_id, row.bank_id, read=True)
     unit = _unit(db)
     envelope = unit.envelopes.get(envelope_id)
     if envelope is None:

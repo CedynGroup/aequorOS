@@ -179,10 +179,12 @@ S3 URLs; document transfer under bank keys remains follow-up work.
 
 The bank grants access to its replacement key while retaining the old grant.
 Rotation verifies the replacement and publishes a new immutable data-key
-version in the existing envelope catalogue. Rotation bookkeeping locks the
-registry. Object encryption and downloads use lock-free version lookups; an
-admitted unit of work may finish with its previous version while later work uses
-the new one. Ciphertext records its version UUID, and old versions keep their exact KMS
+version in the existing envelope catalogue. Version reads and protected writes
+acquire a bank-scoped shared transaction barrier; connection and rotation take
+the exclusive barrier. Rotation waits for admitted transactions to finish, while
+later work waits for the new version. Writers refresh bank-key and current-version
+state after admission, including during optional rollout. Ciphertext records its
+version UUID, and old versions keep their exact KMS
 references. Failed rotation rolls back the new pointer/version. Object writes
 reference committed versions, so business rollback cannot orphan published
 ciphertext. See [the field design](bank_field_encryption.md#keys-and-storage)

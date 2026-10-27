@@ -12,7 +12,7 @@ def backend_pid(db: Session) -> int:
     return cast(int, db.scalar(text("SELECT pg_backend_pid()")))
 
 
-def assert_blocked(engine: Engine, blocker: int, waiter: int, change: Future[None]) -> None:
+def assert_blocked[T](engine: Engine, blocker: int, waiter: int, change: Future[T]) -> None:
     deadline = time.monotonic() + 5
     blocked = False
     with engine.connect() as observer:
