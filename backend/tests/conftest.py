@@ -53,6 +53,8 @@ from tests.support.api_factories import ApiFactories
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.support.inmemory_storage import InMemoryStorageClient
 
+isolate_encryption_locks()
+
 # No scheduled property-test job exists: local and PR runs share this bounded,
 # reproducible budget. Expensive database machines may lower it explicitly.
 hypothesis_settings.register_profile(
@@ -460,8 +462,6 @@ def build_test_database(
     engine = get_engine(database_url)
     if engine.dialect.name == "sqlite":
         _enable_sqlite_foreign_keys(engine)
-    elif engine.dialect.name == "postgresql":
-        isolate_encryption_locks(engine)
     try:
         Base.metadata.create_all(engine)
         seed(engine)
