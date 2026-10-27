@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Announces time travel: shown only when the selected reporting period is
@@ -7,9 +7,9 @@
  * state explicit and offers the way back, per the three-plane model.
  */
 
-import { History } from 'lucide-react';
-import { useBankContext } from '@/components/shell/BankContext';
-import { fmtDateUTC } from '@/lib/api/values';
+import { History } from "lucide-react";
+import { useBankContext } from "@/components/shell/BankContext";
+import { fmtDateUTC } from "@/lib/api/values";
 
 export default function HistoricalPeriodRibbon() {
   const { period, periods, setPeriodId } = useBankContext();
@@ -19,16 +19,18 @@ export default function HistoricalPeriodRibbon() {
   return (
     <div className="flex items-center gap-3 px-8 py-2 bg-action-light/40 border-b border-action/20">
       <History size={13} className="text-action shrink-0" aria-hidden />
-      <p className="text-caption text-navy/85">
-        Viewing the <span className="font-mono font-medium">{period.label}</span> book
-        (positions as at {fmtDateUTC(period.periodEnd)}) — historical, not live.
+      <p className="text-caption text-navy">
+        Selected reporting period:{" "}
+        <span className="font-mono font-medium">{period.label}</span>(
+        {fmtDateUTC(period.periodEnd)}). Dataset dates are shown beside each
+        result.
       </p>
       <button
         type="button"
         onClick={() => setPeriodId(latest.id)}
         className="ml-auto text-caption font-medium text-action hover:underline whitespace-nowrap"
       >
-        Return to live edge →
+        View latest reporting period
       </button>
     </div>
   );

@@ -12,7 +12,7 @@ existing application URLs, ownership, credentials or BYPASSRLS roles.
 | `aqs_owner`          | NOLOGIN object owner     | DDL and explicit migration work through SET ROLE                                                                                                          | Application connections                                                                           |
 | `aqs_migrator`       | Deployment only          | SET ROLE `aqs_owner`; no automatic inheritance                                                                                                            | Runtime use, elevated attributes                                                                  |
 | `aqs_api`            | Tenant API               | Tenant SELECT/INSERT/UPDATE/DELETE under forced RLS, audit append, filing lifecycle columns, enqueue/coalesce jobs and parse/assessment lifecycle updates | Schema DDL, ownership, audit or immutable evidence changes, job DELETE or worker-only job columns |
-| `aqs_worker`         | Background jobs          | API tenant rights plus queue state changes under RLS                                                                                                      | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes                          |
+| `aqs_worker`         | Background jobs          | API tenant rights, job-scoped organization/bank context, heartbeat metadata, and classified platform functions/views                                      | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes                          |
 | `aqs_bi`             | Interactive BI           | SELECT on BI marts/dimensions and public jurisdiction/parameter reference tables under RLS; 10-second statement timeout                                   | Writes, operational queue or identity-table access                                                |
 | `aqs_operator`       | Staff operations         | Dedicated cross-bank metadata views, introduced in the operator PR                                                                                        | Direct tenant-table access; financial inspection outside the governed #351 flow                   |
 | `aqs_audit_verifier` | Independent audit checks | SELECT audit sources, chain entries and heads, including cross-bank verification                                                                          | Other tenant tables, writes or chain ownership                                                    |
@@ -25,7 +25,8 @@ preserved. No application sequence grants are installed. The API's sole partitio
 function grant is `bi_ensure_month_partition(regclass,date)`: its definer pins the
 search path and restricts API logins to the query-log parent in its own schema,
 for the previous, current or next UTC month. It adds no table-level grants or
-mart/drop-partition capability. Existing PUBLIC execution on non-definer trigger
+mart/drop-partition capability. The worker follow-up adds explicit platform-function
+grants only for its classified operations. Existing PUBLIC execution on non-definer trigger
 functions remains unchanged.
 Existing integrity triggers and restrictive policies remain authoritative for
 completed runs, sealed registers and filed-content immutability (#511).
@@ -41,9 +42,9 @@ Future functions created as `aqs_owner` have no PUBLIC EXECUTE default in any
 schema; migrations grant execution explicitly.
 
 The foundation provisions dormant roles; it does not authorize switching worker
-or operator credentials. The worker PR adds tenant context to every job and
-narrowly granted platform functions/views. The operator PR adds metadata views.
-Both require the product owner's review. A fourth, captain-reviewed PR follows
+or operator credentials. The [captain-reviewed worker compatibility migration](#worker-compatibility-migration)
+supports the worker switch. The separate operator PR must add metadata views and
+receive the product owner's review before its switch. A fourth, captain-reviewed PR follows
 operator access: two narrow SECURITY DEFINER functions owned by `aqs_owner`, with
 a pinned search_path and EXECUTE granted only to `aqs_api`. One accepts a
 presented key hash and returns only its organization, bank, scopes and status;
@@ -90,7 +91,7 @@ default to 120 seconds), then restores the role default. The five-minute BI idle
 abandoned read transaction without changing those query budgets.
 
 `backend/app/db/session.py` supplies connection startup options for legacy
-usernames, separately for API/operator, worker and BI pools, including when all
+usernames, separately for API/authentication/operator, worker and BI pools, including when all
 URLs still share one login. This does not alter that role's defaults or other
 clients. Recognized new role usernames use their administrator-configured role
 defaults. Existing URL options, including `search_path`, are preserved. Alembic
@@ -111,8 +112,10 @@ pool identities in `pg_stat_activity`. Native PostgreSQL 17 tests in
 disposable probe logins with the configured role settings and service privileges
 (PostgreSQL role settings are not inherited via membership). They also prove
 real API idle termination/lock release using a short
-transaction-local probe limit, legacy connection budgets, a 65-second worker
-statement and BI export overrides above ten seconds. Native regressions in
+transaction-local probe limit, legacy connection budgets and worker/BI completion.
+The BI export probe verifies the fresh-login default separately, then scales the
+transaction-local interactive and export budgets to prove cancellation, a successful
+override and restoration of the prior budget. Native regressions in
 `backend/tests/db/test_bi_export_transactions.py` prove through `pg_stat_activity`
 that slow BI statements and compiler probes hold no API transaction, and that
 delivery audit/query-log/job writes commit atomically. Document deletion
@@ -150,8 +153,9 @@ The bootstrap pins Alembic to the validated local URL, including when a shell
 has a separate migration URL configured. The local SQL sets clearly identified
 development passwords equal to role names;
 never execute `database_roles_local.sql` on a deployment. Existing DATABASE_URL
-and worker/operator fallbacks keep working. All runtime pools identify API,
-worker, BI and operator connections separately through `application_name`.
+and the worker-to-API and operator-to-API fallbacks keep working. Runtime pools
+identify API/authentication, worker, BI and operator connections separately through
+`application_name`.
 
 For externally supplied test services, an administrator must prepare the versioned
 foundation SQL, `backend/scripts/database_session_timeouts.sql`, and the test actor's
@@ -161,6 +165,124 @@ running the migration suites. Real-login role proofs in
 `POSTGRES_ADMIN_URL` (or a superuser `TEST_DATABASE_URL`) on the same disposable
 test database to create and remove probe logins. The local runner and CI prepare
 these prerequisites; never use the primary database.
+
+## Worker compatibility migration
+
+Migration `202610260001` follows main's bank-stress defaults `202610240001`,
+which follows bank audit reads `202610120100` and measured reverse-lineage indexes
+`202610140100`, preserving a single Alembic head and all changes. This is a captain-reviewed
+worker cutover: **non-breaking; works on current and new worker role; deployment switch is a separate runbook step**. It does
+not change the attributes or credentials of an existing deployment role. The
+effective migration actor needs CREATE on the target database to create the
+worker-view namespace. When `aqs_migrator` connects, Alembic uses SET ROLE
+`aqs_owner`, so Eric grants this database permission to `aqs_owner`, not only to
+the login. Local bootstrap prepares the NOLOGIN owner's CREATE grant automatically.
+
+`aqs_worker` still cannot read tenant jobs or financial rows without organization
+context. `aqs_worker_claim_job` locks and transitions one due job across tenants;
+`aqs_worker_reclaim_jobs` applies the caller's per-type stale windows; and
+`aqs_worker_seed_ticks` serializes startup seeding for bank-owning organizations.
+`aqs_worker_overdue_jobs` exposes only backlog counts for readiness. All are owned
+by NOLOGIN `aqs_owner`, have pinned search paths, and explicitly grant execution
+to the worker and existing non-superuser bypass roles that already have schema
+USAGE and SELECT/UPDATE on the job queue. Read-only legacy credentials gain no queue or desk
+write access. Other application roles cannot execute them. No new role receives
+BYPASSRLS.
+
+`aqs_worker_enqueue_platform_daily` accepts only `desk_capture` and `bi_retention`,
+serializes each daily key across tenants and retains completed-job cadence. Only
+`aqs_worker` can execute it; tenant job kinds are refused. Legacy credentials keep
+the existing global enqueue path.
+
+This captain-reviewed PR retains the existing broad API and operator access during
+this worker-only stage. Authentication uses the API `DATABASE_URL` sessionmaker
+and its `aequoros-api` pool. Operator sessions and the first-account provisioning
+CLI resolve `OPERATOR_DATABASE_URL`, then `DATABASE_URL`; neither falls back to
+`WORKER_DATABASE_URL`. The operator session boundary refuses restricted PostgreSQL
+credentials with a configuration error. Its pool identifies as `aequoros-operator`.
+No role, grant or BYPASSRLS attribute is added for authentication or operator access.
+
+Eric owns this handoff; this PR applies no production configuration:
+
+1. Deploy the compatibility code and migration `202610260001` while retaining the
+   legacy worker credential. Restart long-lived API, operator and worker processes.
+2. Keep the current `DATABASE_URL` unchanged for API and authentication access.
+   Retain `OPERATOR_DATABASE_URL` if configured; otherwise operator access uses
+   `DATABASE_URL`. Reuse existing credentials; do not create new database users
+   or change their grants.
+3. Verify password login, refresh, logout revocation, SSO lookup and expected
+   cross-bank operator visibility.
+4. Only after product-owner review and those checks may Eric switch
+   `WORKER_DATABASE_URL` to the prepared `aqs_worker` secret and restart the workers.
+   This separate deployment step requires this compatibility PR. Repeat
+   identity/operator checks and prove tenant job context and worker refusals.
+
+Rollback restores the previous `WORKER_DATABASE_URL` and restarts affected processes.
+Keep `DATABASE_URL` and any configured `OPERATOR_DATABASE_URL` unchanged. If rolling
+back the code too, restore the legacy worker secret first so older code's worker
+fallback retains identity/operator visibility.
+
+Operator metadata views remain the separate next stage. The captain-reviewed
+bounded API lookup follow-up remains later; the API credential switch to `aqs_api`
+is still blocked because pre-tenant authentication, integration-key and bank-key
+lookup support is not supplied here. This PR is non-breaking and supports both
+current and new worker credentials.
+Before switching the worker secret, configure explicit credentials for
+[logical backups](../../backend/scripts/backup_database.py); that tool retains its
+legacy worker-URL fallback.
+
+Each handler transaction sets `app.organization_id` and `app.bank_id`. A bank
+carried in the payload must agree with the dispatch envelope and belong to that
+organization. Organization-wide ticks may have no bank. Commit, rollback and pool
+reuse cannot carry a job's context into the next job. Separately opened storage
+sessions use the worker credential and the same handler context; cached storage
+clients resolve their session factory on each operation. The worker key-reference
+function locks only the requested storage slug within that context, without
+SELECT privileges on the pre-tenant registry. A companion storage check distinguishes
+an authorized unconnected bank from an unknown or foreign slug, so refusal cannot
+become a plaintext fallback when optional encryption is disabled. Jobs prepare
+stable bank storage setup metadata before handler work starts, allowing separate
+storage connections to see a first-use slug without committing financial work. The API lookup remains blocked
+pending its separate pre-authentication follow-up.
+
+The `aqs_worker_<schema hash>` namespace contains five market-desk views. Worker
+sessions bind only the desk models to these views; tenant financial models stay
+on the ordinary RLS connection. Captures, observations and drafts share one desk
+transaction; existing per-source commits retain their crash-recovery behavior.
+The views expose public-source market research, not bank canonical financial data.
+Captures retain robot provenance; observation financial values, dates and capture
+lineage remain immutable. Only current observations may update supersession,
+`updated_at`, `quality_flags` and the `attributes.cross_source_mismatch` reconciliation
+metadata; other attributes remain immutable. Writes compare the complete OLD row
+to refuse concurrent changes. `backend/tests/db/test_worker_database_access.py`
+exercises disagreeing-source ingestion, supersession and financial/lineage refusal.
+Determinations must remain robot-prepared drafts based on approved effective
+methodologies. The worker cannot approve, publish, delete, edit human drafts or
+write the underlying desk tables. Methodologies and curve definitions are read-only.
+
+The [audit verification contract](../../backend/docs/tamper_evident_records.md#audit-chain)
+owns `aqs_worker_audit_check`, its owner-policy fallback and append-only custody.
+Partition wrappers allow
+creation only for the builder's classified mart parents and the append-only BI query log in this schema. Retention
+can drop completed months only from the two daily position marts; month-end,
+loan-event and query-log drops remain forbidden. Existing partition integrity
+checks stay authoritative. Role timeout budgets remain the separate #518 work.
+
+| Queue source            | Command                               | Scope/guard                       | Destination and effect                            |
+| ----------------------- | ------------------------------------- | --------------------------------- | ------------------------------------------------- |
+| queued                  | claim                                 | Due time, selected lane, row lock | running; claimant and start recorded              |
+| running                 | handler success                       | Job's organization/bank context   | succeeded; completion recorded                    |
+| running                 | handler error                         | Retry budget available            | queued; attempt increment and delayed retry       |
+| running                 | handler error                         | Retry budget exhausted            | failed; completion recorded                       |
+| running                 | reclaim                               | Per-type stale deadline exceeded  | queued with used attempt, or failed at exhaustion |
+| queued/succeeded/failed | reclaim                               | No running overdue row            | unchanged                                         |
+| succeeded/failed        | claim                                 | Not queued                        | unchanged                                         |
+| any tenant row          | direct read/write from another tenant | Forced RLS                        | invisible; no mutation                            |
+
+Native real-login tests cover the transition model, cross-tenant refusal,
+concurrent claims, key isolation, desk governance, audit verification and partition
+allow-lists. The grant ratchet includes both the application schema and worker-view
+namespace.
 
 ## Eric's deployment runbook
 
@@ -223,10 +345,15 @@ WHERE rolname IN ('aqs_worker', 'aqs_operator');
 ```
 
 After the new connections are healthy and old pools drained, Eric removes
-BYPASSRLS from the old deployment roles or retires their credentials. No
+BYPASSRLS from the retired worker/operator roles or retires their credentials.
+Preserve any legacy role still used by API/authentication or an operator awaiting
+its cutover. No
 engineering migration alters those existing role attributes. **Do not switch the
 API credential yet:** `aqs_api` cannot authenticate integration keys or look up
-bank encryption keys. Its switch waits for the separate captain-reviewed
+bank encryption keys. Pre-tenant authentication continues to use the API
+`DATABASE_URL` sessionmaker as described in
+[Worker compatibility migration](#worker-compatibility-migration).
+The API switch waits for the separate captain-reviewed
 pre-authentication PR after the operator PR, followed by verification of both
 lookup paths, refusal of direct table access and refusal of other-bank
 enumeration. Keep the existing API URL secret until that gate passes.
@@ -249,5 +376,7 @@ Restore recorded ACLs/owners only under the maintenance plan; do not relax audit
 or filing integrity guards. The foundation downgrade revokes its own runtime
 schema/table grants and verifier policies, but never drops cluster-wide roles,
 changes existing deployed credentials or restores BYPASSRLS. Disabling a new
-credential is Eric's separate administrator action. Coordinate later migrations
+credential is Eric's separate administrator action. The worker downgrade removes
+its views, functions and delegated rights while preserving privileges on tables
+and partition functions already owned by `aqs_owner`. Coordinate later migrations
 before downgrading so their grants are not accidentally removed.

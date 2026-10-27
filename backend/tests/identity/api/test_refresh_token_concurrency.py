@@ -30,20 +30,22 @@ from __future__ import annotations
 
 import os
 import threading
-import time
 from collections.abc import Callable, Iterator
-from typing import Any
+from concurrent.futures import ThreadPoolExecutor
+from queue import Queue
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import Engine, event, select
+from sqlalchemy import Engine, event, select, text
 from sqlalchemy.orm import Session
 
 from app.core import security
 from app.identity.service import authentication
 from app.models import RefreshToken, User
 from tests.support.helpers import ORG_1, USER_1
+from tests.support.postgres import wait_for_blocker
 
 _PASSWORD = "S3cure-Passphrase!"
 
@@ -241,7 +243,7 @@ def _race_a_revocation_against_an_in_flight_rotation(
     revoke: Callable[[Session, UUID, str], object],
 ) -> None:
     """Hold a rotation open after it has taken its locks, release ``revoke`` into
-    that window, and assert the end state rather than the mechanism.
+    that window, observe its backend blocked on the holder, and assert the end state.
 
     Before the fix the revoking statement blocked on the ancestor the rotation
     held, woke after the rotation committed, and revoked only what its original
@@ -260,44 +262,43 @@ def _race_a_revocation_against_an_in_flight_rotation(
     db_session.expire_all()
 
     rotation_holds_its_locks = threading.Event()
-    revocation_released = threading.Event()
-    original_lock = authentication._lock_refresh_token  # noqa: SLF001 - the pause point
+    release_rotation = threading.Event()
+    holder_pids: Queue[int] = Queue()
+    contender_pids: Queue[int] = Queue()
+    original_lock = authentication._lock_refresh_token
 
-    def paused_lock(db: Session, token_id: Any) -> Any:
+    def paused_lock(db: Session, token_id: UUID) -> RefreshToken | None:
         record = original_lock(db, token_id)
+        holder_pids.put(cast(int, db.scalar(text("SELECT pg_backend_pid()"))))
         rotation_holds_its_locks.set()
-        revocation_released.wait(timeout=15)
-        # The event only says the revoking thread has been let go; this gives its
-        # statement time to actually reach the server and block.
-        time.sleep(0.5)
+        assert release_rotation.wait(timeout=15)
         return record
 
     monkeypatch.setattr(authentication, "_lock_refresh_token", paused_lock)
 
-    outcome: dict[str, Any] = {}
-
-    def rotate() -> None:
+    def rotate() -> authentication.IssuedTokens:
         with Session(engine) as session:
-            try:
-                outcome["rotated"] = authentication.refresh_tokens(
-                    session, refresh_token=issued.refresh_token
-                )
-            except HTTPException as exc:  # the other ordering: revocation won
-                outcome["refused"] = exc.status_code
+            return authentication.refresh_tokens(session, refresh_token=issued.refresh_token)
 
     def revoke_in_its_own_session() -> None:
-        assert rotation_holds_its_locks.wait(timeout=15)
         with Session(engine) as session:
-            revocation_released.set()
+            contender_pids.put(cast(int, session.scalar(text("SELECT pg_backend_pid()"))))
             revoke(session, user_id, issued.refresh_token)
 
-    rotating = threading.Thread(target=rotate, name="rotate")
-    revoking = threading.Thread(target=revoke_in_its_own_session, name="revoke")
-    rotating.start()
-    revoking.start()
-    for thread in (rotating, revoking):
-        thread.join(timeout=30)
-        assert not thread.is_alive(), f"{thread.name} never finished — the locks deadlocked"
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        rotating = executor.submit(rotate)
+        try:
+            if not rotation_holds_its_locks.wait(timeout=15):
+                _ = rotating.result(timeout=1)
+                pytest.fail("Rotation never acquired its locks")
+            revoking = executor.submit(revoke_in_its_own_session)
+            wait_for_blocker(
+                engine, contender_pids.get(timeout=10), holder_pids.get(timeout=1), revoking
+            )
+        finally:
+            release_rotation.set()
+        rotated = rotating.result(timeout=15)
+        revoking.result(timeout=15)
 
     with Session(engine) as verifier:
         verifier.info["organization_id"] = ORG_1
@@ -307,9 +308,7 @@ def _race_a_revocation_against_an_in_flight_rotation(
         assert len(all_rows) == 2, "the successor was never written; the race was not exercised"
         assert _live_token_count(verifier, user) == 0
 
-    # And the token the racing client walked away with is dead on presentation.
-    rotated = outcome.get("rotated")
-    if rotated is not None:
-        with Session(engine) as session, pytest.raises(HTTPException) as refusal:
-            authentication.refresh_tokens(session, refresh_token=rotated.refresh_token)
-        assert refusal.value.status_code == 401
+    # The token returned to the racing client is dead on presentation too.
+    with Session(engine) as session, pytest.raises(HTTPException) as refusal:
+        authentication.refresh_tokens(session, refresh_token=rotated.refresh_token)
+    assert refusal.value.status_code == 401

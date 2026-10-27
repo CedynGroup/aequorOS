@@ -44,15 +44,8 @@ every other tenant table, and the Postgres census
 (``tests/db/test_tenant_rls_completeness.py``) is what finds a table that ships
 without it.
 
-**Why this is a separate module, and what that obliges.** ``app/bi/models/marts.py``
-declares the mart contract and its hand-written ``BI_TABLES`` tuple, which the
-foundation migration and four Postgres parity suites iterate. These four tables
-belong to the same ``bi_`` write family (``tests/architecture/
-test_bi_plane_boundary.py`` derives what BI may write from the ``bi_``-prefixed
-tables of ``Base.metadata``), so they must be admitted to ``BI_TABLES`` in the
-same change that lands their migration, or the mart module's table list and the
-metadata stop agreeing. The exact edit is named in
-``.ai/bi_recon/t16_alerts_subs_report.md`` §"Required DDL".
+BI table registration and migration-parity coverage are owned by
+``ARCHITECTURE.md`` §"BI working rules".
 """
 
 from __future__ import annotations

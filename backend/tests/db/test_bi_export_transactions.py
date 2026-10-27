@@ -123,7 +123,8 @@ class ExportScenario:
                     assert time.monotonic() < deadline, "BI read did not wait on the mart lock"
                     time.sleep(0.05)
                 self.idle_observations.append(self._api_state(observer))
-                time.sleep(3)  # Three times the real API role connection's idle budget.
+                # Keep BI blocked while verifying the API stays outside a transaction.
+                time.sleep(1.5)
                 self.idle_observations.append(self._api_state(observer))
             finally:
                 blocker.rollback()
@@ -188,6 +189,7 @@ def export_scenario(
     def session_dependency() -> Iterator[Session]:
         with Session(api_engine, expire_on_commit=True) as db:
             db.info["organization_id"] = ORG_1
+            assert db.scalar(text("SHOW idle_in_transaction_session_timeout")) == "1s"
             scenario.api_pids.append(cast(int, db.scalar(text("SELECT pg_backend_pid()"))))
             try:
                 yield db

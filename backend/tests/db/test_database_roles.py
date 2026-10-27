@@ -36,8 +36,11 @@ ROLES = ("aqs_api", "aqs_worker", "aqs_bi", "aqs_operator", "aqs_audit_verifier"
 MATRIX = Path(__file__).with_name("database_role_grants.json")
 
 
-def privilege_snapshot(connection: Connection) -> dict[str, object]:
+def _schema_privilege_snapshot(connection: Connection) -> dict[str, object]:
     """Effective rights include PUBLIC/inherited grants, so they cannot hide drift."""
+    privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+    if (connection.dialect.server_version_info or (0,))[0] >= 17:
+        privileges.append("MAINTAIN")
     tables: dict[str, dict[str, list[str]]] = {}
     for name, oid in cast(
         list[tuple[str, int]],
@@ -55,11 +58,10 @@ def privilege_snapshot(connection: Connection) -> dict[str, object]:
                 list[str],
                 connection.execute(
                     text(
-                        "SELECT privilege FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE',"
-                        "'TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) privilege "
+                        "SELECT privilege FROM unnest(CAST(:privileges AS text[])) privilege "
                         "WHERE has_table_privilege(:role, :oid, privilege) ORDER BY privilege"
                     ),
-                    {"role": role, "oid": oid},
+                    {"role": role, "oid": oid, "privileges": privileges},
                 )
                 .scalars()
                 .all(),
@@ -122,6 +124,24 @@ def privilege_snapshot(connection: Connection) -> dict[str, object]:
     }
 
 
+def privilege_snapshot(connection: Connection) -> dict[str, object]:
+    """Include the isolated worker view namespace in the same grant ratchet."""
+    result = _schema_privilege_snapshot(connection)
+    view_schema = cast(str, connection.scalar(text("SELECT aqs_worker_desk_schema()")))
+    previous = cast(str, connection.scalar(text("SELECT current_setting('search_path')")))
+    try:
+        connection.execute(
+            text("SELECT set_config('search_path', quote_ident(:schema), true)"),
+            {"schema": view_schema},
+        )
+        result["worker_views"] = _schema_privilege_snapshot(connection)
+    finally:
+        connection.execute(
+            text("SELECT set_config('search_path', :path, true)"), {"path": previous}
+        )
+    return result
+
+
 @pytest.fixture(scope="module")
 def role_schema() -> Iterator[migrations.MigratedPostgresSchema]:
     with pytest.MonkeyPatch.context() as monkeypatch:
@@ -167,7 +187,12 @@ def role_engines(administrator: Engine) -> Iterator[dict[str, Engine]]:
                     )
                 )
                 names.append(name)
-                connection.execute(text(f"GRANT {role} TO {name} WITH INHERIT TRUE, SET TRUE"))
+                options = (
+                    " WITH INHERIT TRUE, SET TRUE"
+                    if (connection.dialect.server_version_info or (0,))[0] >= 16
+                    else ""
+                )
+                connection.execute(text(f"GRANT {role} TO {name}{options}"))
             url = make_url(administrator.url).set(username=name, password=password)
             engines[role] = create_engine(url)
         yield engines
@@ -175,7 +200,14 @@ def role_engines(administrator: Engine) -> Iterator[dict[str, Engine]]:
         for engine in engines.values():
             engine.dispose()
         with administrator.begin() as connection:
+            schema = connection.dialect.identifier_preparer.quote_identifier(
+                cast(str, connection.execute(text("SELECT current_schema()")).scalar_one())
+            )
             for name in names:
+                # Migration replay can grant scoped read helpers to these runtime logins.
+                connection.execute(
+                    text(f"REVOKE ALL ON ALL FUNCTIONS IN SCHEMA {schema} FROM {name}")
+                )
                 connection.execute(text(f"DROP ROLE {name}"))
 
 
@@ -252,7 +284,13 @@ def test_matrix_detects_inherited_column_grants_and_grant_options(administrator:
         connection.execute(
             text(f"GRANT SELECT (key_id) ON bank_encryption_keys TO {parent} WITH GRANT OPTION")
         )
-        connection.execute(text(f"GRANT {parent} TO aqs_api WITH INHERIT TRUE, SET FALSE"))
+        if (connection.dialect.server_version_info or (0,))[0] >= 16:
+            connection.execute(text(f"GRANT {parent} TO aqs_api WITH INHERIT TRUE, SET FALSE"))
+        else:
+            # PostgreSQL 15 controls inheritance on the member role. This
+            # deliberate privilege drift is rolled back with the transaction.
+            connection.execute(text("ALTER ROLE aqs_api INHERIT"))
+            connection.execute(text(f"GRANT {parent} TO aqs_api"))
         after = privilege_snapshot(connection)
         assert after != before
         assert after["tables"] == before["tables"]
@@ -312,10 +350,16 @@ def test_runtime_attributes_ownership_membership_and_grant_options(administrator
             )
             == 0
         )
+        membership_options = (
+            "m.admin_option,m.inherit_option,m.set_option"
+            if (connection.dialect.server_version_info or (0,))[0] >= 16
+            else "m.admin_option,pg_has_role(member.oid,parent.oid,'USAGE'),"
+            "pg_has_role(member.oid,parent.oid,'MEMBER')"
+        )
         assert tuple(
             connection.execute(
                 text(
-                    "SELECT m.admin_option,m.inherit_option,m.set_option FROM pg_auth_members m "
+                    f"SELECT {membership_options} FROM pg_auth_members m "
                     "JOIN pg_roles member ON member.oid=m.member "
                     "JOIN pg_roles parent ON parent.oid=m.roleid "
                     "WHERE member.rolname='aqs_migrator' AND parent.rolname='aqs_owner'"

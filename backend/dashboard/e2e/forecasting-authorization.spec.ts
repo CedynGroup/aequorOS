@@ -1,5 +1,7 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { test } from "./support/story-identities";
+import { currentBankPeriod, expectBankStatus } from "./support/real-authority";
 import path from "path";
 import { writeFile } from "node:fs/promises";
 import { E2E_TMP } from "../playwright.config";
@@ -11,30 +13,6 @@ const CONFIDENTIAL_VIEW_REASON = /Requires Forecasting · Confidential · View/i
 // `next dev` compiles each route on its first visit; the first assertion
 // after a navigation waits for that rather than for the product.
 const FIRST_PAINT = { timeout: 60_000 };
-
-type Capability = { module: string; sensitivity: string; permission: string };
-
-/**
- * Narrow the signed-in admin's projected authority to exactly the Forecasting
- * capabilities under test. The backend still decides every request; this only
- * shapes what the dashboard believes it may offer.
- */
-async function projectForecasting(
-  page: Page,
-  keep: (capability: Capability) => boolean,
-) {
-  await page.route("**/auth/me", async (route) => {
-    const response = await route.fetch();
-    const profile = await response.json();
-    profile.effective_authority.organization_capabilities = [];
-    for (const institution of profile.effective_authority
-      .institution_capabilities) {
-      institution.capabilities = institution.capabilities.filter(keep);
-    }
-    // A navigation can cancel the request while the profile is in flight.
-    await route.fulfill({ response, json: profile }).catch(() => undefined);
-  });
-}
 
 async function expectDisabledWithReason(
   page: Page,
@@ -67,13 +45,14 @@ async function expectDisabledWorkspace(page: Page, reason: RegExp) {
   );
 }
 
-test.afterEach(async ({ page }) => {
-  // Abandon, never await, a profile handler the last navigation cancelled.
-  await page.unrouteAll({ behavior: "ignoreErrors" });
-});
-
 test.describe("unbound Forecasting user", () => {
-  test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [{ bundle: "viewer", module: "liq", sensitivity: "all" }],
+    },
+  });
 
   test("keeps disabled workspaces and navigation without Forecasting requests", async ({
     page,
@@ -109,20 +88,29 @@ test.describe("unbound Forecasting user", () => {
 });
 
 test.describe("Forecasting reader without run permission", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [
+        { bundle: "viewer", module: "fcst", sensitivity: "aggregated" },
+        { bundle: "viewer", module: "fcst", sensitivity: "confidential" },
+      ],
+    },
+  });
 
   test("keeps every execution control visible, disabled, and explained", async ({
     page,
   }) => {
     // Several first-visit `next dev` compilations in one journey.
     test.slow();
-    await projectForecasting(
-      page,
-      (capability) =>
-        capability.module === "fcst" &&
-        capability.permission === "view" &&
-        ["aggregated", "confidential"].includes(capability.sensitivity),
-    );
+    await expectBankStatus("/forecast/runs", 403, {
+      method: "POST",
+      data: {
+        reporting_period_id: await currentBankPeriod(),
+        scenario_code: "base",
+      },
+    });
     const mutations: string[] = [];
     page.on("request", (request) => {
       if (
@@ -187,19 +175,21 @@ test.describe("Forecasting reader without run permission", () => {
 });
 
 test.describe("Forecasting confidential-only reader", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [
+        { bundle: "viewer", module: "fcst", sensitivity: "confidential" },
+      ],
+    },
+  });
 
   test("explains the missing preset grant beside the disabled scenario run", async ({
     page,
   }) => {
     test.slow();
-    await projectForecasting(
-      page,
-      (capability) =>
-        capability.module === "fcst" &&
-        capability.permission === "view" &&
-        capability.sensitivity === "confidential",
-    );
+    await expectBankStatus("/forecast/scenarios", 403);
     const requests: string[] = [];
     page.on("request", (request) => {
       if (FORECASTING_ROUTE.test(request.url())) requests.push(request.url());
@@ -235,20 +225,22 @@ test.describe("Forecasting confidential-only reader", () => {
 });
 
 test.describe("Forecasting aggregated-only reader", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [
+        { bundle: "viewer", module: "fcst", sensitivity: "aggregated" },
+      ],
+    },
+  });
 
   test("sees summaries, never requests run detail, and finds detail tabs disabled", async ({
     page,
   }) => {
     // Several first-visit `next dev` compilations in one journey.
     test.slow();
-    await projectForecasting(
-      page,
-      (capability) =>
-        capability.module === "fcst" &&
-        capability.permission === "view" &&
-        capability.sensitivity === "aggregated",
-    );
+    await expectBankStatus("/reverse-stress/latest", 403);
     const detailRequests: string[] = [];
     page.on("request", (request) => {
       if (
@@ -302,7 +294,10 @@ test.describe("Forecasting aggregated-only reader", () => {
 });
 
 test.describe("Forecasting analyst", () => {
-  test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "analyst.json"),
+    storyConfig: { roles: ["analyst"], bindings: [] },
+  });
 
   test("runs a forecast and a reverse-stress frontier with effective authority", async ({
     page,

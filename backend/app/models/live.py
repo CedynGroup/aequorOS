@@ -185,7 +185,7 @@ class WorkerHeartbeat(Base):
 
     This table intentionally has no tenant key or RLS policy: it contains no
     tenant financial data and records service health across all tenants. It is
-    written only through the worker's verified BYPASSRLS connection.
+    written through the worker's explicitly granted metadata permissions.
     """
 
     __tablename__ = "worker_heartbeats"

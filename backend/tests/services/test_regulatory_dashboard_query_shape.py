@@ -313,6 +313,7 @@ def _dashboard_statement(statement: str) -> str | None:
     if normalized.startswith(
         (
             "select set_config('app.organization_id',",
+            "select set_config('app.bank_id',",
             "savepoint ",
             "release savepoint ",
             "rollback to savepoint ",
@@ -327,6 +328,7 @@ def test_dashboard_query_count_ignores_postgres_rls_session_setup() -> None:
         _dashboard_statement("SELECT set_config('app.organization_id', %(organization_id)s, true)")
         is None
     )
+    assert _dashboard_statement("SELECT set_config('app.bank_id', %(bank_id)s, true)") is None
     assert _dashboard_statement("SAVEPOINT sa_savepoint_1") is None
     assert _dashboard_statement("RELEASE SAVEPOINT sa_savepoint_1") is None
     assert _dashboard_statement("ROLLBACK TO SAVEPOINT sa_savepoint_1") is None
