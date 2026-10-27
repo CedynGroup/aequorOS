@@ -72,6 +72,26 @@ description = "Run risk service pytest"
 dir = "backend"
 run = "mise run risk-service:test"
 
+[tasks.unit]
+description = "Run backend unit suite"
+dir = "backend"
+run = "mise run unit"
+
+[tasks.integration]
+description = "Run backend integration suite"
+dir = "backend"
+run = "mise run integration"
+
+[tasks."risk-service:test-unit"]
+description = "Run the backend unit suite"
+dir = "backend"
+run = "mise run risk-service:test-unit"
+
+[tasks."risk-service:test-integration"]
+description = "Run the backend integration suite"
+dir = "backend"
+run = "mise run risk-service:test-integration"
+
 [tasks."risk-service:test-fast"]
 description = "Run local affected risk service tests with four workers"
 dir = "backend"
@@ -91,11 +111,6 @@ run = "mise run risk-service:test-postgres-migrations"
 description = "Run risk service Postgres-only concurrency tests"
 dir = "backend"
 run = "mise run risk-service:test-postgres-locks"
-
-[tasks."risk-service:test-pure"]
-description = "Run database-free logic tests with connection and execution guards"
-dir = "backend"
-run = "mise run risk-service:test-pure"
 
 [tasks."risk-service:test-architecture"]
 description = "Run risk service architecture, dependency-boundary and migration-guard tests"
@@ -186,3 +201,9 @@ run = 'mise run risk-service:revision "${usage_message?}"'
 description = "Run risk service local smoke checks that do not require Postgres"
 dir = "backend"
 run = "mise run risk-service:smoke"
+
+[tasks."risk-service:refresh-test-suites"]
+description = "Regenerate backend suite ownership from observed database access"
+dir = "backend"
+usage = 'arg "<evidence_dir>" help="Empty directory for census evidence"'
+run = 'mise run risk-service:refresh-test-suites "${usage_evidence_dir?}"' 

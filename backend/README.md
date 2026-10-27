@@ -437,6 +437,85 @@ The [workflow inventory and stateful-test guide](docs/state_machine_testing.md)
 records transition guards, coverage boundaries, and bounded Hypothesis profiles.
 
 ```bash
+mise run unit         # database-free tests; any database connection fails
+mise run integration  # database/external-service tests on disposable Postgres
+```
+
+Both commands work at the repository root or in `backend/`. Their explicit
+pytest selectors are `-m unit` and `-m integration`; the corresponding
+`risk-service:test-unit` and `risk-service:test-integration` aliases are available.
+Feature-local paths stay in place, preserving imports and fixture/data paths.
+[`scripts/test_suites.json`](scripts/test_suites.json) is generated from observed
+connection acquisition for every exact parametrized test ID. There are no module
+defaults or manual function overrides. Collection rejects new/unclassified IDs,
+duplicate collection and conflicting suite markers before marker deselection.
+SQLite counts as a database. Optional primary-data tests retain their explicit
+opt-in; the census never supplies primary-bank data.
+
+Refresh ownership after adding tests or changing database use:
+
+```bash
+mise run risk-service:refresh-test-suites /absolute/path/to/empty/census-evidence
+```
+
+This runs the entire test tree serially with disposable native PostgreSQL 17 and
+MinIO plus its own loopback OpenBao, clearing ambient database and primary-data URLs.
+Install OpenBao or set `AQS_OPENBAO_BIN` to its verified binary. See the local-services
+guide below for installing the native binaries. To use disposable Docker instead,
+run `uv run python -m scripts.test_suite_census refresh <evidence-dir> --mode docker`
+from `backend/`. Keep the evidence directory outside the repository. The full run
+can take substantially longer than the unit suite; retain its log and let fixture
+teardown and child processes finish before generation. Commit the regenerated
+catalogue. For a service-gated case requiring another applicable profile, collect
+that profile with `CI_DATABASE_CENSUS=1` and `CI_DATABASE_OBSERVATIONS=<separate-dir>`,
+then run `scripts/test_suite_census.py generate <full-dir> --supplement <profile-dir>`.
+The supplement must contain only identities from the full census, and conflicting
+proven ownership across profiles is rejected. A failing run returns nonzero and reports its inconclusive cases;
+fix failures before claiming full validation.
+
+The observer records driver connection attempts and SQLAlchemy pooled checkouts
+across setup, call, teardown, shared fixtures and inherited Python subprocesses.
+An attempted acquisition counts as database use even when it fails or is caught:
+the unit guard must not replace a driver's expected refusal. A fully passing case
+with no observed use is unit-owned. Skipped/failed cases and Python children that
+do not confirm instrumentation cannot prove database freedom, so they retain
+integration ownership and appear in `inconclusive.json`. A skipped case is not
+proof that an integration test could be moved; run its applicable profile to obtain
+evidence. This preserves explicit ownership without changing product assertions.
+
+The unit CI owner also starts disposable MinIO and OpenBao for storage/signing
+cases that use those HTTP services without opening a database. PostgreSQL is never
+provisioned there, and connection refusal stays active. The managed MinIO endpoint
+is scoped to storage/schema packages, matching their existing service owners;
+production-TLS and mocked AWS tests elsewhere retain their ordinary endpoint
+configuration. Tests can still set an explicit endpoint in their own fixtures.
+Locally, provide the
+corresponding S3/OpenBao test settings to exercise those service-gated cases.
+
+Every CI owner emits the same observations alongside its JUnit report. The final
+integration gate invokes `scripts/test_suite_census.py check` on those existing
+executions: observed unit database use and fully executed integration cases with
+no database use both fail with the exact IDs to refresh. The independent partition
+guard proves the observed selection has exactly one execution owner, including
+conservative affected-module CI runs. Original database-free files remain in
+place; classification never changes test imports or fixtures.
+
+A dedicated unit run uses four workers with `--dist loadfile` and refuses
+database connections before collection. Each process records attempts separately;
+the controller requires identical worker classifications and exact combined JUnit
+coverage. Combined
+local runs also refuse connections for each unit test, before fixture setup.
+SQLAlchemy, psycopg (including async), SQLite and installed database-direct driver
+entry points are guarded, including Python subprocesses with fresh environments.
+Attempts fail the run even when caught. The unit CI owner compares the complete
+classified collection with JUnit identities and permits no dropped, duplicated,
+skipped, failed or errored unit case. It uploads `unit-tests` classification,
+connection-attempt and execution evidence. The full-tree module collection check
+also remains enforced.
+
+`mise run risk-service:test` remains the combined compatibility run:
+
+```bash
 mise run risk-service:test
 ```
 
@@ -501,26 +580,24 @@ credential-vault encryption tests need no vault server. The live storage and
 OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
 
-The **Architecture and CI guards** job also runs `risk-service:test-pure`:
-11 explicitly listed database-free files (367 cases at the ownership change).
-Their paths stay in place; the Postgres suite excludes exactly the files owned
-by this task. `scripts/ci_pure.py` records this ownership and prevents affected-test
-planning from routing these files back into a Postgres shard. Changes to them
-use the conservative full Postgres fallback; the non-database owner always runs.
-The opt-in `scripts.ci_pure_plugin` refuses SQLAlchemy, psycopg (including async)
-and SQLite connections, including in Python subprocesses with fresh environments.
-A recorded attempt fails the session even if caught. Collection and JUnit
-identities must match exactly with no skips, failures or errors; the job uploads
-`pure-tests` collection, connection-attempt and JUnit evidence. The full-tree
-collection equality check and Postgres execution floors remain unchanged.
+The integration aggregate also joins the lock and storage execution reports with
+unit and Postgres shard evidence. Their selected union must match the classified
+collection exactly once. Storage integration cases run only in the storage job,
+except key-rotation concurrency, which belongs to locks. The storage job also
+runs for merge groups. A conservative affected-module run excludes only the
+explicitly unselected suite cases from this cross-owner comparison.
+
+The **Unit tests** job runs `risk-service:test-unit`, including database-free
+architecture guards. Database-using architecture cases run in the integration
+shards.
 
 CI runs the remaining PostgreSQL suite in four duration-balanced module shards,
 and the schema/RLS suite in two hash-based shards; lock tests retain their own job.
 Longest-first packing uses the committed `scripts/ci_postgres_durations.json`
 baseline, excluding files with a non-Postgres owner. Each file stays together, including OpenBao's shared AppRole fixtures.
 New modules use stable hashing until the baseline is refreshed. The
-existing **Full suite on Postgres**, **Postgres schema, RLS and locks**, and
-**Risk service gate** check names stay stable. Shards upload their complete
+**Integration tests** aggregate joins the suite shards; **Postgres schema, RLS and locks**
+and the always-reported **Risk service gate** remain enforced. Shards upload their complete
 collection manifests and JUnit reports; the aggregates verify that their union
 contains every expected test exactly once, preserve the full-suite execution
 floor, and reject any skipped schema/RLS or live OpenBao test.
@@ -534,7 +611,7 @@ bodies of existing, unreferenced `tests/domain/test_*.py` tests owned by the
 Postgres suite (including nested domain directories), or comments and formatting
 in those modules, select their affected modules. Changes to fixtures, decorators, production code, new/deleted
 tests, configuration or an uncertain diff select the full suite. Schema/RLS,
-locks, architecture and storage gates keep their coverage. The stdlib planner/coverage verifier is
+locks, unit and storage gates keep their coverage. The stdlib planner/coverage verifier is
 [`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via
 [`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py). Default local test
 tasks continue to run their complete suites; `risk-service:test-fast` uses the

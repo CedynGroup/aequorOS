@@ -18,9 +18,9 @@ from pathlib import Path
 from typing import cast
 
 if __package__:
-    from scripts.ci_pure import PURE_MODULES
+    from scripts.test_suites import case_key, unit_modules
 else:
-    from ci_pure import PURE_MODULES
+    from test_suites import case_key, unit_modules
 
 SHARDS = 4
 SCHEMA_SHARDS = 2
@@ -53,7 +53,7 @@ def module_shards(suite: str = "suite") -> dict[str, int]:
             raise ValueError(f"Invalid duration for {module}")
         if not math.isfinite(value) or value < 0:
             raise ValueError(f"Invalid duration for {module}")
-        if module not in PURE_MODULES:
+        if module not in unit_modules():
             durations[module] = max(float(value), 0.001)
     totals = [0.0] * SHARDS
     assignments: dict[str, int] = {}
@@ -152,7 +152,7 @@ def affected_files(root: Path, event: str, base: str, *, worktree: bool = False)
             if any(module.stem in (root / other).read_text() for other in tracked if other != path):
                 raise ValueError("Change is outside leaf test bodies")
             relative = module.relative_to("backend").as_posix()
-            if relative in PURE_MODULES:
+            if relative in unit_modules():
                 raise ValueError("Non-Postgres owner always runs these tests")
             selected.append(relative)
         return sorted(selected)
@@ -182,13 +182,6 @@ def plan(root: Path, event: str, base: str) -> dict[str, object]:
             ]
         },
     }
-
-
-def case_key(nodeid: str) -> tuple[str, str]:
-    address, bracket, params = nodeid.partition("[")
-    module, *names = address.split("::")
-    names[-1] += bracket + params
-    return ".".join([module.removesuffix(".py").replace("/", "."), *names[:-1]]), names[-1]
 
 
 def read_manifests(directory: Path, files: list[str], suite: str) -> tuple[list[str], int]:
@@ -246,7 +239,11 @@ def verify(directory: Path, files: list[str], suite: str) -> None:
         raise ValueError("Tests failed, errored or did not reach the existing execution floor")
     if suite == "schema" and skipped:
         raise ValueError("Schema/RLS tests skipped")
-    if suite == "suite" and not files:
+    if (
+        suite == "suite"
+        and not files
+        and any(nodeid.split("::")[0] == BAO_MODULE for nodeid in expected_all)
+    ):
         bao = [
             case
             for case in cases
