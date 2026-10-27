@@ -20,7 +20,7 @@ from app.core.key_management import maintenance, reencryption, registry, sdk
 from app.core.key_management.fields import FORMAT, SealedField, blind_index
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
-from app.core.key_management.presentation import SESSION_STATE, PresentationState
+from app.core.key_management.presentation import LOCKED_JSON, SESSION_STATE, PresentationState
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
@@ -827,8 +827,9 @@ def assert_bi_key_loss(
     db_session.expunge_all()
     provider.set_status(NEXT, KeyStatus.DISABLED)
     if identity:
-        with pytest.raises(KeyUnavailableError):
-            db_session.get(BiSubscription, subscription_id)
+        locked = db_session.get(BiSubscription, subscription_id)
+        assert locked is not None and locked.query == {LOCKED_JSON: "revoked"}
+        assert NAME not in json.dumps(locked.query, ensure_ascii=False)
     else:
         numeric = db_session.get(BiSubscription, subscription_id)
         assert numeric is not None and numeric.query == query
@@ -850,7 +851,7 @@ def test_maintenance_preserves_numeric_bi_and_rewrites_only_identity_leaves(
     filters: list[dict[str, object]] = [{"member": "position.currency", "values": ["GHS"]}]
     if identity:
         filters.append({"member": "counterparty.name", "values": [NAME]})
-    query = {"nested": [{"filters": filters}], "limit": 23}
+    query: dict[str, object] = {"nested": [{"filters": filters}], "limit": 23}
     alert = BiAlert(
         organization_id=ORG_1,
         bank_id=BANK_A,
@@ -888,8 +889,8 @@ def test_maintenance_preserves_numeric_bi_and_rewrites_only_identity_leaves(
         store_whole_bi_values(
             db_session,
             [
-                (BiAlert.__table__, alert_id, "filters", filters),
-                (BiSubscription.__table__, subscription_id, "query", query),
+                (cast(Table, BiAlert.__table__), alert_id, "filters", filters),
+                (cast(Table, BiSubscription.__table__), subscription_id, "query", query),
             ],
         )
     job = reencryption.enqueue(db_session, ORG_1, BANK_A)
@@ -931,7 +932,9 @@ def test_nested_immutable_identity_keeps_its_envelope_without_rewriting_bytes(
     monkeypatch.setenv("ENCRYPTION_BACKUP_RETENTION_DAYS", "1")
     get_key_settings.cache_clear()
     connect(db_session, provider)
-    spec = {"tiles": [{"query": {"filters": [{"member": "counterparty.name", "values": [NAME]}]}}]}
+    spec: dict[str, object] = {
+        "tiles": [{"query": {"filters": [{"member": "counterparty.name", "values": [NAME]}]}}]
+    }
     version = saved_version(db_session, spec)
     db_session.add(version)
     db_session.commit()

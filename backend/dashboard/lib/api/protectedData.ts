@@ -213,5 +213,15 @@ export function containsLockedData(value: unknown): boolean {
   if (value === "🔒 Protected data") return true;
   if (!value || typeof value !== "object") return false;
   if ("_aequoros_protected_data" in value) return true;
+  const record = value as Record<string, unknown>;
+  if (
+    Object.values(protectedDataMessages).some(
+      (message) =>
+        record.locked_reason === message ||
+        record.lockedReason === message ||
+        (record.access === "restricted" && record.message === message),
+    )
+  )
+    return true;
   return Object.values(value).some(containsLockedData);
 }
