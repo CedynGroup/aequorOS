@@ -45,10 +45,13 @@ partial bindings.
 ## Dashboard access
 
 Capital navigation and deep links follow the server's effective-authority
-projection. `/basel`, RWA, structure, and stress pages use the aggregated-view
+projection. `/basel`, RWA, structure, and Scenarios pages use the aggregated-view
 permission above; `/basel/planning` uses confidential view. A denied deep link
 returns the dashboard's not-found view. SDI assurance evidence requests use the
 separate restricted-view permission.
+
+Scenario workspace navigation and run controls follow the
+[dashboard guide](../dashboard/README.md#treasury-scenario-workspaces).
 
 In **Basel → Planning**, the **ICAAP and ILAAP governance** panel shows current
 and approved plan versions and the latest ILAAP snapshot. **Refresh ILAAP

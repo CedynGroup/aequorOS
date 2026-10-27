@@ -334,6 +334,7 @@ def test_master_data_provenance_stays_sealed_through_void_and_correction(
     _prepare_filing_role(connection, governance_schema, runtime=runtime)
     try:
         with Session(bind=connection, join_transaction_mode="create_savepoint") as db:
+            db.info["organization_id"] = ORG_1
             package = _master_data_package(db)
             ctx = TenantContext(
                 organization_id=ORG_1, actor_user_id=package.generated_by, authorization_version=1

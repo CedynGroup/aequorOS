@@ -177,10 +177,15 @@ def run_audit_polls(
     def ignore(*args: object, **kwargs: object) -> None:
         pass
 
+    def legacy_access(_session: Session, _signature: str) -> bool:
+        # These polls simulate direct schedule access, before the worker function rollout.
+        return False
+
     for target, name, replacement in (
         (db_session, "scalar", scalar),
         (db_session, "commit", commit),
         (audit_integrity, "verify_chains", verify),
+        (audit_integrity, "has_worker_function", legacy_access),
         (worker, "assert_worker_database_access", ignore),
         (worker, "_heartbeat_safely", ignore),
         (worker, "_reap_stale", ignore),
@@ -383,9 +388,13 @@ def test_peer_observes_shared_recovery_before_later_outage(
         scalar_calls = 0
         return nullcontext(db_session)
 
+    def legacy_access(_session: Session, _signature: str) -> bool:
+        return False
+
     monkeypatch.setattr(db_session, "scalar", scalar)
     monkeypatch.setattr(db_session, "commit", commit)
     monkeypatch.setattr(audit_integrity, "verify_chains", verify)
+    monkeypatch.setattr(audit_integrity, "has_worker_function", legacy_access)
     for _ in range(3):
         for task in workers:
             task.run(new_session, now)

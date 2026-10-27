@@ -1,4 +1,4 @@
-import { fmtRelative, fmtTimestamp } from '@/lib/api/values';
+import { fmtDateUTC, fmtRelative, fmtTimestamp } from "@/lib/api/values";
 
 /**
  * Desk-grade provenance line: which engine tier produced the figures on
@@ -8,32 +8,38 @@ import { fmtRelative, fmtTimestamp } from '@/lib/api/values';
 export default function LiveEngineNote({
   live,
   stored,
+  dataAsOf,
 }: {
   live?: { status: string; computedAt: Date } | null;
   stored: boolean;
+  dataAsOf?: Date;
 }) {
   if (live) {
-    const healthy = live.status.toLowerCase() === 'green';
+    const healthy = live.status.toLowerCase() === "green";
     return (
       <span
-        className="text-caption text-slate whitespace-nowrap"
-        title={`Position date — when the engines last consumed the book. Recomputation fires automatically when new data lands (last ran ${fmtRelative(live.computedAt)}).`}
+        className="text-caption text-slate whitespace-normal text-right"
+        title={`Calculation time, not the reporting date. Engines last ran ${fmtRelative(live.computedAt)}.`}
       >
-        Positions as of {fmtTimestamp(live.computedAt)}
+        {dataAsOf && <>Dashboard reporting date: {fmtDateUTC(dataAsOf)}. </>}
+        Calculated {fmtTimestamp(live.computedAt)}
         {!healthy && (
           <>
-            {' '}
-            <span className="font-mono text-micro uppercase">{live.status}</span>
+            {" "}
+            <span className="font-mono text-micro uppercase">
+              {live.status}
+            </span>
           </>
         )}
       </span>
     );
   }
   return (
-    <span className="text-caption text-slate whitespace-nowrap">
+    <span className="text-caption text-slate whitespace-normal text-right">
+      {dataAsOf && <>Dashboard reporting date: {fmtDateUTC(dataAsOf)}. </>}
       {stored
-        ? 'Computed from stored engine results'
-        : 'Computed live from current positions'}
+        ? "Computed from stored engine results"
+        : "Computed live from current positions"}
     </span>
   );
 }

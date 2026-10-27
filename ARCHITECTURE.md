@@ -331,10 +331,14 @@ on one canonical store — the live tier for intraday awareness, the official ti
   `fail_with_retry` backs off through `run_after` up to `max_attempts`.
 - **Worker** (`app/worker.py`). A poll loop (process `python -m app.worker`, or in-process behind
   `RUN_INPROCESS_WORKER`) claims → dispatches by `job_type` → completes/retries. It reads the
-  `jobs` table **across tenants**, so on an RLS-forced Postgres it must connect with a BYPASSRLS
-  role: set `WORKER_DATABASE_URL` (the app role is deliberately tenant-scoped and cannot see the
-  queue). Per-job work then runs on a session scoped to that job's `organization_id`. When
-  `WORKER_DATABASE_URL` is unset it falls back to `DATABASE_URL` (correct for SQLite tests).
+  queue through narrowly granted platform functions using `aqs_worker` on
+  `WORKER_DATABASE_URL`. Per-job work sets organization and bank context under forced RLS.
+  [The deployment runbook](docs/ops/database-roles.md#worker-compatibility-migration)
+  owns the separate deployment switch, which requires this worker compatibility PR.
+  Authentication uses the API `DATABASE_URL` sessionmaker; operator sessions use
+  `OPERATOR_DATABASE_URL` with only `DATABASE_URL` as fallback. Both are independent
+  of `WORKER_DATABASE_URL`. The API credential switch still waits for the separate
+  captain-reviewed lookup-function PR.
 - **Live tier** — `pipeline.run_refresh` (`job_type=pipeline_refresh`): re-derives facts, then for
   each cheap module computes a baseline metric + limit evaluation (`compute_live`, reusing the
   same domain engines as the detail views), **upserts** one `live_metrics` row, and reconciles open `live_findings`
@@ -1159,16 +1163,16 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 
 ## 8. Validation commands
 
-| Target                   | Commands                                                                                                                                                                                                                                                                                                        |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/type_check_baseline.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                       |
-| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                                                |
-| risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                |
-| dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
-| marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                                                                                                                               |
-| operator console         | `pnpm --filter @aequoros/console typecheck` · `lint` · `test` · `build`                                                                                                                                                                                                                                         |
-| generated client         | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`)                                                                                                                                                                                                                                              |
-| client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean)                                                                                                                                                                                                            |
+| Target                   | Commands                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/type_check_baseline.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                                         |
+| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                                                                  |
+| risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                                  |
+| dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` · `e2e:contracts` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
+| marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                                                                                                                                                 |
+| operator console         | `pnpm --filter @aequoros/console typecheck` · `lint` · `test` · `build`                                                                                                                                                                                                                                                           |
+| generated client         | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`)                                                                                                                                                                                                                                                                |
+| client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean)                                                                                                                                                                                                                              |
 
 All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 
@@ -1176,12 +1180,13 @@ All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 appeared in no workflow at all, and the dashboard workflow ran neither `lint` nor `test`, so
 the regulatory fail-open guard and the browser-runtime SSRF guard were unenforced):
 
-| Workflow                                   | Jobs                                                                                                                                                                                                                     |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.github/workflows/risk-service.yml`       | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests)   |
-| `.github/workflows/dashboard.yml`          | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection) |
-| `.github/workflows/web.yml`                | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                            |
-| `.github/workflows/dashboard-journeys.yml` | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                               |
+| Workflow                                                                               | Jobs                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/risk-service.yml`                                                   | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests)        |
+| [`.github/workflows/risk-service-image.yml`](.github/workflows/risk-service-image.yml) | `build` — independent production image check, outside the Risk service gate; run manually with **Run workflow** in GitHub Actions, or automatically for image-input pushes selected by the workflow's branch and path filters |
+| `.github/workflows/dashboard.yml`                                                      | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection)      |
+| `.github/workflows/web.yml`                                                            | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                                 |
+| `.github/workflows/dashboard-journeys.yml`                                             | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                                    |
 
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.
@@ -1193,18 +1198,27 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
 
 ### CI enforcement
 
-- **Merge-queue checks run on the queued merge result.** The backend, dashboard,
+- **Merge-queue checks focus on integration risk.** The backend, dashboard,
   web, dashboard-journey and secret-scan workflows trigger on pull requests,
   pushes to `main`, and `merge_group` events of type `checks_requested`.
-  Merge groups select every CI area rather than applying PR path filters;
+  On the queued merge result, backend preflight, architecture/CI guards,
+  migration/schema/RLS shards, the full Postgres suite and concurrency locks,
+  and dashboard journeys/browser contracts run without PR path filtering;
   [Postgres suite selection](backend/README.md#run-tests) governs shard coverage.
+  Backend lint/typecheck, storage contracts, generated-client freshness and the
+  conditional real-data job skip in the queue, as do the dashboard checks and
+  marketing/console jobs. Secret scanning reports the required `gitleaks`
+  context successfully without repeating its PR scans. The Risk service,
+  Dashboard and Web aggregate gates still report, accepting intentional skips
+  and rejecting failed or cancelled dependencies. Pull requests retain their
+  change-based selection, and checks on pushes to `main` remain enabled.
   [The merge-queue guard](backend/tests/architecture/test_merge_queue.py) pins
   the triggers and required-check names. Enabling the queue and configuring
   required checks on `main` remain repository-settings work.
 - **CI enforces every surface.** `risk-service.yml` gates the backend; `dashboard.yml`
   enforces the dashboard gates listed above; `web.yml` gates `frontend` lint+build
   and `console` typecheck+test+build, and `dashboard-journeys.yml` gates browser
-  journeys. [Dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)
+  journeys and browser contracts. [Dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)
   owns journey selection, runner isolation, the required check, quarantine and
   fixture setup. These gates are what enforce the dashboard's
   fail-open guard, SSRF egress guard, and browser journeys, and they cover `frontend/`

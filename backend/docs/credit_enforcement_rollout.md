@@ -79,9 +79,11 @@ cannot disagree):
    (precedent `202609160053`). It verifies NO row counts: `_mirror_organization`
    and `_invalidate_mirrored_principals` discard `rowcount`. What prevents the
    silent zero-row no-op of a tenant-scoped Alembic role is
-   `force_rls_suspended` itself, which raises `RlsBlindError` naming
-   `WORKER_DATABASE_URL` when the role can neither bypass RLS nor lift FORCE
-   (`app/db/session.py`). The before/after
+   `force_rls_suspended` itself, which raises `RlsBlindError` when the role
+   can neither bypass RLS nor lift FORCE (`app/db/session.py`). Migration
+   credentials and owner membership follow the
+   [role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order).
+   The before/after
    `authorization_access_impact.py` diff in the release record is the count
    check; the migration does not perform one.
 

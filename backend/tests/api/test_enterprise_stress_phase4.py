@@ -11,14 +11,12 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import cast
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 from sqlalchemy import delete, select
-from sqlalchemy.orm import Session
 
 from app.db.session import get_sessionmaker
 from app.models import (
@@ -55,7 +53,7 @@ _AS_OF = date(2026, 3, 31)
 def _seed_canonical_positions(bank_id: str) -> None:
     """A compact canonical book: a connected corporate group, a bank placement,
     a foreign-currency loan, a deposit funder and a derivative."""
-    session = cast(Session, get_sessionmaker()())
+    session = get_sessionmaker()()
     try:
         batch = IngestionBatch(
             organization_id=ORG_1,

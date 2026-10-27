@@ -7,6 +7,9 @@ buildable target architecture. **The gap inventory and build plan describe the
 2026-08-19 baseline, not current feature availability.** The current default-scenario
 contract and workbench behavior are documented in §3.1.1; the current IRRBB stress
 input and recorded-run contract is in §3.3.1.
+For current module scenario navigation, the separate enterprise workspace, and FTP
+what-if, see the
+[dashboard guide](../backend/dashboard/README.md#treasury-scenario-workspaces).
 
 **The authority:** the BoG Guideline. It applies to **RFIs = banks, savings & loans, finance
 houses, finance & leasing, FHCs** (¶3) — so it also scopes into `sdi.md` (see §8). **Effective
@@ -267,8 +270,8 @@ definition version; a new definition version has a new ID. They appear as
 approving or archiving one is refused; **Clone to editable draft** copies its year-end points into
 a normal organization-owned draft, where the existing maker-checker rules apply unchanged.
 
-The workbench opens on **Scenarios & run**, with the adverse default selected (the
-parallel-up default on the IRRBB lens) and a run reason prefilled. The library labels system
+The enterprise workbench opens on **Scenarios & run**, with the adverse default
+selected and a run reason prefilled. The library labels system
 entries and non-runnable entries; the run selector excludes non-runnable scenarios. System
 entries expose cloning instead of mutation actions, and the BoG placeholder cannot be cloned
 because it has no numeric path. A fresh organization needs no scenario provisioning, but

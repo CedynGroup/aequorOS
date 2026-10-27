@@ -57,14 +57,18 @@ def _attributes(bank_id: str) -> dict[str, dict[str, Any]]:
     session = get_sessionmaker()()
     session.info["organization_id"] = ORG_1
     try:
-        rows = session.execute(
-            select(CanonicalPosition.source_reference, CanonicalPositionSnapshot.attributes)
-            .join(
-                CanonicalPositionSnapshot,
-                CanonicalPositionSnapshot.position_id == CanonicalPosition.id,
+        rows = (
+            session.execute(
+                select(CanonicalPosition.source_reference, CanonicalPositionSnapshot.attributes)
+                .join(
+                    CanonicalPositionSnapshot,
+                    CanonicalPositionSnapshot.position_id == CanonicalPosition.id,
+                )
+                .where(CanonicalPosition.bank_id == bank_id)
             )
-            .where(CanonicalPosition.bank_id == bank_id)
-        ).all()
+            .tuples()
+            .all()
+        )
         return {reference: dict(attributes or {}) for reference, attributes in rows}
     finally:
         session.close()

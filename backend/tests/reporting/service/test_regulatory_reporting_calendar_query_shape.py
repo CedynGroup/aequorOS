@@ -68,6 +68,7 @@ def _calendar_statement(statement: str) -> str | None:
     if normalized.startswith(
         (
             "select set_config('app.organization_id',",
+            "select set_config('app.bank_id',",
             "savepoint ",
             "release savepoint ",
             "rollback to savepoint ",
@@ -85,6 +86,7 @@ def test_calendar_query_count_ignores_transaction_setup() -> None:
         _calendar_statement("SELECT set_config('app.organization_id', %(organization_id)s, true)")
         is None
     )
+    assert _calendar_statement("SELECT set_config('app.bank_id', %(bank_id)s, true)") is None
     assert _calendar_statement(" SELECT banks.id\nFROM banks ") == "select banks.id from banks"
 
 
