@@ -19,7 +19,7 @@ from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import Engine, create_engine, select, text
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -32,6 +32,7 @@ from app.services import documents, job_queue
 from tests.conftest import FakeStorage
 from tests.db import test_database_roles as role_tests
 from tests.services.factories import ServiceFactories
+from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
@@ -41,12 +42,15 @@ role_engines = role_tests.role_engines
 
 
 @pytest.fixture
-def timeout_role_engines(role_engines: dict[str, Engine]) -> Iterator[dict[str, Engine]]:
+def timeout_role_engines(
+    role_engines: dict[str, Engine], request: pytest.FixtureRequest
+) -> Iterator[dict[str, Engine]]:
     engines: dict[str, Engine] = {}
     for role in ("aqs_api", "aqs_worker"):
         url = role_engines[role].url
         options = " ".join(url.normalized_query.get("options", ()))
-        engines[role] = create_engine(
+        engines[role] = managed_engine(
+            request,
             url,
             connect_args={"options": options + " -c idle_in_transaction_session_timeout=1000"},
         )

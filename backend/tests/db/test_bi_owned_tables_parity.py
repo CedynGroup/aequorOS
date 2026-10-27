@@ -33,7 +33,7 @@ from uuid import uuid4
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import inspect, text
 from sqlalchemy.dialects import postgresql
 
 import app.bi.models as models_package
@@ -49,6 +49,7 @@ from tests.db.test_postgres_migrations import (
     clear_database_caches,
     postgres_schema_url,
 )
+from tests.support.database import install_migration_engines, managed_engine
 
 requires_postgres = pytest.mark.skipif(
     os.getenv("TEST_DATABASE_URL") is None,
@@ -104,19 +105,22 @@ def _rendered(type_: sa.types.TypeEngine) -> str:
 
 
 @pytest.fixture(scope="module")
-def bi_schema() -> Iterator[MigratedPostgresSchema]:
+def bi_schema(request: pytest.FixtureRequest) -> Iterator[MigratedPostgresSchema]:
     """One forward migration to ``head`` for the whole module; dropped at the end."""
     test_database_url = os.environ["TEST_DATABASE_URL"]
     schema_name = f"risk_service_bi_owned_{uuid4().hex}"
     database_url = postgres_schema_url(test_database_url, schema_name)
     monkeypatch = pytest.MonkeyPatch()
-    admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
-    app_engine = create_engine(database_url)
+    admin_engine = managed_engine(
+        request, test_database_url, isolation_level="AUTOCOMMIT", schema=schema_name
+    )
+    app_engine = managed_engine(request, database_url)
     monkeypatch.setenv("DATABASE_URL", database_url)
     clear_database_caches()
     with admin_engine.connect() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
     try:
+        install_migration_engines(monkeypatch, app_engine)
         command.upgrade(alembic_config_for_app(), "head")
         yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
     finally:

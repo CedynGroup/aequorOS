@@ -40,11 +40,44 @@ The factory provides:
   are closed at teardown. Tests should still use context managers so resources
   are released as soon as their work completes.
 - `migration_engine()` for direct migration-function tests. `database_url` also
-  carries the schema in its startup options. Alembic consumers that create their
-  own engines still need migration to the support layer; passing this URL alone
-  does not install engine hooks.
+  carries the schema in its startup options. Use `install_migration_engines`
+  below for engines created by Alembic's environment; a URL alone does not
+  install engine hooks.
 - `async_engine()` as an async context manager. Its pool is disposed before the
   using event loop exits. Use `async with engine.connect()` for connections.
+
+Existing schema fixtures can register construction with their own pytest scope:
+
+```python
+engine = managed_engine(request, database_url, schema=schema_name)
+factory = managed_session_factory(request, engine, expire_on_commit=False)
+```
+
+These functions register cleanup on the supplied `request`, whether its fixture
+is function-, module- or session-scoped. URL and driver startup options supply
+schema, role and tenant defaults. An explicit `schema` can select a namespace
+before bootstrap creates it. `administrative=True` is reserved for cluster-role
+probes that have no tenant schema; their search path is pinned to `pg_catalog`.
+It does not grant any database privileges.
+
+`managed_session_factory` preserves SQLAlchemy's autoflush and expiry defaults;
+`TestDatabaseConnections.session_factory` defaults both to false for application
+sessions. Both accept explicit options, preserve explicit tenant info, and close
+sessions at their owner's teardown. Factories require an engine created by this
+support layer.
+
+Before calling Alembic in a schema fixture, install its engine factory:
+
+```python
+install_migration_engines(monkeypatch, engine)
+command.upgrade(config, "head")
+```
+
+The patch belongs to the fixture's existing `MonkeyPatch` lifetime. Alembic still
+resolves its real migration URL and driver settings, including migration role
+and timeout options. Every pool it opens receives the shared hooks and is owned
+by the supplied engine's factory. A different database or schema is refused
+before connecting.
 
 Set explicit tenant and role defaults without leaving the test's schema:
 

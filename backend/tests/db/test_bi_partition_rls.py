@@ -25,7 +25,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import select, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -42,6 +42,7 @@ from tests.db.test_postgres_migrations import (
     clear_database_caches,
     postgres_schema_url,
 )
+from tests.support.database import install_migration_engines, managed_engine
 from tests.support.helpers import ORG_1, ORG_2
 
 _ = set_tenant_rls_context
@@ -204,15 +205,17 @@ def _seed_tenant(connection: Connection, *, organization_id: str, bank_id: str) 
 
 
 @pytest.fixture(scope="module")
-def rls_schema() -> Iterator[MigratedPostgresSchema]:
+def rls_schema(request: pytest.FixtureRequest) -> Iterator[MigratedPostgresSchema]:
     """A migrated disposable schema with the month children created and two
     tenants' rows in both the children and the DEFAULT partitions."""
     test_database_url = os.environ["TEST_DATABASE_URL"]
     schema_name = f"risk_service_bi_rls_{uuid4().hex}"
     database_url = postgres_schema_url(test_database_url, schema_name)
     monkeypatch = pytest.MonkeyPatch()
-    admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
-    app_engine = create_engine(database_url)
+    admin_engine = managed_engine(
+        request, test_database_url, isolation_level="AUTOCOMMIT", schema=schema_name
+    )
+    app_engine = managed_engine(request, database_url)
     monkeypatch.setenv("DATABASE_URL", database_url)
     clear_database_caches()
 
@@ -220,6 +223,7 @@ def rls_schema() -> Iterator[MigratedPostgresSchema]:
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
 
     try:
+        install_migration_engines(monkeypatch, app_engine)
         command.upgrade(alembic_config_for_app(), "head")
         with app_engine.connect() as connection:
             role_attributes = connection.execute(
