@@ -117,9 +117,15 @@ test.describe("Bank-held encryption: revocation", () => {
       ).toHaveCount(0);
       await expect(page.getByLabel("Full name")).toHaveValue(DRAFT);
       await expect(page.getByLabel("Full name")).toBeDisabled();
+      const protectedField = page
+        .locator("fieldset")
+        .filter({ has: page.getByLabel("Full name") });
+      await expect(protectedField).toHaveAttribute("title", REVOKED);
       await expect(
-        page.locator("fieldset").filter({ has: page.getByLabel("Full name") }),
-      ).toHaveCSS("opacity", "0.6");
+        protectedField.getByRole("img", { name: "Protected data locked" }),
+      ).toBeVisible();
+      await expect(page.getByLabel("Status", { exact: true })).toBeEnabled();
+      await expect(page.getByLabel("Reason for change")).toBeEnabled();
       await expect(
         page.getByRole("button", { name: "Add party", exact: true }),
       ).toBeDisabled();

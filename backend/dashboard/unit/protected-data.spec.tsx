@@ -54,6 +54,54 @@ function notify(state: string, bank = "BK-SAMP0001") {
   );
 }
 
+it("retains numeric BI definitions and evicts identity references in every query axis", () => {
+  const client = createAuthorityQueryClient();
+  const unsubscribe = bindProtectedDataCache(client);
+  const bank = "BK-SAMP0001";
+  const numericKey = ["bi-dashboard", bank, "numeric"];
+  const catalogueKey = ["bi-catalogue", bank];
+  const numeric = {
+    widgets: [{ query: null }, { query: { measures: ["positions.balance"] } }],
+  };
+  client.setQueryData(numericKey, numeric);
+  client.setQueryData(catalogueKey, { measures: ["positions.balance"] });
+  const identityKeys = [];
+  for (const member of [
+    "counterparty.id",
+    "counterparty.name",
+    "counterparty.source_reference",
+    "counterparty.group",
+  ]) {
+    for (const axis of [
+      { measures: [member] },
+      { dimensions: [member] },
+      { filters: [{ member, operator: "equals", values: ["Private"] }] },
+      { sort: [{ member, direction: "asc" }] },
+      { pivot: { dimension: member } },
+      { topN: { dimension: member } },
+    ]) {
+      const key = ["bi-dashboard", bank, member, JSON.stringify(axis)];
+      identityKeys.push(key);
+      client.setQueryData(key, {
+        widgets: [{ query: { measures: ["positions.balance"], ...axis } }],
+      });
+    }
+  }
+  try {
+    notify("revoked");
+    expect(client.getQueryData(numericKey)).toEqual(numeric);
+    expect(client.getQueryData(catalogueKey)).toEqual({
+      measures: ["positions.balance"],
+    });
+    for (const key of identityKeys) {
+      expect(client.getQueryData(key)).toBeUndefined();
+    }
+  } finally {
+    unsubscribe();
+    client.clear();
+  }
+});
+
 it.each(["revoked", "unavailable", "support"] as const)(
   "shows the %s report placeholder",
   (reason) => {

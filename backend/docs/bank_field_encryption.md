@@ -222,7 +222,8 @@ protected responses use `Cache-Control: no-store`. Revocation displays “Your b
 has turned off aequorOS access to protected data. Contact your bank administrator.”
 An outage displays “Can't reach your bank's key service. Retrying.” The dashboard
 clears affected cached data, rejects older in-flight disclosures, retries and
-refetches locked data after recovery. Form drafts remain mounted through refusal.
+refetches locked data after recovery. Support placeholders do not trigger recovery
+polling. Form drafts remain mounted through refusal.
 Integrity failures remain verification errors, outside the key-outage presentation.
 
 Bank-wide readiness checks both the current payload key and the retained identity
@@ -239,7 +240,30 @@ while keys are unavailable. Its response can contain locked placeholders. Supply
 `roles` replaces the role list; `role_updates` changes supplied fields on existing
 role IDs scoped to this bank and party, preserving their IDs and omitted values.
 The two role update forms cannot be combined. Protected changes still fail with
-the appropriate key message. Other mutation sessions remain strict.
+the appropriate key message. Shareholding creation and updates also allow
+placeholder reads of party and UBO identities, so non-protected shareholding
+changes can succeed while keys are unavailable. Bank, party and UBO scoping still
+applies, and the response identities remain locked. Other mutation sessions remain
+strict.
+
+The related-party editor retains unsaved changes separately from refreshed server
+records. Refetch and key recovery refresh untouched fields without overwriting
+drafts; locked placeholders never become draft values. Routine saves send only
+edited fields and scoped role updates, allowing numeric-only edits while locked.
+Failed saves retain the draft, including protected edits that must wait for key
+recovery. Adding or removing a role requires the server membership baseline to
+be present; saving that replacement list also requires readable protected values.
+An explicitly empty replacement still removes every role.
+
+While locked, protected inputs in the related-party editor, including first-entry
+forms, are disabled and greyed with a lock icon and the corresponding message above
+as their tooltip. Untouched protected values show a locked placeholder; user-entered
+dirty values remain preserved through lock and recovery. Numeric, status, select and
+reason controls remain editable. A draft containing protected changes cannot be
+saved until recovery; non-protected-only saves and Cancel remain available.
+Shareholding labels and UBO candidates follow current query records while selected
+IDs and numeric drafts are retained, so recovery replaces locked labels with
+current names.
 
 Concentration displays configured locked limits as not evaluated and withholds a
 clean breach indicator while any configured evaluation is incomplete; independent
