@@ -1,8 +1,8 @@
 # Test database connections
 
-`tests.support.database` owns test connection construction. The first migration
-stage leaves existing application fixtures and area-specific tests in place;
-`tests/architecture/test_database_connection_allowlist.json` records their direct
+`tests.support.database` owns test connection construction. Shared application
+and database/API fixtures now use this API; remaining area-specific tests migrate in subsequent stack layers.
+`tests/architecture/test_database_connection_allowlist.json` records remaining direct
 constructor calls. The architecture suite rejects new calls and stale entries.
 Remove entries as each test area moves to this API. Once the inventory is empty,
 remove the allowlist and make strict mode the default.
@@ -23,8 +23,9 @@ with test_db_connections.connection() as connection:
 ```
 
 Binds from another factory are rejected so a session cannot escape its owning
-schema. The shared application fixture family remains on its existing lifecycle
-until its migration stage.
+schema. The shared application fixtures adopt the cached application engine
+before its first checkout. They retain engine identity, the outer rollback
+transaction, savepoints and the separate resettable committing database.
 
 SQLite connections enable foreign-key enforcement on every checkout, so local
 migration fixtures must define the referenced primary or unique keys.
@@ -67,7 +68,12 @@ It does not grant any database privileges.
 `TestDatabaseConnections.session_factory` defaults both to false for application
 sessions. Both accept explicit options, preserve explicit tenant info, and close
 sessions at their owner's teardown. Factories require an engine created by this
-support layer.
+support layer, or explicitly adopted before its first checkout. An owner can
+`adopt_engine(engine)` when the application must construct the engine itself.
+Use `managed_session_factory(None, engine)` only within an explicit owner
+lifetime; pytest fixtures normally supply their request for earlier cleanup.
+Closed connections and sessions are weakly tracked, so long-lived owners do not
+retain every completed request. Still-live resources close before pool disposal.
 
 Before calling Alembic in a schema fixture, install its engine factory:
 
