@@ -968,7 +968,7 @@ For banks with international operations, SWIFT message feeds provide interbank p
   [the bank key setup guide](../backend/docs/bank_key_setup.md).
 - In transit: governed by
   [the transport control and evidence contract](../backend/docs/transport_security.md).
-- Sensitive fields and exact-match search: governed by
+- Sensitive fields and identity indexes: governed by
   [the bank-held field encryption contract](../backend/docs/bank_field_encryption.md).
 - PII masking in non-production environments; synthetic data only for development and testing.
 

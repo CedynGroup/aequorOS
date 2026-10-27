@@ -20,7 +20,7 @@ and local-development exceptions are governed by
 
 Bank-held object encryption and optional rollout are in
 [the bank key setup guide](docs/bank_key_setup.md).
-Covered identity fields and exact-match search are in
+Covered identity fields and identity indexes are in
 [the field encryption contract](docs/bank_field_encryption.md).
 
 Bank audit reads, Inspector support-reference capture, audit-chain verification,

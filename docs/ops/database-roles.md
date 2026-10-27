@@ -239,8 +239,9 @@ organization. Organization-wide ticks may have no bank. Commit, rollback and poo
 reuse cannot carry a job's context into the next job. Separately opened storage
 sessions use the worker credential and the same handler context; cached storage
 clients resolve their session factory on each operation. The worker key-reference
-function locks only the requested storage slug within that context, without
-SELECT privileges on the pre-tenant registry. A companion storage check distinguishes
+function locks only the requested storage slug within that context. Field encryption
+also has SELECT access to the key-reference registry through the runtime session;
+wrapped key envelopes remain tenant-isolated. A companion storage check distinguishes
 an authorized unconnected bank from an unknown or foreign slug, so refusal cannot
 become a plaintext fallback when optional encryption is disabled. Jobs prepare
 stable bank storage setup metadata before handler work starts, allowing separate
