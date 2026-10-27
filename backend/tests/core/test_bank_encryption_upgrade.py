@@ -4,7 +4,7 @@ from typing import Protocol, cast
 
 import pytest
 from alembic.script import ScriptDirectory
-from sqlalchemy import select, text
+from sqlalchemy import JSON, select, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
@@ -117,7 +117,12 @@ def test_upgrade_indexes_all_existing_generations_before_using_them(
         db_session.scalars(
             select(CanonicalCounterparty.id).where(
                 *current,
-                CanonicalCounterparty.external_identifiers_blind_indexes["national_id"].as_string()
+                cast(
+                    JSON.Comparator[object],
+                    CanonicalCounterparty.external_identifiers_blind_indexes[
+                        "national_id"
+                    ].comparator,
+                ).as_string()
                 == blind_index(
                     db_session,
                     organization_id=ORG_1,

@@ -321,7 +321,7 @@ and explicit-period dashboard reads have distinct stable keys. The root
 authority changes, including entry to or exit from staff inspection; ordinary
 access-token rotation deliberately keeps the same cache.
 
-Outside [protected-data recovery](../docs/bank_field_encryption.md#locked-presentation-reads),
+Outside [protected-data recovery](../docs/bank_field_encryption.md#protected-presentation-reads),
 heavy liquidity, capital, IRRBB, FX, FTP, regulatory calendar, and live-snapshot
 payloads do not use fixed polling. They refresh on mount/window focus, after a
 relevant accepted mutation or completed pipeline job, and when the cheap

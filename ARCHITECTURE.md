@@ -418,7 +418,8 @@ on one canonical store — the live tier for intraday awareness, the official ti
   capital-side FX valuation refusal is tracked in
   [the capital follow-up](https://github.com/CedynGroup/aequorOS/issues/424).
 
-The dashboard polls only cheap live-summary, freshness, alert, and notification signals, with
+Outside [protected-data recovery](backend/docs/bank_field_encryption.md#protected-presentation-reads),
+the dashboard polls only cheap live-summary, freshness, alert, and notification signals, with
 stable tenant/authority/bank jitter. Signal polls are read-only; a live generation or
 official-run change invalidates only the affected module's cached detail. Heavyweight regulatory
 dashboards and live-snapshot series do not poll on their own. Their cache keys distinguish current from explicit-period reads and

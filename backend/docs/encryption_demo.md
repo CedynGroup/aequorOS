@@ -83,10 +83,10 @@ the typed draft stays in the form. Restore and press Save again. Staff inspectio
 shows placeholders even when the synthetic key is active.
 
 For saved dashboard layouts and filter values, follow the
-[BI locked-presentation contract](bank_field_encryption.md#locked-presentation-reads).
+[BI locked-presentation contract](bank_field_encryption.md#protected-presentation-reads).
 Use numeric dashboards and certified packs to demonstrate analytics availability;
-use filing lists and status metadata while an encrypted filing snapshot shows its
-locked panel.
+use staff inspection to demonstrate the metadata-only filing view and locked
+snapshot panel.
 
 ## Verify and collect proof
 

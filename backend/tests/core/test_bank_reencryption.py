@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 from decimal import Decimal
 from typing import cast
 from uuid import UUID, uuid4
@@ -339,6 +339,15 @@ def test_interrupted_batch_reclaims_at_default_window_and_resumes(
     assert orphan is not None
     progress = reencryption.Progress.model_validate(orphan.progress)
     assert progress.fields_rewritten > 0
+    started_at = orphan.started_at
+    assert started_at is not None
+    now = started_at.replace(tzinfo=started_at.tzinfo or UTC)
+    assert (
+        job_queue.reclaim_stale(
+            db_session, now + timedelta(seconds=899), stale_after=timedelta(seconds=900)
+        )
+        == 0
+    )
     now += timedelta(seconds=901)
     assert job_queue.reclaim_stale(db_session, now, stale_after=timedelta(seconds=900)) == 1
     db_session.refresh(orphan)

@@ -76,9 +76,11 @@ re-import/reversal; a losing reversal returns 409. Numeric concentration groupin
 
 Name index tokens are 64 characters for both connected and optional banks.
 Optional banks use unkeyed SHA-256 tokens and retain plaintext names.
-Counterparty names retain the plaintext length limit defined by
-[`CounterpartyData`](../app/domain/ingestion/contracts.py), enforced during
-ingestion and before persistence for both optional-key and connected-key banks.
+Counterparty names and group references retain the plaintext length limits defined by
+[`CounterpartyData`](../app/domain/ingestion/contracts.py) and
+[`counterparty_group_key`](../app/core/key_management/concentration_identity.py),
+including groups derived from attributes. These limits apply during ingestion and
+before persistence for both optional-key and connected-key banks.
 
 ## BI
 
@@ -113,14 +115,9 @@ the latest job's status and progress. Connection of an existing bank enqueues th
 job automatically; ordinary key rotation does not. No bank financial data is
 created by key connection or migration.
 
-For an existing aequorOS deployment, the schema upgrade backfills all five
-identity indexes before switching their consumers. It records the current KMS
-reference on each legacy object envelope, creates current/index data-key versions
-for every connected bank (including empty banks), and reindexes connected banks
-under their index key. The upgrade requires access to those bank KMS keys; a
-provider refusal rolls back the upgrade. Legacy object envelopes continue to
-authenticate their original per-object context and unwrap the original secret
-until editable objects move; retained versions keep that decryption path.
+For an existing aequorOS deployment, apply the
+[schema upgrade and key-access prerequisites](bank_encryption.md#onboarding-and-operator-api)
+before running editable-data migration.
 
 The core worker runs `bank_reencrypt`. Progress records the target version,
 phase, field-table/row checkpoint, exact object-version cursor, rewritten counts,
@@ -210,7 +207,8 @@ Guard changes and audit-chain migrations are outside this workflow.
 
 Tenant GET/HEAD sessions disclose protected identity fields as locked placeholders
 when a bank key is revoked or unreachable. Staff and Inspector presentation sessions
-hide those fields even for optional, unconnected banks. Support filing reads expose
+hide those fields even for optional, unconnected banks without unwrapping a bank key.
+Support filing reads expose
 only filing metadata: snapshot and comparison bodies are locked, and validation,
 approval and methodology details are withheld. Bank-user filing reads retain their
 complete content. Numeric projections still
@@ -234,8 +232,9 @@ Integrity failures remain verification errors, outside the key-outage presentati
 
 Manual **Retry** and five-second automatic retries share one in-flight recovery
 attempt for the current bank. They refetch eligible active queries for that bank;
-when none are eligible, they use `GET /api/v1/banks/{bank_id}` to observe readiness
-without loading protected registers. Bank detail checks institution coverage before
+when none are eligible, including empty protected collections after a refused first
+save, they use `GET /api/v1/banks/{bank_id}` to observe readiness without loading
+protected registers. Bank detail checks institution coverage before
 observing keys and requires no key-administration or institution-profile permission.
 Changing banks or unmounting cancels the fallback request. Available and support
 states, or no current bank, suppress recovery probes.
@@ -282,8 +281,3 @@ current names.
 Concentration displays configured locked limits as not evaluated and withholds a
 clean breach indicator while any configured evaluation is incomplete; independent
 numeric limits still evaluate.
-
-Recovery retries also read `GET /banks/{bank_id}` to observe the connected key
-when protected collections are empty after a refused first save. A headerless
-successful response does not clear an existing lock. Support reads never unwrap
-a bank key or poll for recovery.

@@ -202,7 +202,9 @@ def rewrite_row(
             "record_id": str(row["id"]),
         }
 
-        def seal(value: object, field_name: str) -> fields.SealedField:
+        def seal(
+            value: object, field_name: str, *, context: dict[str, str] = context
+        ) -> fields.SealedField:
             secret = registry.prepare_envelope(
                 db,
                 key,
@@ -227,13 +229,20 @@ def rewrite_row(
             continue
         changed = isinstance(row[col.name], fields.SealedField)
 
-        def rewrite_leaf(item: object, path: str) -> object:
+        def rewrite_leaf(
+            item: object,
+            path: str,
+            *,
+            column_name: str = col.name,
+            kind: fields.ProtectedField = kind,
+            context: dict[str, str] = context,
+        ) -> object:
             nonlocal changed
-            field_name = col.name + ":" + path
+            field_name = column_name + ":" + path
             if isinstance(item, dict) and fields.FORMAT in item:
                 sealed = kind.decode(cast(dict[str, object], item)[fields.FORMAT])
                 if sealed.envelope_id == version:
-                    return item
+                    return cast(dict[str, object], item)
                 secret = registry.open_envelope(
                     db,
                     key,
@@ -252,7 +261,7 @@ def rewrite_row(
                         {**context, "field": field_name},
                     )
                 )
-            sealed = seal(item, field_name)
+            sealed = seal(cast(object, item), field_name)
             changed = True
             return {
                 fields.FORMAT: [

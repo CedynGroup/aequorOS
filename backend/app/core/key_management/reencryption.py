@@ -9,7 +9,7 @@ from typing import Literal, cast
 from uuid import UUID
 
 from pydantic import BaseModel, Field, TypeAdapter
-from sqlalchemy import JSON, ColumnElement, String, delete, or_, select, text
+from sqlalchemy import JSON, ColumnElement, String, Table, delete, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.key_management import fields, maintenance, registry
@@ -148,6 +148,35 @@ def _pinned(  # noqa: PLR0912 - resolve version pins across the storage referenc
     return False
 
 
+def _retain_field_references(
+    table: Table, row: Mapping[str, object], progress: Progress, references: set[UUID]
+) -> bool:
+    retained = False
+    for column in table.c:
+        if not isinstance(column.type, ProtectedField):
+            continue
+        value = row[column.name]
+        kind = column.type
+        if column.name in maintenance.IMMUTABLE_FIELDS.get(table.name, set()):
+
+            def retain(item: object, _path: str = "", *, kind: ProtectedField = kind) -> object:
+                nonlocal retained
+                if isinstance(item, dict) and fields.FORMAT in item:
+                    item = kind.decode(cast(dict[str, object], item)[fields.FORMAT])
+                if isinstance(item, SealedField):
+                    references.add(item.envelope_id)
+                    retained |= item.envelope_id != progress.target_version
+                elif item is not None:
+                    retained = True
+                return cast(object, item)
+
+            if isinstance(value, SealedField) or kind.protected_members is None:
+                _ = retain(value)
+            else:
+                _ = fields.identity_values(value, kind.protected_members, retain)
+    return retained
+
+
 def _fields(db: Session, key: BankEncryptionKey, progress: Progress, deadline: float) -> None:
     tables = maintenance.protected_tables()
     if progress.table == len(tables):
@@ -174,32 +203,10 @@ def _fields(db: Session, key: BankEncryptionKey, progress: Progress, deadline: f
             break
         row = cast(Mapping[str, object], result)
         progress.fields_rewritten += maintenance.rewrite_row(db, key, table, row)
-        if progress.phase == "verify_fields":
-            retained = False
-            for column in table.c:
-                if not isinstance(column.type, ProtectedField):
-                    continue
-                value = row[column.name]
-                kind = column.type
-                if column.name in maintenance.IMMUTABLE_FIELDS.get(table.name, set()):
-
-                    def retain(item: object, _path: str = "") -> object:
-                        nonlocal retained
-                        if isinstance(item, dict) and fields.FORMAT in item:
-                            item = kind.decode(cast(dict[str, object], item)[fields.FORMAT])
-                        if isinstance(item, SealedField):
-                            references.add(item.envelope_id)
-                            retained |= item.envelope_id != progress.target_version
-                        elif item is not None:
-                            retained = True
-                        return item
-
-                    if isinstance(value, SealedField) or kind.protected_members is None:
-                        _ = retain(value)
-                    else:
-                        _ = fields.identity_values(value, kind.protected_members, retain)
-            if retained:
-                progress.retained[table.name] = progress.retained.get(table.name, 0) + 1
+        if progress.phase == "verify_fields" and _retain_field_references(
+            table, row, progress, references
+        ):
+            progress.retained[table.name] = progress.retained.get(table.name, 0) + 1
         progress.after = cast(UUID, row["id"])
         processed += 1
     progress.references = sorted(references)

@@ -37,7 +37,8 @@ def _replace_reaper(*, size_based: bool) -> None:
         else ""
     )
     op.execute(f"""
-        CREATE OR REPLACE FUNCTION {schema}.aqs_worker_reclaim_jobs(p_now timestamptz, p_windows jsonb)
+        CREATE OR REPLACE FUNCTION {schema}.aqs_worker_reclaim_jobs(
+            p_now timestamptz, p_windows jsonb)
         RETURNS integer LANGUAGE plpgsql SECURITY DEFINER
         SET search_path = pg_catalog, {schema}, pg_temp SET row_security = on AS $fn$
         DECLARE j {schema}.jobs; window_seconds double precision; reclaimed integer := 0;

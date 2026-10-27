@@ -616,12 +616,6 @@
  "app.features.export_bi": {
   "reportUnnecessaryCast": 1
  },
- "app.features.manage_bi_content": {
-  "reportDeprecated": 1,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 2
- },
  "app.features.manage_documents": {
   "reportAny": 10
  },
@@ -1084,9 +1078,6 @@
   "reportUnknownParameterType": 4,
   "reportUnknownVariableType": 9
  },
- "app.services.bi.alerts": {
-  "reportAny": 1
- },
  "app.services.bi.commentary.payload": {
   "reportAny": 2,
   "reportUnknownArgumentType": 1,
@@ -1165,10 +1156,6 @@
  },
  "app.services.bi.query_log": {
   "reportAny": 5
- },
- "app.services.bi.subscriptions": {
-  "reportAny": 11,
-  "reportUnnecessaryCast": 1
  },
  "app.services.calculations": {
   "reportAny": 99
