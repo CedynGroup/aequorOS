@@ -462,7 +462,13 @@ class TestOperatorManagement:
             select(OperatorAuditLog).where(OperatorAuditLog.action == "operators.create")
         ).all()
         assert len(entries) == 1
-        assert entries[0].detail == {"email": "first@aequoros.com", "role": "operator_admin"}
+        assert entries[0].detail == {
+            "email": "first@aequoros.com",
+            "role": "operator_admin",
+            "reason": "operators create",
+            "support_reference": None,
+            "outcome": "success",
+        }
         assert body["one_time_password"] not in json.dumps(entries[0].detail)
 
     def test_duplicate_email_is_409(

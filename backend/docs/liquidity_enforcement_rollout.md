@@ -73,10 +73,10 @@ CFP sections restricted and omits threshold-dependent headroom assessments
 when confidential inputs are unavailable. Monitoring Tools omits KPI status
 styling when the corresponding authorized metric is unavailable. Saved-analysis
 workbench links use the same access decision as navigation; permission-only
-gaps follow the [disabled-control convention](../../docs/rbac.md). The shared `/liquidity/stress`
-workbench requires both LIQ/confidential/view and RISK/confidential/view for
-navigation; this does not change RISK backend enforcement. The SDI Liquidity
-landing requires confidential view because it reads the SDI position.
+gaps follow the [disabled-control convention](../../docs/rbac.md). Module scenario
+navigation follows
+[Treasury scenario workspaces](../dashboard/README.md#treasury-scenario-workspaces).
+The SDI Liquidity landing requires confidential view because it reads the SDI position.
 
 ## Deny-impact inventory
 

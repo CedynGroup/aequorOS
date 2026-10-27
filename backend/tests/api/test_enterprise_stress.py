@@ -18,7 +18,6 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
-from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.authorization import (
     GrantorType,
@@ -193,7 +192,7 @@ def test_enterprise_stress_persists_run_projection_and_appendix(db_client: TestC
     assert outcome["capital"]["stressed_car_end_pct"] is not None
 
     with get_sessionmaker()() as session:
-        stored = session.get(RegulatoryRun, UUID(run["run_id"]))
+        stored = session.get(RegulatoryRun, UUID(cast(str, run["run_id"])))
         assert stored is not None
         assert stored.engine_version == run["engine_version"]
         assert stored.metrics["outcome"]["engine_version"] == stored.engine_version
@@ -636,19 +635,23 @@ def test_enterprise_readers_project_fx_without_hiding_non_fx(
         },
     )
     assert created.status_code == 201, created.text
-    run_id = created.json()["run_id"]
+    run_id = cast(str, created.json()["run_id"])
     with get_sessionmaker()() as session:
         stored = session.get(RegulatoryRun, UUID(run_id))
         assert stored is not None
         original_metrics = deepcopy(stored.metrics)
         original_inputs = deepcopy(stored.inputs)
         assert bool(original_metrics["outcome"].get("fx")) == include_fx
-        original_rows = original_metrics["appendix_ii"]["table5_rwa"]["rows"]
+        original_rows = cast(
+            list[dict[str, Any]], original_metrics["appendix_ii"]["table5_rwa"]["rows"]
+        )
         assert any(row["pillar2"]["country_and_fx"] is None for row in original_rows)
         assert (
             any(row["pillar2"]["country_and_fx"] is not None for row in original_rows) == include_fx
         )
-        original_drivers = original_metrics["appendix_ii"]["table6_risk_drivers"]["rows"]
+        original_drivers = cast(
+            list[dict[str, Any]], original_metrics["appendix_ii"]["table6_risk_drivers"]["rows"]
+        )
         assert any(row["variable"] == "fx_usd_ghs" for row in original_drivers)
         session.execute(
             delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
@@ -695,6 +698,7 @@ def test_enterprise_readers_project_fx_without_hiding_non_fx(
         assert visible_inputs["capital_facts"] == original_inputs["capital_facts"]
     with get_sessionmaker()() as session:
         stored = session.get(RegulatoryRun, UUID(run_id))
+        assert stored is not None
         assert stored.metrics == original_metrics
         assert stored.inputs == original_inputs
 
@@ -746,7 +750,7 @@ def test_stage3_only_book_has_no_incremental_charge_in_either_projection(
     checker = _seed_checker(db_client)
     scenario_id = _create_scenario(db_client)
     _approve_scenario(db_client, scenario_id, checker)
-    with cast(sessionmaker[Session], get_sessionmaker())() as session:
+    with get_sessionmaker()() as session:
         session.execute(
             delete(BankFinancialFact).where(
                 BankFinancialFact.bank_id == bank_id,
@@ -833,7 +837,7 @@ def test_annual_coverage_refusal_is_independent_of_register_availability(
     checker = _seed_checker(db_client)
     scenario_id = _create_scenario(db_client)
     _approve_scenario(db_client, scenario_id, checker)
-    with cast(sessionmaker[Session], get_sessionmaker())() as session:
+    with get_sessionmaker()() as session:
         session.execute(
             delete(BankFinancialFact).where(
                 BankFinancialFact.bank_id == bank_id,
@@ -901,7 +905,7 @@ def test_annual_coverage_refusal_is_independent_of_register_availability(
     )
     assert response.status_code == 409, response.text
     assert response.json()["error"]["details"]["error_code"] == "ecl_coverage_incomplete"
-    with cast(sessionmaker[Session], get_sessionmaker())() as session:
+    with get_sessionmaker()() as session:
         assert list(session.scalars(select(RegulatoryRun.id))) == before
 
 
@@ -924,7 +928,7 @@ def test_annual_coverage_accepts_derivation_rounding_in_both_directions(
     assert bucket_ead * 2 - loan_ead == (
         Decimal("0.0001") if balance == Decimal("5000000.000060") else Decimal("-0.0001")
     )
-    with cast(sessionmaker[Session], get_sessionmaker())() as session:
+    with get_sessionmaker()() as session:
         session.execute(
             delete(BankFinancialFact).where(
                 BankFinancialFact.bank_id == bank_id,
@@ -995,5 +999,5 @@ def test_annual_coverage_accepts_derivation_rounding_in_both_directions(
     stress = cast(list[dict[str, object]], projection["stress"])
     assert len(stress) == 3
     assert all(Decimal(str(year["incremental_credit_losses"])) > Decimal("0") for year in stress)
-    with cast(sessionmaker[Session], get_sessionmaker())() as session:
+    with get_sessionmaker()() as session:
         assert session.get(RegulatoryRun, UUID(str(run["run_id"]))) is not None

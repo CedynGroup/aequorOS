@@ -1,73 +1,73 @@
-'use client';
+"use client";
 
-import { useState, type FormEvent } from 'react';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
-import Button from './Button';
+import { useState, type FormEvent } from "react";
+import { CheckCircle2, AlertCircle } from "lucide-react";
+import Button from "./Button";
 
 const roles = [
-  'Treasury / ALM',
-  'Risk',
-  'Finance / CFO office',
-  'IT / Data',
-  'Executive / C-suite',
-  'Advisor or partner',
-  'Other',
+  "Treasury / ALM",
+  "Risk",
+  "Finance / CFO office",
+  "IT / Data",
+  "Executive / C-suite",
+  "Advisor or partner",
+  "Other",
 ];
 
-type Status = 'idle' | 'submitting' | 'success' | 'error';
+type Status = "idle" | "submitting" | "success" | "error";
 
 const inputClasses =
-  'w-full rounded border border-[#C9CDD8] bg-white px-4 py-3 text-ink placeholder:text-text-muted focus:border-action focus:outline-none focus:ring-2 focus:ring-action/30 transition disabled:opacity-60 disabled:cursor-not-allowed';
+  "w-full rounded-sm border border-[#C9CDD8] bg-white px-4 py-3 text-ink placeholder:text-text-muted focus:border-action focus:outline-hidden focus:ring-2 focus:ring-action/30 transition disabled:opacity-60 disabled:cursor-not-allowed";
 
 export default function ContactForm() {
-  const [status, setStatus] = useState<Status>('idle');
+  const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setStatus('submitting');
+    setStatus("submitting");
     setError(null);
 
     const form = e.currentTarget;
     const data = new FormData(form);
     const payload = {
-      name: data.get('name'),
-      email: data.get('email'),
-      organization: data.get('organization'),
-      role: data.get('role'),
-      message: data.get('message'),
-      _gotcha: data.get('_gotcha'),
+      name: data.get("name"),
+      email: data.get("email"),
+      organization: data.get("organization"),
+      role: data.get("role"),
+      message: data.get("message"),
+      _gotcha: data.get("_gotcha"),
     };
 
     try {
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const json = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        setStatus('success');
+        setStatus("success");
         form.reset();
         return;
       }
 
       setError(
         json?.error ??
-          'Something went wrong. Please email eric@aequoros.com directly.'
+          "Something went wrong. Please email eric@aequoros.com directly.",
       );
-      setStatus('error');
+      setStatus("error");
     } catch {
       setError(
-        'Network error. Please check your connection or email eric@aequoros.com directly.'
+        "Network error. Please check your connection or email eric@aequoros.com directly.",
       );
-      setStatus('error');
+      setStatus("error");
     }
   };
 
-  if (status === 'success') {
+  if (status === "success") {
     return (
       <div
         role="status"
@@ -85,8 +85,8 @@ export default function ContactForm() {
               Request received.
             </h3>
             <p className="mt-3 text-text-primary leading-relaxed">
-              Thanks — we&apos;ll be in touch within 24-48 hours to schedule your
-              walkthrough. Every inquiry is kept confidential.
+              Thanks — we&apos;ll be in touch within 24-48 hours to schedule
+              your walkthrough. Every inquiry is kept confidential.
             </p>
           </div>
         </div>
@@ -94,12 +94,12 @@ export default function ContactForm() {
     );
   }
 
-  const submitting = status === 'submitting';
+  const submitting = status === "submitting";
 
   return (
     <form
       onSubmit={onSubmit}
-      className="bg-white border border-border-light rounded-xl p-8 space-y-5 shadow-sm"
+      className="bg-white border border-border-light rounded-xl p-8 pt-13 space-y-5 shadow-xs"
     >
       <input
         type="text"
@@ -158,7 +158,7 @@ export default function ContactForm() {
             htmlFor="organization"
             className="block text-sm font-medium text-text-primary mb-2"
           >
-            Bank / organization{' '}
+            Bank / organization{" "}
             <span className="text-text-muted font-normal">(optional)</span>
           </label>
           <input
@@ -205,7 +205,7 @@ export default function ContactForm() {
           htmlFor="message"
           className="block text-sm font-medium text-text-primary mb-2"
         >
-          What would you like to see?{' '}
+          What would you like to see?{" "}
           <span className="text-text-muted font-normal">(optional)</span>
         </label>
         <textarea
@@ -219,7 +219,7 @@ export default function ContactForm() {
         />
       </div>
 
-      {status === 'error' && error && (
+      {status === "error" && error && (
         <div
           role="alert"
           className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800"
@@ -230,7 +230,7 @@ export default function ContactForm() {
       )}
 
       <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
-        {submitting ? 'Sending…' : 'Request demo'}
+        {submitting ? "Sending…" : "Request demo"}
       </Button>
 
       <p className="text-xs text-text-muted pt-1">

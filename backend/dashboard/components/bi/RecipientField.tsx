@@ -59,7 +59,7 @@ export default function RecipientField({
         onChange={(event) => onChange(event.target.value)}
         rows={3}
         spellCheck={false}
-        className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-none"
+        className="rounded-md border border-border bg-white px-3 py-2 text-body text-navy focus:border-action focus:outline-hidden"
         placeholder="name@yourbank.com"
       />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-micro text-slate">

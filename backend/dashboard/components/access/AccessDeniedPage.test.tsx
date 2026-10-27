@@ -11,9 +11,9 @@ const institutions = [
 ];
 let baselineOnly = false;
 let activeBank: (typeof institutions)[number] | null = institutions[1];
-const capability = (module: string) => ({
+const capability = (module: string, sensitivity = "confidential") => ({
   module,
-  sensitivity: "confidential",
+  sensitivity,
   permission: "view",
   requiresContextualAuthorization: false,
   dataScope: { kind: "all", branches: [], regions: [] },
@@ -40,15 +40,18 @@ loader._load = (request, parent, isMain) => {
             : [
                 {
                   institutionId: institutions[0].id,
-                  capabilities: [capability("risk")],
+                  capabilities: [capability("credit", "aggregated")],
                 },
                 {
                   institutionId: institutions[1].id,
-                  capabilities: [capability("liq")],
+                  capabilities: [capability("credit")],
                 },
                 {
                   institutionId: institutions[2].id,
-                  capabilities: [capability("liq"), capability("risk")],
+                  capabilities: [
+                    capability("credit", "aggregated"),
+                    capability("credit"),
+                  ],
                 },
               ],
         },
@@ -100,7 +103,7 @@ loader._load = (request, parent, isMain) => {
 try {
   const AccessDeniedPage = require("./AccessDeniedPage").default;
   const requirements = modules.accessRequestRequirements(
-    "/liquidity/stress",
+    "/credit/activity",
     [],
     "bank",
   );
@@ -108,9 +111,9 @@ try {
   act(() => {
     renderer = create(
       <AccessDeniedPage
-        route="/liquidity/stress"
+        route="/credit/activity"
         denied={{
-          title: "Liquidity stress",
+          title: "Credit activity",
           reason: "Access required",
           requirements: requirements.slice(1),
         }}
@@ -127,7 +130,8 @@ try {
   );
   assert.equal(submitted.length, 1);
   assert.equal(submitted[0].institutionId, institutions[1].id);
-  assert.equal(submitted[0].moduleScope, "risk");
+  assert.equal(submitted[0].moduleScope, "credit");
+  assert.equal(submitted[0].sensitivityScope, "aggregated");
   act(() =>
     renderer.root
       .findByType("select")
@@ -138,7 +142,8 @@ try {
   );
   assert.equal(submitted.length, 2);
   assert.equal(submitted[1].institutionId, institutions[0].id);
-  assert.equal(submitted[1].moduleScope, "liq");
+  assert.equal(submitted[1].moduleScope, "credit");
+  assert.equal(submitted[1].sensitivityScope, "confidential");
   act(() =>
     renderer.root
       .findByType("select")

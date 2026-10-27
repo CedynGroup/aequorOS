@@ -47,7 +47,6 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.key_management.concentration_identity import opaque_group_key
 from app.core.key_management.types import KeyIntegrityError
 from app.data_engine.public import CanonicalCounterparty
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
@@ -126,17 +125,13 @@ class ExposureRow:
 
 
 def canonical_group_key(source_reference: str, counterparty: CanonicalCounterparty | None) -> str:
-    """Connected-group / single-name identity (``le_generation``'s pattern).
-
-    A connected group beats the counterparty's own name, because an
-    idiosyncratic default lands on the group. With no counterparty at all the
-    position is its own name — never merged with another unknown.
-    """
-    if counterparty is not None:
-        if counterparty.concentration_group_blind_index is None:
-            raise KeyIntegrityError("The counterparty concentration identity is missing.")
-        return opaque_group_key(counterparty.concentration_group_blind_index)
-    return f"pos:{source_reference}"
+    """Resolve numeric grouping from the persisted concentration token."""
+    if counterparty is None:
+        return f"pos:{source_reference}"
+    token = counterparty.concentration_group_blind_index
+    if token is None:
+        raise KeyIntegrityError("The counterparty concentration index is missing.")
+    return token
 
 
 def _dec(value: Any) -> Decimal:

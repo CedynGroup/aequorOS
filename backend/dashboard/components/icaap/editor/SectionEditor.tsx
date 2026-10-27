@@ -75,7 +75,7 @@ export default function SectionEditor({
         // Prose styling stays inside this module (no typography plugin, and
         // no global stylesheet edit) so the editor is self-contained.
         class: [
-          "min-h-[24rem] px-4 py-3 text-body text-ink focus:outline-none",
+          "min-h-96 px-4 py-3 text-body text-ink focus:outline-hidden",
           "[&_p]:mb-3 [&_p:last-child]:mb-0",
           "[&_h2]:text-h2 [&_h2]:text-navy [&_h2]:mt-5 [&_h2]:mb-2",
           "[&_h3]:text-h3 [&_h3]:text-navy [&_h3]:mt-4 [&_h3]:mb-2",
@@ -143,7 +143,7 @@ export default function SectionEditor({
   if (!editor) {
     return (
       <div
-        className="min-h-[24rem] animate-pulse rounded bg-surface"
+        className="min-h-96 animate-pulse rounded-sm bg-surface"
         aria-busy="true"
         aria-label="Loading the editor"
       />

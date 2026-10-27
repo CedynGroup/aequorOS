@@ -1,10 +1,8 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
 /**
- * FX, worked end to end by an analyst: read the fixture's net open positions,
- * limits, VaR, hedge book, forwards and depreciation scenarios back off every
- * FX tab, then drive an enterprise stress from the FX Scenarios tab and confirm
- * its FX leg starts from the same position the module reports and that the run
- * is the one the platform kept.
+ * Independent FX outcomes cover currency exposure and limits, historical VaR,
+ * hedge effectiveness, and a persisted severe enterprise stress. Each story
+ * opens the module afresh before navigating to its own analysis.
  *
  * The expectations are the FIXTURE's, not the screen's. Positions are the
  * canonical book's net currency amounts at its period-end spot fixes
@@ -127,21 +125,25 @@ const VAR = {
   } as Record<string, number>,
 };
 
-test.describe("FX functional workflow", () => {
+test.describe("FX exposure, hedge and stress outcomes", () => {
   test.use({ storageState: path.join(E2E_TMP, "analyst.json") });
 
-  test("reads the fixture's NOP, limits, VaR, hedges and scenarios, then stresses and persists", async ({
-    page,
-  }) => {
-    test.setTimeout(120_000);
-    // Derived anchors: 45M long against 12M short, so the NOP is the long leg.
-    expect([LONG_M, SHORT_M, NOP_M, LARGEST.ccy]).toEqual([45, 12, 45, "USD"]);
-
-    // ---- Exposure: the NOP against Tier 1 and every currency's position.
+  test.describe.configure({ timeout: 120_000 });
+  test.beforeEach(async ({ page }) => {
     await page.goto("/fx");
     await expect(
       page.getByRole("heading", { name: "FX Exposure" }),
     ).toBeVisible();
+  });
+
+  test("currency positions reconcile to open-position limits and spot references", async ({
+    page,
+  }) => {
+    // Derived anchors: 45M long against 12M short, so the NOP is the long leg.
+    expect([LONG_M, SHORT_M, NOP_M, LARGEST.ccy]).toEqual([45, 12, 45, "USD"]);
+
+    // ---- Exposure: the NOP against Tier 1 and every currency's position.
+
     await expectKpi(
       page,
       "Aggregate NOP / Tier 1",
@@ -176,6 +178,39 @@ test.describe("FX functional workflow", () => {
     }
     await expectScenarioStrip(page);
 
+    // ---- Limits: the aggregate ceiling and the single-currency breach.
+    await openTab(page, "Limits");
+    await expectKpi(
+      page,
+      "Aggregate limit utilisation",
+      `${((NOP_M / TIER1_M / (AGGREGATE_LIMIT_PCT / 100)) * 100).toFixed(1)}%`,
+      `${pct(NOP_M / TIER1_M)} of Tier 1 vs ${AGGREGATE_LIMIT_PCT}% ceiling`,
+    );
+    await expect(
+      page.getByText(
+        `The largest single-currency net open position (USD at ${((Math.abs(LARGEST.netGhsM) / TIER1_M) * 100).toFixed(6)}% of Tier 1) is above the 10% single-currency limit.`,
+      ),
+    ).toBeVisible();
+
+    // ---- Forwards: the spot fixes the NOP was revalued at. No forward curve
+    // can be ingested yet (#333), so the monitor states that honestly.
+    await openTab(page, "Forwards");
+    await expect(
+      page.getByText("No forward curve ingested", { exact: true }),
+    ).toBeVisible();
+    const spots = section(page, "Spot reference").getByRole("table");
+    for (const p of POSITIONS) {
+      await expectRow(spots, `${p.ccy}/GHS`, [
+        `${p.ccy}/GHS`,
+        p.spot.toFixed(4),
+        p.netGhsM > 0 ? "Long" : "Short",
+      ]);
+    }
+  });
+
+  test("historical VaR reconciles currency risk and diversification", async ({
+    page,
+  }) => {
     // ---- VaR & Stress: the historical VaR bridge, currency by currency.
     await openTab(page, "VaR & Stress");
     await expectKpi(
@@ -209,7 +244,11 @@ test.describe("FX functional workflow", () => {
     expect(sum(Object.values(VAR.standalone)) <= VAR.standaloneTotal).toBe(
       true,
     );
+  });
 
+  test("hedge effectiveness matches both IFRS 9 tests and inventory values", async ({
+    page,
+  }) => {
     // ---- Hedges: the IFRS 9 dual test applied to every hedge.
     await openTab(page, "Hedge Book");
     const passing = HEDGES.filter(effective).length;
@@ -233,38 +272,19 @@ test.describe("FX functional workflow", () => {
         hedges.locator("tbody tr").filter({ hasText: h.id }),
       ).toContainText(effective(h) ? "Effective" : "Ineffective");
     }
+  });
 
-    // ---- Limits: the aggregate ceiling and the single-currency breach.
-    await openTab(page, "Limits");
-    await expectKpi(
-      page,
-      "Aggregate limit utilisation",
-      `${((NOP_M / TIER1_M / (AGGREGATE_LIMIT_PCT / 100)) * 100).toFixed(1)}%`,
-      `${pct(NOP_M / TIER1_M)} of Tier 1 vs ${AGGREGATE_LIMIT_PCT}% ceiling`,
-    );
-    await expect(
-      page.getByText(
-        `The largest single-currency net open position (USD at ${((Math.abs(LARGEST.netGhsM) / TIER1_M) * 100).toFixed(6)}% of Tier 1) is above the 10% single-currency limit.`,
-      ),
-    ).toBeVisible();
-
-    // ---- Forwards: the spot fixes the NOP was revalued at. No forward curve
-    // can be ingested yet (#333), so the monitor states that honestly.
-    await openTab(page, "Forwards");
-    await expect(
-      page.getByText("No forward curve ingested", { exact: true }),
-    ).toBeVisible();
-    const spots = section(page, "Spot reference").getByRole("table");
-    for (const p of POSITIONS) {
-      await expectRow(spots, `${p.ccy}/GHS`, [
-        `${p.ccy}/GHS`,
-        p.spot.toFixed(4),
-        p.netGhsM > 0 ? "Long" : "Short",
-      ]);
-    }
-
+  test("severe stagflation persists the FX shock and enterprise coverage", async ({
+    page,
+  }) => {
     // ---- Scenarios: a governed macro path through every engine, FX leg included.
     await openTab(page, "Scenarios");
+    await expect(
+      page.getByRole("heading", { name: "FX Scenarios", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("link", { name: "Open enterprise stress workbench" })
+      .click();
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
     ).toBeVisible();

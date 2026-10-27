@@ -7,6 +7,7 @@ import os
 from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
+from threading import Lock
 from typing import cast
 from uuid import uuid4
 
@@ -18,8 +19,15 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.key_management import registry
+from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.models import ObjectKeyEnvelope
+from app.core.key_management.schemas import BankKeyConnect, BankKeyRotate
+from app.core.key_management.types import KeyStatus
 from app.core.tenancy import TenantContext
 from app.db.session import get_engine
+from app.identity.schemas.bank_encryption import BankKeyScheduleConfirm
+from app.identity.service import bank_encryption
 from app.models import Bank, Job
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.services import assessments, documents, ingestion, job_queue
@@ -36,8 +44,11 @@ ROLES = ("aqs_api", "aqs_worker", "aqs_bi", "aqs_operator", "aqs_audit_verifier"
 MATRIX = Path(__file__).with_name("database_role_grants.json")
 
 
-def privilege_snapshot(connection: Connection) -> dict[str, object]:
+def _schema_privilege_snapshot(connection: Connection) -> dict[str, object]:
     """Effective rights include PUBLIC/inherited grants, so they cannot hide drift."""
+    privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+    if (connection.dialect.server_version_info or (0,))[0] >= 17:
+        privileges.append("MAINTAIN")
     tables: dict[str, dict[str, list[str]]] = {}
     for name, oid in cast(
         list[tuple[str, int]],
@@ -55,11 +66,10 @@ def privilege_snapshot(connection: Connection) -> dict[str, object]:
                 list[str],
                 connection.execute(
                     text(
-                        "SELECT privilege FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE',"
-                        "'TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) privilege "
+                        "SELECT privilege FROM unnest(CAST(:privileges AS text[])) privilege "
                         "WHERE has_table_privilege(:role, :oid, privilege) ORDER BY privilege"
                     ),
-                    {"role": role, "oid": oid},
+                    {"role": role, "oid": oid, "privileges": privileges},
                 )
                 .scalars()
                 .all(),
@@ -122,6 +132,24 @@ def privilege_snapshot(connection: Connection) -> dict[str, object]:
     }
 
 
+def privilege_snapshot(connection: Connection) -> dict[str, object]:
+    """Include the isolated worker view namespace in the same grant ratchet."""
+    result = _schema_privilege_snapshot(connection)
+    view_schema = cast(str, connection.scalar(text("SELECT aqs_worker_desk_schema()")))
+    previous = cast(str, connection.scalar(text("SELECT current_setting('search_path')")))
+    try:
+        connection.execute(
+            text("SELECT set_config('search_path', quote_ident(:schema), true)"),
+            {"schema": view_schema},
+        )
+        result["worker_views"] = _schema_privilege_snapshot(connection)
+    finally:
+        connection.execute(
+            text("SELECT set_config('search_path', :path, true)"), {"path": previous}
+        )
+    return result
+
+
 @pytest.fixture(scope="module")
 def role_schema() -> Iterator[migrations.MigratedPostgresSchema]:
     with pytest.MonkeyPatch.context() as monkeypatch:
@@ -167,7 +195,12 @@ def role_engines(administrator: Engine) -> Iterator[dict[str, Engine]]:
                     )
                 )
                 names.append(name)
-                connection.execute(text(f"GRANT {role} TO {name} WITH INHERIT TRUE, SET TRUE"))
+                options = (
+                    " WITH INHERIT TRUE, SET TRUE"
+                    if (connection.dialect.server_version_info or (0,))[0] >= 16
+                    else ""
+                )
+                connection.execute(text(f"GRANT {role} TO {name}{options}"))
             url = make_url(administrator.url).set(username=name, password=password)
             engines[role] = create_engine(url)
         yield engines
@@ -175,7 +208,14 @@ def role_engines(administrator: Engine) -> Iterator[dict[str, Engine]]:
         for engine in engines.values():
             engine.dispose()
         with administrator.begin() as connection:
+            schema = connection.dialect.identifier_preparer.quote_identifier(
+                cast(str, connection.execute(text("SELECT current_schema()")).scalar_one())
+            )
             for name in names:
+                # Migration replay can grant scoped read helpers to these runtime logins.
+                connection.execute(
+                    text(f"REVOKE ALL ON ALL FUNCTIONS IN SCHEMA {schema} FROM {name}")
+                )
                 connection.execute(text(f"DROP ROLE {name}"))
 
 
@@ -256,7 +296,13 @@ def test_matrix_detects_inherited_column_grants_and_grant_options(administrator:
         connection.execute(
             text(f"GRANT SELECT (key_id) ON bank_encryption_keys TO {parent} WITH GRANT OPTION")
         )
-        connection.execute(text(f"GRANT {parent} TO aqs_api WITH INHERIT TRUE, SET FALSE"))
+        if (connection.dialect.server_version_info or (0,))[0] >= 16:
+            connection.execute(text(f"GRANT {parent} TO aqs_api WITH INHERIT TRUE, SET FALSE"))
+        else:
+            # PostgreSQL 15 controls inheritance on the member role. This
+            # deliberate privilege drift is rolled back with the transaction.
+            connection.execute(text("ALTER ROLE aqs_api INHERIT"))
+            connection.execute(text(f"GRANT {parent} TO aqs_api"))
         after = privilege_snapshot(connection)
         assert after != before
         assert after["tables"] == before["tables"]
@@ -316,10 +362,16 @@ def test_runtime_attributes_ownership_membership_and_grant_options(administrator
             )
             == 0
         )
+        membership_options = (
+            "m.admin_option,m.inherit_option,m.set_option"
+            if (connection.dialect.server_version_info or (0,))[0] >= 16
+            else "m.admin_option,pg_has_role(member.oid,parent.oid,'USAGE'),"
+            "pg_has_role(member.oid,parent.oid,'MEMBER')"
+        )
         assert tuple(
             connection.execute(
                 text(
-                    "SELECT m.admin_option,m.inherit_option,m.set_option FROM pg_auth_members m "
+                    f"SELECT {membership_options} FROM pg_auth_members m "
                     "JOIN pg_roles member ON member.oid=m.member "
                     "JOIN pg_roles parent ON parent.oid=m.roleid "
                     "WHERE member.rolname='aqs_migrator' AND parent.rolname='aqs_owner'"
@@ -726,3 +778,95 @@ def test_shared_url_pools_have_distinct_application_names(
         for engine in engines:
             engine.dispose()
         get_engine.cache_clear()
+
+
+def test_api_role_can_connect_test_rotate_and_confirm_bank_key(
+    administrator: Engine, role_engines: dict[str, Engine], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payloads = [
+        BankKeyConnect(
+            key_id=f"arn:aws:kms:us-east-1:123456789012:key/{uuid4()}",
+            region="us-east-1",
+            owner_account="123456789012",
+        )
+        for _ in range(2)
+    ]
+    provider = LocalKeyProvider()
+    for payload in payloads:
+        provider.add_key(payload.reference())
+
+    def factory(_name: str) -> LocalKeyProvider:
+        return provider
+
+    recording = Lock()
+    monkeypatch.setattr(registry, "provider_for", factory)
+    monkeypatch.setattr(registry, "_usage_recording", recording)
+    with Session(administrator) as admin:
+        bank = Bank(
+            organization_id=ORG_1,
+            name="Key privilege fixture",
+            short_name="Key privilege",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="bank",
+            institution_type="universal_bank",
+            storage_slug=f"key-privilege-{uuid4().hex}",
+        )
+        admin.add(bank)
+        admin.commit()
+        bank_id = bank.id
+    ctx = TenantContext(organization_id=ORG_1)
+    with Session(role_engines["aqs_api"]) as api:
+        api.info["organization_id"] = ORG_1
+        connected = bank_encryption.connect(api, ctx, bank_id, payloads[0])
+        assert connected.connected and connected.current_version
+        assert bank_encryption.test_connection(api, ctx, bank_id, payloads[0]).passed
+        provider.set_status(payloads[0].reference(), KeyStatus.DISABLED)
+        assert not bank_encryption.test_connection(api, ctx, bank_id, payloads[0]).passed
+        provider.set_status(payloads[0].reference(), KeyStatus.ACTIVE)
+        for payload in (payloads[1], payloads[0], payloads[1]):
+            rotated = bank_encryption.rotate(
+                api,
+                ctx,
+                bank_id,
+                BankKeyRotate(
+                    key_id=payload.key_id,
+                    region=payload.region,
+                    owner_account=payload.owner_account,
+                    reason="Synthetic privilege rotation",
+                ),
+            )
+            assert rotated.current_version != connected.current_version
+            confirmed = bank_encryption.confirm_schedule(
+                api,
+                ctx,
+                bank_id,
+                BankKeyScheduleConfirm(
+                    key_id=payload.key_id,
+                    period_days=365,
+                    reason="Synthetic bank-reported rotation schedule",
+                ),
+            )
+            assert confirmed.rotation_period_days == 365
+    with Session(role_engines["aqs_worker"]) as worker:
+        worker.info["organization_id"] = ORG_1
+        row = registry.bank_key(worker, ORG_1, bank_id)
+        assert row is not None
+        key = registry.prepare_envelope(worker, row, {"purpose": "worker-role"}, lambda _: provider)
+        worker.commit()
+        assert key.key_id == payloads[1].key_id
+    assert recording.acquire(timeout=5)
+    recording.release()
+    with Session(role_engines["aqs_worker"]) as worker:
+        worker.info["organization_id"] = ORG_1
+        row = registry.bank_key(worker, ORG_1, bank_id)
+        assert row is not None
+        assert registry.last_successful_use(worker, row) is not None
+        assert (
+            worker.scalar(
+                select(ObjectKeyEnvelope.last_successful_use_at).where(
+                    ObjectKeyEnvelope.id == key.envelope_id
+                )
+            )
+            is not None
+        )

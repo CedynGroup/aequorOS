@@ -81,7 +81,7 @@ type GridRow = {
 };
 
 const selectClass =
-  "w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded text-navy";
+  "w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded-sm text-navy";
 
 const DAY_COUNT_OPTIONS: { value: DayCountBasis; label: string }[] = [
   { value: "act360", label: "MM Act/360" },
@@ -405,7 +405,7 @@ export default function ForwardTab({
                 ariaLabel={`Published forward yield across ${publishedTenors.length} tenors`}
               />
             </ChartFrame>
-            <div className="overflow-hidden rounded border border-border bg-surface">
+            <div className="overflow-hidden rounded-sm border border-border bg-surface">
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div>
                   <h3 className="text-body font-semibold text-navy">
@@ -617,7 +617,7 @@ export default function ForwardTab({
                     value={pullAsOf}
                     max={new Date().toISOString().slice(0, 10)}
                     onChange={(event) => setPullAsOf(event.target.value)}
-                    className="w-full rounded border border-border bg-surface py-1.5 pl-8 pr-2.5 text-body font-mono text-navy"
+                    className="w-full rounded-sm border border-border bg-surface py-1.5 pl-8 pr-2.5 text-body font-mono text-navy"
                   />
                 </div>
               </label>
@@ -716,12 +716,12 @@ export default function ForwardTab({
             <div className="flex flex-wrap items-center gap-2 text-caption text-slate">
               <BookOpen size={13} aria-hidden className="text-slate" />
               {meta.methodologyRef && (
-                <span className="inline-flex items-center gap-1.5 rounded border border-border bg-surface px-2 py-1">
+                <span className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface px-2 py-1">
                   Methodology <MonoChip>{meta.methodologyRef}</MonoChip>
                 </span>
               )}
               {meta.interpolation && (
-                <span className="inline-flex items-center gap-1.5 rounded border border-action/35 bg-action-light px-2 py-1 font-medium text-action">
+                <span className="inline-flex items-center gap-1.5 rounded-sm border border-action/35 bg-action-light px-2 py-1 font-medium text-action">
                   Published interpolation
                   <span className="font-mono text-micro uppercase tracking-wider">
                     {meta.interpolation}
@@ -811,7 +811,7 @@ export default function ForwardTab({
                       <button
                         type="button"
                         onClick={exportCsv}
-                        className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-caption font-medium text-navy hover:bg-surface"
+                        className="inline-flex items-center gap-1.5 rounded-sm border border-border px-2.5 py-1.5 text-caption font-medium text-navy hover:bg-surface"
                       >
                         <Download size={13} aria-hidden />
                         CSV
@@ -851,7 +851,7 @@ export default function ForwardTab({
                     {meta.pillars.map((pillar, index) => (
                       <span
                         key={`${pillar.tenor}-${index}`}
-                        className="inline-flex items-center gap-2 rounded border border-border-light bg-surface px-2.5 py-1"
+                        className="inline-flex items-center gap-2 rounded-sm border border-border-light bg-surface px-2.5 py-1"
                       >
                         <MonoChip>{pillar.tenor}</MonoChip>
                         <span className="text-caption text-slate">

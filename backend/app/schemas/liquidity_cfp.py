@@ -197,6 +197,7 @@ class CfpPut(ClosedModel):
 
 
 class CfpApprove(ClosedModel):
+    expected_revision: str = Field(min_length=1, max_length=120)
     approval_reference: str = Field(min_length=1, max_length=200)
     reason: str = Field(min_length=1, max_length=2000)
 
@@ -205,6 +206,7 @@ class CfpRead(ClosedModel):
     id: UUID
     bank_id: str
     version: int
+    revision: str
     status: CfpStatus
     content: CfpContent
     prepared_by: UUID | None = None

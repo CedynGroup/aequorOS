@@ -8,9 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, undefer_group
 
-from app.data_engine.service.field_search import find_counterparties
 from app.domain.capital.engine import (
     CapitalFact,
     RiskWeightUnavailable,
@@ -23,6 +22,7 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
+    CanonicalCounterparty,
     CanonicalProduct,
     RegulatoryRun,
 )
@@ -197,10 +197,19 @@ def test_enterprise_expected_credit_refusals_return_409_without_creating_runs(
         product.regulatory_category = "SME_UNRATED"
     else:
         cp = next(
-            iter(
-                find_counterparties(
-                    session, MAKER, bank_id, field="source_reference", value="CP/BIGCORP"
+            (
+                row
+                for row in session.scalars(
+                    select(CanonicalCounterparty)
+                    .options(undefer_group("bank_identity"))
+                    .where(
+                        CanonicalCounterparty.organization_id == MAKER.organization_id,
+                        CanonicalCounterparty.bank_id == bank_id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                    )
                 )
+                if row.source_reference == "CP/BIGCORP"
             ),
             None,
         )

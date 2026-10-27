@@ -34,6 +34,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Load
 
 from app.data_engine.public import (
     CanonicalCounterparty,
@@ -277,6 +278,7 @@ def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> lis
                 CanonicalCounterparty,
                 CanonicalProduct,
             )
+            .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
             .join(
                 latest,
                 (latest.c.pid == CanonicalPositionSnapshot.position_id)

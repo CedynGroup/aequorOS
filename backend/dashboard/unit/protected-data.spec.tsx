@@ -97,6 +97,56 @@ it("retries a locked read automatically and restores the visible value", async (
   client.clear();
 });
 
+it.each(["retained", "current"] as const)(
+  "keeps retrying a readable %s-key profile until every write prerequisite recovers",
+  async (readKey) => {
+    vi.useFakeTimers();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let ready = false;
+    let reads = 0;
+    function HistoricalRead() {
+      const query = useQuery({
+        queryKey: ["institution-profile", "BK-SAMP0001"],
+        queryFn: async () => {
+          reads++;
+          notify(ready ? "available" : "unavailable");
+          return `Readable ${readKey}-key party`;
+        },
+      });
+      return <p>{query.data}</p>;
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <ProtectedDataNotice />
+        <HistoricalRead />
+      </QueryClientProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(screen.getByText(`Readable ${readKey}-key party`)).toBeVisible();
+    expect(screen.getByText(protectedDataMessages.unavailable)).toBeVisible();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(reads).toBe(2);
+    expect(protectedDataState("BK-SAMP0001")).toBe("unavailable");
+    ready = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(reads).toBe(3);
+    expect(screen.queryByText(protectedDataMessages.unavailable)).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(reads).toBe(3);
+    client.clear();
+  },
+);
+
 it("offers manual retry after revocation", async () => {
   const client = new QueryClient();
   let reads = 0;
@@ -449,6 +499,86 @@ it.each([
       view.unmount();
       unsubscribe();
       client.clear();
+      vi.unstubAllGlobals();
+    }
+  },
+);
+
+it("keeps numeric and other-bank responses valid across a bank revocation", async () => {
+  const pending: ((response: Response) => void)[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => new Promise<Response>((resolve) => pending.push(resolve))),
+  );
+  try {
+    notify("revoked");
+    const numeric = protectedDataFetch("/banks/BK-SAMP0001/live-summary");
+    const other = protectedDataFetch("/banks/BK-SAMP0002/institution-profile");
+    notify("revoked");
+    pending[0](Response.json({ ratio: 1.25 }));
+    pending[1](
+      Response.json(
+        { name: "Other bank identity" },
+        {
+          headers: {
+            "X-Aequoros-Protected-Data": JSON.stringify({
+              "BK-SAMP0002": "available",
+            }),
+          },
+        },
+      ),
+    );
+    expect(await (await numeric).json()).toEqual({ ratio: 1.25 });
+    expect(await (await other).json()).toEqual({ name: "Other bank identity" });
+    expect(protectedDataState("BK-SAMP0001")).toBe("revoked");
+    expect(protectedDataState("BK-SAMP0002")).toBe("available");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it.each(["revoked", "unavailable", "support"] as const)(
+  "replaces a stale available body with a typed %s refusal even after recovery",
+  async (reason) => {
+    let finish: ((response: Response) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
+    try {
+      notify(reason);
+      const stale = protectedDataFetch(
+        "/banks/BK-SAMP0001/institution-profile",
+      );
+      notify(reason);
+      notify("available");
+      finish?.(
+        Response.json(
+          { name: "Stale private identity" },
+          {
+            headers: {
+              "X-Aequoros-Protected-Data": JSON.stringify({
+                "BK-SAMP0001": "available",
+              }),
+            },
+          },
+        ),
+      );
+      const response = await stale;
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: {
+          code: "bank_key_unavailable",
+          message: protectedDataMessages.unavailable,
+        },
+      });
+      expect(protectedDataState("BK-SAMP0001")).toBe("available");
+    } finally {
       vi.unstubAllGlobals();
     }
   },

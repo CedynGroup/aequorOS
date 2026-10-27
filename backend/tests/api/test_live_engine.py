@@ -87,6 +87,7 @@ def test_accepted_ingestion_enqueues_pipeline_refresh(
     finally:
         session.close()
     assert len(jobs) == 1
+    assert jobs[0].coalesce_key is not None
     assert jobs[0].coalesce_key.startswith(f"refresh:{bank_id}:")
     assert jobs[0].run_after is not None  # debounced, not immediate
 

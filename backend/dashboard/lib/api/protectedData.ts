@@ -1,4 +1,6 @@
-import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import type { Query, QueryClient, QueryKey } from "@tanstack/react-query";
+import type { BiDashboardRead } from "@aequoros/risk-service-api";
+import { BI_CATALOGUE_PREFIX, BI_DASHBOARD_PREFIX } from "./biKeys";
 
 /** Bank-scoped disclosure notices; an unrelated numeric response cannot clear a lock. */
 export type ProtectedDataState =
@@ -36,11 +38,27 @@ export async function protectedDataFetch(
   const started = revision;
   const response = await fetch(...args);
   const input = args[0];
-  await observeProtectedData(
+  const refused = await observeProtectedData(
     response,
     input instanceof Request ? input.url : String(input),
     started,
   );
+  if (refused) {
+    return Response.json(
+      {
+        error: {
+          code:
+            refused === "revoked"
+              ? "bank_key_revoked"
+              : refused === "support"
+                ? "bank_protected_support"
+                : "bank_key_unavailable",
+          message: protectedDataMessages[refused],
+        },
+      },
+      { status: 503 },
+    );
+  }
   return response;
 }
 
@@ -48,7 +66,7 @@ export async function observeProtectedData(
   response: Response,
   url?: string,
   started = revision,
-) {
+): Promise<Exclude<ProtectedDataState, "available"> | undefined> {
   const raw = response.headers.get("X-Aequoros-Protected-Data");
   try {
     let payload: unknown;
@@ -75,7 +93,8 @@ export async function observeProtectedData(
     }
     if (!payload || typeof payload !== "object" || Array.isArray(payload))
       return;
-    if (started < authorityRevision) return;
+    if (started < authorityRevision) return "unavailable";
+    let refused: Exclude<ProtectedDataState, "available"> | undefined;
     let changed = false;
     for (const [bank, state] of Object.entries(payload)) {
       if (
@@ -84,7 +103,11 @@ export async function observeProtectedData(
         )
       )
         continue;
-      if (state === "available" && started < (locks.get(bank) ?? 0)) continue;
+      if (state === "available" && started < (locks.get(bank) ?? 0)) {
+        const current = protectedDataState(bank);
+        refused = current === "available" ? "unavailable" : current;
+        continue;
+      }
       if (state !== "available") locks.set(bank, ++revision);
       if (notices.get(bank) !== state) {
         notices.set(bank, state as ProtectedDataState);
@@ -92,6 +115,7 @@ export async function observeProtectedData(
       }
     }
     if (changed) listeners.forEach((listener) => listener());
+    return refused;
   } catch {
     /* A malformed notice must not interrupt the original response. */
   }
@@ -104,14 +128,49 @@ export function isLockedBankQuery(queryKey: QueryKey): boolean {
   );
 }
 
+export function isProtectedRecoveryQuery(query: Query): boolean {
+  return (
+    isProtectedDataError(query.state.error) ||
+    containsLockedData(query.state.data) ||
+    (isLockedBankQuery(query.queryKey) &&
+      (query.state.isInvalidated ||
+        query.queryKey[0] === "institution-profile"))
+  );
+}
+
+const protectedBiIdentityMembers = new Set([
+  "counterparty.id",
+  "counterparty.name",
+  "counterparty.source_reference",
+  "counterparty.group",
+]);
+
+function isUnencryptedBiDefinition(query: Query): boolean {
+  if (query.queryKey[0] === BI_CATALOGUE_PREFIX) return true;
+  if (query.queryKey[0] !== BI_DASHBOARD_PREFIX) return false;
+  const dashboard = query.state.data as BiDashboardRead | undefined;
+  if (!dashboard || !Array.isArray(dashboard.widgets)) return false;
+  return dashboard.widgets.every((widget) => {
+    const question = widget.query;
+    if (!question) return true;
+    return ![
+      ...question.measures,
+      ...(question.dimensions ?? []),
+      ...(question.filters ?? []).map((filter) => filter.member),
+      ...(question.sort ?? []).map((sort) => sort.member),
+      ...(question.pivot ? [question.pivot.dimension] : []),
+      ...(question.topN ? [question.topN.dimension] : []),
+    ].some((member) => protectedBiIdentityMembers.has(member));
+  });
+}
+
 export function bindProtectedDataCache(client: QueryClient): () => void {
+  const shouldEvict = (query: Query) =>
+    isLockedBankQuery(query.queryKey) && !isUnencryptedBiDefinition(query);
   return subscribeProtectedData(() => {
-    void client.cancelQueries(
-      { predicate: (query) => isLockedBankQuery(query.queryKey) },
-      { revert: false },
-    );
+    void client.cancelQueries({ predicate: shouldEvict }, { revert: false });
     for (const query of client.getQueryCache().getAll()) {
-      if (!isLockedBankQuery(query.queryKey)) continue;
+      if (!shouldEvict(query)) continue;
       query.setState({
         data: undefined,
         dataUpdatedAt: 0,
@@ -122,8 +181,7 @@ export function bindProtectedDataCache(client: QueryClient): () => void {
     }
     void client.refetchQueries({
       type: "active",
-      predicate: (query) =>
-        isLockedBankQuery(query.queryKey) && query.state.isInvalidated,
+      predicate: (query) => shouldEvict(query) && query.state.isInvalidated,
     });
     void client.invalidateQueries(
       {

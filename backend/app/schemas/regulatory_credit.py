@@ -17,7 +17,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.identity.public import BankRead, BankReportingPeriodRead
 from app.schemas.live import LiveModuleView
@@ -210,8 +210,8 @@ class ConcentrationDimensionRead(ClosedModel):
 class LockedConcentrationLimitRead(ClosedModel):
     dimension: str
     limit_kind: str
-    bucket_key: str
     value: Decimal
+    limit_status: Literal["locked"] = "locked"
 
 
 class CreditConcentrationRead(ClosedModel):
@@ -227,7 +227,7 @@ class CreditConcentrationRead(ClosedModel):
     breaches: list[ConcentrationBucketRead]
     #: Board limit rows active at ``as_of`` (empty = none configured yet).
     limit_count: int
-    locked_limits: list[LockedConcentrationLimitRead] = Field(default_factory=list)
+    locked_limits: list[LockedConcentrationLimitRead]
 
 
 class ConcentrationLimitRead(ClosedModel):

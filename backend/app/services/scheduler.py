@@ -21,9 +21,10 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timedelta
+from typing import cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -33,6 +34,7 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import Settings, get_settings
 from app.core.observability import authorization_denied
 from app.db.base import utc_now
+from app.db.worker_access import SEED_SIGNATURE, has_worker_function
 from app.identity.service import scoped_authorization
 from app.models import (
     Bank,
@@ -44,6 +46,7 @@ from app.models import (
     User,
 )
 from app.services import job_queue, module_scope
+from app.services.job_queue import enqueue_platform_daily
 
 SCHEDULED_TICK = "scheduled_tick"
 OFFICIAL_RUN = "official_run"
@@ -420,20 +423,8 @@ def _enqueue_bi_retention(session: Session, org_id: str, now: datetime) -> Job |
     payload is the contract's ``{"builder_version"}`` and nothing else: the
     action names no bank.
     """
-    coalesce_key = f"bi-retention:{now.date().isoformat()}"
-    existing = session.scalar(
-        select(Job.id)
-        .where(Job.job_type == BI_RETENTION, Job.coalesce_key == coalesce_key)
-        .limit(1)
-    )
-    if existing is not None:
-        return None
-    return job_queue.enqueue(
-        session,
-        org_id,
-        BI_RETENTION,
-        payload={"builder_version": BUILDER_VERSION},
-        coalesce_key=coalesce_key,
+    return enqueue_platform_daily(
+        session, org_id, BI_RETENTION, now.date(), {"builder_version": BUILDER_VERSION}
     )
 
 
@@ -479,10 +470,14 @@ def _enqueue_bi_subscription_scan(session: Session, org_id: str, now: datetime) 
 def seed_ticks(db: Session) -> int:
     """Seed a tick for every org that owns a bank. Returns the count seeded.
 
-    Reads across organizations, so on Postgres the worker connection must be
-    able to see all tenants (a BYPASSRLS worker role); on SQLite/dev it is a
-    plain scan. Idempotent via the per-org coalesce key.
+    PostgreSQL uses the dedicated platform function when available. Legacy
+    deployments and SQLite retain their existing path. Idempotent via the
+    per-org coalesce key.
     """
+    if has_worker_function(db, SEED_SIGNATURE):
+        count = cast(int, db.scalar(text("SELECT aqs_worker_seed_ticks(:now)"), {"now": utc_now()}))
+        db.commit()
+        return int(count or 0)
     org_ids = list(db.scalars(select(Bank.organization_id).distinct()))
     for org_id in org_ids:
         job_queue.seed_tick(db, org_id)

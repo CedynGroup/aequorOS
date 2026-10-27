@@ -88,8 +88,10 @@ Each rule is stated in full in the document the index names.
   `RoleBundle` or `ModuleScope` value needs a CHECK-widening migration; gate every
   enforcement cutover with `backend/scripts/authorization_access_impact.py`.
 - **Calculation hashes and digests are value-based.** Never put a row id
-  (`fact.id`) or a volatile field into an `input_hash` snapshot or an attestation
-  digest; the live engine re-derives facts with new UUIDs on every refresh.
+  (`fact.id`) or a volatile field into an `input_hash` snapshot or calculation
+  content digest; the live engine re-derives facts with new UUIDs on every refresh.
+  Complete-register attestation commitments bind stored values, stable register
+  record IDs, update timestamps and the current bank key version.
 - **Migrated financial engines use explicit data-truth types.** Parse boundary values
   into Decimal-backed numeric kinds; figures are `Value`, `Unavailable(reason)` or
   `NotApplicable(reason)`. Keep status handling exhaustive and extend the scoped CI guard
