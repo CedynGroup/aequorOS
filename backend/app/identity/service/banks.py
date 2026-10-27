@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import Module, Permission, Sensitivity
+from app.core.key_management.fields import observe_bank_key
 from app.core.tenancy import TenantContext
 from app.identity.models.bank import Bank
 from app.identity.schemas.authorization import EffectiveCapabilityRead
@@ -200,6 +201,7 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
 
 def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
     bank, capabilities = _require_institution_coverage(db, ctx, bank_reference)
+    observe_bank_key(db, ctx.organization_id, bank.id)
     jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code})
     institution_types = _institution_types_by_code(
         db, {(bank.institution_type, bank.jurisdiction_code)}

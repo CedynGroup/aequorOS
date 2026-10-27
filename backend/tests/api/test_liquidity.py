@@ -1,13 +1,14 @@
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import UTC, date, datetime
+from queue import Queue
 from threading import Event
 from typing import cast
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, delete, event, select
+from sqlalchemy import Engine, create_engine, delete, event, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import TenantContext
@@ -31,6 +32,7 @@ from app.services.liquidity import generate_findings
 from tests.api.test_calculations import _financial_inputs, _ready_scenario
 from tests.support.api_factories import CaseFactory
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
+from tests.support.postgres import wait_for_blocker
 
 # Liquidity publication uses raw commits, advisory locks, and independent sessions.
 requires_committing_db = pytest.mark.committing_db
@@ -1146,9 +1148,10 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
     db_client: TestClient,
 ) -> None:
     sessionmaker = get_sessionmaker()
-    with sessionmaker() as dialect_session:
-        if dialect_session.get_bind().dialect.name != "postgresql":
-            pytest.skip("PostgreSQL advisory locks are required for concurrency coverage.")
+    engine = cast(Engine, sessionmaker.kw["bind"])
+    if engine.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL advisory locks are required for concurrency coverage.")
+    contender_pids: Queue[int] = Queue()
 
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -1182,9 +1185,10 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
                 )
             )
         )
-        finding_ids = [finding.id for finding in findings]
         setup_session.execute(
-            delete(RiskFindingEvidence).where(RiskFindingEvidence.finding_id.in_(finding_ids))
+            delete(RiskFindingEvidence).where(
+                RiskFindingEvidence.finding_id.in_([finding.id for finding in findings])
+            )
         )
         for finding in findings:
             setup_session.delete(finding)
@@ -1194,30 +1198,33 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
 
     def publish_older() -> None:
         with (
-            sessionmaker() as older_session,
-            liquidity.serialize_finding_publication(
-                older_session, context, case.id, UUID(scenario["id"])
-            ) as publication_session,
+            engine.connect() as connection,
+            Session(connection) as older_session,
         ):
-            calculations._begin_repeatable_read(publication_session)
-            older_run = publication_session.get(CalculationRun, UUID(older["id"]))
-            assert older_run is not None
-            older_periods = list(
-                publication_session.scalars(
-                    select(CalculationForecastPeriod).where(
-                        CalculationForecastPeriod.run_id == older_run.id
+            contender_pids.put(cast(int, connection.scalar(text("SELECT pg_backend_pid()"))))
+            connection.rollback()
+            with liquidity.serialize_finding_publication(
+                older_session, context, case.id, UUID(scenario["id"])
+            ) as publication_session:
+                calculations._begin_repeatable_read(publication_session)
+                older_run = publication_session.get(CalculationRun, UUID(older["id"]))
+                assert older_run is not None
+                older_periods = list(
+                    publication_session.scalars(
+                        select(CalculationForecastPeriod).where(
+                            CalculationForecastPeriod.run_id == older_run.id
+                        )
                     )
                 )
-            )
-            generate_findings(
-                publication_session,
-                context,
-                older_run,
-                older_periods,
-                publication_locked=True,
-            )
-            older_run.status = "succeeded"
-            publication_session.commit()
+                generate_findings(
+                    publication_session,
+                    context,
+                    older_run,
+                    older_periods,
+                    publication_locked=True,
+                )
+                older_run.status = "succeeded"
+                publication_session.commit()
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         with (
@@ -1246,8 +1253,12 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
             newer_run.status = "succeeded"
             publication_session.flush()
             future = executor.submit(publish_older)
-            with pytest.raises(FutureTimeoutError):
-                future.result(timeout=0.2)
+            wait_for_blocker(
+                engine,
+                contender_pids.get(timeout=10),
+                cast(int, publication_session.scalar(text("SELECT pg_backend_pid()"))),
+                future,
+            )
             publication_session.commit()
         future.result(timeout=5)
 
