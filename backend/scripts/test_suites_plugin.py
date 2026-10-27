@@ -14,6 +14,7 @@ from typing import cast
 import pytest
 from _pytest.terminal import TerminalReporter
 
+from scripts.ci_database_children import python_path
 from scripts.ci_no_database import install
 from scripts.test_suites import case_key, catalogue, owner
 
@@ -37,6 +38,7 @@ def _install(config: pytest.Config) -> None:
     _ = attempts.write_text("")
     patches = pytest.MonkeyPatch()
     patches.setenv("CI_NO_DATABASE_ATTEMPTS", str(attempts.resolve()))
+    patches.setenv("PYTHONPATH", python_path(os.environ.get("PYTHONPATH", "")))
     install(patches.setattr)
     config.stash[_PATCHES] = patches
     config.stash[_DIRECTORY] = directory

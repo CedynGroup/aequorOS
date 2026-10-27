@@ -14,7 +14,7 @@ from typing import NoReturn, cast
 import psycopg
 from sqlalchemy import Engine
 
-from scripts.ci_database_children import instrument_command
+from scripts.ci_database_children import instrument_command, python_path
 
 _ORIGINAL_POPEN = cast(Callable[..., None], subprocess.Popen.__init__)
 
@@ -22,6 +22,7 @@ _ORIGINAL_POPEN = cast(Callable[..., None], subprocess.Popen.__init__)
 def install(patch: Callable[[object, str, object], None] = setattr) -> None:
     """Record before raising so catching a refusal cannot make the run pass."""
     attempts = os.environ["CI_NO_DATABASE_ATTEMPTS"]
+    os.environ["PYTHONPATH"] = python_path(os.environ.get("PYTHONPATH", ""))
 
     def refuse(*_args: object, **_kwargs: object) -> NoReturn:
         with Path(attempts).open("a") as stream:
@@ -49,8 +50,6 @@ def install(patch: Callable[[object, str, object], None] = setattr) -> None:
 
     # Import checks deliberately supply fresh environments. Carry the guard
     # through those too, without changing their programs or assertions.
-    backend = Path(__file__).resolve().parents[2]
-    guard = str(Path(__file__).resolve().parent)
 
     def guarded_popen(*args: object, **kwargs: object) -> None:
         supplied = kwargs.get("env")
@@ -63,9 +62,7 @@ def install(patch: Callable[[object, str, object], None] = setattr) -> None:
         ):
             if key in os.environ:
                 environment[key] = os.environ[key]
-        environment["PYTHONPATH"] = os.pathsep.join(
-            [guard, str(backend), environment.get("PYTHONPATH", "")]
-        )
+        environment["PYTHONPATH"] = python_path(environment.get("PYTHONPATH", ""))
         kwargs["env"] = environment
         command = args[1] if len(args) > 1 else kwargs.get("args")
         replacement = instrument_command(command)

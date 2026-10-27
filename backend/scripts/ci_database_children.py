@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import cast
 
@@ -26,3 +27,10 @@ def instrument_command(command: object) -> object:
         return arguments
     arguments[index : index + 1] = [_BOOTSTRAP, arguments[index]]
     return arguments
+
+
+def python_path(previous: str) -> str:
+    """Inherit startup instrumentation through spawn/fork-exec as well as Popen."""
+    backend = Path(__file__).resolve().parents[1]
+    paths = [str(backend / "scripts/ci_no_database"), str(backend), *previous.split(os.pathsep)]
+    return os.pathsep.join(dict.fromkeys(paths))

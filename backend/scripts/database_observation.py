@@ -22,7 +22,7 @@ from typing import cast
 import psycopg
 from sqlalchemy import Engine
 
-from scripts.ci_database_children import instrument_command
+from scripts.ci_database_children import instrument_command, python_path
 
 DIRECTORY_ENV = "CI_DATABASE_OBSERVATIONS"
 CONTEXT_ENV = "CI_DATABASE_CONTEXT"
@@ -56,6 +56,7 @@ def install() -> None:
     if _installed or not os.getenv(DIRECTORY_ENV):
         return
     _installed = True
+    os.environ["PYTHONPATH"] = python_path(os.environ.get("PYTHONPATH", ""))
     _ = os.environ.setdefault(RUN_ENV, uuid.uuid4().hex)
 
     def instrument(target: object, name: str) -> None:
@@ -91,8 +92,6 @@ def install() -> None:
                 instrument(driver, attribute)
 
     original_popen = cast(Callable[..., None], subprocess.Popen.__init__)
-    backend = Path(__file__).resolve().parents[1]
-    bootstrap = str(Path(__file__).with_name("ci_no_database"))
 
     def observed_popen(*args: object, **kwargs: object) -> None:
         supplied = kwargs.get("env")
@@ -101,9 +100,7 @@ def install() -> None:
         environment[DIRECTORY_ENV] = os.environ[DIRECTORY_ENV]
         environment[CONTEXT_ENV] = os.getenv(CONTEXT_ENV, "{}")
         environment[RUN_ENV] = os.environ[RUN_ENV]
-        environment["PYTHONPATH"] = os.pathsep.join(
-            [bootstrap, str(backend), environment.get("PYTHONPATH", "")]
-        )
+        environment["PYTHONPATH"] = python_path(environment.get("PYTHONPATH", ""))
         kwargs["env"] = environment
         command = args[1] if len(args) > 1 else kwargs.get("args")
         replacement = instrument_command(command)
