@@ -298,6 +298,18 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.guards == 'true'
     timeout-minutes: 30
+    env:
+      S3_ENDPOINT: http://127.0.0.1:9000
+      S3_ACCESS_KEY: ciminio
+      S3_SECRET_KEY: ciminio123
+      S3_BUCKET: risk-local
+      S3_REGION: us-east-1
+      STORAGE_BACKEND: minio
+      STORAGE_ENV: mvp
+      STORAGE_RETIRE_AFTER: "2099-01-01"
+      STORAGE_KMS_KEY_ID: aequoros-key
+      OPENBAO_TEST_ADDR: http://127.0.0.1:8200
+      OPENBAO_TEST_TOKEN: aequoros-ci-root
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v5
@@ -307,6 +319,12 @@ jobs:
           install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
+      - name: Start MinIO for database-free storage contracts
+        id: minio
+        uses: ./.github/actions/setup-minio
+      - name: Start OpenBao for database-free signing contracts
+        id: openbao
+        uses: ./.github/actions/setup-openbao
       - name: Unit tests (database connections forbidden)
         env:
           CI_UNIT_REPORT_DIR: ${{ runner.temp }}/unit-tests
@@ -320,6 +338,16 @@ jobs:
           name: unit-tests
           path: ${{ runner.temp }}/unit-tests/
           if-no-files-found: error
+      - name: Stop MinIO
+        if: always() && steps.minio.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.minio.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true
+      - name: Stop OpenBao
+        if: always() && steps.openbao.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.openbao.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true
       # D-32's own recurrence guard, and the only one that is about CI rather
       # than about code. Everything else in this workflow answers "does the
       # command pass?"; this answers "did the command SEE every test?" — the

@@ -478,6 +478,11 @@ integration ownership and appear in `inconclusive.json`. A skipped case is not
 proof that an integration test could be moved; run its applicable profile to obtain
 evidence. This preserves explicit ownership without changing product assertions.
 
+The unit CI owner also starts disposable MinIO and OpenBao for storage/signing
+cases that use those HTTP services without opening a database. PostgreSQL is never
+provisioned there, and connection refusal stays active. Locally, provide the
+corresponding S3/OpenBao test settings to exercise those service-gated cases.
+
 Every CI owner emits the same observations alongside its JUnit report. The final
 integration gate invokes `scripts/test_suite_census.py check` on those existing
 executions: observed unit database use and fully executed integration cases with

@@ -239,7 +239,11 @@ def verify(directory: Path, files: list[str], suite: str) -> None:
         raise ValueError("Tests failed, errored or did not reach the existing execution floor")
     if suite == "schema" and skipped:
         raise ValueError("Schema/RLS tests skipped")
-    if suite == "suite" and not files:
+    if (
+        suite == "suite"
+        and not files
+        and any(nodeid.split("::")[0] == BAO_MODULE for nodeid in expected_all)
+    ):
         bao = [
             case
             for case in cases

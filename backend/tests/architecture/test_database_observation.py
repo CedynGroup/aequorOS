@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -84,7 +85,7 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     catalogue = tmp_path / "suites.json"
     generate(evidence, catalogue)
     check(evidence, catalogue)
-    raw = json.loads(catalogue.read_text())
+    raw = cast(dict[str, dict[str, str]], json.loads(catalogue.read_text()))
     raw["cases"]["test_probe.py::test_pure[1]"] = "integration"
     catalogue.write_text(json.dumps(raw))
     with pytest.raises(ValueError, match="ownership drift"):

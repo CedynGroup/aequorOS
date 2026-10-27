@@ -118,6 +118,21 @@ def verify_partition(directory: Path) -> None:
     expected = Counter(case_key(nodeid) for nodeid in classified if nodeid not in omitted)
     if actual != expected:
         raise ValueError("CI owners dropped or duplicated classified tests")
+    bao_keys = {
+        case_key(nodeid)
+        for nodeid in classified
+        if nodeid.startswith("tests/attestation/service/test_attestation_openbao.py::")
+        and nodeid not in omitted
+    }
+    bao_cases = [
+        case
+        for report in reports
+        for case in ET.parse(report).iter("testcase")
+        if (case.get("classname", ""), case.get("name", "")) in bao_keys
+    ]
+    if any(case.find("skipped") is not None for case in bao_cases):
+        raise ValueError("OpenBao tests skipped across unit/integration owners")
+
     print(
         f"{sum(expected.values())} selected tests: exactly one unit/integration CI owner verified"
     )

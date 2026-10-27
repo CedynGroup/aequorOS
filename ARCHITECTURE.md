@@ -1196,8 +1196,10 @@ The combined SQLite compatibility run remains available as `mise run risk-servic
 CI runs database-free cases in **Unit tests**, with connection refusal, and database-using
 cases in **Integration tests**, using Postgres for shared fixtures while preserving explicit
 SQLite regression checks. Every test has one suite in
-[the classification catalogue](backend/scripts/test_suites.json); collection, execution and
-cross-job ownership guards enforce the partition. Local commands and service requirements
+[the generated exact-test catalogue](backend/scripts/test_suites.json); observed database
+use regenerates it, and CI rejects drift in either direction. Collection, execution and
+cross-job ownership guards enforce the partition. The unit owner supplies MinIO/OpenBao
+for database-free service contracts, while refusing database connections. Local commands and service requirements
 are documented in [the backend test guide](backend/README.md#run-tests).
 
 ### CI enforcement
