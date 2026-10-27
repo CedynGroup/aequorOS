@@ -418,7 +418,7 @@ def test_real_application_factory_receives_hooks_before_internal_checkout(
 ) -> None:
     from app.db import session as application  # noqa: PLC0415
 
-    url = os.environ.get("POSTGRES_ADMIN_URL", os.environ["TEST_DATABASE_URL"])
+    url = os.environ["POSTGRES_ADMIN_URL"]
     checkouts: list[str | None] = []
 
     def hook(engine: Engine) -> None:
