@@ -6,10 +6,9 @@
  * route for one before it looks at a binding. The nav must agree — an entry
  * that leads to a 404 is worse than no entry.
  *
- * The hermetic stack has no real SDI bank (C-20), so the institution class is
- * mocked on the `/banks` response, which is exactly where the dashboard reads
- * it (the `page-header-navigation.spec.ts` pattern). The REAL server-side 404
- * is proven in pytest, not here.
+ * The shared bootstrap bank is not an SDI, so this story mocks its institution
+ * class on `/banks`, where the dashboard reads it. The real server-side 404
+ * is proven in pytest.
  */
 
 import { expect, test } from "@playwright/test";

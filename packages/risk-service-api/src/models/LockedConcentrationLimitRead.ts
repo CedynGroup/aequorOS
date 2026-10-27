@@ -22,12 +22,6 @@ export interface LockedConcentrationLimitRead {
    * @type {string}
    * @memberof LockedConcentrationLimitRead
    */
-  bucketKey: string;
-  /**
-   *
-   * @type {string}
-   * @memberof LockedConcentrationLimitRead
-   */
   dimension: string;
   /**
    *
@@ -35,6 +29,12 @@ export interface LockedConcentrationLimitRead {
    * @memberof LockedConcentrationLimitRead
    */
   limitKind: string;
+  /**
+   *
+   * @type {string}
+   * @memberof LockedConcentrationLimitRead
+   */
+  limitStatus?: string;
   /**
    *
    * @type {string}
@@ -49,7 +49,6 @@ export interface LockedConcentrationLimitRead {
 export function instanceOfLockedConcentrationLimitRead(
   value: object,
 ): value is LockedConcentrationLimitRead {
-  if (!("bucketKey" in value) || value["bucketKey"] === undefined) return false;
   if (!("dimension" in value) || value["dimension"] === undefined) return false;
   if (!("limitKind" in value) || value["limitKind"] === undefined) return false;
   if (!("value" in value) || value["value"] === undefined) return false;
@@ -71,9 +70,10 @@ export function LockedConcentrationLimitReadFromJSONTyped(
   }
   return {
     ...json,
-    bucketKey: json["bucket_key"],
     dimension: json["dimension"],
     limitKind: json["limit_kind"],
+    limitStatus:
+      json["limit_status"] == null ? undefined : json["limit_status"],
     value: json["value"],
   };
 }
@@ -93,9 +93,9 @@ export function LockedConcentrationLimitReadToJSONTyped(
   }
 
   return {
-    bucket_key: value["bucketKey"],
     dimension: value["dimension"],
     limit_kind: value["limitKind"],
+    limit_status: value["limitStatus"],
     value: value["value"],
   };
 }

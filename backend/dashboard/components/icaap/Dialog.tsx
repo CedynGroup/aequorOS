@@ -34,9 +34,9 @@ export default function Dialog({
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    panelRef.current?.querySelector<HTMLElement>(
-      "input, select, textarea, button",
-    )?.focus();
+    panelRef.current
+      ?.querySelector<HTMLElement>("input, select, textarea, button")
+      ?.focus();
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
@@ -51,7 +51,7 @@ export default function Dialog({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-xs"
       />
       <div
         ref={panelRef}
@@ -68,7 +68,7 @@ export default function Dialog({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="shrink-0 rounded p-1 text-slate hover:bg-surface hover:text-navy"
+            className="shrink-0 rounded-sm p-1 text-slate hover:bg-surface hover:text-navy"
           >
             <X size={16} aria-hidden />
           </button>
@@ -165,4 +165,4 @@ export function FieldLabel({
 }
 
 export const INPUT_CLASS =
-  "mt-1 w-full rounded-md border border-border bg-surface-raised px-3 py-2 text-body text-ink focus:border-action focus:outline-none";
+  "mt-1 w-full rounded-md border border-border bg-surface-raised px-3 py-2 text-body text-ink focus:border-action focus:outline-hidden";

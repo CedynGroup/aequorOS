@@ -424,3 +424,109 @@ def test_overrides_failures_as_data_and_saved_analyses(db_session: Session) -> N
 
     # Still zero official writes across everything above.
     assert _run_count(db_session) == runs_before
+
+
+def test_ftp_curve_and_rule_what_if_is_saved_without_changing_official_inputs(
+    db_session: Session,
+) -> None:
+    materialize_canonical_test_book(db_session)
+    _grant_analyst(db_session, ModuleScope.FTP)
+    period_id = _period_id(db_session)
+    before = _run_count(db_session)
+    refs = [
+        ScenarioRefIn(kind="system", code="baseline"),
+        ScenarioRefIn(
+            kind="system",
+            code="baseline",
+            overrides={
+                "curve_shift_bp": Decimal("250"),
+                "funding_spread_add_bps": Decimal("80"),
+                "min_product_margin_pct": Decimal("100"),
+                "nmd_core_min_pct": Decimal("0"),
+                "nmd_core_max_pct": Decimal("0"),
+            },
+        ),
+    ]
+    result = analysis_workbench.run_analysis(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        "ftp",
+        AnalysisRunCreate(reporting_period_id=period_id, scenarios=refs),
+    )
+    baseline, changed = result.results
+    assert baseline.status == changed.status == "succeeded"
+    assert changed.metrics["curve_shift_pct"] == "3.3"
+    assert changed.metric_statuses["nmd_core_pct"] != baseline.metric_statuses["nmd_core_pct"]
+    assert changed.metrics["portfolio_nim_pct"] != baseline.metrics["portfolio_nim_pct"]
+    assert Decimal(changed.metrics["products_below_min_margin"]) > Decimal(
+        baseline.metrics["products_below_min_margin"]
+    )
+    saved = analysis_workbench.save_analysis(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        "ftp",
+        SavedAnalysisCreate(
+            reporting_period_id=period_id, name="FTP pricing what-if", scenarios=refs
+        ),
+    )
+    reopened = analysis_workbench.get_analysis(db_session, MAKER, SAMPLE_BANK_ID, "ftp", saved.id)
+    assert reopened.results[1].metrics == changed.metrics
+    assert reopened.results[1].shocks_applied == changed.shocks_applied
+    unchanged = analysis_workbench.run_analysis(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        "ftp",
+        AnalysisRunCreate(reporting_period_id=period_id, scenarios=[refs[0]]),
+    )
+    assert unchanged.results[0].metrics == baseline.metrics
+    assert _run_count(db_session) == before
+
+
+def test_ftp_invalid_rule_bounds_and_inverted_band_are_refused(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    _grant_analyst(db_session, ModuleScope.FTP)
+    period_id = _period_id(db_session)
+    with pytest.raises(HTTPException) as refused:
+        analysis_workbench.run_analysis(
+            db_session,
+            MAKER,
+            SAMPLE_BANK_ID,
+            "ftp",
+            AnalysisRunCreate(
+                reporting_period_id=period_id,
+                scenarios=[
+                    ScenarioRefIn(
+                        kind="system",
+                        code="baseline",
+                        overrides={
+                            "nmd_core_min_pct": Decimal("101"),
+                        },
+                    ),
+                ],
+            ),
+        )
+    assert refused.value.status_code == 422
+    result = analysis_workbench.run_analysis(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        "ftp",
+        AnalysisRunCreate(
+            reporting_period_id=period_id,
+            scenarios=[
+                ScenarioRefIn(
+                    kind="system",
+                    code="baseline",
+                    overrides={
+                        "nmd_core_min_pct": Decimal("90"),
+                        "nmd_core_max_pct": Decimal("10"),
+                    },
+                ),
+            ],
+        ),
+    )
+    assert result.results[0].status == "failed"
+    assert result.results[0].error_code == "invalid_nmd_policy_band"

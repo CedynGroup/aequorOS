@@ -21,7 +21,7 @@ On the hermetic book, through the REAL package pipeline:
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
@@ -262,7 +262,13 @@ def test_bsd1b_nop_resolver_measures(db_client: TestClient) -> None:  # noqa: PL
         ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 
         def rc(column: str) -> ResolveContext:
-            return ResolveContext(db=session, ctx=ctx, bank=bank, period=period_row, column=column)
+            return ResolveContext(
+                db=session,
+                ctx=ctx,
+                bank=cast(Bank, bank),
+                period=cast(BankReportingPeriod, period_row),
+                column=column,
+            )
 
         # no run yet ⇒ None for every measure
         assert nop(rc("usd"), {"measure": "net"}) is None
@@ -284,7 +290,13 @@ def test_bsd1b_nop_resolver_measures(db_client: TestClient) -> None:  # noqa: PL
         ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 
         def rc(column: str) -> ResolveContext:
-            return ResolveContext(db=session, ctx=ctx, bank=bank, period=period_row, column=column)
+            return ResolveContext(
+                db=session,
+                ctx=ctx,
+                bank=bank,
+                period=period_row,
+                column=column,
+            )
 
         usd = Decimal(by_ccy["USD"]["net_ghs"])
         eur = Decimal(by_ccy["EUR"]["net_ghs"])

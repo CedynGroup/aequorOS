@@ -200,12 +200,10 @@ Band arithmetic (Guide, BSD6 "Maturity"): calendar months from the reporting dat
 - Row 64 **15. Special deposits** — bank-specific chart-of-accounts mapping table required to split this line (BSD2 rows 261, 262, 263, 264, 265, 266, 268, 269, 270, 271, 272, 273)
 - Row 71 **22. Managed funds (contra)** — BSD2 row 283: managed funds (contra) — fiduciary book, outside own-books returns
 
-Also unfilled by construction: BSD2 leaves that are themselves `input_required` (accrued interest, others-to-classify) contribute nothing to a BSD6 Total even when the row is fed — the row's note lists them ("BSD2 rows … unsourced").
-
 ## Cross-form dependencies
 
-- `BSD6A!B*` = `BSD2!B*` (Domestic column) and `BSD6B!B*` = `BSD2!C*` (Foreign column) of the same reporting date — resolved from the computed BSD2 (`depends_on=("BSD2",)`; the generator computes BSD2 first). Every platform-fed Total equals its FROM BSD2 cell by construction (proven for all 84 fed rows in `tests/reporting/service/bog_forms/test_bsd6.py`).
-- Because the map imports BSD2's line map, a BSD2 correction (filters, signs, new sources) flows into BSD6 automatically; a BSD2 line that becomes `input_required` makes the BSD6 row(s) it feeds `input_required` too.
+- `BSD6A!B*` = `BSD2!B*` (Domestic column) and `BSD6B!B*` = `BSD2!C*` (Foreign column) of the same reporting date — resolved from the computed BSD2 (`depends_on=("BSD2",)`; the generator computes BSD2 first). Every fully sourced Total equals its FROM BSD2 cell by construction; `tests/reporting/service/bog_forms/test_bsd6.py` pins the fixture's sourced rows.
+- Because the map imports BSD2's line map, a BSD2 correction (filters, signs, new sources) flows into BSD6 automatically.
 - BSD2 lines with no BSD6 row (template design, recorded not fixed): BSD2 A.3–A.5 (other claims on / loans to / equity in non-residents) and, on BSD6B, the Foreign column of the DOMESTIC borrowing/deposit sections (BSD2 21–27) — BSD6B's borrowing/deposit rows read only the FOREIGN LIABILITIES section (BSD2 18–20).
 - BSD6A row 27 "(e) Others" (loans) has no BSD2 counterpart and stays blank so the loans Sub-total equals BSD2's.
 
@@ -219,9 +217,9 @@ and **BSD6B** rows 53, 57, 63 are now `bsd6.bucket` rows (BSD6A 44 → 51 fed ro
 10, 71–74 (6A) and 10, 11, 59–62 (6B) carry the accrual leaf as an extra component beside their positions.
 Behaviour (`sources_ext/bsd6.py`): an accrual component has **no Guide maturity band** — it is counted in
 FROM BSD2 and Total, and when non-zero the row's band cells stay blank for the bank to allocate (a zero accrual
-places nothing and leaves the positions' bands intact); a component that resolves to `None` (sub-ledger never
-ingested) contributes nothing, and a row whose every component is `None` stays `input_required` in ALL columns
-(FROM BSD2 included — BSD2's subtotal formula over blanks is not a figure). Row tables above are not regenerated
+places nothing and leaves the positions' bands intact); an absent `refs.sum` accrual component contributes
+nothing. Missing official facts and wholly unresolved rows follow the
+[official BSD engine rules](00_full_return_registry.md#6-as-built-engine-rules). Row tables above are not regenerated
 for this; `tests/reporting/service/bog_forms/test_bsd6.py` carries the new counts and
 `tests/services/data_gaps/test_interest_accruals.py` proves the flow-through (BSD6A `B11 = C11 =` the domestic
 accruals of BSD2 rows 20+29+32; bands blank). Open (owner BSD2/BSD6): BSD6A rows 8–10 anchor BSD2 subtotals

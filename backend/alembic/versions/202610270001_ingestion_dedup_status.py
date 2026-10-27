@@ -1,7 +1,7 @@
 """Keep ingestion deduplication lifecycle metadata outside protected reports.
 
-Revision ID: 202610230103
-Revises: 202610220102
+Revision ID: 202610270001
+Revises: 202610230103
 """
 
 from __future__ import annotations
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "202610230103"
-down_revision = "202610220102"
+revision = "202610270001"
+down_revision = "202610230103"
 branch_labels = None
 depends_on = None
 

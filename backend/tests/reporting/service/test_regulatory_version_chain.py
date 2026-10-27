@@ -349,4 +349,5 @@ def test_comparing_a_version_with_itself_yields_no_differences(
     assert comparison.added_count == 0
     assert comparison.removed_count == 0
     assert comparison.sections == []
+    assert comparison.unchanged_section_count is not None
     assert comparison.unchanged_section_count > 0

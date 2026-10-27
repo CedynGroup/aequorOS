@@ -6,6 +6,10 @@ state under `backend/dashboard/`.
 
 ## 1. Information architecture
 
+For treasury scenario tabs, enterprise stress navigation and FTP what-if, see
+the [dashboard guide](../backend/dashboard/README.md#treasury-scenario-workspaces).
+The other module tabs are listed below.
+
 ```
 TOP BAR   institution + license · ⌘K command palette · as-of period · freshness pill · alerts · theme · user
 ────────────────────────────────────────────────────────────────────
@@ -14,10 +18,10 @@ COMMAND      Command Center /            role lenses · breach banner · module 
              Alerts /alerts             live findings stream, group by module/severity
 MARKETS      Markets /markets           curve board · FX board · ratings — attribution + freshness on every value
              Positions /positions       canonical deal blotter, lineage drill, scale guards (418k book)
-MODULES      IRRBB /irr                 Overview · EVE & NII · Gap Analysis · Scenarios · Limits
-             Liquidity /liquidity       Cockpit · Buffer · NSFR · Cash-flow · Stress · CFP · Submission
+MODULES      IRRBB /irr                 Overview · EVE & NII · Gap Analysis · Limits
+             Liquidity /liquidity       Cockpit · Buffer · NSFR · Cash-flow · CFP · Submission
              FX /fx                     Exposure · VaR & Stress · Hedge Book · Limits · Forwards
-             Basel /basel               Overview · RWA · Structure · Stress · Planning · Submissions
+             Basel /basel               Overview · RWA · Structure · Planning · Submissions
              FTP /ftp                   Curve · Products · Business Lines · Rules · Ex-ante/Ex-post
              Forecasting /forecasting   Balance Sheet · NII · Scenarios · What-if · Optimizer · Assumptions
              Behavioral /behavioral     Overview · NMD Duration · Prepayment · Deposit Stability
@@ -32,7 +36,7 @@ For the separate Access and Settings areas, see
 Placement rules: market data **management** (connect/rotate/upload) lives in the Data Engine;
 market data **consumption** (curves, rates, ratings analysis) lives in Markets.
 
-## 2. Token system (`app/globals.css` + `tailwind.config.ts`)
+## 2. Token system (`app/globals.css`)
 
 Semantic CSS variables under `:root[data-theme='dark']` (default) and `[data-theme='light']`,
 stored as RGB channel triplets so Tailwind opacity modifiers work (`text-navy/85`).
@@ -75,7 +79,7 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
   Engine eyebrow, with both Data Engine and Batches linking back to
   `/data-engine`. The sticky top bar, module tab strip, page header, and body all
   sit on the page ground; the sidebar rail is the only always-dark chrome. The
-  top bar uses `bg-surface-alt/90` and `backdrop-blur-sm` on a separate background
+  top bar uses `bg-surface-alt/90` and `backdrop-blur-xs` on a separate background
   layer. Keep the header itself free of backdrop filters so its command-palette
   and notification-inbox overlays remain fixed to the viewport. Page headers use
   spacing rather than a filled band or divider, while the tab strip keeps its

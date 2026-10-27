@@ -17,22 +17,15 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, load_only
+from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
-from app.core.key_management.concentration_identity import counterparty_group_key, opaque_group_key
 from app.core.key_management.fields import blind_index
-from app.core.key_management.presentation import (
-    LOCKED_TEXT,
-    SESSION_STATE,
-    SESSION_SUPPORT,
-    PresentationState,
-    contains_placeholder,
-)
+from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.domain.credit.concentration_monitor import (
@@ -41,7 +34,7 @@ from app.domain.credit.concentration_monitor import (
     ConcentrationMonitorResult,
     monitor_concentration,
 )
-from app.domain.stress.concentration import ConcentrationExposure
+from app.domain.stress.concentration import DIM_SINGLE_NAME, ConcentrationExposure
 from app.identity.public import Bank
 from app.models import (
     CanonicalCounterparty,
@@ -102,13 +95,6 @@ def load_credit_exposures(
             CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type.in_(_CONCENTRATION_POSITION_TYPES),
-        )
-        .options(
-            load_only(
-                CanonicalCounterparty.id,
-                CanonicalCounterparty.concentration_group_blind_index,
-                CanonicalCounterparty.country_code,
-            )
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
     ).all()
@@ -189,41 +175,46 @@ def active_limits(
         db, ctx.organization_id, bank.jurisdiction_code, ParamConcentrationLimit, as_of
     )
     limits: list[ConcentrationLimit] = []
-    presentation = cast(object, db.info.get(SESSION_STATE))
-    support = bool(cast(object, db.info.get(SESSION_SUPPORT))) or (
+    presentation = db.info.get(SESSION_STATE)
+    support = bool(db.info.get(SESSION_SUPPORT)) or (
         isinstance(presentation, PresentationState) and presentation.support
     )
     for row in rows:
         key = row.bucket_key
         locked = False
-        if row.dimension == "single_name" and key is not None and not key.startswith("pos:"):
-            if support:
+        if (
+            row.dimension == DIM_SINGLE_NAME
+            and row.limit_kind != "hhi"
+            and key is not None
+            and not key.startswith("pos:")
+        ):
+            try:
+                if support:
+                    if isinstance(presentation, PresentationState):
+                        presentation.record(bank.id, "support")
+                    key = None
+                    locked = True
+                else:
+                    key = blind_index(
+                        db,
+                        organization_id=ctx.organization_id,
+                        bank_id=bank.id,
+                        domain="counterparty.group",
+                        value=key,
+                    )
+            except KeyIntegrityError:
+                raise
+            except KeyUnavailableError as exc:
+                key = None
                 locked = True
                 if isinstance(presentation, PresentationState):
-                    presentation.record(bank.id, "support")
-            else:
-                try:
-                    key = opaque_group_key(
-                        blind_index(
-                            db,
-                            organization_id=ctx.organization_id,
-                            bank_id=bank.id,
-                            domain="counterparty.group",
-                            value=key,
-                        )
-                    )
-                except KeyIntegrityError:
-                    raise
-                except KeyUnavailableError as exc:
-                    locked = True
-                    if isinstance(presentation, PresentationState):
-                        presentation.record(bank.id, "revoked" if exc.revoked else "unavailable")
+                    presentation.record(bank.id, "revoked" if exc.revoked else "unavailable")
         limits.append(
             ConcentrationLimit(
                 dimension=row.dimension,
                 limit_kind=row.limit_kind,
                 value=row.value,
-                bucket_key=LOCKED_TEXT if locked else key,
+                bucket_key=key,
                 locked=locked,
             )
         )
@@ -261,21 +252,10 @@ def concentration_read(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
 
     result = monitor(db, ctx, bank, as_of)
     basis = "net_own_funds" if institution_types.institution_class(db, bank) == "sdi" else "tier1"
-    group_labels = {
-        canonical_group_key("", party): LOCKED_TEXT
-        if contains_placeholder([party.name, party.group_reference, party.attributes])
-        else counterparty_group_key(party.name, party.group_reference, party.attributes or {})
-        for party in db.scalars(
-            select(CanonicalCounterparty).where(
-                CanonicalCounterparty.organization_id == ctx.organization_id,
-                CanonicalCounterparty.bank_id == bank.id,
-            )
-        )
-    }
 
     def bucket(reading: BucketReading) -> ConcentrationBucketRead:
         return ConcentrationBucketRead(
-            key=group_labels.get(reading.key, reading.key),
+            key=reading.key,
             exposure_ghs=reading.exposure_ghs,
             loan_count=reading.loan_count,
             share_of_book_pct=reading.share_of_book_pct,
@@ -308,10 +288,7 @@ def concentration_read(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
         limit_count=result.limit_count,
         locked_limits=[
             LockedConcentrationLimitRead(
-                dimension=limit.dimension,
-                limit_kind=limit.limit_kind,
-                bucket_key=LOCKED_TEXT,
-                value=limit.value,
+                dimension=limit.dimension, limit_kind=limit.limit_kind, value=limit.value
             )
             for limit in result.locked_limits
         ],

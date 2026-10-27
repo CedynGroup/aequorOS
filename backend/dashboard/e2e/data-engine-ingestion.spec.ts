@@ -3,14 +3,10 @@
 // Needs object storage (uploads are staged in the bank's encrypted temp tier);
 // see `support/object-storage.ts`. Set E2E_EVIDENCE_DIR to keep screenshots.
 //
-// Isolation. These journeys write canonical data into the canonical test bank
-// every other journey reads, so each upload is dated where no other journey
-// looks. Position snapshots are read by EXACT as-of date, and 2026-03-15 is a
-// Sunday — no return anchors on it — so the positions below never enter
-// another journey's figures. The uploads carry no GL account or reference row,
-// which are read as of "on or before" a date. Market data is also read "on or
-// before", so the curve is dated after any date a journey can ask for.
-import { expect, test, type Locator, type Page } from "@playwright/test";
+// Each mutable ingestion story owns an empty institution and retires its actors
+// and queued work in the story fixture, including after an early failure.
+import { expect, type Locator, type Page } from "@playwright/test";
+import { test } from "./support/story-identities";
 import { mkdirSync, readFileSync } from "fs";
 import path from "path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
@@ -20,7 +16,6 @@ import { requireObjectStorage } from "./support/object-storage";
 const AS_OF = "2026-03-15";
 const CURVE_AS_OF = "2099-12-31";
 const FIXTURES = path.join(__dirname, "fixtures", "data-engine");
-const BANK_API = `${E2E_API_ORIGIN}/api/v1/banks/BK-SAMP0001`;
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
 async function evidence(page: Page, name: string): Promise<void> {
@@ -66,13 +61,18 @@ function uploadOutcome(page: Page, filename: string) {
 }
 
 test.describe("Data Engine ingestion", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "analyst.json"),
+    storyConfig: { roles: ["admin", "analyst"], ownedTenant: true },
+  });
   test.beforeAll(() => requireObjectStorage());
 
   test("an Excel/CSV upload is parsed into a batch, reviewed, corrected and reaches the position book", async ({
     page,
     request,
+    storyIdentity,
   }) => {
+    const BANK_API = `${E2E_API_ORIGIN}/api/v1/banks/${storyIdentity.bankId}`;
     test.setTimeout(150_000);
 
     await test.step("activate the canonical passthrough mapping", async () => {
@@ -261,7 +261,9 @@ test.describe("Data Engine ingestion", () => {
       await evidence(page, "positions-downstream");
 
       const response = await request.get(`${BANK_API}/canonical-positions`, {
-        headers: { Authorization: `Bearer ${await mintBackendToken("admin")}` },
+        headers: {
+          Authorization: `Bearer ${await mintBackendToken("analyst")}`,
+        },
         params: { q: "E2E-ING-", as_of_date: AS_OF },
       });
       expect(response.ok(), await response.text()).toBeTruthy();
@@ -331,7 +333,9 @@ test.describe("Data Engine ingestion", () => {
   test("a configured T24 core's close-of-business extract lands in the position book", async ({
     page,
     request,
+    storyIdentity,
   }) => {
+    const BANK_API = `${E2E_API_ORIGIN}/api/v1/banks/${storyIdentity.bankId}`;
     test.setTimeout(120_000);
 
     await test.step("configure the core; live transport stays honestly unavailable", async () => {
@@ -383,7 +387,7 @@ test.describe("Data Engine ingestion", () => {
       // built by `fetch_domains`/`build_bundle` from the adapter's recorded OFS
       // contract fixtures, without the GL domain (see the isolation note).
       const headers = {
-        Authorization: `Bearer ${await mintBackendToken("admin")}`,
+        Authorization: `Bearer ${await mintBackendToken("analyst")}`,
       };
       const staged = await request.post(`${BANK_API}/ingestion-uploads`, {
         headers,

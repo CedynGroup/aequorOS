@@ -51,8 +51,17 @@ export default defineConfig({
   retries: 0,
   workers: 1, // journeys share one disposable canonical test bank; keep them ordered + isolated
   reporter: process.env.CI
-    ? [["./e2e/support/quarantine-reporter.ts"], ["list"]]
-    : [["list"]],
+    ? [
+        ["./e2e/support/artifact-reporter.ts"],
+        ["./e2e/support/quarantine-reporter.ts"],
+        ["./e2e/support/critical-outcome-reporter.ts", { layer: "journey" }],
+        ["list"],
+      ]
+    : [
+        ["./e2e/support/artifact-reporter.ts"],
+        ["./e2e/support/critical-outcome-reporter.ts", { layer: "journey" }],
+        ["list"],
+      ],
   use: {
     baseURL: E2E_BASE_URL,
     trace: "retain-on-failure",
@@ -127,8 +136,8 @@ export default defineConfig({
         //
         // The other four BI flags stay OFF, which is the production-shaped
         // configuration and deliberate. `BI_MART_ENQUEUE_ENABLED` would enqueue
-        // `bi_mart_refresh` into the `bi` worker lane, and this stack runs no
-        // worker at all — the marts are materialised synchronously by
+        // `bi_mart_refresh` into the `bi` worker lane, and the shared fixture has
+        // no BI-lane worker — the marts are materialised synchronously by
         // `tests/bi/fixtures.py` during bootstrap, exactly as the live
         // plane is, so an enqueue flag here would only orphan jobs in `queued`.
         // `BI_SCHEDULER_ENABLED` / `BI_SUBSCRIPTIONS_ENABLED` add tick branches
@@ -140,8 +149,8 @@ export default defineConfig({
         // and the shell hides the Explore "Ask a question" tab, and `bi-ask.spec.ts`
         // would navigate to a walled-up door and pass on an empty state. Setting it
         // sends nothing to any vendor: the AI gates are separate and all shut here
-        // (no approved configuration, no credential, no `ai`-lane worker), which is
-        // precisely the refusal the wire half of that spec asserts. It is set HERE
+        // (no approved configuration, no credential, no `ai`-lane worker). HTTP
+        // refusals and ownership live in `contracts/bi-ask.spec.ts`. It is set HERE
         // rather than in `backend/.env` so a developer's own flag state cannot change
         // what the journeys see, and the flag-OFF shell is asserted by intercepting
         // `/feature-flags`, as the BI flag's own journey does.

@@ -92,7 +92,7 @@ export default function ScenarioLibrary({
   return (
     <SectionCard
       title="Scenario library"
-      subtitle="Governed, versioned macro scenarios — maker-checker status visible; select to run or compare"
+      subtitle="Governed, versioned macro scenarios. maker-checker status visible; select to run or compare"
       noPadding
       actions={
         <button
@@ -151,7 +151,7 @@ export default function ScenarioLibrary({
         )}
         {rows.length === 0 ? (
           <p className="px-5 py-8 text-center text-caption text-slate">
-            No scenarios yet. Author one with the builder — a scenario is a set
+            No scenarios yet. Author one with the builder. a scenario is a set
             of macro-variable paths over ≥3 years.
           </p>
         ) : (
@@ -184,7 +184,9 @@ export default function ScenarioLibrary({
                       <StatusPill tone={STATUS_TONE[s.status] ?? "slate"}>
                         {s.status.replace("_", " ")}
                       </StatusPill>
-                      <StatusPill tone="action">{s.scenario_type}</StatusPill>
+                      <span className="text-caption text-slate">
+                        {s.scenario_type}
+                      </span>
                       {s.severity && (
                         <StatusPill tone={SEVERITY_TONE[s.severity] ?? "slate"}>
                           {s.severity}
@@ -197,18 +199,26 @@ export default function ScenarioLibrary({
                         <StatusPill tone="pending">not runnable</StatusPill>
                       )}
                       {s.bank_id === null && (
-                        <span className="text-micro text-slate-light">
-                          org-wide
-                        </span>
+                        <span className="text-micro text-slate">org-wide</span>
                       )}
                     </div>
                     <p className="text-micro text-slate">
-                      {s.code} · v{s.version} · {s.path_count} paths ·{" "}
-                      {s.horizon_years}y · updated{" "}
-                      {fmtDateUTC(new Date(s.updated_at))}
+                      v{s.version} · {s.path_count} paths · {s.horizon_years}y ·
+                      updated {fmtDateUTC(new Date(s.updated_at))}
                     </p>
+                    {!s.is_runnable && (
+                      <p className="mt-1 text-caption text-slate">
+                        {s.owner === "system" && s.path_count === 0
+                          ? "Reference scenario only. No numeric path has been published, so approval does not make it runnable."
+                          : "This definition has no executable path. Review its variables and horizon before running."}
+                      </p>
+                    )}
+                    <details className="text-caption text-slate">
+                      <summary>Technical identifier</summary>
+                      {s.code}
+                    </details>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 border-l border-border-light pl-3">
                     {s.owner === "system" && s.path_count > 0 && (
                       <IconBtn
                         title={

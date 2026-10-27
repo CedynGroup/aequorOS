@@ -24,7 +24,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
-import { E2E_PASSWORD } from "./mint";
+import { E2E_PASSWORD, E2E_USERS } from "./mint";
 
 /** How long a ceremony may take: pyHanko signs and re-renders the document. */
 const CEREMONY_TIMEOUT = 120_000;
@@ -120,7 +120,7 @@ export async function certifyAsPreparer(
   page: Page,
   code: string,
   date: string,
-  approverLabel = "E2E Approver (approver)",
+  approverLabel = `${E2E_USERS.approver.displayName ?? "E2E Approver"} (approver)`,
 ): Promise<void> {
   await page.goto(returnsUrl(code, date));
   const certify = page.getByRole("button", { name: "Certify and freeze" });
@@ -157,13 +157,19 @@ export async function certifyAsPreparer(
 export async function approveAndSignAsChecker(
   browser: Browser,
   storageState: string,
+  code: string,
   date: string,
 ): Promise<void> {
   const context = await browser.newContext({ storageState });
   try {
     const page = await context.newPage();
     await page.goto("/submissions/approvals");
-    const row = page.getByRole("row", { name: new RegExp(fmtDateGB(date)) });
+    const row = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name: code, exact: true }) })
+      .filter({
+        has: page.getByRole("cell", { name: fmtDateGB(date), exact: true }),
+      });
     await expect(row.first()).toBeVisible({ timeout: 30_000 });
     await row.first().click();
 
@@ -211,6 +217,7 @@ export async function approveAndSignAsChecker(
 export async function sendBackAsChecker(
   browser: Browser,
   storageState: string,
+  code: string,
   date: string,
   note: string,
 ): Promise<void> {
@@ -218,7 +225,12 @@ export async function sendBackAsChecker(
   try {
     const page = await context.newPage();
     await page.goto("/submissions/approvals");
-    const row = page.getByRole("row", { name: new RegExp(fmtDateGB(date)) });
+    const row = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name: code, exact: true }) })
+      .filter({
+        has: page.getByRole("cell", { name: fmtDateGB(date), exact: true }),
+      });
     await expect(row.first()).toBeVisible({ timeout: 30_000 });
     await row.first().click();
     await page.getByTestId("review-and-sign").click();
@@ -237,10 +249,35 @@ export async function sendBackAsChecker(
     await expect(workspace).toBeHidden({ timeout: CEREMONY_TIMEOUT });
 
     // Off the checker queue: it is the preparer's again.
+    const queueReads = [
+      "pending_approval",
+      "approved",
+      "submitted",
+      "acknowledged",
+    ].map((status) =>
+      page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === "GET" &&
+          /\/banks\/[^/]+\/regulatory-packages$/.test(url.pathname) &&
+          url.searchParams.get("status") === status
+        );
+      }),
+    );
     await page.goto("/submissions/approvals");
-    await expect(page.getByText("Queue is clear")).toBeVisible({
+    for (const response of await Promise.all(queueReads)) {
+      expect(response.ok()).toBeTruthy();
+      await response.finished();
+    }
+    await expect(page.getByLabel("Loading table", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole("heading", { name: "In review", exact: true }),
+    ).toBeVisible({
       timeout: 30_000,
     });
+    await expect(row).toHaveCount(0);
   } finally {
     await context.close();
   }

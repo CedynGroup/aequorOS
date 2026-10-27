@@ -1,6 +1,5 @@
 """Canonical connected-group and single-name identity."""
 
-import hashlib
 from collections.abc import Mapping
 
 
@@ -14,7 +13,3 @@ def counterparty_group_key(
         if value:
             return f"group:{value}"
     return f"cp:{name}"
-
-
-def opaque_group_key(index: str) -> str:
-    return "group:" + hashlib.sha256(index.encode()).hexdigest()

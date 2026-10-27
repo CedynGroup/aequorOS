@@ -54,6 +54,9 @@ from app.services.regulatory_ftp import (
     FTP_RUN_SCENARIO_CODES,
     SHOCK_CURVE_SHIFT_BP,
     SHOCK_FUNDING_ADD_BP,
+    SHOCK_MIN_MARGIN_PCT,
+    SHOCK_NMD_CORE_MAX_PCT,
+    SHOCK_NMD_CORE_MIN_PCT,
 )
 from app.services.regulatory_fx import FX_RUN_SCENARIO_CODES, SHOCK_DEPRECIATION
 from app.services.regulatory_irr import IRR_RUN_SCENARIO_CODES
@@ -199,7 +202,17 @@ SHOCK_VOCABULARY: dict[str, ShockVocabulary] = {
         exact_keys=frozenset({SHOCK_PARALLEL_BP, SHOCK_SHORT_BP, SHOCK_LONG_BP, SHOCK_DECAY_YEARS})
     ),
     "fx": ShockVocabulary(exact_keys=frozenset({SHOCK_DEPRECIATION})),
-    "ftp": ShockVocabulary(exact_keys=frozenset({SHOCK_CURVE_SHIFT_BP, SHOCK_FUNDING_ADD_BP})),
+    "ftp": ShockVocabulary(
+        exact_keys=frozenset(
+            {
+                SHOCK_CURVE_SHIFT_BP,
+                SHOCK_FUNDING_ADD_BP,
+                SHOCK_MIN_MARGIN_PCT,
+                SHOCK_NMD_CORE_MIN_PCT,
+                SHOCK_NMD_CORE_MAX_PCT,
+            }
+        )
+    ),
 }
 
 
@@ -235,6 +248,17 @@ def validate_shocks(module: str, shocks: dict[str, Decimal]) -> None:
                 **_allowed_detail(module),
             },
         )
+    if module == "ftp":
+        for key in (SHOCK_MIN_MARGIN_PCT, SHOCK_NMD_CORE_MIN_PCT, SHOCK_NMD_CORE_MAX_PCT):
+            value = shocks.get(key)
+            if value is not None and not Decimal(0) <= value <= Decimal(100):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail={
+                        "error_code": "invalid_ftp_rule",
+                        "message": f"{key} must be between 0 and 100.",
+                    },
+                )
     if module == "capital" and shocks:
         quarterly = [key for key in CAPITAL_REQUIRED_KEYS if key in shocks]
         if quarterly and len(quarterly) != len(CAPITAL_REQUIRED_KEYS):

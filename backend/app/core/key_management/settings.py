@@ -11,6 +11,11 @@ class KeyManagementSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     demo_bank_key_file: Path | None = Field(default=None, alias="DEMO_BANK_KEY_FILE")
+    workload_role_arn: str | None = Field(
+        default=None,
+        alias="ENCRYPTION_WORKLOAD_ROLE_ARN",
+        pattern=r"^arn:aws[^:]*:iam::\d{12}:role/.+$",
+    )
 
     bank_key_required: bool = Field(default=False, alias="BANK_KEY_REQUIRED")
 

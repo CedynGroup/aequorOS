@@ -23,7 +23,7 @@
 #
 # Its Coolify environment holds the vendor credentials — ANTHROPIC_API_KEY,
 # OPENAI_API_KEY, GEMINI_API_KEY, GEMINI_API_URL — plus DATABASE_URL,
-# WORKER_DATABASE_URL (a BYPASSRLS role — the claim reads across tenants),
+# WORKER_DATABASE_URL (rollout: docs/ops/database-roles.md),
 # APP_ENV, LOG_LEVEL, and the AI_* settings. The main app's .env never
 # contains any of the keys. The tier is configured by AI_PROVIDER_TIER; a
 # vendor with no key configured is skipped by name, never silently.
@@ -56,9 +56,8 @@ services:
     # window instead of finishing.
     stop_grace_period: 5460s
     healthcheck:
-      # Two questions in one probe: can this worker claim at all (a role
-      # without BYPASSRLS matches zero rows forever, silently), and has its
-      # poll loop written a heartbeat recently. WORKER_ID is pinned below so
+      # Two questions in one probe: can this credential claim across tenants,
+      # and has its poll loop written a heartbeat recently. WORKER_ID is pinned below so
       # the check reads THIS worker's heartbeat rather than a peer's.
       test:
         [

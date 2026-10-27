@@ -1,53 +1,33 @@
 /**
- * Full-lifecycle submission journeys — the complete regulator conversation
- * driven through the real hermetic stack (no mocking):
+ * Filing journeys drive real certification, checker signatures and independent
+ * transmission through the ORASS sandbox, including downtime, rejection and
+ * send-back correction. Earlier snapshots, signatures and receipts remain
+ * inspectable after corrected versions are signed and filed.
  *
- *  1. certify → approve and sign → submit (ORASS sandbox, ack) → poll →
- *     Acknowledged + Rev 1.0
- *  2. downtime 409 → guided email fallback → pending re-upload → re-upload
- *     via ORASS once restored → poll → Acknowledged (BG/FMD/2026/07 flow)
- *  3. sandbox reject → poll → Rejected + supervisor comments (SIM-LQ-104)
- *     with the package reopened for regeneration
- *  4. the reviewer's other exit — send back for corrections with a note, and the
- *     return is unfrozen, unsigned and unsubmittable again
- *  5. institution register (seeded ORASS code) → LRT corporate pack generates
- *  6. a signed official BoG form (BSD2) hands over every artifact the command
- *     bar offers — Signed PDF, official XLSX, formula copy, CSV bundle — and
- *     each downloaded file is opened and checked against the figures on screen
+ * Each story receives fresh officers, password proofs and software test keys.
+ * The four filing stories claim reporting periods 1..4; the preparer-only story
+ * uses index 5 and the signed BoG form uses index 6. Index 0 belongs to the
+ * submission-lifecycle spec. Separate periods keep package chains independent.
+ * A fixture operator prepares liquidity baselines and sandbox configuration;
+ * finally-based fixtures restore sandbox behavior and retire story authority.
  *
- * Every LCR-NSFR journey now passes through the SIGNING CEREMONY for real, because
- * signing is required for every return by default and an unsigned return must
- * never be submittable. Relaxing the policy would have turned these three
- * journeys green while deleting coverage of that gate, so instead the fixture
- * users carry password hashes (scripts/e2e_bootstrap.py) and the journeys sign:
- * the preparer places the fields, adopts a mark and certifies, and a separate
- * approver session approves-and-signs in one act from the checker queue. That
- * makes these the only tests in the suite covering the whole chain end to end.
- *
- * Note there is no "Request approval" step any more: for a return that requires
- * signatures the preparer's certification IS the request — it freezes the figures
- * and routes the return to the approver they name.
- *
- * And there is no "Validate" step any more either. Machine validation is not a
- * human act, so it stopped being a button: the checks run with generation and
- * the result is a panel the preparer CLEARS
- * (docs/filing_workflow_redesign.md §4b.2). These journeys assert that rule —
- * that the button is gone and the checks ran anyway — rather than being relaxed
- * around it. The three sessions are three ROLES: the preparer prepares, a
- * separate approver approves and signs, and a third officer holding the
- * transmission authority files. Nothing that reaches a regulator is offered to
- * the first two, and journey 0 asserts that on the preparer's own screen.
- *
- * Independence: each LCR-NSFR journey claims its OWN reporting period (indices
- * 1..4 — index 0 stays with the pre-existing submission-lifecycle spec) and
- * mints the liquidity baseline run LCR-NSFR draws on, so no journey shares a
- * package version chain with another. The BoG form journey claims index 5; an
- * official form reads the canonical book directly, so it needs no run. Sandbox
- * behavior is configured through the API with the minted admin token (PUT
- * channel-configs/orass_sandbox).
+ * Official BoG artifacts are downloaded, opened and compared with the figures
+ * displayed in the browser, including signed PDF, XLSX, formula copy and CSV.
  */
 
-import { test, expect, type Browser, type Page } from "@playwright/test";
+import {
+  expect,
+  type APIRequestContext,
+  type Browser,
+  type Locator,
+  type Page,
+} from "@playwright/test";
+import { test as identityTest } from "./support/story-identities";
+import { ChannelConfigReadFromJSON } from "@aequoros/risk-service-api";
+import type {
+  PackageChainRead,
+  RegulatoryPackageRead,
+} from "@aequoros/risk-service-api";
 import { readFile } from "fs/promises";
 import path from "path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
@@ -55,6 +35,23 @@ import { readPdf, readWorkbook, readZip } from "./support/artifacts";
 import { mintBackendToken } from "./support/mint";
 import { requireObjectStorage } from "./support/object-storage";
 import { generateCurrentVersion } from "./support/generate";
+import {
+  currentFilingPackage,
+  expectFilingCash,
+  expectFreshFilingSignatures,
+  expectPriorFilingFrozen,
+  expectRepeatedApprovalSafe,
+  expectRepeatedSubmissionRefused,
+  expectStaleReviewRefused,
+  filingAttestation,
+  filingChain,
+  filingEvents,
+  filingPackage,
+  filingSignatures,
+  generateCorrectedFiling,
+  uploadFilingBook,
+  withdrawFilingBook,
+} from "./support/filing-correction";
 import {
   approveAndSignAsChecker,
   certifyAsPreparer,
@@ -73,6 +70,30 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const adminState = path.join(E2E_TMP, "admin.json");
 const approverState = path.join(E2E_TMP, "approver.json");
 const validatorState = path.join(E2E_TMP, "validator.json");
+const test = identityTest.extend<{ sandboxConfig: void }>({
+  sandboxConfig: [
+    async ({}, provide) => {
+      const response = await fetch(
+        `${E2E_API_ORIGIN}/api/v1/banks/${SAMPLE_BANK_ID}/regulatory-reporting/channel-configs/orass_sandbox`,
+        { headers: { Authorization: `Bearer ${fixtureOperatorToken}` } },
+      );
+      expect([200, 404]).toContain(response.status);
+      const original =
+        response.status === 200
+          ? ChannelConfigReadFromJSON(await response.json()).config
+          : {};
+      try {
+        await provide();
+      } finally {
+        await setSandboxConfig(original);
+      }
+    },
+    { auto: true },
+  ],
+});
+test.use({
+  storyConfig: { roles: ["admin", "approver", "validator"], signing: true },
+});
 /** The committed official layouts — the sheet structure BoG published. */
 const bogLayoutsDir = path.join(
   __dirname,
@@ -111,10 +132,12 @@ async function api(
   return response.json();
 }
 
-let adminToken: string;
+// Administrative fixture preparation is separate from the fresh tested officers.
+let fixtureOperatorToken: string;
 
 /** One reporting date (ISO) per journey that mints a package — never the latest period. */
 const journeyDates = {
+  preparer: "",
   ack: "",
   downtime: "",
   reject: "",
@@ -124,9 +147,9 @@ const journeyDates = {
 
 test.beforeAll(async () => {
   requireObjectStorage();
-  adminToken = await mintBackendToken("admin");
+  fixtureOperatorToken = await mintBackendToken("admin");
   const listing = await api(
-    adminToken,
+    fixtureOperatorToken,
     "GET",
     `/banks/${SAMPLE_BANK_ID}/reporting-periods`,
   );
@@ -137,17 +160,23 @@ test.beforeAll(async () => {
     "downtime",
     "reject",
     "sendBack",
+    "preparer",
   ];
   for (const [index, key] of claims.entries()) {
     const period = periods[index + 1];
     journeyDates[key] = String(period.period_end).slice(0, 10);
     // LCR-NSFR generation pulls from the latest succeeded liquidity baseline run
     // of its reporting period — mint one for each claimed period.
-    await api(adminToken, "POST", `/banks/${SAMPLE_BANK_ID}/regulatory-runs`, {
-      module: "liquidity",
-      reporting_period_id: period.id,
-      scenario_code: "baseline",
-    });
+    await api(
+      fixtureOperatorToken,
+      "POST",
+      `/banks/${SAMPLE_BANK_ID}/regulatory-runs`,
+      {
+        module: "liquidity",
+        reporting_period_id: period.id,
+        scenario_code: "baseline",
+      },
+    );
   }
   journeyDates.bogForm = String(periods[claims.length + 1].period_end).slice(
     0,
@@ -158,7 +187,7 @@ test.beforeAll(async () => {
 /** Replace the ORASS sandbox channel config (behavior + downtime switch). */
 function setSandboxConfig(config: Record<string, unknown>): Promise<unknown> {
   return api(
-    adminToken,
+    fixtureOperatorToken,
     "PUT",
     `/banks/${SAMPLE_BANK_ID}/regulatory-reporting/channel-configs/orass_sandbox`,
     { config },
@@ -215,7 +244,7 @@ async function certifyAndApprove(
 ): Promise<void> {
   await generateAndClearChecks(page, code, date);
   await certifyAsPreparer(page, code, date);
-  await approveAndSignAsChecker(browser, approverState, date);
+  await approveAndSignAsChecker(browser, approverState, code, date);
 }
 
 type FilingSession = { page: Page; close: () => Promise<void> };
@@ -240,22 +269,117 @@ async function openFilingSession(
   date: string,
 ): Promise<FilingSession> {
   const context = await browser.newContext({ storageState: validatorState });
-  const page = await context.newPage();
-  await page.goto("/submissions/approvals");
-  await page
-    .getByRole("row", { name: new RegExp(fmtDateGB(date)) })
-    .first()
-    .click();
-  await expect(page.getByTestId("validator-surface")).toBeVisible({
-    timeout: 30_000,
-  });
-  await page.getByTestId("validator-approve").click();
-  // Approved, not yet filed: the release is now offered, and the approval
-  // cannot be given twice.
-  await expect(page.getByTestId("open-transmit")).toBeEnabled();
-  await expect(page.getByTestId("validator-approve")).toBeDisabled();
-  await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
-  return { page, close: () => context.close() };
+  try {
+    const page = await context.newPage();
+    await page.goto("/submissions/approvals");
+    await page
+      .getByRole("row")
+      .filter({
+        has: page.getByRole("cell", { name: LIQUIDITY_RETURN, exact: true }),
+      })
+      .filter({
+        has: page.getByRole("cell", { name: fmtDateGB(date), exact: true }),
+      })
+      .first()
+      .click();
+    await expect(page.getByTestId("validator-surface")).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByTestId("validator-approve").click();
+    // Approved, not yet filed: the release is now offered, and the approval
+    // cannot be given twice.
+    await expect(page.getByTestId("open-transmit")).toBeEnabled();
+    await expect(page.getByTestId("validator-approve")).toBeDisabled();
+    await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
+    return { page, close: () => context.close() };
+  } catch (error) {
+    await context.close();
+    throw error;
+  }
+}
+
+/** Correct one exact package, obtain new signatures and follow its own receipt. */
+async function correctAndRefile(
+  page: Page,
+  browser: Browser,
+  request: APIRequestContext,
+  date: string,
+  prior: RegulatoryPackageRead,
+  signatures: ReturnType<typeof filingSignatures>,
+  staleReview: PackageChainRead,
+  control: Locator,
+): Promise<void> {
+  const priorEvents = await filingEvents(request, prior.id);
+  expectFilingCash(prior, 2_000_000);
+  const sourceRunId = await uploadFilingBook(
+    request,
+    date,
+    "3000000",
+    test.info().outputPath("corrected-filing-book.xlsx"),
+  );
+  const corrected = await generateCorrectedFiling(
+    page,
+    request,
+    prior,
+    control,
+  );
+  expectFilingCash(corrected, 3_000_000);
+  expect(corrected.sourceRuns).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ module: "liquidity", run_id: sourceRunId }),
+    ]),
+  );
+  expect(corrected.sourceRuns).not.toEqual(prior.sourceRuns);
+  expect(corrected.snapshotSha256).not.toBe(prior.snapshotSha256);
+  await expectPriorFilingFrozen(request, prior, signatures);
+  await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
+  await expectStaleReviewRefused(request, corrected.id, staleReview);
+  await approveAndSignAsChecker(browser, approverState, LIQUIDITY_RETURN, date);
+  await expectFreshFilingSignatures(request, corrected.id, signatures);
+
+  const filing = await openFilingSession(browser, date);
+  try {
+    await expectRepeatedApprovalSafe(request, corrected.id);
+    await fileViaSandbox(filing.page);
+    // ORASS revision counts granted resubmissions; these corrections have no grant.
+    await expect(filing.page.getByText("Rev 1.0")).toBeVisible();
+    await expectRepeatedSubmissionRefused(request, corrected.id);
+    const poll = filing.page.getByTestId("primary-filing-action");
+    await expect(poll).toHaveText(/check for .* decision/i);
+    await expect(poll).toBeEnabled();
+    await poll.click();
+    await expect(
+      filing.page.getByText("Acknowledged", { exact: true }).first(),
+    ).toBeVisible();
+    const acknowledged = await filingPackage(request, corrected.id);
+    expect(acknowledged).toMatchObject({
+      id: corrected.id,
+      version: prior.version + 1,
+      supersedesId: prior.id,
+      status: "acknowledged",
+      submissionRevision: "1.0",
+    });
+    expectFilingCash(acknowledged, 3_000_000);
+    expect(acknowledged.snapshot).toEqual(corrected.snapshot);
+    const events = (await filingEvents(request, corrected.id)).events;
+    expect(events.filter((event) => event.event === "submitted")).toHaveLength(
+      1,
+    );
+    expect(
+      events.filter((event) => event.event === "acknowledged"),
+    ).toHaveLength(1);
+    expect(events.every((event) => event.packageId === corrected.id)).toBe(
+      true,
+    );
+    await test.info().attach("Corrected filing acknowledged", {
+      body: await filing.page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+  } finally {
+    await filing.close();
+  }
+  await expectPriorFilingFrozen(request, prior, signatures);
+  expect(await filingEvents(request, prior.id)).toEqual(priorEvents);
 }
 
 /**
@@ -357,7 +481,7 @@ async function takeArtifact(
   // independently: the page consumed this response into a blob, so the
   // browser no longer holds its body.
   const independent = await fetch(response.url(), {
-    headers: { Authorization: `Bearer ${adminToken}` },
+    headers: { Authorization: `Bearer ${await mintBackendToken("admin")}` },
   });
   expect(independent.ok).toBeTruthy();
   expect(bytes.equals(Buffer.from(await independent.arrayBuffer()))).toBe(true);
@@ -431,7 +555,7 @@ test.describe("full lifecycle", () => {
     // greyed out with a blocked reason, and asked a preparer to work out from
     // four dead controls that none of it was theirs. Absent, not disabled
     // (docs/filing_workflow_redesign.md §4b.1, §4b.6).
-    await generateAndClearChecks(page, LIQUIDITY_RETURN, journeyDates.ack);
+    await generateAndClearChecks(page, LIQUIDITY_RETURN, journeyDates.preparer);
 
     for (const forbidden of [/ORASS/i, /downtime/i, /re-upload/i]) {
       await expect(page.getByText(forbidden)).toHaveCount(0);
@@ -534,94 +658,181 @@ test.describe("full lifecycle", () => {
     }
   });
 
-  test("journey 3: rejection carries supervisor comments and reopens rework", async ({
+  test("a rejected filing is corrected, re-signed and acknowledged without reusing stale approval", async ({
     page,
     browser,
+    request,
   }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "filing.rejected-correction",
+    });
     const date = journeyDates.reject;
     await setSandboxConfig({ sandbox_behavior: "reject" });
-
-    await certifyAndApprove(page, browser, LIQUIDITY_RETURN, date);
-    const filing = await openFilingSession(browser, date);
     try {
-      await fileViaSandbox(filing.page);
+      await uploadFilingBook(
+        request,
+        date,
+        "2000000",
+        test.info().outputPath("original-filing-book.xlsx"),
+      );
+      await certifyAndApprove(page, browser, LIQUIDITY_RETURN, date);
+      const original = await currentFilingPackage(request, date);
+      const filing = await openFilingSession(browser, date);
+      try {
+        await fileViaSandbox(filing.page);
+        const decision = filing.page.getByTestId("primary-filing-action");
+        await expect(decision).toHaveText(/check for .* decision/i);
+        await expect(decision).toBeEnabled();
+        await decision.click();
+        await expect(
+          filing.page.getByText("Rejected", { exact: true }).first(),
+        ).toBeVisible();
+        await expect(
+          filing.page.getByText("What the supervisor said about this return"),
+        ).toBeVisible();
+        await expect(filing.page.getByText(/SIM-LQ-104/).first()).toBeVisible();
+      } finally {
+        await filing.close();
+      }
+      const prior = await filingPackage(request, original.id);
+      expect(prior.snapshot).toEqual(original.snapshot);
+      expect(prior.snapshotSha256).toBe(original.snapshotSha256);
+      expect(prior.sourceRuns).toEqual(original.sourceRuns);
+      expect(prior).toMatchObject({
+        status: "rejected",
+        submissionRevision: "1.0",
+      });
+      const signatures = filingSignatures(prior.id);
+      expect(signatures).toHaveLength(2);
+      const staleReview = await filingChain(request, prior.id);
 
-      const decision = filing.page.getByTestId("primary-filing-action");
-      await expect(decision).toHaveText(/check for .* decision/i);
-      await expect(decision).toBeEnabled();
-      await decision.click();
+      await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
+      const rework = page.getByTestId("primary-filing-action");
+      await expect(rework).toHaveText(/generate a corrected version/i);
+      await expect(rework).toBeEnabled();
+      await expect(
+        page.getByText("What the supervisor said about this return"),
+      ).toBeVisible();
+      await expect(page.getByTestId("transmission-row")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /ORASS/i })).toHaveCount(0);
+      await expect(page.getByLabel("Channel")).toHaveCount(0);
 
-      // Terminal Rejected state + ORASS "View Comments" parity panel carrying
-      // the simulated server-side check.
-      await expect(
-        filing.page.getByText("Rejected", { exact: true }).first(),
-      ).toBeVisible();
-      await expect(
-        filing.page.getByText("What the supervisor said about this return"),
-      ).toBeVisible();
-      // The simulated rule id also appears in the events feed / poll detail —
-      // the panel copy is one of the matches.
-      await expect(filing.page.getByText(/SIM-LQ-104/).first()).toBeVisible();
+      await setSandboxConfig({ sandbox_behavior: "ack" });
+      await correctAndRefile(
+        page,
+        browser,
+        request,
+        date,
+        prior,
+        signatures,
+        staleReview,
+        rework,
+      );
     } finally {
-      await filing.close();
+      try {
+        await withdrawFilingBook(request, date);
+      } finally {
+        await setSandboxConfig({ sandbox_behavior: "ack" });
+      }
     }
-
-    // Rejected = returned for correction, and the rework is the PREPARER's.
-    // Their screen offers exactly one act, and it is the correction — not a
-    // greyed-out row of everyone else's controls.
-    await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
-    const rework = page.getByTestId("primary-filing-action");
-    await expect(rework).toHaveText(/generate a corrected version/i);
-    await expect(rework).toBeEnabled();
-    await expect(
-      page.getByText("What the supervisor said about this return"),
-    ).toBeVisible();
-    // And nothing on the preparer's screen reaches the regulator. The
-    // supervisor's own comment, quoted above, may name the portal, so this is
-    // asserted on the controls rather than on every word of text.
-    await expect(page.getByTestId("transmission-row")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /ORASS/i })).toHaveCount(0);
-    await expect(page.getByLabel("Channel")).toHaveCount(0);
-
-    // Hygiene: leave the sandbox on its happy-path default for later specs.
-    await setSandboxConfig({ sandbox_behavior: "ack" });
   });
 
-  test("journey 4: the reviewer sends it back with a note, and it is unsubmittable again", async ({
+  test("a sent-back filing retains its withdrawn signature and reaches acknowledgement with fresh signatures", async ({
     page,
     browser,
+    request,
   }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "filing.sent-back-correction",
+    });
     const date = journeyDates.sendBack;
-    const note = "Line 12 double-counts the placement maturing 2 April.";
+    const note = "Cash vault omits a GHS 1M contribution to share capital.";
+    await setSandboxConfig({ sandbox_behavior: "ack" });
+    try {
+      await uploadFilingBook(
+        request,
+        date,
+        "2000000",
+        test.info().outputPath("original-filing-book.xlsx"),
+      );
+      await generateAndClearChecks(page, LIQUIDITY_RETURN, date);
+      await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
+      const original = await currentFilingPackage(request, date);
+      const certified = await filingAttestation(request, original.id);
+      const signatures = filingSignatures(original.id);
+      expect(signatures).toHaveLength(1);
+      const staleReview = await filingChain(request, original.id);
+      // A different return on the same date must keep its place in the queue.
+      // BSD2's landscape document needs the same viewport as the artifact journey.
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      await generateAndClearChecks(page, BOG_FORM, date);
+      await certifyAsPreparer(page, BOG_FORM, date);
+      await sendBackAsChecker(
+        browser,
+        approverState,
+        LIQUIDITY_RETURN,
+        date,
+        note,
+      );
+      const companion = await api(
+        await mintBackendToken("admin"),
+        "GET",
+        `/banks/${SAMPLE_BANK_ID}/regulatory-packages?return_code=${BOG_FORM}&reporting_date=${date}&include_superseded=false`,
+      );
+      expect(companion.packages).toHaveLength(1);
+      expect(companion.packages[0].status).toBe("pending_approval");
 
-    await generateAndClearChecks(page, LIQUIDITY_RETURN, date);
-    await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
-    await sendBackAsChecker(browser, approverState, date, note);
-
-    // Back with the preparer, and genuinely correctable: the certification that
-    // froze the figures is withdrawn, the note is on the record, and nothing on
-    // the screen claims the return may be filed.
-    await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
-    await expect(page.getByText("Unsigned").first()).toBeVisible();
-    await expect(page.getByTestId("attestation-clearance").first()).toHaveText(
-      /^Not cleared to submit/i,
-    );
-    // The filing control is ABSENT on the preparer's screen, not greyed out —
-    // it was never theirs (docs/filing_workflow_redesign.md §4b.1). What they
-    // get instead is the note that sent it back, stated before the figures.
-    await expect(page.getByTestId("transmission-row")).toHaveCount(0);
-    await expect(page.getByTestId("sent-back-notice")).toContainText(note);
-    // The preparer's signature is history, not deleted — the withdrawn cycle is
-    // named rather than silently dropped. It is stated inside the Certification
-    // row, which the workspace keeps collapsed until it is opened.
-    const certification = page.getByTestId("certification-row");
-    await certification.getByRole("button", { expanded: false }).click();
-    await expect(
-      certification.getByRole("button", { expanded: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByText(/retained in the append-only trail/i),
-    ).toBeVisible();
+      await page.goto(returnsUrl(LIQUIDITY_RETURN, date));
+      await expect(page.getByText("Unsigned").first()).toBeVisible();
+      await expect(
+        page.getByTestId("attestation-clearance").first(),
+      ).toHaveText(/^Not cleared to submit/i);
+      await expect(page.getByTestId("transmission-row")).toHaveCount(0);
+      await expect(page.getByTestId("sent-back-notice")).toContainText(note);
+      const certification = page.getByTestId("certification-row");
+      await certification.getByRole("button", { expanded: false }).click();
+      await expect(
+        certification.getByRole("button", { expanded: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText(/retained in the append-only trail/i),
+      ).toBeVisible();
+      const withdrawn = await filingAttestation(request, original.id);
+      expect(withdrawn).toMatchObject({
+        attestationCycle: certified.attestationCycle + 1,
+        attestationState: "unsigned",
+        canSubmit: false,
+        signatures: [],
+      });
+      expect(filingSignatures(original.id)).toEqual(signatures);
+      const prior = await filingPackage(request, original.id);
+      expect(prior.snapshot).toEqual(original.snapshot);
+      expect(prior.snapshotSha256).toBe(original.snapshotSha256);
+      expect(prior.sourceRuns).toEqual(original.sourceRuns);
+      expect(prior.workflowRound).toBe(staleReview.round + 1);
+      const regenerate = page
+        .getByRole("button", { name: /^regenerate$/i })
+        .first();
+      await expect(regenerate).toBeEnabled();
+      await correctAndRefile(
+        page,
+        browser,
+        request,
+        date,
+        prior,
+        signatures,
+        staleReview,
+        regenerate,
+      );
+    } finally {
+      try {
+        await withdrawFilingBook(request, date);
+      } finally {
+        await setSandboxConfig({ sandbox_behavior: "ack" });
+      }
+    }
   });
 
   test("journey 5: institution register drives the LRT corporate pack", async ({
@@ -695,12 +906,12 @@ test.describe("full lifecycle", () => {
     // snapshot: the preview deliberately hides each line's workbook cell, so
     // the snapshot is what says where that figure must sit in the files.
     const listing = await api(
-      adminToken,
+      await mintBackendToken("admin"),
       "GET",
       `/banks/${SAMPLE_BANK_ID}/regulatory-packages?return_code=${BOG_FORM}&reporting_date=${date}&include_superseded=false&limit=1`,
     );
     const packagePath = `/banks/${SAMPLE_BANK_ID}/regulatory-packages/${listing.packages[0].id}`;
-    const pkg = await api(adminToken, "GET", packagePath);
+    const pkg = await api(await mintBackendToken("admin"), "GET", packagePath);
     type Line = {
       code: string;
       value: string | null;
@@ -741,7 +952,7 @@ test.describe("full lifecycle", () => {
 
     // The Signed PDF is the revision both officers signed, not a fresh render.
     const chain = await api(
-      adminToken,
+      await mintBackendToken("admin"),
       "GET",
       `${packagePath}/artifact-versions`,
     );

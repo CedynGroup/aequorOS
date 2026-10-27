@@ -64,6 +64,7 @@ STATUS_WITHIN = "within_limit"
 STATUS_ABOVE = "above_limit"
 STATUS_NOT_SET = "not_set"
 STATUS_NOT_COMPUTABLE = "not_computable"
+STATUS_LOCKED = "locked"
 
 
 @dataclass(frozen=True)
@@ -180,6 +181,22 @@ def _assess_bucket(  # noqa: PLR0913 - one argument per assessment input
         if capital_base is not None and capital_base > _ZERO
         else None
     )
+    if (
+        dimension == DIM_SINGLE_NAME
+        and not key.startswith("pos:")
+        and any(limit.locked and limit.dimension == dimension for limit in limits)
+    ):
+        return BucketReading(
+            key=key,
+            exposure_ghs=exposure,
+            loan_count=count,
+            share_of_book_pct=share_book,
+            share_of_capital_pct=share_capital,
+            limit_value=None,
+            limit_kind=None,
+            limit_status=STATUS_LOCKED,
+            utilization_pct=None,
+        )
     # Capital-basis limits outrank book-basis ones when both exist: the
     # Guidelines' §30 names capital first as the reference for limits.
     capital_limit = _limit_for(limits, dimension, LIMIT_SHARE_OF_CAPITAL, key)

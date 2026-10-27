@@ -1,19 +1,11 @@
-'use client';
-
-import PageContainer from '@/components/ui/PageContainer';
-import PageHeader from '@/components/ui/PageHeader';
-import ScenarioWorkbench from '@/components/workbench/ScenarioWorkbench';
-
-// Enterprise stress workbench (docs/stress.md Phase 6): a governed macro
-// scenario drives every engine into a 3-year Appendix II projection. The IRRBB
-// lens leads here; the rate path feeds the enterprise coupling.
-export default function IrrScenarios() {
+"use client";
+import PageContainer from "@/components/ui/PageContainer";
+import PageHeader from "@/components/ui/PageHeader";
+import ScenarioWorkbench from "@/components/workbench/ScenarioWorkbench";
+export default function ModuleScenariosPage() {
   return (
     <>
-      <PageHeader
-        eyebrow="IRRBB"
-        title="Enterprise Stress Workbench"
-      />
+      <PageHeader eyebrow="IRRBB" title="IRRBB Scenarios" />
       <PageContainer className="py-6">
         <ScenarioWorkbench module="irr" />
       </PageContainer>

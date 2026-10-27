@@ -110,7 +110,7 @@ export default function CurvesExplorer({
     });
 
   const selectClass =
-    "w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded text-navy";
+    "w-full px-2.5 py-1.5 text-body bg-surface border border-border rounded-sm text-navy";
 
   return (
     <div className="space-y-4">
@@ -214,7 +214,7 @@ export default function CurvesExplorer({
           <button
             type="button"
             onClick={() => setMethodologyOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-slate border border-border rounded hover:bg-surface hover:text-navy whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-slate border border-border rounded-sm hover:bg-surface hover:text-navy whitespace-nowrap"
           >
             <BookOpen size={13} aria-hidden />
             Methodology
@@ -222,7 +222,7 @@ export default function CurvesExplorer({
           <button
             type="button"
             onClick={() => onOpenForward(selectedCurve.curveName)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-action border border-action/30 rounded hover:bg-action-light whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-action border border-action/30 rounded-sm hover:bg-action-light whitespace-nowrap"
           >
             Forecast grid
             <ArrowRight size={13} aria-hidden />
@@ -230,7 +230,7 @@ export default function CurvesExplorer({
           <PermissionAction
             reason={editOverlaysReason}
             onClick={() => onEditOverlays(selectedCurve.curveName)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-action border border-action/30 rounded hover:bg-action-light whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-action border border-action/30 rounded-sm hover:bg-action-light whitespace-nowrap"
           >
             <SlidersHorizontal size={13} aria-hidden />
             {selectedCurve.overlayComponents.length > 0

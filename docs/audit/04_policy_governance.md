@@ -338,8 +338,9 @@ duplicate-revision collision had already occurred once:
 REFERENCES jurisdictions(code)` — **the control plane's jurisdiction is unconstrained
    today**, so a typo creates an unreachable parameter scope.
 
-Per the repository's own operating rules, any data step runs under `WORKER_DATABASE_URL`,
-and the primary must be reconciled to head before deploy.
+Migration credentials and owner preparation follow the
+[role handoff runbook](../ops/database-roles.md#migration-and-local-development-order);
+the primary must be reconciled to head before deploy.
 
 ---
 
