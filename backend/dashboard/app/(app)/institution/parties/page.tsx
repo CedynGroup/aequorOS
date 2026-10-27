@@ -39,6 +39,7 @@ import PageContainer from "@/components/ui/PageContainer";
 import DataTable, { type Column } from "@/components/ui/DataTable";
 import SectionCard from "@/components/ui/SectionCard";
 import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import ProtectedInputLock from "@/components/ui/ProtectedInputLock";
 import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { useBankContext } from "@/components/shell/BankContext";
@@ -349,7 +350,6 @@ function PartyDetail({
   const [editing, setEditing] = useState(false);
   const [holdingFormFor, setHoldingFormFor] = useState<{
     holding: ShareholdingRead | null;
-    parties: RelatedPartyRead[];
   } | null>(null);
 
   const uboName = (uboPartyId: string | null) => {
@@ -398,7 +398,7 @@ function PartyDetail({
               <>
                 <button
                   type="button"
-                  onClick={() => setHoldingFormFor({ holding: null, parties })}
+                  onClick={() => setHoldingFormFor({ holding: null })}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
                 >
                   <Plus size={13} aria-hidden />
@@ -514,9 +514,7 @@ function PartyDetail({
                           </span>
                           <button
                             type="button"
-                            onClick={() =>
-                              setHoldingFormFor({ holding, parties })
-                            }
+                            onClick={() => setHoldingFormFor({ holding })}
                             className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
                           >
                             <Pencil size={11} aria-hidden />
@@ -544,10 +542,11 @@ function PartyDetail({
       {holdingFormFor && (
         <div className="card p-5">
           <ShareholdingForm
+            key={holdingFormFor.holding?.id ?? "new"}
             bankId={bankId}
             partyId={partyId}
             holding={holdingFormFor.holding}
-            parties={holdingFormFor.parties}
+            parties={parties}
             onClose={() => setHoldingFormFor(null)}
           />
         </div>
@@ -624,12 +623,12 @@ function PartyForm({
   const create = useCreateRelatedParty(bankId);
   const update = useUpdateRelatedParty(bankId);
   const mutation = partyId ? update : create;
-  const locked =
-    useSyncExternalStore(
-      subscribeProtectedData,
-      () => protectedDataState(bankId),
-      () => "available",
-    ) !== "available";
+  const protection = useSyncExternalStore(
+    subscribeProtectedData,
+    () => protectedDataState(bankId),
+    () => "available" as const,
+  );
+  const locked = protection !== "available";
   const [edits, setEdits] = useState<Partial<PartyDraft>>({});
   const [roleEdits, setRoleEdits] = useState<
     Record<string, Partial<RoleDraft>>
@@ -637,7 +636,7 @@ function PartyForm({
   const [roleOrder, setRoleOrder] = useState<string[] | null>(null);
   const [reason, setReason] = useState("");
   const fullName =
-    edits.fullName ??
+    (protection === "support" ? undefined : edits.fullName) ??
     (locked || containsLockedData(party?.fullName)
       ? ""
       : (party?.fullName ?? ""));
@@ -682,12 +681,22 @@ function PartyForm({
     if (!canChangeRoles) return;
     setRoleOrder(roleIds.filter((_, i) => i !== index));
   };
+  const protectedDirty =
+    !partyId ||
+    edits.fullName !== undefined ||
+    roleOrder !== null ||
+    Object.values(roleEdits).some((patch) =>
+      ["termOfAppointment", "icagRegistration", "otherResponsibilities"].some(
+        (field) => field in patch,
+      ),
+    );
   const canSubmit =
+    (!locked || !protectedDirty) &&
     reason.trim().length > 0 &&
     ((partyId && edits.fullName === undefined) || fullName.trim().length > 0) &&
     (!partyId ||
       roleOrder === null ||
-      (!locked && party !== null && !containsLockedData(party)));
+      (party !== null && !containsLockedData(party)));
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSubmit) return;
@@ -767,12 +776,15 @@ function PartyForm({
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Field label="Full name" htmlFor="rp-name" required>
-            <input
-              id="rp-name"
-              value={fullName}
-              onChange={(e) => setField("fullName", e.target.value)}
-              className={inputCls}
-            />
+            <ProtectedInputLock state={protection}>
+              <input
+                id="rp-name"
+                value={fullName}
+                onChange={(e) => setField("fullName", e.target.value)}
+                placeholder={locked ? "🔒 Protected data" : undefined}
+                className={inputCls}
+              />
+            </ProtectedInputLock>
           </Field>
           <Field label="Party type" htmlFor="rp-type">
             <select
@@ -889,15 +901,25 @@ function PartyForm({
                       />
                     </Field>
                     <Field label="Term" htmlFor={`rp-term-${index}`}>
-                      <input
-                        id={`rp-term-${index}`}
-                        value={draft.termOfAppointment}
-                        onChange={(e) =>
-                          setRole(index, { termOfAppointment: e.target.value })
-                        }
-                        placeholder="e.g. 3 years"
-                        className={inputCls}
-                      />
+                      <ProtectedInputLock state={protection}>
+                        <input
+                          id={`rp-term-${index}`}
+                          value={
+                            protection === "support"
+                              ? ""
+                              : draft.termOfAppointment
+                          }
+                          onChange={(e) =>
+                            setRole(index, {
+                              termOfAppointment: e.target.value,
+                            })
+                          }
+                          placeholder={
+                            locked ? "🔒 Protected data" : "e.g. 3 years"
+                          }
+                          className={inputCls}
+                        />
+                      </ProtectedInputLock>
                     </Field>
                     <Field
                       label="Sitting allowance"
@@ -949,14 +971,25 @@ function PartyForm({
                         label="ICAG registration"
                         htmlFor={`rp-icag-${index}`}
                       >
-                        <input
-                          id={`rp-icag-${index}`}
-                          value={draft.icagRegistration}
-                          onChange={(e) =>
-                            setRole(index, { icagRegistration: e.target.value })
-                          }
-                          className={inputCls}
-                        />
+                        <ProtectedInputLock state={protection}>
+                          <input
+                            id={`rp-icag-${index}`}
+                            value={
+                              protection === "support"
+                                ? ""
+                                : draft.icagRegistration
+                            }
+                            onChange={(e) =>
+                              setRole(index, {
+                                icagRegistration: e.target.value,
+                              })
+                            }
+                            placeholder={
+                              locked ? "🔒 Protected data" : undefined
+                            }
+                            className={inputCls}
+                          />
+                        </ProtectedInputLock>
                       </Field>
                     )}
                     <Field
@@ -964,16 +997,23 @@ function PartyForm({
                       htmlFor={`rp-other-${index}`}
                       className="sm:col-span-2"
                     >
-                      <input
-                        id={`rp-other-${index}`}
-                        value={draft.otherResponsibilities}
-                        onChange={(e) =>
-                          setRole(index, {
-                            otherResponsibilities: e.target.value,
-                          })
-                        }
-                        className={inputCls}
-                      />
+                      <ProtectedInputLock state={protection}>
+                        <input
+                          id={`rp-other-${index}`}
+                          value={
+                            protection === "support"
+                              ? ""
+                              : draft.otherResponsibilities
+                          }
+                          onChange={(e) =>
+                            setRole(index, {
+                              otherResponsibilities: e.target.value,
+                            })
+                          }
+                          placeholder={locked ? "🔒 Protected data" : undefined}
+                          className={inputCls}
+                        />
+                      </ProtectedInputLock>
                     </Field>
                   </div>
                   <button
@@ -1160,6 +1200,12 @@ function ShareholdingForm({
             className={inputCls}
           >
             <option value="">None</option>
+            {uboPartyId &&
+              !uboOptions.some((candidate) => candidate.id === uboPartyId) && (
+                <option value={uboPartyId}>
+                  {locked ? "🔒 Protected data" : "Selected owner unavailable"}
+                </option>
+              )}
             {uboOptions.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
                 {locked ? "🔒 Protected data" : candidate.fullName}

@@ -180,6 +180,8 @@ it.each(["manual", "automatic"] as const)(
     await waitFor(() => expect(reads).toBe(2));
     expect(protectedDataState(BANK)).toBe("unavailable");
     expect(screen.getByLabelText(/Full name/)).toHaveValue(draft);
+    expect(screen.getByLabelText(/Full name/)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add party" })).toBeDisabled();
     expect(client.getQueryState(profileKey)?.isInvalidated).toBe(false);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5_000);
@@ -319,6 +321,8 @@ it.each(["revoked", "unavailable"] as const)(
     );
     expect(client.getQueryData(["de-batch", BANK, "other"])).toBeUndefined();
     expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved new name");
+    expect(screen.getByLabelText(/Full name/)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save party" })).toBeDisabled();
     expect(
       screen.getAllByText(protectedDataMessages[reason]).length,
     ).toBeGreaterThan(0);
@@ -334,6 +338,160 @@ it.each(["revoked", "unavailable"] as const)(
 );
 
 const ROLE = "00000000-0000-4000-8000-000000000018";
+
+it.each([
+  ["revoked", false],
+  ["unavailable", false],
+  ["revoked", true],
+  ["unavailable", true],
+] as const)(
+  "refreshes shareholding identities after %s with existing=%s while preserving numeric drafts",
+  async (lockedState, existing) => {
+    let state: string = lockedState;
+    let refreshed = false;
+    const otherId = "00000000-0000-4000-8000-000000000019";
+    const newId = "00000000-0000-4000-8000-000000000020";
+    const holdingId = "00000000-0000-4000-8000-000000000021";
+    const writes: unknown[] = [];
+    const record = () => ({
+      ...party(state === "available" ? "Current owner" : "🔒 Protected data"),
+      shareholdings: existing
+        ? [
+            {
+              id: holdingId,
+              share_type: "ordinary",
+              share_subtype: null,
+              shareholder_rights: "voting",
+              number_of_shares: "100",
+              pct_shareholding: "10",
+              ubo_party_id: PARTY,
+            },
+          ]
+        : [],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT" || init?.method === "POST") {
+          writes.push(JSON.parse(String(init.body)));
+          return Response.json(record());
+        }
+        return Response.json(
+          {
+            bank_id: BANK,
+            profile: null,
+            related_parties: [
+              record(),
+              ...(refreshed
+                ? [{ ...party("New candidate"), id: newId }]
+                : [
+                    {
+                      ...party("Old candidate"),
+                      id: otherId,
+                    },
+                  ]),
+            ],
+            name_history: [],
+            outlets: [],
+            licenses: [],
+            products: [],
+          },
+          {
+            headers: {
+              "X-Aequoros-Protected-Data": JSON.stringify({ [BANK]: state }),
+            },
+          },
+        );
+      }),
+    );
+    const client = mount(<RelatedPartiesPage />);
+    await userEvent.click(await screen.findByText("🔒 Protected data"));
+    if (existing) {
+      const holdingRow = screen.getByText("100 shares").closest("li")!;
+      await userEvent.click(
+        within(holdingRow).getByRole("button", { name: "Edit" }),
+      );
+    } else {
+      await userEvent.click(
+        screen.getByRole("button", { name: "Add shareholding" }),
+      );
+      await userEvent.selectOptions(
+        screen.getByLabelText(/Ultimate beneficial owner/),
+        PARTY,
+      );
+    }
+    await userEvent.clear(screen.getByLabelText(/Number of shares/));
+    await userEvent.type(screen.getByLabelText(/Number of shares/), "250", {
+      delay: null,
+    });
+    await userEvent.clear(screen.getByLabelText(/% shareholding/));
+    await userEvent.type(screen.getByLabelText(/% shareholding/), "25", {
+      delay: null,
+    });
+    await userEvent.type(
+      screen.getByLabelText(/Reason for change/),
+      "Numeric holding",
+      { delay: null },
+    );
+    const select = screen.getByLabelText(/Ultimate beneficial owner/);
+    expect(
+      within(select).getByRole("option", { selected: true }),
+    ).toHaveTextContent("🔒 Protected data");
+    state = "available";
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(
+        within(select).getByRole("option", { selected: true }),
+      ).toHaveTextContent("Current owner"),
+    );
+    expect(select).toHaveValue(PARTY);
+    expect(
+      within(select).getByRole("option", { name: "Old candidate" }),
+    ).toBeVisible();
+    refreshed = true;
+    await act(async () => {
+      await client.refetchQueries({ queryKey: profileKey });
+    });
+    await waitFor(() =>
+      expect(
+        within(select).queryByRole("option", { name: "Old candidate" }),
+      ).toBeNull(),
+    );
+    expect(
+      within(select).getByRole("option", { name: "New candidate" }),
+    ).toBeVisible();
+    expect(select).toHaveValue(PARTY);
+    expect(screen.getByLabelText(/Number of shares/)).toHaveValue(250);
+    expect(screen.getByLabelText(/% shareholding/)).toHaveValue(25);
+    state = lockedState;
+    await act(async () => {
+      await observeProtectedData(profileResponse(state));
+    });
+    await waitFor(() =>
+      expect(
+        within(select).getByRole("option", { selected: true }),
+      ).toHaveTextContent("🔒 Protected data"),
+    );
+    await userEvent.click(
+      within(select.closest("form")!).getByRole("button", {
+        name: existing ? "Save shareholding" : "Add shareholding",
+      }),
+    );
+    await waitFor(() =>
+      expect(writes).toEqual([
+        {
+          reason: "Numeric holding",
+          share_type: "ordinary",
+          share_subtype: null,
+          shareholder_rights: "voting",
+          number_of_shares: "250",
+          pct_shareholding: "25",
+          ubo_party_id: PARTY,
+        },
+      ]),
+    );
+  },
+);
 
 function editableParty(state: string, refreshed = false) {
   const protectedValue = (value: string) =>
@@ -406,7 +564,17 @@ it.each(["revoked", "unavailable"] as const)(
       "ICAG registration",
       "Other responsibilities",
     ]) {
-      expect(screen.getByLabelText(label)).toBeDisabled();
+      const input = screen.getByLabelText(label);
+      expect(input).toBeDisabled();
+      expect(input).toHaveAttribute("placeholder", "🔒 Protected data");
+      const wrapper = input.closest("fieldset");
+      expect(wrapper).toHaveAttribute(
+        "title",
+        protectedDataMessages[lockedState],
+      );
+      expect(
+        within(wrapper!).getByRole("img", { name: "Protected data locked" }),
+      ).toBeVisible();
     }
     expect(
       screen.getAllByTitle(protectedDataMessages[lockedState]).length,

@@ -99,13 +99,15 @@ def update_related_party(  # noqa: PLR0913
     status_code=status.HTTP_201_CREATED,
     operation_id="createShareholding",
 )
-def create_shareholding(
+def create_shareholding(  # noqa: PLR0913
+    request: Request,
     bank_id: str,
     party_id: UUID,
     payload: ShareholdingCreate,
     db: DbSession,
     ctx: MutationTenant,
 ) -> RelatedPartyRead:
+    db.info[SESSION_STATE] = cast(PresentationState, getattr(request.state, SESSION_STATE))
     return institution_profile.add_shareholding(db, ctx, bank_id, party_id, payload)
 
 
@@ -115,6 +117,7 @@ def create_shareholding(
     operation_id="updateShareholding",
 )
 def update_shareholding(  # noqa: PLR0913
+    request: Request,
     bank_id: str,
     party_id: UUID,
     shareholding_id: UUID,
@@ -122,6 +125,7 @@ def update_shareholding(  # noqa: PLR0913
     db: DbSession,
     ctx: MutationTenant,
 ) -> RelatedPartyRead:
+    db.info[SESSION_STATE] = cast(PresentationState, getattr(request.state, SESSION_STATE))
     return institution_profile.update_shareholding(
         db, ctx, bank_id, party_id, shareholding_id, payload
     )
