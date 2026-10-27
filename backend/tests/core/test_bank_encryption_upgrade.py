@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from app.core.key_management.fields import blind_index
 from app.core.key_management.local import LocalKeyProvider
 from app.core.tenancy import TenantContext
-from app.data_engine.service.field_search import find_counterparties
 from app.identity.models.institution_profile import RelatedParty
 from app.identity.public import Bank
 from app.models.canonical import CanonicalCounterparty
@@ -74,7 +73,13 @@ def test_upgrade_indexes_all_existing_generations_before_using_them(
     related = db_session.get(RelatedParty, party_id)
     assert stored is not None and related is not None
     assert stored.source_reference_blind_index == IDENTIFIER
-    assert stored.concentration_group_blind_index == "SYNTHETIC-GROUP-17"
+    assert stored.concentration_group_blind_index == blind_index(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        domain="counterparty.group",
+        value="group:SYNTHETIC-GROUP-17",
+    )
     assert stored.external_identifiers_blind_indexes == {"national_id": IDENTIFIER}
     assert related.full_name_blind_index == blind_index(
         db_session,
@@ -86,21 +91,43 @@ def test_upgrade_indexes_all_existing_generations_before_using_them(
     )
     stored.withdrawn_at = None
     db_session.flush()
-    assert [
-        row.id
-        for row in find_counterparties(db_session, CTX, BANK_A, field="name", value="ada traders")
-    ] == [cp_id]
-    assert [
-        row.id
-        for row in find_counterparties(
-            db_session,
-            CTX,
-            BANK_A,
-            field="external_identifier",
-            namespace="national_id",
-            value=IDENTIFIER,
+    current = (
+        CanonicalCounterparty.organization_id == ORG_1,
+        CanonicalCounterparty.bank_id == BANK_A,
+        CanonicalCounterparty.withdrawn_at.is_(None),
+        CanonicalCounterparty.superseded_by.is_(None),
+    )
+    assert list(
+        db_session.scalars(
+            select(CanonicalCounterparty.id).where(
+                *current,
+                CanonicalCounterparty.name_blind_index
+                == blind_index(
+                    db_session,
+                    organization_id=ORG_1,
+                    bank_id=BANK_A,
+                    domain="counterparty.name",
+                    value="ada traders",
+                    normalization="name",
+                ),
+            )
         )
-    ] == [cp_id]
+    ) == [cp_id]
+    assert list(
+        db_session.scalars(
+            select(CanonicalCounterparty.id).where(
+                *current,
+                CanonicalCounterparty.external_identifiers_blind_indexes["national_id"].as_string()
+                == blind_index(
+                    db_session,
+                    organization_id=ORG_1,
+                    bank_id=BANK_A,
+                    domain="counterparty.identifier:national_id",
+                    value=IDENTIFIER,
+                ),
+            )
+        )
+    ) == [cp_id]
     db_session.rollback()
     counterparty(db_session, include_package=False)
     db_session.commit()
