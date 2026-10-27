@@ -22,9 +22,8 @@ choice: the alternative — trusting a token with no revocation state — is the
 vulnerability this migration exists to close.
 
 The RLS policy form copies the post-epoch precedent (202608190020 onward): the
-``organization_id`` OR- text is compared with no ``::uuid`` cast. Login and
-refresh run on the cross-tenant system session (the BYPASSRLS worker role), the
-same session ``users`` already requires. The hermetic test suite builds the
+``organization_id`` OR- text is compared with no ``::uuid`` cast. Pre-tenant
+authentication sessions follow ``docs/ops/database-roles.md``. The hermetic test suite builds the
 schema with ``Base.metadata.create_all`` and never runs this migration; it
 exists for the primary/production database.
 """

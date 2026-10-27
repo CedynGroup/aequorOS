@@ -156,19 +156,25 @@ def _rungs() -> dict[str, dict[date, Decimal]]:
     session = get_sessionmaker()()
     session.info["organization_id"] = ORG_1
     try:
-        rows = session.execute(
-            select(
-                CanonicalPosition.source_reference,
-                CanonicalPositionSnapshot.as_of_date,
-                CanonicalPositionSnapshot.balance,
+        rows = (
+            session.execute(
+                select(
+                    CanonicalPosition.source_reference,
+                    CanonicalPositionSnapshot.as_of_date,
+                    CanonicalPositionSnapshot.balance,
+                )
+                .join(
+                    CanonicalPosition, CanonicalPosition.id == CanonicalPositionSnapshot.position_id
+                )
+                .where(
+                    CanonicalPositionSnapshot.bank_id == SAMPLE_BANK_ID,
+                    CanonicalPositionSnapshot.superseded_by.is_(None),
+                    CanonicalPosition.superseded_by.is_(None),
+                )
             )
-            .join(CanonicalPosition, CanonicalPosition.id == CanonicalPositionSnapshot.position_id)
-            .where(
-                CanonicalPositionSnapshot.bank_id == SAMPLE_BANK_ID,
-                CanonicalPositionSnapshot.superseded_by.is_(None),
-                CanonicalPosition.superseded_by.is_(None),
-            )
-        ).all()
+            .tuples()
+            .all()
+        )
         positions = session.scalar(
             select(func.count())
             .select_from(CanonicalPosition)

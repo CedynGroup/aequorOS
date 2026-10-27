@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable
 from copy import copy
 from typing import BinaryIO, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -16,6 +15,7 @@ from app.core.key_management.registry import DatabaseEnvelopeStore, EnvelopeStor
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyUnavailableError
 from app.db import session as database
+from app.db.worker_access import STORAGE_KEY_SIGNATURE, has_worker_function
 from app.storage.client import ObjectMetadata, StorageAccessError, StorageLocation
 
 ENCRYPTION_FORMAT = "aws-esdk-object-v1"
@@ -46,20 +46,37 @@ class ObjectEncryption:
         """Connected keys always fail closed, independently of the rollout flag."""
         if self._injected_store or get_key_settings().bank_key_required:
             return True
-        statement = select(BankEncryptionKey.id).where(
-            BankEncryptionKey.storage_slug == location.institution_slug
-        )
         if self._session is not None:
             with self._session.no_autoflush:
-                return self._session.scalar(statement) is not None
-        sessions = cast(Callable[[], Callable[[], Session]], database.get_sessionmaker)()
-        with sessions() as db:
-            return db.scalar(statement) is not None
+                return self._bank_key_required(self._session, location)
+        with database.get_storage_session() as db:
+            return self._bank_key_required(db, location)
+
+    @staticmethod
+    def _bank_key_required(db: Session, location: StorageLocation) -> bool:
+        if db.info.get("worker_context") is True and has_worker_function(db, STORAGE_KEY_SIGNATURE):
+            required = cast(
+                bool | None,
+                db.scalar(
+                    text("SELECT aqs_worker_storage_key_required(:slug)"),
+                    {"slug": location.institution_slug},
+                ),
+            )
+            if required is None:
+                raise KeyUnavailableError("Storage location does not belong to this worker job.")
+            return required
+        return (
+            db.scalar(
+                select(BankEncryptionKey.id).where(
+                    BankEncryptionKey.storage_slug == location.institution_slug
+                )
+            )
+            is not None
+        )
 
     def _envelopes(self) -> EnvelopeStore:
         if self._store is None:
-            sessions = cast(Callable[[], Callable[[], Session]], database.get_sessionmaker)()
-            self._store = DatabaseEnvelopeStore(sessions)
+            self._store = DatabaseEnvelopeStore(database.get_storage_session)
         return self._store.for_session(self._session) if self._session is not None else self._store
 
     def encrypt(

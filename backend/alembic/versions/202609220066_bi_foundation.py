@@ -47,10 +47,10 @@ the tables), so a distinct cross-tenant worker role can create and drop
 partitions without owning anything — which is what lets retention run as the
 BYPASSRLS worker at all (audit A4-03: a non-owner cannot ``DROP`` or ``DETACH``
 a partition directly). EXECUTE is revoked from PUBLIC and granted to the
-migrating role plus every BYPASSRLS login role present at migration time — no
-migration here knows a role by name; the ``_revoke`` loops enumerate
-``pg_roles`` for the same reason. A worker role created AFTER this migration
-needs ``GRANT EXECUTE`` alongside the table grants it needs anyway.
+migrating role plus every BYPASSRLS login role present at this revision — the
+``_revoke`` loops enumerate ``pg_roles`` for the same reason. Later role grants
+and restricted worker wrappers follow
+``docs/ops/database-roles.md#worker-compatibility-migration``.
 
 ``bi_query_log`` is append-only exactly like ``audit_events``
 (``202607250027``): the existing ``aequoros_append_only_guard`` trigger (row

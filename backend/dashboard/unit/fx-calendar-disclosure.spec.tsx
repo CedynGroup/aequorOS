@@ -1,12 +1,27 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render as renderUi, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FxDashboardReadFromJSON } from "@aequoros/risk-service-api";
 import FxModuleFrame from "../components/fx/FxModuleFrame";
 import FxVarPage from "../app/(app)/fx/var/page";
 import FxExposurePage from "../app/(app)/fx/page";
 import FxLimitsPage from "../app/(app)/fx/limits/page";
+import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
+import { queryAuthorityScope } from "../lib/api/queryPolicy";
+
+let client: QueryClient;
+const scope = queryAuthorityScope("org", "fixture", 1);
+function render(ui: React.ReactNode) {
+  return renderUi(
+    <QueryClientProvider client={client}>
+      <QueryAuthorityScopeProvider scope={scope}>
+        {ui}
+      </QueryAuthorityScopeProvider>
+    </QueryClientProvider>,
+  );
+}
 
 const evidence = vi.hoisted(() => ({ missingFebruary: false }));
 
@@ -37,9 +52,15 @@ vi.mock("../components/shell/BankContext", () => ({
   useBankContext: () => ({
     bank: { id: "BK-TEST" },
     moduleScope: { fxAggregatedView: true },
+    period: null,
+    periods: [],
+    setPeriodId: vi.fn(),
+    institutionCapabilities: [],
+    authorityPending: false,
   }),
 }));
-vi.mock("../lib/api/hooks", () => ({
+vi.mock("../lib/api/hooks", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api/hooks")>()),
   useRegulatoryRun: () => ({ data: undefined }),
   useFxDashboard: () => ({
     data: FxDashboardReadFromJSON({
@@ -119,6 +140,7 @@ vi.mock("../lib/api/hooks", () => ({
 }));
 
 beforeEach(() => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   evidence.missingFebruary = false;
   vi.stubGlobal("matchMedia", () => ({
     matches: false,
@@ -128,6 +150,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  client.clear();
   vi.unstubAllGlobals();
 });
 it("shows sample and stress qualifications alongside every FX tab's figures", () => {
@@ -143,6 +166,11 @@ it("shows sample and stress qualifications alongside every FX tab's figures", ()
     screen.getByText(/indicative management stress estimate/),
   ).toBeTruthy();
   expect(screen.getByText("Portfolio figures")).toBeTruthy();
+  expect(
+    screen
+      .getByRole("button", { name: "Run all FX scenarios" })
+      .hasAttribute("disabled"),
+  ).toBe(true);
   expect(screen.queryByText("Hedge detail")).toBeNull();
 });
 

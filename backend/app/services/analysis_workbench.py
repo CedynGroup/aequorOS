@@ -33,6 +33,7 @@ from app.domain.capital.engine import (
 )
 from app.domain.ftp.engine import (
     FtpComputationError,
+    classify_core_band,
 )
 from app.domain.ftp.engine import (
     MissingParameterError as FtpMissingParameter,
@@ -273,7 +274,9 @@ def _fx_result(analysis: regulatory_fx.FxScenarioAnalysis):
     return metrics, statuses
 
 
-def _ftp_result(analysis) -> tuple[dict[str, str], dict[str, str]]:
+def _ftp_result(
+    analysis: regulatory_ftp.FtpScenarioAnalysis,
+) -> tuple[dict[str, str], dict[str, str]]:
     products = analysis.products
     metrics = {
         "portfolio_nim_pct": str(products.portfolio_nim_pct),
@@ -285,7 +288,10 @@ def _ftp_result(analysis) -> tuple[dict[str, str], dict[str, str]]:
     statuses = {
         "products_below_min_margin": (
             "green" if products.products_below_min_margin == 0 else "amber"
-        )
+        ),
+        "nmd_core_pct": classify_core_band(
+            analysis.nmd.core_pct, analysis.nmd.core_min_pct, analysis.nmd.core_max_pct
+        ),
     }
     return metrics, statuses
 

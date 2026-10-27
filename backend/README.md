@@ -128,14 +128,23 @@ mise run risk-service:dev
 ```
 
 Database: configure `backend/.env` and apply the migration chain before starting the API.
+
+Authentication uses the API `DATABASE_URL` sessionmaker. Operator sessions use
+`OPERATOR_DATABASE_URL`, falling back only to `DATABASE_URL`. Neither uses
+`WORKER_DATABASE_URL`. Keep the existing API credential until the separate
+captain-reviewed lookup-function PR is deployed. The worker credential switch
+requires this compatibility PR and remains a separate deployment step under the
+[database-role handoff](../docs/ops/database-roles.md#worker-compatibility-migration),
+which owns activation prerequisites and rollback.
 Two operational notes for a remote database:
 
 - **RLS hides everything without the tenant GUC.** Ad-hoc `psql` against the remote shows zero
   rows on tenant tables (`FORCE ROW LEVEL SECURITY`); set
   `SELECT set_config('app.organization_id', '<OR-XXXXXXXX>', false);` first when inspecting.
-- **The cross-tenant worker needs a BYPASSRLS role** to claim queued jobs from FORCE-RLS
-  tables. Configure that separate role through `WORKER_DATABASE_URL`; keep the application
-  role `NOBYPASSRLS`.
+- **Worker credentials and rollout** follow
+  [the deployment runbook](../docs/ops/database-roles.md#worker-compatibility-migration),
+  including authentication/operator credential separation and the prerequisites
+  for each role's activation.
 
 Fully-local alternative (offline work):
 
@@ -504,6 +513,9 @@ existing **Full suite on Postgres**, **Postgres schema, RLS and locks**, and
 collection manifests and JUnit reports; the aggregates verify that their union
 contains every expected test exactly once, preserve the full-suite execution
 floor, and reject any skipped schema/RLS or live OpenBao test.
+Failed schema and suite shards also upload `postgres.log` as
+`pg-schema-server-log-<shard>` or `pg-suite-server-log-<shard>` when the log
+exists, retained for seven days.
 
 Main pushes and queued merge results always run the full suite. On pull requests,
 only changes confined to the
@@ -550,8 +562,10 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
   ACTUAL primary database — provenance (every canonical row ingestion-traced; the
   executable form of the no-seeding order), period-spine contiguity, fact coverage,
   live-metrics presence, sign-in capability. Opt-in:
-  `LIVE_DATA_DATABASE_URL=<worker URL> uv run pytest tests/live_data` (BYPASSRLS worker
-  URL for visibility, or set `LIVE_DATA_ORG_ID`). The session is server-side read-only —
+  `LIVE_DATA_DATABASE_URL=<authorized read URL> uv run pytest tests/live_data`.
+  With a tenant-scoped credential, set `LIVE_DATA_ORG_ID` to the `OR-…` platform ID;
+  an existing authorized BYPASSRLS credential can inspect all tenants. The new
+  `aqs_worker` credential provides no unscoped tenant visibility. The session is server-side read-only —
   it cannot mutate what it certifies. Hermetic suite stays the home of mutation/logic
   tests; never point mutating tests at the primary DB.
 - Hermetic and Postgres-gated mutation checks follow [Run Tests](#run-tests), including
@@ -563,7 +577,7 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
   the migrations read (`jurisdictions`; `institution_types.seed_rows`;
   `regulatory_parameters.seed_rows`) — add a new registry there once and both callers get
   it. A missing registry surfaces as a fail-closed 409 naming a seed migration.
-  Shared live-plane preparation, the separate real-worker journey and full Playwright
+  Shared live-plane preparation, the separate real-worker journeys and full Playwright
   prerequisites (object storage included) are owned by the
   [dashboard end-to-end guide](dashboard/README.md#end-to-end-playwright); for SSO, see its
   [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).

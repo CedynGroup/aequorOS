@@ -80,8 +80,8 @@ uv run fastapi dev app/main.py --port 8000
 
 # 3. Background worker — REQUIRED. It writes current_financial_facts and
 #    live_metrics; without it every Treasury/ALM page reads "no computed data
-#    yet". On RLS-forced Postgres it needs a BYPASSRLS role via
-#    WORKER_DATABASE_URL, because it claims jobs across tenants. Locally you can
+#    yet". On Postgres, configure WORKER_DATABASE_URL following
+#    docs/ops/database-roles.md#worker-compatibility-migration. Locally you can
 #    instead set RUN_INPROCESS_WORKER=1 (default off) to poll inside the API
 #    process; in production it is always a separate container.
 uv run python -m app.worker
