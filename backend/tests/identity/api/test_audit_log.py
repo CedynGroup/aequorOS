@@ -113,7 +113,7 @@ from tests.conftest import (
     seed_demo_tenants,
 )
 from tests.db import test_postgres_migrations as migrations
-from tests.support.database import database_connections
+from tests.support.database import database_connections as managed_database_connections
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.outbound import stub_public_dns
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
@@ -147,7 +147,7 @@ def audit_database() -> Iterator[ApiTestDatabase]:
                 migrations.postgres_administrator_url(), schema.schema_name
             )
             engine: Engine = create_engine(url)
-            with database_connections(url) as owner:
+            with managed_database_connections(url) as owner:
                 _ = owner.adopt_engine(engine)
                 seed_demo_tenants(engine)
                 yield ApiTestDatabase(database_url=url, engine=engine, seed=seed_demo_tenants)
