@@ -45,7 +45,8 @@ def pytest_configure() -> None:
         finally:
             key = _FIXTURES.get(id(fixture))
             if key is not None:
-                item = cast(pytest.Item, getattr(request, "_pyfuncitem"))
+                # A shared fixture's request.node is its scope, not its consumer.
+                item = request._pyfuncitem  # pyright: ignore[reportPrivateUsage]
                 trace.emit("consumes", nodeid=item.nodeid, fixtures=[key])
 
     def finish(fixture: FixtureDef[object], request: SubRequest) -> None:

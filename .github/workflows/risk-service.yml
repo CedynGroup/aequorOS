@@ -41,10 +41,9 @@ name: Risk Service CI
 #                 `risk-service:test-postgres-schema` covers integration cases in tests/db,
 #                 including tests/db/test_tenant_rls_completeness.py — the structural
 #                 guard on tenant isolation.
-#   postgres-suite — the remaining backend suite against Postgres, including
-#                 OpenBao signing. Suite ownership is defined in backend/mise.toml
-#                 and pinned by tests/architecture/test_ci_task_wiring.py.
-#                 Sharding, selection and coverage guards are documented in
+#   postgres-suite — the integration aggregate, including exact cross-owner
+#                 coverage and observed database-ownership checks. Suite ownership,
+#                 sharding, selection and coverage guards are documented in
 #                 backend/README.md#run-tests.
 #                 Parallel execution and schema isolation are documented in
 #                 backend/README.md#test-databases-and-the-primary-database.
@@ -539,10 +538,9 @@ jobs:
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-locks/database-observations
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-locks/report.xml
         run: mise run risk-service:test-postgres-locks
-      # The three lock modules collect 64 tests and every one of them runs on
-      # Postgres (the only skip in them is "not Postgres"), measured 2026-09-29:
-      # 64 passed, 0 skipped. The largest module holds 33, so 60 trips when any
-      # one vanishes; zero skips because this job exists to run exactly these.
+      # Retain the execution floor and require zero skips for the lock owner.
+      # The integration aggregate also checks exact cross-owner coverage;
+      # ownership and service requirements: backend/README.md#run-tests.
       - name: The concurrency tests must have executed, not skipped
         run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-locks/report.xml" --min-executed 60 --max-skipped 0
       - name: Upload lock integration execution evidence

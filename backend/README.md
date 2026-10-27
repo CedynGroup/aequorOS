@@ -475,6 +475,8 @@ fix failures before claiming full validation.
 
 The observer records driver connection attempts and SQLAlchemy pooled checkouts
 across setup, call, teardown, shared fixtures and inherited Python subprocesses.
+Shared-fixture evidence applies to every consumer, including failed setup and
+cached setup failures; nested fixtures and registered finalizers retain attribution.
 An attempted acquisition counts as database use even when it fails or is caught:
 the unit guard must not replace a driver's expected refusal. A fully passing case
 with no observed use is unit-owned. Positive acquisition evidence proves integration
@@ -510,8 +512,10 @@ provisioned, and any attempted use of the sentinel fails the connection guard.
 A dedicated unit run uses four workers with `--dist loadfile` and refuses
 database connections before collection. Each process records attempts separately;
 the controller requires identical worker classifications and exact combined JUnit
-coverage. Combined
-local runs also refuse connections for each unit test, before fixture setup.
+coverage. Combined local runs also refuse connections for each unit test, before
+fixture setup. Finalization follows fixture ownership: integration-only fixture
+cleanup remains permitted when the last test is unit-owned, while fixtures consumed
+by a unit test retain refusal during their finalizers.
 SQLAlchemy, psycopg (including async), SQLite and installed database-direct driver
 entry points are guarded, including Python subprocesses with fresh environments.
 Attempts fail the run even when caught. The unit CI owner compares the complete
@@ -566,7 +570,7 @@ PostgreSQL 17. If a migration adds an extension dependency, install its PostgreS
 17 package in that action and verify availability before running migrations.
 
 Run the storage contract suite with `mise run risk-service:test-storage`. Its
-wrapper supplies disposable PostgreSQL for key-rotation concurrency and MinIO
+wrapper supplies disposable PostgreSQL for storage integration cases and MinIO
 for the object-store contract unless `TEST_DATABASE_URL` and `S3_*` settings
 already supply those services. The dedicated CI storage job supplies both and
 rejects any skipped test.
@@ -577,11 +581,12 @@ the schema aggregate continues to reject every skip.
 
 CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official
-release binaries and verify pinned SHA256 digests before execution. MinIO runs
-only for the storage contract, schema document cleanup coverage and
-[dashboard journeys](dashboard/README.md#end-to-end-playwright), with a disposable
-built-in KMS key named `aequoros-key`. OpenBao runs only in the suite shard owning its
-live signing tests. Both listen on loopback and stop at job cleanup. Other API,
+release binaries and verify pinned SHA256 digests before execution. MinIO uses a
+disposable built-in KMS key named `aequoros-key`; it also serves
+[dashboard journeys](dashboard/README.md#end-to-end-playwright).
+The integration shard owning live signing cases also starts OpenBao, alongside
+the unit owner's service setup described above. Both services listen on loopback
+and stop at job cleanup. Other API,
 health and operator provisioning tests retain their in-process storage fakes;
 credential-vault encryption tests need no vault server. The live storage and
 OpenBao execution guards remain in

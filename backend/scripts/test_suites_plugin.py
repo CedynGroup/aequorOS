@@ -54,7 +54,7 @@ def _install(config: pytest.Config) -> None:
 
 
 @contextmanager
-def _fixture_guard(config: pytest.Config, enabled: bool) -> Iterator[None]:
+def _fixture_guard(config: pytest.Config, enabled: bool) -> Generator[None]:
     active = _PATCHES in config.stash
     if enabled == active:
         yield
@@ -83,7 +83,8 @@ def _guard_fixture_finalization(config: pytest.Config) -> None:
         try:
             return execute(fixture, request)
         finally:
-            item = cast(pytest.Item, getattr(request, "_pyfuncitem"))
+            # A shared fixture's request.node is its scope, not its consumer.
+            item = request._pyfuncitem  # pyright: ignore[reportPrivateUsage]
             if item.get_closest_marker("unit") is not None:
                 unit_fixtures.add(fixture)
 

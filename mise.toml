@@ -32,7 +32,7 @@ pnpm = "11.2.2"
 #   * `.github/scripts/mise_wiring_preflight.py` — the SAME check in plain
 #     Python with no mise and no uv, run as the `preflight` job every other job
 #     depends on. The test above cannot catch this failure on its own: reaching
-#     it requires `mise run risk-service:test-architecture`, which is itself one
+#     it requires `mise run risk-service:test-unit`, which is itself one
 #     of the proxies that recurses. A guard that can only run when the thing it
 #     guards is healthy is not a guard.
 # ---------------------------------------------------------------------------
