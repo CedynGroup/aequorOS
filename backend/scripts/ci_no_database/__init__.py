@@ -54,6 +54,9 @@ def install(patch: Callable[[object, str, object], None] = setattr) -> None:
         supplied = kwargs.get("env")
         environment = dict(os.environ if supplied is None else cast(Mapping[str, str], supplied))
         environment["CI_NO_DATABASE_ATTEMPTS"] = attempts
+        for key in ("CI_DATABASE_OBSERVATIONS", "CI_DATABASE_CONTEXT"):
+            if key in os.environ:
+                environment[key] = os.environ[key]
         environment["PYTHONPATH"] = os.pathsep.join(
             [guard, str(backend), environment.get("PYTHONPATH", "")]
         )
