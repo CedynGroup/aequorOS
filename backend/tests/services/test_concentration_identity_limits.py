@@ -198,9 +198,11 @@ def test_named_limits_match_the_opaque_group_and_breach(
     bank, _provider, token = prepare(db_session, monkeypatch, prefix, connected=connected)
     limits(db_session, kind, f"{prefix}:Acme")
     db_session.expunge_all()
+    engine = credit_concentration.monitor(db_session, CTX, bank, FIXTURE_AS_OF)
+    assert any(b.key == token for b in engine.breaches)
     reading = credit_concentration.concentration_read(db_session, CTX, bank, FIXTURE_AS_OF)
     single = next(d for d in reading.dimensions if d.dimension == "single_name")
-    matched = next(b for b in single.buckets if b.key == token)
+    matched = next(b for b in single.buckets if b.key == f"{prefix}:Acme")
     assert matched.limit_status == "above_limit" and matched.limit_kind == kind
     assert matched.limit_value == Decimal("0.01")
     assert matched.utilization_pct is not None and matched.utilization_pct > 100
@@ -222,8 +224,10 @@ def test_retained_named_limits_are_locked_on_the_api_when_key_is_unavailable(  #
     bank, provider, token = prepare(db_session, monkeypatch, prefix, connected=True)
     assert provider is not None
     limits(db_session, kind, f"{prefix}:Acme")
+    engine = credit_concentration.monitor(db_session, CTX, bank, FIXTURE_AS_OF)
+    assert any(b.key == token for b in engine.breaches)
     before = credit_concentration.concentration_read(db_session, CTX, bank, FIXTURE_AS_OF)
-    assert any(b.key == token for b in before.breaches)
+    assert any(b.key == f"{prefix}:Acme" for b in before.breaches)
     db_session.commit()
     db_session.expunge_all()
     provider.set_status(KEY_A, status)
@@ -231,6 +235,10 @@ def test_retained_named_limits_are_locked_on_the_api_when_key_is_unavailable(  #
         f"/api/v1/banks/{SAMPLE_BANK_ID}/credit/concentration", headers=headers()
     )
     assert response.status_code == 200, response.text
+    assert TypeAdapter(dict[str, str]).validate_json(response.headers[HEADER]) == {
+        SAMPLE_BANK_ID: "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    }
+    assert "Acme" not in response.text
     after = CreditConcentrationRead.model_validate(cast(object, response.json()))
     assert after.total_book_ghs == before.total_book_ghs and after.limit_count == 3
     assert len(after.locked_limits) == 1
@@ -238,12 +246,12 @@ def test_retained_named_limits_are_locked_on_the_api_when_key_is_unavailable(  #
     assert locked.limit_status == "locked"
     assert locked.limit_kind == kind and locked.value == Decimal("0.01")
     single = next(d for d in after.dimensions if d.dimension == "single_name")
-    bucket = next(b for b in single.buckets if b.key == token)
+    bucket = next(b for b in single.buckets if b.key == LOCKED_TEXT)
     assert bucket.limit_status == "locked" and bucket.utilization_pct is None
     assert bucket.limit_value is None
     sector = next(d for d in after.dimensions if d.dimension == "sector")
     assert sector.hhi_status == "above_limit"
-    assert all(b.key != token for b in after.breaches)
+    assert all(b.key != LOCKED_TEXT for b in after.breaches)
     retained = credit_params.get_concentration_limit_register(
         db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF
     )
@@ -262,7 +270,11 @@ def test_retained_named_limits_are_locked_on_the_api_when_key_is_unavailable(  #
 @pytest.mark.parametrize("connected", [False, True])
 @pytest.mark.parametrize("kind", ["share_of_book_pct", "share_of_capital_pct"])
 def test_literal_pos_limits_still_breach_with_a_locked_named_limit(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch, connected: bool, kind: Kind
+    db_session: Session,
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    connected: bool,
+    kind: Kind,
 ) -> None:
     bank, provider, _token = prepare(db_session, monkeypatch, "group", connected=connected)
     snapshot = db_session.scalar(
@@ -279,7 +291,13 @@ def test_literal_pos_limits_still_breach_with_a_locked_named_limit(
     db_session.expunge_all()
     if provider is not None:
         provider.set_status(KEY_A, KeyStatus.DISABLED)
-    reading = credit_concentration.concentration_read(db_session, CTX, bank, FIXTURE_AS_OF)
+    engine = credit_concentration.monitor(db_session, CTX, bank, FIXTURE_AS_OF)
+    assert any(b.key == f"pos:{reference}" for b in engine.breaches)
+    response = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/credit/concentration", headers=headers()
+    )
+    assert response.status_code == 200, response.text
+    reading = CreditConcentrationRead.model_validate_json(response.content)
     matched = next(b for b in reading.breaches if b.key == f"pos:{reference}")
     assert matched.limit_status == "above_limit" and matched.limit_kind == kind
     assert matched.limit_value == Decimal("0.01")

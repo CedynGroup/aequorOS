@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -9,9 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import Module, Permission, Sensitivity
-from app.core.key_management import registry
-from app.core.key_management.presentation import SESSION_STATE, PresentationState
-from app.core.key_management.types import KeyUnavailableError
+from app.core.key_management.fields import observe_bank_key
 from app.core.tenancy import TenantContext
 from app.identity.models.bank import Bank
 from app.identity.schemas.authorization import EffectiveCapabilityRead
@@ -204,22 +201,7 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
 
 def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
     bank, capabilities = _require_institution_coverage(db, ctx, bank_reference)
-    presentation = cast(object, db.info.get(SESSION_STATE))
-    if isinstance(presentation, PresentationState):
-        if presentation.support or ctx.impersonation_context is not None:
-            presentation.record(bank.id, "support")
-        elif (key := registry.bank_key(db, ctx.organization_id, bank.id)) is not None:
-            try:
-                registry.prepare_envelope(
-                    db,
-                    key,
-                    registry.version_context(ctx.organization_id, bank.id),
-                    registry.provider_for,
-                )
-            except KeyUnavailableError as exc:
-                presentation.record(bank.id, "revoked" if exc.revoked else "unavailable")
-            else:
-                presentation.record(bank.id, "available")
+    observe_bank_key(db, ctx.organization_id, bank.id)
     jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code})
     institution_types = _institution_types_by_code(
         db, {(bank.institution_type, bank.jurisdiction_code)}

@@ -938,8 +938,7 @@ def _stamp_provenance(  # noqa: PLR0913 — the full generation context is the i
     * Otherwise the authority is read off the source runs: a non-empty lineage
       means a sealed engine run owns the figures; an empty one on a generator
       that binds no run by design (the LRT corporate packs) means master data
-      owns them, sealed by ``register_state_digest`` instead. This is the same
-      branch the register-digest decision below already takes, now stated.
+      owns them. Register commitments follow docs/attestation_esignature.md §3.1.
 
     Every section is then stamped with an authority, so no field in a stored
     snapshot is left without one. Resolution order for a consumer is

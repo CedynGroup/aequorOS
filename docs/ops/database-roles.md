@@ -116,8 +116,10 @@ pool identities in `pg_stat_activity`. Native PostgreSQL 17 tests in
 disposable probe logins with the configured role settings and service privileges
 (PostgreSQL role settings are not inherited via membership). They also prove
 real API idle termination/lock release using a short
-transaction-local probe limit, legacy connection budgets, a 65-second worker
-statement and BI export overrides above ten seconds. Native regressions in
+transaction-local probe limit, legacy connection budgets and worker/BI completion.
+The BI export probe verifies the fresh-login default separately, then scales the
+transaction-local interactive and export budgets to prove cancellation, a successful
+override and restoration of the prior budget. Native regressions in
 `backend/tests/db/test_bi_export_transactions.py` prove through `pg_stat_activity`
 that slow BI statements and compiler probes hold no API transaction, and that
 delivery audit/query-log/job writes commit atomically. Document deletion

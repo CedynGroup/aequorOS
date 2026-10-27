@@ -173,7 +173,23 @@ test.describe("Bank-held encryption: service outage", () => {
       await page.getByRole("cell", { name: LOCKED, exact: true }).click();
       await expect(
         page.getByRole("button", { name: "Edit", exact: true }),
-      ).toBeDisabled();
+      ).toBeEnabled();
+      await page.getByRole("button", { name: "Edit", exact: true }).click();
+      await expect(page.getByLabel("Full name")).toBeDisabled();
+      await expect(page.getByLabel("Full name")).toHaveAttribute(
+        "placeholder",
+        LOCKED,
+      );
+      const protectedField = page
+        .locator("fieldset")
+        .filter({ has: page.getByLabel("Full name") });
+      await expect(protectedField).toHaveAttribute("title", OUTAGE);
+      await expect(
+        protectedField.getByRole("img", { name: "Protected data locked" }),
+      ).toBeVisible();
+      await expect(page.getByLabel("Status", { exact: true })).toBeEnabled();
+      await expect(page.getByLabel("Reason for change")).toBeEnabled();
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
       await expect(page.getByLabel("Full name")).toHaveCount(0);
       const retry = page.waitForResponse((response) =>
         response.url().endsWith("/institution-profile"),
