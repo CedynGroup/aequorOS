@@ -591,9 +591,11 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
   reuse a separate application and SQLite database, with the same rollback isolation
   (`tests/operator/conftest.py`). Each client is function-scoped, with storage
   dependency overrides removed at teardown. Migration tests and feature-local fixtures
-  requiring migrated DDL build isolated schemas of their own. A test that needs a
-  fresh schema is the exception to justify,
-  not the default to reach for.
+  requiring migrated DDL build isolated schemas of their own. The `catalog_postgres_schema`
+  fixture shares a module-scoped forward-migrated schema only for read-only catalog assertions;
+  mutating migration tests retain isolated schemas, and `migrated_postgres_schema`
+  still verifies the upgrade/downgrade round trip. A test that needs a fresh schema
+  is the exception to justify, not the default to reach for.
   `risk-service:test-postgres-suite` runs under pytest-xdist (`-n 4 --dist loadfile`),
   using at most four workers. Each worker lazily builds its own rollback and
   committing schemas as needed, and a module's tests stay on one worker. CI's
