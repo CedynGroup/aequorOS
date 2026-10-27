@@ -347,7 +347,9 @@ def _assert_combined_fixture_ownership(tmp_path: Path) -> None:
             timeout=60,
             check=False,
         )
-        assert (result.returncode == 0) == (scenario == "integration"), result.stdout + result.stderr
+        assert (result.returncode == 0) == (scenario == "integration"), (
+            result.stdout + result.stderr
+        )
         attempts = "".join(
             path.read_text() for path in root.glob("unit-tests-*/connection-attempts-*.txt")
         )
@@ -356,7 +358,9 @@ def _assert_combined_fixture_ownership(tmp_path: Path) -> None:
         expected = (
             {"function", "class", "module", "package", "session"}
             if scenario == "integration"
-            else {"function"} if scenario == "shared" else set[str]()
+            else {"function"}
+            if scenario == "shared"
+            else set[str]()
         )
         assert cleaned == expected, result.stdout + result.stderr
         if scenario == "integration":
@@ -494,7 +498,9 @@ def _assert_supplement_preserves_acquisitions(tmp_path: Path) -> None:
             _ = _write_census_profile(positive, source, outcome)
             assert classify(positive) == (integrations, {})
             unresolved = tmp_path / f"unresolved-{source}-{outcome}"
-            _ = _write_census_profile(unresolved, "none", outcome if outcome != "passed" else "child")
+            _ = _write_census_profile(
+                unresolved, "none", outcome if outcome != "passed" else "child"
+            )
             assert classify(unresolved)[0] == integrations
             assert set(classify(unresolved)[1]) == set(nodes)
             for full, supplement in ((positive, unit), (unit, positive)):

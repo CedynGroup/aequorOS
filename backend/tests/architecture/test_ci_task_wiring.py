@@ -297,9 +297,7 @@ def test_workflow_task_invocations_follow_executable_commands(
 ) -> None:
     workflow = tmp_path / "workflow.yml"
     _ = workflow.write_text(
-        yaml.safe_dump(
-            {"jobs": {"test": {"steps": [{"name": "mise run unused", "run": script}]}}}
-        )
+        yaml.safe_dump({"jobs": {"test": {"steps": [{"name": "mise run unused", "run": script}]}}})
     )
     assert _workflow_tasks(workflow) == expected
 
@@ -641,6 +639,7 @@ def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path)
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
         assert (result.returncode == 0) == succeeds, result.stdout + result.stderr
         extra.unlink()
