@@ -1,7 +1,7 @@
 """Committed deletion survives storage waits beyond the API's idle budget.
 
 Use migrated disposable schemas and real API/worker role rights. The accelerated
-one-second budget keeps the regression fast; storage waits for three such budgets.
+one-second budget keeps the regression fast; dedicated storage probes exceed it.
 """
 
 from __future__ import annotations
@@ -153,7 +153,6 @@ def delete_during_upload_head(
                     )
                     is None
                 )
-            time.sleep(3)
             with Session(scenario.api_engine, expire_on_commit=False) as deleting:
                 deleting.info["organization_id"] = ORG_1
                 deleted = documents.delete_document(deleting, scenario.ctx, scenario.document_id)
@@ -228,7 +227,7 @@ def test_upload_completion_succeeds_after_head_exceeds_idle_budget(
         class SlowStorage(FakeStorage):
             def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
                 assert not api.in_transaction()
-                time.sleep(3)
+                time.sleep(1.5)
                 return StoredObjectHead(
                     content_type="application/pdf", byte_size=1234, etag='"etag"'
                 )
@@ -361,7 +360,7 @@ def test_deletion_commits_before_storage_and_retries_under_role_timeouts(
                         )
                         is None
                     )
-                time.sleep(3)
+                time.sleep(1.5)
                 if calls == 1:
                     raise TimeoutError("ambiguous storage failure")
                 super().delete_object(bucket=bucket, object_key=object_key)

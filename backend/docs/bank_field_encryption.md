@@ -222,9 +222,18 @@ protected responses use `Cache-Control: no-store`. Revocation displays “Your b
 has turned off aequorOS access to protected data. Contact your bank administrator.”
 An outage displays “Can't reach your bank's key service. Retrying.” The dashboard
 clears affected cached data, rejects older in-flight disclosures, retries and
-refetches locked data after recovery. Support placeholders do not trigger recovery
-polling. Form drafts remain mounted through refusal.
+refetches locked data after recovery. Responses without an availability header and
+failed recovery requests leave the lock in place. Form drafts remain mounted
+through refusal.
 Integrity failures remain verification errors, outside the key-outage presentation.
+
+Manual **Retry** and five-second automatic retries share one in-flight recovery
+attempt for the current bank. They refetch eligible active queries for that bank;
+when none are eligible, they use `GET /api/v1/banks/{bank_id}` to observe readiness
+without loading protected registers. Bank detail checks institution coverage before
+observing keys and requires no key-administration or institution-profile permission.
+Changing banks or unmounting cancels the fallback request. Available and support
+states, or no current bank, suppress recovery probes.
 
 Bank-wide readiness checks both the current payload key and the retained identity
 index key, including on empty registers and after failed historical field reads.

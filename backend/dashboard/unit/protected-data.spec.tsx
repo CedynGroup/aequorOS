@@ -128,7 +128,7 @@ it("retries a locked read automatically and restores the visible value", async (
   let available = false;
   function ProtectedRead() {
     const query = useQuery({
-      queryKey: ["synthetic-identity"],
+      queryKey: ["synthetic-identity", "BK-SAMP0001"],
       queryFn: async () => {
         notify(available ? "available" : "unavailable");
         return available ? "Synthetic Borrower" : "🔒 Protected data";
@@ -211,7 +211,7 @@ it("offers manual retry after revocation", async () => {
   let reads = 0;
   function ProtectedRead() {
     useQuery({
-      queryKey: ["manual-retry"],
+      queryKey: ["manual-retry", "BK-SAMP0001"],
       queryFn: async () => {
         reads++;
         return "🔒 Protected data";

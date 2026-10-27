@@ -951,8 +951,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   `ai_commentary_drafts`. Each must appear in exactly one model module's table tuple.
   Its Postgres checks cover RLS, column types/lengths/nullability and CHECK names/values;
   `test_bi_migration_structural_parity.py` covers primary keys, foreign keys and indexes.
-  The foundation and Phase 3 migration suites iterate narrower subsets; use the derived
-  census for complete coverage. Without that parity a column too narrow
+  Without that parity a column too narrow
   for the values copied into it passes on SQLite (which ignores VARCHAR lengths) and fails a
   tenant's WHOLE nightly build on Postgres, because the model and the migration agree on the
   wrong number.

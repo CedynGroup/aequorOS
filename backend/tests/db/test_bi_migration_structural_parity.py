@@ -1,9 +1,8 @@
 """Model↔migration parity for the things the column checks do NOT cover.
 
-Audit finding A8-05. Two suites already compare the migrated schema to the model:
-one on column type, length and nullability, one on CHECK constraint names and the
-values each admits. Between them they miss three structural facts, and each has a
-different failure mode when it drifts:
+Column type, length, nullability and CHECK parity live in
+``test_bi_owned_tables_parity.py``. This suite checks three additional structural
+facts, each with a different failure mode when it drifts:
 
 * **Primary key ORDER.** A partitioned table requires its range column to LEAD the
   key, and the model test that asserts that reads the MODEL only. If a migration
@@ -28,10 +27,13 @@ declares.
 from __future__ import annotations
 
 import os
+from typing import TypedDict, cast
 
 import pytest
 import sqlalchemy as sa
+from pydantic import TypeAdapter
 from sqlalchemy import inspect
+from sqlalchemy.engine.reflection import Inspector
 
 from app.bi.models.commentary import BI_COMMENTARY_TABLES
 from app.bi.models.content import BI_CONTENT_TABLES
@@ -40,11 +42,12 @@ from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.db.base import Base
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
-    migrated_postgres_schema,
+    catalog_postgres_schema,
+    forward_migrated_postgres_schema,
     postgres_schema_url,
 )
 
-__all__ = ["migrated_postgres_schema", "postgres_schema_url"]
+__all__ = ["catalog_postgres_schema", "forward_migrated_postgres_schema", "postgres_schema_url"]
 
 pytestmark = [
     pytest.mark.committing_db,
@@ -71,6 +74,62 @@ ALL_BI_TABLES: tuple[str, ...] = (
 #: completeness check below stays exact instead of becoming a ``>=``.
 PREFIXED_BI_TABLES: frozenset[str] = frozenset(ALL_BI_TABLES) - frozenset(BI_COMMENTARY_TABLES)
 PARTITIONED: frozenset[str] = frozenset((*MONTHLY_PARTITIONED_TABLES, *YEARLY_PARTITIONED_TABLES))
+
+
+type ForeignKeySignature = tuple[
+    tuple[str, ...], str, str, tuple[str, ...], str | None, str | None, bool | None, str | None
+]
+
+
+class _ForeignKeyOptions(TypedDict, total=False):
+    ondelete: str
+    onupdate: str
+    deferrable: bool
+    initially: str
+
+
+_FK_OPTIONS = TypeAdapter(_ForeignKeyOptions)
+
+
+def _action(value: str | None) -> str | None:
+    return None if value is None or value.upper() == "NO ACTION" else value.upper()
+
+
+def _model_foreign_keys(table: sa.Table, schema: str) -> set[ForeignKeySignature]:
+    return {
+        (
+            tuple(element.parent.name for element in fk.elements),
+            fk.referred_table.schema or schema,
+            fk.referred_table.name,
+            tuple(element.column.name for element in fk.elements),
+            _action(fk.ondelete),
+            _action(fk.onupdate),
+            fk.deferrable,
+            fk.initially,
+        )
+        for fk in table.foreign_key_constraints
+    }
+
+
+def _migrated_foreign_keys(
+    inspector: Inspector, table: str, schema: str
+) -> set[ForeignKeySignature]:
+    signatures: set[ForeignKeySignature] = set()
+    for fk in inspector.get_foreign_keys(table, schema=schema):
+        options = _FK_OPTIONS.validate_python(cast(object, fk.get("options", {})))
+        signatures.add(
+            (
+                tuple(fk["constrained_columns"]),
+                fk["referred_schema"] or schema,
+                fk["referred_table"],
+                tuple(fk["referred_columns"]),
+                _action(options.get("ondelete")),
+                _action(options.get("onupdate")),
+                options.get("deferrable"),
+                options.get("initially"),
+            )
+        )
+    return signatures
 
 
 def test_the_subject_is_every_registered_bi_table() -> None:
@@ -103,16 +162,16 @@ def test_the_subject_is_not_derived_from_the_bi_prefix_alone() -> None:
 
 
 def test_primary_key_columns_and_their_ORDER_match_the_model(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    inspector = inspect(migrated_postgres_schema.app_engine)
+    inspector = inspect(catalog_postgres_schema.app_engine)
     drift: list[str] = []
     for table_name in ALL_BI_TABLES:
         model = [column.name for column in Base.metadata.tables[table_name].primary_key]
         migrated = list(
-            inspector.get_pk_constraint(
-                table_name, schema=migrated_postgres_schema.schema_name
-            ).get("constrained_columns")
+            inspector.get_pk_constraint(table_name, schema=catalog_postgres_schema.schema_name).get(
+                "constrained_columns"
+            )
             or []
         )
         if model != migrated:
@@ -129,44 +188,76 @@ def test_primary_key_columns_and_their_ORDER_match_the_model(
 
 
 def test_every_foreign_key_is_the_composite_that_pins_the_tenant(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    """The composite is what stops a child pointing at another tenant's parent."""
-    inspector = inspect(migrated_postgres_schema.app_engine)
+    """Compare ordered local/parent columns and the complete FK behavior."""
+    inspector = inspect(catalog_postgres_schema.app_engine)
     drift: list[str] = []
     for table_name in ALL_BI_TABLES:
         table = Base.metadata.tables[table_name]
-        model = {
-            (
-                tuple(element.parent.name for element in constraint.elements),
-                tuple(element.column.table.name for element in constraint.elements),
-            )
-            for constraint in table.constraints
-            if isinstance(constraint, sa.ForeignKeyConstraint)
-        }
-        migrated = {
-            (
-                tuple(fk["constrained_columns"]),
-                (fk["referred_table"],) * len(fk["constrained_columns"]),
-            )
-            for fk in inspector.get_foreign_keys(
-                table_name, schema=migrated_postgres_schema.schema_name
-            )
-        }
+        model = _model_foreign_keys(table, catalog_postgres_schema.schema_name)
+        migrated = _migrated_foreign_keys(
+            inspector, table_name, catalog_postgres_schema.schema_name
+        )
         if model != migrated:
-            drift.append(f"{table_name}: model {sorted(model)} != migrated {sorted(migrated)}")
-        for columns, _ in model:
+            drift.append(f"{table_name}: model {model} != migrated {migrated}")
+        for columns, _, _, referred, *_ in model:
             if len(columns) > 1:
                 assert "organization_id" in columns, f"{table_name}: {columns} omits the tenant"
-    assert not drift, (
-        "the foreign keys differ between the model and the migration. A single-column "
-        "key where the model declares a composite would let a child row point at "
-        "another tenant's parent: " + "; ".join(drift)
+                assert referred[columns.index("organization_id")] == "organization_id", (
+                    f"{table_name}: {columns} does not reference the parent tenant"
+                )
+    assert not drift, "foreign keys differ between the model and migration: " + "; ".join(drift)
+
+
+def test_foreign_key_parity_detects_reversed_referenced_columns(
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    schema = forward_migrated_postgres_schema
+    metadata = sa.MetaData()
+    _ = sa.Table(
+        "fk_parity_parent",
+        metadata,
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("organization_id", sa.Integer, primary_key=True),
+        sa.UniqueConstraint("organization_id", "id"),
+    )
+    child = sa.Table(
+        "fk_parity_child",
+        metadata,
+        sa.Column("parent_id", sa.Integer),
+        sa.Column("organization_id", sa.Integer),
+        sa.ForeignKeyConstraint(
+            ["parent_id", "organization_id"],
+            ["fk_parity_parent.id", "fk_parity_parent.organization_id"],
+            name="fk_parity_subject",
+            ondelete="CASCADE",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+    )
+    metadata.create_all(schema.app_engine)
+    expected = _model_foreign_keys(child, schema.schema_name)
+    assert expected == _migrated_foreign_keys(
+        inspect(schema.app_engine), child.name, schema.schema_name
+    )
+    with schema.app_engine.begin() as connection:
+        connection.execute(sa.text("ALTER TABLE fk_parity_child DROP CONSTRAINT fk_parity_subject"))
+        connection.execute(
+            sa.text(
+                "ALTER TABLE fk_parity_child ADD CONSTRAINT fk_parity_subject "
+                "FOREIGN KEY (parent_id, organization_id) "
+                "REFERENCES fk_parity_parent (organization_id, id) "
+                "ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED"
+            )
+        )
+    assert expected != _migrated_foreign_keys(
+        inspect(schema.app_engine), child.name, schema.schema_name
     )
 
 
 def test_every_declared_index_exists_in_the_migration(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     """A missing index fails nothing and costs everything.
 
@@ -174,7 +265,7 @@ def test_every_declared_index_exists_in_the_migration(
     planner simply does more work, which is how a twelve-month question came to
     scan sixty partitions this week.
     """
-    inspector = inspect(migrated_postgres_schema.app_engine)
+    inspector = inspect(catalog_postgres_schema.app_engine)
     missing: list[str] = []
     for table_name in ALL_BI_TABLES:
         declared = {index.name for index in Base.metadata.tables[table_name].indexes if index.name}
@@ -183,7 +274,7 @@ def test_every_declared_index_exists_in_the_migration(
         migrated = {
             index["name"]
             for index in inspector.get_indexes(
-                table_name, schema=migrated_postgres_schema.schema_name
+                table_name, schema=catalog_postgres_schema.schema_name
             )
             if index.get("name")
         }

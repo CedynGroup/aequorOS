@@ -124,7 +124,7 @@ class ExportScenario:
                     time.sleep(0.05)
                 self.idle_observations.append(self._api_state(observer))
                 # Keep BI blocked while verifying the API stays outside a transaction.
-                time.sleep(3)
+                time.sleep(1.5)
                 self.idle_observations.append(self._api_state(observer))
             finally:
                 blocker.rollback()
@@ -168,7 +168,11 @@ def export_scenario(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[ExportScenario]:
     url = role_engines["aqs_api"].url
-    api_engine = create_engine(url)
+    options = " ".join(url.normalized_query.get("options", ()))
+    api_engine = create_engine(
+        url,
+        connect_args={"options": options + " -c idle_in_transaction_session_timeout=1000"},
+    )
     bi_url = role_engines["aqs_bi"].url.render_as_string(hide_password=False)
     monkeypatch.setenv("BI_ENABLED", "1")
     monkeypatch.setenv("BI_DATABASE_URL", bi_url)
@@ -185,6 +189,7 @@ def export_scenario(
     def session_dependency() -> Iterator[Session]:
         with Session(api_engine, expire_on_commit=True) as db:
             db.info["organization_id"] = ORG_1
+            assert db.scalar(text("SHOW idle_in_transaction_session_timeout")) == "1s"
             scenario.api_pids.append(cast(int, db.scalar(text("SELECT pg_backend_pid()"))))
             try:
                 yield db
