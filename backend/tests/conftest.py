@@ -48,6 +48,7 @@ from app.main import create_app
 from app.models import Organization, User
 from tests.fixtures.reference_data import seed_global_reference_data
 from tests.real_data import REAL_DATA_DATABASE_URL
+from tests.support.advisory_locks import isolate_encryption_locks
 from tests.support.api_factories import ApiFactories
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.support.inmemory_storage import InMemoryStorageClient
@@ -459,6 +460,8 @@ def build_test_database(
     engine = get_engine(database_url)
     if engine.dialect.name == "sqlite":
         _enable_sqlite_foreign_keys(engine)
+    elif engine.dialect.name == "postgresql":
+        isolate_encryption_locks(engine)
     try:
         Base.metadata.create_all(engine)
         if engine.dialect.name == "postgresql":
