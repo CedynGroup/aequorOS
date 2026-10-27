@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Generator, Iterator
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -10,13 +11,14 @@ from uuid import uuid4
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine, make_url
 
 from alembic import command
 from app.core.config import get_settings
 from app.db.session import get_engine
 from app.services.ai import observability
+from tests.support.database import database_connections, managed_engine
 from tests.support.helpers import ORG_1, ORG_2
 
 
@@ -182,38 +184,46 @@ def migrate_isolated_postgres_schema(
 
     schema_name = f"risk_service_migration_{uuid4().hex}"
     alembic_config = alembic_config_for_app()
-    admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
-    migration_role = _prepare_migration_role(admin_engine)
-    database_url = postgres_schema_url(test_database_url, schema_name, role=migration_role)
-    app_engine = create_engine(database_url)
-    monkeypatch.setenv("DATABASE_URL", database_url)
-    clear_database_caches()
-
-    with admin_engine.connect() as connection:
-        authorization = f' AUTHORIZATION "{migration_role}"' if migration_role is not None else ""
-        connection.execute(text(f'CREATE SCHEMA "{schema_name}"{authorization}'))
-
-    try:
-        command.upgrade(alembic_config, revision)
-        yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
-        if downgrade:
-            command.downgrade(alembic_config, "base")
-    finally:
+    with ExitStack() as connections:
+        admin_connections = connections.enter_context(
+            database_connections(test_database_url, schema=schema_name)
+        )
+        admin_engine = admin_connections.engine(isolation_level="AUTOCOMMIT")
+        migration_role = _prepare_migration_role(admin_engine)
+        database_url = postgres_schema_url(test_database_url, schema_name, role=migration_role)
+        app_connections = connections.enter_context(database_connections(database_url))
+        app_engine = app_connections.engine()
+        app_connections.install_migration_engines(monkeypatch)
+        monkeypatch.setenv("DATABASE_URL", database_url)
         clear_database_caches()
-        app_engine.dispose()
+
         with admin_engine.connect() as connection:
-            _drop_worker_view_schema(connection, schema_name)
-            connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
-            if migration_role is not None:
-                database_name = cast(str, connection.scalar(text("SELECT current_database()")))
-                quoted_database = connection.dialect.identifier_preparer.quote_identifier(
-                    database_name
-                )
-                connection.execute(
-                    text(f'REVOKE CREATE ON DATABASE {quoted_database} FROM "{migration_role}"')
-                )
-                connection.execute(text(f'DROP ROLE "{migration_role}"'))
-        admin_engine.dispose()
+            authorization = (
+                f' AUTHORIZATION "{migration_role}"' if migration_role is not None else ""
+            )
+            connection.execute(text(f'CREATE SCHEMA "{schema_name}"{authorization}'))
+
+        try:
+            command.upgrade(alembic_config, revision)
+            yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
+            if downgrade:
+                command.downgrade(alembic_config, "base")
+        finally:
+            clear_database_caches()
+            app_engine.dispose()
+            with admin_engine.connect() as connection:
+                _drop_worker_view_schema(connection, schema_name)
+                connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
+                if migration_role is not None:
+                    database_name = cast(str, connection.scalar(text("SELECT current_database()")))
+                    quoted_database = connection.dialect.identifier_preparer.quote_identifier(
+                        database_name
+                    )
+                    connection.execute(
+                        text(f'REVOKE CREATE ON DATABASE {quoted_database} FROM "{migration_role}"')
+                    )
+                    connection.execute(text(f'DROP ROLE "{migration_role}"'))
+            admin_engine.dispose()
 
 
 def _prepare_migration_role(admin_engine: Engine) -> str | None:
@@ -328,18 +338,19 @@ def postgres_administrator_url() -> str:
     for database_url in (os.getenv("POSTGRES_ADMIN_URL"), os.getenv("TEST_DATABASE_URL")):
         if not database_url:
             continue
-        engine = create_engine(database_url)
-        try:
-            with engine.connect() as connection:
-                if (
-                    connection.scalar(
-                        text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
-                    )
-                    is True
-                ):
-                    return database_url
-        finally:
-            engine.dispose()
+        with database_connections(database_url, administrative=True) as connections:
+            engine = connections.engine()
+            try:
+                with engine.connect() as connection:
+                    if (
+                        connection.scalar(
+                            text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+                        )
+                        is True
+                    ):
+                        return database_url
+            finally:
+                engine.dispose()
     reason = "Superuser credentials are required for the administrator migration regression."
     if os.getenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED"):
         pytest.fail(f"{reason} POSTGRES_PRIVILEGE_TESTS_REQUIRED is set.")
@@ -357,12 +368,13 @@ def superuser_database_url() -> str:
 )
 @pytest.mark.parametrize("downgrade", [False, True])
 @pytest.mark.parametrize("source", ["POSTGRES_ADMIN_URL", "TEST_DATABASE_URL"])
-def test_superuser_migrations_use_restricted_role(
+def test_superuser_migrations_use_restricted_role(  # noqa: PLR0913 - pytest fixture and parametrization inputs
     monkeypatch: pytest.MonkeyPatch,
     superuser_database_url: str,
     forward_migrated_postgres_schema: MigratedPostgresSchema,
     downgrade: bool,
     source: str,
+    request: pytest.FixtureRequest,
 ) -> None:
     assert forward_migrated_postgres_schema.tables({"audit_chain_heads"}) == {"audit_chain_heads"}
     monkeypatch.delenv("POSTGRES_ADMIN_URL", raising=False)
@@ -401,7 +413,7 @@ def test_superuser_migrations_use_restricted_role(
             next(schemas)
     finally:
         schemas.close()
-    admin_engine = create_engine(admin_url)
+    admin_engine = managed_engine(request, admin_url, administrative=True)
     try:
         with admin_engine.connect() as connection:
             assert (

@@ -15,7 +15,7 @@ from typing import Annotated, Any, cast
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, create_engine, func, select, text
+from sqlalchemy import Engine, func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -35,6 +35,7 @@ from tests.bi.api.test_bi_routes import (
     seed_bi_mart,
 )
 from tests.db import test_database_roles as role_tests
+from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1, USER_1
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
@@ -166,10 +167,12 @@ def export_scenario(
     role_engines: dict[str, Engine],
     export_authority: int,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> Iterator[ExportScenario]:
     url = role_engines["aqs_api"].url
     options = " ".join(url.normalized_query.get("options", ()))
-    api_engine = create_engine(
+    api_engine = managed_engine(
+        request,
         url,
         connect_args={"options": options + " -c idle_in_transaction_session_timeout=1000"},
     )

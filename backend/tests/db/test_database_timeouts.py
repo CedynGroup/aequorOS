@@ -11,7 +11,7 @@ from typing import cast
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, func, literal, select, text
+from sqlalchemy import func, literal, select, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.bi.service.execution import run_select
 from app.db.session import database_timeout_connect_args, get_bi_engine, get_engine
 from tests.db import test_database_roles as role_tests
+from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
@@ -35,7 +36,9 @@ TIMEOUTS = {
 
 
 @pytest.fixture(scope="module")
-def timeout_logins(administrator: Engine) -> Iterator[dict[str, Engine]]:
+def timeout_logins(
+    administrator: Engine, request: pytest.FixtureRequest
+) -> Iterator[dict[str, Engine]]:
     """Probe logins retain real role privileges without changing deployed passwords.
 
     Role settings are not inherited, so copy each configured role's two budgets
@@ -84,8 +87,8 @@ def timeout_logins(administrator: Engine) -> Iterator[dict[str, Engine]]:
                         ),
                     )
                     connection.execute(text(sql))
-                engines[role] = create_engine(
-                    make_url(administrator.url).set(username=name, password=password)
+                engines[role] = managed_engine(
+                    request, make_url(administrator.url).set(username=name, password=password)
                 )
         yield engines
     finally:
@@ -160,14 +163,16 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
         bi.commit()
 
 
-def test_legacy_pools_keep_distinct_budgets_and_migration_options(administrator: Engine) -> None:
+def test_legacy_pools_keep_distinct_budgets_and_migration_options(
+    administrator: Engine, request: pytest.FixtureRequest
+) -> None:
     url = administrator.url.render_as_string(hide_password=False)
     engines = {
         "api": get_engine(url),
         "worker": get_engine(url, "aequoros-worker"),
         "bi": get_bi_engine(url),
-        "migrator": create_engine(
-            url, connect_args=database_timeout_connect_args(url, "aequoros-migrator")
+        "migrator": managed_engine(
+            request, url, connect_args=database_timeout_connect_args(url, "aequoros-migrator")
         ),
     }
     try:

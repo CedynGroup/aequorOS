@@ -10,14 +10,17 @@ from typing import cast
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+
+from tests.support.database import managed_engine
 
 pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98")
 
 
 def test_migration_admits_credit_basis_without_changing_accounting_rows(
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     """BoG CRD (June 2018) ¶98: upgrade admits capital evidence on both planes.
 
@@ -35,7 +38,7 @@ def test_migration_admits_credit_basis_without_changing_accounting_rows(
     spec.loader.exec_module(migration)
     upgrade = cast(Callable[[], None], migration.upgrade)
     downgrade = cast(Callable[[], None], migration.downgrade)
-    engine = create_engine("sqlite://")
+    engine = managed_engine(request, "sqlite://")
     with engine.begin() as connection:
         # Minimal tables exercise the owned CHECK contract through its real consumer.
         for table in ("bank_financial_facts", "current_financial_facts"):
@@ -77,6 +80,7 @@ def test_migration_admits_credit_basis_without_changing_accounting_rows(
 
 def test_credit_source_provenance_migration_preserves_periods(
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     """BoG CRD (June 2018) ¶98: unknown historic source basis stays unknown."""
     path = (
@@ -88,7 +92,7 @@ def test_credit_source_provenance_migration_preserves_periods(
     spec.loader.exec_module(migration)
     upgrade = cast(Callable[[], None], migration.upgrade)
     downgrade = cast(Callable[[], None], migration.downgrade)
-    engine = create_engine("sqlite://")
+    engine = managed_engine(request, "sqlite://")
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE bank_reporting_periods (id TEXT PRIMARY KEY)"))
         connection.execute(text("INSERT INTO bank_reporting_periods VALUES ('existing')"))
