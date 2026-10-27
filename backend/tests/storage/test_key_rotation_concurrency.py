@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from threading import Event, Lock
 from typing import cast
@@ -16,14 +16,13 @@ from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyUnavailableError
 from tests.storage.test_bank_encryption import KEY, NEXT_KEY, SLUG, BankStorage, bank_storage
 from tests.support.helpers import ORG_1
+from tests.support.key_concurrency import assert_blocked, backend_pid
 
 __all__ = ["bank_storage"]
 pytestmark = pytest.mark.committing_db
 
 
-def test_rotation_does_not_wait_for_an_active_reader(
-    bank_storage: BankStorage, db_session: Session
-) -> None:
+def test_rotation_drains_an_active_reader(bank_storage: BankStorage, db_session: Session) -> None:
     database = db_session.get_bind()
     if not isinstance(database, Engine) or database.dialect.name != "postgresql":
         pytest.skip("PostgreSQL independent connections are required.")
@@ -35,22 +34,29 @@ def test_rotation_does_not_wait_for_an_active_reader(
     reader = store.for_session(db_session)
     assert reader.open(SLUG, original.envelope_id, context) == original
     db_session.flush()
+    blocker = backend_pid(db_session)
+    waiter: Future[int] = Future()
 
     def rotate() -> None:
         with Session(database) as writer, writer.begin():
             _ = writer.execute(text("SET LOCAL lock_timeout='1s'"))
+            waiter.set_result(backend_pid(writer))
             row = registry.scoped_key(writer, bank_id="BK-SAMP0001", organization_id=ORG_1)
             registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
 
     with ThreadPoolExecutor(max_workers=1) as pool:
-        pool.submit(rotate).result(timeout=5)
-    assert reader.prepare(SLUG, context).envelope_id == original.envelope_id
-    db_session.commit()
+        rotating = pool.submit(rotate)
+        try:
+            assert_blocked(database, blocker, waiter.result(timeout=5), rotating)
+            assert reader.prepare(SLUG, context).envelope_id == original.envelope_id
+        finally:
+            db_session.commit()
+        rotating.result(timeout=5)
     assert reader.prepare(SLUG, context).envelope_id != original.envelope_id
     assert store.open(SLUG, original.envelope_id, context) == original
 
 
-def test_readers_do_not_wait_for_uncommitted_rotation(
+def test_readers_wait_for_uncommitted_rotation(
     bank_storage: BankStorage, db_session: Session
 ) -> None:
     database = db_session.get_bind()
@@ -62,23 +68,33 @@ def test_readers_do_not_wait_for_uncommitted_rotation(
     context = {"purpose": "synthetic-rotation"}
     original = store.prepare(SLUG, context)
     entered, release = Event(), Event()
+    blocker: Future[int] = Future()
+    waiter: Future[int] = Future()
 
     def rotate() -> None:
         with Session(database) as writer, writer.begin():
             row = registry.scoped_key(writer, bank_id="BK-SAMP0001", organization_id=ORG_1)
             registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
+            blocker.set_result(backend_pid(writer))
             entered.set()
             assert release.wait(10)
 
-    with ThreadPoolExecutor(max_workers=1) as pool:
+    def read() -> None:
+        with Session(database) as peer:
+            waiter.set_result(backend_pid(peer))
+            assert store.for_session(peer).open(SLUG, original.envelope_id, context) == original
+            assert store.for_session(peer).prepare(SLUG, context).key_id == NEXT_KEY.key_id
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
         rotating = pool.submit(rotate)
+        assert entered.wait(5)
+        reading = pool.submit(read)
         try:
-            assert entered.wait(5)
-            assert store.open(SLUG, original.envelope_id, context) == original
-            assert store.prepare(SLUG, context).envelope_id == original.envelope_id
+            assert_blocked(database, blocker.result(timeout=5), waiter.result(timeout=5), reading)
         finally:
             release.set()
         rotating.result(timeout=5)
+        reading.result(timeout=5)
     current = store.prepare(SLUG, context)
     assert current.envelope_id != original.envelope_id and current.key_id == NEXT_KEY.key_id
     with Session(database) as db:
