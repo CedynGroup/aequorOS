@@ -369,7 +369,7 @@ def test_rotation_adds_version_and_keeps_old_ciphertext_readable(
 
 @pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
 @pytest.mark.parametrize("tier", ["raw", "canonical", "outputs", "temp"])
-def test_rotated_current_key_gates_historical_object_downloads(
+def test_historical_object_access_uses_its_retained_key_when_current_is_unavailable(
     bank_storage: BankStorage,
     db_session: Session,
     status: KeyStatus,
@@ -387,9 +387,20 @@ def test_rotated_current_key_gates_historical_object_downloads(
     with readable:
         assert readable.read() == content
     bank_storage.provider.set_status(NEXT_KEY, status)
+    _, historical = bank_storage.storage.read(location, original.version_id)
+    with historical:
+        assert historical.read() == content
+    replacement = content + b" replacement"
+    with pytest.raises(KeyUnavailableError) as write_refused:
+        bank_storage.storage.write(
+            location, io.BytesIO(replacement), metadata_for(SLUG, tier, replacement)
+        )
+    assert write_refused.value.revoked == (status == KeyStatus.DISABLED)
+    bank_storage.provider.set_status(KEY, status)
     with pytest.raises(KeyUnavailableError) as refused:
         bank_storage.storage.read(location, original.version_id)
     assert refused.value.revoked == (status == KeyStatus.DISABLED)
+    bank_storage.provider.set_status(KEY, KeyStatus.ACTIVE)
     bank_storage.provider.set_status(NEXT_KEY, KeyStatus.ACTIVE)
     _, recovered = bank_storage.storage.read(location, original.version_id)
     with recovered:
