@@ -472,6 +472,40 @@ def _pipes(script: str) -> bool:
     return "|" in code
 
 
+def _pipeline_failure_is_visible(script: str) -> bool:
+    lines = iter(
+        line for line in script.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    )
+    first = shlex.split(next(lines, ""), comments=True)
+    if not first or first[0] != "set":
+        return False
+    options = [first]
+    options.extend(
+        shlex.split(line, comments=True)
+        for line in lines
+        if line.lstrip().startswith(("set ", "set\t"))
+    )
+    if any(set(token) & set(";&|<>()") for command in options for token in command):
+        return False
+    probe = "\n".join(
+        shlex.join(command) + " || exit 2\nif false | cat; then exit 1; fi" for command in options
+    )
+    result = subprocess.run(
+        [
+            "bash",
+            "--noprofile",
+            "--norc",
+            "-c",
+            probe,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def test_no_ci_step_hides_an_exit_code_behind_a_pipe() -> None:
     """`pytest <gone> | tail` reports the exit code of `tail`, which is 0.
 
@@ -481,12 +515,26 @@ def test_no_ci_step_hides_an_exit_code_behind_a_pipe() -> None:
     has bitten this programme more than once, so the rule is mechanical: any
     multi-command shell block that pipes must turn on `pipefail`.
     """
+    for prologue, visible in (
+        ("set -euo pipefail", True),
+        ("# guard\nset -o pipefail # enable it", True),
+        ("echo pipefail", False),
+        ("# set -o pipefail", False),
+        ("set -eu", False),
+        ("set +o pipefail", False),
+        ("set -o pipefail && set +o pipefail", False),
+        ("set -o pipefail\nset +o pipefail", False),
+        ("set -o pipefail\nset +o pipefail\nset -o pipefail", False),
+        ("set -o pipefail\nset +e", True),
+        ("set -o unknown-option", False),
+    ):
+        assert _pipeline_failure_is_visible(prologue + "\nfalse | cat") == visible
     offenders: list[str] = []
     for workflow in sorted(WORKFLOWS.glob("*.yml")):
         for job, label, script in _workflow_run_blocks(workflow):
             if not _pipes(script):
                 continue
-            if "pipefail" in script:
+            if _pipeline_failure_is_visible(script):
                 continue
             offenders.append(f"{workflow.name}:{job}:{label}")
 

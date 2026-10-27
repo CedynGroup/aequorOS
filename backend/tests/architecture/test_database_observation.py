@@ -20,6 +20,7 @@ BACKEND = Path(__file__).parents[2]
 def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     tmp_path: Path,
 ) -> None:
+    _ = (tmp_path / "pytest.ini").write_text("[pytest]\n")
     # Exercise the same SQLite entry point in the parent as well as in the
     # child so this observer regression is itself database-using evidence.
     with sqlite3.connect(":memory:") as connection:
@@ -124,6 +125,7 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     assert isolated_result.returncode == 0, isolated_result.stdout + isolated_result.stderr
     assert (tmp_path / "isolated-attempts.txt").read_text()
     _assert_managed_service_scope(tmp_path)
+    _assert_combined_fixture_ownership(tmp_path)
     jobs = tmp_path / "jobs"
     for job, database in (("unit", False), ("integration", True)):
         job_dir = jobs / job
@@ -165,6 +167,118 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     )
     generate(evidence, catalogue, supplement)
     assert json.loads(catalogue.read_text())["cases"][node] == "unit"
+
+
+def _assert_combined_fixture_ownership(tmp_path: Path) -> None:
+    for scenario in (
+        "integration",
+        "unit",
+        "unit-caught",
+        "unit-setup",
+        "unit-setup-caught",
+        "shared",
+    ):
+        root = tmp_path / scenario
+        tests = root / "tests"
+        tests.mkdir(parents=True)
+        _ = (root / "pytest.ini").write_text("[pytest]\n")
+        _ = (tests / "__init__.py").write_text("")
+        cases: dict[str, str] = {}
+        for scope in ("function", "class", "module", "package", "session"):
+            path = tests / f"test_{scope}.py"
+            marker = root / f"cleaned-{scope}"
+            cleanup = "sqlite3.connect(':memory:').close()"
+            if scenario.endswith("caught") or scenario == "shared":
+                cleanup = "try: " + cleanup + "\n    except AssertionError: return"
+            integration = "    def test_integration(self, resource): pass\n"
+            unit = "    def test_unit(self): pass\n"
+            if scenario == "shared":
+                unit = "    def test_unit(self, request): request.getfixturevalue('resource')\n"
+            elif scenario.startswith("unit"):
+                integration = "    def test_integration(self): pass\n"
+                unit = "    def test_unit(self, resource): pass\n"
+            methods = unit + integration if scenario.startswith("unit") else integration + unit
+            resource = "    yield\n    " + cleanup + f"\n    Path({str(marker)!r}).touch()\n"
+            if scenario.startswith("unit-setup"):
+                resource = "    sqlite3.connect(':memory:').close()\n    yield\n"
+                if scenario.endswith("caught"):
+                    resource = (
+                        "    try: sqlite3.connect(':memory:').close()\n"
+                        "    except AssertionError: pass\n    yield\n"
+                    )
+            _ = path.write_text(
+                "import pytest, sqlite3\nfrom pathlib import Path\n"
+                + f"@pytest.fixture(scope={scope!r})\n"
+                + "def resource():\n"
+                + resource
+                + "class TestProbe:\n"
+                + methods
+            )
+            for suite in ("unit", "integration"):
+                cases[f"tests/test_{scope}.py::TestProbe::test_{suite}"] = suite
+        if scenario == "integration":
+            _ = (tests / "test_transition.py").write_text(
+                "import pytest, sqlite3\n"
+                "@pytest.fixture(scope='module', params=[0, 1])\n"
+                "def resource(request):\n    yield request.param\n"
+                "    if request.param == 0: sqlite3.connect(':memory:').close()\n"
+                "def test_transition(resource): assert resource in (0, 1)\n"
+            )
+            cases.update(
+                {
+                    "tests/test_transition.py::test_transition[0]": "integration",
+                    "tests/test_transition.py::test_transition[1]": "unit",
+                }
+            )
+        catalogue = root / "suites.json"
+        _ = catalogue.write_text(json.dumps({"cases": cases}))
+        _ = (root / "conftest.py").write_text(
+            "from pathlib import Path\nfrom scripts import test_suites\n"
+            + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
+            + "test_suites.catalogue.cache_clear()\n"
+        )
+        observations = root / "observations"
+        program = (
+            "import os,sys; "
+            + f"os.environ['CI_DATABASE_OBSERVATIONS']={str(observations)!r}; "
+            + "os.environ['CI_DATABASE_CONTEXT']='{}'; "
+            "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
+            "os.environ.pop('CI_DATABASE_CENSUS',None); "
+            "import pytest; sys.exit(pytest.main(['--rootdir=.', '-p', "
+            "'scripts.test_suites_plugin', '-p', 'scripts.database_observation_plugin', 'tests']))"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", program],
+            cwd=root,
+            env={
+                **os.environ,
+                "PYTHONPATH": str(BACKEND),
+                "PYTEST_ADDOPTS": "",
+                "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+                "CI_DATABASE_OBSERVATIONS": str(observations),
+                "TMPDIR": str(root),
+            },
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert (result.returncode == 0) == (scenario == "integration"), result.stdout + result.stderr
+        attempts = "".join(
+            path.read_text() for path in root.glob("unit-tests-*/connection-attempts-*.txt")
+        )
+        assert bool(attempts) == (scenario != "integration"), result.stdout + result.stderr
+        cleaned = {path.name.removeprefix("cleaned-") for path in root.glob("cleaned-*")}
+        expected = (
+            {"function", "class", "module", "package", "session"}
+            if scenario == "integration"
+            else {"function"} if scenario == "shared" else set[str]()
+        )
+        assert cleaned == expected, result.stdout + result.stderr
+        if scenario == "integration":
+            assert classify(observations)[0] == cases
+        else:
+            assert "Unit database connection guard failed" in result.stdout + result.stderr
 
 
 def _assert_managed_service_scope(tmp_path: Path) -> None:

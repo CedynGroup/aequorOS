@@ -7,12 +7,13 @@ import os
 import tempfile
 import xml.etree.ElementTree as ET
 from collections import Counter
-from collections.abc import Generator, Iterator
+from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import cast
 
 import pytest
+from _pytest.fixtures import FixtureDef, SubRequest
 from _pytest.terminal import TerminalReporter
 
 from scripts.ci_database_children import python_path
@@ -23,6 +24,8 @@ _PATCHES = pytest.StashKey[pytest.MonkeyPatch]()
 _DIRECTORY = pytest.StashKey[Path]()
 _ATTEMPTS = pytest.StashKey[Path]()
 _EXPECTED = pytest.StashKey[list[str]]()
+_FIXTURE_PATCHES = pytest.StashKey[pytest.MonkeyPatch]()
+_ATTEMPT_START = pytest.StashKey[int]()
 
 
 def _worker(config: pytest.Config) -> str:
@@ -36,7 +39,8 @@ def _install(config: pytest.Config) -> None:
         directory = Path(os.getenv("CI_UNIT_REPORT_DIR") or tempfile.mkdtemp(prefix="unit-tests-"))
     directory.mkdir(parents=True, exist_ok=True)
     attempts = directory / f"connection-attempts-{os.getpid()}.txt"
-    _ = attempts.write_text("")
+    if _ATTEMPTS not in config.stash:
+        _ = attempts.write_text("")
     patches = pytest.MonkeyPatch()
     patches.setenv("CI_NO_DATABASE_ATTEMPTS", str(attempts.resolve()))
     # Mixed migration modules gate even model-only checks on this setting.
@@ -47,6 +51,53 @@ def _install(config: pytest.Config) -> None:
     config.stash[_PATCHES] = patches
     config.stash[_DIRECTORY] = directory
     config.stash[_ATTEMPTS] = attempts
+
+
+@contextmanager
+def _fixture_guard(config: pytest.Config, enabled: bool) -> Iterator[None]:
+    active = _PATCHES in config.stash
+    if enabled == active:
+        yield
+        return
+    if active:
+        config.stash[_PATCHES].undo()
+        del config.stash[_PATCHES]
+    else:
+        _install(config)
+    try:
+        yield
+    finally:
+        if active:
+            _install(config)
+        else:
+            config.stash[_PATCHES].undo()
+            del config.stash[_PATCHES]
+
+
+def _guard_fixture_finalization(config: pytest.Config) -> None:
+    unit_fixtures: set[FixtureDef[object]] = set()
+    execute = cast(Callable[..., object], FixtureDef.execute)
+    finish = cast(Callable[..., None], FixtureDef.finish)
+
+    def guarded_execute(fixture: FixtureDef[object], request: SubRequest) -> object:
+        try:
+            return execute(fixture, request)
+        finally:
+            item = cast(pytest.Item, getattr(request, "_pyfuncitem"))
+            if item.get_closest_marker("unit") is not None:
+                unit_fixtures.add(fixture)
+
+    def guarded_finish(fixture: FixtureDef[object], request: SubRequest) -> None:
+        try:
+            with _fixture_guard(config, fixture in unit_fixtures):
+                finish(fixture, request)
+        finally:
+            unit_fixtures.discard(fixture)
+
+    patches = pytest.MonkeyPatch()
+    patches.setattr(FixtureDef, "execute", guarded_execute)
+    patches.setattr(FixtureDef, "finish", guarded_finish)
+    config.stash[_FIXTURE_PATCHES] = patches
 
 
 def pytest_load_initial_conftests(early_config: pytest.Config) -> None:
@@ -60,6 +111,8 @@ def pytest_load_initial_conftests(early_config: pytest.Config) -> None:
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "unit: database-free test; database connections are refused")
     config.addinivalue_line("markers", "integration: test requiring a database or external service")
+    if os.getenv("CI_DATABASE_CENSUS") != "1":
+        _guard_fixture_finalization(config)
     if os.getenv("CI_UNIT_REPORT_DIR") and not config.getoption("collectonly"):
         if config.getoption("markexpr") != "unit" or _DIRECTORY not in config.stash:
             raise pytest.UsageError("Unit CI owner requires the unit selector and connection guard")
@@ -135,6 +188,8 @@ def _managed_storage_environment(item: pytest.Item) -> Generator[None]:
 def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
     # Combined/local selections get the same refusal before fixture setup.
     with _managed_storage_environment(item):
+        path = item.config.stash.get(_ATTEMPTS, None)
+        item.stash[_ATTEMPT_START] = path.stat().st_size if path is not None else 0
         if (
             os.getenv("CI_DATABASE_CENSUS") == "1"
             or item.get_closest_marker("unit") is None
@@ -155,10 +210,10 @@ def pytest_runtest_makereport(
     item: pytest.Item, call: pytest.CallInfo[None]
 ) -> pytest.TestReport | None:
     # Emit a failed report so caught attempts also reach an xdist controller.
-    if call.when != "teardown" or item.get_closest_marker("unit") is None:
+    if call.when != "teardown" or _ATTEMPTS not in item.config.stash:
         return None
     path = item.config.stash[_ATTEMPTS]
-    attempts = path.read_text()
+    attempts = path.read_text()[item.stash.get(_ATTEMPT_START, 0) :]
     if not attempts:
         return None
     report = pytest.TestReport.from_item_and_call(item, call)
@@ -224,3 +279,5 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
 def pytest_unconfigure(config: pytest.Config) -> None:
     if _PATCHES in config.stash:
         config.stash[_PATCHES].undo()
+    if _FIXTURE_PATCHES in config.stash:
+        config.stash[_FIXTURE_PATCHES].undo()
