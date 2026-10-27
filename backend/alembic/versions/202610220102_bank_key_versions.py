@@ -256,7 +256,7 @@ def upgrade() -> None:
     for name, size in (("provider", 32), ("key_id", 2048), ("region", 64), ("owner_account", 12)):
         op.add_column("object_key_envelopes", sa.Column(name, sa.String(size), nullable=True))
     connection = op.get_bind()
-    with force_rls_suspended(connection, "object_key_envelopes"):
+    with force_rls_suspended(connection, "object_key_envelopes", "bank_encryption_keys"):
         backfill_references(connection)
     for name in ("provider", "key_id", "region", "owner_account"):
         op.alter_column("object_key_envelopes", name, nullable=False)
@@ -276,7 +276,14 @@ def upgrade() -> None:
             deferrable=True,
             initially="DEFERRED",
         )
-    backfill_versions(connection)
+    with force_rls_suspended(
+        connection,
+        "bank_encryption_keys",
+        "object_key_envelopes",
+        "canonical_counterparties",
+        "related_parties",
+    ):
+        backfill_versions(connection)
 
 
 def downgrade() -> None:
