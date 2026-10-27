@@ -35,7 +35,12 @@ export async function biApi(
   const response = await request.fetch(`${E2E_API_ORIGIN}/api/v1${route}`, {
     method: init.method ?? "GET",
     data: init.data,
-    headers: { Authorization: `Bearer ${await mintBackendToken(role)}` },
+    headers: {
+      Authorization: `Bearer ${await mintBackendToken(role)}`,
+      // Browser work between API calls can outlast Uvicorn's keep-alive window.
+      // Close each connection so fixture cleanup cannot race its expiry.
+      Connection: "close",
+    },
   });
   const text = await response.text();
   let body: unknown = text;
