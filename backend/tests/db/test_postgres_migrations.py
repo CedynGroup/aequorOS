@@ -412,16 +412,29 @@ def test_restricted_test_url_follows_privilege_policy(
         postgres_administrator_url()
 
 
-def test_reconciliation_migration_targets_the_regulatory_parameter_control_plane() -> None:
-    """The control-plane table is singular; a plural name breaks every fresh upgrade."""
-    migration_path = (
-        Path(__file__).parents[2]
-        / "alembic"
-        / "versions"
-        / "202608220032_reconciliation_control.py"
-    )
-
-    assert '_PARAM_TABLE = "regulatory_parameter"' in migration_path.read_text()
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_reconciliation_migration_targets_the_regulatory_parameter_control_plane(
+    catalog_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    with catalog_postgres_schema.app_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text(
+                    f"""
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM "{catalog_postgres_schema.schema_name}".regulatory_parameter
+                        WHERE param_code = :code
+                    )
+                    """
+                ),
+                {"code": "balance_identity_tolerance_pct"},
+            )
+            is True
+        )
 
 
 @pytest.mark.skipif(
