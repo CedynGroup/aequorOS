@@ -135,8 +135,8 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
             worker.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key})
             is False
         )
-        long_job = jobs.submit(worker.scalar, text("SELECT 42 FROM pg_sleep(65)"))
-        deadline = time.monotonic() + 75
+        long_job = jobs.submit(worker.scalar, text("SELECT 42 FROM pg_sleep(2)"))
+        deadline = time.monotonic() + 10
         with administrator.connect() as observer:
             while observer.scalar(
                 text("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid=ANY(:pids))"),
@@ -146,16 +146,16 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
                 assert time.monotonic() < deadline, (
                     "API idle transaction survived the short probe budget"
                 )
-                time.sleep(1)
+                time.sleep(0.05)
         for api_connection in (api, legacy_api):
             with pytest.raises(DBAPIError) as terminated:
                 api_connection.execute(text("SELECT 1"))
             assert getattr(terminated.value.orig, "sqlstate", None) == "25P03"
-        assert long_job.result(timeout=75) == 42
+        assert long_job.result(timeout=10) == 42
         assert (
             worker.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key}) is True
         )
-        assert bi.scalar(text("SELECT 42 FROM pg_sleep(1)")) == 42
+        assert bi.scalar(text("SELECT 42 FROM pg_sleep(0.1)")) == 42
         worker.commit()
         bi.commit()
 
@@ -197,13 +197,21 @@ def test_bi_export_budget_survives_the_interactive_role_default(
     timeout_logins: dict[str, Engine],
 ) -> None:
     with Session(timeout_logins["aqs_bi"]) as session:
+        assert session.scalar(text("SHOW statement_timeout")) == "10s"
+        # Keep the real login-default proof above, but scale the interactive
+        # budget for this disposable transaction and prove it is enforced.
+        session.execute(text("SET LOCAL statement_timeout = '100ms'"))
+        statement = select(literal(42)).select_from(func.pg_sleep(0.3))
+        with pytest.raises(DBAPIError) as cancelled, session.begin_nested():
+            session.execute(statement).all()
+        assert getattr(cancelled.value.orig, "sqlstate", None) == "57014"
         assert (
             run_select(
                 session,
-                select(literal(42)).select_from(func.pg_sleep(11)),
+                statement,
                 organization_id=ORG_1,
-                timeout_ms=120_000,
+                timeout_ms=2_000,
             )[0][0]
             == 42
         )
-        assert session.scalar(text("SHOW statement_timeout")) == "10s"
+        assert session.scalar(text("SHOW statement_timeout")) == "100ms"
