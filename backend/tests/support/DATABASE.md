@@ -86,6 +86,8 @@ Its implementation must become a default shared hook when that stack lands.
 Run the constructor guard with `uv run python scripts/test_database_guard.py`.
 `--strict` rejects all legacy constructors. The temporary allowlist matches
 counts by path and resolved constructor name, so unrelated line movements do
-not change it. It covers imported and assigned aliases, SQLAlchemy sync/async
-factories and psycopg sync/async connections. It does not attempt to interpret
-runtime-generated imports or reflective calls.
+not change it. Only `tests/support/database.py` is exempt, including in strict
+mode; other support files are checked. It covers imported and assigned aliases
+with lexical scoping and reassignment, SQLAlchemy sync/async factories and
+psycopg sync/async connections. It does not attempt to interpret runtime-generated
+imports or reflective calls.

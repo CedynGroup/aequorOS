@@ -1,8 +1,8 @@
 """Managed database connections for synthetic backend tests.
 
 Use ``test_db_connections`` for a fresh per-test database, or
-``isolated_database`` for an explicitly owned fixture lifetime. All
-engines, including extra pools and async engines, pass through the same hooks.
+``isolated_database`` for an explicitly owned fixture lifetime. Engines returned
+to tests, including extra pools and async engines, pass through the same hooks.
 """
 
 from __future__ import annotations
