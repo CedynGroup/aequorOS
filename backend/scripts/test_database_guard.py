@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import symtable
 from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
@@ -33,51 +34,214 @@ CONSTRUCTORS = frozenset(
 )
 
 
-def direct_constructors(source: str) -> Counter[str]:
-    """Resolve imported aliases and assigned aliases before checking calls."""
-    tree = ast.parse(source)
-    aliases: dict[str, str] = {}
+class ConstructorVisitor(ast.NodeVisitor):
+    def __init__(self, source: str) -> None:
+        self.table: symtable.SymbolTable = symtable.symtable(source, "<test>", "exec")
+        self.aliases: dict[str, str] = {}
+        self.enclosing = self.aliases
+        self.module_aliases = self.aliases
+        self.calls: Counter[str] = Counter()
+        self.children: dict[symtable.SymbolTable, list[symtable.SymbolTable]] = {}
+        self.functions: list[
+            tuple[
+                ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda,
+                symtable.SymbolTable,
+                dict[str, str],
+            ]
+        ] = []
 
-    def qualified(node: ast.expr) -> str:
+    def qualified(self, node: ast.expr) -> str:
         if isinstance(node, ast.Name):
-            return aliases.get(node.id, node.id)
+            return self.aliases.get(node.id, "")
         if isinstance(node, ast.Attribute):
-            return f"{qualified(node.value)}.{node.attr}"
+            return f"{self.qualified(node.value)}.{node.attr}"
         return ""
 
-    nodes = list(ast.walk(tree))
-    for node in nodes:
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                aliases[alias.asname or alias.name.split(".")[0]] = (
-                    alias.name if alias.asname else alias.name.split(".")[0]
+    def child_table(self, node: ast.expr | ast.stmt, name: str) -> symtable.SymbolTable:
+        children = self.children.setdefault(self.table, self.table.get_children())
+        index = next(
+            index
+            for index, child in enumerate(children)
+            if child.get_name() == name and child.get_lineno() == node.lineno
+        )
+        child = children.pop(index)
+        if child.get_type() not in {"function", "class"}:
+            child = next(
+                nested
+                for nested in child.get_children()
+                if nested.get_name() == name and nested.get_lineno() == node.lineno
+            )
+        return child
+
+    def visit_Call(self, node: ast.Call) -> None:
+        name = self.qualified(node.func)
+        if name in CONSTRUCTORS:
+            self.calls[name] += 1
+        self.generic_visit(node)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            self.aliases[alias.asname or alias.name.split(".")[0]] = (
+                alias.name if alias.asname else alias.name.split(".")[0]
+            )
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        for alias in node.names:
+            self.aliases[alias.asname or alias.name] = (
+                f"{node.module}.{alias.name}" if node.level == 0 else ""
+            )
+
+    def bindings(self, target: ast.expr, value: ast.expr | None = None) -> dict[str, str]:
+        if isinstance(target, ast.Name):
+            return {target.id: self.qualified(value) if value is not None else ""}
+        if isinstance(target, (ast.Tuple, ast.List)):
+            values = value.elts if isinstance(value, (ast.Tuple, ast.List)) else []
+            result: dict[str, str] = {}
+            for index, item in enumerate(target.elts):
+                result.update(
+                    self.bindings(item, values[index] if len(values) == len(target.elts) else None)
                 )
-        elif isinstance(node, ast.ImportFrom) and node.module is not None:
-            for alias in node.names:
-                aliases[alias.asname or alias.name] = f"{node.module}.{alias.name}"
-    # Fixed point covers chained aliases without depending on traversal order.
-    for _ in range(len(nodes)):
-        previous = aliases.copy()
-        for node in nodes:
-            if isinstance(node, ast.Assign):
-                target_name = qualified(node.value)
-                if target_name in CONSTRUCTORS or target_name.startswith(("sqlalchemy", "psycopg")):
-                    for target in node.targets:
-                        if isinstance(target, ast.Name):
-                            aliases[target.id] = target_name
-        if aliases == previous:
-            break
-    return Counter(
-        name
-        for node in nodes
-        if isinstance(node, ast.Call) and (name := qualified(node.func)) in CONSTRUCTORS
-    )
+            return result
+        if isinstance(target, ast.Starred):
+            return self.bindings(target.value)
+        self.visit(target)
+        return {}
+
+    def bind(self, target: ast.expr, value: ast.expr | None = None) -> None:
+        self.aliases.update(self.bindings(target, value))
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if isinstance(node.ctx, (ast.Store, ast.Del)):
+            self.aliases[node.id] = ""
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        self.visit(node.value)
+        name = self.qualified(node.value)
+        for target in node.targets:
+            self.bind(target, node.value)
+            if isinstance(target, ast.Name):
+                self.aliases[target.id] = name
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        self.visit(node.annotation)
+        if node.value is not None:
+            self.visit(node.value)
+            self.bind(node.target, node.value)
+
+    def visit_AugAssign(self, node: ast.AugAssign) -> None:
+        self.visit(node.value)
+        self.bind(node.target)
+
+    def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
+        self.visit(node.value)
+        self.bind(node.target, node.value)
+
+    def visit_For(self, node: ast.For | ast.AsyncFor) -> None:
+        self.visit(node.iter)
+        self.bind(node.target)
+        for statement in [*node.body, *node.orelse]:
+            self.visit(statement)
+
+    visit_AsyncFor = visit_For
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+        if node.type is not None:
+            self.visit(node.type)
+        if node.name is not None:
+            self.aliases[node.name] = ""
+        for statement in node.body:
+            self.visit(statement)
+        if node.name is not None:
+            self.aliases[node.name] = ""
+
+    def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        self.visit(node.args)
+        if node.returns is not None:
+            self.visit(node.returns)
+        self.functions.append((node, self.child_table(node, node.name), self.enclosing))
+        self.aliases[node.name] = ""
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        self.visit(node.args)
+        self.functions.append((node, self.child_table(node, "lambda"), self.enclosing))
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        for expression in [*node.decorator_list, *node.bases, *node.keywords]:
+            self.visit(expression)
+        previous_table, previous_aliases = self.table, self.aliases
+        self.table = self.child_table(node, node.name)
+        self.aliases = self.aliases.copy()
+        for statement in node.body:
+            self.visit(statement)
+        self.table, self.aliases = previous_table, previous_aliases
+        self.aliases[node.name] = ""
+
+    def visit_comprehension_scope(
+        self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
+    ) -> None:
+        self.visit(node.generators[0].iter)
+        previous_table, previous_aliases, previous_enclosing = (
+            self.table,
+            self.aliases,
+            self.enclosing,
+        )
+        if isinstance(node, ast.GeneratorExp):
+            self.table = self.child_table(node, "genexpr")
+        self.aliases = self.enclosing.copy()
+        self.enclosing = self.aliases
+        for generator in node.generators:
+            self.bind(generator.target)
+        for index, generator in enumerate(node.generators):
+            if index:
+                self.visit(generator.iter)
+            self.bind(generator.target)
+            for condition in generator.ifs:
+                self.visit(condition)
+        for expression in [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]:
+            self.visit(expression)
+        self.table, self.aliases, self.enclosing = (
+            previous_table,
+            previous_aliases,
+            previous_enclosing,
+        )
+
+    visit_ListComp = visit_comprehension_scope
+    visit_SetComp = visit_comprehension_scope
+    visit_DictComp = visit_comprehension_scope
+    visit_GeneratorExp = visit_comprehension_scope
+
+    def scan(self, tree: ast.Module) -> Counter[str]:
+        self.visit(tree)
+        for node, table, enclosing in self.functions:
+            self.table = table
+            self.aliases = enclosing.copy()
+            for symbol in table.get_symbols():
+                if symbol.is_local():
+                    self.aliases[symbol.get_name()] = ""
+                elif symbol.is_global():
+                    self.aliases[symbol.get_name()] = self.module_aliases.get(symbol.get_name(), "")
+            self.enclosing = self.aliases
+            if isinstance(node, ast.Lambda):
+                self.visit(node.body)
+            else:
+                for statement in node.body:
+                    self.visit(statement)
+        return self.calls
+
+
+def direct_constructors(source: str) -> Counter[str]:
+    """Resolve constructor bindings within each lexical scope in statement order."""
+    return ConstructorVisitor(source).scan(ast.parse(source))
 
 
 def inventory(root: Path) -> dict[str, dict[str, int]]:
     counts: dict[str, dict[str, int]] = {}
     for path in sorted((root / "tests").rglob("*.py")):
-        if path.is_relative_to(root / "tests/support"):
+        if path == root / "tests/support/database.py":
             continue
         found = direct_constructors(path.read_text(encoding="utf-8"))
         if found:

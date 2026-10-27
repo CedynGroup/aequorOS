@@ -5,7 +5,7 @@
   },
   "tests/api/test_liquidity.py": {
     "sqlalchemy.create_engine": 1,
-    "sqlalchemy.orm.sessionmaker": 4
+    "sqlalchemy.orm.sessionmaker": 1
   },
   "tests/architecture/test_bi_compiler_injection.py": {
     "sqlalchemy.create_engine": 1

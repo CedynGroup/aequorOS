@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
 
@@ -70,3 +71,255 @@ def test_guard_accepts_support_layer_and_unrelated_connect_calls(tmp_path: Path)
     allowlist = tmp_path / "allowlist.json"
     allowlist.write_text("{}")
     assert guard.main(["--root", str(tmp_path), "--allowlist", str(allowlist)]) == 0
+    assert guard.main(["--root", str(tmp_path), "--strict"]) == 0
+
+
+@pytest.mark.parametrize(
+    ("source", "count"),
+    [
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            def application():
+                sessionmaker = get_sessionmaker()
+                sessionmaker()
+                def nested():
+                    sessionmaker()
+                sessionmaker()
+            def direct():
+                sessionmaker()
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            def shadowed(sessionmaker):
+                sessionmaker()
+            def local():
+                from application import sessionmaker
+                sessionmaker()
+            def direct():
+                sessionmaker()
+            """,
+            1,
+        ),
+        (
+            """
+            def direct():
+                from sqlalchemy.orm import sessionmaker as make
+                other = make
+                other()
+                make = get_sessionmaker()
+                make()
+                other()
+            def unrelated():
+                make()
+            """,
+            2,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            sessionmaker()
+            saved = sessionmaker
+            sessionmaker = get_sessionmaker()
+            sessionmaker()
+            saved()
+            saved = get_sessionmaker()
+            saved()
+            """,
+            2,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            sessionmaker: object = get_sessionmaker()
+            sessionmaker()
+            """,
+            0,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            other, sessionmaker = sessionmaker, get_sessionmaker()
+            sessionmaker()
+            other()
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            def unbound():
+                sessionmaker()
+                sessionmaker = get_sessionmaker()
+            def direct():
+                sessionmaker()
+            """,
+            1,
+        ),
+        (
+            """
+            def direct():
+                def nested():
+                    make()
+                from sqlalchemy.orm import sessionmaker as make
+            from sqlalchemy.orm import sessionmaker
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            class UsesApplication:
+                sessionmaker = get_sessionmaker()
+                sessionmaker()
+                def direct(self):
+                    sessionmaker()
+            sessionmaker()
+            """,
+            2,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            shadowed, direct = lambda sessionmaker: sessionmaker(), lambda: sessionmaker()
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            [sessionmaker() for sessionmaker in factories]
+            {sessionmaker() for sessionmaker in factories}
+            {key: sessionmaker() for key, sessionmaker in factories}
+            (sessionmaker() for sessionmaker in factories)
+            sessionmaker()
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            def direct():
+                [sessionmaker() for sessionmaker in factories]
+                sessionmaker()
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            for sessionmaker in sessionmaker():
+                sessionmaker()
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            def outer():
+                sessionmaker = get_sessionmaker()
+                def direct():
+                    global sessionmaker
+                    sessionmaker()
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            def direct[T](value: T) -> T:
+                sessionmaker()
+                return value
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            async def direct():
+                sessionmaker()
+            async def application():
+                sessionmaker = get_sessionmaker()
+                sessionmaker()
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            class Holder:
+                sessionmaker = get_sessionmaker()
+                direct = [sessionmaker() for item in items]
+            """,
+            1,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            sessionmaker += other
+            sessionmaker()
+            """,
+            0,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            (sessionmaker := get_sessionmaker())
+            sessionmaker()
+            """,
+            0,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            with factory() as sessionmaker:
+                sessionmaker()
+            """,
+            0,
+        ),
+        (
+            """
+            from sqlalchemy.orm import sessionmaker
+            try:
+                work()
+            except Exception as sessionmaker:
+                sessionmaker()
+            """,
+            0,
+        ),
+    ],
+)
+def test_guard_counts_only_bound_constructors(tmp_path: Path, source: str, count: int) -> None:
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    module = tests / "test_example.py"
+    module.write_text(dedent(source))
+    allowlist = tmp_path / "allowlist.json"
+    allowlist.write_text(
+        json.dumps(
+            {"tests/test_example.py": {"sqlalchemy.orm.sessionmaker": count}} if count else {}
+        )
+    )
+    args = ["--root", str(tmp_path), "--allowlist", str(allowlist)]
+    assert guard.main(args) == 0
+    assert guard.main([*args, "--strict"]) == (1 if count else 0)
+
+
+@pytest.mark.parametrize("filename", ["helpers.py", "test_database.py", "nested/database.py"])
+def test_guard_rejects_constructors_outside_support_owner(tmp_path: Path, filename: str) -> None:
+    support = tmp_path / "tests/support"
+    module = support / filename
+    module.parent.mkdir(parents=True)
+    module.write_text("import psycopg\npsycopg.connect(url)\n")
+    (support / "database.py").write_text("import psycopg\npsycopg.connect(url)\n")
+    allowlist = tmp_path / "allowlist.json"
+    allowlist.write_text("{}")
+    args = ["--root", str(tmp_path), "--allowlist", str(allowlist)]
+    assert guard.main(args) == 1
+    assert guard.main([*args, "--strict"]) == 1
+    allowlist.write_text(json.dumps({f"tests/support/{filename}": {"psycopg.connect": 1}}))
+    assert guard.main(args) == 0
+    assert guard.main([*args, "--strict"]) == 1
