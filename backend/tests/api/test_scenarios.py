@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import UTC, datetime
+from queue import Queue
+from typing import cast
 from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import Engine, select, text
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
@@ -17,6 +18,7 @@ from app.schemas.scenarios import AssumptionUpdate
 from app.services.scenarios import update_assumption
 from tests.support.api_factories import CaseFactory
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.postgres import wait_for_blocker
 
 # These concurrency tests need PostgreSQL row locks and independent sessions.
 requires_committing_db = pytest.mark.committing_db
@@ -295,6 +297,10 @@ def test_concurrent_review_and_edit_serialize_on_the_assumption(
     assumption_id = UUID(scenario["assumptions"][0]["id"])
 
     with sessionmaker() as review_session:
+        engine = review_session.get_bind()
+        assert isinstance(engine, Engine)
+        holder_pid = cast(int, review_session.scalar(text("SELECT pg_backend_pid()")))
+        contender_pids: Queue[int] = Queue()
         assumption = review_session.scalar(
             select(ScenarioAssumption)
             .where(ScenarioAssumption.id == assumption_id)
@@ -308,6 +314,7 @@ def test_concurrent_review_and_edit_serialize_on_the_assumption(
 
         def edit_assumption() -> str:
             with sessionmaker() as edit_session:
+                contender_pids.put(cast(int, edit_session.scalar(text("SELECT pg_backend_pid()"))))
                 result = update_assumption(
                     edit_session,
                     TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
@@ -320,9 +327,11 @@ def test_concurrent_review_and_edit_serialize_on_the_assumption(
 
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(edit_assumption)
-            with pytest.raises(FutureTimeoutError):
-                future.result(timeout=0.2)
-            review_session.commit()
+            try:
+                wait_for_blocker(engine, contender_pids.get(timeout=10), holder_pid, future)
+                review_session.commit()
+            finally:
+                review_session.rollback()
             assert future.result(timeout=5) == "draft"
 
     with sessionmaker() as verification_session:
@@ -349,6 +358,10 @@ def test_concurrent_archive_prevents_an_assumption_edit(
     assumption_id = UUID(scenario["assumptions"][0]["id"])
 
     with sessionmaker() as archive_session:
+        engine = archive_session.get_bind()
+        assert isinstance(engine, Engine)
+        holder_pid = cast(int, archive_session.scalar(text("SELECT pg_backend_pid()")))
+        contender_pids: Queue[int] = Queue()
         archived = archive_session.scalar(
             select(RiskScenario).where(RiskScenario.id == scenario_id).with_for_update()
         )
@@ -358,6 +371,7 @@ def test_concurrent_archive_prevents_an_assumption_edit(
 
         def edit_assumption() -> int:
             with sessionmaker() as edit_session:
+                contender_pids.put(cast(int, edit_session.scalar(text("SELECT pg_backend_pid()"))))
                 try:
                     update_assumption(
                         edit_session,
@@ -373,9 +387,11 @@ def test_concurrent_archive_prevents_an_assumption_edit(
 
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(edit_assumption)
-            with pytest.raises(FutureTimeoutError):
-                future.result(timeout=0.2)
-            archive_session.commit()
+            try:
+                wait_for_blocker(engine, contender_pids.get(timeout=10), holder_pid, future)
+                archive_session.commit()
+            finally:
+                archive_session.rollback()
             assert future.result(timeout=5) == 409
 
 

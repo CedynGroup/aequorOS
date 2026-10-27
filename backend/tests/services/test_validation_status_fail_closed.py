@@ -14,7 +14,7 @@ persisted, visible and traceable, but cannot reach a regulatory number.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import cast
 
@@ -28,7 +28,15 @@ from app.domain.ingestion.constants import (
     INCLUDED_VALIDATION_STATUSES,
     VALIDATION_STATUSES,
 )
-from app.models import Bank, BankReportingPeriod, CanonicalPositionSnapshot
+from app.domain.ingestion.contracts import CanonicalRecords, GlAccountData
+from app.models import (
+    Bank,
+    BankReportingPeriod,
+    CanonicalGlAccount,
+    CanonicalPositionSnapshot,
+    IngestionBatch,
+    LineageRecord,
+)
 from app.reporting.service.bog_forms.catalog import all_form_specs
 from app.reporting.service.bog_forms.engine import FormResult
 from app.reporting.service.bog_forms.generation import compute_with_dependencies
@@ -43,6 +51,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.support.factories.canonical import seed_canonical_fixture
+from tests.support.helpers import ORG_1, USER_1
 
 
 def test_unvalidated_status_is_a_real_status_that_no_engine_reads() -> None:
@@ -55,16 +64,73 @@ def test_unvalidated_status_is_a_real_status_that_no_engine_reads() -> None:
     assert _INCLUDED_VALIDATION_STATUSES == INCLUDED_VALIDATION_STATUSES
 
 
-def test_absent_status_persists_as_pending_not_accepted() -> None:
-    """The exact defect P0-11 names, at the line it names."""
-    record_statuses = {("position", "KNOWN"): "warning"}
-
-    def status_of(entity_type: str, source_reference: str) -> str:
-        return record_statuses.get((entity_type, source_reference), ingestion.UNVALIDATED_STATUS)
-
-    assert status_of("position", "KNOWN") == "warning"
-    assert status_of("position", "NEVER_VALIDATED") == ingestion.UNVALIDATED_STATUS
-    assert status_of("position", "NEVER_VALIDATED") != "accepted"
+def test_absent_status_persists_as_pending_not_accepted(db_session: Session) -> None:
+    bank = Bank(
+        organization_id=ORG_1,
+        name="Synthetic validation persistence bank",
+        short_name="status-fixture",
+        currency="GHS",
+        jurisdiction_code="GH",
+        license_type="universal",
+        institution_type="universal_bank",
+    )
+    db_session.add(bank)
+    db_session.flush()
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=bank.id,
+        source_system="EXCEL_CSV",
+        as_of_date=date(2026, 7, 31),
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="validating",
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        bank_id=bank.id,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="missing-validation-status",
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    records = CanonicalRecords(
+        gl_accounts=[
+            GlAccountData(
+                source_reference=reference,
+                source_locator=f"GL:{index}",
+                account_code=reference,
+                name="Synthetic validation control",
+                account_class="ASSET",
+                currency="GHS",
+                balance=Decimal("100"),
+            )
+            for index, reference in enumerate(("KNOWN", "NEVER_VALIDATED"), start=2)
+        ]
+    )
+    # Exercise the production persistence boundary, including its missing-status fallback.
+    ingestion._persist_canonical(  # pyright: ignore[reportPrivateUsage]
+        db_session,
+        TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+        bank,
+        batch,
+        lineage,
+        records,
+        {("gl_account", "KNOWN"): "warning"},
+        (),
+    )
+    db_session.commit()
+    bank_id = bank.id
+    db_session.expire_all()
+    persisted = db_session.scalars(
+        select(CanonicalGlAccount).where(CanonicalGlAccount.bank_id == bank_id)
+    )
+    assert {row.source_reference: row.validation_status for row in persisted} == {
+        "KNOWN": "warning",
+        "NEVER_VALIDATED": "pending",
+    }
 
 
 @dataclass(frozen=True)
