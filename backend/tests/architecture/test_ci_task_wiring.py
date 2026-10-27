@@ -15,8 +15,11 @@ convention.
 from __future__ import annotations
 
 import ast
+import os
 import re
 import shlex
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 from typing import cast
@@ -163,13 +166,26 @@ def test_the_wiring_is_also_guarded_outside_the_task_system() -> None:
     assert preflight.is_file(), f"{preflight} is missing; the wiring guard is behind the wiring."
 
     workflow = (WORKFLOWS / "risk-service.yml").read_text()
-    assert "mise_wiring_preflight.py" in workflow, (
-        "risk-service.yml no longer runs the mise wiring preflight; a moved "
-        "backend/mise.toml would again surface as a recursion that reads like a hang."
-    )
     body = yaml.safe_load(workflow)
     jobs = body["jobs"]
     assert "preflight" in jobs, "risk-service.yml has no `preflight` job."
+    preflight_job = cast(dict[str, object], jobs["preflight"])
+    assert "if" not in preflight_job
+    assert not preflight_job.get("continue-on-error", False)
+    commands: list[list[str]] = []
+    for step in cast(list[dict[str, object]], preflight_job["steps"]):
+        script = step.get("run")
+        if not isinstance(script, str) or "if" in step or step.get("continue-on-error", False):
+            continue
+        if step.get("working-directory", ".") != ".":
+            continue
+        lexer = shlex.shlex(script.strip(), posix=True, punctuation_chars=";&|<>()\n")
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        commands.append(list(lexer))
+    assert ["python3", ".github/scripts/mise_wiring_preflight.py"] in commands, (
+        "The preflight job must directly execute the wiring guard and propagate its failure."
+    )
     mise_driven = {
         name
         for name, job in jobs.items()
@@ -518,19 +534,68 @@ def test_the_full_suite_ignores_exactly_what_its_sibling_tasks_run() -> None:
     assert all((TESTS.parent / path).exists() for path in ignored)
 
 
-def test_the_hermetic_run_still_proves_it_collected_every_module() -> None:
+def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path) -> None:
     """The collection-equality step is the only check that CI SAW every test.
 
     Everything else in the workflow answers "did the command pass?". Losing this
     step would not turn anything red — which is exactly why it needs a test of
     its own.
     """
-    workflow = (WORKFLOWS / "risk-service.yml").read_text()
-    assert "--collect-only" in workflow, (
-        "risk-service.yml no longer compares the test modules on disk against "
-        "the ones pytest collects. A module that collects nowhere would again "
-        "be invisible."
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
     )
+    steps = cast(list[dict[str, object]], document["jobs"]["architecture"]["steps"])
+    step = next(
+        step
+        for step in steps
+        if step.get("name") == "Every test module is collected by the hermetic run"
+    )
+    assert step["working-directory"] == "backend"
+    assert "if" not in step
+    assert not step.get("continue-on-error", False)
+    script = cast(str, step["run"])
+    for report in ("on_disk.txt", "collected.txt"):
+        script = script.replace(f"/tmp/{report}", shlex.quote(str(tmp_path / report)))
+
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    _ = (tmp_path / "pytest.ini").write_text("[pytest]\n")
+    for module in ("test_example.py", "example_test.py"):
+        _ = (tests / module).write_text("def test_example():\n    raise AssertionError\n")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    uv = bin_dir / "uv"
+    _ = uv.write_text(
+        '#!/bin/sh\n[ "$1" = run ] && [ "$2" = pytest ] || exit 97\nshift 2\n'
+        f'exec {shlex.quote(sys.executable)} -I -m pytest "$@"\n'
+    )
+    uv.chmod(0o755)
+    environment = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        "PYTEST_ADDOPTS": "",
+        "PYTEST_PLUGINS": "",
+    }
+    for extra_module, source, succeeds in (
+        ("test_extra.py", "def test_extra():\n    raise AssertionError\n", True),
+        ("test_extra.py", "VALUE = 1\n", False),
+        ("extra_test.py", "VALUE = 1\n", False),
+        ("test_extra.py", "raise RuntimeError('collection failure')\n", False),
+    ):
+        extra = tests / extra_module
+        _ = extra.write_text(source)
+        result = subprocess.run(
+            ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
+            cwd=tmp_path,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert (result.returncode == 0) == succeeds, result.stdout + result.stderr
+        extra.unlink()
 
 
 def test_duration_shards_preserve_worker_limit_and_schema_configuration() -> None:
