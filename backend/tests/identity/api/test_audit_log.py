@@ -12,8 +12,8 @@ import pytest
 from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field, JsonValue, TypeAdapter
-from sqlalchemy import create_engine, select, text
 from sqlalchemy import event as sqlalchemy_event
+from sqlalchemy import select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import ORMExecuteState, Session, sessionmaker
 from sqlalchemy.sql import Select
@@ -146,9 +146,8 @@ def audit_database() -> Iterator[ApiTestDatabase]:
             url = migrations.postgres_schema_url(
                 migrations.postgres_administrator_url(), schema.schema_name
             )
-            engine: Engine = create_engine(url)
             with managed_database_connections(url) as owner:
-                _ = owner.adopt_engine(engine)
+                engine: Engine = owner.engine()
                 seed_demo_tenants(engine)
                 yield ApiTestDatabase(database_url=url, engine=engine, seed=seed_demo_tenants)
 

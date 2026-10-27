@@ -2,9 +2,6 @@
   "tests/conftest.py": {
     "sqlalchemy.orm.sessionmaker": 1
   },
-  "tests/identity/api/test_audit_log.py": {
-    "sqlalchemy.create_engine": 1
-  },
   "tests/live_data/conftest.py": {
     "sqlalchemy.create_engine": 1
   },
