@@ -462,7 +462,7 @@ def test_vocabularies_are_exactly_the_contract() -> None:
         # vocabulary genuinely did; that the constant, the model CHECK and the
         # MIGRATED CHECK all agree is pinned separately, here by
         # ``test_check_constraints_admit_exactly_their_vocabulary`` and against
-        # Postgres by ``tests/db/test_bi_foundation_migration.py``.
+        # Postgres by ``tests/db/test_bi_owned_tables_parity.py``.
         "nlq",
     )
     assert bi.QUERY_LOG_DECISIONS == ("allowed", "denied")
