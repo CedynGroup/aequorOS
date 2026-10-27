@@ -579,7 +579,7 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
   prerequisites (object storage included) are owned by the
   [dashboard end-to-end guide](dashboard/README.md#end-to-end-playwright); for SSO, see its
   [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).
-  **Test databases are built once per pytest process, never per test**
+  **Default tenant test databases are built once per pytest process, never per test**
   (`backend/tests/conftest.py`): tenant API rollback-isolated tests share one
   schema through a savepoint-bound sessionmaker, and `@pytest.mark.committing_db`
   tests share a second schema that is TRUNCATEd and reseeded before each test.
