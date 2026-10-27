@@ -37,6 +37,16 @@ def pytest_configure() -> None:
     if not os.getenv(trace.DIRECTORY_ENV) or _nested:
         return
     original = cast(Callable[..., None], FixtureDef.finish)
+    original_execute = cast(Callable[..., object], FixtureDef.execute)
+
+    def execute(fixture: FixtureDef[object], request: SubRequest) -> object:
+        try:
+            return original_execute(fixture, request)
+        finally:
+            key = _FIXTURES.get(id(fixture))
+            if key is not None:
+                item = cast(pytest.Item, getattr(request, "_pyfuncitem"))
+                trace.emit("consumes", nodeid=item.nodeid, fixtures=[key])
 
     def finish(fixture: FixtureDef[object], request: SubRequest) -> None:
         key = _FIXTURES.get(id(fixture))
@@ -49,7 +59,9 @@ def pytest_configure() -> None:
             if key is not None:
                 _ = _STACK.pop()
                 _context()
+                _ = _FIXTURES.pop(id(fixture), None)
 
+    _PATCHES.setattr(FixtureDef, "execute", execute)
     _PATCHES.setattr(FixtureDef, "finish", finish)
 
 
@@ -59,18 +71,6 @@ def pytest_collection_finish(session: pytest.Session) -> None:
         _selected = True
         trace.emit("session_start")
         trace.emit("selected", nodeids=[item.nodeid for item in session.items])
-
-
-def _consumers(item: pytest.Item) -> None:
-    request = cast(object, getattr(item, "_request", None))
-    definitions = cast(dict[str, object], getattr(request, "_fixture_defs", {}))
-    trace.emit(
-        "consumes",
-        nodeid=item.nodeid,
-        fixtures=[
-            _FIXTURES[id(fixture)] for fixture in definitions.values() if id(fixture) in _FIXTURES
-        ],
-    )
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
@@ -84,17 +84,15 @@ def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
     try:
         yield
     finally:
-        _consumers(item)
         _node = ""
         _context()
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
-def pytest_fixture_setup(fixturedef: FixtureDef[object], request: SubRequest) -> Iterator[None]:
+def pytest_fixture_setup(fixturedef: FixtureDef[object]) -> Iterator[None]:
     if not os.getenv(trace.DIRECTORY_ENV) or _nested:
         yield
         return
-    _ = request
     global _serial  # noqa: PLW0603
     _serial += 1
     key = f"{os.getpid()}:{_serial}:{fixturedef.argname}"
@@ -106,15 +104,6 @@ def pytest_fixture_setup(fixturedef: FixtureDef[object], request: SubRequest) ->
     finally:
         _ = _STACK.pop()
         _context()
-
-
-@pytest.hookimpl(hookwrapper=True, tryfirst=True)
-def pytest_runtest_call(item: pytest.Item) -> Iterator[None]:
-    if os.getenv(trace.DIRECTORY_ENV) and not _nested:
-        _consumers(item)
-    yield
-    if os.getenv(trace.DIRECTORY_ENV) and not _nested:
-        _consumers(item)
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:

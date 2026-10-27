@@ -126,6 +126,7 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     assert (tmp_path / "isolated-attempts.txt").read_text()
     _assert_managed_service_scope(tmp_path)
     _assert_combined_fixture_ownership(tmp_path)
+    _assert_failed_fixture_consumers(tmp_path)
     jobs = tmp_path / "jobs"
     for job, database in (("unit", False), ("integration", True)):
         job_dir = jobs / job
@@ -167,6 +168,89 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     )
     generate(evidence, catalogue, supplement)
     assert json.loads(catalogue.read_text())["cases"][node] == "unit"
+
+
+def _assert_failed_fixture_consumers(tmp_path: Path) -> None:
+    profiles: dict[str, Path] = {}
+    scopes = ("function", "class", "module", "package", "session")
+    for mode in ("unit", "connect", "refused", "finalizer"):
+        root = tmp_path / f"failed-fixtures-{mode}"
+        root.mkdir()
+        _ = (root / "pytest.ini").write_text("[pytest]\n")
+        for scope in scopes:
+            _ = (root / f"test_{scope}.py").write_text(
+                "import os, pytest, sqlite3\nfrom pathlib import Path\n"
+                + f"@pytest.fixture(scope={scope!r})\n"
+                + "def failing(request):\n"
+                + "    mode = os.environ['FIXTURE_PROFILE']\n"
+                + "    if mode == 'unit': return\n"
+                + f"    with Path({str(root / ('setups-' + scope))!r}).open('a') as log:\n"
+                + "        log.write('setup\\n')\n"
+                + "    if mode == 'finalizer':\n"
+                + "        request.addfinalizer(lambda: sqlite3.connect(':memory:').close())\n"
+                + "    elif mode == 'refused':\n"
+                + f"        sqlite3.connect({str(root / 'missing/database.sqlite')!r})\n"
+                + "    else: sqlite3.connect(':memory:').close()\n"
+                + "    raise RuntimeError('fixture setup failed')\n"
+                + f"@pytest.fixture(scope={scope!r})\n"
+                + "def middle(failing): return failing\n"
+                + f"@pytest.fixture(scope={scope!r})\n"
+                + "def outer(middle): return middle\n"
+                + "class TestProbe:\n"
+                + "    def test_first(self, failing): pass\n"
+                + "    def test_nested(self, outer): pass\n"
+                + "    def test_dynamic(self, request): request.getfixturevalue('outer')\n"
+            )
+        observations = root / "observations"
+        program = (
+            "import os,sys; "
+            + f"os.environ['CI_DATABASE_OBSERVATIONS']={str(observations)!r}; "
+            + "os.environ['CI_DATABASE_CONTEXT']='{}'; "
+            + f"os.environ['FIXTURE_PROFILE']={mode!r}; "
+            + "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
+            + "os.environ.pop('CI_DATABASE_CENSUS',None); "
+            + "import pytest; sys.exit(pytest.main(['--rootdir=.', '-p', "
+            + "'scripts.database_observation_plugin', '.']))"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", program],
+            cwd=root,
+            env={
+                **os.environ,
+                "PYTHONPATH": str(BACKEND),
+                "PYTEST_ADDOPTS": "",
+                "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+            },
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert result.returncode == (0 if mode == "unit" else 1), result.stdout + result.stderr
+        nodes = [
+            f"test_{scope}.py::TestProbe::test_{name}"
+            for scope in scopes
+            for name in ("first", "nested", "dynamic")
+        ]
+        cases, inconclusive = classify(observations)
+        assert cases == dict.fromkeys(nodes, "unit" if mode == "unit" else "integration")
+        assert inconclusive == {}
+        if mode != "unit":
+            for scope in scopes:
+                count = len((root / f"setups-{scope}").read_text().splitlines())
+                assert count == (3 if scope == "function" else 1)
+        profiles[mode] = observations
+    output = tmp_path / "failed-fixtures-catalogue.json"
+    generate(profiles["unit"], output)
+    for mode in ("connect", "refused", "finalizer"):
+        with pytest.raises(ValueError, match="ownership drift"):
+            check(profiles[mode], output)
+        for full, supplement in (
+            (profiles[mode], profiles["unit"]),
+            (profiles["unit"], profiles[mode]),
+        ):
+            with pytest.raises(ValueError, match="Conflicting database evidence"):
+                generate(full, output, supplement)
 
 
 def _assert_combined_fixture_ownership(tmp_path: Path) -> None:
