@@ -4,7 +4,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session
 
 from app.core.key_management import registry
@@ -124,23 +124,27 @@ def test_bank_key_locks_are_isolated_between_test_schemas(
     if engine.dialect.name != "postgresql":
         pytest.skip("PostgreSQL advisory locks are required.")
     waiter: Future[int] = Future()
+    replacement = create_engine(engine.url)
 
     def same_schema_writer() -> None:
-        with Session(engine) as writer, writer.begin():
+        with Session(replacement) as writer, writer.begin():
             _ = writer.execute(text("SET LOCAL lock_timeout='1s'"))
             waiter.set_result(backend_pid(writer))
             registry.lock_bank_version(writer, ORG_1, "BK-SAMP0001")
 
-    with Session(engine) as reader:
-        registry.lock_bank_version(reader, ORG_1, "BK-SAMP0001", read=True)
-        blocker = backend_pid(reader)
-        with Session(_shared_committing_database.engine) as other, other.begin():
-            _ = other.execute(text("SET LOCAL lock_timeout='1s'"))
-            registry.lock_bank_version(other, ORG_1, "BK-SAMP0001")
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            writing = pool.submit(same_schema_writer)
-            try:
-                assert_blocked(engine, blocker, waiter.result(timeout=5), writing)
-            finally:
-                reader.rollback()
-            writing.result(timeout=5)
+    try:
+        with Session(engine) as reader:
+            registry.lock_bank_version(reader, ORG_1, "BK-SAMP0001", read=True)
+            blocker = backend_pid(reader)
+            with Session(_shared_committing_database.engine) as other, other.begin():
+                _ = other.execute(text("SET LOCAL lock_timeout='1s'"))
+                registry.lock_bank_version(other, ORG_1, "BK-SAMP0001")
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                writing = pool.submit(same_schema_writer)
+                try:
+                    assert_blocked(engine, blocker, waiter.result(timeout=5), writing)
+                finally:
+                    reader.rollback()
+                writing.result(timeout=5)
+    finally:
+        replacement.dispose()
