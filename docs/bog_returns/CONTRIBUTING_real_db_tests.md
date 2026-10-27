@@ -1,19 +1,18 @@
 # Converting seed-dependent tests to the real-DB pattern (Q06 completion)
 
-**Decision (founder, 2026-08-15):** tests use data from the database, not `data/` and not a
-seed. The retired `POST /banks/seed-demo` route is gone; ~21 test files still call it and fail
-at setup with `405`. Each is converted to run against the ACTUAL primary via the `real_client`
-foundation — opt-in, transaction-isolated (rolled back on teardown; prod is never mutated).
+The retired `POST /banks/seed-demo` route is gone. Current fixture selection and
+primary-database restrictions are owned by the
+[backend test database guide](../../backend/README.md#test-databases-and-the-primary-database).
+Connection construction and ownership are documented in the
+[test connection guide](../../backend/tests/support/DATABASE.md).
+Those guides supersede this conversion recipe's former primary-database directions.
 
 ## The pattern (reference conversion: `backend/tests/api/test_regulatory_liquidity.py`)
 
 - `from tests.real_data import REAL_BANK_ID, REAL_ORG_ID, REAL_USER_ID, real_headers,
 other_headers, requires_real_data`; module-level `pytestmark = requires_real_data`.
-- Fixtures: `real_client` (TestClient wired to the primary through ONE connection whose outer
-  transaction is rolled back — reads see real data, writes work inside the test, nothing commits)
-  and `real_session` (a DB session sharing that transaction; set
-  `session.info["organization_id"] = REAL_ORG_ID` before touching RLS tables). Defined in
-  `tests/conftest.py`.
+- Legacy fixture ownership and validation are described in the
+  [test connection guide](../../backend/tests/support/DATABASE.md).
 - Replace `_seed…(db_client)` / `POST /banks/seed-demo` with reads of the real bank: latest period
   via `GET /api/v1/banks/{REAL_BANK_ID}/reporting-periods`, real users via `real_headers(...)`,
   cross-tenant isolation via `other_headers()` (Horizon Bank's ACTIVE admin — authenticates, RLS
@@ -23,16 +22,11 @@ other_headers, requires_real_data`; module-level `pytestmark = requires_real_dat
   thresholds, sections populated, determinism (identical rerun → identical `input_hash`), tenant
   isolation, 404/422 paths. Where the old test pinned a seed number, assert the _relationship_
   that number was demonstrating.
-- Mutation tests are fine (they roll back): create connections/keys/packages/runs, then assert.
-  Anything the old test did by direct DB write, do via `real_session` on the shared transaction.
 - One real official run takes ~30 s (570k positions over a ~40 ms link) — prefer the inline
   dashboards / previews where the test's point isn't the run itself; keep the number of official
   runs per test file low.
-- Run: `REAL_DATA_DATABASE_URL="$(uv run python -c "from app.core.config import get_settings;
-print(get_settings().database.database_url)")" uv run pytest <file> -q -p no:cacheprovider`
-  (the tenant-scoped app-role URL — RLS enforced). Without the env var the file skips (the
-  Postgres full-suite CI run stays green). Never point a mutating test at the primary outside
-  `real_client`.
+- Run commands and database selection follow the
+  [backend test database guide](../../backend/README.md#test-databases-and-the-primary-database).
 
 ## Deliverable per file
 
