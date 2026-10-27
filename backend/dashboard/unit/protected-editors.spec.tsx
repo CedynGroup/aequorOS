@@ -526,7 +526,6 @@ it.each(["revoked", "unavailable"] as const)(
     expect(screen.getByLabelText("Annual fees")).toHaveValue(250);
     expect(screen.getByLabelText("Other responsibilities")).toHaveValue(
       "Unsaved responsibilities",
-      { delay: null },
     );
     expect(
       screen.queryByRole("heading", { name: "Edit Refreshed owner" }),
