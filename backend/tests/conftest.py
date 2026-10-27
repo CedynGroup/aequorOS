@@ -785,15 +785,13 @@ def db_session(request: pytest.FixtureRequest) -> Session:
 
 
 # ---------------------------------------------------------------------------
-# DB-backed real-data suite (opt-in): the shared real-tenant identities, the
-# auth-header helper, and the skip marker live in tests/real_data.py. These
-# fixtures wire the app to the ACTUAL primary through ONE connection whose outer
-# transaction is rolled back on teardown — reads see real data, writes are
-# visible within the test (SQLAlchemy ``create_savepoint`` turns each request's
-# ``commit()`` into a savepoint release), and the primary is never mutated.
-# ``real_client`` is the API surface; ``real_session`` shares the same
-# transaction for the few tests that manipulate rows directly (e.g. deleting a
-# parameter to force a failed run).
+# Legacy opt-in data fixtures: identities, auth helpers and the skip marker live
+# in tests/real_data.py. One connection holds the outer transaction;
+# ``create_savepoint`` turns each request's commit into a savepoint release.
+# ``real_client`` and ``real_session`` share that transaction until teardown.
+# Database selection and primary access follow
+# backend/README.md#test-databases-and-the-primary-database; connection ownership
+# is documented in tests/support/DATABASE.md.
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def _real_bound_sessionmaker(monkeypatch: pytest.MonkeyPatch) -> Iterator[sessionmaker]:
@@ -812,7 +810,7 @@ def _real_bound_sessionmaker(monkeypatch: pytest.MonkeyPatch) -> Iterator[sessio
     with database_connections(REAL_DATA_DATABASE_URL, default_schema="public") as owner:
         engine = owner.adopt_engine(get_engine(REAL_DATA_DATABASE_URL))
         with engine.connect() as connection:
-            outer = connection.begin()  # NEVER committed -> the primary is never mutated
+            outer = connection.begin()  # Request commits release savepoints inside this rollback.
             if connection.dialect.name == "sqlite":
                 connection.exec_driver_sql("BEGIN")
             bound_sessionmaker = managed_session_factory(
@@ -838,7 +836,7 @@ def real_client(
     fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
-    """A TestClient wired to the ACTUAL primary, transaction-isolated."""
+    """A TestClient using the configured opt-in database and outer rollback."""
     app = create_app()
     app.dependency_overrides[get_object_storage] = lambda: fake_storage
     app.dependency_overrides[get_ingestion_storage] = lambda: storage_engine

@@ -1,16 +1,10 @@
-"""Shared constants + helpers for the opt-in DB-backed real-data suite.
+"""Shared identities, auth helpers and skip marker for the legacy opt-in suite.
 
-The engine/API tests that used to build on the retired sample-bank seed now run
-against the ACTUAL primary database via the ``real_client`` fixture (defined in
-``tests/conftest.py``). This module is the importable home for the real-tenant
-identities, the auth-header helper, and the opt-in skip marker so every migrated
-test file shares one source of truth.
-
-Opt in by pointing ``REAL_DATA_DATABASE_URL`` at the primary's tenant-scoped
-app-role URL (the same value as ``DATABASE_URL`` in ``backend/.env``) so RLS is
-genuinely enforced — cross-tenant reads then see nothing, which is what the
-isolation tests assert. Unset -> the whole suite skips, keeping the hermetic CI
-run green. Mirrors ``tests/live_data`` (``LIVE_DATA_DATABASE_URL``).
+``REAL_DATA_DATABASE_URL`` supplies the database used by ``real_client`` and
+``real_session`` in ``tests/conftest.py``; unset, the suite skips. Fixture
+selection and primary-database restrictions are owned by
+``backend/README.md#test-databases-and-the-primary-database``. Connection
+construction and ownership are documented in ``tests/support/DATABASE.md``.
 """
 
 from __future__ import annotations
