@@ -35,7 +35,7 @@ name: Risk Service CI
 #                 workflow's `paths:` filter. Every other job needs it.
 #   static      — ruff, basedpyright (image build: risk-service-image.yml)
 #   architecture— CI task wiring, RLS-blind migration scanner, case/regulatory
-#                 dependency boundaries
+#                 dependency boundaries, explicitly owned database-free logic
 #   postgres    — aggregate of schema shards and the lock job: migration chain,
 #                 RLS policies, schema defaults, row/advisory locks.
 #                 `risk-service:test-postgres-schema` covers ALL of tests/db,
@@ -319,6 +319,17 @@ jobs:
       # missing.
       - name: Architecture and CI guards
         run: mise run risk-service:test-architecture
+      - name: Database-free logic tests (connections forbidden)
+        env:
+          CI_PURE_REPORT_DIR: ${{ runner.temp }}/pure-tests
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pure-tests/report.xml
+        run: mise run risk-service:test-pure
+      - name: Upload database-free execution evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pure-tests
+          path: ${{ runner.temp }}/pure-tests/
       # D-32's own recurrence guard, and the only one that is about CI rather
       # than about code. Everything else in this workflow answers "does the
       # command pass?"; this answers "did the command SEE every test?" — the
@@ -359,8 +370,8 @@ jobs:
           fi
           echo "Every test module on disk is collected."
 
-  # CI runs the full suite only against Postgres. Developers can still run the
-  # hermetic SQLite suite locally with `mise run risk-service:test`.
+  # CI runs database-backed tests against Postgres; pure tests run above.
+  # Developers can still run the hermetic SQLite suite with `mise run risk-service:test`.
 
   postgres-schema:
     name: Postgres schema shard ${{ matrix.shard }}/2

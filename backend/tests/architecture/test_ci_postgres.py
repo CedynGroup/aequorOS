@@ -389,3 +389,18 @@ def test_full_suite_floor_and_refresh_use_verified_execution_evidence(
             **{module: 750 for module in modules},
             BAO_MODULE: 1,
         }
+
+
+def test_pure_owner_change_does_not_select_an_empty_postgres_shard(
+    selection_repo: tuple[Path, str, Path],
+) -> None:
+    root, _, test = selection_repo
+    pure = test.with_name("test_credit_pd.py")
+    test.rename(pure)
+    _ = run_git(root, "add", "-A")
+    _ = run_git(root, "commit", "-qm", "pure owner baseline")
+    base = run_git(root, "rev-parse", "HEAD")
+    pure.write_text("def test_leaf():\n    assert 2 == 2\n")
+    _ = run_git(root, "add", "-A")
+    _ = run_git(root, "commit", "-qm", "pure leaf body")
+    assert plan(root, "pull_request", base)["mode"] == "full"

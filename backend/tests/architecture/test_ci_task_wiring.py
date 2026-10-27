@@ -421,7 +421,8 @@ def test_the_full_suite_ignores_exactly_what_its_sibling_tasks_run() -> None:
     """`risk-service:test-postgres-suite` skips the Postgres-only suites because
     `test-postgres-schema` and `test-postgres-locks` already run them in the
     same CI run, on the same image and role, and skips `tests/architecture`
-    because `test-architecture` runs it without a database at all. That is only
+    because `test-architecture` runs it without a database at all. Explicit pure
+    files belong to `test-pure` in that same non-database job. That is only
     a de-duplication while the sets match: an `--ignore` with no owner drops
     coverage from every job, and a lock file added to the locks task but not
     ignored here just runs twice again. Pinning equality keeps it
@@ -456,6 +457,7 @@ def test_the_full_suite_ignores_exactly_what_its_sibling_tasks_run() -> None:
         "risk-service:test-postgres-schema",
         "risk-service:test-postgres-locks",
         "risk-service:test-architecture",
+        "risk-service:test-pure",
     ):
         for argument in pytest_arguments(task):
             # A path inside one already owned (the architecture task's single

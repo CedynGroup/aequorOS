@@ -17,6 +17,11 @@ from collections import Counter
 from pathlib import Path
 from typing import cast
 
+if __package__:
+    from scripts.ci_pure import PURE_MODULES
+else:
+    from ci_pure import PURE_MODULES
+
 SHARDS = 4
 SCHEMA_SHARDS = 2
 DURATIONS = Path(__file__).with_name("ci_postgres_durations.json")
@@ -48,7 +53,8 @@ def module_shards(suite: str = "suite") -> dict[str, int]:
             raise ValueError(f"Invalid duration for {module}")
         if not math.isfinite(value) or value < 0:
             raise ValueError(f"Invalid duration for {module}")
-        durations[module] = max(float(value), 0.001)
+        if module not in PURE_MODULES:
+            durations[module] = max(float(value), 0.001)
     totals = [0.0] * SHARDS
     assignments: dict[str, int] = {}
     for module in sorted(durations, key=lambda name: (-durations[name], name)):
@@ -145,7 +151,10 @@ def affected_files(root: Path, event: str, base: str, *, worktree: bool = False)
             # Any textual reference elsewhere is enough to reject narrowing.
             if any(module.stem in (root / other).read_text() for other in tracked if other != path):
                 raise ValueError("Change is outside leaf test bodies")
-            selected.append(module.relative_to("backend").as_posix())
+            relative = module.relative_to("backend").as_posix()
+            if relative in PURE_MODULES:
+                raise ValueError("Non-Postgres owner always runs these tests")
+            selected.append(relative)
         return sorted(selected)
     except (OSError, subprocess.CalledProcessError, SyntaxError, ValueError):
         return []

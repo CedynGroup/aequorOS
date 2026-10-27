@@ -501,10 +501,23 @@ credential-vault encryption tests need no vault server. The live storage and
 OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
 
+The **Architecture and CI guards** job also runs `risk-service:test-pure`:
+11 explicitly listed database-free files (367 cases at the ownership change).
+Their paths stay in place; the Postgres suite excludes exactly the files owned
+by this task. `scripts/ci_pure.py` records this ownership and prevents affected-test
+planning from routing these files back into a Postgres shard. Changes to them
+use the conservative full Postgres fallback; the non-database owner always runs.
+The opt-in `scripts.ci_pure_plugin` refuses SQLAlchemy, psycopg (including async)
+and SQLite connections, including in Python subprocesses with fresh environments.
+A recorded attempt fails the session even if caught. Collection and JUnit
+identities must match exactly with no skips, failures or errors; the job uploads
+`pure-tests` collection, connection-attempt and JUnit evidence. The full-tree
+collection equality check and Postgres execution floors remain unchanged.
+
 CI runs the remaining PostgreSQL suite in four duration-balanced module shards,
 and the schema/RLS suite in two hash-based shards; lock tests retain their own job.
 Longest-first packing uses the committed `scripts/ci_postgres_durations.json`
-baseline. Each file stays together, including OpenBao's shared AppRole fixtures.
+baseline, excluding files with a non-Postgres owner. Each file stays together, including OpenBao's shared AppRole fixtures.
 New modules use stable hashing until the baseline is refreshed. The
 existing **Full suite on Postgres**, **Postgres schema, RLS and locks**, and
 **Risk service gate** check names stay stable. Shards upload their complete
@@ -551,8 +564,9 @@ floor and live OpenBao execution before replacing the baseline. JUnit case times
 include setup, call and teardown. Review and commit the resulting baseline; CI
 never writes it automatically. Refresh after substantial fixture or test layout
 changes, and compare actual job timings rather than treating summed test durations
-as wall time. The initial baseline came from the successful two-shard main run
-linked in its `source_run` field, verified with that run's two-shard verifier.
+as wall time. The baseline's `source_run` links the complete successful hosted run used for its
+weights. On an ownership change, verify the source artifacts against the old
+assignment before removing transferred modules from the refreshed weights.
 
 ### Test databases and the primary database
 

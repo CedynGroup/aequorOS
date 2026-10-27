@@ -70,6 +70,11 @@ run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv
 description = "Run the Postgres-only concurrency tests (local or supplied TEST_DATABASE_URL)"
 run = "uv run python scripts/local_services.py run --postgres -- uv run pytest tests/api/test_liquidity.py tests/api/test_scenarios.py tests/api/test_calculations.py tests/storage/test_key_rotation_concurrency.py"
 
+# Explicit database-free logic has its own execution guard in the architecture CI job.
+[tasks."risk-service:test-pure"]
+description = "Run explicitly database-free logic tests with connection and execution guards"
+run = "uv run pytest -p scripts.ci_pure_plugin tests/scripts/test_feature_moves.py tests/scripts/test_reporting_reorganization.py tests/scripts/test_fix_api_client_package.py tests/domain/irr/test_sf_properties.py tests/domain/authority/test_registry_completeness.py tests/domain/ingestion/test_reference_row_enforcement.py tests/domain/curves/test_nss.py tests/domain/test_capital_engine.py tests/domain/test_ftp_engine.py tests/domain/test_credit_pd.py tests/domain/test_ingestion_validation.py"
+
 # The architecture guards: CI task wiring (P0-15), the RLS-blind data-migration
 # scanner (P0-18) and the case/regulatory dependency boundary (ARCH-5). Fast,
 # hermetic, and deliberately its own gate so a boundary breach is reported as a
@@ -98,7 +103,8 @@ run = "uv run python scripts/local_services.py run --postgres --storage --role-a
 # `risk-service:test-postgres-locks`; CI execution and aggregation are documented
 # in README.md#run-tests. `tests/architecture` belongs to
 # `risk-service:test-architecture`; it never opens a database, so running it here
-# only repeated it on Postgres. They
+# only repeated it on Postgres. The explicit files owned by
+# `risk-service:test-pure` run in the same non-database CI job. All siblings
 # are ignored here so a failure surfaces once, in the job named for it, rather
 # than repeating the same checks here.
 # The hermetic `risk-service:test` still collects everything.
@@ -108,7 +114,7 @@ run = "uv run python scripts/local_services.py run --postgres --storage --role-a
 # README.md#test-databases-and-the-primary-database.
 [tasks."risk-service:test-postgres-suite"]
 description = "Run the full pytest suite against Postgres (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -n 4 --dist loadfile --ignore=tests/architecture --ignore=tests/db --ignore=tests/api/test_calculations.py --ignore=tests/api/test_liquidity.py --ignore=tests/api/test_scenarios.py --ignore=tests/storage/test_key_rotation_concurrency.py"
+run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -n 4 --dist loadfile --ignore=tests/architecture --ignore=tests/db --ignore=tests/api/test_calculations.py --ignore=tests/api/test_liquidity.py --ignore=tests/api/test_scenarios.py --ignore=tests/storage/test_key_rotation_concurrency.py --ignore=tests/scripts/test_feature_moves.py --ignore=tests/scripts/test_reporting_reorganization.py --ignore=tests/scripts/test_fix_api_client_package.py --ignore=tests/domain/irr/test_sf_properties.py --ignore=tests/domain/authority/test_registry_completeness.py --ignore=tests/domain/ingestion/test_reference_row_enforcement.py --ignore=tests/domain/curves/test_nss.py --ignore=tests/domain/test_capital_engine.py --ignore=tests/domain/test_ftp_engine.py --ignore=tests/domain/test_credit_pd.py --ignore=tests/domain/test_ingestion_validation.py"
 
 # The DB-backed regulatory/attestation/auth/vendor API surface. It is gated on
 # REAL_DATA_DATABASE_URL pointing at the PRIMARY database (it asserts against
