@@ -279,7 +279,8 @@ def blind_index(  # noqa: PLR0913 - explicit scope at the search boundary
 ) -> str:
     """Compute a scoped exact-match token using the unit's authenticated index key."""
     with db.no_autoflush:
-        row = registry.bank_key(db, organization_id, bank_id)
+        registry.lock_bank_version(db, organization_id, bank_id, read=True)
+        row = registry.bank_key(db, organization_id, bank_id, refresh=True)
         if row is None and get_key_settings().bank_key_required:
             raise KeyUnavailableError("The bank encryption key is not connected.")
         secret = _index_key(db, row) if row is not None else None
@@ -426,7 +427,8 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
             organization, bank = _scope(db, state, columns)
             scope = (organization, bank) if bank is not None else None
             if scope is not None and scope not in bank_rows:
-                bank_rows[scope] = registry.bank_key(db, organization, scope[1])
+                registry.lock_bank_version(db, organization, scope[1], read=True)
+                bank_rows[scope] = registry.bank_key(db, organization, scope[1], refresh=True)
             row = bank_rows[scope] if scope is not None else None
             if bank is not None and row is None and get_key_settings().bank_key_required:
                 raise KeyUnavailableError("The bank encryption key is not connected.")
