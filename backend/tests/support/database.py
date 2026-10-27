@@ -55,6 +55,7 @@ class EngineOptions(PoolOptions, total=False):
 
 
 class SessionDefaults(TypedDict, total=False):
+    class_: type[Session]
     info: dict[str, object]
     autoflush: bool
     expire_on_commit: bool
@@ -220,6 +221,11 @@ class TestDatabaseConnections:
             self._default_engine = self.engine()
         return self._default_engine
 
+    def _check_session_bind(self, bind: object) -> None:
+        engine = bind.engine if isinstance(bind, Connection) else bind
+        if not isinstance(engine, Engine) or engine not in self._engines:
+            raise ValueError("Session binds must belong to this test database factory")
+
     def session_factory(
         self,
         *,
@@ -231,28 +237,31 @@ class TestDatabaseConnections:
         info = dict(options.pop("info", {}))
         bind = options.pop("bind", None)
         if bind is not None:
-            engine = bind.engine if isinstance(bind, Connection) else bind
-            if engine not in self._engines:
-                raise ValueError("Session binds must belong to this test database factory")
+            self._check_session_bind(bind)
         if self.context.organization_id is not None:
             info.setdefault("organization_id", self.context.organization_id)
         if self.context.bank_id is not None:
             info.setdefault("bank_id", self.context.bank_id)
         owner = self
 
-        class ManagedSession(Session):
-            def __init__(self, **kwargs: Unpack[SessionOptions]) -> None:
+        class ManagedSessionFactory(sessionmaker[Session]):
+            def __call__(self, **local_kw: object) -> Session:
                 owner._check_open()
-                super().__init__(**kwargs)
-                owner._sessions.add(self)
+                defaults = cast(Mapping[str, object], self.kw)
+                owner._check_session_bind(local_kw.get("bind", defaults.get("bind")))
+                if local_kw.get("binds") is not None or defaults.get("binds") is not None:
+                    raise ValueError("Multiple session binds are not supported by test factories")
+                session = super().__call__(**local_kw)
+                owner._sessions.add(session)
                 if cleanup is not None:
-                    cleanup(self.close)
+                    cleanup(session.close)
+                return session
 
         options.setdefault("autoflush", False)
         options.setdefault("expire_on_commit", False)
         options["bind"] = bind if bind is not None else self._app_engine()
         options["info"] = info
-        return sessionmaker(class_=ManagedSession, **options)
+        return ManagedSessionFactory(**options)
 
     @contextmanager
     def session(self, **options: Unpack[SessionOptions]) -> Generator[Session]:
@@ -453,6 +462,21 @@ def managed_engine(
     )
     request.addfinalizer(database.close)
     return database.engine(**options)
+
+
+def adopt_application_engine(request: FinalizerOwner, engine: Engine) -> Engine:
+    """Own a real application factory's engine before its first checkout.
+
+    Existing managed engines retain their original fixture lifetime. Callers
+    preserve the application factory and its cache/settings behavior; this adds
+    the shared hooks and cleanup to otherwise unowned pools.
+    """
+    if engine in _ENGINE_OWNERS:
+        return engine
+    owner = database_connections(engine.url)
+    _ = owner.adopt_engine(engine)
+    request.addfinalizer(owner.close)
+    return engine
 
 
 def managed_session_factory(
