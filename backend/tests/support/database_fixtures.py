@@ -7,8 +7,19 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine
 
-from tests.support.database import TestDatabaseConnections, isolated_database
+from tests.support.database import (
+    TestDatabaseConnections,
+    install_application_engines,
+    isolated_database,
+)
+
+
+@pytest.fixture
+def managed_application_engines(administrator: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Own real application pools in a role suite's existing schema lifetime."""
+    install_application_engines(monkeypatch, administrator)
 
 
 @pytest.fixture

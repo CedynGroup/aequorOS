@@ -805,6 +805,7 @@ def test_bi_sessionmaker_is_none_without_a_bi_database_url() -> None:
 
 def test_bi_sessionmaker_binds_the_bi_pool_when_configured(
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     url = "postgresql+psycopg://bi:bi@localhost:1/never_connected"
     monkeypatch.setenv("BI_DATABASE_URL", url)
@@ -812,6 +813,7 @@ def test_bi_sessionmaker_binds_the_bi_pool_when_configured(
     get_bi_engine.cache_clear()
     try:
         factory = get_bi_sessionmaker()
+        _ = adopt_application_engine(request, get_bi_engine(url), administrative=True)
         assert factory is not None
         assert factory.kw["bind"] is get_bi_engine(url)
     finally:
@@ -819,9 +821,13 @@ def test_bi_sessionmaker_binds_the_bi_pool_when_configured(
         get_settings.cache_clear()
 
 
-def test_bi_engine_is_a_small_named_pool_on_postgres() -> None:
+def test_bi_engine_is_a_small_named_pool_on_postgres(request: pytest.FixtureRequest) -> None:
     get_bi_engine.cache_clear()
-    engine = get_bi_engine("postgresql+psycopg://bi:bi@localhost:1/never_connected")
+    engine = adopt_application_engine(
+        request,
+        get_bi_engine("postgresql+psycopg://bi:bi@localhost:1/never_connected"),
+        administrative=True,
+    )
     seen: dict[str, object] = {}
 
     class _Abort(Exception):
