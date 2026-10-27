@@ -13,8 +13,10 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
+from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
 from app.operator.deps import Operator, OperatorDb, record_operator_action
 from app.operator.inspection import require_active_inspection
 from app.operator.services import inspector_reads
@@ -30,8 +32,18 @@ from app.services.public_ids import normalize_public_id
 router = APIRouter(prefix="/tenants", tags=["operator-inspector-reads"])
 
 
+def _inspector_db(db: OperatorDb) -> Session:
+    """Apply disclosure placeholders to tenant inspection, not internal fleet work."""
+    db.info[SESSION_SUPPORT] = True
+    db.info[SESSION_STATE] = PresentationState(support=True)
+    return db
+
+
+InspectorDb = Annotated[Session, Depends(_inspector_db)]
+
+
 @router.get("/{org_id}/metrics", response_model=TenantMetricsRead)
-def get_tenant_metrics(org_id: str, db: OperatorDb, operator: Operator) -> TenantMetricsRead:
+def get_tenant_metrics(org_id: str, db: InspectorDb, operator: Operator) -> TenantMetricsRead:
     """The bank's computed module outputs: latest LiveMetric per module plus a
     latest RegulatoryRun summary per family. Session-gated + audited."""
     organization_id = normalize_public_id(org_id)
@@ -52,7 +64,7 @@ def get_tenant_metrics(org_id: str, db: OperatorDb, operator: Operator) -> Tenan
 @router.get("/{org_id}/findings", response_model=TenantFindingsRead)
 def get_tenant_findings(
     org_id: str,
-    db: OperatorDb,
+    db: InspectorDb,
     operator: Operator,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> TenantFindingsRead:
@@ -76,7 +88,7 @@ def get_tenant_findings(
 @router.get("/{org_id}/ingestion", response_model=TenantIngestionListRead)
 def get_tenant_ingestion(
     org_id: str,
-    db: OperatorDb,
+    db: InspectorDb,
     operator: Operator,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> TenantIngestionListRead:
@@ -99,7 +111,7 @@ def get_tenant_ingestion(
 
 @router.get("/{org_id}/ingestion/{batch_id}", response_model=TenantIngestionBatchDetailRead)
 def get_tenant_ingestion_batch(
-    org_id: str, batch_id: UUID, db: OperatorDb, operator: Operator
+    org_id: str, batch_id: UUID, db: InspectorDb, operator: Operator
 ) -> TenantIngestionBatchDetailRead:
     """One ingestion batch with validation/ETL reports and per-row translation
     failures — to diagnose a failed upload. Session-gated + audited; 404 if the
@@ -120,7 +132,7 @@ def get_tenant_ingestion_batch(
 
 
 @router.get("/{org_id}/config", response_model=TenantConfigRead)
-def get_tenant_config(org_id: str, db: OperatorDb, operator: Operator) -> TenantConfigRead:
+def get_tenant_config(org_id: str, db: InspectorDb, operator: Operator) -> TenantConfigRead:
     """Non-secret diagnostic config: bank jurisdiction/currency, active mappings,
     Board threshold register, SSO connection (no secret), and integration-key
     metadata (no raw key). Session-gated + audited."""

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Annotated, Final, Literal, cast
+from typing import Annotated, Final, Literal
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Query, Request, status
@@ -452,13 +452,13 @@ def get_tenant_db_session(
     refuse_impersonated_mutation(request, ctx)
     session = get_sessionmaker()()
     session.info["organization_id"] = ctx.organization_id
-    cast(Session, session).info[SESSION_SUPPORT] = ctx.impersonation_context is not None
+    session.info[SESSION_SUPPORT] = ctx.impersonation_context is not None
     if request.method in {"GET", "HEAD"}:
         presentation = getattr(request.state, SESSION_STATE, None)
         if not isinstance(presentation, PresentationState):
             presentation = PresentationState()
         presentation.support = ctx.impersonation_context is not None
-        cast(Session, session).info[SESSION_STATE] = presentation
+        session.info[SESSION_STATE] = presentation
     try:
         if ctx.authorization_version is None:
             validate_tenant_context(session, ctx)
