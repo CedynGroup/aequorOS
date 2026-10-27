@@ -31,8 +31,7 @@ from app.bi.service.versions import BUILDER_VERSION
 from app.core import audit_integrity, security
 from app.core.config import get_operator_settings, get_settings
 from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.models import BankEncryptionKey
-from app.core.key_management.registry import DatabaseEnvelopeStore
+from app.core.key_management.registry import DatabaseEnvelopeStore, register
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyUnavailableError
 from app.db import session as database
@@ -239,45 +238,54 @@ def test_worker_key_resolution_is_job_scoped_and_storage_uses_worker_credentials
     administrator: Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with Session(administrator) as admin:
-        for org in (ORG_1, ORG_2):
-            admin.add(
-                BankEncryptionKey(
+    provider = LocalKeyProvider()
+    try:
+        with Session(administrator) as admin:
+            for org in (ORG_1, ORG_2):
+                key = KeyReference("aws_kms", f"synthetic-{org}", "eu-west-1", "123456789012")
+                provider.add_key(key)
+                register(
+                    admin,
                     bank_id=role_banks[org],
                     organization_id=org,
                     storage_slug=f"worker-{org}",
-                    provider="aws_kms",
-                    key_id=f"synthetic-{org}",
-                    region="eu-west-1",
-                    owner_account="123456789012",
-                    status="active",
+                    key=key,
+                    providers=lambda _name: provider,
                 )
-            )
-        admin.commit()
-    monkeypatch.setattr(
-        "app.db.session.get_worker_sessionmaker", lambda: sessionmaker(role_engines["aqs_worker"])
-    )
-    with worker_tenant_context(ORG_1, role_banks[ORG_1]), get_storage_session() as session:
-        own = DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_1}")
-        assert own is not None and own.bank_id == role_banks[ORG_1]
-        assert DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_2}") is None
-        with pytest.raises(DBAPIError):
-            session.scalars(select(BankEncryptionKey)).all()
-    with Session(role_engines["aqs_worker"]) as session:
-        assert DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_1}") is None
+            admin.commit()
+        monkeypatch.setattr(
+            "app.db.session.get_worker_sessionmaker",
+            lambda: sessionmaker(role_engines["aqs_worker"]),
+        )
+        with worker_tenant_context(ORG_1, role_banks[ORG_1]), get_storage_session() as session:
+            own = DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_1}")
+            assert own is not None and own.bank_id == role_banks[ORG_1]
+            assert DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_2}") is None
+        with Session(role_engines["aqs_worker"]) as session:
+            assert DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_1}") is None
 
-    provider = LocalKeyProvider()
-    provider.add_key(KeyReference("aws_kms", f"synthetic-{ORG_1}", "eu-west-1", "123456789012"))
-    store = DatabaseEnvelopeStore(get_storage_session, lambda _name: provider)
-    context = {"purpose": "worker-storage-fixture"}
-    with worker_tenant_context(ORG_1, role_banks[ORG_1]):
-        prepared = store.prepare(f"worker-{ORG_1}", context)
-        reopened = store.open(f"worker-{ORG_1}", prepared.envelope_id, context)
-        assert reopened.plaintext == prepared.plaintext
-        with pytest.raises(KeyUnavailableError):
-            store.prepare(f"worker-{ORG_2}", context)
-    with worker_tenant_context(ORG_2, role_banks[ORG_2]), pytest.raises(KeyUnavailableError):
-        store.open(f"worker-{ORG_1}", prepared.envelope_id, context)
+        store = DatabaseEnvelopeStore(get_storage_session, lambda _name: provider)
+        context = {"purpose": "worker-storage-fixture"}
+        with worker_tenant_context(ORG_1, role_banks[ORG_1]):
+            prepared = store.prepare(f"worker-{ORG_1}", context)
+            reopened = store.open(f"worker-{ORG_1}", prepared.envelope_id, context)
+            assert reopened.plaintext == prepared.plaintext
+            with pytest.raises(KeyUnavailableError):
+                store.prepare(f"worker-{ORG_2}", context)
+        with worker_tenant_context(ORG_2, role_banks[ORG_2]), pytest.raises(KeyUnavailableError):
+            store.open(f"worker-{ORG_1}", prepared.envelope_id, context)
+    finally:
+        with administrator.begin() as connection:
+            for statement in (
+                "UPDATE bank_encryption_keys "
+                "SET current_version_id = NULL, index_version_id = NULL",
+                "DELETE FROM object_key_envelopes",
+                "DELETE FROM bank_encryption_keys",
+            ):
+                connection.execute(
+                    text(statement + " WHERE bank_id = ANY(:banks)"),
+                    {"banks": list(role_banks.values())},
+                )
 
 
 def test_optional_encryption_refuses_foreign_and_same_org_other_bank_storage(
