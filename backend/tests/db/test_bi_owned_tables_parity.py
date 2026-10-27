@@ -91,7 +91,6 @@ PREFIXED_IN_METADATA: frozenset[str] = frozenset(
 #: The subject of every axis below.
 BI_OWNED_TABLES: tuple[str, ...] = tuple(sorted(DECLARED_BY_BI_MODULES | PREFIXED_IN_METADATA))
 
-#: What the three older suites take their subjects from, unioned.
 HAND_REGISTERED: frozenset[str] = frozenset(
     (*BI_TABLES, *BI_CONTENT_TABLES, *BI_NOTIFICATION_TABLES, *BI_COMMENTARY_TABLES)
 )
@@ -158,12 +157,6 @@ def test_the_subject_is_derived_from_the_model_modules_and_the_prefix() -> None:
 
 
 def test_every_bi_owned_table_is_registered_in_exactly_one_hand_tuple() -> None:
-    """The three older suites read the tuples; this is what keeps them honest.
-
-    Fails by name in both directions: a table a BI model module declares (or a
-    ``bi_``-named table anywhere) that no tuple registers — the 26th-table case
-    — and a tuple entry that no module declares.
-    """
     unregistered = sorted(set(BI_OWNED_TABLES) - HAND_REGISTERED)
     undeclared = sorted(HAND_REGISTERED - set(BI_OWNED_TABLES))
     assert not unregistered, (
