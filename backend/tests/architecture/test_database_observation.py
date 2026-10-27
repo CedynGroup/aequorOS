@@ -102,6 +102,27 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     with pytest.raises(ValueError, match="ownership drift"):
         check(evidence, catalogue)
 
+    isolated = tmp_path / "isolated_guard.py"
+    _ = isolated.write_text(
+        "import os, subprocess, sys\n"
+        + f"os.environ['CI_NO_DATABASE_ATTEMPTS']={str(tmp_path / 'isolated-attempts.txt')!r}\n"
+        + "from scripts.ci_no_database import install\ninstall()\n"
+        + "result = subprocess.run([sys.executable, '-I', '-S', '-c', "
+        + "\"import sqlite3; sqlite3.connect(':memory:')\"], "
+        + "env={}, capture_output=True, text=True)\n"
+        + "assert result.returncode != 0, 'isolated child bypassed refusal'\n"
+        + "assert 'Database connections are forbidden' in result.stderr, result.stderr\n"
+    )
+    isolated_result = subprocess.run(
+        [sys.executable, str(isolated)],
+        env={**os.environ, "PYTHONPATH": str(BACKEND)},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert isolated_result.returncode == 0, isolated_result.stdout + isolated_result.stderr
+    assert (tmp_path / "isolated-attempts.txt").read_text()
     jobs = tmp_path / "jobs"
     for job, database in (("unit", False), ("integration", True)):
         job_dir = jobs / job
@@ -170,7 +191,7 @@ def test_census_rejects_incomplete_or_ambiguous_evidence(tmp_path: Path, mutatio
     else:
         events.append({"kind": "python_child", "pid": 1, "nodeid": nodeid, "child": 2})
     (tmp_path / "events-1.jsonl").write_text("\n".join(json.dumps(e) for e in events) + "\n")
-    if mutation in {"missing-report", "child"}:
+    if mutation == "child":
         cases, inconclusive = classify(tmp_path)
         assert cases == {nodeid: "integration"}
         assert set(inconclusive) == {nodeid}

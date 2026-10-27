@@ -22,6 +22,8 @@ from typing import cast
 import psycopg
 from sqlalchemy import Engine
 
+from scripts.ci_database_children import instrument_command
+
 DIRECTORY_ENV = "CI_DATABASE_OBSERVATIONS"
 CONTEXT_ENV = "CI_DATABASE_CONTEXT"
 RUN_ENV = "CI_DATABASE_OBSERVATION_RUN"
@@ -103,9 +105,15 @@ def install() -> None:
             [bootstrap, str(backend), environment.get("PYTHONPATH", "")]
         )
         kwargs["env"] = environment
+        command = args[1] if len(args) > 1 else kwargs.get("args")
+        replacement = instrument_command(command)
+        if len(args) > 1:
+            args = (args[0], replacement, *args[2:])
+        else:
+            kwargs["args"] = replacement
         original_popen(*args, **kwargs)
-        # Python launchers must confirm that sitecustomize was loaded. Isolated
-        # Python (-I/-S) is inconclusive rather than proof of database freedom.
+        # Launchers must confirm instrumentation; an unconfirmed child cannot
+        # establish database freedom. Isolated inline programs use stdlib tracing.
         command = args[1] if len(args) > 1 else kwargs.get("args")
         if isinstance(command, (list, tuple)) and command and args:
             executable = Path(str(cast(list[object], command)[0])).name

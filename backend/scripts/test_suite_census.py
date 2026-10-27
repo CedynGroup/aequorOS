@@ -98,6 +98,12 @@ def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:  # noqa:
         counts = Counter(when for when, _ in phases)
         if any(count > 1 for count in counts.values()):
             raise ValueError(f"Duplicate execution observation: {nodeid}")
+        phase_map = dict(phases)
+        required = {"setup", "teardown"}
+        if phase_map.get("setup") == "passed":
+            required.add("call")
+        if set(phase_map) != required:
+            raise ValueError(f"Incomplete execution phases: {nodeid}")
         database = nodeid in direct or bool(consumers[nodeid] & fixture_database)
         if consumers[nodeid] & uncertain_fixtures:
             uncertain.add(nodeid)

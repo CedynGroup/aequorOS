@@ -2901,7 +2901,7 @@
   "reportUnknownVariableType": 3
  },
  "tests.architecture.test_ci_task_wiring": {
-  "reportAny": 26,
+  "reportAny": 25,
   "reportUnknownArgumentType": 2,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 6

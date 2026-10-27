@@ -14,6 +14,8 @@ from typing import NoReturn, cast
 import psycopg
 from sqlalchemy import Engine
 
+from scripts.ci_database_children import instrument_command
+
 _ORIGINAL_POPEN = cast(Callable[..., None], subprocess.Popen.__init__)
 
 
@@ -65,6 +67,12 @@ def install(patch: Callable[[object, str, object], None] = setattr) -> None:
             [guard, str(backend), environment.get("PYTHONPATH", "")]
         )
         kwargs["env"] = environment
+        command = args[1] if len(args) > 1 else kwargs.get("args")
+        replacement = instrument_command(command)
+        if len(args) > 1:
+            args = (args[0], replacement, *args[2:])
+        else:
+            kwargs["args"] = replacement
         _ORIGINAL_POPEN(*args, **kwargs)
 
     patch(subprocess.Popen, "__init__", guarded_popen)
