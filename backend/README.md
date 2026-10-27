@@ -530,9 +530,9 @@ exists, retained for seven days.
 
 Main pushes and queued merge results always run the full suite. On pull requests,
 only changes confined to the
-bodies of existing, unreferenced `tests/domain/test_*.py` tests (including nested
-domain directories), or comments and formatting in those modules, select their
-affected modules. Changes to fixtures, decorators, production code, new/deleted
+bodies of existing, unreferenced `tests/domain/test_*.py` tests owned by the
+Postgres suite (including nested domain directories), or comments and formatting
+in those modules, select their affected modules. Changes to fixtures, decorators, production code, new/deleted
 tests, configuration or an uncertain diff select the full suite. Schema/RLS,
 locks, architecture and storage gates keep their coverage. The stdlib planner/coverage verifier is
 [`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via

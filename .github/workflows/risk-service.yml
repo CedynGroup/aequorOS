@@ -78,9 +78,10 @@ name: Risk Service CI
 # EVERY TEST GROUP ALSO PROVES IT RAN. pytest exits 0 when everything it collected
 # skipped itself, which is how the storage contract sat at `27 passed, 18
 # skipped` for months and how the concurrency tests ran in no environment at
-# all. Each suite now writes a JUnit report via PYTEST_ADDOPTS — no task command
-# changes — and a following step asserts a floor of tests actually executed
+# all. Postgres and storage suites write a JUnit report via PYTEST_ADDOPTS,
+# and a following step asserts a floor of tests actually executed
 # (.github/scripts/assert_pytest_ran.py or the shard aggregate verifier).
+# The pure owner's execution guard is documented in backend/README.md#run-tests.
 # The storage job, the schema/RLS aggregate
 # and the lock job additionally allow ZERO skips, because the environment each
 # stands up is supposed to satisfy its whole suite — and an RLS proof can

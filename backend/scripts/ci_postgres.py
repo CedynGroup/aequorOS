@@ -40,7 +40,7 @@ def module_shards(suite: str = "suite") -> dict[str, int]:
     """Longest-first packing keeps fixture-sharing modules on a single worker.
 
     Unrecorded modules use the stable hash fallback until the next main refresh.
-    Assignment depends only on the committed baseline, never on a PR subset.
+    Assignment uses the committed baseline and ownership, never a PR subset.
     """
     if suite == "schema":
         return {}
