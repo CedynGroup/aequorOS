@@ -1,6 +1,6 @@
 """PostgreSQL proof of BI version immutability and dashboard deletion cascades.
 
-Structural parity across all BI-owned tables lives in
+Column, CHECK and RLS parity across all BI-owned tables lives in
 ``test_bi_owned_tables_parity.py``. This suite retains the behavioral proof that
 versions cannot be rewritten but can be removed by their dashboard's cascade.
 """
