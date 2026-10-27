@@ -129,7 +129,7 @@ def forward_migrated_postgres_schema(
 
 @pytest.fixture(scope="module")
 def catalog_postgres_schema() -> Iterator[MigratedPostgresSchema]:
-    """Share a forward-only schema among this module's read-only catalog checks."""
+    """Consumers share this schema and must leave its migrated state unchanged."""
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setenv("APP_ENV", "test")
         monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "1")
