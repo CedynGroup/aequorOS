@@ -451,6 +451,25 @@ duplicate collection and conflicting suite markers before marker deselection.
 SQLite counts as a database. Optional primary-data tests retain their explicit
 opt-in; the census never supplies primary-bank data.
 
+[`scripts/database_contracts.json`](scripts/database_contracts.json) records exact
+protected PostgreSQL contract identities with grouped reasons. Changes to that
+reviewed catalogue are deliberate contract changes, not a way to lower a CI count
+floor. A moved or renamed case must retain its integration guarantee and update
+its protected identity in the same review.
+
+The suite plugin rejects unit ownership of protected cases, direct or indirect
+requests for the standard `current_annex_repository` fake fixture, and database
+resource fixtures in unit tests. The fake is also forbidden under database,
+storage, API and identity test paths. Full unit CI collection rejects stale
+protected identities. Selected protected cases require PostgreSQL in CI (or with
+`CI_REQUIRE_DATABASE_CONTRACTS=1`), and skipping one fails its execution.
+
+The catalogue explicitly identifies the existing primary-data opt-in cases.
+Their integration ownership and fake prohibition always apply; execution remains
+conditional on their existing `REAL_DATA_DATABASE_URL` profile. The census never
+supplies that URL or makes primary data a CI prerequisite. When explicitly
+enabled, those cases also require PostgreSQL and may not skip their guarantees.
+
 Refresh ownership after adding tests or changing database use:
 
 ```bash
@@ -593,7 +612,8 @@ OpenBao execution guards remain in
 
 The integration aggregate also joins the lock and storage execution reports with
 unit and Postgres shard evidence. Their selected union must match the classified
-collection exactly once. Storage integration cases run only in the storage job,
+collection exactly once. Every selected protected case must execute successfully
+without skips in its Postgres owner. Storage integration cases run only in the storage job,
 except key-rotation concurrency, which belongs to locks. The storage job also
 runs for merge groups. A conservative affected-module run excludes only the
 explicitly unselected suite cases from this cross-owner comparison.

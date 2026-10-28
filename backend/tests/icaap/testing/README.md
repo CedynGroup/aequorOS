@@ -24,32 +24,6 @@ concurrency/locks/timeouts, encryption/key persistence/rotation/recovery, atomic
 side effects, jobs and immutable/audit/seal history. The complete freeze-to-validate
 control and the adapter's real SQL/isolation matrix remain integration-owned.
 
-## Executable ownership guard
-
-`scripts/database_contracts.json` records exact protected identities with grouped
-reasons. Changes to that reviewed catalogue are deliberate changes to a database
-contract, not a way to lower a CI count floor. A moved or renamed case must retain
-its integration guarantee and update its protected identity in the same review.
-
-The existing suite plugin rejects unit ownership of protected cases, direct or
-indirect requests for the standard fake fixture, and database resource fixtures
-in unit tests. The fake is also forbidden under database, storage, API and identity
-test paths. Full CI collection rejects stale protected identities. Selected
-protected cases require a PostgreSQL backend in CI (or with
-`CI_REQUIRE_DATABASE_CONTRACTS=1`), and skipping one fails its execution.
-
-The catalogue explicitly identifies the existing primary-data opt-in cases.
-Their integration ownership and fake prohibition always apply; execution remains
-conditional on their existing `REAL_DATA_DATABASE_URL` profile. This change never
-supplies that URL or turns primary data into a CI prerequisite. When explicitly
-enabled, those cases also require PostgreSQL and may not skip their guarantees.
-
-The existing partition verifier checks actual JUnit results: every selected
-protected case executes once, successfully and without skips, in its Postgres
-owner. Existing schema/lock/suite/storage ownership and full-tree disjoint coverage
-remain intact. Existing unit connection refusal also covers inherited Python
-children; a parent monkeypatch alone does not establish subprocess isolation.
-
-After changing tests, record observed ownership and refresh the exact-test
-catalogue as described in [the test guide](../../../README.md#run-tests). Keep the
-observation/JUnit artifacts and compare full collection with all execution owners.
+The [backend test guide](../../../README.md#run-tests) owns the protected database
+contract catalogue, fake-fixture restrictions, required backend and execution
+checks, and census refresh procedure.
