@@ -929,7 +929,6 @@
   "reportUnknownMemberType": 2
  },
  "app.operator.services.inspector_fix": {
-  "reportAny": 1,
   "reportUnnecessaryIsInstance": 1
  },
  "app.operator.services.inspector_reads": {
@@ -941,7 +940,6 @@
   "reportUnknownVariableType": 2
  },
  "app.operator.services.operator_views": {
-  "reportAny": 1,
   "reportMissingParameterType": 1,
   "reportUnknownArgumentType": 1,
   "reportUnknownParameterType": 1

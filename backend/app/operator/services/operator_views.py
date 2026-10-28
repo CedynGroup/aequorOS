@@ -733,7 +733,7 @@ def stuck_dedup_batches(db: Session, *, limit: int) -> StuckDedupBatchesRead:
     """Ingestion batches whose out-of-band ML-ETL dedup pass can no longer run.
 
     "Can no longer run" is a precise state, not a guess: the batch's own
-    ``etl_report.dedup_status`` still reads ``deferred`` or ``failed`` AND its
+    ``dedup_status`` still reads ``deferred`` or ``failed`` AND its
     most recent ``etl_dedup`` job is terminal with every attempt used, so the
     queue will never touch it again. A batch whose job is still queued/running,
     or which has retries left, is working as designed and is not listed.
@@ -755,7 +755,7 @@ def stuck_dedup_batches(db: Session, *, limit: int) -> StuckDedupBatchesRead:
     )
     rows: list[StuckDedupBatchRead] = []
     for batch in batches:
-        dedup_status = (batch.etl_report or {}).get("dedup_status")
+        dedup_status = batch.dedup_status
         if dedup_status not in STUCK_DEDUP_STATUSES:
             continue
         job = job_queue.latest_for_entity(
