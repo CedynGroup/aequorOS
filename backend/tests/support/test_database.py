@@ -486,6 +486,35 @@ def _bank_lock_key(owner: TestDatabaseConnections) -> int:
     return keys[0]
 
 
+def _native_lock_pool(
+    owner: TestDatabaseConnections,
+    engine: Engine,
+    pool: str,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> tuple[TestDatabaseConnections, Engine | None]:
+    db = owner
+    if pool == "adopted":
+        from app.db.session import get_engine  # noqa: PLC0415
+
+        request.addfinalizer(get_engine.cache_clear)
+        native_engine = owner.adopt_engine(get_engine(owner.database_url))
+    elif pool == "migration":
+        native_engine = owner.migration_engine()
+    elif pool == "alembic":
+        install_migration_engines(monkeypatch, engine)
+        native_engine = sqlalchemy.engine_from_config({"sqlalchemy.url": owner.database_url})
+    elif pool == "context":
+        db = owner.with_context(replace(owner.context, organization_id="OR-NATIVE"))
+        native_engine = db.engine()
+    elif pool == "extra":
+        native_engine = owner.engine()
+    else:
+        native_engine = None
+
+    return db, native_engine
+
+
 @postgres_only
 @pytest.mark.parametrize("shared", [False, True])
 @pytest.mark.parametrize("pool", ["default", "extra", "adopted", "migration", "alembic", "context"])
@@ -500,24 +529,7 @@ def test_native_and_orm_bank_locks_contend_and_release(
             if shared
             else "SELECT pg_advisory_xact_lock(%(key)s)"
         )
-        db = owner
-        if pool == "adopted":
-            from app.db.session import get_engine  # noqa: PLC0415
-
-            request.addfinalizer(get_engine.cache_clear)
-            native_engine = owner.adopt_engine(get_engine(owner.database_url))
-        elif pool == "migration":
-            native_engine = owner.migration_engine()
-        elif pool == "alembic":
-            install_migration_engines(monkeypatch, engine)
-            native_engine = sqlalchemy.engine_from_config({"sqlalchemy.url": owner.database_url})
-        elif pool == "context":
-            db = owner.with_context(replace(owner.context, organization_id="OR-NATIVE"))
-            native_engine = db.engine()
-        elif pool == "extra":
-            native_engine = owner.engine()
-        else:
-            native_engine = None
+        db, native_engine = _native_lock_pool(owner, engine, pool, monkeypatch, request)
 
         with ExitStack() as resources:
             if native_engine is None:
@@ -586,6 +598,20 @@ def test_native_bank_locks_are_schema_scoped_and_probes_are_unchanged(shared: bo
         ).fetchone() == (True,)
 
 
+def _assert_native_stream_keeps_rows_and_locks(
+    owner: TestDatabaseConnections, raw: psycopg.Connection[tuple[object, ...]]
+) -> None:
+    with raw.cursor(row_factory=dict_row) as cursor:
+        assert list(cursor.stream("SELECT %s AS value", (19,))) == [{"value": 19}]
+        rows = list(cursor.stream("SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123}))
+        assert len(rows) == 1
+        with owner.raw_connection() as contender:
+            _ = contender.execute("SET LOCAL lock_timeout='250ms'")
+            with pytest.raises(LockNotAvailable):
+                _ = contender.execute("SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123})
+    raw.rollback()
+
+
 @postgres_only
 @pytest.mark.parametrize("client_side", [False, True])
 def test_native_cursor_factories_keep_rows_and_execution_modes(client_side: bool) -> None:
@@ -633,19 +659,7 @@ def test_native_cursor_factories_keep_rows_and_execution_modes(client_side: bool
                     _ = raw.execute("SELECT pg_advisory_xact_lock(%(key)s)", key)
                 raw.rollback()
             if not client_side:
-                with raw.cursor(row_factory=dict_row) as cursor:
-                    assert list(cursor.stream("SELECT %s AS value", (19,))) == [{"value": 19}]
-                    rows = list(
-                        cursor.stream("SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123})
-                    )
-                    assert len(rows) == 1
-                    with owner.raw_connection() as contender:
-                        _ = contender.execute("SET LOCAL lock_timeout='250ms'")
-                        with pytest.raises(LockNotAvailable):
-                            _ = contender.execute(
-                                "SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123}
-                            )
-                raw.rollback()
+                _assert_native_stream_keeps_rows_and_locks(owner, raw)
             with raw.cursor(name="native_rows", row_factory=dict_row) as server:
                 _ = server.execute("SELECT %s AS value", (23,))
                 assert server.fetchone() == {"value": 23}
