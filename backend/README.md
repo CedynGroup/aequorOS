@@ -114,10 +114,9 @@ mise run risk-service:hooks
 ```
 
 The service runs against the **shared remote Postgres** (`<postgres-host>:<port>/<database>`) —
-`DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape). The
-default test run needs no database at all (isolated SQLite); Postgres-gated tests opt in via
-`TEST_DATABASE_URL`; use a dedicated test database as described under
-[Run Tests](#run-tests). The bundled Docker Compose remains available for fully-local/offline work.
+`DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape).
+Test commands and database prerequisites are documented under [Run Tests](#run-tests).
+The bundled Docker Compose remains available for fully-local/offline work.
 
 ## Run The API
 
