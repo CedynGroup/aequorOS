@@ -418,7 +418,8 @@ on one canonical store — the live tier for intraday awareness, the official ti
   capital-side FX valuation refusal is tracked in
   [the capital follow-up](https://github.com/CedynGroup/aequorOS/issues/424).
 
-The dashboard polls only cheap live-summary, freshness, alert, and notification signals, with
+Outside [protected-data recovery](backend/docs/bank_field_encryption.md#protected-presentation-reads),
+the dashboard polls only cheap live-summary, freshness, alert, and notification signals, with
 stable tenant/authority/bank jitter. Signal polls are read-only; a live generation or
 official-run change invalidates only the affected module's cached detail. Heavyweight regulatory
 dashboards and live-snapshot series do not poll on their own. Their cache keys distinguish current from explicit-period reads and
@@ -498,8 +499,11 @@ official reads must be explicit.
   twice, concurrently with itself. A handler that outgrows the fleet default
   (`WORKER_STALE_JOB_SECONDS`) gets an entry in `job_queue.STALE_AFTER_OVERRIDES_SECONDS`,
   **never a bigger global number** (the global also governs how fast a genuinely dead worker's
-  jobs come back). Setting the default asserts every unlisted type finishes inside it — the
-  config comment names them. When a job exhausts `max_attempts` nothing re-enqueues it: the
+  jobs come back). Large-object re-encryption dispatches instead extend their own claim window
+  from the persisted source size; [the migration contract](backend/docs/bank_field_encryption.md#editable-data-re-encryption)
+  owns their isolation and retry rules. Setting the default asserts every other unlisted type
+  finishes inside it — the config comment names them. When a job exhausts `max_attempts`
+  nothing re-enqueues it: the
   recovery surface is `GET /operator/v1/jobs/stuck-dedup` (fleet board, read) +
   `POST /operator/v1/tenants/{org}/fix/redrive-dedup` (session-gated, audited), and it is
   manual on purpose — stranded jobs fail for unrelated reasons that each need a look.
@@ -1223,9 +1227,8 @@ classification, census regeneration, service prerequisites and CI execution owne
   fixture setup. These gates are what enforce the dashboard's
   fail-open guard, SSRF egress guard, and browser journeys, and they cover `frontend/`
   and `console/`. Each workflow's header comment is its gate inventory — keep it
-  accurate. Which Postgres job owns which test suites is defined by the
-  `risk-service:test-postgres-*` task comments in `backend/mise.toml` and pinned by
-  `tests/architecture/test_ci_task_wiring.py`.
+  accurate. The [backend test guide](backend/README.md#run-tests) owns suite
+  classification and CI execution ownership.
 
 ---
 

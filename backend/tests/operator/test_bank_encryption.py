@@ -15,6 +15,7 @@ from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyStatus
 from app.db.base import utc_now
+from app.models.job import Job
 from app.models.operator import OperatorAuditLog
 from app.operator.deps import OperatorContext, get_operator_context
 from tests.operator.conftest import BANK_KEY, operator_headers, provision_payload, start_inspection
@@ -27,6 +28,8 @@ KEY_REFERENCE_CENSUS = (
     ("PUT", _BASE),
     ("POST", _BASE + "/rotate"),
     ("POST", _BASE + "/retire"),
+    ("POST", _BASE + "/reencrypt"),
+    ("GET", _BASE + "/reencrypt"),
 )
 
 
@@ -159,7 +162,7 @@ def test_bank_key_routes_require_an_active_inspection(operator_client: TestClien
     assert response.status_code == 403
 
 
-def test_retirement_http_refuses_retained_backups_then_authorizes_and_audits(
+def test_retirement_http_refuses_retained_versions_after_backup_expiry(
     operator_client: TestClient,
     operator_db: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -207,11 +210,81 @@ def test_retirement_http_refuses_retained_backups_then_authorizes_and_audits(
             operator_client.post(
                 base + "/retire", json=payload, headers=operator_headers()
             ).status_code
-            == 204
+            == 409
         )
         assert keys.describe(BANK_KEY).status == KeyStatus.ACTIVE
-        assert "bank_key.retirement_authorized" in set(
+        assert "bank_key.retirement_authorized" not in set(
             operator_db.scalars(select(OperatorAuditLog.action))
         )
     finally:
         get_key_settings.cache_clear()
+
+
+def test_operator_can_enqueue_and_inspect_bank_reencryption(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    organization, bank = _provision(operator_client)
+    base = _BASE.format(org_id=organization, bank_id=bank) + "/reencrypt"
+    response = operator_client.post(base, headers=operator_headers())
+    assert response.status_code == 202, response.text
+    body = cast(dict[str, object], response.json())
+    job_id = body["job_id"]
+    assert body["status"] == "queued"
+    repeated = operator_client.post(base, headers=operator_headers())
+    assert repeated.status_code == 202 and repeated.json()["job_id"] == job_id
+    read = operator_client.get(base, headers=operator_headers())
+    assert read.status_code == 200 and read.json()["job_id"] == job_id
+    job = operator_db.scalar(select(Job).where(Job.job_type == "bank_reencrypt"))
+    assert job is not None
+    job.status = "running"
+    operator_db.commit()
+    assert operator_client.post(base, headers=operator_headers()).json()["job_id"] == job_id
+    assert (
+        operator_db.scalar(
+            select(OperatorAuditLog.id).where(
+                OperatorAuditLog.action == "bank_key.reencryption_requested"
+            )
+        )
+        is not None
+    )
+
+
+def test_connecting_existing_bank_enqueues_migration(
+    operator_client: TestClient,
+    operator_db: Session,
+) -> None:
+    response = operator_client.post(
+        "/operator/v1/tenants",
+        json=provision_payload(encryption_key=None),
+        headers=operator_headers(),
+    )
+    body = cast(dict[str, object], response.json())
+    assert body["succeeded"] is True
+    organization, bank = str(body["organization_id"]), str(body["bank_id"])
+    start_inspection(operator_client, organization)
+    response = operator_client.put(
+        _BASE.format(org_id=organization, bank_id=bank),
+        headers=operator_headers(),
+        json={
+            "provider": "aws_kms",
+            "key_id": BANK_KEY.key_id,
+            "region": BANK_KEY.region,
+            "owner_account": BANK_KEY.owner_account,
+        },
+    )
+    assert response.status_code == 200, response.text
+    job = operator_db.scalar(
+        select(Job).where(
+            Job.organization_id == organization,
+            Job.bank_id == bank,
+            Job.job_type == "bank_reencrypt",
+        )
+    )
+    assert job is not None and job.status == "queued"
+    key = registry.scoped_key(operator_db, organization_id=organization, bank_id=bank)
+    assert key.current_version_id is not None
+    assert key.index_version_id == key.current_version_id
+    material = registry.prepare_envelope(
+        operator_db, key, registry.version_context(organization, bank), registry.provider_for
+    )
+    assert material.envelope_id == key.current_version_id

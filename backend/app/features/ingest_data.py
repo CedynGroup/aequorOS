@@ -40,10 +40,10 @@ router = APIRouter(tags=["ingestion"])
 MAX_UPLOAD_BYTES = 50_000_000
 
 
-def get_ingestion_storage() -> StorageClient:
+def get_ingestion_storage(db: DbSession) -> StorageClient:
     """The storage engine, or 503 when it is unconfigured or retired."""
     try:
-        return get_storage_client()
+        return get_storage_client().for_session(db)
     except (StorageValidationError, StorageRetiredError, NotImplementedError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

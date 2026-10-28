@@ -217,7 +217,7 @@ def _book(rc: ResolveContext, position_type: str) -> tuple[_Row, ...]:
         select(
             CanonicalPositionSnapshot,
             CanonicalPosition,
-            CanonicalCounterparty.attributes,
+            CanonicalCounterparty,
         )
         .select_from(CanonicalPositionSnapshot)
         .join(
@@ -244,7 +244,7 @@ def _book(rc: ResolveContext, position_type: str) -> tuple[_Row, ...]:
     rows: list[_Row] = []
     for snapshot, position, cp_attrs in rc.db.execute(stmt).tuples():
         attributes = dict(snapshot.attributes or {})
-        cp_attributes = dict(cp_attrs or {})
+        cp_attributes = dict(cp_attrs.attributes or {}) if cp_attrs else {}
         raw_sector = attributes.get("sector", cp_attributes.get("sector"))
         weight = reporting_currency_value(rc, snapshot, position, attributes=attributes)
         rows.append(

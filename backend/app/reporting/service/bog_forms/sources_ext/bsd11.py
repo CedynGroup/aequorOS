@@ -34,6 +34,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Load
 
 from app.data_engine.public import (
     CanonicalCounterparty,
@@ -144,9 +145,10 @@ def _load_parties(rc: ResolveContext) -> list[_Party]:
                 RelatedParty.bank_id == rc.bank.id,
                 RelatedParty.status == "active",
             )
-            .order_by(RelatedParty.full_name, RelatedParty.id)
+            .order_by(RelatedParty.id)
         )
     ]
+    parties.sort(key=lambda party: (party.name, str(party.id)))
     by_id = {p.id: p for p in parties}
     if by_id:
         for role in rc.db.scalars(
@@ -276,6 +278,7 @@ def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> lis
                 CanonicalCounterparty,
                 CanonicalProduct,
             )
+            .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
             .join(
                 latest,
                 (latest.c.pid == CanonicalPositionSnapshot.position_id)

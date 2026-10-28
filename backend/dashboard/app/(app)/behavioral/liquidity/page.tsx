@@ -211,9 +211,9 @@ export default function BehavioralLiquidityPage() {
               <div className="space-y-3">
                 {rows
                   .filter((row) => row.reasons.length > 0)
-                  .map((row) => (
+                  .map((row, index) => (
                     <div
-                      key={`${row.dimension}-${row.segment}`}
+                      key={`${row.dimension}-${index}`}
                       className="border-b border-border-light pb-3 last:border-0 last:pb-0"
                     >
                       <p className="text-body font-medium text-navy">

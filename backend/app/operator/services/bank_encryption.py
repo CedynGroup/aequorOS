@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.key_management import registry
+from app.core.key_management import reencryption, registry
 from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.schemas import BankKeyConnect, BankKeyRead, BankKeyRotate
 from app.core.key_management.types import KeyStatus, KeyUnavailableError
@@ -58,6 +58,7 @@ def connect_key(  # noqa: PLR0913 - scoped operator mutation
     providers: registry.ProviderFactory | None = None,
 ) -> BankKeyRead:
     providers = providers or registry.provider_for
+    registry.lock_bank_version(db, organization_id, bank_id)
     bank = _bank(db, organization_id, bank_id)
     if (
         db.scalar(
@@ -84,15 +85,16 @@ def connect_key(  # noqa: PLR0913 - scoped operator mutation
         db.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     _update_storage_reference(db, row)
+    db.flush()
+    _ = reencryption.enqueue(db, organization_id, bank_id)
     return _read(row)
 
 
 def get_key(db: Session, organization_id: str, bank_id: str) -> BankKeyRead:
     _bank(db, organization_id, bank_id)
-    try:
-        row = registry.scoped_key(db, bank_id=bank_id, organization_id=organization_id)
-    except KeyUnavailableError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    row = registry.bank_key(db, organization_id, bank_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="The bank encryption key is not connected.")
     return _read(row)
 
 
