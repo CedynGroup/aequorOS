@@ -59,7 +59,7 @@ from app.live.public import (
     credit_source_basis,
     load_position_records,
 )
-from app.services import jurisdictions
+from app.policy.public import jurisdictions
 
 #: Adds the securities book, because issuer and sovereign concentration is real
 #: concentration even where the holding is not a counterparty credit exposure.

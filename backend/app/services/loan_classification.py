@@ -44,8 +44,8 @@ from app.domain.credit.restructure import restructure_holds_npl
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity.public import Bank
 from app.models import CanonicalPosition, CanonicalPositionSnapshot
-from app.services import institution_types, jurisdictions
-from app.services import regulatory_parameters as rp
+from app.policy.public import institution_types, jurisdictions
+from app.policy.public import regulatory_parameters as rp
 
 _LOAN_POSITION_TYPE = "LOAN"
 _ZERO = Decimal("0")

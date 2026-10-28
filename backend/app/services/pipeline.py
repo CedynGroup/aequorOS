@@ -44,11 +44,11 @@ from app.models import (
     LiveMetric,
     LiveMetricSnapshot,
 )
+from app.policy.public import module_scope
 from app.reporting.service import filing_reconciliation
 from app.services import (
     data_activation,
     implied_rating,
-    module_scope,
     regulatory_capital,
     regulatory_credit,
     regulatory_forecasting,
@@ -122,7 +122,7 @@ def _scoped_modules(db: Session, bank: Bank) -> tuple[tuple[str, _ComputeLive], 
     filing tier (``data_activation``), so the two tiers cannot disagree about
     which modules an institution runs. The entitlement, metric-authority and
     engine-substitution rules that used to live inline here now live there,
-    unchanged in behaviour and pinned by ``tests/services/test_module_scope.py``.
+    unchanged in behaviour and pinned by ``tests/policy/service/test_module_scope.py``.
     """
     return tuple(
         (module, compute)

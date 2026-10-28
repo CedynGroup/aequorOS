@@ -20,7 +20,7 @@ from sqlalchemy import Table, func, select
 from app.db.base import Base, utc_now
 from app.db.session import get_sessionmaker
 from app.models import AuditEvent, Bank, CanonicalWithdrawal, Job, SystemOfRecordDeclaration
-from app.services.institution_types import FALLBACK_TYPE_CODE
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.api.test_system_of_record import (
     APPROVER_USER,
     FIXTURE_SOURCE,

@@ -50,13 +50,14 @@ from app.models import (
     RegulatoryRun,
 )
 from app.operator.services import regulatory_parameters as console
+from app.policy.service import regulatory_parameters
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation
 from app.reporting.service.exports import export_package
 from app.reporting.service.templates import report_notes
 from app.schemas.operator import RegulatoryParameterProposeRequest
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import capital_plan, regulatory_capital, regulatory_parameters
+from app.services import capital_plan, regulatory_capital
 from app.services.enterprise_stress import EnterpriseStressError
 from tests.domain.stress_fixtures import (
     BASE_ASSUMPTIONS,

@@ -18,9 +18,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from app.models import RegulatoryParameter
 from app.operator.deps import Operator, OperatorDb, record_operator_action
 from app.operator.services import regulatory_parameters as service
+from app.policy.public import RegulatoryParameter
 from app.schemas.operator import (
     RegulatoryParameterApproveRequest,
     RegulatoryParameterListRead,

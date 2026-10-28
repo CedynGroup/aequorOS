@@ -30,7 +30,7 @@ from app.db.base import utc_now
 from app.identity.service import authorization
 from app.identity.service.authorization import ALL_INSTITUTION_DATA, NO_INSTITUTION_DATA
 from app.models import AuthorizationBinding, Bank, User
-from app.services.institution_types import FALLBACK_TYPE_CODE
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 BANK_1 = "BK-DSCOPE01"

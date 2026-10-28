@@ -6,7 +6,7 @@ from decimal import Decimal
 from hypothesis import strategies as st
 
 from app.domain.fx.engine import FxPosition, money
-from app.services.parameter_register import BANK_FX_THRESHOLDS
+from app.policy.service.parameter_register import BANK_FX_THRESHOLDS
 
 
 @dataclass(frozen=True)

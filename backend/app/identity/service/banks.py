@@ -23,10 +23,10 @@ from app.identity.schemas.banks import (
     JurisdictionRead,
 )
 from app.identity.service import authorization
-from app.models.institution_type import InstitutionType
-from app.models.jurisdiction import Jurisdiction
 from app.models.regulatory import BankFinancialFact, BankReportingPeriod
-from app.services import regulatory_parameters
+from app.policy.models.institution_type import InstitutionType
+from app.policy.models.jurisdiction import Jurisdiction
+from app.policy.service import regulatory_parameters
 from app.services.public_ids import normalize_public_id
 
 _FACT_GROUP_FIELDS: dict[str, str] = {
@@ -59,7 +59,7 @@ def _institution_types_by_code(
     Display-side resolution (like ``_jurisdictions_by_code``): a code with no
     registry row simply resolves to None on the payload — never a fabricated
     default. Calculation code that must not silently default goes through
-    ``app/services/institution_types.py`` instead (fail-closed).
+    ``app/policy/service/institution_types.py`` instead (fail-closed).
 
     Keyed by jurisdiction as well as licence code because the ENFORCED exposure
     limits it overlays are jurisdiction-scoped: resolving them without the bank's

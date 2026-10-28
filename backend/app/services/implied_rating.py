@@ -41,11 +41,11 @@ from app.models import (
     DeskMethodology,
     FinancialFactRow,
     ImpliedRatingRun,
-    Jurisdiction,
     LiveMetric,
     RegulatoryRun,
 )
-from app.services import institution_types, sdi_readiness
+from app.policy.public import Jurisdiction, institution_types
+from app.services import sdi_readiness
 from app.services.audit import record_event
 from app.services.live_types import LiveFindingSpec, LiveModuleResult
 

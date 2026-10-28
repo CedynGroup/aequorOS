@@ -8,7 +8,7 @@ one immutable ``RegulatoryRun`` (module ``enterprise_stress``) with a value-base
 ``input_hash`` — the same reproducibility spine every official run carries.
 
 It reads ``BankFinancialFact`` and the effective-dated ``Param*`` registers via
-``app.services.params.get_active_params``. The IRRBB leg shares the regulatory
+``app.policy.service.params.get_active_params``. The IRRBB leg shares the regulatory
 IRRBB fact reader, ``regulatory_irr.positions_from_facts``, so contractual rates
 and swap-leg decomposition have one implementation.
 """
@@ -112,6 +112,9 @@ from app.models import (
     BankReportingPeriod,
     FinancialFactRow,
     ManagementActionPlan,
+    RegulatoryRun,
+)
+from app.policy.public import (
     ParamCapitalThreshold,
     ParamCrmHaircut,
     ParamEclAssumption,
@@ -119,7 +122,10 @@ from app.models import (
     ParamNsfrWeight,
     ParamRiskWeight,
     ParamStressShock,
-    RegulatoryRun,
+    get_active_params,
+    institution_types,
+    jurisdictions,
+    regulatory_parameters,
 )
 from app.schemas.enterprise_stress import (
     EnterpriseStressRead,
@@ -131,16 +137,12 @@ from app.schemas.enterprise_stress import (
 from app.services import (
     credit_exposure_book,
     enterprise_run_visibility,
-    institution_types,
-    jurisdictions,
     macro_scenarios,
     management_action_plans,
     regulatory_irr,
-    regulatory_parameters,
     sdi_capital,
 )
 from app.services.audit import record_event
-from app.services.params import get_active_params
 from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL, DEFAULT_CRM_HAIRCUTS
 
 #: v2 (#306): the IRRBB leg prices the book regulatory IRRBB prices — swap

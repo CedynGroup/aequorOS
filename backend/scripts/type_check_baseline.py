@@ -35,7 +35,7 @@ STRICT_MODULES: tuple[str, ...] = (
     "app.live",
     "app.identity.models.bank",
     "app.models.job",
-    "app.models.parameter_register",
+    "app.policy.models.parameter_register",
 )
 
 #: The rule name charged to a diagnostic basedpyright raises without one, such as a

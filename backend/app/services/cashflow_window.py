@@ -33,13 +33,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.identity.public import Bank
 from app.models import CanonicalPosition, CanonicalPositionSnapshot
+from app.policy.public import base_currency
 from app.schemas.cashflow_window import (
     CashflowWindowCurrencyTotalRead,
     CashflowWindowMonthRead,
     CashflowWindowOverallRead,
     CashflowWindowRead,
 )
-from app.services.jurisdictions import base_currency
 from app.services.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
 
 _MAX_WINDOW_MONTHS = 36

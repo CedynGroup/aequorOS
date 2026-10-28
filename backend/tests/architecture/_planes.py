@@ -141,7 +141,7 @@ _CASE_MODEL_FILES: tuple[str, ...] = (
 _BANK_MODEL_FILES: tuple[str, ...] = (
     "identity/models/bank.py",
     "models/canonical.py",
-    "models/parameter_register.py",
+    "policy/models/parameter_register.py",
     "models/regulatory.py",
     "models/regulatory_run.py",
     "reporting/models/packages.py",

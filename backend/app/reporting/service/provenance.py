@@ -80,7 +80,7 @@ from app.domain.authority.registry import (
     MetricAuthority,
     UnknownMetricError,
 )
-from app.domain.regulatory_instruments import (
+from app.policy.domain.regulatory_instruments import (
     InstrumentStatus,
     instrument_status_label,
 )

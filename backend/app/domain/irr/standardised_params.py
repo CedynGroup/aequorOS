@@ -187,7 +187,7 @@ class ResolvedValue(Protocol):
     """The shape of a resolved control-plane row the SF reads.
 
     Read-only by design: the SF consumes governed values and never edits them.
-    ``app.services.regulatory_parameters.ResolvedParameter`` satisfies this
+    ``app.policy.service.regulatory_parameters.ResolvedParameter`` satisfies this
     structurally, which is how the pure layer stays free of service imports.
     """
 
@@ -612,7 +612,8 @@ def _profiles(row: ResolvedValue) -> tuple[Mapping[str, CashFlowProfile], int]:
     if not isinstance(swap, Mapping):
         raise SfParameterError(code, f"no profile for {SWAP_PROFILE_KEY}")
     frequency = _positive_int(
-        code, f"{SWAP_PROFILE_KEY}.{SWAP_FIXED_LEG_FREQUENCY_KEY}",
+        code,
+        f"{SWAP_PROFILE_KEY}.{SWAP_FIXED_LEG_FREQUENCY_KEY}",
         swap.get(SWAP_FIXED_LEG_FREQUENCY_KEY),
     )
     return profiles, frequency
@@ -629,8 +630,9 @@ def _one_profile(code: str, family: str, entry: Any) -> CashFlowProfile:
         raise SfParameterError(code, f"{family} has no horizonless bucket")
     return CashFlowProfile(
         amortisation=cast(Amortisation, amortisation),
-        frequency_months=_positive_int(code, f"{family}.frequency_months",
-                                       entry.get("frequency_months")),
+        frequency_months=_positive_int(
+            code, f"{family}.frequency_months", entry.get("frequency_months")
+        ),
         horizonless_bucket=bucket,
     )
 

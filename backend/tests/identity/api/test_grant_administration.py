@@ -46,8 +46,8 @@ from app.models import (
     RefreshToken,
     User,
 )
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.schemas.common import JsonObject
-from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 GRANTEE = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")

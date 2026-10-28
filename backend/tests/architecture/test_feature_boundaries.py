@@ -131,14 +131,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
     # ---- staff operator console
     (r"^(models|schemas)/operator$", "operator"),
-    # ---- policy: jurisdiction, regime, parameter registers
-    (
-        r"^services/(regulatory_parameters|jurisdictions|institution_types|module_scope"
-        r"|parameter_register|params|sdi_regime)$",
-        "policy",
-    ),
-    (r"^models/(regulatory_parameter|parameter_register|jurisdiction|institution_type)$", "policy"),
-    (r"^domain/(policy/|regulatory_instruments$)", "policy"),
     # ---- notifications
     (
         r"^services/(notifications|notification_email_mirror|reporting_deadline_scan)$",
@@ -629,7 +621,7 @@ class _ModelSplitScenario:
     def check_new_sibling(self, path: Path, target: str, split: str) -> None:
         sibling = "parameter_register" if split == "bank" else "bank"
         sibling_target = (
-            "app.identity.models.bank" if sibling == "bank" else f"app.models.{sibling}"
+            "app.identity.models.bank" if sibling == "bank" else f"app.policy.models.{sibling}"
         )
         sibling_path = _write_synthetic_module(self.app, sibling_target, "class Authority: pass\n")
         path.write_text(
@@ -763,11 +755,19 @@ def test_model_splits_preserve_historical_boundary_identities(
     "edge",
     [
         ("app.live.service", "app.identity.models.bank", "private live->identity"),
-        ("app.live.service", "app.models.parameter_register", "private live->policy"),
-        ("app.identity.models.bank", "app.models.parameter_register", "layer identity->policy"),
-        ("app.models.parameter_register", "app.identity.models.bank", "private policy->identity"),
+        ("app.live.service", "app.policy.models.parameter_register", "private live->policy"),
+        (
+            "app.identity.models.bank",
+            "app.policy.models.parameter_register",
+            "layer identity->policy",
+        ),
+        (
+            "app.policy.models.parameter_register",
+            "app.identity.models.bank",
+            "private policy->identity",
+        ),
         ("app.identity.models.bank", "app.live.service", "layer identity->live"),
-        ("app.models.parameter_register", "app.live.service", "layer policy->live"),
+        ("app.policy.models.parameter_register", "app.live.service", "layer policy->live"),
     ],
 )
 def test_new_split_dependencies_use_current_ownership(

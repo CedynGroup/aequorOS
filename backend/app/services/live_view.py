@@ -25,6 +25,7 @@ from app.models import (
     LiveMetric,
     LiveMetricSnapshot,
 )
+from app.policy.public import module_scope
 from app.schemas.live import (
     JobEnqueuedRead,
     LiveModuleView,
@@ -35,7 +36,7 @@ from app.schemas.live import (
     OfficialRunRequest,
     RefreshRequest,
 )
-from app.services import fact_derivation, job_queue, module_scope
+from app.services import fact_derivation, job_queue
 from app.services.audit import record_event
 
 _MODULE_ORDER = {

@@ -28,11 +28,12 @@ from app.db.base import utc_now
 from app.domain.capital.ecl import ALL_SEGMENTS, normalize_segment
 from app.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
 from app.identity.public import Bank
-from app.models import (
+from app.policy.public import (
     ParamConcentrationLimit,
     ParamCreditThreshold,
     ParamCrmHaircut,
     ParamEclAssumption,
+    get_active_params,
 )
 from app.schemas.credit_params import (
     CrmHaircutRead,
@@ -52,7 +53,6 @@ from app.schemas.regulatory_credit import (
 )
 from app.services import live_refresh_triggers
 from app.services.audit import record_event
-from app.services.params import get_active_params
 from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
 _HUNDRED = Decimal("100")

@@ -41,6 +41,7 @@ from app.models import (
     StressScenario,
     User,
 )
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.schemas.data_activation import DataActivationCreate
 from app.schemas.regulatory_fx import FxScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
@@ -53,7 +54,6 @@ from app.services import (
     regulatory_fx,
     scheduler,
 )
-from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,

@@ -21,7 +21,8 @@ from app.core.authorization import (
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.models import Bank, BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric, User
-from app.services import job_queue, module_scope, pipeline
+from app.policy.service import module_scope
+from app.services import job_queue, pipeline
 from tests.adapters.excel_csv import fixtures
 from tests.api.test_ingestion import FULL_MAPPING, activate_mapping, seed_bank, start_batch
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book

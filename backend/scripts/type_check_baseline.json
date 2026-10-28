@@ -4617,7 +4617,7 @@
   "reportAny": 33
  },
  "tests.services.test_regulatory_parameters_icaap_jurisdictions": {
-  "reportAny": 21,
+  "reportAny": 19,
   "reportUnknownMemberType": 1
  },
  "tests.services.test_regulatory_parameters_icaap_p2": {

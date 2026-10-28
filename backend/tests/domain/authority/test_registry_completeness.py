@@ -771,7 +771,7 @@ def _fixture(**overrides: object) -> MetricAuthority:
         "methodology_id": "test_methodology",
         "return_family": "capital",
         "effective_from": date(2026, 1, 1),
-        "policy_resolver": "app.services.params:get_active_params",
+        "policy_resolver": "app.policy.service.params:get_active_params",
         "calculation_engine": "app.domain.capital.engine:compute_rwa",
         "calculation_version": "regulatory-capital-v2.0.0",
         "authority_reference": "BoG Capital Requirements Directive",

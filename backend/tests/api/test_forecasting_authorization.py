@@ -46,17 +46,17 @@ from app.models import (
     RegulatoryRun,
     User,
 )
+from app.policy.service import module_scope
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.services import (
     data_activation,
-    module_scope,
     pipeline,
     regulatory_forecasting,
     reverse_stress,
     scheduler,
 )
-from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 

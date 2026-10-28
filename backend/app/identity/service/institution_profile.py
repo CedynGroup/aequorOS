@@ -71,7 +71,7 @@ from app.identity.schemas.institution_profile import (
     ShareholdingRead,
     ShareholdingUpdate,
 )
-from app.models.jurisdiction import Jurisdiction
+from app.policy.models.jurisdiction import Jurisdiction
 from app.services.audit import record_event
 
 _OWNERSHIP_SUM_TOLERANCE = Decimal("0.01")

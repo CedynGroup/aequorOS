@@ -33,7 +33,7 @@ from app.domain.liquidity.engine import (
     compute_lcr,
     hqla_haircut_param_code,
 )
-from app.services.regulatory_parameters import (
+from app.policy.service.regulatory_parameters import (
     HQLA_HAIRCUT_CODES,
     HQLA_LEVEL2_CAP_CODE,
     HQLA_LEVEL2B_CAP_CODE,
@@ -180,9 +180,7 @@ def test_the_lcr_falls_when_level_2_replaces_level_1() -> None:
     """
     outflow = _deposits("1000")  # 10% run-off => 100M net outflows
     all_l1 = compute_lcr((_sec("a", "300", "L1"), outflow), _params())
-    with_l2a = compute_lcr(
-        (_sec("a", "200", "L1"), _sec("b", "100", "L2A"), outflow), _params()
-    )
+    with_l2a = compute_lcr((_sec("a", "200", "L1"), _sec("b", "100", "L2A"), outflow), _params())
     # 300M / 100M = 300%; (200 + 85) / 100 = 285%.
     assert all_l1.lcr_pct.quantize(FOUR_DP) == Decimal("300.0000")
     assert with_l2a.lcr_pct.quantize(FOUR_DP) == Decimal("285.0000")

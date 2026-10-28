@@ -35,9 +35,10 @@ from app.models import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.policy.service import jurisdictions
 from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.schemas.regulatory_irr_sf import IrrbbSfRunCreate
-from app.services import jurisdictions, regulatory_irr, regulatory_irr_sf
+from app.services import regulatory_irr, regulatory_irr_sf
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -552,9 +553,7 @@ def test_running_the_standardised_framework_leaves_the_legacy_irr_untouched(
     legacy_before = regulatory_irr.run_all_irr_scenarios(
         db_session, CTX, SAMPLE_BANK_ID, IrrScenarioBatchCreate(reporting_period_id=period_id)
     )
-    dashboard_before = regulatory_irr.get_irr_dashboard(
-        db_session, CTX, SAMPLE_BANK_ID, period_id
-    )
+    dashboard_before = regulatory_irr.get_irr_dashboard(db_session, CTX, SAMPLE_BANK_ID, period_id)
 
     sf_run = _run(db_session, period_id)
     assert sf_run.status == "succeeded", sf_run.error_code
@@ -562,16 +561,12 @@ def test_running_the_standardised_framework_leaves_the_legacy_irr_untouched(
     legacy_after = regulatory_irr.run_all_irr_scenarios(
         db_session, CTX, SAMPLE_BANK_ID, IrrScenarioBatchCreate(reporting_period_id=period_id)
     )
-    dashboard_after = regulatory_irr.get_irr_dashboard(
-        db_session, CTX, SAMPLE_BANK_ID, period_id
-    )
+    dashboard_after = regulatory_irr.get_irr_dashboard(db_session, CTX, SAMPLE_BANK_ID, period_id)
 
     assert [run.input_hash for run in legacy_after.runs] == [
         run.input_hash for run in legacy_before.runs
     ]
-    assert [run.metrics for run in legacy_after.runs] == [
-        run.metrics for run in legacy_before.runs
-    ]
+    assert [run.metrics for run in legacy_after.runs] == [run.metrics for run in legacy_before.runs]
     assert dashboard_after.metrics == dashboard_before.metrics
 
     # And the legacy runs never acquire the new module value.
@@ -632,9 +627,7 @@ def test_past_due_principal_is_tallied_labelled_and_disclosed(
         regulatory_irr_sf.ASSUMPTION_LABELS[sfcf.TALLY_PAST_DUE]
         == "Principal already past due at the reporting date; placed in the shortest bucket"
     )
-    statement = next(
-        line for line in run.metrics["statements"] if "past due" in line
-    )
+    statement = next(line for line in run.metrics["statements"] if "past due" in line)
     assert "understates" in statement
 
 
@@ -670,9 +663,7 @@ def test_a_wholesale_term_deposit_declares_the_book_it_is_priced_on(
     assert tallies.get(regulatory_irr_sf.TALLY_TD_WHOLESALE_DEMANDABLE) == 1
     # And NOT under the label that says the contractual schedule was used.
     assert sf.TALLY_NO_REDEMPTION_RATE not in tallies
-    statement = next(
-        line for line in run.metrics["statements"] if "repayable on demand" in line
-    )
+    statement = next(line for line in run.metrics["statements"] if "repayable on demand" in line)
     assert "most disadvantageous" in statement
     assert "base position and every shocked position alike" in statement
 
@@ -720,6 +711,4 @@ def test_every_assumption_marker_carries_bank_facing_copy() -> None:
     missing = markers - set(regulatory_irr_sf.ASSUMPTION_LABELS)
 
     assert missing == set(), f"no bank-facing copy for {sorted(missing)}"
-    assert all(
-        label != marker for marker, label in regulatory_irr_sf.ASSUMPTION_LABELS.items()
-    )
+    assert all(label != marker for marker, label in regulatory_irr_sf.ASSUMPTION_LABELS.items())

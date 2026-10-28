@@ -86,9 +86,9 @@ from app.models.canonical import (
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.models.institution_type import InstitutionType
 from app.models.live import LIVE_MODULES, LiveMetric
 from app.models.regulatory_run import RegulatoryRun
+from app.policy.models.institution_type import InstitutionType
 
 MODELS: tuple[type, ...] = (
     BiFactPositionDaily,

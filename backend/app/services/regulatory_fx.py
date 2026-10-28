@@ -88,12 +88,18 @@ from app.models import (
     BankFinancialFact,
     BankReportingPeriod,
     FinancialFactRow,
-    ParamCapitalThreshold,
-    ParamStressShock,
     RegulatoryLineItem,
     RegulatoryMetricResult,
     RegulatoryRun,
     RegulatoryValidation,
+)
+from app.policy.public import (
+    ParamCapitalThreshold,
+    ParamStressShock,
+    PrefetchedActiveParams,
+    base_currency,
+    get_active_params,
+    prefetch_active_params,
 )
 from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_fx import (
@@ -113,7 +119,6 @@ from app.schemas.regulatory_liquidity import (
 )
 from app.services import regulatory_dashboard_batching
 from app.services.audit import record_event
-from app.services.jurisdictions import base_currency
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
 from app.services.live_types import (
@@ -121,7 +126,6 @@ from app.services.live_types import (
     findings_from_validations,
     worst_status,
 )
-from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
 ENGINE_VERSION = "regulatory-fx-v1.2.0"

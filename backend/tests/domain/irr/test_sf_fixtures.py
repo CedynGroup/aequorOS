@@ -1,6 +1,6 @@
 """The governed parameter rows the Standardised Framework tests run against.
 
-WS-B owns ``app/services/regulatory_parameters.py`` and the migration that seeds
+WS-B owns ``app/policy/service/regulatory_parameters.py`` and the migration that seeds
 these codes; the pure domain owns none of them. So the domain suite builds its
 own control-plane rows here, from the P5 design's seed table, and every test
 resolves through :func:`app.domain.irr.standardised_params.parse_parameters`
@@ -50,34 +50,61 @@ BUCKET_COUNT = len(_BUCKETS)
 
 #: Per-currency calibrations, with the regulator's printed "Other" column.
 PARALLEL_BP: Mapping[str, str] = {
-    "GHS": "450", "USD": "200", "EUR": "225", "GBP": "275", "CNY": "225", "OTHER": "325",
+    "GHS": "450",
+    "USD": "200",
+    "EUR": "225",
+    "GBP": "275",
+    "CNY": "225",
+    "OTHER": "325",
 }
 SHORT_BP: Mapping[str, str] = {
-    "GHS": "500", "USD": "300", "EUR": "350", "GBP": "425", "CNY": "300", "OTHER": "500",
+    "GHS": "500",
+    "USD": "300",
+    "EUR": "350",
+    "GBP": "425",
+    "CNY": "300",
+    "OTHER": "500",
 }
 LONG_BP: Mapping[str, str] = {
-    "GHS": "300", "USD": "225", "EUR": "200", "GBP": "250", "CNY": "150", "OTHER": "300",
+    "GHS": "300",
+    "USD": "225",
+    "EUR": "200",
+    "GBP": "250",
+    "CNY": "150",
+    "OTHER": "300",
 }
 
 _PROFILE_SEED: Mapping[str, Mapping[str, str]] = {
     "LOAN": {"amortisation": "annuity", "frequency_months": "1", "horizonless_bucket": "b13"},
     "SECURITY_HOLDING": {
-        "amortisation": "bullet", "frequency_months": "6", "horizonless_bucket": "b13",
+        "amortisation": "bullet",
+        "frequency_months": "6",
+        "horizonless_bucket": "b13",
     },
     "INTERBANK_PLACEMENT": {
-        "amortisation": "bullet", "frequency_months": "0", "horizonless_bucket": "b01",
+        "amortisation": "bullet",
+        "frequency_months": "0",
+        "horizonless_bucket": "b01",
     },
     "INTERBANK_BORROWING": {
-        "amortisation": "bullet", "frequency_months": "0", "horizonless_bucket": "b01",
+        "amortisation": "bullet",
+        "frequency_months": "0",
+        "horizonless_bucket": "b01",
     },
     "DEPOSIT_TERM": {
-        "amortisation": "bullet", "frequency_months": "0", "horizonless_bucket": "b01",
+        "amortisation": "bullet",
+        "frequency_months": "0",
+        "horizonless_bucket": "b01",
     },
     "OTHER_LIABILITY": {
-        "amortisation": "bullet", "frequency_months": "0", "horizonless_bucket": "b01",
+        "amortisation": "bullet",
+        "frequency_months": "0",
+        "horizonless_bucket": "b01",
     },
     "CAPITAL_INSTRUMENT": {
-        "amortisation": "bullet", "frequency_months": "6", "horizonless_bucket": "b13",
+        "amortisation": "bullet",
+        "frequency_months": "6",
+        "horizonless_bucket": "b13",
     },
     "INTEREST_RATE_SWAP": {"fixed_leg_frequency_months": "6"},
 }
@@ -146,9 +173,12 @@ def seed_rows() -> dict[str, sp.GovernedValue]:
             sp.CODE_CPR_MULTIPLIERS,
             {
                 "schema": "irrbb-sf-scenario-scalars-v1",
-                "parallel_up": "0.8", "parallel_down": "1.2",
-                "steepener": "0.8", "flattener": "1.2",
-                "short_up": "0.8", "short_down": "1.2",
+                "parallel_up": "0.8",
+                "parallel_down": "1.2",
+                "steepener": "0.8",
+                "flattener": "1.2",
+                "short_up": "0.8",
+                "short_down": "1.2",
             },
             "multiplier",
         ),
@@ -156,9 +186,12 @@ def seed_rows() -> dict[str, sp.GovernedValue]:
             sp.CODE_TDRR_SCALARS,
             {
                 "schema": "irrbb-sf-scenario-scalars-v1",
-                "parallel_up": "1.2", "parallel_down": "0.8",
-                "steepener": "0.8", "flattener": "1.2",
-                "short_up": "1.2", "short_down": "0.8",
+                "parallel_up": "1.2",
+                "parallel_down": "0.8",
+                "steepener": "0.8",
+                "flattener": "1.2",
+                "short_up": "1.2",
+                "short_down": "0.8",
             },
             "multiplier",
         ),
@@ -167,10 +200,12 @@ def seed_rows() -> dict[str, sp.GovernedValue]:
             {
                 "schema": "irrbb-sf-nmd-caps-v1",
                 "retail_transactional": {
-                    "core_cap_pct": "90", "avg_maturity_cap_years": "5",
+                    "core_cap_pct": "90",
+                    "avg_maturity_cap_years": "5",
                 },
                 "retail_non_transactional": {
-                    "core_cap_pct": "70", "avg_maturity_cap_years": "4.5",
+                    "core_cap_pct": "70",
+                    "avg_maturity_cap_years": "4.5",
                 },
                 "wholesale": {"core_cap_pct": "50", "avg_maturity_cap_years": "4"},
             },
@@ -215,9 +250,7 @@ def seed_rows() -> dict[str, sp.GovernedValue]:
             source_citation=_REPRESENTATIVE_CITATION,
             confirmation_status="pending",
         ),
-        sp.CODE_OUTLIER_THRESHOLD_PCT: _scalar(
-            sp.CODE_OUTLIER_THRESHOLD_PCT, "15", "percent"
-        ),
+        sp.CODE_OUTLIER_THRESHOLD_PCT: _scalar(sp.CODE_OUTLIER_THRESHOLD_PCT, "15", "percent"),
     }
     return rows
 
@@ -326,7 +359,7 @@ def test_the_fixture_reproduces_the_seed_table() -> None:
     pure layer still imports nothing, and the point of the test is precisely
     that the fixture is not independent of production.
     """
-    from app.services.regulatory_parameters import (  # noqa: PLC0415 - the seam under test
+    from app.policy.service.regulatory_parameters import (  # noqa: PLC0415 - the seam under test
         ICAAP_P2_SEED_PARAMETERS,
         IRRBB_SF_SEED_PARAMETERS,
     )

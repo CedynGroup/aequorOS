@@ -3,7 +3,7 @@
 The Credit / Loan Book module applies to every deposit-taking lender: a bank
 files the 5-grade classification, an SDI the NBFI 4-grade, and both are bound
 by the NPL prudential limit of Notice BG/GOV/SEC/2025/23 — so ``credit`` joins
-``BANK_MODULES`` in the live catalogue (``app/services/institution_types.py``)
+``BANK_MODULES`` in the live catalogue (``app/policy/service/institution_types.py``)
 and, through the class derivation, the SDI set too. This migration reconciles
 the already-seeded ``institution_types`` rows to that catalogue end state.
 
