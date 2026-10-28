@@ -5,6 +5,7 @@ export type E2ERuntimePorts = {
   dashboard: number;
   /** The local OIDC issuer (scripts/e2e_idp.py) the SSO journeys sign in at. */
   idp: number;
+  kms: number;
 };
 
 const PORTS_SELECTED = "E2E_RUNTIME_PORTS_SELECTED";
@@ -39,12 +40,14 @@ export function selectE2ERuntimePorts(): E2ERuntimePorts {
       backend: configuredPort("E2E_BACKEND_PORT"),
       dashboard: configuredPort("E2E_DASHBOARD_PORT"),
       idp: configuredPort("E2E_IDP_PORT"),
+      kms: configuredPort("E2E_KMS_PROXY_PORT"),
     };
   }
 
   const requestedBackend = configuredPort("E2E_BACKEND_PORT");
   const requestedDashboard = configuredPort("E2E_DASHBOARD_PORT");
   const requestedIdp = configuredPort("E2E_IDP_PORT");
+  const requestedKms = configuredPort("E2E_KMS_PROXY_PORT");
   const allocator = String.raw`
     const net = require('node:net');
 
@@ -72,15 +75,18 @@ export function selectE2ERuntimePorts(): E2ERuntimePorts {
       const backend = await bind(Number(process.argv[1]));
       const dashboard = await bind(Number(process.argv[2]));
       const idp = await bind(Number(process.argv[3]));
+      const kms = await bind(Number(process.argv[4]));
       console.log(JSON.stringify({
         backend: backend.address().port,
         dashboard: dashboard.address().port,
         idp: idp.address().port,
+        kms: kms.address().port,
       }));
       await Promise.all([
         new Promise((resolve) => backend.close(resolve)),
         new Promise((resolve) => dashboard.close(resolve)),
         new Promise((resolve) => idp.close(resolve)),
+        new Promise((resolve) => kms.close(resolve)),
       ]);
     })().catch((error) => {
       console.error(error);
@@ -97,6 +103,7 @@ export function selectE2ERuntimePorts(): E2ERuntimePorts {
         String(requestedBackend),
         String(requestedDashboard),
         String(requestedIdp),
+        String(requestedKms),
       ],
       { encoding: "utf8" },
     ),
@@ -105,6 +112,7 @@ export function selectE2ERuntimePorts(): E2ERuntimePorts {
   process.env.E2E_BACKEND_PORT = String(selected.backend);
   process.env.E2E_DASHBOARD_PORT = String(selected.dashboard);
   process.env.E2E_IDP_PORT = String(selected.idp);
+  process.env.E2E_KMS_PROXY_PORT = String(selected.kms);
   process.env[PORTS_SELECTED] = "1";
   return selected;
 }

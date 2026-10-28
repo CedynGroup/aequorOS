@@ -17,6 +17,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.key_management import registry
+from app.core.key_management.presentation import LOCKED_JSON, LOCKED_TEXT
 from app.db.base import utc_now
 from app.models import (
     BankReportingPeriod,
@@ -258,7 +260,7 @@ def test_findings_returns_active_alert_with_severity_and_module(
 
 
 def test_ingestion_list_and_detail_expose_failure_diagnostics(
-    operator_client: TestClient, operator_db: Session
+    operator_client: TestClient, operator_db: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     organization_id, bank_id = _provision(operator_client)
     batch = IngestionBatch(
@@ -273,7 +275,8 @@ def test_ingestion_list_and_detail_expose_failure_diagnostics(
         records_error=3,
         error_code="translation_incomplete",
         error_message="3 rows failed to translate",
-        validation_report={"errors": 3},
+        validation_report={"errors": 3, "name": "Synthetic private borrower"},
+        etl_report={"name": "Synthetic private borrower"},
     )
     operator_db.add(batch)
     operator_db.commit()
@@ -293,6 +296,11 @@ def test_ingestion_list_and_detail_expose_failure_diagnostics(
     operator_db.commit()
 
     start_inspection(operator_client, organization_id)
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Staff inspection must not unwrap protected data")
+
+    monkeypatch.setattr(registry.provider_for("aws_kms"), "unwrap", refuse_unwrap)
     listing = operator_client.get(
         f"{BASE}/{organization_id}/ingestion", headers=operator_headers()
     ).json()
@@ -307,11 +315,14 @@ def test_ingestion_list_and_detail_expose_failure_diagnostics(
     detail = operator_client.get(
         f"{BASE}/{organization_id}/ingestion/{batch_id}", headers=operator_headers()
     ).json()
-    assert detail["validation_report"] == {"errors": 3}
+    assert row["error_message"] == LOCKED_TEXT
+    assert detail["validation_report"] == {LOCKED_JSON: "support"}
+    assert detail["etl_report"] == {LOCKED_JSON: "support"}
     assert len(detail["translation_failures"]) == 1
     failure = detail["translation_failures"][0]
     assert failure["source_locator"].endswith("R14")
-    assert failure["raw_record"] == {"amount": "not-a-number"}
+    assert failure["raw_record"] == {LOCKED_JSON: "support"}
+    assert failure["error_message"] == LOCKED_TEXT
     assert failure["error_code"] == "bad_number"
 
 

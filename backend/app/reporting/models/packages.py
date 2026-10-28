@@ -222,7 +222,10 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     )
     supersedes_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     snapshot: Mapped[dict[str, Any]] = mapped_column(
-        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+        JSON,
+        default=dict,
+        server_default=sql_text("'{}'"),
+        nullable=False,
     )
     source_runs: Mapped[list[Any]] = mapped_column(
         JSON, default=list, server_default=sql_text("'[]'"), nullable=False
@@ -263,8 +266,7 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     # VERSION), this is stable across regenerations of identical figures and is
     # what a signature binds to.
     content_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # Master-data provenance for packs that bind no engine run (the LRT-*
-    # corporate family, source_runs == []).
+    # Complete-register commitment; scope: docs/attestation_esignature.md §3.1.
     register_state_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     attestation_state: Mapped[str] = mapped_column(
         String(24), default="unsigned", server_default="unsigned", nullable=False

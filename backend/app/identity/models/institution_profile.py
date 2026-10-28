@@ -39,6 +39,7 @@ from sqlalchemy import (
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.key_management.fields import ProtectedJSON, ProtectedText
 from app.db.base import Base, TableArgs, TimestampMixin, UuidV7PrimaryKeyMixin
 
 PARTY_TYPES = ("individual", "legal_entity")
@@ -135,20 +136,28 @@ class RelatedParty(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         ),
         UniqueConstraint("id", "organization_id", name="uq_related_parties_id_org"),
         Index("ix_related_parties_org_bank", "organization_id", "bank_id"),
+        Index(
+            "ix_related_parties_name_blind", "organization_id", "bank_id", "full_name_blind_index"
+        ),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     party_type: Mapped[str] = mapped_column(String(16), nullable=False)
-    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    full_name: Mapped[str] = mapped_column(ProtectedText(), nullable=False)
     contact: Mapped[dict[str, Any]] = mapped_column(
-        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+        ProtectedJSON(empty_object=True),
+        default=dict,
+        server_default=sql_text("'{}'"),
+        nullable=False,
     )
     regulated_elsewhere: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=sql_text("false"), nullable=False
     )
     regulated_jurisdiction: Mapped[str | None] = mapped_column(String(80), nullable=True)
     status: Mapped[str] = mapped_column(String(12), default="active", nullable=False)
+
+    full_name_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class RelatedPartyRole(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
@@ -172,13 +181,19 @@ class RelatedPartyRole(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     party_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     role: Mapped[str] = mapped_column(String(40), nullable=False)
-    other_responsibilities: Mapped[str | None] = mapped_column(Text, nullable=True)
+    other_responsibilities: Mapped[str | None] = mapped_column(
+        ProtectedText(parent=("related_parties", "party_id")), nullable=True
+    )
     appointed_on: Mapped[date | None] = mapped_column(Date, nullable=True)
-    term_of_appointment: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    term_of_appointment: Mapped[str | None] = mapped_column(
+        ProtectedText(parent=("related_parties", "party_id")), nullable=True
+    )
     sitting_allowance: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     travel_allowance: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     annual_fees: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
-    icag_registration: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    icag_registration: Mapped[str | None] = mapped_column(
+        ProtectedText(parent=("related_parties", "party_id")), nullable=True
+    )
 
 
 class Shareholding(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
