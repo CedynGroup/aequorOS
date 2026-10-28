@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Generator
+from concurrent.futures import Future, ThreadPoolExecutor
 from inspect import unwrap
 from typing import cast
 
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.key_management import registry
 from app.db.session import get_sessionmaker
 from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.s3 import get_object_storage
@@ -23,8 +25,10 @@ from tests.conftest import (
     _TestDatabase,
 )
 from tests.support.api_factories import CaseFactory
+from tests.support.database import DatabaseContext, TestDatabaseConnections
 from tests.support.helpers import ORG_1
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.key_concurrency import assert_blocked, backend_pid
 
 _ROLLBACK_ORGANIZATION_ID = "OR-TXROLL01"
 _COMMITTED_ORGANIZATION_ID = "OR-TXCOMM01"
@@ -142,3 +146,43 @@ def test_real_data_fixture_keeps_commits_inside_outer_rollback_on_synthetic_data
             connection.scalar(text("SELECT count(*) FROM organizations WHERE id='OR-RAWROLL1'"))
             == 0
         )
+
+
+def test_bank_key_locks_are_isolated_between_test_schemas(
+    _shared_test_database: _TestDatabase,
+    _shared_committing_database: _TestDatabase,
+) -> None:
+    engine = _shared_test_database.engine
+    if engine.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL advisory locks are required.")
+    waiter: Future[int] = Future()
+    with engine.connect() as connection:
+        schema = cast(object, connection.scalar(text("SELECT current_schema()")))
+    assert isinstance(schema, str)
+    connections = TestDatabaseConnections(
+        engine.url.difference_update_query(["options"]), context=DatabaseContext(schema=schema)
+    )
+    replacement = connections.engine()
+
+    def same_schema_writer() -> None:
+        with Session(replacement) as writer, writer.begin():
+            _ = writer.execute(text("SET LOCAL lock_timeout='1s'"))
+            waiter.set_result(backend_pid(writer))
+            registry.lock_bank_version(writer, ORG_1, "BK-SAMP0001")
+
+    try:
+        with Session(engine) as reader:
+            registry.lock_bank_version(reader, ORG_1, "BK-SAMP0001", read=True)
+            blocker = backend_pid(reader)
+            with Session(_shared_committing_database.engine) as other, other.begin():
+                _ = other.execute(text("SET LOCAL lock_timeout='1s'"))
+                registry.lock_bank_version(other, ORG_1, "BK-SAMP0001")
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                writing = pool.submit(same_schema_writer)
+                try:
+                    assert_blocked(engine, blocker, waiter.result(timeout=5), writing)
+                finally:
+                    reader.rollback()
+                writing.result(timeout=5)
+    finally:
+        connections.close()

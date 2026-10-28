@@ -313,7 +313,9 @@ class ManualUploadAdapter(MarketDataAdapter):
         )
 
     def _storage(self) -> StorageClient:
-        return self._storage_client if self._storage_client is not None else get_storage_client()
+        return (
+            self._storage_client if self._storage_client is not None else get_storage_client()
+        ).for_session(self._db)
 
     def _resolve_staged(self, credentials: CredentialSet) -> tuple[str, bytes]:
         raw = credentials.credentials

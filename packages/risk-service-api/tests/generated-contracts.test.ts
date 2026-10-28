@@ -1,3 +1,4 @@
+import { RelatedPartyUpdateToJSON } from "../src/models/RelatedPartyUpdate";
 import { IcaapApi } from "../src/apis/IcaapApi";
 import { Configuration } from "../src/runtime";
 import { AccountId, instanceOfAccountId } from "../src/models/AccountId";
@@ -430,7 +431,6 @@ void (0 as unknown as AssumptionValueContract);
 void (0 as unknown as ScenarioAssumptionsContract);
 void closedPayload;
 
-
 // ---------------------------------------------------------------------------
 // Multipart form fields carry TEXT.
 //
@@ -502,3 +502,89 @@ void checkMultipartFormFields().catch((error: unknown) => {
   // rather than as an exit code — node still exits non-zero.
   throw error;
 });
+
+const partialPartyWire = JSON.parse(
+  JSON.stringify(
+    RelatedPartyUpdateToJSON({
+      reason: "Update supplied fields",
+      roleUpdates: [
+        {
+          roleId: "0198c7de-95bf-7000-8000-000000000021",
+          annualFees: "75.25",
+          sittingAllowance: "10.50",
+          appointedOn: "2026-10-01",
+          termOfAppointment: null,
+        },
+      ],
+    }),
+  ),
+) as Record<string, unknown>;
+const roleUpdateWire = (
+  partialPartyWire.role_updates as Record<string, unknown>[]
+)[0];
+assert(
+  roleUpdateWire.role_id === "0198c7de-95bf-7000-8000-000000000021",
+  "role update IDs must use the API wire name",
+);
+assert(
+  roleUpdateWire.annual_fees === "75.25",
+  "role fees must serialize as supplied decimal text",
+);
+assert(
+  roleUpdateWire.sitting_allowance === "10.50",
+  "nested role allowances must use API wire names",
+);
+assert(
+  roleUpdateWire.appointed_on === "2026-10-01",
+  "role appointment dates must serialize as ISO dates",
+);
+assert(
+  roleUpdateWire.term_of_appointment === null,
+  "explicit protected clears must remain supplied",
+);
+assert(
+  !("roles" in partialPartyWire) &&
+    !("full_name" in partialPartyWire) &&
+    !("contact" in partialPartyWire),
+  "omitted party fields must stay absent on the wire",
+);
+assert(
+  !("other_responsibilities" in roleUpdateWire),
+  "omitted role fields must stay absent on the wire",
+);
+const replacementWire = JSON.parse(
+  JSON.stringify(
+    RelatedPartyUpdateToJSON({
+      reason: "Replace roles",
+      roles: [
+        {
+          role: "director",
+          otherResponsibilities: "Synthetic duties",
+          icagRegistration: "Synthetic registration",
+        },
+      ],
+    }),
+  ),
+) as Record<string, unknown>;
+const replacementRoleWire = (
+  replacementWire.roles as Record<string, unknown>[]
+)[0];
+assert(
+  replacementRoleWire.other_responsibilities === "Synthetic duties" &&
+    replacementRoleWire.icag_registration === "Synthetic registration",
+  "replacement roles must serialize nested protected fields with API wire names",
+);
+assert(
+  !("role_updates" in replacementWire),
+  "role replacement must not add in-place updates",
+);
+const emptyReplacementWire = JSON.parse(
+  JSON.stringify(
+    RelatedPartyUpdateToJSON({ reason: "Clear roles", roles: [] }),
+  ),
+) as Record<string, unknown>;
+assert(
+  Array.isArray(emptyReplacementWire.roles) &&
+    emptyReplacementWire.roles.length === 0,
+  "an explicit empty replacement must remain supplied",
+);

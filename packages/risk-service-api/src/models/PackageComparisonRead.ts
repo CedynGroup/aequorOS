@@ -11,6 +11,41 @@
  */
 
 import { mapValues } from "../runtime";
+import type { ChangedCount } from "./ChangedCount";
+import {
+  ChangedCountFromJSON,
+  ChangedCountFromJSONTyped,
+  ChangedCountToJSON,
+  ChangedCountToJSONTyped,
+} from "./ChangedCount";
+import type { Identical } from "./Identical";
+import {
+  IdenticalFromJSON,
+  IdenticalFromJSONTyped,
+  IdenticalToJSON,
+  IdenticalToJSONTyped,
+} from "./Identical";
+import type { RemovedCount } from "./RemovedCount";
+import {
+  RemovedCountFromJSON,
+  RemovedCountFromJSONTyped,
+  RemovedCountToJSON,
+  RemovedCountToJSONTyped,
+} from "./RemovedCount";
+import type { UnchangedSectionCount } from "./UnchangedSectionCount";
+import {
+  UnchangedSectionCountFromJSON,
+  UnchangedSectionCountFromJSONTyped,
+  UnchangedSectionCountToJSON,
+  UnchangedSectionCountToJSONTyped,
+} from "./UnchangedSectionCount";
+import type { AddedCount } from "./AddedCount";
+import {
+  AddedCountFromJSON,
+  AddedCountFromJSONTyped,
+  AddedCountToJSON,
+  AddedCountToJSONTyped,
+} from "./AddedCount";
 import type { SnapshotSectionDiffRead } from "./SnapshotSectionDiffRead";
 import {
   SnapshotSectionDiffReadFromJSON,
@@ -34,10 +69,10 @@ import {
 export interface PackageComparisonRead {
   /**
    *
-   * @type {number}
+   * @type {AddedCount}
    * @memberof PackageComparisonRead
    */
-  addedCount: number;
+  addedCount: AddedCount;
   /**
    *
    * @type {PackageComparisonSideRead}
@@ -46,22 +81,28 @@ export interface PackageComparisonRead {
   base: PackageComparisonSideRead;
   /**
    *
-   * @type {number}
+   * @type {ChangedCount}
    * @memberof PackageComparisonRead
    */
-  changedCount: number;
+  changedCount: ChangedCount;
   /**
    *
    * @type {boolean}
    * @memberof PackageComparisonRead
    */
-  identical: boolean;
+  contentLocked?: boolean;
   /**
    *
-   * @type {number}
+   * @type {Identical}
    * @memberof PackageComparisonRead
    */
-  removedCount: number;
+  identical: Identical;
+  /**
+   *
+   * @type {RemovedCount}
+   * @memberof PackageComparisonRead
+   */
+  removedCount: RemovedCount;
   /**
    *
    * @type {Array<SnapshotSectionDiffRead>}
@@ -76,10 +117,10 @@ export interface PackageComparisonRead {
   target: PackageComparisonSideRead;
   /**
    *
-   * @type {number}
+   * @type {UnchangedSectionCount}
    * @memberof PackageComparisonRead
    */
-  unchangedSectionCount: number;
+  unchangedSectionCount: UnchangedSectionCount;
 }
 
 /**
@@ -121,16 +162,20 @@ export function PackageComparisonReadFromJSONTyped(
   }
   return {
     ...json,
-    addedCount: json["added_count"],
+    addedCount: AddedCountFromJSON(json["added_count"]),
     base: PackageComparisonSideReadFromJSON(json["base"]),
-    changedCount: json["changed_count"],
-    identical: json["identical"],
-    removedCount: json["removed_count"],
+    changedCount: ChangedCountFromJSON(json["changed_count"]),
+    contentLocked:
+      json["content_locked"] == null ? undefined : json["content_locked"],
+    identical: IdenticalFromJSON(json["identical"]),
+    removedCount: RemovedCountFromJSON(json["removed_count"]),
     sections: (json["sections"] as Array<any>).map(
       SnapshotSectionDiffReadFromJSON,
     ),
     target: PackageComparisonSideReadFromJSON(json["target"]),
-    unchangedSectionCount: json["unchanged_section_count"],
+    unchangedSectionCount: UnchangedSectionCountFromJSON(
+      json["unchanged_section_count"],
+    ),
   };
 }
 
@@ -147,15 +192,18 @@ export function PackageComparisonReadToJSONTyped(
   }
 
   return {
-    added_count: value["addedCount"],
+    added_count: AddedCountToJSON(value["addedCount"]),
     base: PackageComparisonSideReadToJSON(value["base"]),
-    changed_count: value["changedCount"],
-    identical: value["identical"],
-    removed_count: value["removedCount"],
+    changed_count: ChangedCountToJSON(value["changedCount"]),
+    content_locked: value["contentLocked"],
+    identical: IdenticalToJSON(value["identical"]),
+    removed_count: RemovedCountToJSON(value["removedCount"]),
     sections: (value["sections"] as Array<any>).map(
       SnapshotSectionDiffReadToJSON,
     ),
     target: PackageComparisonSideReadToJSON(value["target"]),
-    unchanged_section_count: value["unchangedSectionCount"],
+    unchanged_section_count: UnchangedSectionCountToJSON(
+      value["unchangedSectionCount"],
+    ),
   };
 }

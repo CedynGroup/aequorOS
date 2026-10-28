@@ -11,6 +11,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.key_management.presentation import (
+    LOCKED_JSON,
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+)
 from app.data_engine.public import CanonicalGlAccount, CanonicalPositionSnapshot
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity.public import Bank
@@ -159,13 +165,13 @@ def get_package_or_404(
 
 def validation_passed(package: RegulatoryPackage) -> bool | None:
     report = package.validation_report
-    if report is None:
+    if report is None or LOCKED_JSON in report:
         return None
     return bool(report.get("passed"))
 
 
 def read_summary(
-    package: RegulatoryPackage, *, stage_title: str | None = None
+    db: Session, package: RegulatoryPackage, *, stage_title: str | None = None
 ) -> RegulatoryPackageSummaryRead:
     """The package as a queue row.
 
@@ -173,6 +179,7 @@ def read_summary(
     resolves every row's title in ONE query (see ``packages.list_packages``),
     and doing it per row would fan a queue out into a query per package.
     """
+    support = support_presentation(db, package.bank_id)
     return RegulatoryPackageSummaryRead(
         id=package.id,
         bank_id=package.bank_id,
@@ -186,12 +193,12 @@ def read_summary(
         supersedes_id=package.supersedes_id,
         generated_by=package.generated_by,
         generated_at=package.generated_at,
-        validation_passed=validation_passed(package),
-        notes=package.notes,
+        validation_passed=None if support else validation_passed(package),
+        notes=None if support else package.notes,
         attestation_state=package.attestation_state,
         submission_revision=package.submission_revision,
         snapshot_sha256=package.snapshot_sha256,
-        regulator_comments=package.regulator_comments,
+        regulator_comments=None if support else package.regulator_comments,
         is_rehearsal=package.is_rehearsal,
         current_stage_seq=package.current_stage_seq,
         current_stage_title=stage_title,
@@ -201,7 +208,29 @@ def read_summary(
     )
 
 
+def support_presentation(db: Session, bank_id: str) -> bool:
+    presentation = db.info.get(SESSION_STATE)
+    support = bool(db.info.get(SESSION_SUPPORT)) or (
+        isinstance(presentation, PresentationState) and presentation.support
+    )
+    if support and isinstance(presentation, PresentationState):
+        presentation.record(bank_id, "support")
+    return support
+
+
 def read_package(db: Session, package: RegulatoryPackage) -> RegulatoryPackageRead:
+    if support_presentation(db, package.bank_id):
+        summary = read_summary(db, package)
+        return RegulatoryPackageRead.model_validate(
+            {
+                **summary.model_dump(),
+                "snapshot": {LOCKED_JSON: "support"},
+                "source_runs": [],
+                "validation_report": None,
+                "approvals": [],
+                "declared_methodologies": [],
+            }
+        )
     approvals = list(
         db.scalars(
             select(RegulatoryPackageApproval)
@@ -216,8 +245,10 @@ def read_package(db: Session, package: RegulatoryPackage) -> RegulatoryPackageRe
         )
     )
     report_payload: dict[str, Any] | None = package.validation_report
+    if report_payload is not None and LOCKED_JSON in report_payload:
+        report_payload = None
     return RegulatoryPackageRead(
-        **read_summary(package).model_dump(),
+        **read_summary(db, package).model_dump(),
         snapshot=package.snapshot,
         source_runs=[PackageSourceRunRead(**entry) for entry in package.source_runs],
         validation_report=(

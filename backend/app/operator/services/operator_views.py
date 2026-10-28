@@ -22,7 +22,7 @@ from fastapi import HTTPException, status
 from pydantic import AwareDatetime, BaseModel
 from sqlalchemy import JSON, Boolean, String, bindparam, func, literal, select, text, tuple_
 from sqlalchemy import cast as sql_cast
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.api.deps import TenantContext
 from app.core.audit_attribution import (
@@ -562,6 +562,18 @@ def _last_ingestion(
 ) -> TenantIngestionSummaryRead | None:
     batch = db.scalar(
         select(IngestionBatch)
+        .options(
+            load_only(
+                IngestionBatch.id,
+                IngestionBatch.organization_id,
+                IngestionBatch.bank_id,
+                IngestionBatch.status,
+                IngestionBatch.source_system,
+                IngestionBatch.as_of_date,
+                IngestionBatch.completed_at,
+                raiseload=True,
+            )
+        )
         .where(
             IngestionBatch.organization_id == organization_id,
             IngestionBatch.bank_id == bank_id,
@@ -590,6 +602,21 @@ def get_tenant_activity(db: Session, organization_id: str, limit: int) -> Tenant
 
     for batch in db.scalars(
         select(IngestionBatch)
+        .options(
+            load_only(
+                IngestionBatch.id,
+                IngestionBatch.organization_id,
+                IngestionBatch.bank_id,
+                IngestionBatch.completed_at,
+                IngestionBatch.created_at,
+                IngestionBatch.source_system,
+                IngestionBatch.as_of_date,
+                IngestionBatch.records_accepted,
+                IngestionBatch.records_error,
+                IngestionBatch.status,
+                raiseload=True,
+            )
+        )
         .where(IngestionBatch.organization_id == organization_id)
         .order_by(IngestionBatch.created_at.desc())
         .limit(limit)
@@ -733,7 +760,7 @@ def stuck_dedup_batches(db: Session, *, limit: int) -> StuckDedupBatchesRead:
     """Ingestion batches whose out-of-band ML-ETL dedup pass can no longer run.
 
     "Can no longer run" is a precise state, not a guess: the batch's own
-    ``etl_report.dedup_status`` still reads ``deferred`` or ``failed`` AND its
+    ``dedup_status`` still reads ``deferred`` or ``failed`` AND its
     most recent ``etl_dedup`` job is terminal with every attempt used, so the
     queue will never touch it again. A batch whose job is still queued/running,
     or which has retries left, is working as designed and is not listed.
@@ -746,8 +773,20 @@ def stuck_dedup_batches(db: Session, *, limit: int) -> StuckDedupBatchesRead:
     batches = list(
         db.scalars(
             select(IngestionBatch)
+            .options(
+                load_only(
+                    IngestionBatch.id,
+                    IngestionBatch.organization_id,
+                    IngestionBatch.bank_id,
+                    IngestionBatch.source_system,
+                    IngestionBatch.as_of_date,
+                    IngestionBatch.records_extracted,
+                    IngestionBatch.dedup_status,
+                    raiseload=True,
+                )
+            )
             .where(
-                IngestionBatch.etl_report.is_not(None),
+                IngestionBatch.dedup_status.in_(STUCK_DEDUP_STATUSES),
                 IngestionBatch.status.in_(BATCH_ACCEPTED_STATUSES),
             )
             .order_by(IngestionBatch.created_at.desc())
@@ -755,9 +794,7 @@ def stuck_dedup_batches(db: Session, *, limit: int) -> StuckDedupBatchesRead:
     )
     rows: list[StuckDedupBatchRead] = []
     for batch in batches:
-        dedup_status = (batch.etl_report or {}).get("dedup_status")
-        if dedup_status not in STUCK_DEDUP_STATUSES:
-            continue
+        dedup_status = batch.dedup_status
         job = job_queue.latest_for_entity(
             db,
             organization_id=batch.organization_id,

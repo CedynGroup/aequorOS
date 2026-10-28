@@ -148,6 +148,13 @@ from app.bi.service.authorization import (
 from app.bi.service.compiler import ColumnSpec, CompiledQuery, compile_query
 from app.bi.service.errors import BiQueryError
 from app.bi.service.execution import QueryResult, execute
+from app.bi.service.identity_policy import (
+    IDENTITY_MEMBERS,
+    IDENTITY_MESSAGE,
+    IDENTITY_REASON,
+    connected,
+    query_identity_members,
+)
 from app.bi.service.insights import assemble as assemble_insights
 from app.bi.service.insights import (
     default_compare_to,
@@ -358,8 +365,12 @@ def _denied(cat: Catalogue, decision: BiAuthorization) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
-            "error_code": "bi_authorization_denied",
-            "message": (
+            "error_code": IDENTITY_REASON
+            if decision.reason == IDENTITY_REASON
+            else "bi_authorization_denied",
+            "message": IDENTITY_MESSAGE
+            if decision.reason == IDENTITY_REASON
+            else (
                 "Your access does not cover every field this view needs. "
                 "An Org Owner can grant the fields listed here."
             ),
@@ -744,8 +755,11 @@ class _Visibility:
     #: however its pair was decided — the query path refuses exactly those, and
     #: the catalogue must not advertise what the query path refuses.
     whole_institution: bool = True
+    identity_restricted: bool = False
 
     def allows(self, member: MemberDef) -> bool:
+        if self.identity_restricted and member.id in IDENTITY_MEMBERS:
+            return False
         if not self.pairs.get((member.module, member.sensitivity), False):
             return False
         return self.whole_institution or branch_readable(member)
@@ -797,14 +811,20 @@ def _visible_pairs(
     rule is applied by :meth:`_Visibility.allows` where it belongs.
     """
 
-    pairs = scope_pairs(cat.members())
+    protected = connected(db, access.ctx.organization_id, access.bank.id)
+    pairs = scope_pairs(
+        tuple(
+            member for member in cat.members() if not protected or member.id not in IDENTITY_MEMBERS
+        )
+    )
     by_representative = {
         _representative(cat, member_ids): pair for pair, member_ids in pairs.items()
     }
     denied, scopes = _probe(db, access, cat, list(by_representative), surface=surface)
-    allowed = {pair: member_id not in denied for member_id, pair in by_representative.items()}
+    allowed = dict.fromkeys(pairs, False)
+    allowed.update({pair: member_id not in denied for member_id, pair in by_representative.items()})
     if _whole_institution(scopes):
-        return _Visibility(pairs=allowed, whole_institution=True)
+        return _Visibility(pairs=allowed, whole_institution=True, identity_restricted=protected)
     # NOT ``all(...)`` over a possibly EMPTY list: a scoped reader's preferred
     # representatives are institution-grain in four of the twelve pairs, so the
     # first pass can come back wholly denied — and a vacuous ``all(())`` would
@@ -821,7 +841,9 @@ def _visible_pairs(
         for member_id, pair in retry.items():
             allowed[pair] = member_id not in retried
         scopes = [*scopes, *retry_scopes]
-    return _Visibility(pairs=allowed, whole_institution=_whole_institution(scopes))
+    return _Visibility(
+        pairs=allowed, whole_institution=_whole_institution(scopes), identity_restricted=protected
+    )
 
 
 def _whole_institution(scopes: Sequence[BiDataScope]) -> bool:
@@ -911,6 +933,10 @@ def get_bi_catalogue(
     visible_dimension_ids = {d.id for d in dimensions}
     hierarchies: list[BiCatalogueHierarchyRead] = []
     for hierarchy in cat.hierarchies():
+        if allowed.identity_restricted and any(
+            level in IDENTITY_MEMBERS for level in hierarchy.levels
+        ):
+            continue
         levels = [level for level in hierarchy.levels if level in visible_dimension_ids]
         if levels:
             hierarchies.append(
@@ -926,6 +952,7 @@ def get_bi_catalogue(
         # of the same pairs, so an institution-wide representation must not revalidate
         # for them (nor theirs for an institution-wide reader).
         allowed.whole_institution,
+        allowed.identity_restricted,
         *sorted(
             f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.pairs.items() if ok
         ),
@@ -1358,8 +1385,13 @@ def _pack_widget_read(  # noqa: PLR0913 - one widget, its place, its date and it
 
     query = None if widget.query is None else widget.query.for_period(as_of)
     if query is not None:
+        requested_identity = query_identity_members(cat, query)
+        authority = replace(allowed, identity_restricted=False)
         refused = [
-            member.id for member in query_members(cat, query) if not _visible(member, allowed)
+            member.id
+            for member in query_members(cat, query)
+            if not _visible(member, authority)
+            or (allowed.identity_restricted and member.id in requested_identity)
         ]
         if refused:
             denied.extend(member_id for member_id in refused if member_id not in denied)
@@ -1413,6 +1445,12 @@ def _pack_read(  # noqa: PLR0913 - one pack, its date, its reader and the two lo
         access, message = "granted", PACK_MESSAGES["partial"]
     else:
         access, message = "granted", PACK_MESSAGES["granted"]
+    if allowed.identity_restricted and any(
+        query_identity_members(cat, widget.query.for_period(as_of))
+        for widget in spec.widgets
+        if widget.query is not None
+    ):
+        message = IDENTITY_MESSAGE
     return BiPackRead(
         id=spec.id,
         title=spec.title,
@@ -1512,6 +1550,7 @@ def list_bi_packs(  # noqa: PLR0913 - FastAPI injects db/access/response/header
         # of the same pairs, so an institution-wide representation must not revalidate
         # for them (nor theirs for an institution-wide reader).
         allowed.whole_institution,
+        allowed.identity_restricted,
         *sorted(
             f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.pairs.items() if ok
         ),
@@ -1588,6 +1627,7 @@ def get_bi_pack(  # noqa: PLR0913 - FastAPI injects db/access/response/header
         # of the same pairs, so an institution-wide representation must not revalidate
         # for them (nor theirs for an institution-wide reader).
         allowed.whole_institution,
+        allowed.identity_restricted,
         *sorted(
             f"{module}/{sensitivity}" for (module, sensitivity), ok in allowed.pairs.items() if ok
         ),

@@ -32,6 +32,13 @@ import {
   BiNotificationRecipientToJSON,
   BiNotificationRecipientToJSONTyped,
 } from "./BiNotificationRecipient";
+import type { LockedReason } from "./LockedReason";
+import {
+  LockedReasonFromJSON,
+  LockedReasonFromJSONTyped,
+  LockedReasonToJSON,
+  LockedReasonToJSONTyped,
+} from "./LockedReason";
 import type { LatestAsOf } from "./LatestAsOf";
 import {
   LatestAsOfFromJSON,
@@ -114,6 +121,12 @@ export interface BiAlertRead {
    * @memberof BiAlertRead
    */
   latestState?: LatestState;
+  /**
+   *
+   * @type {LockedReason}
+   * @memberof BiAlertRead
+   */
+  lockedReason?: LockedReason;
   /**
    *
    * @type {string}
@@ -258,6 +271,10 @@ export function BiAlertReadFromJSONTyped(
       json["latest_state"] == null
         ? undefined
         : LatestStateFromJSON(json["latest_state"]),
+    lockedReason:
+      json["locked_reason"] == null
+        ? undefined
+        : LockedReasonFromJSON(json["locked_reason"]),
     measureId: json["measure_id"],
     measureLabel: json["measure_label"],
     name: json["name"],
@@ -309,6 +326,7 @@ export function BiAlertReadToJSONTyped(
     latest_as_of: LatestAsOfToJSON(value["latestAsOf"]),
     latest_detail: value["latestDetail"],
     latest_state: LatestStateToJSON(value["latestState"]),
+    locked_reason: LockedReasonToJSON(value["lockedReason"]),
     measure_id: value["measureId"],
     measure_label: value["measureLabel"],
     name: value["name"],
