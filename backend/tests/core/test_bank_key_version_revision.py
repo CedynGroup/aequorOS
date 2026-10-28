@@ -13,6 +13,7 @@ from app.core.key_management.local import LocalKeyProvider
 from app.db.base import utc_now
 from tests.core.test_bank_field_encryption import BANK_A, BANK_B, KEY_A
 from tests.db.test_postgres_migrations import alembic_config_for_app
+from tests.support.database import TestDatabaseConnections
 from tests.support.helpers import ORG_1
 
 
@@ -93,7 +94,8 @@ def test_revision_local_versions_reindex_populated_and_empty_banks_without_healt
     assert revision is not None
     migration = cast(VersionMigration, cast(object, revision.module))
     metadata, keys, envelopes, parties = revision_tables()
-    engine = sa.create_engine("sqlite://")
+    connections = TestDatabaseConnections("sqlite://")
+    engine = connections.engine()
     metadata.create_all(engine)
     with engine.begin() as connection:
         for bank in (BANK_A, BANK_B):
@@ -163,4 +165,4 @@ def test_revision_local_versions_reindex_populated_and_empty_banks_without_healt
         migration.backfill_versions(connection)
         assert connection.execute(sa.select(parties)).mappings().all() == stored
         assert connection.scalar(sa.select(sa.func.count()).select_from(envelopes)) == 3
-    engine.dispose()
+    connections.close()
