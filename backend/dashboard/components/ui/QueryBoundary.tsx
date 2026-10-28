@@ -132,13 +132,19 @@ export default function QueryBoundary({
   children: ReactNode;
 }) {
   const hidden = isLoading || Boolean(error);
-  const [hasContent, setHasContent] = useState(false);
-  if (!hidden && !hasContent) setHasContent(true);
+  const [content, setContent] = useState<{ children: ReactNode } | null>(null);
+  // Error handling may clear data-derived children. Keep the last visible tree
+  // while hidden so Activity can preserve its forms and native disclosures.
+  if (!hidden && (!content || content.children !== children)) {
+    setContent({ children });
+  }
   const panel = error ? <ErrorPanel error={error} onRetry={onRetry} /> : null;
   return (
     <>
-      {hasContent && (
-        <Activity mode={hidden ? "hidden" : "visible"}>{children}</Activity>
+      {content && (
+        <Activity mode={hidden ? "hidden" : "visible"}>
+          {content.children}
+        </Activity>
       )}
       {isLoading ? (
         <>{skeleton ?? <PageSkeleton contained={contained} />}</>
