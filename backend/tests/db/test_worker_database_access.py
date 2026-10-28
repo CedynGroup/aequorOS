@@ -22,10 +22,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import select, text
 from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from alembic import command
 from app import worker
@@ -64,6 +64,7 @@ from scripts import create_operator
 from tests.db import test_database_roles as foundation
 from tests.db import test_postgres_migrations as migrations
 from tests.live_data import conftest as live_data
+from tests.support.database import managed_engine, managed_session_factory
 from tests.support.helpers import ORG_1, ORG_2
 from tests.support.stateful import run_database_machine
 
@@ -90,7 +91,7 @@ def scoped(engine: Engine, org: str, bank: str | None = None) -> Session:
 
 @pytest.fixture
 def legacy_engines(
-    administrator: Engine, monkeypatch: pytest.MonkeyPatch
+    administrator: Engine, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> Iterator[dict[str, Engine]]:
     engines: dict[str, Engine] = {}
     names: list[str] = []
@@ -111,8 +112,8 @@ def legacy_engines(
                 connection.execute(
                     text(f"GRANT SELECT, INSERT, UPDATE ON operator_users TO {name}")
                 )
-            engines[purpose] = create_engine(
-                make_url(administrator.url).set(username=name, password=password)
+            engines[purpose] = managed_engine(
+                request, make_url(administrator.url).set(username=name, password=password)
             )
         yield engines
     finally:
@@ -372,6 +373,7 @@ def test_worker_key_resolution_is_job_scoped_and_storage_uses_worker_credentials
     role_banks: dict[str, str],
     administrator: Engine,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     provider = LocalKeyProvider()
     try:
@@ -390,7 +392,7 @@ def test_worker_key_resolution_is_job_scoped_and_storage_uses_worker_credentials
             admin.commit()
         monkeypatch.setattr(
             "app.db.session.get_worker_sessionmaker",
-            lambda: sessionmaker(role_engines["aqs_worker"]),
+            lambda: managed_session_factory(request, role_engines["aqs_worker"]),
         )
         with worker_tenant_context(ORG_1, role_banks[ORG_1]), get_storage_session() as session:
             own = DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_1}")
@@ -427,6 +429,7 @@ def test_optional_encryption_refuses_foreign_and_same_org_other_bank_storage(
     role_engines: dict[str, Engine],
     administrator: Engine,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     with Session(administrator) as admin:
         banks = [
@@ -449,7 +452,9 @@ def test_optional_encryption_refuses_foreign_and_same_org_other_bank_storage(
     monkeypatch.setenv("BANK_KEY_REQUIRED", "0")
     get_key_settings.cache_clear()
     monkeypatch.setattr(
-        database, "get_worker_sessionmaker", lambda: sessionmaker(role_engines["aqs_worker"])
+        database,
+        "get_worker_sessionmaker",
+        lambda: managed_session_factory(request, role_engines["aqs_worker"]),
     )
     encryption = ObjectEncryption()
     try:
@@ -473,6 +478,7 @@ def test_worker_can_verify_both_audit_streams_without_reading_them(
     administrator: Engine,
     monkeypatch: pytest.MonkeyPatch,
     organization_id: str | None,
+    request: pytest.FixtureRequest,
 ) -> None:
     monkeypatch.setenv("AUDIT_INTEGRITY_ENABLED", "1")
     for org in (ORG_1, ORG_2):
@@ -489,7 +495,9 @@ def test_worker_can_verify_both_audit_streams_without_reading_them(
         connection.execute(
             text("UPDATE audit_integrity_schedule SET run_after = :now"), {"now": NOW}
         )
-    factory = sessionmaker(role_engines["aqs_worker"], info={"organization_id": organization_id})
+    factory = managed_session_factory(
+        request, role_engines["aqs_worker"], info={"organization_id": organization_id}
+    )
     results = audit_integrity.AuditIntegrityTask().run(factory, NOW)
     assert results is not None
     assert {result.stream for result in results} == {"audit_events", "operator_audit_log"}
@@ -518,6 +526,7 @@ def test_desk_views_allow_robot_drafts_and_refuse_approval_or_base_writes(
     role_engines: dict[str, Engine],
     administrator: Engine,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     with Session(administrator) as admin:
         admin.add(
@@ -534,7 +543,9 @@ def test_desk_views_allow_robot_drafts_and_refuse_approval_or_base_writes(
         )
         admin.commit()
     monkeypatch.setattr(
-        worker, "get_worker_sessionmaker", lambda: sessionmaker(role_engines["aqs_worker"])
+        worker,
+        "get_worker_sessionmaker",
+        lambda: managed_session_factory(request, role_engines["aqs_worker"]),
     )
     with worker.job_session(ORG_1) as session:
         draft = DeskDetermination(
@@ -565,10 +576,12 @@ def test_desk_views_allow_robot_drafts_and_refuse_approval_or_base_writes(
 
 @pytest.fixture
 def worker_desk_session(
-    role_engines: dict[str, Engine], monkeypatch: pytest.MonkeyPatch
+    role_engines: dict[str, Engine], monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> Iterator[Session]:
     monkeypatch.setattr(
-        worker, "get_worker_sessionmaker", lambda: sessionmaker(role_engines["aqs_worker"])
+        worker,
+        "get_worker_sessionmaker",
+        lambda: managed_session_factory(request, role_engines["aqs_worker"]),
     )
     with worker.job_session(ORG_1) as session:
         yield session
@@ -725,16 +738,19 @@ def test_worker_observation_refuses_financial_and_lineage_changes(
 
 
 @pytest.mark.parametrize("envelope_bank", [True, False])
-def test_dispatch_refuses_conflicting_or_foreign_payload_bank_before_handler(
+def test_dispatch_refuses_conflicting_or_foreign_payload_bank_before_handler(  # noqa: PLR0913 - pytest fixture and parametrization inputs
     role_engines: dict[str, Engine],
     role_banks: dict[str, str],
     administrator: Engine,
     monkeypatch: pytest.MonkeyPatch,
     envelope_bank: bool,
+    request: pytest.FixtureRequest,
 ) -> None:
     monkeypatch.setenv("BI_SCHEDULER_ENABLED", "0")
     monkeypatch.setattr(
-        worker, "get_worker_sessionmaker", lambda: sessionmaker(role_engines["aqs_worker"])
+        worker,
+        "get_worker_sessionmaker",
+        lambda: managed_session_factory(request, role_engines["aqs_worker"]),
     )
     with Session(administrator) as admin:
         job = job_queue.enqueue(
@@ -762,6 +778,7 @@ def test_worker_dispatch_state_machine(
     administrator: Engine,
     role_banks: dict[str, str],
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Queue → running → success/retry; wrong-lane polls and terminal polls do nothing.
 
@@ -771,7 +788,9 @@ def test_worker_dispatch_state_machine(
     monkeypatch.setattr(
         worker,
         "get_worker_sessionmaker",
-        lambda: sessionmaker(role_engines["aqs_worker"], expire_on_commit=False),
+        lambda: managed_session_factory(
+            request, role_engines["aqs_worker"], expire_on_commit=False
+        ),
     )
     monkeypatch.setenv("BI_SCHEDULER_ENABLED", "0")
 
@@ -1015,8 +1034,9 @@ def test_worker_visibility_accepts_claim_capability_and_refuses_api_role(
     role_engines: dict[str, Engine],
     monkeypatch: pytest.MonkeyPatch,
     role: str,
+    request: pytest.FixtureRequest,
 ) -> None:
-    factory = sessionmaker(role_engines[role])
+    factory = managed_session_factory(request, role_engines[role])
     monkeypatch.setattr(database, "get_worker_sessionmaker", lambda: factory)
     assert database.worker_visibility().can_claim == (role == "aqs_worker")
 
@@ -1132,6 +1152,7 @@ def test_legacy_bypass_worker_operates_before_and_after_compatibility_migration(
     administrator: Engine,
     role_schema: migrations.MigratedPostgresSchema,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     name, password = f"legacy_worker_{uuid4().hex}", uuid4().hex
     config = migrations.alembic_config_for_app()
@@ -1149,9 +1170,11 @@ def test_legacy_bypass_worker_operates_before_and_after_compatibility_migration(
         schema = admin.dialect.identifier_preparer.quote_identifier(role_schema.schema_name)
         admin.execute(text(f"GRANT USAGE ON SCHEMA {schema} TO {name}"))
         admin.execute(text(f"GRANT SELECT, INSERT, UPDATE ON jobs, worker_heartbeats TO {name}"))
-    engine = create_engine(make_url(administrator.url).set(username=name, password=password))
+    engine = managed_engine(
+        request, make_url(administrator.url).set(username=name, password=password)
+    )
     try:
-        factory = sessionmaker(engine, expire_on_commit=False)
+        factory = managed_session_factory(request, engine, expire_on_commit=False)
         monkeypatch.setattr(worker, "get_worker_sessionmaker", lambda: factory)
         command.downgrade(config, "202610120096")
         for after_migration in (False, True):
@@ -1313,6 +1336,7 @@ def test_compatibility_migration_does_not_promote_readonly_legacy_bypass_role(
     administrator: Engine,
     role_schema: migrations.MigratedPostgresSchema,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     name, password = f"legacy_reader_{uuid4().hex}", uuid4().hex
     config = migrations.alembic_config_for_app()
@@ -1329,7 +1353,9 @@ def test_compatibility_migration_does_not_promote_readonly_legacy_bypass_role(
         )
         connection.execute(text(f"GRANT USAGE ON SCHEMA {schema} TO {name}"))
         connection.execute(text(f"GRANT SELECT ON {schema}.jobs TO {name}"))
-    engine = create_engine(make_url(administrator.url).set(username=name, password=password))
+    engine = managed_engine(
+        request, make_url(administrator.url).set(username=name, password=password)
+    )
     try:
         command.downgrade(config, "202610120096")
         command.upgrade(config, "head")

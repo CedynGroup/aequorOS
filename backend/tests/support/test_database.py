@@ -4,15 +4,29 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
 import pytest
+import sqlalchemy
+from psycopg.errors import LockNotAvailable
 from sqlalchemy import Engine, event, inspect, text
-from sqlalchemy.exc import IntegrityError, ResourceClosedError
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError, IntegrityError, ResourceClosedError
 
-from tests.support.database import DatabaseContext, TestDatabaseConnections, isolated_database
+from app.core.key_management import registry
+from tests.support.database import (
+    DatabaseContext,
+    TestDatabaseConnections,
+    database_connections,
+    install_migration_engines,
+    isolated_database,
+    managed_engine,
+    managed_session_factory,
+)
 
 
 def test_connections_share_data_and_close_resources(tmp_path: Path) -> None:
@@ -207,3 +221,95 @@ def test_role_variant_changes_database_authority() -> None:
             assert connection.scalar(text("SELECT current_schema()")) == schema
         with db.connection() as connection:
             assert connection.scalar(text("SELECT current_user")) == original_role
+
+
+class FixtureLifetime:
+    def __init__(self) -> None:
+        self.resources: ExitStack = ExitStack()
+
+    def addfinalizer(self, finalizer: Callable[[], None]) -> None:
+        _ = self.resources.callback(finalizer)
+
+
+def test_fixture_factory_closes_sessions_and_preserves_explicit_tenant(tmp_path: Path) -> None:
+    lifetime = FixtureLifetime()
+    url = f"sqlite:///{tmp_path / 'fixture.db'}"
+    engine = managed_engine(lifetime, url)
+    with engine.begin() as connection:
+        _ = connection.execute(text("CREATE TABLE probe (value integer)"))
+    maker = managed_session_factory(lifetime, engine, info={"organization_id": "OR-EXPLICIT"})
+    session = maker()
+    assert session.info["organization_id"] == "OR-EXPLICIT"
+    assert session.autoflush
+    assert session.expire_on_commit
+    _ = session.execute(text("INSERT INTO probe VALUES (1)"))
+    lifetime.resources.close()
+    assert not session.in_transaction()
+    with pytest.raises(RuntimeError, match="already been closed"), engine.connect():
+        pass
+    with database_connections(url) as database, database.connection() as connection:
+        assert connection.scalar(text("SELECT count(*) FROM probe")) == 0
+
+
+def test_alembic_factory_keeps_database_hooks_and_ownership(tmp_path: Path) -> None:
+    hooks: list[Engine] = []
+    url = f"sqlite:///{tmp_path / 'migration.db'}"
+    with (
+        database_connections(url, hooks=(hooks.append,)) as database,
+        pytest.MonkeyPatch.context() as patch,
+    ):
+        engine = database.engine()
+        install_migration_engines(patch, engine)
+        migrated = sqlalchemy.engine_from_config({"sqlalchemy.url": url})
+        with migrated.begin() as connection:
+            _ = connection.execute(text("CREATE TABLE probe (value integer)"))
+        with engine.connect() as connection:
+            assert "probe" in inspect(connection).get_table_names()
+        assert hooks == [engine, migrated]
+        with pytest.raises(ValueError, match="owning test database and schema"):
+            _ = sqlalchemy.engine_from_config(
+                {"sqlalchemy.url": f"sqlite:///{tmp_path / 'another.db'}"}
+            )
+    with pytest.raises(RuntimeError, match="already been closed"), migrated.connect():
+        pass
+
+
+@postgres_only
+def test_adopted_and_migration_pools_preserve_schema_lock_identity(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with (
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as owner,
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as other,
+        database_connections(owner.database_url) as adopted,
+    ):
+        with owner.connection() as connection:
+            role = cast(str, connection.scalar(text("SELECT current_user")))
+        options = f"-cstatement_timeout=10000 -crole={role} " + cast(
+            str, make_url(owner.database_url).query["options"]
+        )
+        with database_connections(
+            make_url(owner.database_url).update_query_dict({"options": options})
+        ) as configured:
+            install_migration_engines(monkeypatch, owner.engine())
+            pools = [
+                owner.engine(),
+                adopted.engine(),
+                managed_engine(request, owner.database_url),
+                configured.engine(),
+                sqlalchemy.engine_from_config({"sqlalchemy.url": owner.database_url}),
+            ]
+            with owner.session() as holder:
+                registry.lock_bank_version(holder, "OR-LOCKTEST", "BK-LOCKTEST", read=True)
+                for engine in pools:
+                    with managed_session_factory(request, engine)() as contender:
+                        _ = contender.execute(text("SET LOCAL lock_timeout='250ms'"))
+                        with pytest.raises(DBAPIError) as error:
+                            registry.lock_bank_version(contender, "OR-LOCKTEST", "BK-LOCKTEST")
+                        assert isinstance(error.value.orig, LockNotAvailable)
+                with other.session() as independent:
+                    _ = independent.execute(text("SET LOCAL lock_timeout='250ms'"))
+                    registry.lock_bank_version(independent, "OR-LOCKTEST", "BK-LOCKTEST")
+            with adopted.session() as released:
+                _ = released.execute(text("SET LOCAL lock_timeout='250ms'"))
+                registry.lock_bank_version(released, "OR-LOCKTEST", "BK-LOCKTEST")
