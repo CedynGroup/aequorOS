@@ -73,6 +73,9 @@ run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -
 [tasks.unit]
 description = "Run database-free unit tests with database connections refused"
 run = "uv run pytest -m unit --suite-only -n logical --dist load --durations=20"
+# Independent pytest workers own parallelism; numeric libraries must not each
+# create another runner-wide pool while several ML cases fit concurrently.
+env = { OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1", VECLIB_MAXIMUM_THREADS = "1" }
 
 [tasks.integration]
 description = "Run integration tests against disposable local Postgres"

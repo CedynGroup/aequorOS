@@ -18,10 +18,27 @@ def scheduler(config: pytest.Config, log: object) -> object:
     result = factory(config, log)
 
     def scope(nodeid: str) -> str:
-        # This contract's audit assertion consumes earlier cases through one
-        # class-scoped log. Every other case is an independent scheduling unit.
-        contract = "tests/storage/test_inmemory_contract.py::TestInMemoryStorageContract::"
-        return contract if nodeid.startswith(contract) else nodeid
+        groups = (
+            # The audit assertion consumes earlier cases through a class log.
+            (
+                "storage-audit",
+                ("tests/storage/test_inmemory_contract.py::TestInMemoryStorageContract::",),
+            ),
+            # Rebuilding these immutable module fixtures on every worker costs
+            # more than their independent assertions can save in parallel.
+            ("openapi-schema", ("tests/api/test_openapi_contract.py::",)),
+            (
+                "shard-reports",
+                (
+                    "tests/architecture/test_ci_postgres.py::test_real_workers_partition_every_test_and_preserve_junit_names",
+                    "tests/architecture/test_ci_postgres.py::test_coverage_guard_rejects_incomplete_or_inconsistent_results[",
+                ),
+            ),
+        )
+        for group, prefixes in groups:
+            if nodeid.startswith(prefixes):
+                return group
+        return nodeid
 
     patch: Callable[[object, str, object], None] = setattr
     patch(result, "_split_scope", scope)

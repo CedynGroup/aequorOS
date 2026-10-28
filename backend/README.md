@@ -520,9 +520,12 @@ must match the catalogue, and aggregate execution reports prove the other owners
 exact coverage; a second full-tree collection is unnecessary. Integration-only
 modules are never imported by this selector. Mixed modules still share their
 module imports, while their known integration/e2e functions are not collected.
-The run uses the runner's logical CPU count and per-case load scheduling, retaining
+Numeric libraries use one thread per worker to avoid nested OpenMP/BLAS pools
+when several ML cases fit concurrently. The run uses the runner's logical CPU
+count and per-case load scheduling, retaining
 the in-memory storage audit sequence on one worker because it shares mutable
-class state. `--durations=20` reports setup/call/teardown outliers. Database
+class state. The immutable OpenAPI schema and generated shard reports also stay
+on one worker each, avoiding repeated expensive module-fixture setup. `--durations=20` reports setup/call/teardown outliers. Database
 connections are refused before collection. Each process records attempts separately;
 the controller requires identical worker classifications and exact combined JUnit
 coverage. Combined local runs also refuse connections for each unit test, before
