@@ -1,4 +1,4 @@
-"""Explicit unit/integration ownership without moving feature-local test files.
+"""Explicit unit/integration/e2e ownership without moving feature-local test files.
 
 The generated catalogue declares every parametrized test by its exact node ID.
 There is no module default or implicit fallback for new tests.
@@ -22,7 +22,7 @@ if __package__:
 else:
     from database_contracts import check_classification, verify_execution
 
-Suite = Literal["unit", "integration"]
+Suite = Literal["unit", "integration", "e2e"]
 CATALOGUE = Path(__file__).with_name("test_suites.json")
 
 
@@ -40,15 +40,21 @@ def catalogue() -> tuple[dict[str, Suite], dict[str, Suite]]:
         json.loads(CATALOGUE.read_text(), object_pairs_hook=_unique_object),
     )
     cases = raw["cases"]
-    if not cases or any(value not in ("unit", "integration") for value in cases.values()):
-        raise ValueError("Test suite must be unit or integration")
+    if not cases or any(value not in ("unit", "integration", "e2e") for value in cases.values()):
+        raise ValueError("Test suite must be unit, integration or e2e")
     modules: dict[str, Suite] = {}
     for nodeid, suite in cases.items():
         if "::" not in nodeid:
             raise ValueError("Generated catalogue requires exact test node IDs")
         module = nodeid.split("::", 1)[0]
         previous = modules.get(module, "unit")
-        modules[module] = "integration" if "integration" in (previous, suite) else "unit"
+        modules[module] = (
+            "integration"
+            if "integration" in (previous, suite)
+            else "e2e"
+            if "e2e" in (previous, suite)
+            else "unit"
+        )
     return modules, cast(dict[str, Suite], cases)
 
 
@@ -65,6 +71,30 @@ def unit_modules() -> frozenset[str]:
     return frozenset(module for module, suite in modules.items() if suite == "unit")
 
 
+def selected_modules(suite: str) -> list[str]:
+    return sorted(
+        {nodeid.split("::")[0] for nodeid, assigned in catalogue()[1].items() if assigned == suite}
+    )
+
+
+def verify_module_inventory(root: Path, paths: list[str], patterns: list[str]) -> None:
+    """Inventory files without importing integration-only test modules.
+
+    Actual collection checks every case in selected modules. The aggregate joins
+    the other owners' collected identities, so a new, empty, deleted or excluded
+    module cannot be hidden by the optimized unit selection.
+    """
+    discovered = {
+        path.relative_to(root).as_posix()
+        for directory in paths
+        for pattern in patterns
+        for path in (root / directory).rglob(pattern)
+        if "__pycache__" not in path.parts
+    }
+    if discovered != set(catalogue()[0]):
+        raise ValueError("Test modules on disk differ from the generated catalogue")
+
+
 def case_key(nodeid: str) -> tuple[str, str]:
     address, bracket, params = nodeid.partition("[")
     module, *names = address.split("::")
@@ -72,13 +102,31 @@ def case_key(nodeid: str) -> tuple[str, str]:
     return ".".join([module.removesuffix(".py").replace("/", "."), *names[:-1]]), names[-1]
 
 
+def _verify_service_execution(reports: list[Path]) -> None:
+    service_nodes = cast(dict[str, dict[str, str]], json.loads(CATALOGUE.read_text())).get(
+        "services", {}
+    )
+    service_keys = {case_key(nodeid) for nodeid in service_nodes}
+    if any(
+        case.find("skipped") is not None
+        for report in reports
+        for case in ET.parse(report).iter("testcase")
+        if (case.get("classname", ""), case.get("name", "")) in service_keys
+    ):
+        raise ValueError("External service contract skipped across CI owners")
+
+
 def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = None) -> None:
-    """Join unit, schema, suite, lock and storage reports against full collection."""
+    """Join unit, e2e, schema, suite, lock and storage reports against full collection."""
     classified = cast(
         dict[str, str], json.loads((directory / "unit-tests" / "collection.json").read_text())
     )
-    if not classified or set(classified.values()) != {"unit", "integration"}:
-        raise ValueError("Missing unit/integration classification evidence")
+    if not classified or not {"unit", "integration"} <= set(classified.values()) <= {
+        "unit",
+        "integration",
+        "e2e",
+    }:
+        raise ValueError("Missing unit/integration/e2e classification evidence")
     check_classification(classified, protected=protected)
     files = cast(list[str], json.loads(os.getenv("CI_POSTGRES_FILES", "[]")))
     indices = set(range(1, 5))
@@ -97,11 +145,12 @@ def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = N
         *(f"pg-suite-{index}" for index in indices),
         *(f"pg-schema-{index}" for index in range(1, 3)),
     }
+    expected_reports.update({"e2e-tests"} if "e2e" in classified.values() else set())
     if {report.parent.name for report in reports} != expected_reports:
         raise ValueError("Missing or unexpected CI execution owner report")
     actual: Counter[tuple[str, str]] = Counter()
     for report in reports:
-        suite = "unit" if report.parent.name == "unit-tests" else "integration"
+        suite = {"unit-tests": "unit", "e2e-tests": "e2e"}.get(report.parent.name, "integration")
         cases = list(ET.parse(report).iter("testcase"))
         identities = [(case.get("classname", ""), case.get("name", "")) for case in cases]
         allowed = {
@@ -114,6 +163,7 @@ def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = N
         if any(case.find(tag) is not None for case in cases for tag in ("error", "failure")):
             raise ValueError(f"Failed CI execution in {report}")
         actual.update(identities)
+    _verify_service_execution(reports)
     omitted: set[str] = set()
     if files:
         for manifest in directory.glob("pg-suite-*/collection-*.json"):

@@ -87,6 +87,11 @@ description = "Run the backend unit suite"
 dir = "backend"
 run = "mise run risk-service:test-unit"
 
+[tasks."risk-service:test-e2e"]
+description = "Run backend Playwright e2e contracts"
+dir = "backend"
+run = "mise run risk-service:test-e2e"
+
 [tasks."risk-service:test-integration"]
 description = "Run the backend integration suite"
 dir = "backend"

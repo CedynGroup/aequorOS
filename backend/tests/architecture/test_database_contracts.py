@@ -53,7 +53,14 @@ def test_contract_collection_and_required_execution(
         "stale-protected",
     }
     suites = tmp_path / "suites.json"
-    _ = suites.write_text(json.dumps({"cases": {nodeid: "integration" if integration else "unit"}}))
+    cases = {nodeid: "integration" if integration else "unit"}
+    sql_node = "test_sql.py::test_sql"
+    if scenario == "unit":
+        cases[sql_node] = "integration"
+        _ = (tmp_path / "test_sql.py").write_text(
+            "def test_sql(): raise AssertionError('not unit')\n"
+        )
+    _ = suites.write_text(json.dumps({"cases": cases}))
     contracts = tmp_path / "contracts.json"
     _ = contracts.write_text(
         json.dumps(
@@ -62,10 +69,16 @@ def test_contract_collection_and_required_execution(
                     {
                         "category": "SQL",
                         "reason": "Synthetic guard contract",
-                        "cases": [nodeid + "_old" if scenario == "stale-protected" else nodeid],
+                        "cases": [
+                            sql_node
+                            if scenario == "unit"
+                            else nodeid + "_old"
+                            if scenario == "stale-protected"
+                            else nodeid
+                        ],
                     }
                 ]
-                if protected
+                if protected or scenario == "unit"
                 else []
             }
         )
@@ -80,6 +93,11 @@ def test_contract_collection_and_required_execution(
         "@pytest.fixture\ndef annex_input(current_annex_repository):\n"
         "    return current_annex_repository\n"
         "@pytest.fixture\ndef db_session(): return None\n"
+        + (
+            "def pytest_configure(config): config.option.suite_only = True\n"
+            if scenario == "unit"
+            else ""
+        )
     )
     arguments = {
         "protected-fake": "current_annex_repository",
@@ -108,7 +126,7 @@ def test_contract_collection_and_required_execution(
     for name in ("CI_UNIT_REPORT_DIR", "CI_DATABASE_CENSUS"):
         _ = environment.pop(name, None)
     selection: list[str] = []
-    if scenario == "stale-protected":
+    if scenario in {"stale-protected", "unit"}:
         environment["CI_UNIT_REPORT_DIR"] = str(tmp_path / "evidence")
         selection = ["-m", "unit"]
     result = subprocess.run(
