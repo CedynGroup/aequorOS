@@ -135,10 +135,18 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
         for connection in (api, legacy_api):
             connection.execute(text("SET LOCAL idle_in_transaction_session_timeout = '1s'"))
         # A transaction-scoped advisory lock proves that termination releases locks.
-        lock_key = int(uuid4().hex[:14], 16)
-        api.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+        # Use the two-integer namespace for this generic termination probe;
+        # the shared test hook namespaces encryption's one-integer bank locks.
+        lock_token = uuid4().hex
+        lock_keys = {
+            "class_id": int(lock_token[:7], 16),
+            "object_id": int(lock_token[7:14], 16),
+        }
+        api.execute(text("SELECT pg_advisory_xact_lock(:class_id, :object_id)"), lock_keys)
         assert (
-            worker.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key})
+            worker.scalar(
+                text("SELECT pg_try_advisory_xact_lock(:class_id, :object_id)"), lock_keys
+            )
             is False
         )
         long_job = jobs.submit(worker.scalar, text("SELECT 42 FROM pg_sleep(2)"))
@@ -159,7 +167,10 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
             assert getattr(terminated.value.orig, "sqlstate", None) == "25P03"
         assert long_job.result(timeout=10) == 42
         assert (
-            worker.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key}) is True
+            worker.scalar(
+                text("SELECT pg_try_advisory_xact_lock(:class_id, :object_id)"), lock_keys
+            )
+            is True
         )
         assert bi.scalar(text("SELECT 42 FROM pg_sleep(0.1)")) == 42
         worker.commit()
