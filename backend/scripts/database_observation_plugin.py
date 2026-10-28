@@ -72,6 +72,15 @@ def pytest_collection_finish(session: pytest.Session) -> None:
         _selected = True
         trace.emit("session_start")
         trace.emit("selected", nodeids=[item.nodeid for item in session.items])
+        for item in session.items:
+            for requirement in item.iter_markers("requires_service"):
+                service = str(cast(object, requirement.args[0]))
+                trace.emit(
+                    "service",
+                    nodeid=item.nodeid,
+                    service=service,
+                    suite="e2e" if service == "playwright" else "integration",
+                )
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)

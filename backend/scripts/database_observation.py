@@ -8,8 +8,8 @@ the unit refusal guard must not replace the driver's failure behavior.
 from __future__ import annotations
 
 import importlib
-import json
 import os
+import socket
 import sqlite3
 import sqlite3.dbapi2 as sqlite_dbapi
 import subprocess
@@ -27,31 +27,29 @@ from scripts.ci_database_children import (
     instrument_command,
     python_path,
 )
+from scripts.database_events import (
+    CONTEXT_ENV,
+    DIRECTORY_ENV,
+    RUN_ENV,
+    context,
+    emit,
+    service_connection,
+)
+from scripts.database_events import service_command as _command_service
 
-DIRECTORY_ENV = "CI_DATABASE_OBSERVATIONS"
-CONTEXT_ENV = "CI_DATABASE_CONTEXT"
-RUN_ENV = "CI_DATABASE_OBSERVATION_RUN"
+__all__ = ["CONTEXT_ENV", "DIRECTORY_ENV", "RUN_ENV", "context", "emit", "install"]
+
 _installed = False
 
 
-def context() -> dict[str, object]:
-    return cast(dict[str, object], json.loads(os.getenv(CONTEXT_ENV, "{}")))
+def _observe_services() -> None:
+    original = socket.socket.connect
 
+    def service_connect(connection: socket.socket, address: object) -> None:
+        service_connection(address)
+        original(connection, cast(tuple[str, int], address))
 
-def emit(kind: str, **values: object) -> None:
-    directory = os.getenv(DIRECTORY_ENV)
-    if not directory:
-        return
-    path = Path(directory)
-    path.mkdir(parents=True, exist_ok=True)
-    event = {"kind": kind, "pid": os.getpid(), "run": os.getenv(RUN_ENV, ""), **context(), **values}
-    descriptor = os.open(
-        path / f"events-{os.getpid()}.jsonl", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
-    )
-    try:
-        _ = os.write(descriptor, (json.dumps(event, sort_keys=True) + "\n").encode())
-    finally:
-        os.close(descriptor)
+    socket.socket.connect = service_connect
 
 
 def install() -> None:
@@ -95,6 +93,8 @@ def install() -> None:
             if hasattr(driver, attribute):
                 instrument(driver, attribute)
 
+    _observe_services()
+
     original_popen = cast(Callable[..., None], subprocess.Popen.__init__)
 
     def observed_popen(*args: object, **kwargs: object) -> None:
@@ -107,6 +107,7 @@ def install() -> None:
         environment["PYTHONPATH"] = python_path(environment.get("PYTHONPATH", ""))
         kwargs["env"] = environment
         command = args[1] if len(args) > 1 else kwargs.get("args")
+        _command_service(command)
         replacement = instrument_command(command)
         if len(args) > 1:
             args = (args[0], replacement, *args[2:])

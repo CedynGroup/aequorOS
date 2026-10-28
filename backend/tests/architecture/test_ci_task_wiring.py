@@ -15,6 +15,7 @@ convention.
 from __future__ import annotations
 
 import ast
+import json
 import os
 import re
 import shlex
@@ -326,10 +327,12 @@ def test_unit_suite_task_and_ci_job_are_explicit() -> None:
         "pytest",
         "-m",
         "unit",
+        "--suite-only",
         "-n",
-        "4",
+        "auto",
         "--dist",
-        "loadfile",
+        "load",
+        "--durations=20",
     ]
     document = cast(
         dict[str, dict[str, dict[str, object]]],
@@ -343,6 +346,7 @@ def test_unit_suite_task_and_ci_job_are_explicit() -> None:
     assert not any("setup-postgres" in str(step.get("uses", "")) for step in steps)
     assert job["if"] == "needs.preflight.outputs.guards == 'true'"
     assert document["jobs"]["postgres-suite"]["name"] == "Integration tests"
+    assert {"architecture", "backend-e2e"} <= set(_needs(document["jobs"]["gate"]))
 
 
 # --------------------------------------------------------------------------
@@ -581,64 +585,63 @@ def test_the_full_suite_ignores_exactly_what_its_sibling_tasks_run() -> None:
 
 
 def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path) -> None:
-    """The collection-equality step is the only check that CI SAW every test.
-
-    Everything else in the workflow answers "did the command pass?". Losing this
-    step would not turn anything red — which is exactly why it needs a test of
-    its own.
-    """
-    document = cast(
-        dict[str, dict[str, dict[str, object]]],
-        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
-    )
-    steps = cast(list[dict[str, object]], document["jobs"]["architecture"]["steps"])
-    step = next(
-        step
-        for step in steps
-        if step.get("name") == "Every test module is collected by the hermetic run"
-    )
-    assert step["working-directory"] == "backend"
-    assert "if" not in step
-    assert not step.get("continue-on-error", False)
-    script = cast(str, step["run"])
-    for report in ("on_disk.txt", "collected.txt"):
-        script = script.replace(f"/tmp/{report}", shlex.quote(str(tmp_path / report)))
-
+    """Selective collection rejects drift without importing integration-only files."""
     tests = tmp_path / "tests"
     tests.mkdir()
-    _ = (tmp_path / "pytest.ini").write_text("[pytest]\n")
-    for module in ("test_example.py", "example_test.py"):
-        _ = (tests / module).write_text("def test_example():\n    raise AssertionError\n")
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    uv = bin_dir / "uv"
-    _ = uv.write_text(
-        '#!/bin/sh\n[ "$1" = run ] && [ "$2" = pytest ] || exit 97\nshift 2\n'
-        f'exec {shlex.quote(sys.executable)} -I -m pytest "$@"\n'
+    _ = (tmp_path / "pytest.ini").write_text("[pytest]\ntestpaths=tests\n")
+    nodes = {"tests/test_unit.py::test_unit": "unit", "tests/test_db.py::test_db": "integration"}
+    _ = (tests / "test_unit.py").write_text(
+        "class TestClient:\n    def __init__(self): pass\ndef test_unit(): assert True\n"
     )
-    uv.chmod(0o755)
+    _ = (tests / "test_db.py").write_text("raise RuntimeError('integration module imported')\n")
+    catalogue = tmp_path / "suites.json"
+    _ = (tmp_path / "probe_catalogue.py").write_text(
+        "from pathlib import Path\nfrom scripts import test_suites\n"
+        + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
+        + "test_suites.catalogue.cache_clear()\n"
+    )
     environment = {
         **os.environ,
-        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "PYTHONPATH": os.pathsep.join([str(tmp_path), str(TESTS.parent)]),
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
         "PYTEST_ADDOPTS": "",
         "PYTEST_PLUGINS": "",
+        "CI_UNIT_REPORT_DIR": str(tmp_path / "evidence"),
     }
-    for extra_module, source, succeeds in (
-        ("test_extra.py", "def test_extra():\n    raise AssertionError\n", True),
-        ("test_extra.py", "VALUE = 1\n", False),
-        ("extra_test.py", "VALUE = 1\n", False),
-        ("test_extra.py", "raise RuntimeError('collection failure')\n", False),
+    _ = environment.pop("CI_DATABASE_CENSUS", None)
+    for extra_module, source, declared, succeeds in (
+        ("test_extra.py", "def test_extra(): assert True\n", True, True),
+        ("test_extra.py", "VALUE = 1\n", False, False),
+        ("extra_test.py", "VALUE = 1\n", False, False),
+        ("test_extra.py", "raise RuntimeError('collection failure')\n", True, False),
+        ("test_extra.py", "def test_extra(): pass\ndef test_new(): pass\n", True, False),
+        ("test_extra.py", "VALUE = 1\n", True, False),
     ):
         extra = tests / extra_module
         _ = extra.write_text(source)
+        owners = dict(nodes)
+        if declared:
+            owners[f"tests/{extra_module}::test_extra"] = "unit"
+        _ = catalogue.write_text(json.dumps({"cases": owners}))
         result = subprocess.run(
-            ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "--rootdir=.",
+                "-p",
+                "scripts.test_suites_plugin",
+                "-p",
+                "probe_catalogue",
+                "-m",
+                "unit",
+                "--suite-only",
+            ],
             cwd=tmp_path,
             env=environment,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=60,
             check=False,
         )
         assert (result.returncode == 0) == succeeds, result.stdout + result.stderr

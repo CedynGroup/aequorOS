@@ -438,20 +438,24 @@ records transition guards, coverage boundaries, and bounded Hypothesis profiles.
 ```bash
 mise run unit         # database-free tests; any database connection fails
 mise run integration  # database/external-service tests on disposable Postgres
+mise run risk-service:test-e2e  # backend Playwright contracts
 ```
 
-Both commands work at the repository root or in `backend/`. Their explicit
-pytest selectors are `-m unit` and `-m integration`; the corresponding
-`risk-service:test-unit` and `risk-service:test-integration` aliases are available.
+These commands work at the repository root or in `backend/`. Their explicit
+pytest selectors are `-m unit`, `-m integration` and `-m e2e`; unit and integration
+also have `risk-service:test-unit` and `risk-service:test-integration` aliases.
+Install dashboard dependencies with `pnpm install --frozen-lockfile` at the repository
+root before running the e2e suite or the full census.
+
 Feature-local paths stay in place, preserving imports and fixture/data paths.
 [`scripts/test_suites.json`](scripts/test_suites.json) is generated from observed
-connection acquisition for every exact parametrized test ID. There are no module
-defaults or manual function overrides. Collection rejects new/unclassified IDs,
+database and external-service requirements for every exact parametrized test ID.
+There are no module defaults or manual function overrides. Collection rejects new/unclassified IDs,
 duplicate collection and conflicting suite markers before marker deselection.
 SQLite counts as a database. Optional primary-data tests retain their explicit
 opt-in; the census never supplies primary-bank data.
 
-Refresh ownership after adding tests or changing database use:
+Refresh ownership after adding tests or changing database or service requirements:
 
 ```bash
 mise run risk-service:refresh-test-suites /absolute/path/to/empty/census-evidence
@@ -471,6 +475,9 @@ then run `scripts/test_suite_census.py generate <full-dir> --supplement <profile
 The supplement must contain only identities from the full census, and conflicting
 proven ownership across profiles is rejected. A failing run returns nonzero and reports its inconclusive cases;
 fix failures before claiming full validation.
+For newly merged tests, `--extend <complete-new-test-profile>` adds disjoint
+identities with the same execution evidence requirements; overlapping identities
+are rejected. Existing ownership still comes from the retained full census.
 
 The observer records driver connection attempts and SQLAlchemy pooled checkouts
 across setup, call, teardown, shared fixtures and inherited Python subprocesses.
@@ -478,27 +485,32 @@ Shared-fixture evidence applies to every consumer, including failed setup and
 cached setup failures; nested fixtures and registered finalizers retain attribution.
 An attempted acquisition counts as database use even when it fails or is caught:
 the unit guard must not replace a driver's expected refusal. A fully passing case
-with no observed use is unit-owned. Positive acquisition evidence proves integration
-ownership even when execution fails or a child does not confirm instrumentation;
-neither profile may replace it with proven unit ownership. Without an acquisition,
+with no observed database or external-service use and no unconfirmed children is
+unit-owned. Positive database acquisition evidence rules out unit ownership even
+when execution fails or a child does not confirm instrumentation; neither profile
+may replace it with proven unit ownership. Without a database or service requirement,
 skipped/failed cases and unconfirmed children retain conservative integration
 ownership and appear in `inconclusive.json`. A skipped case is not
 proof that an integration test could be moved; run its applicable profile to obtain
 evidence. This preserves explicit ownership without changing product assertions.
 
-The unit CI owner also starts disposable MinIO and OpenBao for storage/signing
-cases that use those HTTP services without opening a database. PostgreSQL is never
-provisioned there, and connection refusal stays active. The managed MinIO endpoint
-is scoped to storage/schema packages, matching their existing service owners;
-production-TLS and mocked AWS tests elsewhere retain their ordinary endpoint
-configuration. Tests can still set an explicit endpoint in their own fixtures.
-Locally, provide the
-corresponding S3/OpenBao test settings to exercise those service-gated cases.
+The unit owner has no PostgreSQL, MinIO, OpenBao or dashboard dependency setup.
+Observed MinIO/OpenBao connections and native service processes are integration
+requirements; Playwright launches are e2e requirements. A declared
+`requires_service` marker covers contracts whose assertions consume state from
+earlier service-using cases. The generated catalogue also records these service
+requirements so the aggregate rejects skipped service contracts. To enrich an
+older database-only census, pass `--services <complete-service-profile>` to
+`generate`; only positive service requirements can change ownership. MinIO runs
+in storage/schema jobs and the shard containing native service contracts;
+OpenBao runs in its integration shard. Backend Playwright contracts have one
+explicit e2e job beside dashboard journeys. Every test has one of three owners:
+unit, integration or e2e.
 
 Every CI owner emits the same observations alongside its JUnit report. The final
 integration gate invokes `scripts/test_suite_census.py check` on those existing
-executions: observed unit database use and fully executed integration cases with
-no database use both fail with the exact IDs to refresh. The independent partition
+executions: observed unit database/service use and fully executed integration/e2e cases without
+their observed dependency both fail with the exact IDs to refresh. The independent partition
 guard proves the observed selection has exactly one execution owner, including
 conservative affected-module CI runs. Original database-free files remain in
 place; classification never changes test imports or fixtures.
@@ -508,8 +520,21 @@ collection. This enables model-only checks inside mixed migration modules whose
 module-wide skip condition requires that setting. No PostgreSQL service is
 provisioned, and any attempted use of the sentinel fails the connection guard.
 
-A dedicated unit run uses four workers with `--dist loadfile` and refuses
-database connections before collection. Each process records attempts separately;
+A dedicated unit run selects only generated unit-bearing modules before imports,
+then prunes known non-unit functions before parametrization. Unknown test functions
+and parameter identities fail collection. With CI evidence enabled, missing cases
+also fail collection and the filesystem inventory must match the catalogue.
+Aggregate execution reports prove the other owners'
+exact coverage; a second full-tree collection is unnecessary. Integration-only
+modules are never imported by this selector. Mixed modules still share their
+module imports, while their known integration/e2e functions are not collected.
+Numeric libraries use one thread per worker to avoid nested OpenMP/BLAS pools
+when several ML cases fit concurrently. The run uses the runner's detected CPU
+count (`-n auto`) and per-case load scheduling, retaining
+the in-memory storage audit sequence on one worker because it shares mutable
+class state. The immutable OpenAPI schema and generated shard reports also stay
+on one worker each, avoiding repeated expensive module-fixture setup. `--durations=20` reports setup/call/teardown outliers. Database
+connections are refused before collection. Each process records attempts separately;
 the controller requires identical worker classifications and exact combined JUnit
 coverage. Combined local runs also refuse connections for each unit test, before
 fixture setup. Finalization follows fixture ownership: integration-only fixture
@@ -517,11 +542,14 @@ cleanup remains permitted when the last test is unit-owned, while fixtures consu
 by a unit test retain refusal during their finalizers.
 SQLAlchemy, psycopg (including async), SQLite and installed database-direct driver
 entry points are guarded, including Python subprocesses with fresh environments.
+Ordinary Python children start with stdlib-only instrumentation; a loader wraps
+database drivers before their imports return instead of eagerly importing every
+SDK into tiny subprocess probes. SQLite also has a process-wide audit guard.
+Grandchildren retain refusal and observation even with a fresh environment.
 Attempts fail the run even when caught. The unit CI owner compares the complete
 classified collection with JUnit identities and permits no dropped, duplicated,
 skipped, failed or errored unit case. It uploads `unit-tests` classification,
-connection-attempt and execution evidence. The full-tree module collection check
-also remains enforced.
+connection-attempt and execution evidence. Module inventory and exact case coverage remain enforced in that same collection.
 
 `mise run risk-service:test` remains the combined compatibility run:
 
@@ -583,8 +611,8 @@ CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 release binaries and verify pinned SHA256 digests before execution. MinIO uses a
 disposable built-in KMS key named `aequoros-key`; it also serves
 [dashboard journeys](dashboard/README.md#end-to-end-playwright).
-The integration shard owning live signing cases also starts OpenBao, alongside
-the unit owner's service setup described above. Both services listen on loopback
+The integration shard owning live signing cases also starts OpenBao. Both
+services listen on loopback
 and stop at job cleanup. Other API,
 health and operator provisioning tests retain their in-process storage fakes;
 credential-vault encryption tests need no vault server. The live storage and
@@ -592,7 +620,7 @@ OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
 
 The integration aggregate also joins the lock and storage execution reports with
-unit and Postgres shard evidence. Their selected union must match the classified
+unit, e2e and Postgres shard evidence. Their selected union must match the classified
 collection exactly once. Storage integration cases run only in the storage job,
 except key-rotation concurrency, which belongs to locks. The storage job also
 runs for merge groups. A conservative affected-module run excludes only the
@@ -671,6 +699,8 @@ assignment before removing transferred modules from the refreshed weights.
 - Hermetic and Postgres-gated mutation checks follow [Run Tests](#run-tests), including
   its dedicated test-database requirement. Tests against the primary are limited to the
   read-only live-data suite above.
+- Test connection construction, fixture selection and the direct-constructor ratchet
+  are documented in the [test connection guide](tests/support/DATABASE.md).
 - **`Base.metadata.create_all` skips migrations.** The hermetic pytest suite and the
   shared Playwright bootstrap therefore use `tests/fixtures/reference_data.py` to seed
   every GLOBAL registry from the same catalogues

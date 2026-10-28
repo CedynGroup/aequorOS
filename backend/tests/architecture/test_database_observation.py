@@ -124,6 +124,7 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     )
     assert isolated_result.returncode == 0, isolated_result.stdout + isolated_result.stderr
     assert (tmp_path / "isolated-attempts.txt").read_text()
+    _assert_normal_child_refusals(tmp_path)
     _assert_managed_service_scope(tmp_path)
     _assert_combined_fixture_ownership(tmp_path)
     _assert_failed_fixture_consumers(tmp_path)
@@ -369,6 +370,85 @@ def _assert_combined_fixture_ownership(tmp_path: Path) -> None:
             assert "Unit database connection guard failed" in result.stdout + result.stderr
 
 
+def _assert_normal_child_refusals(tmp_path: Path) -> None:
+    attempts = tmp_path / "normal-attempts.txt"
+    programs = [
+        "import sqlite3; sqlite3.connect(':memory:')",
+        "import _sqlite3; _sqlite3.connect(':memory:')",
+        "import psycopg; psycopg.connect('host=127.0.0.1 port=1 dbname=unused')",
+        "import psycopg; psycopg.Connection.connect('host=127.0.0.1 port=1 dbname=unused')",
+        "import asyncio,psycopg; "
+        "asyncio.run(psycopg.AsyncConnection.connect('host=127.0.0.1 port=1 dbname=unused'))",
+        "from sqlalchemy import create_engine; create_engine('sqlite://').connect()",
+        "from sqlalchemy import create_engine; create_engine('sqlite://').raw_connection()",
+        "import oracledb; oracledb.connect(dsn='127.0.0.1:1/unused')",
+    ]
+    environment = {
+        **os.environ,
+        "CI_NO_DATABASE_ATTEMPTS": str(attempts),
+        "PYTHONPATH": os.pathsep.join([str(BACKEND / "scripts/ci_no_database"), str(BACKEND)]),
+    }
+    for program in programs:
+        _ = attempts.write_text("")
+        code = (
+            "import sys\nassert 'psycopg' not in sys.modules and 'sqlalchemy' not in sys.modules\n"
+            + "try:\n    "
+            + program
+            + "\nexcept AssertionError: pass\nelse: raise RuntimeError('child bypassed refusal')\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert attempts.read_text(), program
+    # The light bootstrap must propagate a fresh environment without waiting
+    # for any driver import in the launching process.
+    code = (
+        "import subprocess,sys\n"
+        "result=subprocess.run([sys.executable,'-c',"
+        "\"import psycopg; psycopg.connect('host=127.0.0.1 port=1 dbname=unused')\"],"
+        "env={},capture_output=True,text=True)\n"
+        "assert result.returncode != 0, result.stderr\n"
+        "assert 'Database connections are forbidden' in result.stderr, result.stderr\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    threaded = (
+        "from concurrent.futures import ThreadPoolExecutor\nimport importlib\n"
+        "def connect(name):\n"
+        "    try:\n"
+        "        driver=importlib.import_module(name)\n"
+        "        if name=='sqlalchemy': driver.create_engine('sqlite://').connect()\n"
+        "        else: driver.connect(':memory:' if name=='sqlite3' else "
+        "'host=127.0.0.1 port=1 dbname=unused')\n"
+        "    except AssertionError: return True\n"
+        "    return False\n"
+        "with ThreadPoolExecutor(max_workers=3) as pool:\n"
+        "    assert all(pool.map(connect,['psycopg','sqlalchemy','sqlite3']))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", threaded],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def _assert_managed_service_scope(tmp_path: Path) -> None:
     scope_root = tmp_path / "service_scope"
     (scope_root / "tests/storage").mkdir(parents=True)
@@ -492,6 +572,41 @@ def _assert_supplement_preserves_acquisitions(tmp_path: Path) -> None:
     integrations = dict.fromkeys(nodes, "integration")
     output = tmp_path / "generated.json"
     assert classify(unit) == (units, {})
+    for suite in ("integration", "e2e"):
+        for outcome in ("passed", "skipped"):
+            service = tmp_path / f"service-{suite}-{outcome}"
+            _ = _write_census_profile(service, "none", outcome)
+            with (service / "events-1.jsonl").open("a") as stream:
+                for node in nodes:
+                    stream.write(
+                        json.dumps(
+                            {"kind": "consumes", "pid": 1, "nodeid": node, "fixtures": ["service"]}
+                        )
+                        + "\n"
+                    )
+                stream.write(
+                    json.dumps(
+                        {"kind": "service", "pid": 1, "fixtures": ["service"], "suite": suite}
+                    )
+                    + "\n"
+                )
+            owners = dict.fromkeys(nodes, suite)
+            assert classify(service) == (owners, {})
+            generate(unit, output, services=service)
+            assert json.loads(output.read_text()) == {"cases": owners, "services": owners}
+            check(service, output)
+            generate(unit, output)
+            with pytest.raises(ValueError, match="ownership drift"):
+                check(service, output)
+    extension = tmp_path / "additional-tests"
+    _ = _write_census_profile(extension, "direct", "passed")
+    events = extension / "events-1.jsonl"
+    _ = events.write_text(events.read_text().replace("test_probe.py", "test_added.py"))
+    added = {node.replace("test_probe.py", "test_added.py"): "integration" for node in nodes}
+    generate(unit, output, extension=extension)
+    assert json.loads(output.read_text()) == {"cases": units | added}
+    with pytest.raises(ValueError, match="Extension overlaps"):
+        generate(unit, output, extension=unit)
     for source in ("direct", "fixture", "child"):
         for outcome in ("passed", "setup", "call", "teardown", "skipped", "child"):
             positive = tmp_path / f"positive-{source}-{outcome}"

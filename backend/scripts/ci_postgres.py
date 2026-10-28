@@ -175,6 +175,12 @@ def plan(root: Path, event: str, base: str) -> dict[str, object]:
             "include": [
                 {
                     "shard": index,
+                    "minio": (not files or "tests/scripts/test_local_services.py" in files)
+                    and index
+                    == assignments.get(
+                        "tests/scripts/test_local_services.py",
+                        shard_for("tests/scripts/test_local_services.py"),
+                    ),
                     "openbao": not files
                     and index == assignments.get(BAO_MODULE, shard_for(BAO_MODULE)),
                 }
