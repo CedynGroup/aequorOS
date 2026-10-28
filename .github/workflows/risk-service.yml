@@ -318,6 +318,8 @@ jobs:
           install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
+      - name: Install dashboard dependencies for the Playwright cancellation contract
+        run: mise exec -- pnpm install --frozen-lockfile
       - name: Start MinIO for database-free storage contracts
         id: minio
         uses: ./.github/actions/setup-minio
