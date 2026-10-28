@@ -51,6 +51,8 @@ from tests.icaap.service.p3_support import (
     write_every_section,
 )
 
+pytestmark = pytest.mark.canonical_book_baseline
+
 
 class _OrderedAttachment(TypedDict):
     kind: str

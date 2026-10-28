@@ -16,7 +16,6 @@ from app.icaap.service import cycles
 from app.models import Bank
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
-    materialize_canonical_test_book,
 )
 from tests.fixtures.icaap import synthetic_frameworks as synthetic
 
@@ -24,6 +23,7 @@ from tests.fixtures.icaap import synthetic_frameworks as synthetic
 # (Ghana's is 15/17 pending_primary_text, D-006). Registered here so the P3
 # suites take it as an ordinary fixture instead of importing it per module.
 from tests.icaap.service.p3_support import extra_frameworks  # noqa: F401
+from tests.support.canonical_book import canonical_test_book
 from tests.support.helpers import ORG_1, USER_1
 
 #: The canonical book runs 2025-04 .. 2026-03, so FY2025 has a 31 December
@@ -42,7 +42,7 @@ def icaap_enabled(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 @pytest.fixture
 def canonical_book(db_session: Session) -> Session:
-    materialize_canonical_test_book(db_session)
+    canonical_test_book(db_session)
     db_session.commit()
     return db_session
 

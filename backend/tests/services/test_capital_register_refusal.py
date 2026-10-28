@@ -70,6 +70,8 @@ from tests.fixtures.capital_structure import (
 from tests.services.sf_book import seed_fx
 from tests.support.authority import grant_organization_analyst
 
+pytestmark = pytest.mark.canonical_book_baseline
+
 
 @pytest.fixture
 def refused_book(db_session: Session) -> tuple[Bank, BankReportingPeriod]:
