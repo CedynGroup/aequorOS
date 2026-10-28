@@ -472,6 +472,9 @@ then run `scripts/test_suite_census.py generate <full-dir> --supplement <profile
 The supplement must contain only identities from the full census, and conflicting
 proven ownership across profiles is rejected. A failing run returns nonzero and reports its inconclusive cases;
 fix failures before claiming full validation.
+For newly merged tests, `--extend <complete-new-test-profile>` adds disjoint
+identities with the same execution evidence requirements; overlapping identities
+are rejected. Existing ownership still comes from the retained full census.
 
 The observer records driver connection attempts and SQLAlchemy pooled checkouts
 across setup, call, teardown, shared fixtures and inherited Python subprocesses.

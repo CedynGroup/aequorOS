@@ -598,6 +598,15 @@ def _assert_supplement_preserves_acquisitions(tmp_path: Path) -> None:
             generate(unit, output)
             with pytest.raises(ValueError, match="ownership drift"):
                 check(service, output)
+    extension = tmp_path / "additional-tests"
+    _ = _write_census_profile(extension, "direct", "passed")
+    events = extension / "events-1.jsonl"
+    _ = events.write_text(events.read_text().replace("test_probe.py", "test_added.py"))
+    added = {node.replace("test_probe.py", "test_added.py"): "integration" for node in nodes}
+    generate(unit, output, extension=extension)
+    assert json.loads(output.read_text()) == {"cases": units | added}
+    with pytest.raises(ValueError, match="Extension overlaps"):
+        generate(unit, output, extension=unit)
     for source in ("direct", "fixture", "child"):
         for outcome in ("passed", "setup", "call", "teardown", "skipped", "child"):
             positive = tmp_path / f"positive-{source}-{outcome}"

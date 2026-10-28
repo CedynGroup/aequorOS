@@ -144,7 +144,11 @@ def classify(  # noqa: PLR0912, PLR0915
 
 
 def generate(
-    directory: Path, output: Path, supplement: Path | None = None, services: Path | None = None
+    directory: Path,
+    output: Path,
+    supplement: Path | None = None,
+    services: Path | None = None,
+    extension: Path | None = None,
 ) -> None:
     cases, inconclusive = classify(directory)
     service_owners, _ = classify(directory, services_only=True)
@@ -170,6 +174,14 @@ def generate(
         service_owners.update(external)
         for nodeid in external:
             _ = inconclusive.pop(nodeid, None)
+    if extension is not None:
+        added, unresolved = classify(extension)
+        if set(added) & set(cases):
+            raise ValueError("Extension overlaps the existing complete census")
+        cases.update(added)
+        inconclusive.update(unresolved)
+        external, _ = classify(extension, services_only=True)
+        service_owners.update(external)
     payload = {"cases": cases}
     if service_owners:
         payload["services"] = service_owners
@@ -298,6 +310,7 @@ def main() -> int:
     _ = parser.add_argument("--output", type=Path, default=CATALOGUE)
     _ = parser.add_argument("--supplement", type=Path)
     _ = parser.add_argument("--services", type=Path)
+    _ = parser.add_argument("--extend", type=Path)
     _ = parser.add_argument("--mode", choices=["native", "docker"], default="native")
     arguments = parser.parse_args()
     directory = cast(Path, arguments.directory)
@@ -310,6 +323,7 @@ def main() -> int:
             cast(Path, arguments.output),
             cast(Path | None, arguments.supplement),
             cast(Path | None, arguments.services),
+            cast(Path | None, arguments.extend),
         )
     else:
         check(directory, cast(Path, arguments.output))
