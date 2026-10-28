@@ -13,7 +13,8 @@ import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadg
 
 /** Draft capabilities are reached deliberately from the preparation workspace. */
 type Props = {
-  tabs: (Tab & { ruleCode?: string })[];
+  // null exempts a cross-module tab from the context instrument.
+  tabs: (Tab & { ruleCode?: string | null })[];
   children: ReactNode;
   contextRule?: string;
 };
@@ -52,14 +53,16 @@ function ModulePreparationSurface({ tabs, children, contextRule }: Props) {
     const instrument = instrumentFor(code);
     return Boolean(instrument && (isRuleInForce(instrument) || preparing));
   };
+  const tabRule = (tab: Props["tabs"][number] | undefined) =>
+    tab?.ruleCode === null ? undefined : (tab?.ruleCode ?? moduleRule);
   const visible = tabs
-    .filter((tab) => available(tab.ruleCode ?? moduleRule))
+    .filter((tab) => available(tabRule(tab)))
     .map((tab) => ({
       ...tab,
       href: preparationHref(tab.href, preparing),
     }));
   const selected = tabs.find((tab) => tab.href === pathname);
-  const selectedRule = ruleFor(selected?.ruleCode ?? moduleRule);
+  const selectedRule = ruleFor(tabRule(selected));
   const instrument = instrumentFor(selectedRule);
   return (
     <>
