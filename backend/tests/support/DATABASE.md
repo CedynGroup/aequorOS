@@ -7,16 +7,16 @@ constructor calls. The architecture suite rejects new calls and stale entries.
 Remove entries as each test area moves to this API. Once the inventory is empty,
 remove the allowlist and make strict mode the default.
 
-Use `test_db_connections` for an **empty**, per-test PostgreSQL schema when
+Use `isolated_db` for an **empty**, per-test PostgreSQL schema when
 `TEST_DATABASE_URL` is set, or a temporary SQLite file otherwise. It never seeds
 financial data. Use `db_session` and `db_client` when testing the existing shared
 application baseline. A session can bind to an outer transaction opened through
 the same factory:
 
 ```python
-with test_db_connections.connection() as connection:
+with isolated_db.connection() as connection:
     with connection.begin():
-        with test_db_connections.session(
+        with isolated_db.session(
             bind=connection, join_transaction_mode="create_savepoint"
         ) as session:
             ...
@@ -64,6 +64,10 @@ before bootstrap creates it. `administrative=True` is reserved for cluster-role
 probes that have no tenant schema; their search path is pinned to `pg_catalog`.
 It does not grant any database privileges.
 
+For an existing schema outside a pytest request's lifecycle, use
+`database_connections(database_url, schema=schema_name)` as a context manager.
+It owns connection resources without creating or dropping the schema.
+
 `managed_session_factory` preserves SQLAlchemy's autoflush and expiry defaults;
 `TestDatabaseConnections.session_factory` defaults both to false for application
 sessions. Both accept explicit options, preserve explicit tenant info, and close
@@ -93,9 +97,9 @@ Set explicit tenant and role defaults without leaving the test's schema:
 ```python
 from dataclasses import replace
 
-tenant = test_db_connections.with_context(
+tenant = isolated_db.with_context(
     replace(
-        test_db_connections.context,
+        isolated_db.context,
         organization_id="OR-TEST",
         bank_id="BK-TEST",
         role="aqs_api",
@@ -115,10 +119,11 @@ tenant from an earlier pool user.
 For a module-scoped or standalone fixture, use
 `isolated_database(os.environ["TEST_DATABASE_URL"], ...)`. It owns a generated
 schema and drops it after disposing all test engines. SQLite callers supply a
-path in pytest's temporary directory. PostgreSQL factories reject construction
-without an explicit disposable schema. Never pass a production database URL.
+path in pytest's temporary directory. PostgreSQL factories require an explicit
+disposable schema, except for the administrative probes described above. Never
+pass a production database URL.
 
-`hooks=(install_hook, ...)` on `isolated_database` or
+`hooks=(install_hook, ...)` on `isolated_database`, `database_connections` or
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
 sync facades. The encryption stack's schema-scoped lock isolation is still a
