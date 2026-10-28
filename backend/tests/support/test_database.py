@@ -70,11 +70,11 @@ def test_session_factory_preserves_outer_rollback_and_context(tmp_path: Path) ->
 
 
 def test_sqlite_connections_enforce_foreign_keys(
-    test_db_connections: TestDatabaseConnections,
+    isolated_db: TestDatabaseConnections,
 ) -> None:
-    if test_db_connections.url.drivername.startswith("postgresql"):
+    if isolated_db.url.drivername.startswith("postgresql"):
         pytest.skip("SQLite foreign-key connection setup")
-    with test_db_connections.connection() as connection:
+    with isolated_db.connection() as connection:
         _ = connection.execute(text("CREATE TABLE parent (id integer primary key)"))
         _ = connection.execute(text("CREATE TABLE child (parent_id integer REFERENCES parent(id))"))
         connection.commit()
