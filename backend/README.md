@@ -458,7 +458,9 @@ duplicate collection and conflicting suite markers before marker deselection.
 SQLite counts as a database. Optional primary-data tests retain their explicit
 opt-in; the census never supplies primary-bank data.
 
-Refresh ownership after adding tests or changing database or service requirements:
+Refresh ownership after adding tests or changing database or service requirements,
+including tests brought in by merging main. The merge queue executes the combined
+tree, so a catalogue checked only against an older PR head is insufficient:
 
 ```bash
 mise run risk-service:refresh-test-suites /absolute/path/to/empty/census-evidence
@@ -501,8 +503,9 @@ The unit owner has no PostgreSQL, MinIO, OpenBao or dashboard dependency setup.
 Observed MinIO/OpenBao connections and native service processes are integration
 requirements; Playwright launches are e2e requirements. A declared
 `requires_service` marker covers contracts whose assertions consume state from
-earlier service-using cases. The generated catalogue also records these service
-requirements so the aggregate rejects skipped service contracts. To enrich an
+earlier service-using cases and service-gated contracts such as the local KMS.
+The generated catalogue also records these service requirements so the aggregate
+rejects skipped service contracts. To enrich an
 older database-only census, pass `--services <complete-service-profile>` to
 `generate`; only positive service requirements can change ownership. MinIO runs
 in storage/schema jobs and the shard containing native service contracts;
