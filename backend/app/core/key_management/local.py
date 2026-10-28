@@ -31,8 +31,11 @@ class LocalKeyProvider(KeyProvider):
         return KeyDescription(key, self._statuses.get(key, KeyStatus.UNAVAILABLE))
 
     def _material(self, key: KeyReference) -> bytes:
-        if self.describe(key).status != KeyStatus.ACTIVE:
-            raise KeyUnavailableError("The bank encryption key is unavailable.")
+        status = self.describe(key).status
+        if status != KeyStatus.ACTIVE:
+            raise KeyUnavailableError(
+                "The bank encryption key is unavailable.", revoked=status == KeyStatus.DISABLED
+            )
         return self._keys[key]
 
     def generate_data_key(self, key: KeyReference, context: dict[str, str]) -> DataKey:

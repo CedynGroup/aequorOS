@@ -117,3 +117,29 @@ def test_unstated_dimension_is_excluded_never_grouped_as_unknown() -> None:
     assert employer is not None
     assert {bucket.key for bucket in employer.buckets} == {"ACME", "GES"}
     assert employer.stated_exposure_ghs == Decimal("900")
+
+
+def test_locked_named_limits_preserve_numeric_measures_and_literal_positions() -> None:
+    exposures = [
+        ConcentrationExposure("A", Decimal("500"), "opaque-group"),
+        ConcentrationExposure("B", Decimal("500"), "pos:B"),
+    ]
+    result = monitor_concentration(
+        exposures,
+        (
+            ConcentrationLimit(DIM_SINGLE_NAME, LIMIT_SHARE_OF_BOOK, Decimal("10"), locked=True),
+            ConcentrationLimit(DIM_SINGLE_NAME, LIMIT_SHARE_OF_BOOK, Decimal("99")),
+            ConcentrationLimit(DIM_SINGLE_NAME, LIMIT_SHARE_OF_BOOK, Decimal("10"), "pos:B"),
+            ConcentrationLimit(DIM_SINGLE_NAME, LIMIT_HHI, Decimal("100")),
+        ),
+        capital_base_ghs=Decimal("2000"),
+    )
+    single = result.dimension(DIM_SINGLE_NAME)
+    assert single is not None and single.hhi == Decimal("5000")
+    named, positional = single.buckets
+    assert named.limit_status == "locked" and named.utilization_pct is None
+    assert named.share_of_book_pct == Decimal("50")
+    assert named.share_of_capital_pct == Decimal("25")
+    assert positional.limit_status == STATUS_ABOVE
+    assert single.hhi_status == STATUS_ABOVE
+    assert len(result.locked_limits) == 1 and result.limit_count == 4

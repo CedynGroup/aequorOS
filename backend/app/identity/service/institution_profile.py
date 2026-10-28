@@ -19,12 +19,20 @@ Validation:
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
+from app.core.key_management.fields import observe_bank_key
+from app.core.key_management.presentation import (
+    SESSION_STATE,
+    PresentationState,
+    contains_placeholder,
+)
+from app.core.key_management.types import KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.models.bank import Bank
@@ -56,6 +64,7 @@ from app.identity.schemas.institution_profile import (
     OutletUpdate,
     RelatedPartyCreate,
     RelatedPartyRead,
+    RelatedPartyRoleInput,
     RelatedPartyRoleRead,
     RelatedPartyUpdate,
     ShareholdingCreate,
@@ -81,10 +90,13 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
 
 
 def _get_party_or_404(
-    db: Session, ctx: TenantContext, bank_id: str, party_id: UUID
+    db: Session, ctx: TenantContext, bank_id: str, party_id: UUID, *, defer_protected: bool = False
 ) -> RelatedParty:
+    query = select(RelatedParty)
+    if defer_protected:
+        query = query.options(defer(RelatedParty.full_name), defer(RelatedParty.contact))
     party = db.scalar(
-        select(RelatedParty).where(
+        query.where(
             RelatedParty.id == party_id,
             RelatedParty.organization_id == ctx.organization_id,
             RelatedParty.bank_id == bank_id,
@@ -336,7 +348,7 @@ def get_full_profile(db: Session, ctx: TenantContext, bank_id: str) -> Instituti
     profile = _profile_row(db, ctx, bank.id)
     parties = _bank_children(db, RelatedParty, ctx, bank.id)
     roles_by_party, holdings_by_party = _party_children(db, [party.id for party in parties])
-    return InstitutionProfileFullRead(
+    result = InstitutionProfileFullRead(
         bank_id=bank.id,
         profile=_profile_read(profile) if profile is not None else None,
         related_parties=[
@@ -350,6 +362,8 @@ def get_full_profile(db: Session, ctx: TenantContext, bank_id: str) -> Instituti
             _name_history_read(row) for row in _bank_children(db, BankNameHistory, ctx, bank.id)
         ],
     )
+    observe_bank_key(db, ctx.organization_id, bank.id)
+    return result
 
 
 # --- institution profile ----------------------------------------------------------
@@ -405,9 +419,7 @@ def upsert_profile(
 # --- related parties ----------------------------------------------------------------
 
 
-def _apply_party_fields(
-    party: RelatedParty, payload: RelatedPartyCreate | RelatedPartyUpdate
-) -> None:
+def _apply_party_fields(party: RelatedParty, payload: RelatedPartyCreate) -> None:
     party.party_type = payload.party_type
     party.full_name = payload.full_name
     party.contact = payload.contact
@@ -419,17 +431,16 @@ def _apply_party_fields(
 def _validate_party_rules(
     db: Session,
     ctx: TenantContext,
-    payload: RelatedPartyCreate | RelatedPartyUpdate,
+    party_type: str,
+    roles: list[str],
     party_id: UUID | None,
 ) -> None:
-    if payload.party_type != "individual" and any(
-        role.role == "ultimate_beneficial_owner" for role in payload.roles
-    ):
+    if party_type != "individual" and "ultimate_beneficial_owner" in roles:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only an individual related party can hold the ultimate-beneficial-owner role.",
         )
-    if payload.party_type != "individual" and party_id is not None:
+    if party_type != "individual" and party_id is not None:
         linked = db.scalar(
             select(Shareholding.id).where(
                 Shareholding.organization_id == ctx.organization_id,
@@ -446,17 +457,29 @@ def _validate_party_rules(
             )
 
 
-def _replace_roles(
-    db: Session, ctx: TenantContext, party: RelatedParty, payload: RelatedPartyCreate
-) -> None:
-    for existing in db.scalars(
-        select(RelatedPartyRole).where(
-            RelatedPartyRole.organization_id == ctx.organization_id,
-            RelatedPartyRole.party_id == party.id,
+def _party_roles(db: Session, ctx: TenantContext, party: RelatedParty) -> list[RelatedPartyRole]:
+    return list(
+        db.scalars(
+            select(RelatedPartyRole)
+            .options(
+                defer(RelatedPartyRole.other_responsibilities),
+                defer(RelatedPartyRole.term_of_appointment),
+                defer(RelatedPartyRole.icag_registration),
+            )
+            .where(
+                RelatedPartyRole.organization_id == ctx.organization_id,
+                RelatedPartyRole.party_id == party.id,
+            )
         )
-    ):
+    )
+
+
+def _replace_roles(
+    db: Session, ctx: TenantContext, party: RelatedParty, roles: list[RelatedPartyRoleInput]
+) -> None:
+    for existing in _party_roles(db, ctx, party):
         db.delete(existing)
-    for role_input in payload.roles:
+    for role_input in roles:
         db.add(
             RelatedPartyRole(
                 organization_id=ctx.organization_id,
@@ -477,7 +500,9 @@ def create_related_party(
     db: Session, ctx: TenantContext, bank_id: str, payload: RelatedPartyCreate
 ) -> RelatedPartyRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    _validate_party_rules(db, ctx, payload, party_id=None)
+    _validate_party_rules(
+        db, ctx, payload.party_type, [role.role for role in payload.roles], party_id=None
+    )
     party = RelatedParty(
         organization_id=ctx.organization_id,
         bank_id=bank.id,
@@ -487,7 +512,7 @@ def create_related_party(
     _apply_party_fields(party, payload)
     db.add(party)
     db.flush()
-    _replace_roles(db, ctx, party, payload)
+    _replace_roles(db, ctx, party, payload.roles)
     db.flush()
     record_event(
         db,
@@ -499,7 +524,6 @@ def create_related_party(
             "bank_id": str(bank.id),
             "reason": payload.reason,
             "party_type": payload.party_type,
-            "full_name": payload.full_name,
             "roles": [role.role for role in payload.roles],
         },
     )
@@ -511,10 +535,52 @@ def update_related_party(
     db: Session, ctx: TenantContext, bank_id: str, party_id: UUID, payload: RelatedPartyUpdate
 ) -> RelatedPartyRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    party = _get_party_or_404(db, ctx, bank.id, party_id)
-    _validate_party_rules(db, ctx, payload, party_id=party.id)
-    _apply_party_fields(party, payload)
-    _replace_roles(db, ctx, party, payload)
+    party = _get_party_or_404(db, ctx, bank.id, party_id, defer_protected=True)
+    presentation = cast(object, db.info.setdefault(SESSION_STATE, PresentationState()))
+    assert isinstance(presentation, PresentationState)
+    roles = _party_roles(db, ctx, party)
+    by_id = {role.id: role for role in roles}
+    for update in payload.role_updates:
+        if update.role_id not in by_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Related party role not found."
+            )
+    changed_codes = {
+        update.role_id: update.role for update in payload.role_updates if update.role is not None
+    }
+    role_codes = (
+        [role.role for role in payload.roles]
+        if "roles" in payload.model_fields_set
+        else [changed_codes.get(role.id, role.role) for role in roles]
+    )
+    _validate_party_rules(
+        db, ctx, payload.party_type or party.party_type, role_codes, party_id=party.id
+    )
+    protected = {"other_responsibilities", "term_of_appointment", "icag_registration"}
+    protected_change = bool({"full_name", "contact", "roles"} & payload.model_fields_set) or any(
+        protected & update.model_fields_set for update in payload.role_updates
+    )
+    if protected_change:
+        observe_bank_key(db, ctx.organization_id, bank.id)
+        reason = presentation.banks.get(bank.id)
+        if reason in {"revoked", "unavailable"}:
+            raise KeyUnavailableError(
+                "Protected data cannot be changed.", revoked=reason == "revoked"
+            )
+        if contains_placeholder(payload.model_dump(exclude_unset=True)):
+            raise KeyUnavailableError("Locked placeholders cannot be saved as protected data.")
+    for name, value in cast(dict[str, object], payload.model_dump(exclude_unset=True)).items():
+        if name not in {"reason", "roles", "role_updates"}:
+            setattr(party, name, value)
+    if "roles" in payload.model_fields_set:
+        _replace_roles(db, ctx, party, payload.roles)
+    else:
+        for update in payload.role_updates:
+            for name, value in cast(
+                dict[str, object], update.model_dump(exclude_unset=True)
+            ).items():
+                if name != "role_id":
+                    setattr(by_id[update.role_id], name, value)
     db.flush()
     record_event(
         db,
@@ -525,9 +591,8 @@ def update_related_party(
         details={
             "bank_id": str(bank.id),
             "reason": payload.reason,
-            "party_type": payload.party_type,
-            "full_name": payload.full_name,
-            "roles": [role.role for role in payload.roles],
+            "party_type": party.party_type,
+            "roles": role_codes,
         },
     )
     db.commit()

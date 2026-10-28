@@ -13,11 +13,13 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import Protocol, cast
 from uuid import UUID, uuid4
 
 import pytest
+from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import JSON, Connection, Uuid, bindparam, select, text
 from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
@@ -30,6 +32,7 @@ from app.models import (
     ParamCapitalThreshold,
     ParamLiquidityThreshold,
 )
+from tests.db.test_postgres_migrations import alembic_config_for_app
 from tests.operator.conftest import operator_headers, provision_payload, start_inspection
 
 BASE = "/operator/v1/tenants"
@@ -339,12 +342,36 @@ def _stuck_batch(
     return batch, job
 
 
+class DedupMigration(Protocol):
+    def backfill_status(self, connection: Connection) -> None: ...
+
+
+@pytest.mark.parametrize("dedup_status", ["deferred", "failed"])
 def test_redrive_dedup_reenqueues_and_audits_the_failure_it_recovers_from(
-    operator_client: TestClient, operator_db: Session
+    operator_client: TestClient, operator_db: Session, dedup_status: str
 ) -> None:
     """The only way back for a batch the queue will never retry."""
     organization_id, bank_id = _provision(operator_client)
-    batch, stranded = _stuck_batch(operator_db, (organization_id, bank_id))
+    batch, stranded = _stuck_batch(
+        operator_db, (organization_id, bank_id), dedup_status=dedup_status
+    )
+    before = dict(batch.etl_report or {})
+    _ = operator_db.execute(
+        text(
+            "UPDATE ingestion_batches SET dedup_status=NULL, etl_report=:report WHERE id=:id"
+        ).bindparams(bindparam("report", type_=JSON), bindparam("id", type_=Uuid())),
+        {"report": before, "id": batch.id},
+    )
+    revision = ScriptDirectory.from_config(alembic_config_for_app()).get_revision("202610270001")
+    assert revision is not None
+    cast(DedupMigration, cast(object, revision.module)).backfill_status(operator_db.connection())
+    operator_db.commit()
+    operator_db.refresh(batch)
+    assert batch.dedup_status == dedup_status and batch.etl_report == before
+    board = operator_client.get("/operator/v1/jobs/stuck-dedup", headers=operator_headers())
+    assert board.status_code == 200, board.text
+    board_body = cast(dict[str, list[dict[str, object]]], board.json())
+    assert str(batch.id) in {row["batch_id"] for row in board_body["batches"]}
     session_id = start_inspection(operator_client, organization_id)
 
     response = operator_client.post(
@@ -357,7 +384,7 @@ def test_redrive_dedup_reenqueues_and_audits_the_failure_it_recovers_from(
     assert body["job_type"] == "etl_dedup"
     assert body["status"] == "queued"
     assert body["batch_id"] == str(batch.id)
-    assert body["previous_dedup_status"] == "deferred"
+    assert body["previous_dedup_status"] == dedup_status
     assert body["previous_job_id"] == str(stranded.id)
     assert "worker presumed dead" in body["previous_job_error"]
 
@@ -378,7 +405,7 @@ def test_redrive_dedup_reenqueues_and_audits_the_failure_it_recovers_from(
     assert len(rows) == 1
     assert rows[0].detail["session_id"] == session_id
     assert rows[0].detail["batch_id"] == str(batch.id)
-    assert rows[0].detail["previous_dedup_status"] == "deferred"
+    assert rows[0].detail["previous_dedup_status"] == dedup_status
     assert rows[0].detail["previous_job_id"] == str(stranded.id)
 
 

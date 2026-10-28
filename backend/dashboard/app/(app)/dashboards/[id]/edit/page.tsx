@@ -145,7 +145,11 @@ export default function EditDashboardPage({
             <EmptyState
               Icon={LayoutGrid}
               title="This dashboard cannot be rearranged here"
-              description={unrestatableReason(restated.unrestatable)}
+              description={
+                saved.data.access === "restricted"
+                  ? saved.data.message
+                  : unrestatableReason(restated.unrestatable)
+              }
               action={
                 <Link
                   href={`/dashboards/${id}`}

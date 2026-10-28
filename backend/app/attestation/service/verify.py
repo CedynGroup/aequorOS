@@ -555,6 +555,9 @@ def _collect_artifacts(  # noqa: PLR0913 - one lookup with five distinct inputs
             logger.warning("attestation verification could not obtain a storage client: {}", exc)
             client = None
 
+    if client is not None:
+        client = client.for_session(db)
+
     collected: list[_ArtifactEvidence] = []
     cache: dict[tuple[str, str | None], tuple[bytes | None, str | None]] = {}
     for signature in pinned:
