@@ -35,7 +35,7 @@ from app.bi.domain.catalogue import catalogue
 from app.bi.domain.packs import packs
 from app.bi.schemas.query import BiExplainComponentRead, BiPackWidget
 from app.identity.models.user import USER_ROLES
-from app.services.institution_types import SEED_TYPES
+from app.policy.service.institution_types import SEED_TYPES
 
 cat = catalogue()
 widget = BiPackWidget.model_validate({"id": "missing_data", "title": "Missing data",

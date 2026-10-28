@@ -478,7 +478,7 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
   `centralBankName()`/`currencyCode()`; never literal `'GHS'`, `'en-GH'`, `'BoG'`,
   `'Bank of Ghana'` in display code. Module-level constants evaluate before the binding —
   use jurisdiction-neutral wording there ("regulatory minimum", "supervisory severe"), not
-  getter calls. Backend: services resolve names via `app/services/jurisdictions.py`
+  getter calls. Backend: services resolve names via `app/policy/service/jurisdictions.py`
   (BSD-2/BSD-3 headers do); fact derivation reads `_Canonical.base_currency` (from
   `bank.currency`) for FX base-leg and curve selection. Deliberate exceptions
   (Ghana-factual content, keep literal): the BoG return-family artifacts — BSD
@@ -502,7 +502,7 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
   `jurisdictions.base_currency(bank)`, which deliberately has no fallback: an unset
   currency is a skipped decision at the creation site, not a Ghanaian bank. Never write a
   currency literal into bank-facing narrative — the guard suite
-  `tests/services/test_jurisdiction_neutrality.py` exercises currency-labelled liquidity
+  `tests/policy/service/test_jurisdiction_neutrality.py` exercises currency-labelled liquidity
   narratives and unresolved-identity refusals, alongside registry and model checks. On the dashboard,
   `fmtCurrency(value)` uses the active jurisdiction; passing a second argument OVERRIDES
   it, so pass it only when the currency is genuinely not the bank's own.

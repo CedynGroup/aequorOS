@@ -35,7 +35,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services import regulatory_parameters
+from app.policy.service import regulatory_parameters
 from tests.architecture._planes import APP, imported_modules, module_name, referenced_names
 from tests.architecture.test_bi_plane_boundary import BI_OWNED
 
@@ -99,11 +99,11 @@ PINNED_ENTRY_POINTS: frozenset[str] = frozenset(
 #: Modules that hold either register, or the rules for combining them. Outside
 #: the door, a BI module may not import one.
 DOOR_ONLY_MODULES: tuple[str, ...] = (
-    "app.services.regulatory_parameters",
-    "app.services.params",
-    "app.services.parameter_register",
-    "app.domain.policy",
-    "app.models.regulatory_parameter",
+    "app.policy.service.regulatory_parameters",
+    "app.policy.service.params",
+    "app.policy.service.parameter_register",
+    "app.policy.domain",
+    "app.policy.models.regulatory_parameter",
 )
 
 #: Names that reach a register without importing its service: the board register
@@ -163,10 +163,11 @@ def _resolver_aliases(source: str, tree: ast.AST) -> set[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name == "app.services.regulatory_parameters":
+                if alias.name == "app.policy.service.regulatory_parameters":
                     aliases.add(alias.asname or alias.name.rsplit(".", 1)[-1])
         elif isinstance(node, ast.ImportFrom) and (
-            (node.module or "").startswith("app.services") or node.module == "app.policy.public"
+            (node.module or "").startswith(("app.services", "app.policy.service"))
+            or node.module == "app.policy.public"
         ):
             aliases.update(
                 alias.asname or alias.name
@@ -302,12 +303,14 @@ def test_no_bi_module_but_the_door_imports_a_register(path: Path) -> None:
     imported = imported_modules(source, module=module_name(path))
     imported = {
         name.replace(
-            "app.policy.public.regulatory_parameters", "app.services.regulatory_parameters"
-        ).replace("app.policy.public.params", "app.services.params")
+            "app.policy.public.regulatory_parameters", "app.policy.service.regulatory_parameters"
+        ).replace("app.policy.public.params", "app.policy.service.params")
         for name in imported
     }
     allowed = (
-        {"app.services.regulatory_parameters"} if relative == FINGERPRINT_EXCEPTION[0] else set()
+        {"app.policy.service.regulatory_parameters"}
+        if relative == FINGERPRINT_EXCEPTION[0]
+        else set()
     )
     offending = sorted(
         name
@@ -336,12 +339,16 @@ def test_no_bi_module_but_the_door_names_a_register_table_or_rule(path: Path) ->
 
 VIOLATIONS: dict[str, str] = {
     "recording_read": (
-        "from app.services import regulatory_parameters\n\n\n"
+        "from app.policy.service import regulatory_parameters\n"
+        "\n"
+        "\n"
         "def limit(db, bank, code):\n"
         "    return regulatory_parameters.try_resolve(db, bank, code)\n"
     ),
     "aliased_recording_read": (
-        "from app.services import regulatory_parameters as rp\n\n\n"
+        "from app.policy.service import regulatory_parameters as rp\n"
+        "\n"
+        "\n"
         "def limit(db, bank, code):\n"
         "    return rp.resolve(db, bank, code)\n"
     ),
@@ -352,7 +359,9 @@ VIOLATIONS: dict[str, str] = {
         "    return db.scalars(select(ParamCapitalThreshold)).all()\n"
     ),
     "second_prefetched_resolver": (
-        "from app.services import regulatory_parameters\n\n\n"
+        "from app.policy.service import regulatory_parameters\n"
+        "\n"
+        "\n"
         "def limits(db, bank, dates):\n"
         "    return regulatory_parameters.PrefetchedParameterResolver.load(\n"
         "        db, bank, as_of_dates=dates, record=True\n"

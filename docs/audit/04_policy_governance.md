@@ -1,10 +1,10 @@
 # 04. Policy and Parameter Governance
 
 **Prepared:** 2026-08-22
-**Primary modules:** `backend/app/domain/policy/resolver.py`,
-`backend/app/services/regulatory_parameters.py`,
+**Primary modules:** `backend/app/policy/domain/resolver.py`,
+`backend/app/policy/service/regulatory_parameters.py`,
 `backend/app/operator/services/regulatory_parameters.py`,
-`backend/app/models/regulatory_parameter.py`
+`backend/app/policy/models/regulatory_parameter.py`
 
 Every regulatory number the platform applies — a minimum ratio, a risk weight, a
 provisioning rate, a haircut — is data with a citation, an effective date, a confirmation
@@ -23,13 +23,13 @@ tenant board register     param_capital_threshold / param_liquidity_threshold /
                           param_stress_shock / param_liquidity_haircut /
                           param_ecl_assumption / param_crm_haircut
         ↓
-tightening clamp          app/domain/policy/resolver.py::clamp_overrides
+tightening clamp          app/policy/domain/resolver.py::clamp_overrides
         ↓
 engine
 ```
 
 The resolver is **pure** — no SQLAlchemy, no FastAPI, no `app.services` import (606 lines).
-`app/services/regulatory_parameters.py` is a thin database adapter over it (`ARCH-2`), and
+`app/policy/service/regulatory_parameters.py` is a thin database adapter over it (`ARCH-2`), and
 the purity is enforced by
 `tests/architecture/test_dependency_boundaries.py::test_the_pure_domain_layer_imports_no_application_state`.
 
@@ -42,7 +42,7 @@ threaded through `app/identity/service/banks.py`, so institution-type detail is 
 
 ## 2. Citation discipline is a database constraint, not a convention
 
-`app/models/regulatory_parameter.py`:
+`app/policy/models/regulatory_parameter.py`:
 
 | Column                        | Constraint                                                                               |
 | ----------------------------- | ---------------------------------------------------------------------------------------- |
@@ -56,7 +56,7 @@ threaded through `app/identity/service/banks.py`, so institution-type detail is 
 | uniqueness                    | one generation per `(scope, code, jurisdiction, effective_from)`                         |
 
 The tenant-side resolver reads **only approved rows**
-(`app/services/regulatory_parameters.py:797`, filtering on `effective_from <= as_of` and
+(`app/policy/service/regulatory_parameters.py:797`, filtering on `effective_from <= as_of` and
 `effective_to` null or later).
 
 ## 3. Four-eyes on parameter change
@@ -111,7 +111,7 @@ no DOM or component tests.
 ## 4. The tightening clamp
 
 A tenant's board may adopt a stricter limit than the regulator's, never a looser one.
-`PARAMETER_DIRECTION` (`app/domain/policy/resolver.py:466`) declares the direction of each
+`PARAMETER_DIRECTION` (`app/policy/domain/resolver.py:466`) declares the direction of each
 governed code, and `clamp_overrides` applies it to a whole register in one pass. Every clamp
 produces a `ClampRecord` that is logged and returned as evidence — it is never applied
 silently.
@@ -119,7 +119,7 @@ silently.
 Measured:
 
 ```
-$ cd backend && uv run python -c "from app.domain.policy.resolver import PARAMETER_DIRECTION; ..."
+$ cd backend && uv run python -c "from app.policy.domain.resolver import PARAMETER_DIRECTION; ..."
 governed codes: 25   (22 floor, 3 ceiling)
 governed codes with a seeded control value: 20
 governed but UNSEEDED — clamp wired but INERT:
@@ -150,9 +150,9 @@ broken book and a filed return.
 It is now declared **`ceiling`**: the tolerance is a percent of total assets, so a larger
 number admits a more broken book and tightening means smaller. The governed set is pinned at
 26 codes (`test_the_governed_code_set_is_pinned`), and two tests prove the clamp — one pure
-(`tests/domain/policy/test_policy_resolver.py::test_a_board_override_cannot_widen_the_balance_identity_tolerance`)
+(`tests/policy/domain/test_policy_resolver.py::test_a_board_override_cannot_widen_the_balance_identity_tolerance`)
 and one through the seeded control plane for both institution classes
-(`tests/services/test_policy_chain.py::test_a_board_override_cannot_widen_the_filing_tolerance`):
+(`tests/policy/service/test_policy_chain.py::test_a_board_override_cannot_widen_the_filing_tolerance`):
 a board asking for 5.00% against the governed 0.10% is clamped to 0.10% and the attempt is
 recorded as a `ClampRecord`; a board holding itself to 0.02% keeps 0.02%.
 
@@ -176,7 +176,7 @@ Now both use 13.
 ## 5. Seed catalogue census — measured
 
 ```
-$ cd backend && uv run python -c "from app.services.regulatory_parameters import SEED_PARAMETERS, SEED_EFFECTIVE_FROM; ..."
+$ cd backend && uv run python -c "from app.policy.service.regulatory_parameters import SEED_PARAMETERS, SEED_EFFECTIVE_FROM; ..."
 SEED_PARAMETERS: 70   (54 literal rows + 16 generated LMTD floors)
 confirmation_status: 56 confirmed, 14 pending
 distinct param codes: 40
@@ -308,7 +308,7 @@ Directive on Stress Testing, and the ICAAP guideline (`NEW-28`). Comment windows
 | `savings_and_loans` / `finance_house` paid-up 15           | "SDI Subsector ToR"                               | An internal terms-of-reference document is not a regulatory source. **Downgrade.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `microfinance_bank` paid-up 2                              | "MFI Framework 2026"                              | The citation names the 2026 framework but the value is the 2015 figure. Notice BG/GOV/SEC/2026/03 §3.1.3 sets 50,000,000 transitioning / 100,000,000 for new entrants. **Value and citation disagree with each other.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `rural_community_bank` paid-up 1                           | "SDI Subsector ToR"                               | Value correct per Notice BG/GOV/SEC/2015/08 ¶1.1, but the class becomes Community Bank at 5,000,000 from 31 Dec 2026.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| bank `car_min` 13                                          | "Basel CRD (10% + 3% CCB)"                        | **WRONG ISSUER, not just an undated citation.** Re-read at HEAD 2026-08-22 (`backend/app/services/regulatory_parameters.py:171`, inside the `ParamSpec` at `:165-173`): the string is still `"Basel CRD (10% + 3% CCB)"`. The CRD is the **Bank of Ghana**'s Capital Requirements Directive (June 2018) — ¶71's 10% minimum plus the ¶75 CCB1 — **not Basel's**. The arithmetic is right and matches the in-force figure; the attribution tells staff a Ghanaian requirement is an international one, which is the mirror image of the dashboard defect MILESTONE 13 corrected in the other direction. It is also undated across four regime changes (13 → 11.5 → 13 → 10 → 13) and cites no paragraph, and `ParamSpec` (`:109-118`) carries **no `effective_from` field at all**, so the row cannot be dated without a schema change. Ships `confirmed`. Raised as `WS-A12-2`; **still open at the close of the WS-A12 execution pass.** |
+| bank `car_min` 13                                          | "Basel CRD (10% + 3% CCB)"                        | **WRONG ISSUER, not just an undated citation.** Re-read at HEAD 2026-08-22 (`backend/app/policy/service/regulatory_parameters.py:171`, inside the `ParamSpec` at `:165-173`): the string is still `"Basel CRD (10% + 3% CCB)"`. The CRD is the **Bank of Ghana**'s Capital Requirements Directive (June 2018) — ¶71's 10% minimum plus the ¶75 CCB1 — **not Basel's**. The arithmetic is right and matches the in-force figure; the attribution tells staff a Ghanaian requirement is an international one, which is the mirror image of the dashboard defect MILESTONE 13 corrected in the other direction. It is also undated across four regime changes (13 → 11.5 → 13 → 10 → 13) and cites no paragraph, and `ParamSpec` (`:109-118`) carries **no `effective_from` field at all**, so the row cannot be dated without a schema change. Ships `confirmed`. Raised as `WS-A12-2`; **still open at the close of the WS-A12 execution pass.** |
 | sdi `car_min` 10                                           | "Act 930 s.29"                                    | Cite **s.29(2)** and record it as a statutory floor standing in for an absent SDI directive.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `large_exposure_limit_pct` 20 / 15                         | "Large Exposures Directive Sept 2025"             | Values correct per ¶12, but the directive is **not in force until 1 Jan 2027**, and the 15% reaches only savings-and-loans and finance houses.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `large_exposure_id_threshold_pct` 10                       | "BoG LE return (BSD) 10% identification"          | Correct value, **wrong authority** — it is LED ¶11 and Act 930 s.156, not a return.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -356,7 +356,7 @@ nine the audit identified plus eight it missed:
   `le_generation.py:328,1207,1933,2543`, `bog_forms/sources_ext/bsd11.py:301`
 
 All are ORM-side; no migration was needed. The guard suite is
-`backend/tests/services/test_jurisdiction_neutrality.py`.
+`backend/tests/policy/service/test_jurisdiction_neutrality.py`.
 
 Deliberate exceptions, kept literal because they are Ghana-factual content: the BoG return
 artifacts (BSD templates and registry), ORASS/DBK rules, notice citations, and the GHS '000

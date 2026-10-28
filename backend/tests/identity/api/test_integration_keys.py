@@ -31,7 +31,7 @@ from app.db.session import get_sessionmaker
 from app.identity.service import authentication, authorization
 from app.identity.service.integration_keys import hash_key
 from app.models import AuditEvent, AuthorizationBinding, Bank, IntegrationKey, RefreshToken, User
-from app.services.institution_types import FALLBACK_TYPE_CODE
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.api.test_ingestion import seed_bank
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers

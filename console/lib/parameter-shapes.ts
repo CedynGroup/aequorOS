@@ -1,6 +1,6 @@
 /**
  * What a governed parameter's value must LOOK like — the console's mirror of
- * `backend/app/domain/policy/parameter_shapes.py`.
+ * `backend/app/policy/domain/parameter_shapes.py`.
  *
  * D-024 says every regulatory number reaches the engines from this console.
  * D-037 adds the other kind of number: the ICAAP Pillar 2 engine reads BAND

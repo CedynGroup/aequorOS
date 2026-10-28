@@ -32,7 +32,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 
 from alembic import command
-from app.services.regulatory_parameters import P5_SEED_PARAMETERS
+from app.policy.service.regulatory_parameters import P5_SEED_PARAMETERS
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,

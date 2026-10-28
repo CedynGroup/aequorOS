@@ -28,7 +28,7 @@ from sqlalchemy import text
 
 from alembic import command
 from app.icaap.service.parameters import ICAAP_PARAM_CODES
-from app.services.regulatory_parameters import (
+from app.policy.service.regulatory_parameters import (
     ICAAP_P2_SEED_PARAMETERS,
     P2_PARAMETER_CODES,
     SEED_EFFECTIVE_FROM,

@@ -309,7 +309,8 @@ from app.models import (
     CurrentFinancialFact,
     IngestionBatch,
 )
-from app.services import jurisdictions, market_data_sources, reconciliation
+from app.policy.public import jurisdictions
+from app.services import market_data_sources, reconciliation
 from app.services.market_data import (
     CurveView,
     desk_projection_curve_name,

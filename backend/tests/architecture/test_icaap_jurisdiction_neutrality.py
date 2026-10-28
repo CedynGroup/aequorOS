@@ -121,7 +121,7 @@ def test_no_icaap_module_names_a_country_a_regulator_or_a_currency(path: Path) -
     hits = sorted(set(IDENTITY.findall(_code_only(path.read_text(encoding="utf-8")))))
     assert not hits, (
         f"{path.relative_to(BACKEND)} names {hits}. Country identity is data: resolve "
-        "it through app/services/jurisdictions.py, or put it in the framework JSON "
+        "it through app/policy/service/jurisdictions.py, or put it in the framework JSON "
         "under frameworks/<jurisdiction>/."
     )
 

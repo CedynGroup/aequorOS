@@ -24,11 +24,10 @@ from app.models import (
     LiveMetric,
     MappingConfigRecord,
     Organization,
-    ParamCapitalThreshold,
-    ParamLiquidityThreshold,
     RegulatoryRun,
     TranslationFailure,
 )
+from app.policy.public import ParamCapitalThreshold, ParamLiquidityThreshold
 from app.schemas.operator import (
     TenantCapitalThresholdRead,
     TenantConfigBankRead,

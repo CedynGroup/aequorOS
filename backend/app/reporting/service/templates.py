@@ -31,7 +31,7 @@ from typing import Any, Literal
 
 from fastapi import HTTPException, status
 
-from app.domain.policy import Direction, direction_for
+from app.policy.domain import Direction, direction_for
 from app.reporting.service.registry import FidelityGrade
 
 type ColumnKind = Literal["text", "ghs", "pct", "number", "bool", "auto"]

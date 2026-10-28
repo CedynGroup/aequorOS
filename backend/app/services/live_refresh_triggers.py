@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session
 
 from app.bi.service.enqueue import enqueue_mart_refresh
 from app.identity.public import Bank
-from app.models import CurrentFinancialFact, InstitutionType, Job, RegulatoryParameter
+from app.models import CurrentFinancialFact, Job
+from app.policy.public import InstitutionType, RegulatoryParameter
 from app.services import job_queue
 
 

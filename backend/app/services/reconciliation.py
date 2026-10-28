@@ -17,7 +17,7 @@ Design
 **The tolerance is governed, not hardcoded.** It resolves through the
 regulatory-parameter control plane (``balance_identity_tolerance_pct``,
 effective-dated, four-eyed, per institution class/type — see
-``app/services/regulatory_parameters.py``). When the control plane holds no row
+``app/policy/service/regulatory_parameters.py``). When the control plane holds no row
 the module default applies, but it is *stamped as a module default* in every
 provenance record it touches, so "which tolerance did this filing use, and who
 set it" always has an answer. It is never invisible.
@@ -88,7 +88,8 @@ from app.domain.authority.outcomes import (
 from app.domain.authority.outcomes import outcome as build_outcome
 from app.identity.public import Bank
 from app.models import ReconciliationException
-from app.services import live_refresh_triggers, regulatory_parameters
+from app.policy.public import regulatory_parameters
+from app.services import live_refresh_triggers
 from app.services.audit import record_event
 
 # ---------------------------------------------------------------------------

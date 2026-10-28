@@ -46,20 +46,15 @@ from app.db.base import utc_now
 from app.identity import public as membership
 from app.identity import public as organization_ownership
 from app.identity.public import Bank, SsoConnection, User
-from app.models import (
-    BankReportingPeriod,
-    InstitutionType,
-    Jurisdiction,
-    Organization,
-    TenantStorage,
-)
+from app.models import BankReportingPeriod, Organization, TenantStorage
 from app.operator.deps import OperatorContext, record_operator_action
+from app.policy.public import InstitutionType, Jurisdiction, institution_types, parameter_register
 from app.schemas.operator import (
     ProvisioningResultRead,
     ProvisioningStepRead,
     TenantProvisionCreate,
 )
-from app.services import institution_types, job_queue, parameter_register
+from app.services import job_queue
 from app.services.market_desk import publication as desk_publication
 from app.storage.client import StorageLocation
 from app.storage.config import StorageEngineSettings

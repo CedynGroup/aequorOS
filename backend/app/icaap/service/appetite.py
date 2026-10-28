@@ -32,7 +32,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess
 from app.db.base import utc_now
-from app.domain.policy import Direction
 from app.icaap.domain import appetite as domain
 from app.icaap.models.risk_capital import IcaapAppetiteMetric
 from app.icaap.models.workspace import IcaapAttachment, IcaapCycle
@@ -50,6 +49,7 @@ from app.icaap.schemas.risk_capital import (
 )
 from app.icaap.service import blocks as blocks_service
 from app.icaap.service import guards, params
+from app.policy.domain import Direction
 from app.policy.public import ParamCapitalThreshold, get_active_params
 from app.services.audit import record_event
 

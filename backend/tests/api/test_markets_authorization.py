@@ -49,8 +49,8 @@ from app.models import (
     MarketDataSourcePreference,
     User,
 )
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.services import implied_rating, market_data_overlays
-from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.adapters.market_data.manual_upload.fixtures import (
     FIXTURE_AS_OF,
     build_full_coverage_workbook,

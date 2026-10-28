@@ -137,9 +137,9 @@ Healthy, unhealthy and exception paths are covered by `tests/test_health.py`.
 
 ## 5. Purity of the domain layer
 
-`app/domain/**` is pure Decimal computation. `app/domain/policy/resolver.py` (606 lines)
+`app/domain/**` is pure Decimal computation. `app/policy/domain/resolver.py` (606 lines)
 imports no SQLAlchemy, no FastAPI and nothing from `app.services`;
-`app/services/regulatory_parameters.py` is a thin database adapter over it (`ARCH-2`).
+`app/policy/service/regulatory_parameters.py` is a thin database adapter over it (`ARCH-2`).
 The purity rule is enforced by
 `tests/architecture/test_dependency_boundaries.py::test_the_pure_domain_layer_imports_no_application_state`.
 
@@ -150,7 +150,7 @@ Shared primitives, all in `app/domain/`:
 | Metric authority registry (`ARCH-1`)  | `app/domain/authority/registry.py`   | 1,785 |
 | Fail-closed outcome states (`ARCH-3`) | `app/domain/authority/outcomes.py`   | 386   |
 | Calculation provenance (`ARCH-4`)     | `app/domain/authority/provenance.py` | 282   |
-| Policy resolver (`ARCH-2`)            | `app/domain/policy/resolver.py`      | 606   |
+| Policy resolver (`ARCH-2`)            | `app/policy/domain/resolver.py`      | 606   |
 
 `OutcomeState` (`outcomes.py:82-93`) declares exactly five refusal states —
 `not_computable`, `missing_required_input`, `policy_unresolved`, `data_quality_block`,

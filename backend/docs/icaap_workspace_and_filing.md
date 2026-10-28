@@ -160,7 +160,7 @@ Founder directive (D-024), and the single most invasive rule in this build.
 1. Every regulatory or methodological number — floors, buffers, caps, shocks,
    buckets, bands, coefficients, tolerances, deadlines, NMD caps, granularity
    parameters, materiality thresholds — is resolved at runtime through
-   `app/services/regulatory_parameters.py`. Never a literal in engine, service,
+   `app/policy/service/regulatory_parameters.py`. Never a literal in engine, service,
    template or frontend code.
 2. Numbers appear only in the seed catalogue and the migrations that pin it, as
    the initial approved rows. After that the database, edited in the operator
@@ -177,7 +177,7 @@ Founder directive (D-024), and the single most invasive rule in this build.
 
 Guards: `tests/architecture/test_icaap_governed_literals.py`,
 `test_icaap_no_regulatory_literals.py`, and — for the values a bank actually
-files — `tests/services/test_regulatory_parameters_p5.py`, which holds the
+files — `tests/policy/service/test_regulatory_parameters_p5.py`, which holds the
 shock magnitudes as a deliberateness gate: a change to a number a bank files
 has to be made in a test that says so.
 

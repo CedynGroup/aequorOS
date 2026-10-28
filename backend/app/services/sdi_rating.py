@@ -334,7 +334,7 @@ def _paid_up_floor(db: Session, bank: Bank, as_of: date) -> Decimal | None:
     row and is converted here rather than assumed, because a factor-of-1e6 error
     in a capital floor is not a rounding difference.
     """
-    from app.services import regulatory_parameters as rp  # noqa: PLC0415
+    from app.policy.public import regulatory_parameters as rp  # noqa: PLC0415
 
     resolved = rp.try_resolve(db, bank, "paid_up_min", as_of=as_of)
     if resolved is None or resolved.value is None:

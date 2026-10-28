@@ -70,16 +70,25 @@ from app.models import (
     BankFinancialFact,
     BankReportingPeriod,
     FinancialFactRow,
-    ParamCapitalThreshold,
-    ParamCrmHaircut,
-    ParamEclAssumption,
-    ParamRiskWeight,
-    ParamStressShock,
     RegulatoryLineItem,
     RegulatoryMetricResult,
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.policy.public import (
+    ParamCapitalThreshold,
+    ParamCrmHaircut,
+    ParamEclAssumption,
+    ParamRiskWeight,
+    ParamStressShock,
+    PrefetchedActiveParams,
+    base_currency,
+    get_active_params,
+    prefetch_active_params,
+    regulator_name,
+    regulatory_parameters,
+)
+from app.policy.public import institution_class as _resolve_institution_class
 from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_capital import (
     Bsd2HeaderRead,
@@ -105,15 +114,8 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunCreate,
     RegulatoryRunRead,
 )
-from app.services import (
-    regulatory_dashboard_batching,
-    regulatory_parameters,
-    sdi_capital,
-    sdi_capital_checks,
-)
+from app.services import regulatory_dashboard_batching, sdi_capital, sdi_capital_checks
 from app.services.audit import record_event
-from app.services.institution_types import institution_class as _resolve_institution_class
-from app.services.jurisdictions import base_currency, regulator_name
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
 from app.services.live_types import (
@@ -122,7 +124,6 @@ from app.services.live_types import (
     findings_from_validations,
     worst_status,
 )
-from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
 from app.services.regulatory_liquidity import _read_regulatory_run_execution_result, preview_note
 
 #: Bumped 2026-08-22 (forensic re-audit D-5) from ``v1.0.0``. MAJOR, because the

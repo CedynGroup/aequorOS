@@ -44,8 +44,7 @@ from app.domain.liquidity.engine import (
     SHOCK_RUNOFF_PREFIX,
 )
 from app.identity.public import Bank
-from app.models import ParamStressShock
-from app.services.params import get_active_params
+from app.policy.public import ParamStressShock, get_active_params
 from app.services.regulatory_capital import (
     CAPITAL_SCENARIO_CODES,
     ECL_CONDITIONING_KEYS,

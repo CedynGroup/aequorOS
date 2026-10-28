@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import User
+from app.policy.service.institution_types import SEED_TYPES
 from app.schemas.stress import (
     MacroScenarioApproval,
     MacroScenarioClone,
@@ -23,7 +24,6 @@ from app.schemas.stress import (
     MacroScenarioUpdate,
 )
 from app.services import default_macro_scenarios, macro_scenarios
-from app.services.institution_types import SEED_TYPES
 from tests.support.helpers import ORG_1, USER_1
 
 CHECKER = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")

@@ -29,7 +29,7 @@ row ships ``confirmation_status='pending'`` and every output that quotes one
 says so (D-039).
 
 As in ``202609190054``-``202609190059`` the rows are PINNED here rather than
-imported from ``app.services.regulatory_parameters``: a later catalogue edit
+imported from ``app.policy.service.regulatory_parameters``: a later catalogue edit
 must not change what this revision seeded. A test holds the pinned rows equal
 to the catalogue's today.
 

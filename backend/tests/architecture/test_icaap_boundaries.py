@@ -308,7 +308,9 @@ def test_the_plane_scanner_would_catch_a_deliberate_violation(tmp_path: Path) ->
     """Proof the two guards above report rather than merely being present."""
     violation = tmp_path / "leaky_params.py"
     violation.write_text(
-        "from app.services import regulatory_parameters\n\n\n"
+        "from app.policy.service import regulatory_parameters\n"
+        "\n"
+        "\n"
         "def read(db, bank):\n"
         "    resolver = regulatory_parameters.PrefetchedParameterResolver.load(\n"
         "        db, bank, as_of_dates=[], record=True\n"

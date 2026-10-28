@@ -1895,7 +1895,7 @@ export interface RegulatoryParameterProposeRequest {
    * the FX shock table, the operational severity map, the sovereign haircut
    * grid, the materiality score bands. Its form is checked against
    * `lib/parameter-shapes.ts` here and against
-   * `app/domain/policy/parameter_shapes.py` at BOTH propose and approve.
+   * `app/policy/domain/parameter_shapes.py` at BOTH propose and approve.
    */
   value_json?: Record<string, unknown> | null;
   unit: string;

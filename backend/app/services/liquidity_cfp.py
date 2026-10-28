@@ -34,6 +34,7 @@ from app.db.base import utc_now
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.models import CfpActivationEvent, ContingencyFundingPlan
+from app.policy.public import regulator_short
 from app.schemas.liquidity_cfp import (
     CfpActivationCreate,
     CfpApprove,
@@ -48,7 +49,6 @@ from app.schemas.liquidity_cfp import (
 )
 from app.services import notifications
 from app.services.audit import record_event
-from app.services.jurisdictions import regulator_short
 from app.services.liquidity_ewi import (
     _get_bank_or_404,  # noqa: PLC2701 - shared tenant guards, one definition
     _get_period_or_404,  # noqa: PLC2701

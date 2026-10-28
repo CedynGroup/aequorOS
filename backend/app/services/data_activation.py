@@ -31,6 +31,7 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.models import AuditEvent
+from app.policy.public import module_scope
 from app.schemas.data_activation import (
     ActivationGroupRead,
     ActivationRunRead,
@@ -48,7 +49,6 @@ from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
 from app.services import (
     implied_rating,
-    module_scope,
     regulatory_capital,
     regulatory_credit,
     regulatory_forecasting,

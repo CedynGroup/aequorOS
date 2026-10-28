@@ -23,7 +23,7 @@ import pytest
 from sqlalchemy import text
 
 from alembic import command
-from app.services.regulatory_parameters import (
+from app.policy.service.regulatory_parameters import (
     CRD_CAPITAL_FLOOR_SEEDS,
     SDI_RECOGNITION_CAP_SEEDS,
     SEED_EFFECTIVE_FROM,

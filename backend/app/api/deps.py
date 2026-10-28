@@ -2640,7 +2640,7 @@ def require_module_access(module_key: str):  # noqa: ANN201 - returns a FastAPI 
     ``default_modules`` (the same data the nav is scoped from). ``bank_id`` is
     read from the path; a non-bank-scoped route in a gated router is not blocked.
     """
-    from app.services import institution_types  # noqa: PLC0415 - avoid import cycle
+    from app.policy.service import institution_types  # noqa: PLC0415 - avoid import cycle
 
     def _dependency(
         request: Request,
