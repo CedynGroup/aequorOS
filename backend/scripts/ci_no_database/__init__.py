@@ -14,7 +14,11 @@ from typing import NoReturn, cast
 import psycopg
 from sqlalchemy import Engine
 
-from scripts.ci_database_children import instrument_command, python_path, wait_for_startup
+from scripts.ci_database_children import (
+    confirm_startup_before_signal,
+    instrument_command,
+    python_path,
+)
 
 _ORIGINAL_POPEN = cast(Callable[..., None], subprocess.Popen.__init__)
 
@@ -76,7 +80,9 @@ def install(patch: Callable[[object, str, object], None] = setattr) -> None:
             kwargs["args"] = replacement
         _ORIGINAL_POPEN(*args, **kwargs)
         if args:
-            wait_for_startup(cast(subprocess.Popen[bytes], args[0]), environment, command)
+            confirm_startup_before_signal(
+                cast(subprocess.Popen[bytes], args[0]), environment, command
+            )
         if (
             os.getenv("CI_DATABASE_OBSERVATIONS")
             and isinstance(command, (tuple, list))

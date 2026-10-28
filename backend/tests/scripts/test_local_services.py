@@ -224,10 +224,18 @@ def test_sigterm_stops_child_before_returning(tmp_path):
     pidfile = tmp_path / "child.pid"
     script = Path(local_services.__file__)
     env = {**os.environ, "AQS_LOCAL_SERVICES": "external"}
+    env.setdefault("CI_DATABASE_OBSERVATIONS", str(tmp_path / "observations"))
     child = f"import os,time; open({str(pidfile)!r},'w').write(str(os.getpid())); time.sleep(30)"
-    wrapper = subprocess.Popen(
-        [sys.executable, str(script), "run", "--", sys.executable, "-c", child], env=env
+    # Hold startup polling until cancellation instead of relying on scheduling.
+    # The caller must receive its child handle before any such wait begins.
+    program = (
+        "import runpy,signal,sys,time,types; from scripts import ci_database_children; "
+        "ci_database_children.time = types.SimpleNamespace("
+        "monotonic=signal.pause, sleep=time.sleep); "
+        f"sys.argv = [{str(script)!r}, 'run', '--', sys.executable, '-c', {child!r}]; "
+        f"runpy.run_path({str(script)!r}, run_name='__main__')"
     )
+    wrapper = subprocess.Popen([sys.executable, "-c", program], env=env)
     try:
         deadline = time.monotonic() + 10
         while not pidfile.exists():
@@ -243,6 +251,9 @@ def test_sigterm_stops_child_before_returning(tmp_path):
         if wrapper.poll() is None:
             wrapper.terminate()
             wrapper.wait(timeout=10)
+        if pidfile.exists():
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(int(pidfile.read_text()), signal.SIGKILL)
 
 
 @pytest.mark.skipif(

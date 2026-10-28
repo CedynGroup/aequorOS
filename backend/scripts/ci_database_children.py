@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import time
+import weakref
 from pathlib import Path
 from typing import cast
 
@@ -39,17 +40,37 @@ def python_path(previous: str) -> str:
     return os.pathsep.join(dict.fromkeys(paths))
 
 
-def wait_for_startup(
+def confirm_startup_before_signal(
     process: subprocess.Popen[bytes], environment: dict[str, str], command: object
 ) -> None:
-    """Confirm instrumentation before a caller can immediately terminate Python."""
+    """Keep Popen nonblocking so callers can own cancellation and cleanup.
+
+    Confirm instrumentation before an immediate terminate/kill instead: waiting
+    inside construction can raise KeyboardInterrupt before the caller receives
+    its child handle, leaving the child outside its cleanup scope.
+    """
     directory = environment.get("CI_DATABASE_OBSERVATIONS")
     if not directory or not isinstance(command, (list, tuple)) or not command:
         return
     if not Path(str(cast(list[object], command)[0])).name.startswith("python"):
         return
+    # A callback stored on Popen must not keep the process alive through itself.
+    child = cast(subprocess.Popen[bytes], weakref.proxy(process))
+    send_signal = type(process).send_signal
+
+    def confirmed_signal(sig: int) -> None:
+        _wait_for_startup(child, environment, Path(directory))
+        send_signal(child, sig)
+
+    process.send_signal = confirmed_signal
+
+
+def _wait_for_startup(
+    process: subprocess.Popen[bytes], environment: dict[str, str], directory: Path
+) -> None:
+    """Confirm instrumentation before a caller can immediately terminate Python."""
     context = cast(dict[str, object], json.loads(environment.get("CI_DATABASE_CONTEXT", "{}")))
-    path = Path(directory) / f"events-{process.pid}.jsonl"
+    path = directory / f"events-{process.pid}.jsonl"
     deadline = time.monotonic() + 5
     while True:
         if path.exists():
