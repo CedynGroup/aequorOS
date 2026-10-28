@@ -128,7 +128,9 @@ def test_bank_key_locks_are_isolated_between_test_schemas(
     with engine.connect() as connection:
         schema = connection.scalar(text("SELECT current_schema()"))
     assert isinstance(schema, str)
-    connections = TestDatabaseConnections(engine.url, context=DatabaseContext(schema=schema))
+    connections = TestDatabaseConnections(
+        engine.url.difference_update_query(["options"]), context=DatabaseContext(schema=schema)
+    )
     replacement = connections.engine()
 
     def same_schema_writer() -> None:
