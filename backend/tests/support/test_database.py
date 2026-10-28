@@ -502,7 +502,7 @@ def test_encryption_lock_namespace_follows_schema_across_pools(
                 lock_bank_version(session, "OR-TEST", "BK-TEST", read=shared)
                 identities.append(cast(int, session.scalar(lock_identity)))
         assert len(set(identities)) == 1
-        with owner.session() as first, isolated_database(os.environ["TEST_DATABASE_URL"]) as other:
+        with owner.session() as first, isolated_database(url) as other:
             lock_bank_version(first, "OR-TEST", "BK-TEST")
             with other.session() as second:
                 # A broken namespace fails promptly instead of hanging the worker.
