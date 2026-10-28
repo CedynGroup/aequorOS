@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Client-side detail drawer for one canonical position: every field the
@@ -6,45 +6,56 @@
  * data-quality chip linking to the ingestion batch the lineage resolves to.
  */
 
-import Link from 'next/link';
-import { ArrowUpRight, GitCommitHorizontal, X } from 'lucide-react';
-import type { CanonicalPositionRead } from '@aequoros/risk-service-api';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { useLineageWalk } from '@/lib/api/ingestion';
-import { fmtDateUTC, fmtTimestamp, labelize, num } from '@/lib/api/values';
-import { fmtLocale } from '@/lib/format';
+import Link from "next/link";
+import { ArrowUpRight, GitCommitHorizontal, X } from "lucide-react";
+import type { CanonicalPositionRead } from "@aequoros/risk-service-api";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import { useLineageWalk } from "@/lib/api/ingestion";
+import { useBankContext } from "@/components/shell/BankContext";
+import { fmtDateUTC, fmtTimestamp, labelize, num } from "@/lib/api/values";
+import { fmtLocale } from "@/lib/format";
 
 export function validationTone(status: string): StatusTone {
   switch (status) {
-    case 'accepted':
-      return 'compliant';
-    case 'warning':
-      return 'amber';
-    case 'error':
-    case 'blocked':
-      return 'critical';
+    case "accepted":
+      return "compliant";
+    case "warning":
+      return "amber";
+    case "error":
+    case "blocked":
+      return "critical";
     default:
-      return 'pending';
+      return "pending";
   }
 }
 
 export function fmtBalance(value: string | null | undefined): string {
-  if (value === null || value === undefined) return '—';
+  if (value === null || value === undefined) return "—";
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return value;
   return parsed.toLocaleString(fmtLocale(), { maximumFractionDigits: 2 });
 }
 
 export function fmtRate(value: string | null | undefined): string {
-  if (value === null || value === undefined) return '—';
+  if (value === null || value === undefined) return "—";
   return `${(num(value) * 100).toFixed(2)}%`;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="min-w-0">
-      <p className="text-micro font-medium text-slate uppercase tracking-wider">{label}</p>
-      <p className="mt-0.5 text-body text-navy font-mono tnum break-all">{children}</p>
+      <p className="text-micro font-medium text-slate uppercase tracking-wider">
+        {label}
+      </p>
+      <p className="mt-0.5 text-body text-navy font-mono tnum break-all">
+        {children}
+      </p>
     </div>
   );
 }
@@ -56,7 +67,8 @@ export default function PositionDrawer({
   position: CanonicalPositionRead;
   onClose: () => void;
 }) {
-  const walk = useLineageWalk(position.lineageId);
+  const { bank } = useBankContext();
+  const walk = useLineageWalk(bank?.id, position.lineageId);
   // Nodes come newest-first; the batch is attached to the extraction root.
   const batchId =
     walk.data?.nodes
@@ -99,7 +111,9 @@ export default function PositionDrawer({
           {/* Data quality */}
           <div className="card px-4 py-3 flex items-center justify-between gap-3">
             <span className="inline-flex items-center gap-2">
-              <span className="text-caption font-medium text-slate">Data quality</span>
+              <span className="text-caption font-medium text-slate">
+                Data quality
+              </span>
               <StatusPill tone={validationTone(position.validationStatus)}>
                 {position.validationStatus}
               </StatusPill>
@@ -114,7 +128,7 @@ export default function PositionDrawer({
               </Link>
             ) : (
               <span className="text-caption text-slate-light">
-                {walk.isPending ? 'Resolving batch…' : 'No batch in lineage'}
+                {walk.isPending ? "Resolving batch…" : "No batch in lineage"}
               </span>
             )}
           </div>
@@ -126,17 +140,17 @@ export default function PositionDrawer({
             </Field>
             <Field label="Interest rate">
               {fmtRate(position.interestRate)}
-              {position.rateType ? ` · ${position.rateType}` : ''}
+              {position.rateType ? ` · ${position.rateType}` : ""}
             </Field>
             <Field label="Contractual maturity">
               {position.contractualMaturity
                 ? fmtDateUTC(position.contractualMaturity)
-                : '—'}
+                : "—"}
             </Field>
             <Field label="As of">{fmtDateUTC(position.asOfDate)}</Field>
             <Field label="Source system">{position.sourceSystem}</Field>
             <Field label="Snapshot">
-              {position.snapshotId ? position.snapshotId.slice(0, 8) : 'none'}
+              {position.snapshotId ? position.snapshotId.slice(0, 8) : "none"}
             </Field>
           </div>
 

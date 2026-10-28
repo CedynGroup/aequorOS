@@ -11,9 +11,18 @@ from sqlalchemy.orm import Session
 
 from app.core.key_management import sdk
 from app.core.key_management.models import BankEncryptionKey
+from app.core.key_management.presentation import (
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+)
 from app.core.key_management.registry import DatabaseEnvelopeStore, EnvelopeStore
 from app.core.key_management.settings import get_key_settings
-from app.core.key_management.types import KeyUnavailableError
+from app.core.key_management.types import (
+    KeyIntegrityError,
+    KeyUnavailableError,
+    ProtectedSupportAccessError,
+)
 from app.db import session as database
 from app.db.worker_access import STORAGE_KEY_SIGNATURE, has_worker_function
 from app.storage.client import ObjectMetadata, StorageAccessError, StorageLocation
@@ -41,6 +50,14 @@ class ObjectEncryption:
         bound = copy(self)
         bound._session = db
         return bound
+
+    def require_read_access(self) -> None:
+        if self._session is not None:
+            presentation = self._session.info.get(SESSION_STATE)
+            if self._session.info.get(SESSION_SUPPORT) or (
+                isinstance(presentation, PresentationState) and presentation.support
+            ):
+                raise ProtectedSupportAccessError()
 
     def bank_key_required(self, location: StorageLocation) -> bool:
         """Connected keys always fail closed, independently of the rollout flag."""
@@ -89,7 +106,9 @@ class ObjectEncryption:
             key = self._envelopes().prepare(location.institution_slug, context)
             encrypted = sdk.transform_file(data, key.plaintext, context)
             return encrypted, str(key.envelope_id), key.key_id
-        except (KeyUnavailableError, RuntimeError, SQLAlchemyError) as exc:
+        except KeyUnavailableError:
+            raise
+        except (RuntimeError, SQLAlchemyError) as exc:
             raise StorageAccessError(
                 "The bank encryption key is unavailable; storage access refused."
             ) from exc
@@ -103,11 +122,12 @@ class ObjectEncryption:
     ) -> BinaryIO:
         close_source = True
         try:
+            self.require_read_access()
             if "encryption-format" not in headers and not self.bank_key_required(location):
                 close_source = False
                 return data
             if headers.get("encryption-format") != ENCRYPTION_FORMAT:
-                raise KeyUnavailableError("An encrypted bank object is required.")
+                raise KeyIntegrityError("An encrypted bank object is required.")
             envelope_id = UUID(headers["key-envelope-id"])
             context = object_context(location, metadata.checksum_sha256)
             key = self._envelopes().open(location.institution_slug, envelope_id, context)
@@ -117,10 +137,16 @@ class ObjectEncryption:
                 digest.update(chunk)
             if digest.hexdigest() != metadata.checksum_sha256:
                 decrypted.close()
-                raise KeyUnavailableError("The encrypted object's checksum does not match.")
+                raise KeyIntegrityError("The encrypted object's checksum does not match.")
             _ = decrypted.seek(0)
             return decrypted
-        except (KeyUnavailableError, ValueError, KeyError, RuntimeError, SQLAlchemyError) as exc:
+        except KeyIntegrityError as exc:
+            raise StorageAccessError(
+                "The bank key or encrypted object could not be verified."
+            ) from exc
+        except KeyUnavailableError:
+            raise
+        except (ValueError, KeyError, RuntimeError, SQLAlchemyError) as exc:
             raise StorageAccessError(
                 "The bank key or encrypted object could not be verified."
             ) from exc

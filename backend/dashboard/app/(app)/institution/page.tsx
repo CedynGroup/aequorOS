@@ -51,7 +51,11 @@ export default function InstitutionProfilePage() {
   const bankId = bank?.id;
 
   const query = useInstitutionProfile(bankId);
-  const [editing, setEditing] = useState(false);
+  const [editor, setEditor] = useState<{
+    bankId: string | undefined;
+    profile: InstitutionProfileFullReadProfile | null;
+  } | null>(null);
+  const editing = editor?.bankId === bankId ? editor : null;
   // An LRT pack is event-driven, so its as-of dates are the bank's computed
   // positions (newest first) rather than a regulator calendar. Carrying the
   // newest one on the link opens the workspace ready to generate.
@@ -83,39 +87,44 @@ export default function InstitutionProfilePage() {
       />
 
       <PageContainer className="py-6 space-y-6">
-        <QueryBoundary
-          contained
-          isLoading={query.isLoading}
-          error={notFound ? null : query.error}
-          onRetry={() => query.refetch()}
-          skeleton={<SkeletonCard />}
-        >
-          {!profile && !editing ? (
-            <EmptyState
-              Icon={Building2}
-              title="Profile not configured yet"
-              description="Record the institution's legal identity, authorisation, approved capital, listing, and ownership split. The register feeds the corporate (LRT) returns."
-              action={
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
-                >
-                  <Pencil size={13} aria-hidden />
-                  Set up profile
-                </button>
-              }
-            />
-          ) : editing ? (
-            <ProfileForm
-              bankId={bankId!}
-              profile={profile}
-              onClose={() => setEditing(false)}
-            />
-          ) : profile ? (
-            <ProfileView profile={profile} onEdit={() => setEditing(true)} />
-          ) : null}
-        </QueryBoundary>
+        {editing ? (
+          <ProfileForm
+            bankId={bankId!}
+            profile={editing.profile}
+            onClose={() => setEditor(null)}
+          />
+        ) : (
+          <QueryBoundary
+            contained
+            isLoading={query.isLoading}
+            error={notFound ? null : query.error}
+            onRetry={() => query.refetch()}
+            skeleton={<SkeletonCard />}
+          >
+            {!profile ? (
+              <EmptyState
+                Icon={Building2}
+                title="Profile not configured yet"
+                description="Record the institution's legal identity, authorisation, approved capital, listing, and ownership split. The register feeds the corporate (LRT) returns."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setEditor({ bankId, profile })}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                  >
+                    <Pencil size={13} aria-hidden />
+                    Set up profile
+                  </button>
+                }
+              />
+            ) : (
+              <ProfileView
+                profile={profile}
+                onEdit={() => setEditor({ bankId, profile })}
+              />
+            )}
+          </QueryBoundary>
+        )}
       </PageContainer>
     </>
   );
@@ -153,7 +162,7 @@ function ProfileView({
     >
       <div className="space-y-5">
         {profile.warnings.length > 0 && (
-          <div className="rounded-sm border border-warning/25 bg-warning-light/50 px-3.5 py-2.5 space-y-1.5">
+          <div className="rounded border border-warning/25 bg-warning-light/50 px-3.5 py-2.5 space-y-1.5">
             {profile.warnings.map((warning) => (
               <p
                 key={warning}

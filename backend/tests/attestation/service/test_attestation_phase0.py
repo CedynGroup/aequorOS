@@ -217,9 +217,10 @@ def test_content_digest_is_sealed_and_survives_regeneration(db_session: Session)
     first = _generate(db_session)
     assert first.content_digest == digests.content_digest(first.snapshot)
     assert first.snapshot_sha256 == generation.snapshot_content_hash(first.snapshot)
-    # Engine-backed returns bind runs, so they carry no register-state digest.
     assert first.source_runs != []
-    assert first.register_state_digest is None
+    assert first.register_state_digest == digests.register_state_digest(
+        register_state.project_register_state(db_session, MAKER, SAMPLE_BANK_ID)
+    )
 
     second = _generate(db_session)
     assert second.version == first.version + 1
@@ -416,10 +417,9 @@ def test_every_registered_return_family_seals_a_content_digest(db_session: Sessi
     ):
         package = _generate(db_session, return_code)
         assert package.content_digest == digests.content_digest(package.snapshot), return_code
-        if package.source_runs:
-            assert package.register_state_digest is None, return_code
-        else:
-            assert package.register_state_digest is not None, return_code
+        assert package.register_state_digest == digests.register_state_digest(
+            register_state.project_register_state(db_session, MAKER, SAMPLE_BANK_ID)
+        ), return_code
 
 
 def test_all_registered_returns_route_through_the_single_sealing_site() -> None:

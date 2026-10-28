@@ -525,17 +525,33 @@ def _package(**overrides: object) -> RegulatoryPackage:
         "generated_at": datetime.now(UTC),
         "attestation_state": "unsigned",
         "attestation_cycle": 1,
+        "register_state_digest": digests.register_state_digest(
+            {"organization_id": ORG_1, "bank_id": SAMPLE_BANK_ID, "key_version": None, "rows": []}
+        ),
     }
     defaults.update(overrides)
     return RegulatoryPackage(**defaults)
 
 
 def test_compute_binding_classifies_by_source_runs() -> None:
-    engine = workflow.compute_binding(_package())
+    engine = workflow.compute_binding(_package(register_state_digest=None))
     assert engine.binding_class == "engine_run"
 
     master = _package(source_runs=[], register_state_digest="rs1", return_code="LRT-PROFILE")
     assert workflow.compute_binding(master).binding_class == "master_data"
+
+
+def test_engine_binding_covers_register_and_engine_provenance_independently() -> None:
+    package = _package(register_state_digest="register-before")
+    original = workflow.compute_binding(package)
+    assert original.binding_class == "engine_run"
+    assert original.source_runs == package.source_runs
+    assert original.register_state_digest == "register-before"
+    package.register_state_digest = "register-after"
+    assert workflow.compute_binding(package).certification_digest != original.certification_digest
+    package.register_state_digest = "register-before"
+    package.source_runs = [{**package.source_runs[0], "input_hash": "changed"}]
+    assert workflow.compute_binding(package).certification_digest != original.certification_digest
 
 
 def test_master_data_package_without_register_state_is_refused() -> None:
@@ -543,6 +559,29 @@ def test_master_data_package_without_register_state_is_refused() -> None:
     with pytest.raises(workflow.AttestationConflict) as excinfo:
         workflow.compute_binding(package)
     assert excinfo.value.error_code == "register_state_missing"
+
+
+@pytest.mark.parametrize(
+    "package_status", ["generated", "validated", "pending_approval", "approved"]
+)
+@pytest.mark.parametrize("engine_backed", [False, True])
+def test_unsubmitted_package_without_register_commitment_requires_regeneration(
+    db_session: Session, package_status: str, engine_backed: bool
+) -> None:
+    package = _package(status=package_status, register_state_digest=None)
+    if not engine_backed:
+        package.source_runs = []
+    with pytest.raises(workflow.AttestationConflict, match="register_state_changed"):
+        workflow.ensure_register_current(db_session, _ctx(), package)
+    assert package.register_state_digest is None
+
+
+def test_submitted_legacy_engine_package_keeps_historical_binding(db_session: Session) -> None:
+    package = _package(status="submitted", register_state_digest=None)
+    original = workflow.compute_binding(package)
+    workflow.ensure_register_current(db_session, _ctx(), package)
+    assert workflow.compute_binding(package) == original
+    assert package.register_state_digest is None
 
 
 def test_preparer_cannot_certify_an_unvalidated_package() -> None:

@@ -13,7 +13,7 @@ import hmac
 import json
 import unicodedata
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import batched
 from typing import Literal, cast
 from uuid import UUID
@@ -28,8 +28,21 @@ from app.core.ids import new_uuid4, new_uuid7
 from app.core.key_management import registry, sdk
 from app.core.key_management.concentration_identity import counterparty_group_key
 from app.core.key_management.models import BankEncryptionKey
+from app.core.key_management.presentation import (
+    LOCKED_JSON,
+    LOCKED_TEXT,
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+    contains_placeholder,
+)
 from app.core.key_management.settings import get_key_settings
-from app.core.key_management.types import FIELD_FORMAT, KeyIntegrityError, KeyUnavailableError
+from app.core.key_management.types import (
+    FIELD_FORMAT,
+    KeyIntegrityError,
+    KeyUnavailableError,
+    ProtectedSupportAccessError,
+)
 from app.db.base import Base, UuidV4PrimaryKeyMixin
 
 FORMAT = FIELD_FORMAT
@@ -266,7 +279,8 @@ def blind_index(  # noqa: PLR0913 - explicit scope at the search boundary
 ) -> str:
     """Compute a scoped exact-match token using the unit's authenticated index key."""
     with db.no_autoflush:
-        row = registry.bank_key(db, organization_id, bank_id)
+        registry.lock_bank_version(db, organization_id, bank_id, read=True)
+        row = registry.bank_key(db, organization_id, bank_id, refresh=True)
         if row is None and get_key_settings().bank_key_required:
             raise KeyUnavailableError("The bank encryption key is not connected.")
         secret = _index_key(db, row) if row is not None else None
@@ -413,7 +427,8 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
             organization, bank = _scope(db, state, columns)
             scope = (organization, bank) if bank is not None else None
             if scope is not None and scope not in bank_rows:
-                bank_rows[scope] = registry.bank_key(db, organization, scope[1])
+                registry.lock_bank_version(db, organization, scope[1], read=True)
+                bank_rows[scope] = registry.bank_key(db, organization, scope[1], refresh=True)
             row = bank_rows[scope] if scope is not None else None
             if bank is not None and row is None and get_key_settings().bank_key_required:
                 raise KeyUnavailableError("The bank encryption key is not connected.")
@@ -423,6 +438,23 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
                 if state.pending or state.attrs[col.attribute].history.has_changes()
             ]
             values = {col.attribute: cast(object, state.dict.get(col.attribute)) for col in changed}
+            presentation = db.info.get(SESSION_STATE)
+            reason = (
+                presentation.banks.get(bank or "")
+                if isinstance(presentation, PresentationState)
+                else None
+            )
+            if db.info.get(SESSION_SUPPORT) or (
+                isinstance(presentation, PresentationState) and presentation.support
+            ):
+                raise ProtectedSupportAccessError()
+            if reason in {"revoked", "unavailable"} or any(
+                contains_placeholder(state.dict.get(col.attribute)) for col in columns
+            ):
+                raise KeyUnavailableError(
+                    "Locked placeholders cannot be saved as protected data.",
+                    revoked=reason == "revoked",
+                )
             restores.append(_Restore(instance, values))
             if row is None:
                 if bank is not None:
@@ -505,29 +537,112 @@ def restore_after_failure(db: Session, _previous: object) -> None:
     _restore(db, failed=True)
 
 
-def _open_field(
+def _lock_field(instance: Base, col: FieldColumn, reason: str) -> None:
+    state = cast(InstanceState[object], inspect(instance))
+    if cast(Table, state.mapper.local_table).name.startswith("bi_"):
+        if reason == "support":
+            raise ProtectedSupportAccessError()
+        raise KeyUnavailableError("Protected configuration is locked.", revoked=reason == "revoked")
+    value: object = LOCKED_TEXT if isinstance(col.kind, ProtectedText) else {LOCKED_JSON: reason}
+    attributes.set_committed_value(instance, col.attribute, value)
+
+
+def _presentation_locked(
+    instance: Base,
+    col: FieldColumn,
+    presentation: object,
+    bank: str | None,
+    *,
+    missing_key: bool,
+) -> bool:
+    if not isinstance(presentation, PresentationState):
+        return False
+    support = presentation.support or presentation.banks.get(bank or "") == "support"
+    if not support and not missing_key:
+        return False
+    reason = "support" if support else "unavailable"
+    if bank is not None:
+        presentation.record(bank, reason)
+    _lock_field(instance, col, reason)
+    return True
+
+
+def observe_bank_key(db: Session, organization: str, bank: str) -> None:
+    presentation = db.info.get(SESSION_STATE)
+    if not isinstance(presentation, PresentationState) or bank in presentation.observed_banks:
+        return
+    if presentation.support or db.info.get(SESSION_SUPPORT):
+        presentation.record(bank, "support")
+        presentation.observed_banks.add(bank)
+        return
+    registry.lock_bank_version(db, organization, bank, read=True)
+    row = registry.bank_key(db, organization, bank)
+    if row is None and get_key_settings().bank_key_required:
+        presentation.record(bank, "unavailable")
+        presentation.observed_banks.add(bank)
+        return
+    if row is not None:
+        versions = {row.current_version_id: _envelope_context(organization, bank)}
+        versions.setdefault(row.index_version_id, _index_context(row))
+        for version, context in versions.items():
+            try:
+                if version is None:
+                    raise KeyUnavailableError("The bank data-key version is unavailable.")
+                if reason := presentation.read_locks.get(version):
+                    presentation.record(bank, reason)
+                    continue
+                registry.open_envelope(db, row, version, context, registry.provider_for)
+            except KeyIntegrityError:
+                raise
+            except KeyUnavailableError as exc:
+                reason = "revoked" if exc.revoked else "unavailable"
+                presentation.record(bank, reason)
+                if version is not None:
+                    presentation.read_locks[version] = reason
+    presentation.record(bank, "available")
+    presentation.observed_banks.add(bank)
+
+
+def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
     db: Session,
     row: BankEncryptionKey,
-    state: InstanceState[object],
     value: SealedField,
-    field_name: str,
-) -> object:
-    secret = registry.open_envelope(
-        db,
-        row,
-        value.envelope_id,
-        _envelope_context(row.organization_id, row.bank_id),
-        registry.provider_for,
-    ).plaintext
-    plaintext = sdk.decrypt(
-        value.message,
-        sdk.raw_keyring(secret, name=FORMAT),
-        {**_context(state, row.organization_id, row.bank_id), "field": field_name},
-    )
-    return _JSON.validate_json(plaintext)
+    presentation: object,
+    instance: Base,
+    col: FieldColumn,
+) -> bytes | None:
+    if isinstance(presentation, PresentationState) and (
+        reason := presentation.read_locks.get(value.envelope_id)
+    ):
+        observe_bank_key(db, row.organization_id, row.bank_id)
+        _lock_field(instance, col, reason)
+        return None
+    try:
+        secret = registry.open_envelope(
+            db,
+            row,
+            value.envelope_id,
+            _envelope_context(row.organization_id, row.bank_id),
+            registry.provider_for,
+        ).plaintext
+    except KeyIntegrityError:
+        raise
+    except KeyUnavailableError as exc:
+        if not isinstance(presentation, PresentationState):
+            raise
+        reason = "revoked" if exc.revoked else "unavailable"
+        presentation.record(row.bank_id, reason)
+        presentation.read_locks[value.envelope_id] = reason
+        observe_bank_key(db, row.organization_id, row.bank_id)
+        _lock_field(instance, col, reason)
+        return None
+    observe_bank_key(db, row.organization_id, row.bank_id)
+    return secret
 
 
-def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
+def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
+    instance: Base, refreshed: set[str] | None = None
+) -> None:
     state = cast(InstanceState[object], inspect(instance))
     columns = field_columns(state)
     db = object_session(instance)
@@ -549,20 +664,41 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
                 _ = cast(object, attributes.get_attribute(instance, attribute))
         organization, bank = _scope(db, state, columns)
         row = registry.bank_key(db, organization, bank) if bank is not None else None
-        if bank is not None and row is None and get_key_settings().bank_key_required:
-            raise KeyUnavailableError("The bank encryption key is not connected.")
+        presentation = db.info.get(SESSION_STATE)
+        if db.info.get(SESSION_SUPPORT):
+            if not isinstance(presentation, PresentationState):
+                presentation = PresentationState(support=True)
+            presentation.support = True
+        missing_key = bank is not None and row is None and get_key_settings().bank_key_required
+        if bank is not None and missing_key:
+            if not isinstance(presentation, PresentationState):
+                raise KeyUnavailableError("The bank encryption key is not connected.")
+            presentation.record(bank, "support" if presentation.support else "unavailable")
         for col in present:
             value = cast(object, state.dict[col.attribute])
-            if col.kind.protected_members is not None:
+            if col.kind.protected_members is not None and not isinstance(value, SealedField):
                 value = _validate_value(col.kind, value)
 
                 def open_values(item: object, path: str, col: FieldColumn = col) -> object:
+                    leaf = replace(col, column=col.column + ":" + path)
+                    if _presentation_locked(
+                        instance, leaf, presentation, bank, missing_key=missing_key
+                    ):
+                        return None
                     if not isinstance(item, dict) or FORMAT not in item:
                         return cast(object, item)
                     sealed = col.kind.decode(cast(dict[str, object], item)[FORMAT])
                     if row is None:
                         raise KeyUnavailableError("The bank encryption key is not connected.")
-                    return _open_field(db, row, state, sealed, col.column + ":" + path)
+                    secret = _field_secret(db, row, sealed, presentation, instance, leaf)
+                    if secret is None:
+                        return None
+                    plaintext = sdk.decrypt(
+                        sealed.message,
+                        sdk.raw_keyring(secret, name=FORMAT),
+                        {**_context(state, organization, row.bank_id), "field": leaf.column},
+                    )
+                    return _JSON.validate_json(plaintext)
 
                 attributes.set_committed_value(
                     instance,
@@ -570,13 +706,23 @@ def _decrypt_entity(instance: Base, refreshed: set[str] | None = None) -> None:
                     _identity_values(value, col.kind.protected_members, open_values),
                 )
                 continue
+            if _presentation_locked(instance, col, presentation, bank, missing_key=missing_key):
+                continue
             if not isinstance(value, SealedField):
                 continue
             if row is None:
                 raise KeyUnavailableError("The bank encryption key is not connected.")
-            decoded = _open_field(db, row, state, value, col.column)
+            context = _context(state, organization, row.bank_id)
+            secret = _field_secret(db, row, value, presentation, instance, col)
+            if secret is None:
+                continue
+            plaintext = sdk.decrypt(
+                value.message,
+                sdk.raw_keyring(secret, name=FORMAT),
+                {**context, "field": col.column},
+            )
             attributes.set_committed_value(
-                instance, col.attribute, _validate_value(col.kind, decoded)
+                instance, col.attribute, _validate_value(col.kind, _JSON.validate_json(plaintext))
             )
 
 

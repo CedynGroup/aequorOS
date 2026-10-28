@@ -9,10 +9,16 @@ from __future__ import annotations
 # pyright: reportMissingTypeStubs=false
 import re
 import secrets
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Protocol, cast
 
 import boto3
+from aws_cryptographic_material_providers.mpl.errors import (
+    CollectionOfErrors,
+    ComAmazonawsKms,
+    OpaqueError,
+    OpaqueWithTextError,
+)
 from aws_cryptographic_material_providers.mpl.models import (
     CreateAwsKmsKeyringInput,
 )
@@ -21,6 +27,13 @@ from aws_cryptographic_material_providers.mpl.references import (
 )
 from botocore.client import BaseClient
 from botocore.config import Config
+from botocore.exceptions import (
+    ClientError,
+    ConnectionClosedError,
+    ConnectTimeoutError,
+    EndpointConnectionError,
+    ReadTimeoutError,
+)
 from pydantic import BaseModel, ConfigDict
 
 from app.core.config import get_settings, is_undeployed_environment
@@ -29,6 +42,7 @@ from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import (
     DataKey,
     KeyDescription,
+    KeyIntegrityError,
     KeyProvider,
     KeyReference,
     KeyStatus,
@@ -51,6 +65,21 @@ class _Metadata(BaseModel):
 class _Description(BaseModel):
     model_config = ConfigDict(extra="ignore")
     KeyMetadata: _Metadata
+
+
+class _ClientFailure(Protocol):
+    response: object
+    operation_name: str
+
+
+class _ErrorCode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    Code: str = ""
+
+
+class _ErrorResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    Error: _ErrorCode
 
 
 class _KmsClient(Protocol):
@@ -89,6 +118,84 @@ def kms_client(region: str) -> BaseClient:
     return client
 
 
+def _provider_errors(exc: Exception) -> Iterator[BaseException]:
+    pending: list[object] = [exc]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, CollectionOfErrors):
+            pending.extend(cast(list[object], current.list))
+        if isinstance(current, (OpaqueError, OpaqueWithTextError)):
+            pending.append(cast(object, current.obj))
+        if isinstance(current, BaseException):
+            yield current
+            pending.extend([current.__cause__, current.__context__])
+
+
+def _failure(exc: Exception, permission: str) -> KeyUnavailableError:
+    for current in _provider_errors(exc):
+        if isinstance(
+            current,
+            (ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, ReadTimeoutError),
+        ):
+            return KeyUnavailableError("The bank key service is unreachable.")
+        operation = ""
+        if isinstance(current, ClientError):
+            failure = cast(_ClientFailure, cast(object, current))
+            operation = failure.operation_name
+            code = _ErrorResponse.model_validate(failure.response).Error.Code
+        elif isinstance(current, ComAmazonawsKms):
+            # The MPL adapter discards botocore's structured response. Only
+            # recognize its fixed error-code/operation prefix; never echo text.
+            match = re.match(
+                r"(?:ClientError\(['\"])?An error occurred \(([A-Za-z]+)\) when calling the "
+                r"(DescribeKey|Encrypt|GenerateDataKey|Decrypt) operation:",
+                current.message,
+            )
+            if match is None:
+                continue
+            code, operation = match.groups()
+        else:
+            continue
+        permission = {
+            "DescribeKey": "kms:DescribeKey",
+            "Encrypt": "kms:Encrypt",
+            "GenerateDataKey": "kms:GenerateDataKey",
+            "Decrypt": "kms:Decrypt",
+        }.get(operation, permission)
+        if code in {"AccessDeniedException", "AccessDenied"}:
+            return KeyUnavailableError(
+                f"Access denied for {permission}. Add this permission to the bank key policy "
+                "and the aequorOS workload role, then test again.",
+                revoked=True,
+            )
+        if code in {"DisabledException", "KMSInvalidStateException"}:
+            return KeyUnavailableError(
+                "The key is disabled or pending deletion. "
+                "Enable the key in AWS KMS, then test again.",
+                revoked=True,
+            )
+        if code == "NotFoundException":
+            return KeyUnavailableError(
+                "Key not found. Check the exact key ARN, bank AWS account and region.", revoked=True
+            )
+        if code in {
+            "DependencyTimeoutException",
+            "ThrottlingException",
+            "KMSInternalException",
+            "ServiceUnavailableException",
+        }:
+            return KeyUnavailableError("The bank key service is unavailable.")
+    error = KeyIntegrityError if permission == "kms:Decrypt" else KeyUnavailableError
+    return error(
+        f"The key operation {permission} failed. Check KMS connectivity, key state "
+        "and the required permission, then retry."
+    )
+
+
 class AwsKmsKeyProvider(KeyProvider):
     def __init__(self, client_factory: Callable[[str], BaseClient] | None = None) -> None:
         self._factory = client_factory or kms_client
@@ -115,14 +222,15 @@ class AwsKmsKeyProvider(KeyProvider):
         except KeyUnavailableError:
             raise
         except Exception as exc:
-            raise KeyUnavailableError(
-                "The bank key service is unavailable or access was refused."
-            ) from exc
+            raise _failure(exc, "kms:DescribeKey") from exc
 
     def _keyring(self, key: KeyReference) -> IKeyring:
         description = self.describe(key)
         if description.status != KeyStatus.ACTIVE:
-            raise KeyUnavailableError("The bank encryption key is disabled or pending deletion.")
+            raise KeyUnavailableError(
+                "The bank encryption key is disabled or pending deletion.",
+                revoked=description.status == KeyStatus.DISABLED,
+            )
         return sdk.materials().create_aws_kms_keyring(
             CreateAwsKmsKeyringInput(
                 kms_key_id=key.key_id,
@@ -140,10 +248,14 @@ class AwsKmsKeyProvider(KeyProvider):
         except KeyUnavailableError:
             raise
         except Exception as exc:
-            raise KeyUnavailableError("The bank key could not wrap the data key.") from exc
+            raise _failure(exc, "kms:GenerateDataKey") from exc
 
     def unwrap(self, key: KeyReference, wrapped: bytes, context: dict[str, str]) -> bytes:
-        return sdk.decrypt(wrapped, self._keyring(key), context)
+        keyring = self._keyring(key)
+        try:
+            return sdk.decrypt(wrapped, keyring, context)
+        except Exception as exc:
+            raise _failure(exc, "kms:Decrypt") from exc
 
     def rotate(
         self,

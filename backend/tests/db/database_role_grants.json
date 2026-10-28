@@ -169,7 +169,7 @@
       "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
     },
     "bank_encryption_keys": {
-      "aqs_api": ["SELECT"],
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["SELECT"]
     },
     "bank_financial_facts": {
@@ -855,7 +855,9 @@
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
-    "retained_bank_keys": {},
+    "retained_bank_keys": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"]
+    },
     "return_signature_placements": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]

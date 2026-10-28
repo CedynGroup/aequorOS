@@ -50,6 +50,7 @@ from app.core.config import (
     get_settings,
     is_undeployed_environment,
 )
+from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
 from app.db.session import RlsBlindError, get_cross_tenant_engine
 from app.identity.public import Bank
 from app.models import OperatorAuditLog, OperatorInspectorSession, OperatorUser
@@ -117,6 +118,8 @@ def _dev_context(token: str, operator_settings: OperatorSettings) -> OperatorCon
 def _load_operator_user(email: str) -> OperatorUser | None:
     """Fetch one staff row on a short-lived session (global table, no RLS)."""
     session = get_operator_sessionmaker()()
+    session.info[SESSION_SUPPORT] = True
+    session.info[SESSION_STATE] = PresentationState(support=True)
     try:
         return session.scalar(select(OperatorUser).where(OperatorUser.email == email))
     finally:

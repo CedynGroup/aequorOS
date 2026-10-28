@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from fastapi.testclient import TestClient
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
+from pydantic import TypeAdapter
 from sqlalchemy import Uuid, bindparam, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, undefer_group
 
 from app.attestation.service import register_state
 from app.attestation.service.digests import register_state_digest
@@ -27,8 +29,16 @@ from app.bi.service.execution import execute
 from app.bi.service.identity_policy import IDENTITY_REASON
 from app.core.ids import new_uuid7
 from app.core.key_management import registry
+from app.core.key_management.fields import Normalization, blind_index, observe_bank_key
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
+from app.core.key_management.presentation import (
+    LOCKED_JSON,
+    LOCKED_TEXT,
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+)
 from app.core.key_management.types import (
     KeyIntegrityError,
     KeyReference,
@@ -36,12 +46,12 @@ from app.core.key_management.types import (
     KeyUnavailableError,
 )
 from app.core.tenancy import TenantContext
-from app.data_engine.service.field_search import find_counterparties
 from app.db.base import utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
 from app.identity.public import Bank, User
 from app.identity.schemas.institution_profile import (
+    InstitutionProfileFullRead,
     RelatedPartyCreate,
     RelatedPartyRoleInput,
     RelatedPartyUpdate,
@@ -57,8 +67,9 @@ from app.reporting.models.packages import RegulatoryPackage
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.services import canonical_withdrawal, credit_concentration, fact_derivation, ingestion
 from app.services.canonical_withdrawal import WithdrawalError
+from tests.api import test_impersonation_auth as impersonation
 from tests.bi.fixtures import materialize_bi_plane
-from tests.support.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 BANK_A = "BK-SAMP0001"
@@ -296,15 +307,15 @@ def test_every_covered_field_is_ciphertext_and_entity_reads_round_trip(
     assert package.validation_report == {"message": NAME} and package.notes == NAME
 
 
-def test_bank_scoped_exact_search_and_master_key_rotation(
+def test_bank_scoped_indexes_and_master_key_rotation(
     db_session: Session,
     provider: LocalKeyProvider,
 ) -> None:
     connect(db_session, provider)
     connect(db_session, provider, BANK_B)
     a = counterparty(db_session)
-    b = counterparty(db_session, BANK_B)
-    a_id, b_id = a.id, b.id
+    counterparty(db_session, BANK_B)
+    a_id = a.id
     db_session.commit()
     before = raw_fields(db_session)
     indexes = cast(
@@ -317,54 +328,54 @@ def test_bank_scoped_exact_search_and_master_key_rotation(
     )
     assert len(set(indexes)) == 2
     assert all(NAME not in str(token) and len(str(token)) == 64 for token in indexes)
-    db_session.expunge_all()
-    assert [
-        row.id
-        for row in find_counterparties(
-            db_session, CTX, BANK_A, field="name", value="  SYNTHETIC   borrower ñ  "
+    tokens: tuple[tuple[str, str, Normalization, object], ...] = (
+        ("counterparty.name", "  SYNTHETIC   borrower ñ  ", "name", a.name_blind_index),
+        ("counterparty.source_reference", IDENTIFIER, "identifier", a.source_reference_blind_index),
+        (
+            "counterparty.identifier:national_id",
+            IDENTIFIER,
+            "identifier",
+            a.external_identifiers_blind_indexes["national_id"],
+        ),
+    )
+    for domain, value, normalization, expected in tokens:
+        assert (
+            blind_index(
+                db_session,
+                organization_id=ORG_1,
+                bank_id=BANK_A,
+                domain=domain,
+                value=value,
+                normalization=normalization,
+            )
+            == expected
         )
-    ] == [a_id]
-    assert [
-        row.id
-        for row in find_counterparties(
-            db_session, CTX, BANK_B, field="source_reference", value=IDENTIFIER
-        )
-    ] == [b_id]
-    assert [
-        row.id
-        for row in find_counterparties(
-            db_session,
-            CTX,
-            BANK_A,
-            field="external_identifier",
-            namespace="national_id",
-            value=IDENTIFIER,
-        )
-    ] == [a_id]
     assert (
-        find_counterparties(
-            db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER.lower()
+        blind_index(
+            db_session,
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            domain="counterparty.source_reference",
+            value=IDENTIFIER.lower(),
         )
-        == []
+        != a.source_reference_blind_index
     )
     assert (
-        find_counterparties(
+        blind_index(
             db_session,
-            CTX,
-            BANK_A,
-            field="external_identifier",
-            namespace="tax_id",
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            domain="counterparty.identifier:tax_id",
             value=IDENTIFIER,
         )
-        == []
+        != a.external_identifiers_blind_indexes["national_id"]
     )
     row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
     registry.rotate(db_session, row, NEXT, lambda _provider: provider)
     db_session.commit()
     db_session.expunge_all()
-    assert [
-        row.id for row in find_counterparties(db_session, CTX, BANK_A, field="name", value=NAME)
-    ] == [a_id]
+    loaded = db_session.get(CanonicalCounterparty, a_id)
+    assert loaded is not None and loaded.name == NAME
     assert raw_fields(db_session) == before
 
 
@@ -426,12 +437,9 @@ def test_bank_a_key_cannot_unwrap_bank_b_and_revocation_refuses_reads(
         loaded = db_session.get(CanonicalCounterparty, b_id)
         assert loaded is not None
         _ = loaded.name
-    db_session.expunge_all()
-    with pytest.raises(KeyUnavailableError):
-        find_counterparties(db_session, CTX, BANK_B, field="name", value=NAME)
 
 
-def test_register_crud_search_and_new_audits_omit_names(
+def test_register_crud_and_new_audits_omit_names(
     db_session: Session,
     provider: LocalKeyProvider,
 ) -> None:
@@ -448,13 +456,6 @@ def test_register_crud_search_and_new_audits_omit_names(
     )
     created = institution_profile.create_related_party(db_session, CTX, BANK_A, payload)
     assert created.full_name == NAME
-    assert (
-        institution_profile.find_related_parties_by_name(db_session, CTX, BANK_A, NAME.lower())[
-            0
-        ].id
-        == created.id
-    )
-    assert institution_profile.find_related_parties_by_name(db_session, CTX, BANK_B, NAME) == []
     db_session.expire_all()
     profile = institution_profile.get_full_profile(db_session, CTX, BANK_A)
     assert profile.related_parties[0].contact == {"national_id": IDENTIFIER}
@@ -476,13 +477,8 @@ def test_register_crud_search_and_new_audits_omit_names(
     )
     assert updated.full_name == "Synthetic replacement"
     db_session.expunge_all()
-    assert institution_profile.find_related_parties_by_name(db_session, CTX, BANK_A, NAME) == []
-    assert (
-        institution_profile.find_related_parties_by_name(
-            db_session, CTX, BANK_A, "SYNTHETIC REPLACEMENT"
-        )[0].id
-        == created.id
-    )
+    profile = institution_profile.get_full_profile(db_session, CTX, BANK_A)
+    assert profile.related_parties[0].full_name == "Synthetic replacement"
     event = db_session.scalar(
         select(AuditEvent).where(AuditEvent.event_type == "related_party.updated")
     )
@@ -517,18 +513,8 @@ def assert_unicode_name_round_trip(db: Session, connected: bool) -> None:
         db.expunge_all()
         loaded = db.get(CanonicalCounterparty, borrower_id)
         assert loaded is not None and loaded.name == name
-        assert [
-            row.name for row in find_counterparties(db, CTX, BANK_A, field="name", value=equivalent)
-        ] == [name]
-        assert [
-            row.full_name
-            for row in institution_profile.find_related_parties_by_name(db, CTX, BANK_A, equivalent)
-        ] == [name]
-        assert find_counterparties(db, CTX, BANK_A, field="name", value=equivalent + "x") == []
-        assert (
-            institution_profile.find_related_parties_by_name(db, CTX, BANK_A, equivalent + "x")
-            == []
-        )
+        profile = institution_profile.get_full_profile(db, CTX, BANK_A)
+        assert profile.related_parties[0].full_name == name
         stored = db.execute(
             text(
                 "SELECT name, name_blind_index FROM canonical_counterparties "
@@ -536,9 +522,18 @@ def assert_unicode_name_round_trip(db: Session, connected: bool) -> None:
             )
         ).all()
         assert len(stored) == 2
-        for record in stored:
+        for record, domain in zip(
+            stored, ("counterparty.name", "related_party.full_name"), strict=True
+        ):
             stored_name, token = cast(object, record[0]), cast(object, record[1])
-            assert isinstance(token, str) and 0 < len(token) <= 255
+            assert token == blind_index(
+                db,
+                organization_id=ORG_1,
+                bank_id=BANK_A,
+                domain=domain,
+                value=equivalent,
+                normalization="name",
+            )
             if connected:
                 assert stored_name != name
             else:
@@ -546,7 +541,7 @@ def assert_unicode_name_round_trip(db: Session, connected: bool) -> None:
 
 
 @pytest.mark.parametrize("connected", [False, True])
-def test_unicode_name_writes_updates_and_normalized_search(
+def test_unicode_name_writes_updates_and_normalized_indexes(
     db_session: Session, provider: LocalKeyProvider, connected: bool
 ) -> None:
     if connected:
@@ -624,7 +619,6 @@ def test_partial_refresh_and_update_preserve_other_encrypted_fields(
     assert loaded.attributes == {"contact_name": NAME}
     assert loaded.group_reference == "SYNTHETIC-GROUP-17"
     assert loaded.external_identifiers == {"national_id": IDENTIFIER}
-    assert find_counterparties(db_session, CTX, BANK_A, field="name", value=NAME) == []
 
 
 def test_failed_sensitive_write_rolls_back_without_a_platform_fallback(
@@ -647,7 +641,7 @@ def test_failed_sensitive_write_rolls_back_without_a_platform_fallback(
     assert raw_fields(db_session) == before
 
 
-def withdraw_counterparties(db: Session) -> CanonicalWithdrawal:
+def withdraw_counterparties(db: Session, *, expected_rows: int = 1) -> CanonicalWithdrawal:
     checker = User(
         id=new_uuid7(),
         organization_id=ORG_1,
@@ -675,23 +669,44 @@ def withdraw_counterparties(db: Session) -> CanonicalWithdrawal:
         requested.id,
         approved_by=checker.email,
     )
-    assert applied.status == "applied" and applied.rows_withdrawn == 1
+    assert applied.status == "applied" and applied.rows_withdrawn == expected_rows
     db.commit()
     return applied
 
 
-@pytest.mark.parametrize("connected", [False, True])
-@pytest.mark.parametrize("withdraw", [False, True])
+def write_counterparty_workbook(path: Path, name: str) -> None:
+    workbook = Workbook()
+    customers = workbook.active
+    assert customers is not None
+    customers.title = "Customers"
+    customers.append(["CustomerId", "CustomerName", "Type"])
+    customers.append([IDENTIFIER, name, "RETAIL_INDIVIDUAL"])
+    loans = cast(Worksheet, workbook.create_sheet("Loans"))
+    loans.append(["Reference", "Type", "Currency", "Balance", "CustomerId"])
+    loans.append(["synthetic-loan-1", "LOAN", "GHS", 123, IDENTIFIER])
+    workbook.save(path)
+
+
+@pytest.mark.parametrize(
+    "connection_timing,withdraw",
+    [
+        ("none", False),
+        ("none", True),
+        ("before", False),
+        ("before", True),
+        ("after_withdrawal", True),
+    ],
+)
 @pytest.mark.parametrize("initial_name", [NAME, EXPANDING_NAME])
-def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(  # noqa: PLR0913
+def test_ingestion_and_replacement_keep_identity_reads_working(  # noqa: PLR0913
     db_session: Session,
     provider: LocalKeyProvider,
     tmp_path: Path,
-    connected: bool,
+    connection_timing: str,
     withdraw: bool,
     initial_name: str,
 ) -> None:
-    if connected:
+    if connection_timing == "before":
         connect(db_session, provider)
     withdrawal: CanonicalWithdrawal | None = None
     mapping = MappingConfig(
@@ -730,17 +745,8 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
     )
     storage = InMemoryStorageClient()
     for name in (initial_name, "Synthetic replacement borrower"):
-        workbook = Workbook()
-        customers = workbook.active
-        assert customers is not None
-        customers.title = "Customers"
-        customers.append(["CustomerId", "CustomerName", "Type"])
-        customers.append([IDENTIFIER, name, "RETAIL_INDIVIDUAL"])
-        loans = cast(Worksheet, workbook.create_sheet("Loans"))
-        loans.append(["Reference", "Type", "Currency", "Balance", "CustomerId"])
-        loans.append(["synthetic-loan-1", "LOAN", "GHS", 123, IDENTIFIER])
         path = tmp_path / "synthetic.xlsx"
-        workbook.save(path)
+        write_counterparty_workbook(path, name)
         result = ingestion.start_ingestion(
             db_session,
             CTX,
@@ -756,20 +762,20 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
         )
         assert result.batch.status in {"accepted", "accepted_with_warnings"}
         db_session.expunge_all()
-        matches = find_counterparties(
-            db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER
+        matches = list(
+            db_session.scalars(
+                select(CanonicalCounterparty)
+                .options(undefer_group("bank_identity"))
+                .where(
+                    CanonicalCounterparty.organization_id == ORG_1,
+                    CanonicalCounterparty.bank_id == BANK_A,
+                    CanonicalCounterparty.superseded_by.is_(None),
+                    CanonicalCounterparty.withdrawn_at.is_(None),
+                )
+            )
         )
         assert len(matches) == 1 and matches[0].name == name
-        assert [
-            row.name
-            for row in find_counterparties(
-                db_session,
-                CTX,
-                BANK_A,
-                field="name",
-                value="FFI" * 130 if name == EXPANDING_NAME else name.swapcase(),
-            )
-        ] == [name]
+        assert matches[0].source_reference == IDENTIFIER
         raw = cast(
             object,
             db_session.execute(
@@ -779,12 +785,18 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
                 )
             ).scalar_one(),
         )
-        if connected:
+        if connection_timing == "before" or (
+            connection_timing == "after_withdrawal" and name != initial_name
+        ):
             assert name not in str(raw) and str(raw).startswith("aqs-bank-field-v1:")
         else:
             assert raw == name
         if withdraw and name == initial_name:
             withdrawal = withdraw_counterparties(db_session)
+            if connection_timing == "after_withdrawal":
+                stored = raw_fields(db_session)
+                connect(db_session, provider)
+                assert raw_fields(db_session) == stored
     assert (
         db_session.execute(
             text("SELECT balance FROM canonical_position_snapshots WHERE superseded_by IS NULL")
@@ -794,6 +806,7 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
     if withdrawal is not None:
         bank = db_session.get(Bank, BANK_A)
         assert bank is not None
+        before_reversal = raw_fields(db_session)
         with pytest.raises(WithdrawalError, match="same natural key") as refused:
             canonical_withdrawal.reverse_withdrawal(
                 db_session,
@@ -806,32 +819,46 @@ def test_ingestion_and_replacement_keep_identity_reads_and_exact_search_working(
         assert refused.value.status_code == 409
         db_session.flush()
         assert withdrawal.status == "applied"
+        assert raw_fields(db_session) == before_reversal
         withdraw_counterparties(db_session)
         restored = canonical_withdrawal.reverse_withdrawal(
             db_session, CTX, bank, withdrawal.id, reversed_by="Synthetic checker", reason="Restore"
         )
         db_session.commit()
         assert restored.status == "reversed" and restored.rows_restored == 1
-        matches = find_counterparties(
-            db_session, CTX, BANK_A, field="source_reference", value=IDENTIFIER
+        matches = list(
+            db_session.scalars(
+                select(CanonicalCounterparty).where(
+                    CanonicalCounterparty.organization_id == ORG_1,
+                    CanonicalCounterparty.bank_id == BANK_A,
+                    CanonicalCounterparty.source_system == "EXCEL_CSV",
+                    CanonicalCounterparty.as_of_date == AS_OF,
+                    CanonicalCounterparty.withdrawn_at.is_(None),
+                    CanonicalCounterparty.superseded_by.is_(None),
+                )
+            )
         )
         assert len(matches) == 1 and matches[0].name == initial_name
+        assert matches[0].source_reference == IDENTIFIER
 
 
-@pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("connection_timing", ["none", "before", "after_withdrawal"])
 @pytest.mark.parametrize("axis", ["none", "reference", "source", "date", "bank"])
 def test_counterparty_reversal_preserves_natural_key_scope(
     db_session: Session,
     provider: LocalKeyProvider,
-    connected: bool,
+    connection_timing: str,
     axis: str,
 ) -> None:
-    if connected:
+    if connection_timing == "before":
         connect(db_session, provider)
         connect(db_session, provider, BANK_B)
     original = counterparty(db_session, include_package=False)
     original_id = original.id
     withdrawal = withdraw_counterparties(db_session)
+    if connection_timing == "after_withdrawal":
+        connect(db_session, provider)
+        connect(db_session, provider, BANK_B)
     replacement = None
     if axis != "none":
         replacement = counterparty(
@@ -1333,3 +1360,491 @@ def test_numeric_saved_content_rejects_invalid_json_shape(
         pytest.raises(KeyIntegrityError),
     ):
         fresh.get(BiDashboardVersion, version_id)
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_presentation_locks_and_recovers_without_changing_numeric_fields(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    row = counterparty(db_session)
+    row_id = row.id
+    db_session.commit()
+    provider.set_status(KEY_A, status)
+    db_session.expunge_all()
+    view = PresentationState()
+    db_session.info[SESSION_STATE] = view
+    locked = db_session.get(CanonicalCounterparty, row_id)
+    assert locked is not None
+    assert locked.name == LOCKED_TEXT
+    assert locked.external_identifiers == {
+        LOCKED_JSON: "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    }
+    assert locked.as_of_date == AS_OF and locked.validation_status == "accepted"
+    assert view.banks[BANK_A] == ("revoked" if status == KeyStatus.DISABLED else "unavailable")
+    locked.name = "Synthetic edited name"
+    with pytest.raises(KeyUnavailableError) as refused:
+        db_session.flush()
+    assert refused.value.revoked == (status == KeyStatus.DISABLED)
+    db_session.rollback()
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    db_session.expunge_all()
+    db_session.info[SESSION_STATE] = PresentationState()
+    recovered = db_session.get(CanonicalCounterparty, row_id)
+    assert recovered is not None and recovered.name == NAME
+    assert recovered.attributes == {"contact_name": NAME}
+    assert cast(PresentationState, db_session.info[SESSION_STATE]).banks[BANK_A] == "available"
+    db_session.info.pop(SESSION_STATE)
+
+
+@pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("missing_presentation", [False, True])
+def test_support_presentation_hides_fields_without_unwrapping(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    missing_presentation: bool,
+    connected: bool,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    row_id = counterparty(db_session).id
+    db_session.commit()
+    db_session.expunge_all()
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Support presentation must not unwrap bank data")
+
+    monkeypatch.setattr(provider, "unwrap", refuse_unwrap)
+    db_session.info[SESSION_SUPPORT] = True
+    if not missing_presentation:
+        db_session.info[SESSION_STATE] = PresentationState(support=True)
+    row = db_session.get(CanonicalCounterparty, row_id)
+    assert row is not None and row.name == LOCKED_TEXT
+    if not missing_presentation:
+        assert cast(PresentationState, db_session.info[SESSION_STATE]).banks == {BANK_A: "support"}
+    db_session.info.pop(SESSION_STATE, None)
+    db_session.info.pop(SESSION_SUPPORT)
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_profile_http_locked_read_write_and_recovery(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    party = institution_profile.create_related_party(
+        db_session,
+        CTX,
+        BANK_A,
+        RelatedPartyCreate(
+            reason="Synthetic protected profile",
+            party_type="individual",
+            full_name=NAME,
+            contact={"email": "synthetic@example.test"},
+            roles=[RelatedPartyRoleInput(role="director")],
+        ),
+    )
+    db_session.commit()
+    provider.set_status(KEY_A, status)
+    db_session.expunge_all()
+    response = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
+    assert response.status_code == 200, response.text
+    assert response.json()["related_parties"][0]["full_name"] == LOCKED_TEXT
+    reason = "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
+    assert "no-store" in response.headers["cache-control"]
+    payload: dict[str, object] = {
+        "reason": "Synthetic retained edit",
+        "party_type": "individual",
+        "full_name": "Synthetic draft stays in browser",
+        "contact": {},
+        "roles": [{"role": "director"}],
+    }
+    refused = db_client.put(
+        f"/api/v1/banks/{BANK_A}/related-parties/{party.id}",
+        headers=headers(),
+        json=payload,
+    )
+    assert refused.status_code == 503, refused.text
+    assert (
+        refused.json()["error"]["message"]
+        == KeyUnavailableError(
+            "private provider detail",
+            revoked=status == KeyStatus.DISABLED,
+        ).public_message
+    )
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    restored = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["related_parties"][0]["full_name"] == NAME
+    assert json.loads(restored.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_empty_profile_observes_key_recovery_after_a_refused_party_create(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    url = f"/api/v1/banks/{BANK_A}/institution-profile"
+    provider.set_status(KEY_A, status)
+    payload: dict[str, object] = {
+        "reason": "Synthetic retained draft",
+        "party_type": "individual",
+        "full_name": NAME,
+        "contact": {},
+        "roles": [],
+    }
+    refused = db_client.post(
+        f"/api/v1/banks/{BANK_A}/related-parties", headers=headers(), json=payload
+    )
+    assert refused.status_code == 503, refused.text
+    reason = "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    for _ in range(2):
+        empty = db_client.get(url, headers=headers())
+        assert empty.status_code == 200, empty.text
+        assert empty.json()["related_parties"] == []
+        assert json.loads(empty.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    restored = db_client.get(url, headers=headers())
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["related_parties"] == []
+    assert json.loads(restored.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+    saved = db_client.post(
+        f"/api/v1/banks/{BANK_A}/related-parties", headers=headers(), json=payload
+    )
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["full_name"] == NAME
+
+
+@pytest.mark.parametrize("missing_current", [False, True])
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_rotated_profile_keeps_failure_until_both_write_keys_recover(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    missing_current: bool,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    payload = RelatedPartyCreate(
+        reason="Synthetic rotated recovery",
+        party_type="individual",
+        full_name="Synthetic retained-key party",
+        contact={"email": "retained@example.test"},
+        roles=[RelatedPartyRoleInput(role="director", sitting_allowance=Decimal(45))],
+    )
+    retained = institution_profile.create_related_party(db_session, CTX, BANK_A, payload)
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, NEXT, lambda _name: provider)
+    assert row.current_version_id != row.index_version_id
+    db_session.commit()
+    current = institution_profile.create_related_party(
+        db_session,
+        CTX,
+        BANK_A,
+        payload.model_copy(update={"full_name": "Synthetic current-key party"}),
+    )
+    stored_query = text("SELECT full_name FROM related_parties WHERE bank_id=:bank ORDER BY id")
+    stored = TypeAdapter(list[str]).validate_python(
+        cast(object, db_session.scalars(stored_query, {"bank": BANK_A}).all())
+    )
+    db_session.commit()
+    missing = NEXT if missing_current else KEY_A
+    provider.set_status(missing, status)
+    url = f"/api/v1/banks/{BANK_A}/institution-profile"
+    write_url = f"/api/v1/banks/{BANK_A}/related-parties"
+    refused = db_client.post(write_url, headers=headers(), json=payload.model_dump(mode="json"))
+    assert refused.status_code == 503, refused.text
+    reason = "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    assert refused.json()["error"]["code"] == f"bank_key_{reason}"
+    for _ in range(2):
+        response = db_client.get(url, headers=headers())
+        assert response.status_code == 200, response.text
+        assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
+        parties = {
+            party.id: party
+            for party in InstitutionProfileFullRead.model_validate_json(
+                response.content
+            ).related_parties
+        }
+        visible, locked = (retained, current) if missing_current else (current, retained)
+        assert parties[visible.id].full_name == visible.full_name
+        assert parties[visible.id].contact == {"email": "retained@example.test"}
+        assert parties[locked.id].full_name == LOCKED_TEXT
+        assert all(party.roles[0].sitting_allowance == Decimal(45) for party in parties.values())
+    assert (
+        TypeAdapter(list[str]).validate_python(
+            cast(object, db_session.scalars(stored_query, {"bank": BANK_A}).all())
+        )
+        == stored
+    )
+    db_session.commit()
+    provider.set_status(missing, KeyStatus.ACTIVE)
+    recovered = db_client.get(url, headers=headers())
+    assert recovered.status_code == 200, recovered.text
+    assert json.loads(recovered.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+    restored = InstitutionProfileFullRead.model_validate_json(recovered.content)
+    assert {party.full_name for party in restored.related_parties} == {
+        retained.full_name,
+        current.full_name,
+    }
+    saved = db_client.post(write_url, headers=headers(), json=payload.model_dump(mode="json"))
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["full_name"] == payload.full_name
+
+
+@pytest.mark.parametrize("rotated", [False, True])
+def test_profile_recovery_unwraps_each_required_version_once(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    rotated: bool,
+) -> None:
+    connect(db_session, provider)
+    for index in range(3):
+        institution_profile.create_related_party(
+            db_session,
+            CTX,
+            BANK_A,
+            RelatedPartyCreate(
+                reason="Synthetic bounded key observation",
+                party_type="individual",
+                full_name=f"Synthetic historical party {index}",
+                contact={"email": "synthetic@example.test"},
+                roles=[RelatedPartyRoleInput(role="director", other_responsibilities="Review")],
+            ),
+        )
+    if rotated:
+        row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+        registry.rotate(db_session, row, NEXT, lambda _name: provider)
+        db_session.commit()
+    unwrap = provider.unwrap
+    calls: list[KeyReference] = []
+
+    def observed(key: KeyReference, wrapped: bytes, context: dict[str, str]) -> bytes:
+        calls.append(key)
+        return unwrap(key, wrapped, context)
+
+    monkeypatch.setattr(provider, "unwrap", observed)
+    response = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
+    assert response.status_code == 200, response.text
+    assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+    assert (
+        len(InstitutionProfileFullRead.model_validate_json(response.content).related_parties) == 3
+    )
+    assert calls.count(KEY_A) == 1 and calls.count(NEXT) == int(rotated)
+    assert len(calls) == 1 + int(rotated)
+
+
+@pytest.mark.parametrize("populated", [False, True])
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        (KeyStatus.UNAVAILABLE, KeyStatus.DISABLED, NEXT),
+        (KeyStatus.DISABLED, KeyStatus.UNAVAILABLE, KEY_A),
+    ],
+)
+def test_rotated_profiles_combine_prerequisite_failure_severity(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    populated: bool,
+    scenario: tuple[KeyStatus, KeyStatus, KeyReference],
+) -> None:
+    connect(db_session, provider)
+    if populated:
+        institution_profile.create_related_party(
+            db_session,
+            CTX,
+            BANK_A,
+            RelatedPartyCreate(
+                reason="Synthetic historical field failure",
+                party_type="individual",
+                full_name=NAME,
+                contact={"email": "synthetic@example.test"},
+                roles=[],
+            ),
+        )
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, NEXT, lambda _name: provider)
+    db_session.commit()
+    index_status, current_status, first_restored = scenario
+    provider.set_status(NEXT, current_status)
+    provider.set_status(KEY_A, index_status)
+    url = f"/api/v1/banks/{BANK_A}/institution-profile"
+    for expected in ("revoked", "unavailable", "available"):
+        response = db_client.get(url, headers=headers())
+        assert response.status_code == 200, response.text
+        parties = InstitutionProfileFullRead.model_validate_json(response.content).related_parties
+        assert len(parties) == int(populated)
+        if populated:
+            assert parties[0].full_name == (
+                NAME
+                if expected == "available" or first_restored == KEY_A and expected == "unavailable"
+                else LOCKED_TEXT
+            )
+        assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: expected}
+        provider.set_status(first_restored if expected == "revoked" else KEY_A, KeyStatus.ACTIVE)
+        if expected == "unavailable":
+            provider.set_status(NEXT, KeyStatus.ACTIVE)
+
+
+@pytest.mark.parametrize("observe_first", [False, True])
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        (KeyStatus.ACTIVE, KeyStatus.UNAVAILABLE, KeyStatus.DISABLED, "revoked"),
+        (KeyStatus.DISABLED, KeyStatus.ACTIVE, KeyStatus.UNAVAILABLE, "revoked"),
+        (KeyStatus.UNAVAILABLE, KeyStatus.DISABLED, KeyStatus.ACTIVE, "revoked"),
+        (KeyStatus.ACTIVE, KeyStatus.UNAVAILABLE, KeyStatus.ACTIVE, "unavailable"),
+        (KeyStatus.UNAVAILABLE, KeyStatus.ACTIVE, KeyStatus.ACTIVE, "unavailable"),
+        (KeyStatus.ACTIVE, KeyStatus.ACTIVE, KeyStatus.UNAVAILABLE, "unavailable"),
+        (KeyStatus.ACTIVE, KeyStatus.ACTIVE, KeyStatus.ACTIVE, "available"),
+    ],
+)
+def test_prerequisite_observation_is_independent_of_historical_read_order(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    observe_first: bool,
+    scenario: tuple[KeyStatus, KeyStatus, KeyStatus, str],
+) -> None:
+    connect(db_session, provider)
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, NEXT, lambda _name: provider)
+    db_session.commit()
+    institution_profile.create_related_party(
+        db_session,
+        CTX,
+        BANK_A,
+        RelatedPartyCreate(
+            reason="Synthetic independent historical key",
+            party_type="individual",
+            full_name=NAME,
+            contact={"email": "synthetic@example.test"},
+            roles=[RelatedPartyRoleInput(role="director", sitting_allowance=Decimal(45))],
+        ),
+    )
+    current_key = KeyReference("aws_kms", "synthetic-current-v3", "us-east-1", "111122223333")
+    provider.add_key(current_key)
+    row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
+    registry.rotate(db_session, row, current_key, lambda _name: provider)
+    db_session.commit()
+    index_status, historical_status, current_status, expected = scenario
+    for key, status in (
+        (KEY_A, index_status),
+        (NEXT, historical_status),
+        (current_key, current_status),
+    ):
+        provider.set_status(key, status)
+    calls: list[KeyReference] = []
+    unwrap = provider.unwrap
+
+    def observed(key: KeyReference, wrapped: bytes, context: dict[str, str]) -> bytes:
+        calls.append(key)
+        return unwrap(key, wrapped, context)
+
+    monkeypatch.setattr(provider, "unwrap", observed)
+    with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+        presentation = PresentationState()
+        fresh.info[SESSION_STATE] = presentation
+        if observe_first:
+            observe_bank_key(fresh, ORG_1, BANK_A)
+        profile = institution_profile.get_full_profile(fresh, CTX, BANK_A)
+        observe_bank_key(fresh, ORG_1, BANK_A)
+        assert presentation.banks == {BANK_A: expected}
+        assert profile.related_parties[0].full_name == (
+            NAME if historical_status == KeyStatus.ACTIVE else LOCKED_TEXT
+        )
+        assert profile.related_parties[0].roles[0].sitting_allowance == Decimal(45)
+        assert all(calls.count(key) == 1 for key in (KEY_A, NEXT, current_key))
+        assert len(calls) == 3
+    for key in (KEY_A, NEXT, current_key):
+        provider.set_status(key, KeyStatus.ACTIVE)
+    calls.clear()
+    with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+        presentation = PresentationState()
+        fresh.info[SESSION_STATE] = presentation
+        profile = institution_profile.get_full_profile(fresh, CTX, BANK_A)
+        assert presentation.banks == {BANK_A: "available"}
+        assert profile.related_parties[0].full_name == NAME
+        assert all(calls.count(key) == 1 for key in (KEY_A, NEXT, current_key))
+        assert len(calls) == 3
+
+
+@pytest.mark.parametrize("connected", [False, True])
+def test_inspector_profile_read_never_releases_protected_identity(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    connected: bool,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    institution_profile.create_related_party(
+        db_session,
+        CTX,
+        BANK_A,
+        RelatedPartyCreate(
+            reason="Synthetic staff disclosure proof",
+            party_type="individual",
+            full_name=NAME,
+            contact={"email": "identity@example.test"},
+            roles=[RelatedPartyRoleInput(role="director")],
+        ),
+    )
+    db_session.commit()
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Staff reads must not unwrap identity fields")
+
+    monkeypatch.setattr(provider, "unwrap", refuse_unwrap)
+    token = impersonation._impersonation_token(ORG_1)  # pyright: ignore[reportPrivateUsage]
+    response = db_client.get(
+        f"/api/v1/banks/{BANK_A}/institution-profile", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["related_parties"][0]["full_name"] == LOCKED_TEXT
+    assert NAME not in response.text and "identity@example.test" not in response.text
+    assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "support"}
+
+
+def test_corrupted_protected_read_is_an_integrity_refusal_not_an_outage(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+) -> None:
+    connect(db_session, provider)
+    party = institution_profile.create_related_party(
+        db_session,
+        CTX,
+        BANK_A,
+        RelatedPartyCreate(
+            reason="Synthetic integrity proof",
+            party_type="individual",
+            full_name=NAME,
+            contact={},
+            roles=[RelatedPartyRoleInput(role="director")],
+        ),
+    )
+    db_session.execute(
+        text("UPDATE related_parties SET full_name=:value WHERE id=:id").bindparams(
+            bindparam("id", type_=Uuid(as_uuid=True))
+        ),
+        {"value": "aqs-bank-field-v1:invalid", "id": party.id},
+    )
+    db_session.commit()
+    response = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "bank_key_integrity"
+    assert "Retrying" not in response.text

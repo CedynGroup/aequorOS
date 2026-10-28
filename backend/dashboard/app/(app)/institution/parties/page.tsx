@@ -2,13 +2,18 @@
 
 /**
  * Institution Profile — Related parties: directors, key management, external
- * auditors, shareholders, UBOs, and outsourced providers, each carrying a
- * replace-on-write roles list and (for shareholders) shareholding rows with
+ * auditors, shareholders, UBOs, and outsourced providers, each carrying
+ * roles and (for shareholders) shareholding rows with
  * optional UBO linkage. Selecting a row expands the full detail; every
  * mutation records a required audit reason.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import {
+  containsLockedData,
+  protectedDataState,
+  subscribeProtectedData,
+} from "@/lib/api/protectedData";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Users, Pencil, X } from "lucide-react";
 import type {
@@ -18,6 +23,9 @@ import type {
   RelatedPartyRead,
   RelatedPartyRoleCode,
   RelatedPartyRoleInput,
+  RelatedPartyRoleRead,
+  RelatedPartyRoleUpdate,
+  RelatedPartyUpdate,
   ShareholderRights,
   ShareholdingCreate,
   ShareholdingRead,
@@ -31,6 +39,7 @@ import PageContainer from "@/components/ui/PageContainer";
 import DataTable, { type Column } from "@/components/ui/DataTable";
 import SectionCard from "@/components/ui/SectionCard";
 import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import ProtectedInputLock from "@/components/ui/ProtectedInputLock";
 import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { useBankContext } from "@/components/shell/BankContext";
@@ -142,10 +151,13 @@ export default function RelatedPartiesPage() {
   const createParty = useCreateRelatedParty(bankId);
   const parties = useMemo(() => query.data?.relatedParties ?? [], [query.data]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{
+    bankId: string | undefined;
+    partyId: string;
+  } | null>(null);
   const [adding, setAdding] = useState(false);
 
-  const selected = parties.find((party) => party.id === selectedId) ?? null;
+  const selected = selection?.bankId === bankId ? selection : null;
 
   const columns: Column<RelatedPartyRead>[] = [
     {
@@ -182,7 +194,7 @@ export default function RelatedPartiesPage() {
             {party.roles.slice(0, 3).map((role) => (
               <span
                 key={role.id}
-                className="inline-flex items-center rounded-sm border border-border px-1.5 py-0.5 text-micro text-navy/85"
+                className="inline-flex items-center rounded border border-border px-1.5 py-0.5 text-micro text-navy/85"
               >
                 {roleLabel(role.role)}
               </span>
@@ -219,7 +231,7 @@ export default function RelatedPartiesPage() {
             type="button"
             onClick={() => {
               setAdding(true);
-              setSelectedId(null);
+              setSelection(null);
             }}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
           >
@@ -245,6 +257,14 @@ export default function RelatedPartiesPage() {
           }
         />
 
+        {adding && (
+          <PartyForm
+            bankId={bankId!}
+            party={null}
+            onClose={() => setAdding(false)}
+          />
+        )}
+
         <QueryBoundary
           contained
           isLoading={query.isLoading}
@@ -256,14 +276,6 @@ export default function RelatedPartiesPage() {
             </div>
           }
         >
-          {adding && (
-            <PartyForm
-              bankId={bankId!}
-              party={null}
-              onClose={() => setAdding(false)}
-            />
-          )}
-
           <SectionCard
             title="Register"
             subtitle={`${parties.length} related ${
@@ -286,26 +298,33 @@ export default function RelatedPartiesPage() {
                 density="compact"
                 onRowClick={(party) => {
                   setAdding(false);
-                  setSelectedId((prev) =>
-                    prev === party.id ? null : party.id,
+                  setSelection((prev) =>
+                    prev !== null &&
+                    prev.bankId === bankId &&
+                    prev.partyId === party.id
+                      ? null
+                      : { bankId, partyId: party.id },
                   );
                 }}
                 rowClassName={(party) =>
-                  party.id === selected?.id ? "bg-action-light/40" : ""
+                  party.id === selected?.partyId ? "bg-action-light/40" : ""
                 }
               />
             )}
           </SectionCard>
-
-          {selected && (
-            <PartyDetail
-              key={selected.id}
-              bankId={bankId!}
-              party={selected}
-              parties={parties}
-            />
-          )}
         </QueryBoundary>
+        {selected && (
+          <PartyDetail
+            key={`${bankId}:${selected.partyId}`}
+            bankId={bankId!}
+            partyId={selected.partyId}
+            party={
+              parties.find((party) => party.id === selected.partyId) ?? null
+            }
+            parties={parties}
+            query={query}
+          />
+        )}
       </PageContainer>
     </>
   );
@@ -317,12 +336,16 @@ export default function RelatedPartiesPage() {
 
 function PartyDetail({
   bankId,
+  partyId,
   party,
   parties,
+  query,
 }: {
   bankId: string;
-  party: RelatedPartyRead;
+  partyId: string;
+  party: RelatedPartyRead | null;
   parties: RelatedPartyRead[];
+  query: ReturnType<typeof useInstitutionProfile>;
 }) {
   const [editing, setEditing] = useState(false);
   const [holdingFormFor, setHoldingFormFor] = useState<{
@@ -339,6 +362,7 @@ function PartyDetail({
     return (
       <PartyForm
         bankId={bankId}
+        partyId={partyId}
         party={party}
         onClose={() => setEditing(false)}
       />
@@ -346,176 +370,192 @@ function PartyDetail({
   }
 
   return (
-    <SectionCard
-      title={
-        <span className="inline-flex items-center gap-2">
-          {party.fullName}
-          <PartyStatusPill status={party.status} />
-        </span>
-      }
-      subtitle={`${PARTY_TYPE_LABELS[party.partyType]}${
-        party.regulatedElsewhere
-          ? ` · regulated elsewhere${
-              party.regulatedJurisdiction
-                ? ` (${party.regulatedJurisdiction})`
+    <>
+      <QueryBoundary
+        contained
+        isLoading={query.isLoading}
+        error={query.error}
+        onRetry={() => query.refetch()}
+      >
+        {party && (
+          <SectionCard
+            title={
+              <span className="inline-flex items-center gap-2">
+                {party.fullName}
+                <PartyStatusPill status={party.status} />
+              </span>
+            }
+            subtitle={`${PARTY_TYPE_LABELS[party.partyType]}${
+              party.regulatedElsewhere
+                ? ` · regulated elsewhere${
+                    party.regulatedJurisdiction
+                      ? ` (${party.regulatedJurisdiction})`
+                      : ""
+                  }`
                 : ""
-            }`
-          : ""
-      }`}
-      actions={
-        <>
-          <button
-            type="button"
-            onClick={() => setHoldingFormFor({ holding: null })}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
-          >
-            <Plus size={13} aria-hidden />
-            Add shareholding
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
-          >
-            <Pencil size={13} aria-hidden />
-            Edit
-          </button>
-        </>
-      }
-    >
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Roles detail */}
-        <div>
-          <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
-            Roles
-          </p>
-          {party.roles.length === 0 ? (
-            <p className="text-caption text-slate">No roles recorded.</p>
-          ) : (
-            <ul className="space-y-2.5">
-              {party.roles.map((role) => (
-                <li
-                  key={role.id}
-                  className="rounded-sm border border-border-light bg-surface px-3 py-2 space-y-1"
+            }`}
+            actions={
+              <>
+                <button
+                  type="button"
+                  onClick={() => setHoldingFormFor({ holding: null })}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
                 >
-                  <p className="text-body font-medium text-navy">
-                    {roleLabel(role.role)}
+                  <Plus size={13} aria-hidden />
+                  Add shareholding
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
+                >
+                  <Pencil size={13} aria-hidden />
+                  Edit
+                </button>
+              </>
+            }
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Roles detail */}
+              <div>
+                <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
+                  Roles
+                </p>
+                {party.roles.length === 0 ? (
+                  <p className="text-caption text-slate">No roles recorded.</p>
+                ) : (
+                  <ul className="space-y-2.5">
+                    {party.roles.map((role) => (
+                      <li
+                        key={role.id}
+                        className="rounded border border-border-light bg-surface px-3 py-2 space-y-1"
+                      >
+                        <p className="text-body font-medium text-navy">
+                          {roleLabel(role.role)}
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-caption text-navy/80">
+                          <span>
+                            Appointed{" "}
+                            <span className="font-mono tnum">
+                              {fmtRegisterDate(role.appointedOn)}
+                            </span>
+                          </span>
+                          {role.termOfAppointment && (
+                            <span>Term {role.termOfAppointment}</span>
+                          )}
+                          {role.sittingAllowance != null && (
+                            <span>
+                              Sitting allowance{" "}
+                              <span className="font-mono tnum">
+                                {fmtCurrencyFull(num(role.sittingAllowance))}
+                              </span>
+                            </span>
+                          )}
+                          {role.travelAllowance != null && (
+                            <span>
+                              Travel allowance{" "}
+                              <span className="font-mono tnum">
+                                {fmtCurrencyFull(num(role.travelAllowance))}
+                              </span>
+                            </span>
+                          )}
+                          {role.annualFees != null && (
+                            <span>
+                              Annual fees{" "}
+                              <span className="font-mono tnum">
+                                {fmtCurrencyFull(num(role.annualFees))}
+                              </span>
+                            </span>
+                          )}
+                          {role.icagRegistration && (
+                            <span>
+                              ICAG registration {role.icagRegistration}
+                            </span>
+                          )}
+                        </div>
+                        {role.otherResponsibilities && (
+                          <p className="text-caption text-slate leading-relaxed">
+                            {role.otherResponsibilities}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Shareholdings */}
+              <div>
+                <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
+                  Shareholdings
+                </p>
+                {party.shareholdings.length === 0 ? (
+                  <p className="text-caption text-slate">
+                    No shareholdings recorded for this party.
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-caption text-navy/80">
-                    <span>
-                      Appointed{" "}
-                      <span className="font-mono tnum">
-                        {fmtRegisterDate(role.appointedOn)}
-                      </span>
-                    </span>
-                    {role.termOfAppointment && (
-                      <span>Term {role.termOfAppointment}</span>
-                    )}
-                    {role.sittingAllowance != null && (
-                      <span>
-                        Sitting allowance{" "}
-                        <span className="font-mono tnum">
-                          {fmtCurrencyFull(num(role.sittingAllowance))}
-                        </span>
-                      </span>
-                    )}
-                    {role.travelAllowance != null && (
-                      <span>
-                        Travel allowance{" "}
-                        <span className="font-mono tnum">
-                          {fmtCurrencyFull(num(role.travelAllowance))}
-                        </span>
-                      </span>
-                    )}
-                    {role.annualFees != null && (
-                      <span>
-                        Annual fees{" "}
-                        <span className="font-mono tnum">
-                          {fmtCurrencyFull(num(role.annualFees))}
-                        </span>
-                      </span>
-                    )}
-                    {role.icagRegistration && (
-                      <span>ICAG registration {role.icagRegistration}</span>
-                    )}
-                  </div>
-                  {role.otherResponsibilities && (
-                    <p className="text-caption text-slate leading-relaxed">
-                      {role.otherResponsibilities}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Shareholdings */}
-        <div>
-          <p className="text-micro font-medium text-slate uppercase tracking-wider mb-1.5">
-            Shareholdings
-          </p>
-          {party.shareholdings.length === 0 ? (
-            <p className="text-caption text-slate">
-              No shareholdings recorded for this party.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {party.shareholdings.map((holding) => (
-                <li
-                  key={holding.id}
-                  className="rounded-sm border border-border-light bg-surface px-3 py-2"
-                >
-                  <div className="flex items-center gap-2 flex-wrap text-caption">
-                    <span className="font-medium text-navy">
-                      {labelize(holding.shareType)}
-                      {holding.shareSubtype ? ` · ${holding.shareSubtype}` : ""}
-                    </span>
-                    <span className="text-slate">
-                      {holding.shareholderRights === "voting"
-                        ? "Voting"
-                        : "Non-voting"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setHoldingFormFor({ holding })}
-                      className="ml-auto inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
-                    >
-                      <Pencil size={11} aria-hidden />
-                      Edit
-                    </button>
-                  </div>
-                  <div className="mt-1 flex items-center gap-4 flex-wrap font-mono text-caption text-navy/85 tnum">
-                    <span>{fmtInt(num(holding.numberOfShares))} shares</span>
-                    <span>{fmtPct(num(holding.pctShareholding))}</span>
-                    <span className="font-sans text-slate">
-                      UBO {uboName(holding.uboPartyId)}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
+                ) : (
+                  <ul className="space-y-2">
+                    {party.shareholdings.map((holding) => (
+                      <li
+                        key={holding.id}
+                        className="rounded border border-border-light bg-surface px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2 flex-wrap text-caption">
+                          <span className="font-medium text-navy">
+                            {labelize(holding.shareType)}
+                            {holding.shareSubtype
+                              ? ` · ${holding.shareSubtype}`
+                              : ""}
+                          </span>
+                          <span className="text-slate">
+                            {holding.shareholderRights === "voting"
+                              ? "Voting"
+                              : "Non-voting"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setHoldingFormFor({ holding })}
+                            className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                          >
+                            <Pencil size={11} aria-hidden />
+                            Edit
+                          </button>
+                        </div>
+                        <div className="mt-1 flex items-center gap-4 flex-wrap font-mono text-caption text-navy/85 tnum">
+                          <span>
+                            {fmtInt(num(holding.numberOfShares))} shares
+                          </span>
+                          <span>{fmtPct(num(holding.pctShareholding))}</span>
+                          <span className="font-sans text-slate">
+                            UBO {uboName(holding.uboPartyId)}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </SectionCard>
+        )}
+      </QueryBoundary>
       {holdingFormFor && (
-        <div className="mt-5 border-t border-border-light pt-5">
+        <div className="card p-5">
           <ShareholdingForm
+            key={holdingFormFor.holding?.id ?? "new"}
             bankId={bankId}
-            partyId={party.id}
+            partyId={partyId}
             holding={holdingFormFor.holding}
             parties={parties}
             onClose={() => setHoldingFormFor(null)}
           />
         </div>
       )}
-    </SectionCard>
+    </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Party create / edit form — full replacement; roles are replace-on-write.
 // ---------------------------------------------------------------------------
 
 type RoleDraft = {
@@ -542,54 +582,121 @@ function emptyRole(): RoleDraft {
   };
 }
 
+type PartyDraft = {
+  fullName: string;
+  partyType: PartyType;
+  status: PartyStatus;
+  regulatedElsewhere: boolean;
+  regulatedJurisdiction: string;
+};
+
+function roleDraft(
+  role: RelatedPartyRoleRead | undefined,
+  locked: boolean,
+): RoleDraft {
+  if (!role) return emptyRole();
+  const protectedText = (value: string | null | undefined) =>
+    locked || containsLockedData(value) ? "" : (value ?? "");
+  return {
+    role: role.role ?? "director",
+    appointedOn: role.appointedOn ?? "",
+    sittingAllowance: role.sittingAllowance ?? "",
+    travelAllowance: role.travelAllowance ?? "",
+    annualFees: role.annualFees ?? "",
+    termOfAppointment: protectedText(role.termOfAppointment),
+    icagRegistration: protectedText(role.icagRegistration),
+    otherResponsibilities: protectedText(role.otherResponsibilities),
+  };
+}
+
 function PartyForm({
   bankId,
+  partyId,
   party,
   onClose,
 }: {
   bankId: string;
+  partyId?: string;
   party: RelatedPartyRead | null;
   onClose: () => void;
 }) {
   const create = useCreateRelatedParty(bankId);
   const update = useUpdateRelatedParty(bankId);
-  const mutation = party ? update : create;
-
-  const [fullName, setFullName] = useState(party?.fullName ?? "");
-  const [partyType, setPartyType] = useState<PartyType>(
-    party?.partyType ?? "individual",
+  const mutation = partyId ? update : create;
+  const protection = useSyncExternalStore(
+    subscribeProtectedData,
+    () => protectedDataState(bankId),
+    () => "available" as const,
   );
-  const [status, setStatus] = useState<PartyStatus>(party?.status ?? "active");
-  const [regulatedElsewhere, setRegulatedElsewhere] = useState(
-    party?.regulatedElsewhere ?? false,
-  );
-  const [regulatedJurisdiction, setRegulatedJurisdiction] = useState(
-    party?.regulatedJurisdiction ?? "",
-  );
-  const [roles, setRoles] = useState<RoleDraft[]>(
-    party
-      ? party.roles.map((role) => ({
-          role: role.role,
-          appointedOn: role.appointedOn ?? "",
-          termOfAppointment: role.termOfAppointment ?? "",
-          sittingAllowance: role.sittingAllowance ?? "",
-          travelAllowance: role.travelAllowance ?? "",
-          annualFees: role.annualFees ?? "",
-          icagRegistration: role.icagRegistration ?? "",
-          otherResponsibilities: role.otherResponsibilities ?? "",
-        }))
-      : [],
-  );
+  const locked = protection !== "available";
+  const [edits, setEdits] = useState<Partial<PartyDraft>>({});
+  const [roleEdits, setRoleEdits] = useState<
+    Record<string, Partial<RoleDraft>>
+  >({});
+  const [roleOrder, setRoleOrder] = useState<string[] | null>(null);
   const [reason, setReason] = useState("");
-
+  const fullName =
+    (protection === "support" ? undefined : edits.fullName) ??
+    (locked || containsLockedData(party?.fullName)
+      ? ""
+      : (party?.fullName ?? ""));
+  const partyType = edits.partyType ?? party?.partyType ?? "individual";
+  const status = edits.status ?? party?.status ?? "active";
+  const regulatedElsewhere =
+    edits.regulatedElsewhere ?? party?.regulatedElsewhere ?? false;
+  const regulatedJurisdiction =
+    edits.regulatedJurisdiction ?? party?.regulatedJurisdiction ?? "";
+  const roleIds = roleOrder ?? [
+    ...new Set([
+      ...(party?.roles.map((role) => role.id) ?? []),
+      ...Object.keys(roleEdits),
+    ]),
+  ];
+  const roles = roleIds.map((id) => ({
+    ...roleDraft(
+      party?.roles.find((role) => role.id === id),
+      locked,
+    ),
+    ...roleEdits[id],
+  }));
+  const setField = <K extends keyof PartyDraft>(
+    field: K,
+    value: PartyDraft[K],
+  ) => setEdits((previous) => ({ ...previous, [field]: value }));
   const setRole = (index: number, patch: Partial<RoleDraft>) => {
-    setRoles((prev) =>
-      prev.map((draft, i) => (i === index ? { ...draft, ...patch } : draft)),
-    );
+    const id = roleIds[index];
+    setRoleEdits((previous) => ({
+      ...previous,
+      [id]: { ...previous[id], ...patch },
+    }));
   };
-
-  const canSubmit = fullName.trim().length > 0 && reason.trim().length > 0;
-
+  const canChangeRoles = !partyId || party !== null;
+  const addRole = () => {
+    if (!canChangeRoles) return;
+    const id = crypto.randomUUID();
+    setRoleEdits((previous) => ({ ...previous, [id]: emptyRole() }));
+    setRoleOrder([...roleIds, id]);
+  };
+  const removeRole = (index: number) => {
+    if (!canChangeRoles) return;
+    setRoleOrder(roleIds.filter((_, i) => i !== index));
+  };
+  const protectedDirty =
+    !partyId ||
+    edits.fullName !== undefined ||
+    roleOrder !== null ||
+    Object.values(roleEdits).some((patch) =>
+      ["termOfAppointment", "icagRegistration", "otherResponsibilities"].some(
+        (field) => field in patch,
+      ),
+    );
+  const canSubmit =
+    (!locked || !protectedDirty) &&
+    reason.trim().length > 0 &&
+    ((partyId && edits.fullName === undefined) || fullName.trim().length > 0) &&
+    (!partyId ||
+      roleOrder === null ||
+      (party !== null && !containsLockedData(party)));
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSubmit) return;
@@ -603,46 +710,89 @@ function PartyForm({
       icagRegistration: textOrNull(draft.icagRegistration),
       otherResponsibilities: textOrNull(draft.otherResponsibilities),
     }));
-    const payload: RelatedPartyCreate = {
-      reason: reason.trim(),
-      fullName: fullName.trim(),
-      partyType,
-      status,
-      regulatedElsewhere,
-      regulatedJurisdiction: regulatedElsewhere
-        ? textOrNull(regulatedJurisdiction)
-        : null,
-      // Structured contact details are carried through unchanged (no editor yet).
-      contact: party?.contact ?? {},
-      roles: rolePayloads,
-    };
-    if (party) {
-      update.mutate({ partyId: party.id, payload }, { onSuccess: onClose });
+    if (partyId) {
+      const payload: RelatedPartyUpdate = { reason: reason.trim() };
+      if (edits.fullName !== undefined)
+        payload.fullName = edits.fullName.trim();
+      if (edits.partyType !== undefined) payload.partyType = edits.partyType;
+      if (edits.status !== undefined) payload.status = edits.status;
+      if (edits.regulatedElsewhere !== undefined)
+        payload.regulatedElsewhere = edits.regulatedElsewhere;
+      if (
+        edits.regulatedElsewhere === false ||
+        edits.regulatedJurisdiction !== undefined
+      ) {
+        payload.regulatedJurisdiction = regulatedElsewhere
+          ? textOrNull(regulatedJurisdiction)
+          : null;
+      }
+      if (roleOrder !== null) {
+        payload.roles = rolePayloads;
+      } else {
+        const updates: RelatedPartyRoleUpdate[] = Object.entries(roleEdits).map(
+          ([roleId, patch]) => ({
+            roleId,
+            ...Object.fromEntries(
+              Object.entries(patch).map(([key, value]) => [
+                key,
+                key === "role" ? value : textOrNull(value),
+              ]),
+            ),
+          }),
+        );
+        if (updates.length) payload.roleUpdates = updates;
+      }
+      update.mutate({ partyId, payload }, { onSuccess: onClose });
     } else {
-      create.mutate(payload, { onSuccess: onClose });
+      create.mutate(
+        {
+          reason: reason.trim(),
+          fullName: fullName.trim(),
+          partyType,
+          status,
+          regulatedElsewhere,
+          regulatedJurisdiction: regulatedElsewhere
+            ? textOrNull(regulatedJurisdiction)
+            : null,
+          contact: {},
+          roles: rolePayloads,
+        },
+        { onSuccess: onClose },
+      );
     }
   };
 
   return (
     <SectionCard
-      title={party ? `Edit ${party.fullName}` : "Add related party"}
-      subtitle="Full replacement — the roles list below replaces the stored roles on save"
+      title={
+        partyId
+          ? party && !locked
+            ? `Edit ${party.fullName}`
+            : "Edit related party"
+          : "Add related party"
+      }
+      subtitle="Only edited fields are saved. Adding or removing a role replaces the roles list."
     >
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Field label="Full name" htmlFor="rp-name" required>
-            <input
-              id="rp-name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className={inputCls}
-            />
+            <ProtectedInputLock state={protection}>
+              <input
+                id="rp-name"
+                value={fullName}
+                onChange={(e) => setField("fullName", e.target.value)}
+                placeholder={locked ? "🔒 Protected data" : undefined}
+                className={inputCls}
+              />
+            </ProtectedInputLock>
           </Field>
           <Field label="Party type" htmlFor="rp-type">
             <select
               id="rp-type"
               value={partyType}
-              onChange={(e) => setPartyType(e.target.value as PartyType)}
+              onChange={(e) =>
+                setField("partyType", e.target.value as PartyType)
+              }
               className={inputCls}
             >
               {(Object.keys(PARTY_TYPE_LABELS) as PartyType[]).map((value) => (
@@ -656,7 +806,9 @@ function PartyForm({
             <select
               id="rp-status"
               value={status}
-              onChange={(e) => setStatus(e.target.value as PartyStatus)}
+              onChange={(e) =>
+                setField("status", e.target.value as PartyStatus)
+              }
               className={inputCls}
             >
               <option value="active">Active</option>
@@ -668,7 +820,9 @@ function PartyForm({
               <input
                 type="checkbox"
                 checked={regulatedElsewhere}
-                onChange={(e) => setRegulatedElsewhere(e.target.checked)}
+                onChange={(e) =>
+                  setField("regulatedElsewhere", e.target.checked)
+                }
               />
               Regulated elsewhere
             </label>
@@ -678,7 +832,9 @@ function PartyForm({
               <input
                 id="rp-jurisdiction"
                 value={regulatedJurisdiction}
-                onChange={(e) => setRegulatedJurisdiction(e.target.value)}
+                onChange={(e) =>
+                  setField("regulatedJurisdiction", e.target.value)
+                }
                 className={inputCls}
               />
             </Field>
@@ -692,8 +848,9 @@ function PartyForm({
             </p>
             <button
               type="button"
-              onClick={() => setRoles((prev) => [...prev, emptyRole()])}
-              className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+              onClick={addRole}
+              disabled={!canChangeRoles}
+              className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
             >
               <Plus size={11} aria-hidden />
               Add role
@@ -707,8 +864,8 @@ function PartyForm({
             <ul className="space-y-3">
               {roles.map((draft, index) => (
                 <li
-                  key={index}
-                  className="rounded-sm border border-border-light bg-surface px-3 py-3"
+                  key={roleIds[index]}
+                  className="rounded border border-border-light bg-surface px-3 py-3"
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <Field label="Role" htmlFor={`rp-role-${index}`}>
@@ -744,15 +901,25 @@ function PartyForm({
                       />
                     </Field>
                     <Field label="Term" htmlFor={`rp-term-${index}`}>
-                      <input
-                        id={`rp-term-${index}`}
-                        value={draft.termOfAppointment}
-                        onChange={(e) =>
-                          setRole(index, { termOfAppointment: e.target.value })
-                        }
-                        placeholder="e.g. 3 years"
-                        className={inputCls}
-                      />
+                      <ProtectedInputLock state={protection}>
+                        <input
+                          id={`rp-term-${index}`}
+                          value={
+                            protection === "support"
+                              ? ""
+                              : draft.termOfAppointment
+                          }
+                          onChange={(e) =>
+                            setRole(index, {
+                              termOfAppointment: e.target.value,
+                            })
+                          }
+                          placeholder={
+                            locked ? "🔒 Protected data" : "e.g. 3 years"
+                          }
+                          className={inputCls}
+                        />
+                      </ProtectedInputLock>
                     </Field>
                     <Field
                       label="Sitting allowance"
@@ -804,14 +971,25 @@ function PartyForm({
                         label="ICAG registration"
                         htmlFor={`rp-icag-${index}`}
                       >
-                        <input
-                          id={`rp-icag-${index}`}
-                          value={draft.icagRegistration}
-                          onChange={(e) =>
-                            setRole(index, { icagRegistration: e.target.value })
-                          }
-                          className={inputCls}
-                        />
+                        <ProtectedInputLock state={protection}>
+                          <input
+                            id={`rp-icag-${index}`}
+                            value={
+                              protection === "support"
+                                ? ""
+                                : draft.icagRegistration
+                            }
+                            onChange={(e) =>
+                              setRole(index, {
+                                icagRegistration: e.target.value,
+                              })
+                            }
+                            placeholder={
+                              locked ? "🔒 Protected data" : undefined
+                            }
+                            className={inputCls}
+                          />
+                        </ProtectedInputLock>
                       </Field>
                     )}
                     <Field
@@ -819,24 +997,30 @@ function PartyForm({
                       htmlFor={`rp-other-${index}`}
                       className="sm:col-span-2"
                     >
-                      <input
-                        id={`rp-other-${index}`}
-                        value={draft.otherResponsibilities}
-                        onChange={(e) =>
-                          setRole(index, {
-                            otherResponsibilities: e.target.value,
-                          })
-                        }
-                        className={inputCls}
-                      />
+                      <ProtectedInputLock state={protection}>
+                        <input
+                          id={`rp-other-${index}`}
+                          value={
+                            protection === "support"
+                              ? ""
+                              : draft.otherResponsibilities
+                          }
+                          onChange={(e) =>
+                            setRole(index, {
+                              otherResponsibilities: e.target.value,
+                            })
+                          }
+                          placeholder={locked ? "🔒 Protected data" : undefined}
+                          className={inputCls}
+                        />
+                      </ProtectedInputLock>
                     </Field>
                   </div>
                   <button
                     type="button"
-                    onClick={() =>
-                      setRoles((prev) => prev.filter((_, i) => i !== index))
-                    }
-                    className="mt-2 inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-critical hover:border-critical/40"
+                    onClick={() => removeRole(index)}
+                    disabled={!canChangeRoles}
+                    className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-critical hover:border-critical/40"
                   >
                     <X size={11} aria-hidden />
                     Remove role
@@ -855,13 +1039,13 @@ function PartyForm({
           <ErrorPanel
             error={mutation.error}
             title={
-              party ? "Could not update the party" : "Could not add the party"
+              partyId ? "Could not update the party" : "Could not add the party"
             }
           />
         )}
 
         <FormActions
-          submitLabel={party ? "Save party" : "Add party"}
+          submitLabel={partyId ? "Save party" : "Add party"}
           pending={mutation.isPending}
           disabled={!canSubmit}
           onCancel={onClose}
@@ -888,6 +1072,12 @@ function ShareholdingForm({
   parties: RelatedPartyRead[];
   onClose: () => void;
 }) {
+  const locked =
+    useSyncExternalStore(
+      subscribeProtectedData,
+      () => protectedDataState(bankId),
+      () => "available",
+    ) !== "available";
   const create = useCreateShareholding(bankId);
   const update = useUpdateShareholding(bankId);
   const mutation = holding ? update : create;
@@ -1010,9 +1200,15 @@ function ShareholdingForm({
             className={inputCls}
           >
             <option value="">None</option>
+            {uboPartyId &&
+              !uboOptions.some((candidate) => candidate.id === uboPartyId) && (
+                <option value={uboPartyId}>
+                  {locked ? "🔒 Protected data" : "Selected owner unavailable"}
+                </option>
+              )}
             {uboOptions.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
-                {candidate.fullName}
+                {locked ? "🔒 Protected data" : candidate.fullName}
               </option>
             ))}
           </select>

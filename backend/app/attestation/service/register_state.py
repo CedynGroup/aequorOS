@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.attestation.service.digests import RegisterState, RegisterStateRow
+from app.core.key_management import registry
 from app.core.key_management.fields import ProtectedField
 from app.core.key_management.models import BankEncryptionKey
 from app.identity.public import (
@@ -81,6 +82,7 @@ def _entry(
 
 def project_register_state(db: Session, ctx: TenantContext, bank_id: str) -> RegisterState:
     """Project all eight register tables without decrypting protected values."""
+    registry.lock_bank_version(db, ctx.organization_id, bank_id, read=True)
     key_version = db.scalar(
         select(BankEncryptionKey.current_version_id).where(
             BankEncryptionKey.organization_id == ctx.organization_id,

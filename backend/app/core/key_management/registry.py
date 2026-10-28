@@ -7,10 +7,12 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from threading import Lock, Thread
 from typing import Protocol, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import event, select, text
+from sqlalchemy import Engine, event, func, or_, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.key_management.aws import AwsKmsKeyProvider
@@ -29,6 +31,8 @@ from app.db.worker_access import KEY_SIGNATURE, has_worker_function
 
 type ProviderFactory = Callable[[str], KeyProvider]
 
+_usage_recording = Lock()
+
 
 def provider_for(provider: str) -> KeyProvider:
     if provider != "aws_kms":
@@ -41,8 +45,16 @@ def reference(row: BankEncryptionKey | ObjectKeyEnvelope) -> KeyReference:
 
 
 def require_active(description: KeyDescription) -> KeyReference:
+    if description.status == KeyStatus.DISABLED:
+        raise KeyUnavailableError(
+            "The bank encryption key is disabled or pending deletion. "
+            "Enable the key in AWS KMS, then retry.",
+            revoked=True,
+        )
     if description.status != KeyStatus.ACTIVE:
-        raise KeyUnavailableError("The bank encryption key is unavailable.")
+        raise KeyUnavailableError(
+            "The bank encryption key is unavailable. Check its ARN, account and region, then retry."
+        )
     return description.reference
 
 
@@ -55,6 +67,7 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     key: KeyReference,
     providers: ProviderFactory = provider_for,
 ) -> BankEncryptionKey:
+    lock_bank_version(db, organization_id, bank_id)
     _lock_keys(db, key)
     resolved = require_active(providers(key.provider).describe(key))
     row = BankEncryptionKey(
@@ -75,9 +88,14 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     return row
 
 
-def bank_key(db: Session, organization: str, bank: str) -> BankEncryptionKey | None:
+def bank_key(
+    db: Session, organization: str, bank: str, *, refresh: bool = False
+) -> BankEncryptionKey | None:
     scope = (organization, bank)
     unit = _unit(db)
+    if refresh:
+        unit.banks.pop(scope, None)
+        unit.current.pop(scope, None)
     if scope not in unit.banks:
         unit.banks[scope] = db.scalar(
             select(BankEncryptionKey)
@@ -91,6 +109,7 @@ def bank_key(db: Session, organization: str, bank: str) -> BankEncryptionKey | N
 
 
 def scoped_key(db: Session, *, bank_id: str, organization_id: str) -> BankEncryptionKey:
+    lock_bank_version(db, organization_id, bank_id)
     row = db.scalar(
         select(BankEncryptionKey)
         .where(
@@ -111,6 +130,7 @@ def rotate(
     destination: KeyReference,
     providers: ProviderFactory = provider_for,
 ) -> int:
+    lock_bank_version(db, row.organization_id, row.bank_id)
     source = reference(row)
     _lock_keys(db, source, destination)
     if source == destination:
@@ -154,6 +174,9 @@ def rotate(
             if held.decrypt_until is not None and decrypt_until is not None
             else None
         )
+    row.rotation_period_days = None
+    row.rotation_confirmed_at = None
+    row.last_rotated_at = rotated_at
     row.key_id = target.key_id
     row.region = target.region
     row.status = KeyStatus.ACTIVE.value
@@ -193,6 +216,7 @@ class _Unit:
     envelopes: dict[UUID, ObjectKeyEnvelope] = field(default_factory=dict)
     material: dict[UUID, bytes] = field(default_factory=dict)
     durable: set[UUID] = field(default_factory=set)
+    usage: dict[tuple[str, str, UUID], datetime] = field(default_factory=dict)
 
 
 def _unit(db: Session) -> _Unit:
@@ -206,11 +230,76 @@ def _unit(db: Session) -> _Unit:
 @event.listens_for(Session, "after_transaction_end")
 def discard_material(db: Session, transaction: SessionTransaction) -> None:
     if transaction.parent is None:
-        db.info.pop("bank_key_unit", None)
+        unit = cast(object, db.info.pop("bank_key_unit", None))
+        if not isinstance(unit, _Unit) or not unit.usage:
+            return
+        engine = db.get_bind()
+        if not isinstance(engine, Engine) or not _usage_recording.acquire(blocking=False):
+            return
+        try:
+            Thread(target=_record_completed_usage, args=(engine, unit.usage), daemon=True).start()
+        except RuntimeError:
+            _usage_recording.release()
+
+
+def _record_completed_usage(engine: Engine, usage: dict[tuple[str, str, UUID], datetime]) -> None:
+    try:
+        for (organization, bank, version), observed_at in usage.items():
+            _record_usage(engine, organization, bank, version, observed_at)
+    finally:
+        _usage_recording.release()
+
+
+def _record_usage(
+    engine: Engine, organization: str, bank: str, version: UUID, observed_at: datetime
+) -> None:
+    try:
+        with Session(engine) as peer, peer.begin():
+            peer.info["organization_id"] = organization
+            if engine.dialect.name == "postgresql":
+                _ = peer.execute(text("SET LOCAL lock_timeout = '1ms'"))
+                _ = peer.execute(text("SET LOCAL statement_timeout = '100ms'"))
+            envelope = peer.scalar(
+                select(ObjectKeyEnvelope)
+                .where(
+                    ObjectKeyEnvelope.id == version,
+                    ObjectKeyEnvelope.organization_id == organization,
+                    ObjectKeyEnvelope.bank_id == bank,
+                    or_(
+                        ObjectKeyEnvelope.last_successful_use_at.is_(None),
+                        ObjectKeyEnvelope.last_successful_use_at
+                        < observed_at - timedelta(minutes=5),
+                    ),
+                )
+                .with_for_update(skip_locked=True, key_share=True)
+            )
+            if envelope is not None:
+                envelope.last_successful_use_at = observed_at
+    except SQLAlchemyError:
+        pass
+
+
+def last_successful_use(db: Session, row: BankEncryptionKey) -> datetime | None:
+    latest = db.scalar(
+        select(func.max(ObjectKeyEnvelope.last_successful_use_at)).where(
+            ObjectKeyEnvelope.organization_id == row.organization_id,
+            ObjectKeyEnvelope.bank_id == row.bank_id,
+        )
+    )
+    times = [time for time in (latest, row.last_successful_use_at) if time is not None]
+    return max(times, key=_utc) if times else None
 
 
 def version_context(organization: str, bank: str) -> dict[str, str]:
     return {"purpose": "bank-data-key-version-v1", "organization_id": organization, "bank_id": bank}
+
+
+def lock_bank_version(db: Session, organization: str, bank: str, *, read: bool = False) -> None:
+    if db.get_bind().dialect.name == "postgresql":
+        identity = json.dumps(["bank-data-key-version-v1", organization, bank])
+        value = int.from_bytes(hashlib.sha256(identity.encode()).digest()[:8], signed=True)
+        function = "pg_advisory_xact_lock_shared" if read else "pg_advisory_xact_lock"
+        _ = db.execute(text(f"SELECT {function}(:key)"), {"key": value})
 
 
 def _new_version(
@@ -235,9 +324,29 @@ def _new_version(
     )
     db.add(version)
     db.flush()
+    row.last_successful_use_at = utc_now()
     row.current_version_id = version.id
     if row.index_version_id is None:
-        row.index_version_id = version.id
+        row.index_version_id = (
+            db.scalar(
+                select(ObjectKeyEnvelope.id)
+                .where(
+                    ObjectKeyEnvelope.organization_id == row.organization_id,
+                    ObjectKeyEnvelope.bank_id == row.bank_id,
+                    ObjectKeyEnvelope.context_digest
+                    == context_digest(
+                        {
+                            "purpose": "bank-sensitive-index-v1",
+                            "organization_id": row.organization_id,
+                            "bank_id": row.bank_id,
+                        }
+                    ),
+                )
+                .order_by(ObjectKeyEnvelope.created_at, ObjectKeyEnvelope.id)
+                .limit(1)
+            )
+            or version.id
+        )
     unit = _unit(db)
     unit.envelopes[version.id] = version
     unit.material[version.id] = data.plaintext
@@ -254,13 +363,30 @@ def current_version(db: Session, row: BankEncryptionKey) -> UUID:
     return unit.current[scope]
 
 
+def initialize_version(
+    db: Session, row: BankEncryptionKey, providers: ProviderFactory = provider_for
+) -> None:
+    lock_bank_version(db, row.organization_id, row.bank_id)
+    if row.current_version_id is not None:
+        return
+    _new_version(
+        db, row, require_active(providers(row.provider).describe(reference(row))), providers
+    )
+    db.flush()
+    _unit(db).current.pop((row.organization_id, row.bank_id), None)
+
+
 def prepare_envelope(
     db: Session,
     row: BankEncryptionKey,
     context: dict[str, str],
     providers: ProviderFactory = provider_for,
 ) -> ObjectKey:
-    return open_envelope(db, row, current_version(db, row), context, providers)
+    lock_bank_version(db, row.organization_id, row.bank_id, read=True)
+    connected = bank_key(db, row.organization_id, row.bank_id, refresh=True)
+    if connected is None:
+        raise KeyUnavailableError("The bank encryption key is not connected.")
+    return open_envelope(db, connected, current_version(db, connected), context, providers)
 
 
 def open_envelope(
@@ -270,6 +396,7 @@ def open_envelope(
     context: dict[str, str],
     providers: ProviderFactory = provider_for,
 ) -> ObjectKey:
+    lock_bank_version(db, row.organization_id, row.bank_id, read=True)
     unit = _unit(db)
     envelope = unit.envelopes.get(envelope_id)
     if envelope is None:
@@ -283,11 +410,13 @@ def open_envelope(
         if envelope is None:
             raise KeyIntegrityError("The data key does not belong to this bank and record.")
         unit.envelopes[envelope_id] = envelope
+    versioned = envelope.context_digest == context_digest(
+        version_context(row.organization_id, row.bank_id)
+    )
     if (
         envelope.bank_id != row.bank_id
         or envelope.organization_id != row.organization_id
-        or envelope.context_digest
-        != context_digest(version_context(row.organization_id, row.bank_id))
+        or not (versioned or envelope.context_digest == context_digest(context))
     ):
         raise KeyIntegrityError("The data key does not belong to this bank and record.")
     plaintext = unit.material.get(envelope_id)
@@ -297,10 +426,12 @@ def open_envelope(
             envelope.wrapped_key,
             wrapping_context(row.bank_id, envelope.context_digest),
         )
+        unit.usage[(row.organization_id, row.bank_id, envelope_id)] = utc_now()
         unit.material[envelope_id] = plaintext
-    plaintext = hmac.new(
-        plaintext, ("bank-payload:" + context_digest(context)).encode(), hashlib.sha256
-    ).digest()
+    if versioned:
+        plaintext = hmac.new(
+            plaintext, ("bank-payload:" + context_digest(context)).encode(), hashlib.sha256
+        ).digest()
     return ObjectKey(envelope_id, envelope.key_id, plaintext)
 
 

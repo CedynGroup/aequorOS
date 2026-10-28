@@ -20,17 +20,21 @@ from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.attestation.service import digests, register_state
+from app.attestation.service import workflow as attestation
 from app.attestation.service.digests import content_digest
+from app.core.key_management import registry
 from app.core.key_management.types import KeyStatus
 from app.icaap.models.workspace import IcaapCycle, IcaapStageDecision
 from app.icaap.schemas.workspace import IcaapFreezeCreate
-from app.icaap.service import cycles, freeze, guards, snapshot, workflow
+from app.icaap.service import cycles, freeze, guards, post_freeze, snapshot, workflow
 from app.models import BankFinancialFact, BankReportingPeriod, RegulatoryPackage
+from app.reporting.service.filing_workflow import chain
 from app.reporting.service.generation import GeneratedReturn, snapshot_content_hash
 from app.reporting.service.registry import ReturnDefinition
 from app.services import reconciliation
 from tests.core import test_key_unavailable_numeric as encrypted
-from tests.core.test_bank_field_encryption import KEY_A
+from tests.core.test_bank_field_encryption import KEY_A, NEXT
 from tests.icaap.service.p3_support import (
     AS_OF,
     access_for,
@@ -41,6 +45,7 @@ from tests.icaap.service.p3_support import (
     govern_first_as_of,
     make_p2_ready,
     make_user,
+    return_payload,
     seal_capital_run,
     submit,
     write_every_section,
@@ -684,3 +689,76 @@ def test_snapshot_commits_protected_register_without_key_access(
     icaap = cast(Mapping[str, object], metadata["icaap"])
     profile = cast(Mapping[str, object], icaap["institution_profile"])
     assert profile["register_state_digest"]
+
+
+def test_frozen_engine_package_requires_regeneration_after_key_rotation(
+    canonical_book: Session, extra_frameworks: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = canonical_book
+    provider = encrypted.connect(db, monkeypatch)
+    encrypted.register(db)
+    access, reviewer, approver, cycle = _build(db)
+    digest = workflow.get_stages(db, access, cycle.id).review_digest
+    out = freeze.freeze_cycle(
+        db, access, cycle.id, IcaapFreezeCreate(review_digest=digest, reason="Seal the report.")
+    )
+    package = db.get(RegulatoryPackage, out.package.id)
+    assert package is not None and package.source_runs
+    sealed = package.register_state_digest
+    assert sealed == digests.register_state_digest(
+        register_state.project_register_state(db, access.ctx, access.bank.id)
+    )
+    metadata = cast(Mapping[str, object], package.snapshot["metadata"])
+    icaap = cast(Mapping[str, object], metadata["icaap"])
+    profile = cast(Mapping[str, object], icaap["institution_profile"])
+    assert profile["register_state_digest"] == sealed
+    key = registry.scoped_key(
+        db, bank_id=access.bank.id, organization_id=access.ctx.organization_id
+    )
+    registry.rotate(db, key, NEXT, providers=lambda _name: provider)
+    db.commit()
+    db.expire_all()
+    current = digests.register_state_digest(
+        register_state.project_register_state(db, access.ctx, access.bank.id)
+    )
+    assert current != sealed
+    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
+        attestation.ensure_register_current(db, access.ctx, package)
+    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
+        attestation.ensure_submittable(db, access.ctx, package)
+    with pytest.raises(attestation.AttestationConflict, match="register_state_changed"):
+        chain.assert_transmission_permitted(db, access.ctx, package)
+    post_freeze.return_cycle(
+        db,
+        reviewer,
+        cycle.id,
+        return_payload(
+            db,
+            reviewer,
+            cycle.id,
+            return_to_seq=1,
+            reason="Regenerate the report after the bank encryption key rotation.",
+        ),
+    )
+    submit(db, access, cycle.id)
+    decide(db, reviewer, cycle.id, 2, "reviewed")
+    decide(db, approver, cycle.id, 3, "approved")
+    digest = workflow.get_stages(db, access, cycle.id).review_digest
+    regenerated = freeze.freeze_cycle(
+        db,
+        access,
+        cycle.id,
+        IcaapFreezeCreate(review_digest=digest, reason="Seal the updated report."),
+    )
+    updated = db.get(RegulatoryPackage, regenerated.package.id)
+    assert updated is not None
+    assert updated.register_state_digest == current
+    updated_metadata = cast(Mapping[str, object], updated.snapshot["metadata"])
+    updated_icaap = cast(Mapping[str, object], updated_metadata["icaap"])
+    updated_profile = cast(Mapping[str, object], updated_icaap["institution_profile"])
+    assert updated_profile["register_state_digest"] == current
+    assert updated.source_runs == package.source_runs
+    assert updated.version == package.version + 1
+    assert package.register_state_digest == sealed
+    assert package.status == "superseded"
+    attestation.ensure_register_current(db, access.ctx, updated)

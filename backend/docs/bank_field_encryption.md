@@ -31,11 +31,16 @@ Field and object encryption reuse `BankEncryptionKey`, `ObjectKeyEnvelope`,
 wrapped by the bank's KMS key. Ciphertext records its version UUID.
 
 A unit of work resolves the current version once and unwraps each required version
-once. Request-bound storage shares the session cache. Root transaction completion,
-rollback or session close discards plaintext key material. Encryption takes no
-key-row or advisory locks. Rotation creates a new current version; earlier
-versions remain available to read earlier ciphertext. There is no re-encryption
-maintenance command.
+once. Request-bound storage shares the session cache; standalone storage operations
+own short-lived sessions. Plaintext material is session-local and excluded from
+logs. Root transaction completion, rollback or session close discards plaintext
+key material. Field encryption itself takes no key-row or advisory locks;
+presentation readiness checks take the shared bank-version transaction lock.
+There is no persistent or process-wide plaintext cache.
+Revocation refuses the next unit once KMS enforces the permission change; an
+already admitted unit may complete. Rotation creates a new current version;
+earlier versions remain available to read earlier ciphertext. There is no
+re-encryption maintenance command.
 
 Object writes use committed versions, so published ciphertext remains readable
 if the caller rolls back. Authenticated context binds fields to organization,
@@ -49,14 +54,13 @@ remain opaque. Complete-register attestation commitments follow the
 [attestation digest contract](../../docs/attestation_esignature.md#31-what-gets-signed--two-artefacts-per-signature).
 Optional banks without a connected key retain ordinary field storage.
 
-## Exact-match search
+## Identity indexes
 
 Bank-scoped HMAC-SHA-256 indexes support counterparty names, source references,
 external identifiers and related-party names. Names use Unicode normalization,
 case folding and collapsed whitespace; identifiers retain case and punctuation.
-Searches scope by organization and bank and confirm decrypted candidate values.
-A stable index-version pointer keeps exact matches working across payload-key
-rotation. Numeric concentration grouping uses opaque indexes.
+A stable index-version pointer preserves tokens across payload-key rotation.
+Numeric concentration grouping uses opaque indexes.
 
 Name index tokens are 64 characters for both connected and optional banks.
 Optional banks use unkeyed SHA-256 tokens and retain plaintext names.
@@ -84,3 +88,75 @@ and writes, cross-bank isolation, exact matching, old-version reads after
 rotation, numeric BI and identity refusals. PostgreSQL/storage tests exercise
 concurrent ingestion, push, exports, attachments and downloads, bounded unwrap
 counts and published-manifest readability after rollback.
+
+## Protected presentation reads
+
+Tenant GET/HEAD sessions disclose protected identity fields as locked placeholders
+when a bank key is revoked or unreachable. Staff and Inspector presentation sessions
+hide those fields even for optional, unconnected banks. Support filing reads expose
+only filing metadata: snapshot and comparison bodies are locked, and validation,
+approval and methodology details are withheld. Bank-user filing reads retain their
+complete content. Numeric projections still
+use their stored values and indexes. Structured executable BI configuration refuses
+with a locked panel instead of substituting an empty query.
+
+The response header `X-Aequoros-Protected-Data` reports bank-scoped availability and
+protected responses use `Cache-Control: no-store`. Revocation displays “Your bank
+has turned off aequorOS access to protected data. Contact your bank administrator.”
+An outage displays “Can't reach your bank's key service. Retrying.” The dashboard
+clears affected cached data, rejects older in-flight disclosures, retries and
+refetches locked data after recovery. Responses without an availability header and
+failed recovery requests leave the lock in place. Form drafts remain mounted
+through refusal.
+Integrity failures remain verification errors, outside the key-outage presentation.
+
+Manual **Retry** and five-second automatic retries share one in-flight recovery
+attempt for the current bank. They refetch eligible active queries for that bank;
+when none are eligible, they use `GET /api/v1/banks/{bank_id}` to observe readiness
+without loading protected registers. Bank detail checks institution coverage before
+observing keys and requires no key-administration or institution-profile permission.
+Changing banks or unmounting cancels the fallback request. Available and support
+states, or no current bank, suppress recovery probes.
+
+Bank-wide readiness checks both the current payload key and the retained identity
+index key, including on empty registers and after failed historical field reads.
+Each prerequisite is observed once per request, with shared versions deduplicated.
+Readable historical fields remain readable, but their successful decryption cannot
+clear a prerequisite failure. Revocation takes precedence over an outage, and a
+later successful observation cannot clear either within the same response.
+
+Protected writes require usable keys and never persist placeholders. Related-party
+`PUT /api/v1/banks/{bank_id}/related-parties/{party_id}` updates only supplied fields;
+omitted protected fields remain unchanged, so non-protected updates can succeed
+while keys are unavailable. Its response can contain locked placeholders. Supplying
+`roles` replaces the role list; `role_updates` changes supplied fields on existing
+role IDs scoped to this bank and party, preserving their IDs and omitted values.
+The two role update forms cannot be combined. Protected changes still fail with
+the appropriate key message. Shareholding creation and updates also allow
+placeholder reads of party and UBO identities, so non-protected shareholding
+changes can succeed while keys are unavailable. Bank, party and UBO scoping still
+applies, and the response identities remain locked. Other mutation sessions remain
+strict.
+
+The related-party editor retains unsaved changes separately from refreshed server
+records. Refetch and key recovery refresh untouched fields without overwriting
+drafts; locked placeholders never become draft values. Routine saves send only
+edited fields and scoped role updates, allowing numeric-only edits while locked.
+Failed saves retain the draft, including protected edits that must wait for key
+recovery. Adding or removing a role requires the server membership baseline to
+be present; saving that replacement list also requires readable protected values.
+An explicitly empty replacement still removes every role.
+
+While locked, protected inputs in the related-party editor, including first-entry
+forms, are disabled and greyed with a lock icon and the corresponding message above
+as their tooltip. Untouched protected values show a locked placeholder; user-entered
+dirty values remain preserved through lock and recovery. Numeric, status, select and
+reason controls remain editable. A draft containing protected changes cannot be
+saved until recovery; non-protected-only saves and Cancel remain available.
+Shareholding labels and UBO candidates follow current query records while selected
+IDs and numeric drafts are retained, so recovery replaces locked labels with
+current names.
+
+Concentration displays configured locked limits as not evaluated and withholds a
+clean breach indicator while any configured evaluation is incomplete; independent
+numeric limits still evaluate.

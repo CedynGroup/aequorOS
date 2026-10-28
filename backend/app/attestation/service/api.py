@@ -327,6 +327,7 @@ def step_up(  # noqa: PLR0913 - request context is part of the evidence
             "user_agent": request.headers.get("user-agent"),
         },
     )
+    workflow.ensure_register_current(db, ctx, package)
     token, row = stepup.mint_authorization(
         db,
         ctx,

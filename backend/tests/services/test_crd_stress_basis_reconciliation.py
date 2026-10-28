@@ -10,13 +10,12 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, undefer_group
 
 from app.api.deps import TenantContext
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
-from app.data_engine.service.field_search import find_counterparties
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.domain.forecasting.engine import ForecastFact
 from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
@@ -402,10 +401,19 @@ def _change_credit_source(db_session: Session, bank_id: str, change: str) -> Non
         )
     )
     bank_counterparty = next(
-        iter(
-            find_counterparties(
-                db_session, MAKER, bank_id, field="source_reference", value="CP/PEERBANK"
+        (
+            row
+            for row in db_session.scalars(
+                select(CanonicalCounterparty)
+                .options(undefer_group("bank_identity"))
+                .where(
+                    CanonicalCounterparty.organization_id == MAKER.organization_id,
+                    CanonicalCounterparty.bank_id == bank_id,
+                    CanonicalCounterparty.superseded_by.is_(None),
+                    CanonicalCounterparty.withdrawn_at.is_(None),
+                )
             )
+            if row.source_reference == "CP/PEERBANK"
         ),
         None,
     )
