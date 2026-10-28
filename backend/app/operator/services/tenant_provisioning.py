@@ -343,7 +343,7 @@ def _step_parameters(
 
     Regime-scoped by construction: a licence class receives only the parameters
     its own entitled modules read, so an SDI is never given a Basel LCR floor
-    BoG does not impose on it (``services/parameter_register.py``).
+    BoG does not impose on it (``app/policy/service/parameter_register.py``).
 
     The governed capital minima are not written into the register (founder
     directives D-024 / D-042): the calculations take them from the regulatory
