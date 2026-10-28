@@ -60,9 +60,10 @@ factory = managed_session_factory(request, engine, expire_on_commit=False)
 These functions register cleanup on the supplied `request`, whether its fixture
 is function-, module- or session-scoped. URL and driver startup options supply
 schema, role and tenant defaults. An explicit `schema` can select a namespace
-before bootstrap creates it. `administrative=True` is reserved for cluster-role
-probes that have no tenant schema; their search path is pinned to `pg_catalog`.
-It does not grant any database privileges.
+before bootstrap creates it. `administrative=True` supports schema bootstrap and
+cluster-role probes without a tenant schema; absent an explicit or startup
+schema, their search path is pinned to `pg_catalog`. It does not grant any
+database privileges.
 
 For an existing schema outside a pytest request's lifecycle, use
 `database_connections(database_url, schema=schema_name)` as a context manager.
@@ -76,8 +77,9 @@ support layer, or explicitly adopted before its first checkout. An owner can
 `adopt_engine(engine)` when the application must construct the engine itself.
 Use `managed_session_factory(None, engine)` only within an explicit owner
 lifetime; pytest fixtures normally supply their request for earlier cleanup.
-Closed connections and sessions are weakly tracked, so long-lived owners do not
-retain every completed request. Still-live resources close before pool disposal.
+The database owner weakly tracks connections and sessions. When supplied,
+the pytest request also retains each session's close method as a finalizer until
+that request's teardown. Still-live resources close before pool disposal.
 
 Before calling Alembic in a schema fixture, install its engine factory:
 
