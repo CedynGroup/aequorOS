@@ -21,7 +21,9 @@ REAL_DATA_DATABASE_URL = os.environ.get("REAL_DATA_DATABASE_URL", "").strip()
 
 requires_real_data = pytest.mark.skipif(
     not REAL_DATA_DATABASE_URL,
-    reason="opt-in DB-backed suite: set REAL_DATA_DATABASE_URL to the primary (app-role) URL",
+    reason=(
+        "opt-in DB-backed suite: see backend/README.md#test-databases-and-the-primary-database"
+    ),
 )
 
 # Real primary identities (resolved 2026-08-15; the retired seed's OR-DEM00001 /
