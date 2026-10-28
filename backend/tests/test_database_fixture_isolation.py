@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -126,7 +127,7 @@ def test_bank_key_locks_are_isolated_between_test_schemas(
         pytest.skip("PostgreSQL advisory locks are required.")
     waiter: Future[int] = Future()
     with engine.connect() as connection:
-        schema = connection.scalar(text("SELECT current_schema()"))
+        schema = cast(object, connection.scalar(text("SELECT current_schema()")))
     assert isinstance(schema, str)
     connections = TestDatabaseConnections(
         engine.url.difference_update_query(["options"]), context=DatabaseContext(schema=schema)
