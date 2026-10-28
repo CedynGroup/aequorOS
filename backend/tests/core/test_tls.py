@@ -290,19 +290,20 @@ def test_orass_refuses_certificate_bypass(
 
 
 @pytest.mark.parametrize("scheme", ["http", "https"])
+@pytest.mark.parametrize("field", ["AWS_ENDPOINT_URL", "AWS_ENDPOINT_URL_KMS"])
 def test_bank_key_provider_exposes_only_verified_kms_clients(
-    production: None, monkeypatch: pytest.MonkeyPatch, scheme: str
+    production: None, monkeypatch: pytest.MonkeyPatch, scheme: str, field: str
 ) -> None:
     from app.core.key_management.aws import kms_client  # noqa: PLC0415
 
-    monkeypatch.setenv("AWS_ENDPOINT_URL_KMS", f"{scheme}://kms.example")
+    monkeypatch.setenv(field, f"{scheme}://kms.example")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "synthetic")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "synthetic")
-    if scheme == "https":
-        assert kms_client("us-east-1") is not None
-    else:
-        with pytest.raises(TransportSecurityError):
-            kms_client("us-east-1")
+    client = kms_client("us-east-1")
+    try:
+        assert client.meta.endpoint_url == "https://kms.us-east-1.amazonaws.com"
+    finally:
+        client.close()
 
 
 def test_dashboard_backend_requests_refuse_http_redirects(tmp_path: Path) -> None:

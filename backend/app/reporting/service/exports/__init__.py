@@ -502,7 +502,7 @@ def _store_export(  # noqa: PLR0913 - one storage write is its named parts
     )
     checksum = hashlib.sha256(payload).hexdigest()
     location = StorageLocation(institution_slug=slug, tier="outputs", object_path=object_path)
-    storage = get_storage_client()
+    storage = get_storage_client().for_session(db)
     storage.ensure_institution(slug)
     stored = storage.write(
         location,

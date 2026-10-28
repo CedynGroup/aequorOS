@@ -1,4 +1,16 @@
 services:
+  # Opt-in, synthetic keys only. Never included in deployment compose stacks.
+  risk-kms:
+    profiles: [encryption]
+    image: nsmithuk/local-kms:3.11.7@sha256:360d7377b6f3687c89a622236791e4fa3f7316366267b437829edbdfa8a5fc60
+    environment:
+      KMS_REGION: us-east-1
+      KMS_ACCOUNT_ID: "111122223333"
+    ports:
+      - "127.0.0.1:18080:8080"
+    volumes:
+      - risk-kms-data:/data
+
   risk-postgres:
     image: public.ecr.aws/docker/library/postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
     environment:
@@ -111,5 +123,6 @@ services:
       OFFICIAL_RUN_ENABLED: "false"
 
 volumes:
+  risk-kms-data:
   risk-postgres-data:
   risk-minio-data:

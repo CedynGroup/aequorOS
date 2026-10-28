@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
+from sqlalchemy.orm import Session
+
 from app.core.key_management.registry import (
     EnvelopeStore,
     ObjectKey,
@@ -19,6 +21,9 @@ class MemoryEnvelopeStore(EnvelopeStore):
         self.key = key
         self.provider = provider
         self.envelopes: dict[UUID, tuple[str, bytes]] = {}
+
+    def for_session(self, db: Session) -> MemoryEnvelopeStore:
+        return self
 
     def prepare(self, slug: str, context: dict[str, str]) -> ObjectKey:
         if slug != self.slug:

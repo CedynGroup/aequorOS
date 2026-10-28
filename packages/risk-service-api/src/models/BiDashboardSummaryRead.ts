@@ -18,6 +18,13 @@ import {
   SourcePackToJSON,
   SourcePackToJSONTyped,
 } from "./SourcePack";
+import type { LockedReason } from "./LockedReason";
+import {
+  LockedReasonFromJSON,
+  LockedReasonFromJSONTyped,
+  LockedReasonToJSON,
+  LockedReasonToJSONTyped,
+} from "./LockedReason";
 import type { VisibilityRole1 } from "./VisibilityRole1";
 import {
   VisibilityRole1FromJSON,
@@ -67,6 +74,12 @@ export interface BiDashboardSummaryRead {
    * @memberof BiDashboardSummaryRead
    */
   id: string;
+  /**
+   *
+   * @type {LockedReason}
+   * @memberof BiDashboardSummaryRead
+   */
+  lockedReason?: LockedReason;
   /**
    *
    * @type {boolean}
@@ -202,6 +215,10 @@ export function BiDashboardSummaryReadFromJSONTyped(
     createdAt: new Date(json["created_at"]),
     description: json["description"],
     id: json["id"],
+    lockedReason:
+      json["locked_reason"] == null
+        ? undefined
+        : LockedReasonFromJSON(json["locked_reason"]),
     ownedByCaller: json["owned_by_caller"],
     ownerDisplayName: OwnerDisplayNameFromJSON(json["owner_display_name"]),
     ownerUserId: json["owner_user_id"],
@@ -234,6 +251,7 @@ export function BiDashboardSummaryReadToJSONTyped(
     created_at: value["createdAt"].toISOString(),
     description: value["description"],
     id: value["id"],
+    locked_reason: LockedReasonToJSON(value["lockedReason"]),
     owned_by_caller: value["ownedByCaller"],
     owner_display_name: OwnerDisplayNameToJSON(value["ownerDisplayName"]),
     owner_user_id: value["ownerUserId"],

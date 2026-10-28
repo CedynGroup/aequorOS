@@ -20,6 +20,8 @@ and local-development exceptions are governed by
 
 Bank-held object encryption and optional rollout are in
 [the bank key setup guide](docs/bank_key_setup.md).
+Covered identity fields and identity indexes are in
+[the field encryption contract](docs/bank_field_encryption.md).
 
 Bank audit reads, Inspector support-reference capture, audit-chain verification,
 paging, filing and session retention, backup
@@ -474,7 +476,9 @@ conditional on their existing `REAL_DATA_DATABASE_URL` profile. The census never
 supplies that URL or makes primary data a CI prerequisite. When explicitly
 enabled, those cases also require PostgreSQL and may not skip their guarantees.
 
-Refresh ownership after adding tests or changing database or service requirements:
+Refresh ownership after adding tests or changing database or service requirements,
+including tests brought in by merging main. The merge queue executes the combined
+tree, so a catalogue checked only against an older PR head is insufficient:
 
 ```bash
 mise run risk-service:refresh-test-suites /absolute/path/to/empty/census-evidence
@@ -488,9 +492,9 @@ run `uv run python -m scripts.test_suite_census refresh <evidence-dir> --mode do
 from `backend/`. Keep the evidence directory outside the repository. The full run
 can take substantially longer than the unit suite; retain its log and let fixture
 teardown and child processes finish before generation. Commit the regenerated
-catalogue. For a service-gated case requiring another applicable profile, collect
-that profile with `CI_DATABASE_CENSUS=1` and `CI_DATABASE_OBSERVATIONS=<separate-dir>`,
-then run `scripts/test_suite_census.py generate <full-dir> --supplement <profile-dir>`.
+catalogue. For a service-gated case requiring another applicable profile, work from
+`backend/` and collect that profile with `CI_DATABASE_CENSUS=1` and `CI_DATABASE_OBSERVATIONS=<separate-dir>`,
+then run `uv run python -m scripts.test_suite_census generate <full-dir> --supplement <profile-dir>`.
 The supplement must contain only identities from the full census, and conflicting
 proven ownership across profiles is rejected. A failing run returns nonzero and reports its inconclusive cases;
 fix failures before claiming full validation.
@@ -517,8 +521,9 @@ The unit owner has no PostgreSQL, MinIO, OpenBao or dashboard dependency setup.
 Observed MinIO/OpenBao connections and native service processes are integration
 requirements; Playwright launches are e2e requirements. A declared
 `requires_service` marker covers contracts whose assertions consume state from
-earlier service-using cases. The generated catalogue also records these service
-requirements so the aggregate rejects skipped service contracts. To enrich an
+earlier service-using cases and service-gated contracts such as the local KMS.
+The generated catalogue also records these service requirements so the aggregate
+rejects skipped service contracts. To enrich an
 older database-only census, pass `--services <complete-service-profile>` to
 `generate`; only positive service requirements can change ownership. MinIO runs
 in storage/schema jobs and the shard containing native service contracts;

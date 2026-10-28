@@ -59,6 +59,7 @@ from decimal import Decimal
 from typing import Any, cast
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Load
 
 from app.data_engine.public import (
     CanonicalCounterparty,
@@ -379,8 +380,9 @@ def contracts(rc: ResolveContext) -> tuple[Contract, ...]:
             CanonicalPositionSnapshot.notional,
             CanonicalPositionSnapshot.contractual_maturity,
             CanonicalPositionSnapshot.attributes,
-            CanonicalCounterparty.name,
+            CanonicalCounterparty,
         )
+        .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
         .select_from(CanonicalPositionSnapshot)
         .join(
             latest,
@@ -422,7 +424,7 @@ def contracts(rc: ResolveContext) -> tuple[Contract, ...]:
                 kind=_classify(attributes, maturity, rc.period.period_end),
                 origination=origination,
                 maturity=maturity,
-                counterparty=str(cp_name) if cp_name else None,
+                counterparty=cp_name.name if cp_name else None,
             )
         )
     book.sort(key=lambda c: (c.maturity or date.max, c.source_reference))

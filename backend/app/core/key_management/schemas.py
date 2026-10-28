@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -34,3 +35,9 @@ class BankKeyRead(BaseModel):
 
 class BankKeyRotate(BankKeyConnect):
     reason: str = Field(min_length=10, max_length=2000)
+
+
+class ReencryptionRead(BaseModel):
+    job_id: UUID
+    status: str
+    progress: dict[str, object]

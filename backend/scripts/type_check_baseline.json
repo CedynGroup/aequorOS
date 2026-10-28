@@ -616,12 +616,6 @@
  "app.features.export_bi": {
   "reportUnnecessaryCast": 1
  },
- "app.features.manage_bi_content": {
-  "reportDeprecated": 1,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 2
- },
  "app.features.manage_documents": {
   "reportAny": 10
  },
@@ -929,7 +923,6 @@
   "reportUnknownMemberType": 2
  },
  "app.operator.services.inspector_fix": {
-  "reportAny": 1,
   "reportUnnecessaryIsInstance": 1
  },
  "app.operator.services.inspector_reads": {
@@ -941,7 +934,6 @@
   "reportUnknownVariableType": 2
  },
  "app.operator.services.operator_views": {
-  "reportAny": 1,
   "reportMissingParameterType": 1,
   "reportUnknownArgumentType": 1,
   "reportUnknownParameterType": 1
@@ -1005,7 +997,7 @@
   "reportUnknownVariableType": 1
  },
  "app.services.attestation.digests": {
-  "reportAny": 9,
+  "reportAny": 6,
   "reportUnknownArgumentType": 1,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 6
@@ -1086,9 +1078,6 @@
   "reportUnknownParameterType": 4,
   "reportUnknownVariableType": 9
  },
- "app.services.bi.alerts": {
-  "reportAny": 1
- },
  "app.services.bi.commentary.payload": {
   "reportAny": 2,
   "reportUnknownArgumentType": 1,
@@ -1145,9 +1134,9 @@
   "reportUnusedFunction": 1
  },
  "app.services.bi.mart_builder": {
-  "reportAny": 107,
-  "reportUnknownArgumentType": 20,
-  "reportUnknownMemberType": 15,
+  "reportAny": 93,
+  "reportUnknownArgumentType": 13,
+  "reportUnknownMemberType": 7,
   "reportUnknownVariableType": 4
  },
  "app.services.bi.nlq.candidates": {
@@ -1167,10 +1156,6 @@
  },
  "app.services.bi.query_log": {
   "reportAny": 5
- },
- "app.services.bi.subscriptions": {
-  "reportAny": 11,
-  "reportUnnecessaryCast": 1
  },
  "app.services.calculations": {
   "reportAny": 99
@@ -1205,15 +1190,13 @@
   "reportPrivateUsage": 1
  },
  "app.services.credit_concentration": {
-  "reportAny": 36,
+  "reportAny": 16,
   "reportUnknownArgumentType": 3,
   "reportUnknownMemberType": 6,
   "reportUnknownVariableType": 4
  },
  "app.services.credit_exposure_book": {
-  "reportAny": 12,
-  "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 2
+  "reportAny": 7
  },
  "app.services.data_activation": {
   "reportAny": 13,
@@ -4201,7 +4184,7 @@
   "reportUnknownVariableType": 57
  },
  "tests.services.test_attestation_phase0": {
-  "reportAny": 25
+  "reportAny": 22
  },
  "tests.services.test_attestation_signers": {
   "reportAny": 8,
