@@ -45,8 +45,8 @@ PROJECTED into ``package_stage_decisions`` rather than invented. An ``approved``
 package therefore lands at the Validator's stage: its Approver approved it, and
 under the new rule that is not authority to file.
 
-**The data step is RLS-aware and verifies itself.** Alembic runs as the
-tenant-scoped app role: it owns these tables but has no BYPASSRLS, and
+**The data step is RLS-aware and verifies itself.** Migration credentials follow
+``docs/ops/database-roles.md#migration-and-local-development-order``.
 ``regulatory_packages``, ``regulatory_package_approvals`` and ``users`` are all
 FORCE RLS with no ``app.organization_id`` set during a migration, so an unscoped
 UPDATE reports rowcount 0 and fails silently (audit P0-18; the trap that bit
@@ -449,7 +449,8 @@ def _backfill_organization(bind: Any, organization_id: str) -> None:
             message = (
                 f"filing chain backfill saw {result.rowcount} of {expected} packages "
                 f"for {organization_id}: row-level security is hiding them. Re-run "
-                "this migration with the BYPASSRLS worker role (WORKER_DATABASE_URL)."
+                "this migration using MIGRATION_DATABASE_URL and the owner membership "
+                "described in docs/ops/database-roles.md#migration-and-local-development-order."
             )
             raise RuntimeError(message)
 

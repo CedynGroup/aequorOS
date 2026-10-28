@@ -1,15 +1,12 @@
 """Postgres partition lifecycle for the BI marts — a thin wrapper, no DDL of its own.
 
-Migration ``202609220066`` owns the partitioned parents and the four
-``SECURITY DEFINER`` functions that are the ONLY sanctioned way any role
-creates or drops a child (D-039): ``bi_ensure_month_partition`` /
-``bi_ensure_year_partition`` (create the child with ENABLE + FORCE RLS and the
-tenant policy, idempotent) and ``bi_drop_month_partition`` /
-``bi_drop_year_partition``. This module calls them through SQLAlchemy Core —
-no ``text()`` anywhere in the BI plane — and is a no-op wherever the parents
-are not partitioned: SQLite (the hermetic suite, the Playwright stack) and a
-Postgres schema built with ``create_all`` (plain tables, D-011). It never
-names ``bi_fact_position_eom`` in a drop.
+Migration ``202609220066`` owns the partitioned parents and underlying
+``SECURITY DEFINER`` helpers (D-039). Runtime grants and the worker's bounded
+wrappers follow ``docs/ops/database-roles.md``. This module selects the available
+entry point through SQLAlchemy Core and is a no-op wherever the parents are not
+partitioned: SQLite (the hermetic suite, the Playwright stack) and a Postgres
+schema built with ``create_all`` (plain tables, D-011). It never names
+``bi_fact_position_eom`` in a drop.
 
 Why the builder ensures partitions BEFORE its slice transaction, and commits
 the DDL on its own: ``CREATE TABLE … PARTITION OF`` takes an ACCESS EXCLUSIVE
@@ -35,6 +32,12 @@ from app.bi.models.marts import (
     BiFactLoanEvent,
     BiFactPositionDaily,
     BiFactPositionEom,
+)
+from app.db.worker_access import (
+    DROP_SIGNATURE,
+    ENSURE_MONTH_SIGNATURE,
+    ENSURE_YEAR_SIGNATURE,
+    has_worker_function,
 )
 
 #: The monthly parents the BUILDER writes (``bi_query_log`` is the query path's).
@@ -114,18 +117,32 @@ def ensure_month_partition(db: Session, parent: str, month: date) -> str | None:
     ``None`` when the parent is not partitioned here."""
     if not is_partitioned(db, parent):
         return None
-    created = db.scalar(
-        select(func.bi_ensure_month_partition(_regclass(parent), literal(month.replace(day=1))))
+    ensure = (
+        func.aqs_worker_ensure_month_partition
+        if has_worker_function(db, ENSURE_MONTH_SIGNATURE)
+        and (
+            db.info.get("worker_access") is True
+            or not has_worker_function(db, "bi_ensure_month_partition(regclass,date)")
+        )
+        else func.bi_ensure_month_partition
     )
+    created = db.scalar(select(ensure(_regclass(parent), literal(month.replace(day=1)))))
     return str(created) if created is not None else None
 
 
 def ensure_year_partition(db: Session, parent: str, year: date) -> str | None:
     if not is_partitioned(db, parent):
         return None
-    created = db.scalar(
-        select(func.bi_ensure_year_partition(_regclass(parent), literal(year.replace(day=1))))
+    ensure = (
+        func.aqs_worker_ensure_year_partition
+        if has_worker_function(db, ENSURE_YEAR_SIGNATURE)
+        and (
+            db.info.get("worker_access") is True
+            or not has_worker_function(db, "bi_ensure_year_partition(regclass,date)")
+        )
+        else func.bi_ensure_year_partition
     )
+    created = db.scalar(select(ensure(_regclass(parent), literal(year.replace(day=1)))))
     return str(created) if created is not None else None
 
 
@@ -133,9 +150,16 @@ def drop_month_partition(db: Session, parent: str, month: date) -> bool:
     """Drop ``parent``'s child for ``month`` through the definer; False when absent."""
     if not is_partitioned(db, parent):
         return False
-    dropped = db.scalar(
-        select(func.bi_drop_month_partition(_regclass(parent), literal(month.replace(day=1))))
+    drop = (
+        func.aqs_worker_drop_daily_partition
+        if has_worker_function(db, DROP_SIGNATURE)
+        and (
+            db.info.get("worker_access") is True
+            or not has_worker_function(db, "bi_drop_month_partition(regclass,date)")
+        )
+        else func.bi_drop_month_partition
     )
+    dropped = db.scalar(select(drop(_regclass(parent), literal(month.replace(day=1)))))
     return bool(dropped)
 
 

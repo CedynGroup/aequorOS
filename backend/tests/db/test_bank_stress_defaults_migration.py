@@ -127,6 +127,7 @@ def test_backfill_sees_all_tenants_and_restores_forced_rls(
     spec.loader.exec_module(cast(ModuleType, migration))
     with schema.app_engine.begin() as connection, Session(bind=connection) as session:
         for org in ("OR-SHK00001", "OR-SHK00002"):
+            session.info["organization_id"] = org
             connection.execute(
                 text("SELECT set_config('app.organization_id', :org, true)"), {"org": org}
             )

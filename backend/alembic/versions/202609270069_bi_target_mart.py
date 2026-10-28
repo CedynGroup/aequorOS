@@ -49,7 +49,7 @@ literally, as ``202608160014`` and ``202609220068`` do: a literal keeps a fresh
 upgrade and an already-migrated database on the same constraint after the next
 scope is added, and lets the downgrade restore the historical shape. The parity
 between the model tuple and the migrated CHECK is asserted in
-``tests/db/test_bi_foundation_migration.py`` instead, so a scope added to the
+``tests/db/test_bi_owned_tables_parity.py`` instead, so a scope added to the
 tuple without a migration fails there rather than in a tenant's nightly build.
 """
 
