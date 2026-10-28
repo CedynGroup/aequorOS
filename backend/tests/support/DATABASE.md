@@ -153,7 +153,6 @@ with lexical scoping and reassignment, SQLAlchemy sync/async factories and
 psycopg sync/async connections. It does not attempt to interpret runtime-generated
 imports or reflective calls.
 
-
 ## Prepared canonical books
 
 The `canonical_book_baseline` marker opts a module into a separate synthetic

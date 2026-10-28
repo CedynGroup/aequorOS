@@ -728,9 +728,11 @@ assignment before removing transferred modules from the refreshed weights.
   [dashboard end-to-end guide](dashboard/README.md#end-to-end-playwright); for SSO, see its
   [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).
   **Default shared test databases are built once per pytest process**
-  (`backend/tests/conftest.py`): tenant API rollback-isolated tests share one
+  (`backend/tests/conftest.py`): default tenant API rollback-isolated tests share one
   schema through a savepoint-bound sessionmaker, and `@pytest.mark.committing_db`
   tests share a second schema that is TRUNCATEd and reseeded before each test.
+  Opt-in [prepared canonical books](tests/support/DATABASE.md#prepared-canonical-books)
+  use a separate baseline with per-test rollback.
   Both default tenant fixture families reuse one application per process.
   BI export header cases (`tests/bi/api/test_bi_exports.py`) reuse a separate
   module-scoped app, built lazily after hermetic settings, BI flags and the fixed
