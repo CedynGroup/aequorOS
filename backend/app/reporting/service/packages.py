@@ -112,7 +112,7 @@ def list_packages(  # noqa: PLR0913
 
     return RegulatoryPackageListRead(
         bank_id=bank.id,
-        packages=[read_summary(row, stage_title=titles.get(row.id)) for row in rows],
+        packages=[read_summary(db, row, stage_title=titles.get(row.id)) for row in rows],
         total=total,
         limit=limit,
         offset=offset,

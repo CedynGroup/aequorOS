@@ -31,6 +31,18 @@
     "fresh_forecast_analyst": {
       "id": "eeeeeeee-2900-4eee-8eee-eeeeeeee2900",
       "organizationId": "OR-FRSH0001"
+    },
+    "encryption_revocation": {
+      "id": "eeeeeeee-3901-4eee-8eee-eeeeeeee3901",
+      "organizationId": "OR-KEY00001"
+    },
+    "encryption_outage": {
+      "id": "eeeeeeee-3902-4eee-8eee-eeeeeeee3902",
+      "organizationId": "OR-KEY00002"
+    },
+    "encryption_rotation": {
+      "id": "eeeeeeee-3903-4eee-8eee-eeeeeeee3903",
+      "organizationId": "OR-KEY00003"
     }
   }
 }

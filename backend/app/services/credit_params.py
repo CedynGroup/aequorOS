@@ -18,6 +18,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.key_management.presentation import (
+    LOCKED_TEXT,
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+)
 from app.db.base import utc_now
 from app.domain.capital.ecl import ALL_SEGMENTS, normalize_segment
 from app.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
@@ -402,19 +408,35 @@ def get_concentration_limit_register(
     rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamConcentrationLimit, as_of
     )
-    return ConcentrationLimitRegisterRead(
-        as_of=as_of.isoformat(),
-        limits=[
+    presentation = db.info.get(SESSION_STATE)
+    support = bool(db.info.get(SESSION_SUPPORT)) or (
+        isinstance(presentation, PresentationState) and presentation.support
+    )
+    limits: list[ConcentrationLimitRead] = []
+    for row in rows:
+        key = row.bucket_key
+        if (
+            support
+            and row.dimension == "single_name"
+            and key is not None
+            and not key.startswith("pos:")
+        ):
+            key = LOCKED_TEXT
+            if isinstance(presentation, PresentationState):
+                presentation.record(bank.id, "support")
+        limits.append(
             ConcentrationLimitRead(
                 dimension=row.dimension,
                 limit_kind=row.limit_kind,
-                bucket_key=row.bucket_key,
+                bucket_key=key,
                 value=row.value,
                 effective_from=row.effective_from.isoformat(),
                 approved_by=row.approved_by,
             )
-            for row in rows
-        ],
+        )
+    return ConcentrationLimitRegisterRead(
+        as_of=as_of.isoformat(),
+        limits=limits,
     )
 
 

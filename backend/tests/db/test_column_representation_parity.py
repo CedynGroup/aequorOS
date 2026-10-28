@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import TypeDecorator
 
 from app.db.base import Base
 from tests.db.test_bank_organization_integrity import pytestmark
@@ -22,6 +23,8 @@ def test_model_column_types_match_migrations_with_documented_json_storage(
     for name, table in Base.metadata.tables.items():
         for column in inspector.get_columns(name, schema=bank_integrity_schema.schema_name):
             model_type = table.c[column["name"]].type
+            if isinstance(model_type, TypeDecorator):
+                model_type = model_type.type_engine(dialect)
             migrated_type = column["type"]
             # CODEBASE_CONVENTIONS §1: generic JSON supports hermetic SQLite;
             # PostgreSQL migrations intentionally use JSONB for these documents.

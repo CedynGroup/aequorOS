@@ -167,6 +167,35 @@ def test_reclaim_stale_leaves_a_recently_started_job(db_session: Session) -> Non
     assert claimed.status == "running"
 
 
+@pytest.mark.parametrize("size", [None, 0, -1, True, "524288000", 524288000.0])
+def test_reencryption_default_window_requires_positive_integer_bytes(
+    db_session: Session,
+    size: object,
+) -> None:
+    job_queue.enqueue(db_session, ORG_1, "bank_reencrypt", payload={"reencryption_bytes": size})
+    db_session.commit()
+    started = utc_now()
+    claimed = job_queue.claim_next(db_session, started, ("bank_reencrypt",))
+    assert claimed is not None
+    assert (
+        job_queue.reclaim_stale(
+            db_session,
+            started + timedelta(seconds=900),
+            stale_after=timedelta(seconds=900),
+        )
+        == 0
+    )
+    assert (
+        job_queue.reclaim_stale(
+            db_session,
+            started + timedelta(seconds=900, microseconds=1),
+            stale_after=timedelta(seconds=900),
+        )
+        == 1
+    )
+    assert claimed.status == "queued" and claimed.attempts == 1
+
+
 def test_reclaim_stale_fails_a_job_past_max_attempts(db_session: Session) -> None:
     job_queue.enqueue(db_session, ORG_1, "pipeline_refresh", max_attempts=1)
     db_session.commit()

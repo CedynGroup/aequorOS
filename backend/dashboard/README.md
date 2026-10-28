@@ -35,7 +35,7 @@ and dynamic detail routes. The route groups under `app/(app)/`:
 | Risk / Alerts      | `/risk`, `/alerts` | limit wall, findings, pipeline alerts                                                       |
 | Reports            | `/reports/*`       | ALCO, board pack, ICAAP stress pack, comparisons                                            |
 | Access control     | `/access/*`        | Members and scoped grants; SSO and access requests; integration keys; My access placeholder |
-| Settings           | `/settings/*`      | appearance, profile/account, data and compute status, and About                             |
+| Settings           | `/settings/*`      | appearance, profile/account, bank key administration, data and compute status, and About    |
 
 `app/inspect` is the tenant inspector; `app/api/*` holds the server-only route
 handlers for attestation step-up, auth, and impersonation cookies.
@@ -44,6 +44,8 @@ Capital navigation, planning, and ILAAP access requirements are documented in
 [Capital dashboard access](../docs/capital_enforcement_rollout.md#dashboard-access).
 FX navigation, dashboard queries, run actions, and report projections are
 documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-access).
+Bank key administration follows [the setup guide](../docs/bank_key_setup.md#bank-administrator-self-service).
+Locked fields and editor recovery follow [the protected presentation contract](../docs/bank_field_encryption.md#protected-presentation-reads).
 
 ### Regulatory instruments and preparation
 
@@ -343,7 +345,8 @@ and explicit-period dashboard reads have distinct stable keys. The root
 authority changes, including entry to or exit from staff inspection; ordinary
 access-token rotation deliberately keeps the same cache.
 
-Heavy liquidity, capital, IRRBB, FX, FTP, regulatory calendar, and live-snapshot
+Outside [protected-data recovery](../docs/bank_field_encryption.md#protected-presentation-reads),
+heavy liquidity, capital, IRRBB, FX, FTP, regulatory calendar, and live-snapshot
 payloads do not use fixed polling. They refresh on mount/window focus, after a
 relevant accepted mutation or completed pipeline job, and when the cheap
 live-summary generation or freshness official-run signal changes for that
@@ -675,6 +678,10 @@ diagnosis:
    live plane and running the product's own `pipeline.recompute_modules`.
    Without it `/basel`, `/liquidity`, `/ftp/*`, `/irr/*` and `/fx/*` all open on
    the "no computed data yet" envelope.
+4. **Bank-held keys.** The full suite requires the bank-key emulator described in
+   [the encryption journey setup](../docs/bank_encryption.md#browser-encryption-journeys).
+   Start it and export `BANK_KMS_ENDPOINT_URL` before the commands below. The local
+   service runner provisions Postgres and MinIO; it does not start this emulator.
 
 `00-ingestion-worker.spec.ts` exercises the worker path separately. It provisions
 an empty tenant and real analyst/approver bindings, uploads a balanced synthetic
@@ -1010,6 +1017,13 @@ the overflow you cannot remove, remove the one you can. **Design changes are
 reviewed as pixels**: follow the visual-tour capture instructions under
 [End-to-end (Playwright)](#end-to-end-playwright) and compare the screenshots
 before and after. Type-checking cannot see a clipped column.
+
+### Encryption journeys with local KMS
+
+Follow [the browser encryption journey guide](../docs/bank_encryption.md#browser-encryption-journeys)
+for emulator setup, the focused command, fixture isolation, recovery coverage and
+evidence paths. Its [emulator contract](../docs/bank_encryption.md#local-kms-emulator-and-ci)
+owns endpoint restrictions and the cross-account-grant limitation.
 
 ### Contingency funding plan lifecycle
 

@@ -15,8 +15,8 @@ export default defineConfig({
   testMatch: "regulatory-rule-status.spec.ts",
   testIgnore: [],
   webServer: (Array.isArray(base.webServer) ? base.webServer : []).map(
-    (server, index) =>
-      index === 1
+    (server) =>
+      server.command.includes("uvicorn app.main:app")
         ? {
             ...server,
             command: server.command.replace(

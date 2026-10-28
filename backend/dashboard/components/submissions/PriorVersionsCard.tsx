@@ -23,6 +23,7 @@
  * rendered here; nothing in this file decides what changed.
  */
 
+import ProtectedDataPlaceholder from "@/components/ui/ProtectedDataPlaceholder";
 import { useState } from "react";
 import RegulatoryExportWarning from "./RegulatoryExportWarning";
 import {
@@ -259,6 +260,13 @@ export function ComparisonPanel({
   comparison: PackageComparisonRead;
   currentVersion: number;
 }) {
+  if (comparison.contentLocked) {
+    return (
+      <ProtectedDataPlaceholder
+        value={{ _aequoros_protected_data: "support" }}
+      />
+    );
+  }
   if (comparison.identical) {
     return (
       <p className="text-caption text-navy/85 leading-relaxed">

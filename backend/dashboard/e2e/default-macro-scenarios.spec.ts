@@ -106,7 +106,9 @@ test.describe("default macro scenarios", () => {
       });
       await expect(run).toBeVisible();
       await expect(run).toBeDisabled();
-      await run.hover({ force: true });
+      const runTrigger = run.locator("..");
+      await runTrigger.focus();
+      await expect(runTrigger).toBeFocused();
       await expect(page.getByRole("tooltip")).toHaveText(
         "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.",
       );
@@ -114,7 +116,13 @@ test.describe("default macro scenarios", () => {
       await page.goto("/ftp/scenarios");
       const preview = page.getByRole("button", { name: "Preview FTP what-if" });
       await expect(preview).toBeDisabled();
-      await preview.locator("..").hover();
+      // Period selection remounts the FTP workbench; focus its ready control.
+      await expect(
+        page.getByText(/^As of (?!no period selected)/),
+      ).toBeVisible();
+      const previewTrigger = preview.locator("..");
+      await previewTrigger.focus();
+      await expect(previewTrigger).toBeFocused();
       await expect(page.getByRole("tooltip")).toHaveText(
         "Requires FTP · Confidential · Run authority.",
       );

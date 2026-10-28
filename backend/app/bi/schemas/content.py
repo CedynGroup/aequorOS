@@ -208,6 +208,7 @@ class BiDashboardSummaryRead(BiClosedModel):
     visibility_role: str | None
     badge: BiCertificationBadge
     version: int
+    locked_reason: str | None = None
     widget_count: int
     source_pack: str | None
     created_at: datetime
@@ -266,6 +267,7 @@ class BiDashboardVersionRead(BiClosedModel):
     title: str
     description: str
     change_note: str
+    locked_reason: str | None = None
     widget_count: int
     spec_digest: str
     created_by_user_id: UUID

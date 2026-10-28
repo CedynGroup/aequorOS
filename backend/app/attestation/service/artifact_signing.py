@@ -155,7 +155,7 @@ def sign_package_pdf(  # noqa: PLR0913 - one act, and every input is distinct
             f"agree before certification, not after.",
         )
     resolved = settings if settings is not None else get_settings()
-    client = storage if storage is not None else get_storage_client()
+    client = (storage if storage is not None else get_storage_client()).for_session(db)
     slug = bank_slug(db, get_bank_or_404(db, ctx, package.bank_id))
 
     base = (

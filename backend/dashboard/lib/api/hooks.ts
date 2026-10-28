@@ -3290,7 +3290,6 @@ export function useCreateRelatedParty(bankId: string | undefined) {
   );
 }
 
-/** Full replacement; the `roles` list is replace-on-write. */
 export function useUpdateRelatedParty(bankId: string | undefined) {
   return useInstitutionRegisterMutation(
     bankId,

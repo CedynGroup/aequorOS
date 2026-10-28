@@ -20,6 +20,8 @@ and local-development exceptions are governed by
 
 Bank-held object encryption and optional rollout are in
 [the bank key setup guide](docs/bank_key_setup.md).
+Covered identity fields and identity indexes are in
+[the field encryption contract](docs/bank_field_encryption.md).
 
 Bank audit reads, Inspector support-reference capture, audit-chain verification,
 paging, filing and session retention, backup
@@ -569,6 +571,8 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
 - Hermetic and Postgres-gated mutation checks follow [Run Tests](#run-tests), including
   its dedicated test-database requirement. Tests against the primary are limited to the
   read-only live-data suite above.
+- Test connection construction, fixture selection and the direct-constructor ratchet
+  are documented in the [test connection guide](tests/support/DATABASE.md).
 - **`Base.metadata.create_all` skips migrations.** The hermetic pytest suite and the
   shared Playwright bootstrap therefore use `tests/fixtures/reference_data.py` to seed
   every GLOBAL registry from the same catalogues
