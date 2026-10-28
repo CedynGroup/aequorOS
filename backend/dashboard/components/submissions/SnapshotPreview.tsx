@@ -6,6 +6,9 @@
  * the exported artifacts render amounts in GHS '000 per the BoG convention.
  */
 
+import ProtectedDataPlaceholder, {
+  protectedPayloadReason,
+} from "@/components/ui/ProtectedDataPlaceholder";
 import DataTable, { type Column } from "@/components/ui/DataTable";
 import { labelize } from "@/lib/api/values";
 import { regShort } from "@/lib/format";
@@ -217,6 +220,8 @@ export default function SnapshotPreview({
   /** One line saying what the marks mean — required when marks are shown. */
   changedNote?: string;
 }) {
+  if (protectedPayloadReason(snapshot))
+    return <ProtectedDataPlaceholder value={snapshot} />;
   const sections = snapshot.sections ?? [];
   const totals = snapshot.totals ?? [];
   const marking = Boolean(changedLineKeys && changedLineKeys.size > 0);
@@ -226,7 +231,7 @@ export default function SnapshotPreview({
       <p className="text-caption text-slate">{unitPreamble(sections)}</p>
 
       {marking && changedNote && (
-        <p className="flex items-center gap-2 rounded-sm border border-action/25 bg-action-light/40 px-3 py-2 text-caption text-navy/85">
+        <p className="flex items-center gap-2 rounded border border-action/25 bg-action-light/40 px-3 py-2 text-caption text-navy/85">
           <span
             className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-action"
             aria-hidden
@@ -246,7 +251,7 @@ export default function SnapshotPreview({
           {totals.map((total, i) => (
             <div
               key={String(total.code ?? i)}
-              className="rounded-sm border border-border-light bg-surface px-3 py-2.5 min-w-0"
+              className="rounded border border-border-light bg-surface px-3 py-2.5 min-w-0"
             >
               <p
                 className="text-micro font-medium text-slate uppercase tracking-wider leading-snug"
@@ -254,7 +259,7 @@ export default function SnapshotPreview({
               >
                 {String(total.description ?? total.code ?? "Total")}
               </p>
-              <p className="mt-1 font-mono text-h3 text-navy tnum wrap-break-word">
+              <p className="mt-1 font-mono text-h3 text-navy tnum break-words">
                 {fmtSnapshotCell(total.value)}
                 {/* Accepts BOTH unit vocabularies: the check used to test only
                     'pct' while the section map keyed on 'percent', so a headline
@@ -279,7 +284,7 @@ export default function SnapshotPreview({
         return (
           <div
             key={String(section.code ?? i)}
-            className="rounded-sm border border-border-light overflow-hidden"
+            className="rounded border border-border-light overflow-hidden"
           >
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-surface border-b border-border-light">
               <div className="flex items-baseline gap-2 min-w-0">

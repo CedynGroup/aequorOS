@@ -210,7 +210,7 @@ def execute_pull(  # noqa: PLR0913 - one call carries the full pull context
     warnings: list[str] = []
     errors: list[str] = []
     raw_prefix = f"market_data/{vendor}/{as_of_date.isoformat()}/{batch.id}"
-    storage = get_storage_client()
+    storage = get_storage_client().for_session(db)
     extractions = _extract_scopes(
         scopes,
         extract,

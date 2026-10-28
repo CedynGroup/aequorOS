@@ -227,7 +227,7 @@ def test_run_etl_dedup_backfills_report_lineage_and_audit(
     assert nodes[0].details["anomalies"] == 2
     assert nodes[0].details["content_hash_match"] is True
 
-    # A dedup-completed audit event carries the merged report.
+    # Audit evidence retains counts; the protected batch retains the detailed report.
     event = db_session.scalar(
         select(AuditEvent).where(
             AuditEvent.organization_id == ORG_1,

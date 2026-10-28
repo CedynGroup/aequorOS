@@ -18,6 +18,13 @@ import {
   DayOfWeekToJSON,
   DayOfWeekToJSONTyped,
 } from "./DayOfWeek";
+import type { BiAskReadQuery } from "./BiAskReadQuery";
+import {
+  BiAskReadQueryFromJSON,
+  BiAskReadQueryFromJSONTyped,
+  BiAskReadQueryToJSON,
+  BiAskReadQueryToJSONTyped,
+} from "./BiAskReadQuery";
 import type { Minute } from "./Minute";
 import {
   MinuteFromJSON,
@@ -25,13 +32,6 @@ import {
   MinuteToJSON,
   MinuteToJSONTyped,
 } from "./Minute";
-import type { BiQuery } from "./BiQuery";
-import {
-  BiQueryFromJSON,
-  BiQueryFromJSONTyped,
-  BiQueryToJSON,
-  BiQueryToJSONTyped,
-} from "./BiQuery";
 import type { BiNotificationRecipient } from "./BiNotificationRecipient";
 import {
   BiNotificationRecipientFromJSON,
@@ -46,6 +46,13 @@ import {
   HourToJSON,
   HourToJSONTyped,
 } from "./Hour";
+import type { LockedReason } from "./LockedReason";
+import {
+  LockedReasonFromJSON,
+  LockedReasonFromJSONTyped,
+  LockedReasonToJSON,
+  LockedReasonToJSONTyped,
+} from "./LockedReason";
 import type { DayOfMonth } from "./DayOfMonth";
 import {
   DayOfMonthFromJSON,
@@ -135,6 +142,12 @@ export interface BiSubscriptionRead {
   isActive: boolean;
   /**
    *
+   * @type {LockedReason}
+   * @memberof BiSubscriptionRead
+   */
+  lockedReason?: LockedReason;
+  /**
+   *
    * @type {Minute}
    * @memberof BiSubscriptionRead
    */
@@ -165,10 +178,10 @@ export interface BiSubscriptionRead {
   ownerUserId: string;
   /**
    *
-   * @type {BiQuery}
+   * @type {BiAskReadQuery}
    * @memberof BiSubscriptionRead
    */
-  query: BiQuery;
+  query: BiAskReadQuery;
   /**
    *
    * @type {Array<string>}
@@ -286,6 +299,10 @@ export function BiSubscriptionReadFromJSONTyped(
     hour: json["hour"] == null ? undefined : HourFromJSON(json["hour"]),
     id: json["id"],
     isActive: json["is_active"],
+    lockedReason:
+      json["locked_reason"] == null
+        ? undefined
+        : LockedReasonFromJSON(json["locked_reason"]),
     minute: json["minute"] == null ? undefined : MinuteFromJSON(json["minute"]),
     name: json["name"],
     ownedByCaller: json["owned_by_caller"],
@@ -294,7 +311,7 @@ export function BiSubscriptionReadFromJSONTyped(
         ? undefined
         : OwnerDisplayNameFromJSON(json["owner_display_name"]),
     ownerUserId: json["owner_user_id"],
-    query: BiQueryFromJSON(json["query"]),
+    query: BiAskReadQueryFromJSON(json["query"]),
     recipientUserIds:
       json["recipient_user_ids"] == null
         ? undefined
@@ -334,12 +351,13 @@ export function BiSubscriptionReadToJSONTyped(
     hour: HourToJSON(value["hour"]),
     id: value["id"],
     is_active: value["isActive"],
+    locked_reason: LockedReasonToJSON(value["lockedReason"]),
     minute: MinuteToJSON(value["minute"]),
     name: value["name"],
     owned_by_caller: value["ownedByCaller"],
     owner_display_name: OwnerDisplayNameToJSON(value["ownerDisplayName"]),
     owner_user_id: value["ownerUserId"],
-    query: BiQueryToJSON(value["query"]),
+    query: BiAskReadQueryToJSON(value["query"]),
     recipient_user_ids: value["recipientUserIds"],
     recipients:
       value["recipients"] == null

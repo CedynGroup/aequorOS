@@ -90,6 +90,7 @@ from app.models import (
     RegulatoryResubmissionRequest,
     RegulatoryRun,
     RelatedParty,
+    RelatedPartyRole,
     RiskAssessment,
     RiskAssessmentRun,
     RiskCase,
@@ -383,6 +384,18 @@ def _related_party(session: Session, tenant: TenantSeed, _objects: ObjectSet) ->
             bank_id=tenant.bank_id,
             party_type="individual",
             full_name=tenant.marker,
+        ),
+    )
+
+
+def _related_party_role(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        RelatedPartyRole(
+            organization_id=tenant.organization_id,
+            party_id=UUID(objects["related_party"]),
+            role="director",
+            annual_fees=Decimal("100"),
         ),
     )
 
@@ -1568,6 +1581,7 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
     ObjectKind("outlet", _outlet, (f"{_BANK_PREFIX}/outlets/{{outlet_id}}",)),
     ObjectKind("product", _product, (f"{_BANK_PREFIX}/products/{{product_id}}",)),
     ObjectKind("related_party", _related_party, (f"{_BANK_PREFIX}/related-parties/{{party_id}}",)),
+    ObjectKind("related_party_role", _related_party_role, ()),
     ObjectKind(
         "shareholding",
         _shareholding,
@@ -1898,6 +1912,7 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "outlet": Outlet,
     "product": BankProduct,
     "related_party": RelatedParty,
+    "related_party_role": RelatedPartyRole,
     "shareholding": Shareholding,
     "database_connection": DatabaseDirectConnection,
     "market_data_connection": MarketDataConnection,
@@ -1974,6 +1989,7 @@ REFERENCE_FIELDS: Final[tuple[tuple[str, str, str], ...]] = (
     ("", "declaration_id", "declaration"),
     ("", "case_id", "case"),
     ("", "assessment_id", "assessment"),
+    ("/related-parties/", "role_id", "related_party_role"),
     ("", "ubo_party_id", "related_party"),
     ("", "user_id", "user"),
     ("", "principal_user_id", "user"),

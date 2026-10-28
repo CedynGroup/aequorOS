@@ -14,10 +14,9 @@ from botocore.exceptions import ClientError
 from moto import mock_aws
 from pydantic import TypeAdapter
 
-from app.core.key_management.types import KeyStatus
+from app.core.key_management.types import KeyStatus, KeyUnavailableError
 from app.storage.backups import BackupClient, publish_backup
 from app.storage.client import (
-    StorageAccessError,
     StorageBackendError,
     StorageLocation,
     StorageValidationError,
@@ -102,8 +101,9 @@ def test_retained_filing_stays_encrypted_and_revocation_refuses_read(
             VersionId=stored.version_id,
         )
     bank_storage.provider.set_status(KEY, KeyStatus.DISABLED)
-    with pytest.raises(StorageAccessError):
+    with pytest.raises(KeyUnavailableError) as refused:
         bank_storage.storage.read(location, stored.version_id)
+    assert refused.value.revoked
 
 
 def test_output_lock_provisioning_preserves_unversioned_temp_cleanup(

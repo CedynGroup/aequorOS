@@ -16,7 +16,7 @@ import logging
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Load, Session
 
 from app.api.deps import TenantContext
 from app.domain.ingestion.contracts import RawRecord
@@ -40,7 +40,9 @@ _MIN_POSITIONS = 20
 
 def _counterparty_rows(db: Session, ctx: TenantContext, bank_id: str) -> list[dict[str, str]]:
     counterparties = db.scalars(
-        select(CanonicalCounterparty).where(
+        select(CanonicalCounterparty)
+        .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
+        .where(
             CanonicalCounterparty.organization_id == ctx.organization_id,
             CanonicalCounterparty.bank_id == bank_id,
             CanonicalCounterparty.superseded_by.is_(None),

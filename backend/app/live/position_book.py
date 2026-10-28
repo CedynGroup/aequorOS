@@ -11,6 +11,7 @@ from typing import cast
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.key_management.fields import ProtectedField
 from app.core.tenancy import TenantContext
 from app.data_engine.public import (
     CanonicalCounterparty,
@@ -107,6 +108,7 @@ def credit_source_basis(records: Sequence[SourceRecord]) -> str:
                 column.key: cast(object, getattr(model, column.key))
                 for column in model.__table__.columns
                 if column.key not in ("created_at", "updated_at", "ingested_at")
+                and not isinstance(column.type, ProtectedField)
             }
             for model in record
         ]

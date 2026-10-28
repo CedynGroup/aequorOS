@@ -47,8 +47,10 @@ from sqlalchemy import (
     Uuid,
 )
 from sqlalchemy import text as sql_text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.key_management.fields import ProtectedJSON, ProtectedText
 from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin, utc_now
 from app.domain.ingestion.constants import (
     COUNTERPARTY_TYPES,
@@ -256,18 +258,23 @@ class CanonicalCounterparty(CanonicalMetadataMixin, Base):
             "organization_id",
             "bank_id",
             "source_system",
-            "source_reference",
+            "source_reference_blind_index",
             "as_of_date",
         ),
+        Index("ix_counterparties_name_blind", "organization_id", "bank_id", "name_blind_index"),
         *canonical_constraints("canonical_counterparties"),
     )
 
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(
+        ProtectedText(), nullable=False, deferred=True, deferred_group="bank_identity"
+    )
     counterparty_type: Mapped[str] = mapped_column(String(32), nullable=False)
     country_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
     rating: Mapped[str | None] = mapped_column(String(16), nullable=True)
     rating_source: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    group_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    group_reference: Mapped[str | None] = mapped_column(
+        ProtectedText(), nullable=True, deferred=True, deferred_group="bank_identity"
+    )
     # Residency of the counterparty relative to the bank's jurisdiction
     # (LMTD 2026 ¶5 "Narrow Liquid Assets": non-resident correspondent
     # balances and non-resident FI placements are distinct classification
@@ -275,10 +282,32 @@ class CanonicalCounterparty(CanonicalMetadataMixin, Base):
     # alone because branch/subsidiary residency can differ from domicile.
     resident: Mapped[bool | None] = mapped_column(nullable=True)
     external_identifiers: Mapped[dict[str, Any]] = mapped_column(
-        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+        ProtectedJSON(empty_object=True),
+        deferred=True,
+        deferred_group="bank_identity",
+        default=dict,
+        server_default=sql_text("'{}'"),
+        nullable=False,
     )
     attributes: Mapped[dict[str, Any]] = mapped_column(
-        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+        JSON,
+        active_history=True,
+        default=dict,
+        server_default=sql_text("'{}'"),
+        nullable=False,
+    )
+
+    source_reference: Mapped[str] = mapped_column(
+        ProtectedText(), nullable=False, deferred=True, deferred_group="bank_identity"
+    )
+    source_reference_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    name_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    concentration_group_blind_index: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    external_identifiers_blind_indexes: Mapped[dict[str, str]] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"),
+        default=dict,
+        server_default=sql_text("'{}'"),
+        nullable=False,
     )
 
 

@@ -69,12 +69,12 @@ def test_session_factory_preserves_outer_rollback_and_context(tmp_path: Path) ->
             assert connection.scalar(text("SELECT count(*) FROM probe")) == 0
 
 
-def test_sqlite_connections_enforce_foreign_keys(
-    isolated_db: TestDatabaseConnections,
-) -> None:
-    if isolated_db.url.drivername.startswith("postgresql"):
-        pytest.skip("SQLite foreign-key connection setup")
-    with isolated_db.connection() as connection:
+def test_sqlite_connections_enforce_foreign_keys(tmp_path: Path) -> None:
+    # This contract is specifically SQLite even in a Postgres integration job.
+    with (
+        isolated_database(f"sqlite:///{tmp_path / 'foreign-keys.db'}") as db,
+        db.connection() as connection,
+    ):
         _ = connection.execute(text("CREATE TABLE parent (id integer primary key)"))
         _ = connection.execute(text("CREATE TABLE child (parent_id integer REFERENCES parent(id))"))
         connection.commit()

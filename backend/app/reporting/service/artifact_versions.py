@@ -226,6 +226,7 @@ def read_version_bytes(
     on bytes already sent, and half a signed return followed by a 500 is not a
     download an operator can distinguish from a good one.
     """
+    storage = storage.for_session(db)
     bank = get_bank_or_404(db, ctx, bank_id)
     version = get_version_or_404(db, ctx, bank_id, version_id)
     # Lazy import, matching prepare_artifact_download: app.services.ingestion
