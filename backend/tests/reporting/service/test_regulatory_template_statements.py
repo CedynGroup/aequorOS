@@ -5,7 +5,7 @@ A template note is printed on a filed return. Two were stale or overclaimed:
 * the IRRBB notes said the engine "computes the fixed Basel scenario set today"
   and that ±450 bp was "a documented gap" — the engine computes the ±450 bp
   parallel rows whenever the parameter set carries that calibration
-  (``domain/irr/engine.IRR_OPTIONAL_SCENARIO_CODES``), but excludes them from
+  (``app/irrbb/domain/engine.py::IRR_OPTIONAL_SCENARIO_CODES``), but excludes them from
   the outlier column and still uses 9 buckets;
 * the CAR minimum was printed as a literal "13%" in headers that the governed,
   effective-dated floor can disagree with (covered in the Appendix II tests).

@@ -27,7 +27,7 @@ adversarial_amounts = st.lists(
 def repricing_amounts(draw: st.DrawFn) -> list[Decimal]:
     """Signed zero-coupon asset/funding portfolios with consistent outstanding.
 
-    Source: domain/irr/standardised.py Ladder: assets positive, funding negative;
+    Source: app/irrbb/domain/standardised.py Ladder: assets positive, funding negative;
     six-place HALF_UP results. Bucket/shock calibration comes from the existing
     test_sf_fixtures.py governed parser fixture (IRRBB exposure draft, pending).
     Synthetic 100k–5m bullet cash flows favour the first five years; a zero book
