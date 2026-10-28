@@ -36,7 +36,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DatabaseError
 
@@ -47,6 +47,7 @@ from tests.db.test_postgres_migrations import (
     clear_database_caches,
     postgres_schema_url,
 )
+from tests.support.database import install_migration_engines, managed_engine
 from tests.support.helpers import ORG_1
 
 postgres_only = pytest.mark.skipif(
@@ -79,14 +80,16 @@ GOVERNANCE_MIGRATION = _load_migration()
 
 
 @pytest.fixture(scope="module")
-def governance_schema() -> Iterator[MigratedPostgresSchema]:
+def governance_schema(request: pytest.FixtureRequest) -> Iterator[MigratedPostgresSchema]:
     """One migrated schema for the whole module, plus the org + bank to hang rows on."""
     test_database_url = os.environ["TEST_DATABASE_URL"]
     schema_name = f"risk_service_sealed_{uuid4().hex}"
     runtime_role = f"{schema_name}_runtime"
     database_url = postgres_schema_url(test_database_url, schema_name)
-    admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
-    app_engine = create_engine(database_url)
+    admin_engine = managed_engine(
+        request, test_database_url, isolation_level="AUTOCOMMIT", schema=schema_name
+    )
+    app_engine = managed_engine(request, database_url)
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setenv("DATABASE_URL", database_url)
     clear_database_caches()
@@ -110,6 +113,7 @@ def governance_schema() -> Iterator[MigratedPostgresSchema]:
         with admin_engine.connect() as migration_lock:
             migration_lock.execute(text("SELECT pg_advisory_lock(413090)"))
             try:
+                install_migration_engines(monkeypatch, app_engine)
                 command.upgrade(alembic_config_for_app(), "head")
             finally:
                 migration_lock.execute(text("SELECT pg_advisory_unlock(413090)"))
