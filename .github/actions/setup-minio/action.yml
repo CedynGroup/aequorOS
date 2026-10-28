@@ -19,6 +19,7 @@ runs:
         # SHA256 from the official release's .sha256sum asset.
         echo "7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f  $directory/minio" | sha256sum --check --strict
         chmod +x "$directory/minio"
+        echo "$directory" >> "$GITHUB_PATH"
     - name: Start MinIO with built-in KMS
       id: start
       shell: bash

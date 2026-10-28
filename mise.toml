@@ -32,7 +32,7 @@ pnpm = "11.2.2"
 #   * `.github/scripts/mise_wiring_preflight.py` — the SAME check in plain
 #     Python with no mise and no uv, run as the `preflight` job every other job
 #     depends on. The test above cannot catch this failure on its own: reaching
-#     it requires `mise run risk-service:test-architecture`, which is itself one
+#     it requires `mise run risk-service:test-unit`, which is itself one
 #     of the proxies that recurses. A guard that can only run when the thing it
 #     guards is healthy is not a guard.
 # ---------------------------------------------------------------------------
@@ -71,6 +71,26 @@ run = "mise run risk-service:worker-ai"
 description = "Run risk service pytest"
 dir = "backend"
 run = "mise run risk-service:test"
+
+[tasks.unit]
+description = "Run backend unit suite"
+dir = "backend"
+run = "mise run unit"
+
+[tasks.integration]
+description = "Run backend integration suite"
+dir = "backend"
+run = "mise run integration"
+
+[tasks."risk-service:test-unit"]
+description = "Run the backend unit suite"
+dir = "backend"
+run = "mise run risk-service:test-unit"
+
+[tasks."risk-service:test-integration"]
+description = "Run the backend integration suite"
+dir = "backend"
+run = "mise run risk-service:test-integration"
 
 [tasks."risk-service:test-fast"]
 description = "Run local affected risk service tests with four workers"
@@ -181,3 +201,9 @@ run = 'mise run risk-service:revision "${usage_message?}"'
 description = "Run risk service local smoke checks that do not require Postgres"
 dir = "backend"
 run = "mise run risk-service:smoke"
+
+[tasks."risk-service:refresh-test-suites"]
+description = "Regenerate backend suite ownership from observed database access"
+dir = "backend"
+usage = 'arg "<evidence_dir>" help="Empty directory for census evidence"'
+run = 'mise run risk-service:refresh-test-suites "${usage_evidence_dir?}"'

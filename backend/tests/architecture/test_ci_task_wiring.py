@@ -15,12 +15,16 @@ convention.
 from __future__ import annotations
 
 import ast
+import os
 import re
 import shlex
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 from typing import cast
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).parents[3]
@@ -29,12 +33,6 @@ BACKEND_TASKS = REPO_ROOT / "backend" / "mise.toml"
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 
 _DELEGATION = re.compile(r"^mise\s+run\s+(\S+)")
-_WORKFLOW_INVOCATION = re.compile(r"mise\s+run\s+([A-Za-z0-9_.:-]+)")
-# Full-line comments are stripped before a workflow is scanned. A header that
-# EXPLAINS this machinery is documentation, not a gate, and conflating the two
-# forced every comment about it to be written in circumlocution — which is a
-# large part of why the machinery went unexplained until it broke.
-_COMMENT_LINE = re.compile(r"^\s*#.*$", re.MULTILINE)
 
 
 def _tasks(path: Path) -> dict[str, dict[str, object]]:
@@ -53,9 +51,25 @@ def _needs(job: dict[str, object]) -> list[str]:
     return []
 
 
-def _workflow_body(path: Path) -> str:
-    """Workflow text with full-line comments removed."""
-    return _COMMENT_LINE.sub("", path.read_text())
+def _workflow_tasks(path: Path) -> set[str]:
+    """Normalize direct mise commands and their fail-fast shell chains."""
+    tasks: set[str] = set()
+    for _, _, script in _workflow_run_blocks(path):
+        lexer = shlex.shlex(script, posix=False, punctuation_chars=True)
+        lexer.whitespace_split = True
+        first = next(lexer, "")
+        if shlex.split(first) != ["mise"]:
+            continue
+        tokens = [first, *lexer]
+        commands: list[list[str]] = [[]]
+        for token in tokens:
+            if token == "&&":
+                commands.append([])
+            else:
+                commands[-1].extend(shlex.split(token))
+        if all(len(command) == 3 and command[:2] == ["mise", "run"] for command in commands):
+            tasks.update(command[2] for command in commands)
+    return tasks
 
 
 def _run_commands(body: dict[str, object]) -> list[str]:
@@ -152,13 +166,26 @@ def test_the_wiring_is_also_guarded_outside_the_task_system() -> None:
     assert preflight.is_file(), f"{preflight} is missing; the wiring guard is behind the wiring."
 
     workflow = (WORKFLOWS / "risk-service.yml").read_text()
-    assert "mise_wiring_preflight.py" in workflow, (
-        "risk-service.yml no longer runs the mise wiring preflight; a moved "
-        "backend/mise.toml would again surface as a recursion that reads like a hang."
-    )
     body = yaml.safe_load(workflow)
     jobs = body["jobs"]
     assert "preflight" in jobs, "risk-service.yml has no `preflight` job."
+    preflight_job = cast(dict[str, object], jobs["preflight"])
+    assert "if" not in preflight_job
+    assert not preflight_job.get("continue-on-error", False)
+    commands: list[list[str]] = []
+    for step in cast(list[dict[str, object]], preflight_job["steps"]):
+        script = step.get("run")
+        if not isinstance(script, str) or "if" in step or step.get("continue-on-error", False):
+            continue
+        if step.get("working-directory", ".") != ".":
+            continue
+        lexer = shlex.shlex(script.strip(), posix=True, punctuation_chars=";&|<>()\n")
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        commands.append(list(lexer))
+    assert ["python3", ".github/scripts/mise_wiring_preflight.py"] in commands, (
+        "The preflight job must directly execute the wiring guard and propagate its failure."
+    )
     mise_driven = {
         name
         for name, job in jobs.items()
@@ -181,7 +208,7 @@ def test_every_task_ci_invokes_exists() -> None:
     missing: list[str] = []
 
     for workflow in sorted(WORKFLOWS.glob("*.yml")):
-        for task in _WORKFLOW_INVOCATION.findall(_workflow_body(workflow)):
+        for task in _workflow_tasks(workflow):
             if task not in root_tasks:
                 missing.append(f"{workflow.name}: {task}")
 
@@ -230,11 +257,11 @@ def test_the_backend_gates_ci_must_run_are_all_defined() -> None:
 
 
 def test_ci_actually_runs_every_required_gate() -> None:
-    invoked = set(_WORKFLOW_INVOCATION.findall(_workflow_body(WORKFLOWS / "risk-service.yml")))
+    invoked = _workflow_tasks(WORKFLOWS / "risk-service.yml")
     required = {
         "risk-service:lint",
         "risk-service:typecheck",
-        "risk-service:test-architecture",
+        "risk-service:test-unit",
         # Supersedes test-postgres-migrations: the same chain plus the RLS
         # policies and server defaults it installs.
         "risk-service:test-postgres-schema",
@@ -248,6 +275,74 @@ def test_ci_actually_runs_every_required_gate() -> None:
     }
 
     assert required <= invoked, f"Not gated in CI: {sorted(required - invoked)}"
+
+
+@pytest.mark.parametrize(
+    ("script", "expected"),
+    [
+        ("mise run risk-service:test-unit", {"risk-service:test-unit"}),
+        ('mise run "risk-service:test-unit" # gate', {"risk-service:test-unit"}),
+        (
+            "mise run risk-service:lint && mise run risk-service:typecheck",
+            {"risk-service:lint", "risk-service:typecheck"},
+        ),
+        ('echo "mise run risk-service:test-unit"', set[str]()),
+        ("# mise run risk-service:test-unit", set[str]()),
+        ("mise run risk-service:lint && echo mise run risk-service:test-unit", set[str]()),
+        ("mise run risk-service:lint '&&' mise run risk-service:test-unit", set[str]()),
+    ],
+)
+def test_workflow_task_invocations_follow_executable_commands(
+    tmp_path: Path, script: str, expected: set[str]
+) -> None:
+    workflow = tmp_path / "workflow.yml"
+    _ = workflow.write_text(
+        yaml.safe_dump({"jobs": {"test": {"steps": [{"name": "mise run unused", "run": script}]}}})
+    )
+    assert _workflow_tasks(workflow) == expected
+
+
+def test_echoing_the_unit_command_does_not_satisfy_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
+    )
+    for step in cast(list[dict[str, object]], document["jobs"]["architecture"]["steps"]):
+        if step.get("run") == "mise run risk-service:test-unit":
+            step["run"] = 'echo "mise run risk-service:test-unit"'
+    _ = (tmp_path / "risk-service.yml").write_text(yaml.safe_dump(document))
+    monkeypatch.setitem(globals(), "WORKFLOWS", tmp_path)
+    with pytest.raises(AssertionError, match="risk-service:test-unit"):
+        test_ci_actually_runs_every_required_gate()
+
+
+def test_unit_suite_task_and_ci_job_are_explicit() -> None:
+    tasks = _tasks(BACKEND_TASKS)
+    assert shlex.split(cast(str, tasks["unit"]["run"])) == [
+        "uv",
+        "run",
+        "pytest",
+        "-m",
+        "unit",
+        "-n",
+        "4",
+        "--dist",
+        "loadfile",
+    ]
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
+    )
+    job = document["jobs"]["architecture"]
+    assert job["name"] == "Unit tests"
+    steps = cast(list[dict[str, object]], job["steps"])
+    unit = next(step for step in steps if step.get("run") == "mise run risk-service:test-unit")
+    assert "CI_UNIT_REPORT_DIR" in cast(dict[str, str], unit["env"])
+    assert not any("setup-postgres" in str(step.get("uses", "")) for step in steps)
+    assert job["if"] == "needs.preflight.outputs.guards == 'true'"
+    assert document["jobs"]["postgres-suite"]["name"] == "Integration tests"
 
 
 # --------------------------------------------------------------------------
@@ -375,6 +470,40 @@ def _pipes(script: str) -> bool:
     return "|" in code
 
 
+def _pipeline_failure_is_visible(script: str) -> bool:
+    lines = iter(
+        line for line in script.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    )
+    first = shlex.split(next(lines, ""), comments=True)
+    if not first or first[0] != "set":
+        return False
+    options = [first]
+    options.extend(
+        shlex.split(line, comments=True)
+        for line in lines
+        if line.lstrip().startswith(("set ", "set\t"))
+    )
+    if any(set(token) & set(";&|<>()") for command in options for token in command):
+        return False
+    probe = "\n".join(
+        shlex.join(command) + " || exit 2\nif false | cat; then exit 1; fi" for command in options
+    )
+    result = subprocess.run(
+        [
+            "bash",
+            "--noprofile",
+            "--norc",
+            "-c",
+            probe,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def test_no_ci_step_hides_an_exit_code_behind_a_pipe() -> None:
     """`pytest <gone> | tail` reports the exit code of `tail`, which is 0.
 
@@ -384,12 +513,26 @@ def test_no_ci_step_hides_an_exit_code_behind_a_pipe() -> None:
     has bitten this programme more than once, so the rule is mechanical: any
     multi-command shell block that pipes must turn on `pipefail`.
     """
+    for prologue, visible in (
+        ("set -euo pipefail", True),
+        ("# guard\nset -o pipefail # enable it", True),
+        ("echo pipefail", False),
+        ("# set -o pipefail", False),
+        ("set -eu", False),
+        ("set +o pipefail", False),
+        ("set -o pipefail && set +o pipefail", False),
+        ("set -o pipefail\nset +o pipefail", False),
+        ("set -o pipefail\nset +o pipefail\nset -o pipefail", False),
+        ("set -o pipefail\nset +e", True),
+        ("set -o unknown-option", False),
+    ):
+        assert _pipeline_failure_is_visible(prologue + "\nfalse | cat") == visible
     offenders: list[str] = []
     for workflow in sorted(WORKFLOWS.glob("*.yml")):
         for job, label, script in _workflow_run_blocks(workflow):
             if not _pipes(script):
                 continue
-            if "pipefail" in script:
+            if _pipeline_failure_is_visible(script):
                 continue
             offenders.append(f"{workflow.name}:{job}:{label}")
 
@@ -418,74 +561,88 @@ def test_every_pytest_path_a_task_names_exists() -> None:
 
 
 def test_the_full_suite_ignores_exactly_what_its_sibling_tasks_run() -> None:
-    """`risk-service:test-postgres-suite` skips the Postgres-only suites because
-    `test-postgres-schema` and `test-postgres-locks` already run them in the
-    same CI run, on the same image and role, and skips `tests/architecture`
-    because `test-architecture` runs it without a database at all. That is only
-    a de-duplication while the sets match: an `--ignore` with no owner drops
-    coverage from every job, and a lock file added to the locks task but not
-    ignored here just runs twice again. Pinning equality keeps it
-    moved-not-dropped.
-    """
+    """Only integration siblings are ignored; markers own unit selection."""
     tasks = _tasks(BACKEND_TASKS)
-
-    def pytest_arguments(task: str) -> list[str]:
-        arguments: list[str] = []
-        for command in _run_commands(tasks[task]):
-            tokens = shlex.split(command, comments=True)
-            if tokens[:4] == ["uv", "run", "python", "scripts/local_services.py"]:
-                # Local provisioning lends the environment to the same pytest
-                # command; CI bypasses it when its test URL is already supplied.
-                assert tokens[4] == "run", task
-                tokens = tokens[tokens.index("--") + 1 :]
-            assert tokens[:3] == ["uv", "run", "pytest"], task
-            assert not ({";", "&&", "||", "|", "&", ">", "<"} & set(tokens)), task
-            arguments.extend(tokens[3:])
-        assert arguments, task
-        return arguments
-
-    ignored: set[str] = set()
-    arguments = iter(pytest_arguments("risk-service:test-postgres-suite"))
-    for argument in arguments:
-        if argument == "--ignore":
-            ignored.add(next(arguments))
-        elif argument.startswith("--ignore="):
-            ignored.add(argument.partition("=")[2])
+    suite = shlex.split(_run_commands(tasks["risk-service:test-postgres-suite"])[0])
+    assert suite[suite.index("-m") + 1] == "integration"
+    ignored = {token.partition("=")[2] for token in suite if token.startswith("--ignore=")}
     owned: set[str] = set()
     for task in (
         "risk-service:test-postgres-schema",
         "risk-service:test-postgres-locks",
-        "risk-service:test-architecture",
+        "risk-service:test-storage",
     ):
-        for argument in pytest_arguments(task):
-            # A path inside one already owned (the architecture task's single
-            # tests/db module) is covered by that owner's `--ignore`.
-            if argument.startswith("tests/") and not any(
-                argument.startswith(f"{path}/") for path in owned
-            ):
-                owned.add(argument)
-
-    assert ignored == owned, (
-        f"Ignored by the full suite but run by no sibling task: {sorted(ignored - owned)}; "
-        f"run by a sibling task but still duplicated in the full suite: "
-        f"{sorted(owned - ignored)}"
-    )
+        tokens = shlex.split(_run_commands(tasks[task])[0])
+        assert tokens[tokens.index("-m") + 1] == "integration"
+        owned.update(token for token in tokens if token.startswith("tests/"))
+    owned = {path for path in owned if not any(path.startswith(other + "/") for other in owned)}
+    assert ignored == owned
     assert all((TESTS.parent / path).exists() for path in ignored)
 
 
-def test_the_hermetic_run_still_proves_it_collected_every_module() -> None:
+def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path) -> None:
     """The collection-equality step is the only check that CI SAW every test.
 
     Everything else in the workflow answers "did the command pass?". Losing this
     step would not turn anything red — which is exactly why it needs a test of
     its own.
     """
-    workflow = (WORKFLOWS / "risk-service.yml").read_text()
-    assert "--collect-only" in workflow, (
-        "risk-service.yml no longer compares the test modules on disk against "
-        "the ones pytest collects. A module that collects nowhere would again "
-        "be invisible."
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
     )
+    steps = cast(list[dict[str, object]], document["jobs"]["architecture"]["steps"])
+    step = next(
+        step
+        for step in steps
+        if step.get("name") == "Every test module is collected by the hermetic run"
+    )
+    assert step["working-directory"] == "backend"
+    assert "if" not in step
+    assert not step.get("continue-on-error", False)
+    script = cast(str, step["run"])
+    for report in ("on_disk.txt", "collected.txt"):
+        script = script.replace(f"/tmp/{report}", shlex.quote(str(tmp_path / report)))
+
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    _ = (tmp_path / "pytest.ini").write_text("[pytest]\n")
+    for module in ("test_example.py", "example_test.py"):
+        _ = (tests / module).write_text("def test_example():\n    raise AssertionError\n")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    uv = bin_dir / "uv"
+    _ = uv.write_text(
+        '#!/bin/sh\n[ "$1" = run ] && [ "$2" = pytest ] || exit 97\nshift 2\n'
+        f'exec {shlex.quote(sys.executable)} -I -m pytest "$@"\n'
+    )
+    uv.chmod(0o755)
+    environment = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        "PYTEST_ADDOPTS": "",
+        "PYTEST_PLUGINS": "",
+    }
+    for extra_module, source, succeeds in (
+        ("test_extra.py", "def test_extra():\n    raise AssertionError\n", True),
+        ("test_extra.py", "VALUE = 1\n", False),
+        ("extra_test.py", "VALUE = 1\n", False),
+        ("test_extra.py", "raise RuntimeError('collection failure')\n", False),
+    ):
+        extra = tests / extra_module
+        _ = extra.write_text(source)
+        result = subprocess.run(
+            ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
+            cwd=tmp_path,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert (result.returncode == 0) == succeeds, result.stdout + result.stderr
+        extra.unlink()
 
 
 def test_duration_shards_preserve_worker_limit_and_schema_configuration() -> None:

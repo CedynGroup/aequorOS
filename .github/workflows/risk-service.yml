@@ -34,17 +34,16 @@ name: Risk Service CI
 #                 and no uv, plus the change detection that replaced this
 #                 workflow's `paths:` filter. Every other job needs it.
 #   static      — ruff, basedpyright (image build: risk-service-image.yml)
-#   architecture— CI task wiring, RLS-blind migration scanner, case/regulatory
-#                 dependency boundaries
+#   architecture— Unit tests: database-free logic and architecture guards,
+#                 explicit classification and connection/execution refusal
 #   postgres    — aggregate of schema shards and the lock job: migration chain,
 #                 RLS policies, schema defaults, row/advisory locks.
-#                 `risk-service:test-postgres-schema` covers ALL of tests/db,
+#                 `risk-service:test-postgres-schema` covers integration cases in tests/db,
 #                 including tests/db/test_tenant_rls_completeness.py — the structural
 #                 guard on tenant isolation.
-#   postgres-suite — the remaining backend suite against Postgres, including
-#                 OpenBao signing. Suite ownership is defined in backend/mise.toml
-#                 and pinned by tests/architecture/test_ci_task_wiring.py.
-#                 Sharding, selection and coverage guards are documented in
+#   postgres-suite — the integration aggregate, including exact cross-owner
+#                 coverage and observed database-ownership checks. Suite ownership,
+#                 sharding, selection and coverage guards are documented in
 #                 backend/README.md#run-tests.
 #                 Parallel execution and schema isolation are documented in
 #                 backend/README.md#test-databases-and-the-primary-database.
@@ -78,9 +77,10 @@ name: Risk Service CI
 # EVERY TEST GROUP ALSO PROVES IT RAN. pytest exits 0 when everything it collected
 # skipped itself, which is how the storage contract sat at `27 passed, 18
 # skipped` for months and how the concurrency tests ran in no environment at
-# all. Each suite now writes a JUnit report via PYTEST_ADDOPTS — no task command
-# changes — and a following step asserts a floor of tests actually executed
+# all. Postgres and storage suites write a JUnit report via PYTEST_ADDOPTS,
+# and a following step asserts a floor of tests actually executed
 # (.github/scripts/assert_pytest_ran.py or the shard aggregate verifier).
+# The unit owner's execution guard is documented in backend/README.md#run-tests.
 # The storage job, the schema/RLS aggregate
 # and the lock job additionally allow ZERO skips, because the environment each
 # stands up is supposed to satisfy its whole suite — and an RLS proof can
@@ -200,7 +200,7 @@ env:
   POSTGRES_TEST_URL: postgresql+psycopg://risk_service_test:risk_service_test@localhost:5432/risk_service
 
 # Merge groups keep preflight, architecture, migration/schema and full Postgres
-# suites (including locks). Per-PR checks skip; the aggregate still reports.
+# suites (including locks and storage). Other per-PR checks skip; the aggregate still reports.
 jobs:
   # Runs on EVERY pull request, needs nothing, installs nothing, and every other
   # job depends on it. Two responsibilities, both cheap:
@@ -292,11 +292,23 @@ jobs:
         run: mise run risk-service:typecheck
 
   architecture:
-    name: Architecture and CI guards
+    name: Unit tests
     runs-on: ubuntu-latest
     needs: preflight
     if: needs.preflight.outputs.guards == 'true'
-    timeout-minutes: 15
+    timeout-minutes: 30
+    env:
+      S3_ENDPOINT: http://127.0.0.1:9000
+      S3_ACCESS_KEY: ciminio
+      S3_SECRET_KEY: ciminio123
+      S3_BUCKET: risk-local
+      S3_REGION: us-east-1
+      STORAGE_BACKEND: minio
+      STORAGE_ENV: mvp
+      STORAGE_RETIRE_AFTER: "2099-01-01"
+      STORAGE_KMS_KEY_ID: aequoros-key
+      OPENBAO_TEST_ADDR: http://127.0.0.1:8200
+      OPENBAO_TEST_TOKEN: aequoros-ci-root
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v5
@@ -306,19 +318,37 @@ jobs:
           install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
-      # Cheap, hermetic, and first to fail: this is the job that notices when
-      # the task delegation breaks, when a data migration writes to a FORCE-RLS
-      # tenant table it cannot see, and when a filed regulatory number grows a
-      # dependency on the advisory case plane.
-      #
-      # `tests/architecture/test_ci_task_wiring.py` lives here: it pins the
-      # delegation contract that `f33e869` broke, and it is the SECOND of the
-      # two guards. The first is the `preflight` job, which asserts the same
-      # invariant without mise — necessary because reaching this file at all
-      # requires the very proxy that recurses when backend/mise.toml goes
-      # missing.
-      - name: Architecture and CI guards
-        run: mise run risk-service:test-architecture
+      - name: Install dashboard dependencies for the Playwright cancellation contract
+        run: mise exec -- pnpm install --frozen-lockfile
+      - name: Start MinIO for database-free storage contracts
+        id: minio
+        uses: ./.github/actions/setup-minio
+      - name: Start OpenBao for database-free signing contracts
+        id: openbao
+        uses: ./.github/actions/setup-openbao
+      - name: Unit tests (database connections forbidden)
+        env:
+          CI_UNIT_REPORT_DIR: ${{ runner.temp }}/unit-tests
+          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/unit-tests/database-observations
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/unit-tests/report.xml
+        run: mise run risk-service:test-unit
+      - name: Upload unit execution and classification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-tests
+          path: ${{ runner.temp }}/unit-tests/
+          if-no-files-found: error
+      - name: Stop MinIO
+        if: always() && steps.minio.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.minio.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true
+      - name: Stop OpenBao
+        if: always() && steps.openbao.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.openbao.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true
       # D-32's own recurrence guard, and the only one that is about CI rather
       # than about code. Everything else in this workflow answers "does the
       # command pass?"; this answers "did the command SEE every test?" — the
@@ -359,8 +389,8 @@ jobs:
           fi
           echo "Every test module on disk is collected."
 
-  # CI runs the full suite only against Postgres. Developers can still run the
-  # hermetic SQLite suite locally with `mise run risk-service:test`.
+  # CI runs database-backed tests against Postgres; pure tests run above.
+  # Developers can still run the hermetic SQLite suite with `mise run risk-service:test`.
 
   postgres-schema:
     name: Postgres schema shard ${{ matrix.shard }}/2
@@ -447,6 +477,7 @@ jobs:
           CI_POSTGRES_FILES: "[]"
           CI_POSTGRES_SUITE: schema
           CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-schema
+          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-schema/database-observations
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-schema/report.xml
         run: mise run risk-service:test-postgres-schema
       - name: Upload failed schema shard PostgreSQL log
@@ -506,17 +537,24 @@ jobs:
       - name: Test Postgres concurrency locks
         env:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
-          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-locks.xml
+          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-locks/database-observations
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-locks/report.xml
         run: mise run risk-service:test-postgres-locks
-      # The three lock modules collect 64 tests and every one of them runs on
-      # Postgres (the only skip in them is "not Postgres"), measured 2026-09-29:
-      # 64 passed, 0 skipped. The largest module holds 33, so 60 trips when any
-      # one vanishes; zero skips because this job exists to run exactly these.
+      # Retain the execution floor and require zero skips for the lock owner.
+      # The integration aggregate also checks exact cross-owner coverage;
+      # ownership and service requirements: backend/README.md#run-tests.
       - name: The concurrency tests must have executed, not skipped
-        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-locks.xml" --min-executed 60 --max-skipped 0
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-locks/report.xml" --min-executed 60 --max-skipped 0
+      - name: Upload lock integration execution evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pg-locks
+          path: ${{ runner.temp }}/pg-locks/
+          if-no-files-found: error
 
   postgres-shard:
-    name: Postgres suite shard ${{ matrix.shard }}/4
+    name: Integration tests shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
     needs: preflight
     if: needs.preflight.outputs.backend == 'true'
@@ -557,12 +595,13 @@ jobs:
         id: openbao
         if: matrix.openbao
         uses: ./.github/actions/setup-openbao
-      - name: Full suite against Postgres
+      - name: Integration tests against Postgres
         env:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
           CI_POSTGRES_SHARD: ${{ matrix.shard }}
           CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
           CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-suite
+          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-suite/database-observations
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-suite/report.xml
         run: mise run risk-service:test-postgres-suite
       - name: Upload failed suite shard PostgreSQL log
@@ -616,9 +655,9 @@ jobs:
         run: python3 backend/scripts/ci_postgres.py verify "$RUNNER_TEMP/postgres-reports" --suite schema
 
   postgres-suite:
-    name: Full suite on Postgres
+    name: Integration tests
     runs-on: ubuntu-latest
-    needs: [preflight, postgres-shard]
+    needs: [preflight, postgres-shard, postgres, storage, architecture]
     if: always() && needs.preflight.outputs.backend == 'true'
     timeout-minutes: 5
     steps:
@@ -642,12 +681,34 @@ jobs:
         env:
           CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
         run: python3 backend/scripts/ci_postgres.py verify "$RUNNER_TEMP/postgres-reports" --suite suite
+      - uses: actions/download-artifact@v8
+        with:
+          name: unit-tests
+          path: ${{ runner.temp }}/postgres-reports/unit-tests
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: pg-schema-*
+          path: ${{ runner.temp }}/postgres-reports
+      - uses: actions/download-artifact@v8
+        with:
+          name: pg-locks
+          path: ${{ runner.temp }}/postgres-reports/pg-locks
+      - uses: actions/download-artifact@v8
+        with:
+          name: storage-tests
+          path: ${{ runner.temp }}/postgres-reports/storage-tests
+      - name: Every classified test has exactly one CI execution owner
+        env:
+          CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
+        run: |
+          python3 backend/scripts/test_suites.py "$RUNNER_TEMP/postgres-reports"
+          python3 backend/scripts/test_suite_census.py check "$RUNNER_TEMP/postgres-reports"
 
   storage:
     name: Storage contract
     runs-on: ubuntu-latest
     needs: preflight
-    if: github.event_name != 'merge_group' && needs.preflight.outputs.backend == 'true'
+    if: needs.preflight.outputs.backend == 'true'
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -694,13 +755,21 @@ jobs:
           STORAGE_ENV: mvp
           STORAGE_RETIRE_AFTER: "2099-01-01"
           STORAGE_KMS_KEY_ID: aequoros-key
-          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/storage.xml
+          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/storage-tests/database-observations
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/storage-tests/report.xml
         run: mise run risk-service:test-storage
       # `--max-skipped 0`: MinIO exercises the object-store contract, and
-      # Postgres exercises the key-rotation row locks and independent readers.
+      # Postgres exercises key-rotation database contracts; locks own concurrency.
       # Missing either dependency must not silently leave its tests unexercised.
       - name: The storage contract must have executed, not skipped
-        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/storage.xml" --max-skipped 0
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/storage-tests/report.xml" --max-skipped 0
+      - name: Upload storage integration execution evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: storage-tests
+          path: ${{ runner.temp }}/storage-tests/
+          if-no-files-found: error
       - name: Stop MinIO
         if: always() && steps.minio.outputs.pid != ''
         env:

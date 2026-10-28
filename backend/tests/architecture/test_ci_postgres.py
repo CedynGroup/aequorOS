@@ -287,7 +287,7 @@ def test_workflow_preserves_required_names_and_joins_all_postgres_jobs() -> None
         yaml.safe_load((REPO / ".github/workflows/risk-service.yml").read_text()),
     )
     jobs = document["jobs"]
-    assert jobs["postgres-suite"]["name"] == "Full suite on Postgres"
+    assert jobs["postgres-suite"]["name"] == "Integration tests"
     assert jobs["postgres"]["name"] == "Postgres schema, RLS and locks"
     assert jobs["gate"]["name"] == "Risk service gate"
     assert set(cast(list[str], jobs["postgres"]["needs"])) == {
@@ -295,7 +295,13 @@ def test_workflow_preserves_required_names_and_joins_all_postgres_jobs() -> None
         "postgres-schema",
         "postgres-locks",
     }
-    assert set(cast(list[str], jobs["postgres-suite"]["needs"])) == {"preflight", "postgres-shard"}
+    assert set(cast(list[str], jobs["postgres-suite"]["needs"])) == {
+        "preflight",
+        "postgres-shard",
+        "postgres",
+        "storage",
+        "architecture",
+    }
     schema_strategy = cast(dict[str, object], jobs["postgres-schema"]["strategy"])
     matrix = cast(dict[str, object], schema_strategy["matrix"])
     assert matrix["shard"] == [1, 2]
@@ -389,3 +395,18 @@ def test_full_suite_floor_and_refresh_use_verified_execution_evidence(
             **{module: 750 for module in modules},
             BAO_MODULE: 1,
         }
+
+
+def test_pure_owner_change_does_not_select_an_empty_postgres_shard(
+    selection_repo: tuple[Path, str, Path],
+) -> None:
+    root, _, test = selection_repo
+    pure = test.with_name("test_credit_pd.py")
+    test.rename(pure)
+    _ = run_git(root, "add", "-A")
+    _ = run_git(root, "commit", "-qm", "pure owner baseline")
+    base = run_git(root, "rev-parse", "HEAD")
+    pure.write_text("def test_leaf():\n    assert 2 == 2\n")
+    _ = run_git(root, "add", "-A")
+    _ = run_git(root, "commit", "-qm", "pure leaf body")
+    assert plan(root, "pull_request", base)["mode"] == "full"
