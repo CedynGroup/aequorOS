@@ -1,7 +1,7 @@
 # Test database connections
 
-`tests.support.database` owns test connection construction. Shared application
-and database/API fixtures now use this API; remaining area-specific tests migrate in subsequent stack layers.
+`tests.support.database` owns test connection construction, including shared
+application and database/API fixtures.
 `tests/architecture/test_database_connection_allowlist.json` records remaining direct
 constructor calls. The architecture suite rejects new calls and stale entries.
 Remove entries as each test area moves to this API. Once the inventory is empty,
