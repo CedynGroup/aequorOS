@@ -4,7 +4,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
 from app.core.key_management import registry
@@ -21,6 +21,7 @@ from tests.conftest import (
     _TestDatabase,
 )
 from tests.support.api_factories import CaseFactory
+from tests.support.database import DatabaseContext, TestDatabaseConnections
 from tests.support.helpers import ORG_1
 from tests.support.inmemory_storage import InMemoryStorageClient
 from tests.support.key_concurrency import assert_blocked, backend_pid
@@ -124,7 +125,11 @@ def test_bank_key_locks_are_isolated_between_test_schemas(
     if engine.dialect.name != "postgresql":
         pytest.skip("PostgreSQL advisory locks are required.")
     waiter: Future[int] = Future()
-    replacement = create_engine(engine.url)
+    with engine.connect() as connection:
+        schema = connection.scalar(text("SELECT current_schema()"))
+    assert isinstance(schema, str)
+    connections = TestDatabaseConnections(engine.url, context=DatabaseContext(schema=schema))
+    replacement = connections.engine()
 
     def same_schema_writer() -> None:
         with Session(replacement) as writer, writer.begin():
@@ -147,4 +152,4 @@ def test_bank_key_locks_are_isolated_between_test_schemas(
                     reader.rollback()
                 writing.result(timeout=5)
     finally:
-        replacement.dispose()
+        connections.close()
