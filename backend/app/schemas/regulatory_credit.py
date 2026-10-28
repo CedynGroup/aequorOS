@@ -207,6 +207,13 @@ class ConcentrationDimensionRead(ClosedModel):
     hhi_status: str
 
 
+class LockedConcentrationLimitRead(ClosedModel):
+    dimension: str
+    limit_kind: str
+    value: Decimal
+    limit_status: Literal["locked"] = "locked"
+
+
 class CreditConcentrationRead(ClosedModel):
     as_of: str
     total_book_ghs: Decimal
@@ -220,6 +227,7 @@ class CreditConcentrationRead(ClosedModel):
     breaches: list[ConcentrationBucketRead]
     #: Board limit rows active at ``as_of`` (empty = none configured yet).
     limit_count: int
+    locked_limits: list[LockedConcentrationLimitRead]
 
 
 class ConcentrationLimitRead(ClosedModel):

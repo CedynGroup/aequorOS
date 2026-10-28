@@ -88,7 +88,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy import delete, distinct, func, insert, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Load, Session
 
 from app.api.deps import TenantContext
 from app.bi.domain import extract
@@ -118,6 +118,7 @@ from app.bi.schemas.query import BiDateRange, BiQuery, BiTime
 from app.bi.service import partitions
 from app.bi.service.compiler import compile_query
 from app.bi.service.errors import BiQueryError
+from app.bi.service.identity_policy import connected
 from app.bi.service.versions import BUILDER_VERSION
 from app.credit.public import loan_classification
 from app.data_engine.public import (
@@ -530,6 +531,7 @@ def fingerprint_for(db: Session, *, organization_id: str, bank_id: str, as_of: d
         )
     ).one()
     payload = {
+        "bank_key_identity_policy": connected(db, organization_id, bank_id),
         "builder_version": BUILDER_VERSION,
         "catalogue_version": CATALOGUE_VERSION,
         "as_of": as_of.isoformat(),
@@ -746,6 +748,8 @@ def _stream_snapshots(
         .order_by(CanonicalPositionSnapshot.id)
         .execution_options(yield_per=STREAM_BATCH)
     )
+    if not connected(db, organization_id, bank_id):
+        stmt = stmt.options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
     yield from db.execute(stmt)
 
 
@@ -803,7 +807,7 @@ def _log_attribute_overflows(
     )
 
 
-def _build_positions(  # noqa: PLR0913 - one build carries its whole identity
+def _build_positions(  # noqa: PLR0912, PLR0913 - one build carries its whole identity
     db: Session,
     ctx: TenantContext,
     bank: Bank,
@@ -860,6 +864,7 @@ def _build_positions(  # noqa: PLR0913 - one build carries its whole identity
     # narrower than the value (audit A360 H3): counted per key and logged once,
     # never a value, never a build failure. The row lands with the column NULL.
     overflows: dict[str, int] = defaultdict(int)
+    protected = connected(db, organization_id, bank_id)
     for snapshot, position, counterparty, product, gl_account in _stream_snapshots(
         db, organization_id, bank_id, as_of
     ):
@@ -871,9 +876,11 @@ def _build_positions(  # noqa: PLR0913 - one build carries its whole identity
             gl_account,
             base_currency=base_currency,
             classified=classified.get(snapshot.id),
+            include_identity=not protected,
         )
         _count_attribute_overflows(overflows, snapshot.attributes)
-        pending.append(_position_values(row, built_at))
+        values = _position_values(row, built_at)
+        pending.append(values)
         result.rows += 1
         result.aggregates[tuple(getattr(row, column) for column in _AGG_GRAIN)].add(row)
         if row.branch_code is not None:
@@ -971,10 +978,18 @@ def _build_events(  # noqa: PLR0913 - one build carries its whole identity
             )
         )
     }
+    protected = connected(db, organization_id, bank_id)
     latest: dict[UUID, tuple[Any, Any, Any]] = {}
     if positions:
         rows = db.execute(
             select(CanonicalPositionSnapshot, CanonicalCounterparty, CanonicalProduct)
+            .options(
+                *(
+                    ()
+                    if protected
+                    else (Load(CanonicalCounterparty).undefer_group("bank_identity"),)
+                )
+            )
             .outerjoin(
                 CanonicalCounterparty,
                 CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
@@ -1009,6 +1024,7 @@ def _build_events(  # noqa: PLR0913 - one build carries its whole identity
                     None,
                     base_currency=base_currency,
                     classified=None,
+                    include_identity=not protected,
                 )
                 if found is not None
                 else None
@@ -1489,23 +1505,24 @@ def _build_dim_branch(  # noqa: PLR0913 - one build carries its whole identity
     )
 
 
-def _latest_current_rows(
-    db: Session, model: type, organization_id: str, bank_id: str, as_of: date
-) -> list[Any]:
+def _latest_current_rows[T: (CanonicalProduct, CanonicalCounterparty, CanonicalGlAccount)](
+    db: Session, model: type[T], organization_id: str, bank_id: str, as_of: date
+) -> list[T]:
     """Included, current-generation rows of ``model`` on/before ``as_of``, newest first."""
-    return list(
-        db.scalars(
-            select(model)
-            .where(
-                model.organization_id == organization_id,
-                model.bank_id == bank_id,
-                *is_current_generation(model),
-                model.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
-                model.as_of_date <= as_of,
-            )
-            .order_by(model.as_of_date.desc(), model.id)
+    stmt = (
+        select(model)
+        .where(
+            model.organization_id == organization_id,
+            model.bank_id == bank_id,
+            *is_current_generation(model),
+            model.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
+            model.as_of_date <= as_of,
         )
+        .order_by(model.as_of_date.desc(), model.id)
     )
+    if model is CanonicalCounterparty and not connected(db, organization_id, bank_id):
+        stmt = stmt.options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
+    return list(db.scalars(stmt))
 
 
 def _product_family_of(product: CanonicalProduct, observed: Mapping[str, str | None]) -> str | None:
@@ -1563,6 +1580,7 @@ def _build_dim_counterparty(  # noqa: PLR0913 - one build carries its whole iden
     seen: _PositionPass,
     built_at: datetime,
 ) -> int:
+    protected = connected(db, organization_id, bank_id)
     parties: dict[UUID, CanonicalCounterparty] = dict(seen.counterparties)
     for party in _latest_current_rows(db, CanonicalCounterparty, organization_id, bank_id, as_of):
         parties.setdefault(party.id, party)
@@ -1571,10 +1589,10 @@ def _build_dim_counterparty(  # noqa: PLR0913 - one build carries its whole iden
             "organization_id": organization_id,
             "bank_id": bank_id,
             "counterparty_id": party.id,
-            "source_reference": party.source_reference,
-            "name": party.name,
+            "source_reference": str(party.id) if protected else party.source_reference,
+            "name": str(party.id) if protected else party.name,
             "counterparty_type": party.counterparty_type,
-            "group_reference": party.group_reference,
+            "group_reference": None if protected else party.group_reference,
             "country_code": party.country_code,
             "rating": party.rating,
             "builder_version": BUILDER_VERSION,

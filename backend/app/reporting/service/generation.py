@@ -449,7 +449,7 @@ def _generate_package(
     # analogue, without which a signature over them would bind figures with
     # nothing behind them (gap G16).
     register_digest = (
-        digests.register_state_digest(register_state.register_state_rows(db, ctx, bank.id))
+        digests.register_state_digest(register_state.project_register_state(db, ctx, bank.id))
         if not generated.source_runs
         else None
     )
@@ -640,7 +640,7 @@ def generate_frozen_package(  # noqa: PLR0913 - the mint key is its named parts
         rehearsal=rehearsal,
     )
     register_digest = (
-        digests.register_state_digest(register_state.register_state_rows(db, ctx, bank.id))
+        digests.register_state_digest(register_state.project_register_state(db, ctx, bank.id))
         if not built.source_runs
         else None
     )

@@ -222,7 +222,10 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     )
     supersedes_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     snapshot: Mapped[dict[str, Any]] = mapped_column(
-        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+        JSON,
+        default=dict,
+        server_default=sql_text("'{}'"),
+        nullable=False,
     )
     source_runs: Mapped[list[Any]] = mapped_column(
         JSON, default=list, server_default=sql_text("'[]'"), nullable=False

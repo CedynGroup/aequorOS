@@ -13,7 +13,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
-from typing import BinaryIO, Literal
+from typing import BinaryIO, Literal, Self
+
+from sqlalchemy.orm import Session
 
 Tier = Literal["raw", "canonical", "outputs", "temp"]
 TIERS: tuple[Tier, ...] = ("raw", "canonical", "outputs", "temp")
@@ -158,6 +160,9 @@ class StorageClient(ABC):
       only for ``temp``.
     - Every operation is recorded through the access log hook.
     """
+
+    def for_session(self, db: Session) -> Self:
+        return self
 
     @abstractmethod
     def write(

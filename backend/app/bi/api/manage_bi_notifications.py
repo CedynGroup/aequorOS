@@ -102,6 +102,11 @@ from app.bi.schemas.query import BiFilter, BiQuery, BiTime
 from app.bi.service import query_log, subscriptions
 from app.bi.service.authorization import UnknownMember, authorize_query, query_members
 from app.bi.service.exports import policy
+from app.bi.service.identity_policy import (
+    IDENTITY_MESSAGE,
+    IDENTITY_REASON,
+    query_identity_members,
+)
 from app.bi.service.insights.statements import render_value
 from app.core.authorization import Permission
 from app.core.config import get_settings
@@ -180,6 +185,7 @@ _STATE_COPY: Mapping[str, str] = {
 #: vocabulary, each value as a sentence a reader can act on. Deny-by-default:
 #: an unknown reason falls back to the generic sentence rather than to the code.
 _EVENT_REASON_COPY: Mapping[str, str] = {
+    IDENTITY_REASON: IDENTITY_MESSAGE,
     "authorization_revoked": (
         "The figure could not be read under this alert's owner's access, so no "
         "verdict was reached. The owner's grant has to be restored."
@@ -221,6 +227,7 @@ _DELIVERY_STATUS_COPY: Mapping[str, str] = {
 #: Why a delivery ended as it did — ``services.bi.subscriptions``' own reasons,
 #: as sentences. Only the ones a reader can act on say what to do.
 _DELIVERY_REASON_COPY: Mapping[str, str] = {
+    IDENTITY_REASON: IDENTITY_MESSAGE,
     "already_delivered": "This recipient had already received this run.",
     "recipient_inactive": "This person's account is no longer active.",
     "data_scope_unsupported": (
@@ -343,8 +350,12 @@ def _denied(cat: Catalogue, denied_members: Sequence[str], reason: str) -> HTTPE
     return HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
-            "error_code": "bi_authorization_denied",
-            "message": (
+            "error_code": IDENTITY_REASON
+            if reason == IDENTITY_REASON
+            else "bi_authorization_denied",
+            "message": IDENTITY_MESSAGE
+            if reason == IDENTITY_REASON
+            else (
                 "Your access does not cover every figure this needs. "
                 "An Org Owner can grant the figures listed here."
             ),
@@ -387,7 +398,10 @@ class _Authority:
     access: BiReadAccess
     cat: Catalogue
     surface: str
-    _verdicts: dict[tuple[str, ...], tuple[bool, tuple[str, ...], str]]
+    _verdicts: dict[
+        tuple[str, Permission, tuple[str, ...], tuple[str, ...]],
+        tuple[bool, tuple[str, ...], str],
+    ]
 
     @classmethod
     def build(
@@ -409,7 +423,7 @@ class _Authority:
             members = tuple(member.id for member in query_members(self.cat, query))
         except UnknownMember as exc:
             return False, (str(exc.member_id),), "unknown_member"
-        key = (self.surface, permission.value, *members)
+        key = (self.surface, permission, members, query_identity_members(self.cat, query))
         cached = self._verdicts.get(key)
         if cached is not None:
             return cached
@@ -890,11 +904,11 @@ def _latest_event(db: Session, alert: BiAlert) -> BiAlertEvent | None:
     )
 
 
-def _alert_detail(alert: BiAlert, event: BiAlertEvent | None, *, visible: bool) -> str:
+def _alert_detail(alert: BiAlert, event: BiAlertEvent | None, *, visible: bool, reason: str) -> str:
     """One sentence for the row: the newest verdict, or why there is none."""
 
     if not visible:
-        return VERDICT_WITHHELD
+        return IDENTITY_MESSAGE if reason == IDENTITY_REASON else VERDICT_WITHHELD
     if event is None:
         if not alert.is_active:
             return ALERT_INACTIVE
@@ -948,6 +962,7 @@ def _alert_read(  # noqa: PLR0913 - one alert, its reader, its label and its ver
     caller: UUID,
     event: BiAlertEvent | None,
     verdict_visible: bool,
+    refusal_reason: str = "",
 ) -> BiAlertRead:
     own = alert.owner_user_id == caller
     stored = _stored_ids(alert.notify_user_ids)
@@ -975,7 +990,7 @@ def _alert_read(  # noqa: PLR0913 - one alert, its reader, its label and its ver
         updated_at=alert.updated_at,
         latest_state=_state(event.state) if event is not None and verdict_visible else None,
         latest_as_of=event.as_of_date if event is not None and verdict_visible else None,
-        latest_detail=_alert_detail(alert, event, visible=verdict_visible),
+        latest_detail=_alert_detail(alert, event, visible=verdict_visible, reason=refusal_reason),
     )
 
 
@@ -1056,7 +1071,11 @@ def _delivery_read(
     """
 
     recipient = identities.get(delivery.recipient_user_id)
-    status_copy = _DELIVERY_STATUS_COPY.get(delivery.status, "Outcome recorded")
+    status_copy = (
+        "Not sent"
+        if delivery.reason == IDENTITY_REASON
+        else _DELIVERY_STATUS_COPY.get(delivery.status, "Outcome recorded")
+    )
     reason_copy = _DELIVERY_REASON_COPY.get(delivery.reason or "")
     detail = f"{status_copy}. {reason_copy}" if reason_copy else f"{status_copy}."
     return BiSubscriptionDeliveryRead(
@@ -1129,7 +1148,9 @@ def list_bi_alerts(bank_id: str, db: DbSession, access: BiRead) -> BiAlertListRe
     for alert in reachable:
         measure = measures.get(alert.measure_id)
         asked = _stored_alert_query(alert)
-        allowed = asked is not None and authority.decide(asked)[0]
+        allowed, _, reason = (
+            authority.decide(asked) if asked is not None else (False, (), "unknown_member")
+        )
         alerts.append(
             _alert_read(
                 alert,
@@ -1138,6 +1159,7 @@ def list_bi_alerts(bank_id: str, db: DbSession, access: BiRead) -> BiAlertListRe
                 caller=access.principal_user_id,
                 event=_latest_event(db, alert),
                 verdict_visible=allowed,
+                refusal_reason=reason,
             )
         )
     return BiAlertListRead(alerts=alerts)
@@ -1230,7 +1252,9 @@ def get_bi_alert(bank_id: str, alert_id: UUID, db: DbSession, access: BiRead) ->
     alert = _load_alert(db, access, alert_id)
     authority = _Authority.build(db, access, cat, surface=ALERT_SURFACE)
     asked = _stored_alert_query(alert)
-    allowed = asked is not None and authority.decide(asked)[0]
+    allowed, _, reason = (
+        authority.decide(asked) if asked is not None else (False, (), "unknown_member")
+    )
     measures = {measure.id: measure for measure in cat.measures()}
     stored = _stored_ids(alert.notify_user_ids)
     return _alert_read(
@@ -1240,6 +1264,7 @@ def get_bi_alert(bank_id: str, alert_id: UUID, db: DbSession, access: BiRead) ->
         caller=access.principal_user_id,
         event=_latest_event(db, alert),
         verdict_visible=allowed,
+        refusal_reason=reason,
     )
 
 
@@ -1341,7 +1366,9 @@ def deactivate_bi_alert(  # noqa: PLR0913 - FastAPI injects db/access
     db.refresh(alert)
     authority = _Authority.build(db, access, cat, surface=ALERT_SURFACE)
     asked = _stored_alert_query(alert)
-    allowed = asked is not None and authority.decide(asked)[0]
+    allowed, _, reason = (
+        authority.decide(asked) if asked is not None else (False, (), "unknown_member")
+    )
     measures = {measure.id: measure for measure in cat.measures()}
     stored = _stored_ids(alert.notify_user_ids)
     return _alert_read(
@@ -1351,6 +1378,7 @@ def deactivate_bi_alert(  # noqa: PLR0913 - FastAPI injects db/access
         caller=access.principal_user_id,
         event=_latest_event(db, alert),
         verdict_visible=allowed,
+        refusal_reason=reason,
     )
 
 

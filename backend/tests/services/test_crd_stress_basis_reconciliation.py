@@ -13,6 +13,10 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.key_management import registry
+from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
+from app.data_engine.service.field_search import find_counterparties
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.domain.forecasting.engine import ForecastFact
 from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
@@ -312,9 +316,10 @@ def _observe_projection(monkeypatch: pytest.MonkeyPatch) -> list[EnterpriseProje
 
 
 def _prepare_credit_basis_run(
-    db_client: TestClient, db_session: Session, change: str
+    db_client: TestClient, db_session: Session, change: str, *, bank_id: str | None = None
 ) -> tuple[str, dict[str, object]]:
-    bank_id = seed_bank(db_client)
+    if bank_id is None:
+        bank_id = seed_bank(db_client)
     _seed_canonical_positions(bank_id)
     snapshots = list(
         db_session.scalars(
@@ -396,11 +401,13 @@ def _change_credit_source(db_session: Session, bank_id: str, change: str) -> Non
             CanonicalPositionSnapshot.source_reference == "LOAN/CORP1",
         )
     )
-    bank_counterparty = db_session.scalar(
-        select(CanonicalCounterparty).where(
-            CanonicalCounterparty.bank_id == bank_id,
-            CanonicalCounterparty.source_reference == "CP/PEERBANK",
-        )
+    bank_counterparty = next(
+        iter(
+            find_counterparties(
+                db_session, MAKER, bank_id, field="source_reference", value="CP/PEERBANK"
+            )
+        ),
+        None,
     )
     assert snapshot is not None and bank_counterparty is not None
     if change == "counterparty":
@@ -530,3 +537,61 @@ def test_reingested_corporate_as_bank_refuses_until_official_rederivation(
         repaired_stored = db_session.get(RegulatoryRun, UUID(repaired_id))
         assert repaired_stored is not None
         assert repaired_stored.input_hash == initial_hash
+
+
+@pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_enterprise_stress_runs_without_the_identity_key(
+    db_client: TestClient,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    status: KeyStatus,
+) -> None:
+    bank_id = seed_bank(db_client)
+    bank = db_session.get(Bank, bank_id)
+    assert bank is not None
+    provider = LocalKeyProvider()
+    key = KeyReference("aws_kms", "synthetic-enterprise", "us-east-1", "111122223333")
+    provider.add_key(key)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    registry.register(
+        db_session,
+        organization_id=bank.organization_id,
+        bank_id=bank_id,
+        storage_slug="synthetic-enterprise",
+        key=key,
+        providers=providers,
+    )
+    db_session.commit()
+    _, payload = _prepare_credit_basis_run(db_client, db_session, "unchanged", bank_id=bank_id)
+    rows = {
+        row.source_reference: row
+        for row in db_session.scalars(
+            select(CanonicalPositionSnapshot).where(CanonicalPositionSnapshot.bank_id == bank_id)
+        )
+    }
+    rows["DRV/1"].counterparty_id = rows["LOAN/CORP1"].counterparty_id
+    db_session.commit()
+    db_session.expunge_all()
+    provider.set_status(key, status)
+    response = db_client.post(RUNS_URL.format(bank_id=bank_id), headers=headers(), json=payload)
+    assert response.status_code == 201, response.text
+    outcome = TypeAdapter(_Run).validate_json(response.text)["outcome"]["bottom_up_credit"]
+    assert Decimal(outcome["base_credit_rwa"]) == Decimal("2500")
+    assert Decimal(outcome["stressed_credit_rwa"]) == Decimal("2500")
+    with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+        party = fresh.scalar(
+            select(CanonicalCounterparty)
+            .where(
+                CanonicalCounterparty.organization_id == bank.organization_id,
+                CanonicalCounterparty.bank_id == bank_id,
+            )
+            .limit(1)
+        )
+        assert party is not None
+        with pytest.raises(KeyUnavailableError):
+            _ = party.name

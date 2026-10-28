@@ -27,7 +27,8 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import String, and_, any_, bindparam, func, select
 from sqlalchemy.dialects.postgresql import ARRAY, insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Load, Session
+from sqlalchemy.sql.elements import ColumnElement
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
 from app.api.deps import TenantContext
@@ -307,6 +308,7 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
     Locks last until commit or rollback, including when the caller owns the
     transaction via ``commit=False``. SQLite skips reservations and row locks.
     """
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     try:
         adapter, mapping_record, mapping, source_path, extraction = _prepare_extraction(
@@ -414,7 +416,12 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
         event_type="ml_etl.completed",
         entity_type="ingestion_batch",
         entity_id=batch.id,
-        details=batch.etl_report,
+        details={
+            "bank_id": bank.id,
+            "batch_id": str(batch.id),
+            "operation_count": len(etl_result.operations),
+            "linkage_count": len(etl_result.linkages),
+        },
     )
 
     batch.status = "translating"
@@ -1617,6 +1624,20 @@ def _known_references(
     """Current-generation canonical references already ingested for the bank."""
 
     def current(column, model) -> frozenset[str]:
+        if model is CanonicalCounterparty:
+            return frozenset(
+                row.source_reference
+                for row in db.scalars(
+                    select(CanonicalCounterparty)
+                    .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
+                    .where(
+                        CanonicalCounterparty.organization_id == ctx.organization_id,
+                        CanonicalCounterparty.bank_id == bank.id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                    )
+                )
+            )
         return frozenset(
             db.scalars(
                 select(column).where(
@@ -1852,6 +1873,20 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
         return record_statuses.get((entity_type, source_reference), UNVALIDATED_STATUS)
 
     def existing_ids(key_column: Any, model: Any) -> dict[str, UUID]:
+        if model is CanonicalCounterparty:
+            return {
+                row.source_reference: row.id
+                for row in db.scalars(
+                    select(CanonicalCounterparty)
+                    .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
+                    .where(
+                        CanonicalCounterparty.organization_id == ctx.organization_id,
+                        CanonicalCounterparty.bank_id == bank.id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                    )
+                )
+            }
         rows = db.execute(
             select(key_column, model.id).where(
                 model.organization_id == ctx.organization_id,
@@ -1863,6 +1898,21 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
         return {key: row_id for key, row_id in rows}
 
     def current_by_key(key_column, model, *conditions: Any) -> dict[str, Any]:
+        if model is CanonicalCounterparty:
+            return {
+                row.source_reference: row
+                for row in db.scalars(
+                    select(CanonicalCounterparty)
+                    .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
+                    .where(
+                        CanonicalCounterparty.organization_id == ctx.organization_id,
+                        CanonicalCounterparty.bank_id == bank.id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                        *cast(tuple[ColumnElement[bool], ...], conditions),
+                    )
+                )
+            }
         rows = db.execute(
             select(key_column, model).where(
                 model.organization_id == ctx.organization_id,
@@ -2164,6 +2214,7 @@ def upload_source(  # noqa: PLR0913 - mirrors record_event's shape
     provenance metadata. The temp tier's 30-day lifecycle cleans up staged
     files that never get ingested.
     """
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     storage.ensure_institution(slug)

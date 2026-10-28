@@ -53,7 +53,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Load, Session
 
 from app.api.deps import TenantContext
 from app.capital.public import regulatory_capital, sdi_capital
@@ -344,6 +344,7 @@ def _load_canonical_rows(
                 CanonicalCounterparty,
                 CanonicalProduct,
             )
+            .options(Load(CanonicalCounterparty).undefer_group("bank_identity"))
             .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
             .outerjoin(
                 CanonicalCounterparty,
@@ -1716,12 +1717,12 @@ def _normalized_name(name: str) -> str:
 
 def _related_party_names(db: Session, ctx: TenantContext, bank: Bank) -> frozenset[str]:
     names = db.scalars(
-        select(RelatedParty.full_name).where(
+        select(RelatedParty).where(
             RelatedParty.organization_id == ctx.organization_id,
             RelatedParty.bank_id == bank.id,
         )
     ).all()
-    return frozenset(_normalized_name(name) for name in names)
+    return frozenset(_normalized_name(party.full_name) for party in names)
 
 
 def _funding_entities(

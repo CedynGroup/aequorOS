@@ -18,7 +18,11 @@ from app.attestation.service.digests import (
     sha256_hex,
 )
 from app.attestation.service.policy import SigningPolicy
-from app.attestation.service.workflow import ensure_submittable, package_policy
+from app.attestation.service.workflow import (
+    ensure_register_current,
+    ensure_submittable,
+    package_policy,
+)
 
 __all__ = [
     "AttestationSignature",
@@ -28,6 +32,7 @@ __all__ = [
     "canonical_json",
     "digest_of",
     "digests",
+    "ensure_register_current",
     "ensure_submittable",
     "identity",
     "layouts",
