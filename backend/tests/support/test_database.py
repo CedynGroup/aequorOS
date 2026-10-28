@@ -14,9 +14,10 @@ from typing import cast
 
 import pytest
 import sqlalchemy
+from psycopg.errors import LockNotAvailable
 from sqlalchemy import Connection, Engine, event, inspect, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import IntegrityError, ResourceClosedError
+from sqlalchemy.exc import DBAPIError, IntegrityError, ResourceClosedError
 from sqlalchemy.orm import Session
 
 from app.core.key_management.registry import lock_bank_version
@@ -85,12 +86,12 @@ def test_session_factory_preserves_outer_rollback_and_context(tmp_path: Path) ->
             assert connection.scalar(text("SELECT count(*) FROM probe")) == 0
 
 
-def test_sqlite_connections_enforce_foreign_keys(
-    isolated_db: TestDatabaseConnections,
-) -> None:
-    if isolated_db.url.drivername.startswith("postgresql"):
-        pytest.skip("SQLite foreign-key connection setup")
-    with isolated_db.connection() as connection:
+def test_sqlite_connections_enforce_foreign_keys(tmp_path: Path) -> None:
+    # This contract is specifically SQLite even in a Postgres integration job.
+    with (
+        isolated_database(f"sqlite:///{tmp_path / 'foreign-keys.db'}") as db,
+        db.connection() as connection,
+    ):
         _ = connection.execute(text("CREATE TABLE parent (id integer primary key)"))
         _ = connection.execute(text("CREATE TABLE child (parent_id integer REFERENCES parent(id))"))
         connection.commit()
@@ -390,3 +391,44 @@ def test_async_encryption_lock_uses_owning_schema_namespace() -> None:
                 assert await connection.run_sync(acquire) == expected
 
         asyncio.run(run())
+
+
+@postgres_only
+def test_adopted_and_migration_pools_preserve_schema_lock_identity(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with (
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as owner,
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as other,
+        database_connections(owner.database_url) as adopted,
+    ):
+        with owner.connection() as connection:
+            role = cast(str, connection.scalar(text("SELECT current_user")))
+        options = f"-cstatement_timeout=10000 -crole={role} " + cast(
+            str, make_url(owner.database_url).query["options"]
+        )
+        with database_connections(
+            make_url(owner.database_url).update_query_dict({"options": options})
+        ) as configured:
+            install_migration_engines(monkeypatch, owner.engine())
+            pools = [
+                owner.engine(),
+                adopted.engine(),
+                managed_engine(request, owner.database_url),
+                configured.engine(),
+                sqlalchemy.engine_from_config({"sqlalchemy.url": owner.database_url}),
+            ]
+            with owner.session() as holder:
+                lock_bank_version(holder, "OR-LOCKTEST", "BK-LOCKTEST", read=True)
+                for engine in pools:
+                    with managed_session_factory(request, engine)() as contender:
+                        _ = contender.execute(text("SET LOCAL lock_timeout='250ms'"))
+                        with pytest.raises(DBAPIError) as error:
+                            lock_bank_version(contender, "OR-LOCKTEST", "BK-LOCKTEST")
+                        assert isinstance(error.value.orig, LockNotAvailable)
+                with other.session() as independent:
+                    _ = independent.execute(text("SET LOCAL lock_timeout='250ms'"))
+                    lock_bank_version(independent, "OR-LOCKTEST", "BK-LOCKTEST")
+            with adopted.session() as released:
+                _ = released.execute(text("SET LOCAL lock_timeout='250ms'"))
+                lock_bank_version(released, "OR-LOCKTEST", "BK-LOCKTEST")

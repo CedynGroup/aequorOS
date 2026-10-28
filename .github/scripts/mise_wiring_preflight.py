@@ -14,9 +14,8 @@ typecheck, the hermetic suite and both Postgres suites executed nothing. From
 the log it looked like a hang, not a missing file.
 
 `backend/tests/architecture/test_ci_task_wiring.py` asserts the same contract,
-but it cannot be the only guard: reaching it means running
-`mise run risk-service:test-architecture`, which is one of the proxies that
-recurses. A guard that only runs when the thing it guards is healthy is not a
+but it cannot be the only guard: its CI execution depends on the task wiring
+it checks. A guard that only runs when the thing it guards is healthy is not a
 guard. Hence this script — stdlib only, no mise, no uv, no dependency install —
 run as the first job of the workflow, with every other job needing it.
 

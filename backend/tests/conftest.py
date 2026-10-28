@@ -40,11 +40,9 @@ from app.core.config import Settings, get_settings
 from app.core.key_management.settings import get_key_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
-from app.features.ingest_data import get_ingestion_storage
 from app.identity.service import authorization
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
-from app.main import create_app
 from app.models import Organization, User
 from tests.fixtures.reference_data import seed_global_reference_data
 from tests.real_data import REAL_DATA_DATABASE_URL
@@ -305,7 +303,15 @@ def hermetic_etl_models(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(create_app(), raise_server_exceptions=False)
+    return TestClient(_create_app(), raise_server_exceptions=False)
+
+
+def _create_app() -> FastAPI:
+    # The xdist controller registers fixtures but never needs the API. Defer
+    # route registration until a client or shared app actually requests it.
+    from app.main import create_app  # noqa: PLC0415
+
+    return create_app()
 
 
 class FakeStorage:
@@ -424,7 +430,7 @@ class _TestDatabase:
 
 @dataclass
 class _LazyTestApp:
-    factory: Callable[[], FastAPI] = create_app
+    factory: Callable[[], FastAPI] = _create_app
     app: FastAPI | None = None
 
     def get(self) -> FastAPI:
@@ -738,6 +744,7 @@ def _db_client_lifecycle(
     fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
+    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
 
     def object_storage_override() -> FakeStorage:
         return fake_storage
@@ -860,7 +867,9 @@ def real_client(
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
     """A TestClient wired to the ACTUAL primary, transaction-isolated."""
-    app = create_app()
+    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
+
+    app = _create_app()
     app.dependency_overrides[get_object_storage] = lambda: fake_storage
     app.dependency_overrides[get_ingestion_storage] = lambda: storage_engine
     with TestClient(app, raise_server_exceptions=False) as test_client:
