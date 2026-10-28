@@ -6,6 +6,7 @@
  * data-quality chip linking to the ingestion batch the lineage resolves to.
  */
 
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ArrowUpRight, GitCommitHorizontal, X } from "lucide-react";
 import type { CanonicalPositionRead } from "@aequoros/risk-service-api";
@@ -14,6 +15,10 @@ import { useLineageWalk } from "@/lib/api/ingestion";
 import { useBankContext } from "@/components/shell/BankContext";
 import { fmtDateUTC, fmtTimestamp, labelize, num } from "@/lib/api/values";
 import { fmtLocale } from "@/lib/format";
+import {
+  protectedDataState,
+  subscribeProtectedData,
+} from "@/lib/api/protectedData";
 
 export function validationTone(status: string): StatusTone {
   switch (status) {
@@ -68,6 +73,15 @@ export default function PositionDrawer({
   onClose: () => void;
 }) {
   const { bank } = useBankContext();
+  const locked =
+    useSyncExternalStore(
+      subscribeProtectedData,
+      () => protectedDataState(bank?.id ?? ""),
+      () => "available",
+    ) !== "available";
+  const sourceReference = locked
+    ? "🔒 Protected data"
+    : position.sourceReference;
   const walk = useLineageWalk(bank?.id, position.lineageId);
   // Nodes come newest-first; the batch is attached to the extraction root.
   const batchId =
@@ -86,7 +100,7 @@ export default function PositionDrawer({
       <aside
         className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-surface-raised border-l border-border shadow-xl overflow-y-auto"
         role="dialog"
-        aria-label={`Position ${position.sourceReference}`}
+        aria-label={`Position ${sourceReference}`}
       >
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border-light sticky top-0 bg-surface-raised">
           <div className="min-w-0">
@@ -94,7 +108,7 @@ export default function PositionDrawer({
               {labelize(position.positionType)}
             </p>
             <h2 className="text-h3 text-navy font-mono truncate">
-              {position.sourceReference}
+              {sourceReference}
             </h2>
           </div>
           <button
@@ -179,7 +193,8 @@ export default function PositionDrawer({
                         {labelize(node.operationType)}
                       </p>
                       <p className="text-caption font-mono text-slate truncate">
-                        {node.operationRef} · {fmtTimestamp(node.occurredAt)}
+                        {locked ? "🔒 Protected data" : node.operationRef} ·{" "}
+                        {fmtTimestamp(node.occurredAt)}
                       </p>
                     </div>
                   </li>

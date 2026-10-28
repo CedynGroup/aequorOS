@@ -267,5 +267,49 @@ retained versions, substitution, revocation, downloads and backup recovery),
 `test_bank_key_rollout.py` (optional platform storage, required-key refusal and
 connected-key failures in every environment),
 `tests/operator/test_bank_encryption.py` (staff and bank scoping), and
-`tests/db/test_tenant_rls_completeness.py` (migrated envelope RLS). CI uses fake
-providers and moto, never real AWS KMS calls.
+`tests/db/test_tenant_rls_completeness.py` (migrated envelope RLS). The HTTP
+provider contract and its CI service are documented in
+[Local KMS emulator and CI](#local-kms-emulator-and-ci).
+
+## Local KMS emulator and CI
+
+The opt-in `encryption` profile in `backend/docker-compose.yml` runs
+[local-kms](https://github.com/nsmithuk/local-kms), pinned by image digest. It is
+for synthetic keys and disposable data only. Start just the emulator with:
+
+```sh
+docker compose -f backend/docker-compose.yml --profile encryption up -d risk-kms
+```
+
+For a locally launched API/worker, set `APP_ENV=local`,
+`TLS_ALLOW_PLAINTEXT=1` and
+`BANK_KMS_ENDPOINT_URL=http://127.0.0.1:18080`. A process inside the local compose
+network may use `http://risk-kms:8080`. Restart long-lived processes after changing
+configuration. The endpoint is optional: without it the provider uses real AWS
+KMS. With it, the **same** `AwsKmsKeyProvider` and AWS Encryption SDK use the
+emulator with hardcoded synthetic credentials, ignoring ambient AWS credentials
+and SDK endpoint overrides. No fallback to AWS occurs when the emulator fails.
+
+The override refuses deployed application startup and provider construction;
+only `local`/`test` and loopback or the local compose service host are accepted.
+Plain HTTP still requires the transport policy's explicit local opt-in. The
+emulator service is absent from deployment compose files and application images.
+Never connect retained bank data or real credentials to it. The local named
+volume retains synthetic keys across restarts; keep it as long as its encrypted
+disposable data is needed.
+
+Run the provider's HTTP contract from the repository root:
+
+```sh
+TEST_KMS_ENDPOINT_URL=http://127.0.0.1:18080 mise -C backend exec -- uv run \
+  pytest tests/storage/test_kms_emulator.py -q
+```
+
+The storage contract job and every dashboard journey CI shard own ephemeral
+emulator services and run this contract; JUnit assertions disallow skipping it.
+Journey shards run it before starting the browser stack. It covers real SDK
+wrap/unwrap, authenticated context, disabled-key refusal, recovery, and data-key
+rewrapping to a second key. AWS cross-account
+policy and grant enforcement are outside the emulator's model and remain covered
+by mocked provider tests. Guided key setup and historical re-encryption journeys
+belong to their separate feature stacks.

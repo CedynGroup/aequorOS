@@ -298,11 +298,11 @@ def test_bank_key_provider_exposes_only_verified_kms_clients(
     monkeypatch.setenv("AWS_ENDPOINT_URL_KMS", f"{scheme}://kms.example")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "synthetic")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "synthetic")
-    if scheme == "https":
-        assert kms_client("us-east-1") is not None
-    else:
-        with pytest.raises(TransportSecurityError):
-            kms_client("us-east-1")
+    client = kms_client("us-east-1")
+    try:
+        assert client.meta.endpoint_url == "https://kms.us-east-1.amazonaws.com"
+    finally:
+        client.close()
 
 
 def test_dashboard_backend_requests_refuse_http_redirects(tmp_path: Path) -> None:

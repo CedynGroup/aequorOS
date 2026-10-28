@@ -19,9 +19,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
-from app.core.key_management.concentration_identity import counterparty_group_key
-from app.core.key_management.presentation import LOCKED_TEXT, contains_placeholder
-from app.data_engine.public import CanonicalCounterparty
+from app.data_engine.public import (
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    counterparty_group_labels,
+)
 from app.identity.public import Bank
 from app.ml.behavioral import history
 from app.ml.behavioral.config import BehavioralTrainingConfig
@@ -253,17 +255,16 @@ def get_behavioral_liquidity_report(
     )
     short_rates = history.load_ghs_short_rate_history(db, ctx, bank.id, as_of, cfg.window_months)
     group_labels = {
-        party.concentration_group_blind_index: LOCKED_TEXT
-        if contains_placeholder([party.name, party.group_reference, party.attributes])
-        else counterparty_group_key(
-            party.name, party.group_reference, party.attributes or {}
-        ).split(":", 1)[1]
-        for party in db.scalars(
-            select(CanonicalCounterparty).where(
-                CanonicalCounterparty.organization_id == ctx.organization_id,
-                CanonicalCounterparty.bank_id == bank.id,
-            )
-        )
+        key: label.split(":", 1)[-1]
+        for key, label in counterparty_group_labels(
+            db,
+            ctx,
+            bank.id,
+            CanonicalPositionSnapshot.as_of_date >= history.months_before(as_of, cfg.window_months),
+            CanonicalPositionSnapshot.as_of_date <= as_of,
+            CanonicalPosition.position_type == "DEPOSIT",
+            group_keys={row.concentration_group for row in rows},
+        ).items()
     }
     segments = [
         _segment_metrics(

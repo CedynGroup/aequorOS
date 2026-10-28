@@ -536,6 +536,57 @@ async function openPartyEditor() {
   );
 }
 
+it("hides protected editor drafts during support access without locking numeric controls", async () => {
+  let state = "available";
+  let writes = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") writes++;
+      return profileResponse(state, undefined, editableParty(state));
+    }),
+  );
+  mount(<RelatedPartiesPage />);
+  await openPartyEditor();
+  const protectedLabels = [
+    /Full name/,
+    "Term",
+    "ICAG registration",
+    "Other responsibilities",
+  ];
+  for (const label of protectedLabels) {
+    await userEvent.clear(screen.getByLabelText(label));
+    await userEvent.type(screen.getByLabelText(label), "Synthetic draft", {
+      delay: null,
+    });
+  }
+  await userEvent.clear(screen.getByLabelText("Annual fees"));
+  await userEvent.type(screen.getByLabelText("Annual fees"), "250", {
+    delay: null,
+  });
+  state = "support";
+  await act(async () => {
+    await observeProtectedData(profileResponse(state));
+  });
+  await waitFor(() => expect(protectedDataState(BANK)).toBe("support"));
+  for (const label of protectedLabels) {
+    const input = screen.getByLabelText(label);
+    expect(input).toBeDisabled();
+    expect(input).toHaveValue("");
+    expect(input).toHaveAttribute("placeholder", "🔒 Protected data");
+    expect(input.closest("fieldset")).toHaveAttribute(
+      "title",
+      protectedDataMessages.support,
+    );
+  }
+  expect(screen.getByLabelText("Annual fees")).toBeEnabled();
+  expect(screen.getByLabelText("Annual fees")).toHaveValue(250);
+  expect(screen.getByLabelText(/Reason for change/)).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Save party" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  expect(writes).toBe(0);
+});
+
 it.each(["revoked", "unavailable"] as const)(
   "locks protected controls while preserving an editable numeric save during %s",
   async (lockedState) => {
