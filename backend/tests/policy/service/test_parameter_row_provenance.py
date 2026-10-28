@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.authority.provenance import CalculationProvenance
 from app.models import Bank, RegulatoryParameter
-from app.policy.service import regulatory_parameters as rp
+from app.policy.public import regulatory_parameters as rp
 from tests.support.helpers import ORG_1
 
 
@@ -210,6 +210,30 @@ def test_the_recorded_value_is_the_exact_decimal_the_engine_consumed(
     assert Decimal(entry["value"]) == resolved.decimal
 
 
+def test_seed_reads_preserve_the_existing_run_ledger(db_session: Session) -> None:
+    bank = _bank(db_session)
+    as_of = date(2026, 6, 30)
+    rp.consume_parameter_provenance(db_session)
+    rp.resolve(db_session, bank, "car_min", as_of=as_of)
+    expected = rp.consume_parameter_provenance(db_session)
+    assert expected
+    rp.resolve(db_session, bank, "car_min", as_of=as_of)
+
+    rows = rp.seed_values(
+        db_session,
+        bank,
+        ["tier1_min", "icaap_report_first_as_of_date", "unconfigured_parameter"],
+        as_of=as_of,
+    )
+
+    scalar = rows["tier1_min"]
+    assert scalar is not None and scalar.value is not None
+    structural = rows["icaap_report_first_as_of_date"]
+    assert structural is not None and structural.value_json is not None
+    assert rows["unconfigured_parameter"] is None
+    assert rp.consume_parameter_provenance(db_session) == expected
+
+
 def test_the_registry_dispatch_scan_never_enters_the_run_ledger(
     db_session: Session,
 ) -> None:
@@ -280,6 +304,10 @@ def test_the_icaap_report_plane_never_enters_the_run_ledger(db_session: Session)
     bank = _bank(db_session)
     as_of = date(2026, 12, 31)
     rp.consume_parameter_provenance(db_session)  # start from a clean ledger
+    rp.resolve(db_session, bank, "car_min", as_of=as_of)
+    expected = rp.consume_parameter_provenance(db_session)
+    assert expected
+    rp.resolve(db_session, bank, "car_min", as_of=as_of)
 
     deadline = icaap_parameters.resolve(
         db_session,
@@ -289,10 +317,22 @@ def test_the_icaap_report_plane_never_enters_the_run_ledger(db_session: Session)
         as_of=as_of,
     )
     pillar2 = icaap_p2_params.resolve_p2(db_session, bank, as_of=as_of)
+    optional_deadline = icaap_parameters.try_resolve(
+        db_session, bank, icaap_parameters.SUBMISSION_MONTHS, as_of=as_of
+    )
+    dates = [as_of, date(2027, 12, 31)]
+    codes = ["ccr_name_cr_n", "icaap_report_first_as_of_date"]
+    by_date = icaap_p2_params.resolve_by_date(db_session, bank, dates=dates, codes=codes)
 
     # Non-vacuity: both doors must genuinely have READ approved rows, or an
     # unseeded control plane would make this pass by resolving nothing at all.
     assert deadline.parameter_id
     assert pillar2.rows, "resolve_p2 resolved no governed row — vacuous"
+    assert optional_deadline is not None
+    assert optional_deadline.parameter_id == deadline.parameter_id
+    assert set(by_date) == set(dates)
+    for parameters in by_date.values():
+        assert set(parameters.rows) == set(codes)
+        assert parameters.missing == frozenset()
 
-    assert rp.consume_parameter_provenance(db_session) == []
+    assert rp.consume_parameter_provenance(db_session) == expected
