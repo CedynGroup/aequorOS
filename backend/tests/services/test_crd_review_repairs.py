@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, undefer_group
 
 from app.domain.capital.engine import (
     CapitalFact,
@@ -196,11 +196,22 @@ def test_enterprise_expected_credit_refusals_return_409_without_creating_runs(
     if failure == "stale_bucket":
         product.regulatory_category = "SME_UNRATED"
     else:
-        cp = session.scalar(
-            select(CanonicalCounterparty).where(
-                CanonicalCounterparty.bank_id == bank_id,
-                CanonicalCounterparty.source_reference == "CP/BIGCORP",
-            )
+        cp = next(
+            (
+                row
+                for row in session.scalars(
+                    select(CanonicalCounterparty)
+                    .options(undefer_group("bank_identity"))
+                    .where(
+                        CanonicalCounterparty.organization_id == MAKER.organization_id,
+                        CanonicalCounterparty.bank_id == bank_id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                    )
+                )
+                if row.source_reference == "CP/BIGCORP"
+            ),
+            None,
         )
         assert cp is not None
         cp.counterparty_type = "GOVERNMENT_ENTITY"

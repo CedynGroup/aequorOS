@@ -28,6 +28,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
+from app.core.key_management import registry as key_registry
+from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.icaap.domain.pillar2 import DEFERRED_METHODS
 from app.icaap.domain.pillar2.granularity_method import (
     FULL_LABEL,
@@ -246,7 +249,7 @@ def test_an_exposures_own_pd_and_lgd_are_the_first_source(
     assert exposure.elgd == Decimal("40") / Decimal(100)
     assert exposure.pd_source == granularity_inputs.PD_SOURCE_EXPOSURE
     assert exposure.lgd_source == granularity_inputs.LGD_SOURCE_EXPOSURE
-    assert exposure.group_key == "cp:Volta Agro Ltd"
+    assert exposure.group_key == counterparty.concentration_group_blind_index
     assert exposure.ead == Decimal("1000000")
 
 
@@ -471,7 +474,9 @@ def test_two_facilities_to_one_connected_group_are_one_obligor(
     book.commit()
 
     exposures = _build(canonical_book, access, cycle).exposures
-    assert {exposure.group_key for exposure in exposures} == {"group:GRP-1"}
+    assert {exposure.group_key for exposure in exposures} == {
+        parent.concentration_group_blind_index
+    }
 
 
 # --- governed rows: a refusal names the console row -------------------------
@@ -677,8 +682,13 @@ def test_a_book_below_the_governed_floor_is_declined_with_the_number_that_decide
 
 
 @pytest.mark.usefixtures("pillar1_bound")
+@pytest.mark.parametrize("key_status", [None, KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
 def test_a_granular_book_reaches_the_method_and_produces_a_figure(
-    canonical_book: Session, access: IcaapAccess, cycle: IcaapCycleRead
+    canonical_book: Session,
+    access: IcaapAccess,
+    cycle: IcaapCycleRead,
+    monkeypatch: pytest.MonkeyPatch,
+    key_status: KeyStatus | None,
 ) -> None:
     """The design's primary service-level golden (P5-DESIGN §4.6, last row).
 
@@ -686,12 +696,34 @@ def test_a_granular_book_reaches_the_method_and_produces_a_figure(
     correlation, no maturity adjustment: N_eff = 66.67, which clears the seeded
     floor of 50, GA = 0.016372 of a 2,000 book and the add-on is 32.744634.
     """
+    provider = LocalKeyProvider()
+    key = KeyReference("aws_kms", "synthetic-granularity", "us-east-1", "111122223333")
+    if key_status is not None:
+        provider.add_key(key)
+
+        def providers(_name: str) -> LocalKeyProvider:
+            return provider
+
+        monkeypatch.setattr(key_registry, "provider_for", providers)
+        key_registry.register(
+            canonical_book,
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            storage_slug="synthetic-granularity",
+            key=key,
+            providers=providers,
+        )
+        canonical_book.commit()
     book = _Book(canonical_book)
     _corporate_loans(book, count=20, balance="50", pd_pct="1", prefix="BIG")
     _corporate_loans(book, count=100, balance="10", pd_pct="3", prefix="SMALL")
     book.commit()
 
     item_id = _create_item(canonical_book, access, cycle)
+    if key_status is not None:
+        canonical_book.commit()
+        canonical_book.expunge_all()
+        provider.set_status(key, key_status)
     read = _compute(canonical_book, access, cycle, item_id)
 
     assert read.method_status == "computed"
@@ -712,6 +744,20 @@ def test_a_granular_book_reaches_the_method_and_produces_a_figure(
     # The stressed side is an absolute amount, so it is declared, not inferred.
     assert read.stressed_amount is None
     assert "stressed_book_not_assessed" in _computation(read)["reasons"]
+
+    if key_status is not None:
+        canonical_book.expunge_all()
+        party = canonical_book.scalar(
+            select(CanonicalCounterparty)
+            .where(
+                CanonicalCounterparty.organization_id == ORG_1,
+                CanonicalCounterparty.bank_id == SAMPLE_BANK_ID,
+            )
+            .limit(1)
+        )
+        assert party is not None
+        with pytest.raises(KeyUnavailableError):
+            _ = party.name
 
 
 @pytest.mark.usefixtures("pillar1_bound")

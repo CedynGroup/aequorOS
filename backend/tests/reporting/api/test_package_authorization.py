@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from app.api.deps import TenantContext
+from app.attestation.service import digests, register_state
 from app.core.authorization import (
     DataScope,
     GrantorType,
@@ -136,6 +137,17 @@ def _package(  # noqa: PLR0913 - one package row, spelled out
             source_runs=[],
             generated_by=generated_by or uuid4(),
             generated_at=datetime.now(UTC),
+            register_state_digest=digests.register_state_digest(
+                register_state.project_register_state(
+                    session,
+                    TenantContext(
+                        organization_id=organization_id,
+                        actor_user_id=generated_by or USER_1,
+                        authorization_version=1,
+                    ),
+                    bank_id,
+                )
+            ),
         )
         session.add(row)
         session.commit()

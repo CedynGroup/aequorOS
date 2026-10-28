@@ -18,13 +18,34 @@ import {
   RegulatedJurisdictionToJSON,
   RegulatedJurisdictionToJSONTyped,
 } from "./RegulatedJurisdiction";
-import type { PartyStatus } from "./PartyStatus";
+import type { FullName } from "./FullName";
 import {
-  PartyStatusFromJSON,
-  PartyStatusFromJSONTyped,
-  PartyStatusToJSON,
-  PartyStatusToJSONTyped,
-} from "./PartyStatus";
+  FullNameFromJSON,
+  FullNameFromJSONTyped,
+  FullNameToJSON,
+  FullNameToJSONTyped,
+} from "./FullName";
+import type { RelatedPartyUpdateStatus } from "./RelatedPartyUpdateStatus";
+import {
+  RelatedPartyUpdateStatusFromJSON,
+  RelatedPartyUpdateStatusFromJSONTyped,
+  RelatedPartyUpdateStatusToJSON,
+  RelatedPartyUpdateStatusToJSONTyped,
+} from "./RelatedPartyUpdateStatus";
+import type { RelatedPartyUpdatePartyType } from "./RelatedPartyUpdatePartyType";
+import {
+  RelatedPartyUpdatePartyTypeFromJSON,
+  RelatedPartyUpdatePartyTypeFromJSONTyped,
+  RelatedPartyUpdatePartyTypeToJSON,
+  RelatedPartyUpdatePartyTypeToJSONTyped,
+} from "./RelatedPartyUpdatePartyType";
+import type { RegulatedElsewhere } from "./RegulatedElsewhere";
+import {
+  RegulatedElsewhereFromJSON,
+  RegulatedElsewhereFromJSONTyped,
+  RegulatedElsewhereToJSON,
+  RegulatedElsewhereToJSONTyped,
+} from "./RegulatedElsewhere";
 import type { RelatedPartyRoleInput } from "./RelatedPartyRoleInput";
 import {
   RelatedPartyRoleInputFromJSON,
@@ -32,38 +53,45 @@ import {
   RelatedPartyRoleInputToJSON,
   RelatedPartyRoleInputToJSONTyped,
 } from "./RelatedPartyRoleInput";
-import type { PartyType } from "./PartyType";
+import type { RelatedPartyRoleUpdate } from "./RelatedPartyRoleUpdate";
 import {
-  PartyTypeFromJSON,
-  PartyTypeFromJSONTyped,
-  PartyTypeToJSON,
-  PartyTypeToJSONTyped,
-} from "./PartyType";
+  RelatedPartyRoleUpdateFromJSON,
+  RelatedPartyRoleUpdateFromJSONTyped,
+  RelatedPartyRoleUpdateToJSON,
+  RelatedPartyRoleUpdateToJSONTyped,
+} from "./RelatedPartyRoleUpdate";
+import type { Contact } from "./Contact";
+import {
+  ContactFromJSON,
+  ContactFromJSONTyped,
+  ContactToJSON,
+  ContactToJSONTyped,
+} from "./Contact";
 
 /**
- * Full replacement; ``roles`` is replace-on-write.
+ * Supplied fields change; explicit roles replace, role_updates retain IDs.
  * @export
  * @interface RelatedPartyUpdate
  */
 export interface RelatedPartyUpdate {
   /**
    *
-   * @type {{ [key: string]: any; }}
+   * @type {Contact}
    * @memberof RelatedPartyUpdate
    */
-  contact?: { [key: string]: any };
+  contact?: Contact;
   /**
    *
-   * @type {string}
+   * @type {FullName}
    * @memberof RelatedPartyUpdate
    */
-  fullName: string;
+  fullName?: FullName;
   /**
    *
-   * @type {PartyType}
+   * @type {RelatedPartyUpdatePartyType}
    * @memberof RelatedPartyUpdate
    */
-  partyType: PartyType;
+  partyType?: RelatedPartyUpdatePartyType;
   /**
    *
    * @type {string}
@@ -72,10 +100,10 @@ export interface RelatedPartyUpdate {
   reason: string;
   /**
    *
-   * @type {boolean}
+   * @type {RegulatedElsewhere}
    * @memberof RelatedPartyUpdate
    */
-  regulatedElsewhere?: boolean;
+  regulatedElsewhere?: RegulatedElsewhere;
   /**
    *
    * @type {RegulatedJurisdiction}
@@ -84,16 +112,22 @@ export interface RelatedPartyUpdate {
   regulatedJurisdiction?: RegulatedJurisdiction;
   /**
    *
+   * @type {Array<RelatedPartyRoleUpdate>}
+   * @memberof RelatedPartyUpdate
+   */
+  roleUpdates?: Array<RelatedPartyRoleUpdate>;
+  /**
+   *
    * @type {Array<RelatedPartyRoleInput>}
    * @memberof RelatedPartyUpdate
    */
   roles?: Array<RelatedPartyRoleInput>;
   /**
    *
-   * @type {PartyStatus}
+   * @type {RelatedPartyUpdateStatus}
    * @memberof RelatedPartyUpdate
    */
-  status?: PartyStatus;
+  status?: RelatedPartyUpdateStatus;
 }
 
 /**
@@ -102,8 +136,6 @@ export interface RelatedPartyUpdate {
 export function instanceOfRelatedPartyUpdate(
   value: object,
 ): value is RelatedPartyUpdate {
-  if (!("fullName" in value) || value["fullName"] === undefined) return false;
-  if (!("partyType" in value) || value["partyType"] === undefined) return false;
   if (!("reason" in value) || value["reason"] === undefined) return false;
   return true;
 }
@@ -121,24 +153,39 @@ export function RelatedPartyUpdateFromJSONTyped(
   }
   return {
     ...json,
-    contact: json["contact"] == null ? undefined : json["contact"],
-    fullName: json["full_name"],
-    partyType: PartyTypeFromJSON(json["party_type"]),
+    contact:
+      json["contact"] == null ? undefined : ContactFromJSON(json["contact"]),
+    fullName:
+      json["full_name"] == null
+        ? undefined
+        : FullNameFromJSON(json["full_name"]),
+    partyType:
+      json["party_type"] == null
+        ? undefined
+        : RelatedPartyUpdatePartyTypeFromJSON(json["party_type"]),
     reason: json["reason"],
     regulatedElsewhere:
       json["regulated_elsewhere"] == null
         ? undefined
-        : json["regulated_elsewhere"],
+        : RegulatedElsewhereFromJSON(json["regulated_elsewhere"]),
     regulatedJurisdiction:
       json["regulated_jurisdiction"] == null
         ? undefined
         : RegulatedJurisdictionFromJSON(json["regulated_jurisdiction"]),
+    roleUpdates:
+      json["role_updates"] == null
+        ? undefined
+        : (json["role_updates"] as Array<any>).map(
+            RelatedPartyRoleUpdateFromJSON,
+          ),
     roles:
       json["roles"] == null
         ? undefined
         : (json["roles"] as Array<any>).map(RelatedPartyRoleInputFromJSON),
     status:
-      json["status"] == null ? undefined : PartyStatusFromJSON(json["status"]),
+      json["status"] == null
+        ? undefined
+        : RelatedPartyUpdateStatusFromJSON(json["status"]),
   };
 }
 
@@ -155,18 +202,24 @@ export function RelatedPartyUpdateToJSONTyped(
   }
 
   return {
-    contact: value["contact"],
-    full_name: value["fullName"],
-    party_type: PartyTypeToJSON(value["partyType"]),
+    contact: ContactToJSON(value["contact"]),
+    full_name: FullNameToJSON(value["fullName"]),
+    party_type: RelatedPartyUpdatePartyTypeToJSON(value["partyType"]),
     reason: value["reason"],
-    regulated_elsewhere: value["regulatedElsewhere"],
+    regulated_elsewhere: RegulatedElsewhereToJSON(value["regulatedElsewhere"]),
     regulated_jurisdiction: RegulatedJurisdictionToJSON(
       value["regulatedJurisdiction"],
     ),
+    role_updates:
+      value["roleUpdates"] == null
+        ? undefined
+        : (value["roleUpdates"] as Array<any>).map(
+            RelatedPartyRoleUpdateToJSON,
+          ),
     roles:
       value["roles"] == null
         ? undefined
         : (value["roles"] as Array<any>).map(RelatedPartyRoleInputToJSON),
-    status: PartyStatusToJSON(value["status"]),
+    status: RelatedPartyUpdateStatusToJSON(value["status"]),
   };
 }

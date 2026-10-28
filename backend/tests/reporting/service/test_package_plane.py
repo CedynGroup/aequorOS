@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service import digests, register_state
 from app.attestation.service import workflow as attestation_workflow
 from app.models import (
     Bank,
@@ -83,6 +84,9 @@ def _package(db: Session, *, return_code: str = "LCR-NSFR", family: str = "liqui
         version=1,
         snapshot={"sections": []},
         source_runs=[],
+        register_state_digest=digests.register_state_digest(
+            register_state.project_register_state(db, MAKER, SAMPLE_BANK_ID)
+        ),
         generated_by=DEMO_USER_ID,
         generated_at=datetime.now(UTC),
     )

@@ -37,8 +37,9 @@ export async function biApi(
     data: init.data,
     headers: {
       Authorization: `Bearer ${await mintBackendToken(role)}`,
-      // Browser work between API calls can outlast Uvicorn's keep-alive window.
-      // Close each connection so fixture cleanup cannot race its expiry.
+      // Browser ceremonies can outlast the API's idle keep-alive window.
+      // Fresh test connections avoid racing its close without replaying writes.
+
       Connection: "close",
     },
   });
