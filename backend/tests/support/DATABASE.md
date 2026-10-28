@@ -120,9 +120,10 @@ pass a production database URL.
 `hooks=(install_hook, ...)` on `isolated_database`, `database_connections` or
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
-sync facades. The encryption stack's schema-scoped lock isolation is still a
-pending integration; this foundation does not claim to fix that CI failure.
-Its implementation must become a default shared hook when that stack lands.
+sync facades. The suite already installs encryption lock namespacing globally
+through `tests/support/advisory_locks.py`. It recognizes only URLs whose startup
+options begin with `-csearch_path=risk_service_test_`; other schema names do not
+receive that lock isolation automatically.
 
 Run the constructor guard with `uv run python scripts/test_database_guard.py`.
 `--strict` rejects all legacy constructors. The temporary allowlist matches
