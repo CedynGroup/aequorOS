@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import shlex
 from typing import cast
 
 from sqlalchemy import Connection, Engine, event
@@ -16,10 +17,16 @@ def _namespace_key(
     _context: object,
     _executemany: bool,
 ) -> tuple[str, object]:
-    namespace = connection.engine.url.query.get("options")
-    if not isinstance(namespace, str) or not namespace.startswith(
-        "-csearch_path=risk_service_test_"
-    ):
+    options = connection.engine.url.query.get("options")
+    if not isinstance(options, str):
+        return statement, parameters
+    namespace = ""
+    tokens = iter(shlex.split(options))
+    for token in tokens:
+        setting = next(tokens, "") if token == "-c" else token.removeprefix("-c")
+        if setting.startswith("search_path="):
+            namespace = setting.removeprefix("search_path=")
+    if not namespace.startswith("risk_service_test_") or not namespace.isidentifier():
         return statement, parameters
     if statement not in {
         "SELECT pg_advisory_xact_lock(%(key)s)",

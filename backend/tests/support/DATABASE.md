@@ -121,9 +121,10 @@ pass a production database URL.
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
 sync facades. The suite already installs encryption lock namespacing globally
-through `tests/support/advisory_locks.py`. It recognizes only URLs whose startup
-options begin with `-csearch_path=risk_service_test_`; other schema names do not
-receive that lock isolation automatically.
+through `tests/support/advisory_locks.py`. It derives lock identity from the
+`risk_service_test_` search-path schema, independent of repeated options, option
+order, role or timeout settings. Other schema names do not receive that lock
+isolation automatically.
 
 Run the constructor guard with `uv run python scripts/test_database_guard.py`.
 `--strict` rejects all legacy constructors. The temporary allowlist matches

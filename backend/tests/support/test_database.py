@@ -12,9 +12,12 @@ from typing import cast
 
 import pytest
 import sqlalchemy
+from psycopg.errors import LockNotAvailable
 from sqlalchemy import Engine, event, inspect, text
-from sqlalchemy.exc import IntegrityError, ResourceClosedError
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError, IntegrityError, ResourceClosedError
 
+from app.core.key_management import registry
 from tests.support.database import (
     DatabaseContext,
     TestDatabaseConnections,
@@ -269,3 +272,44 @@ def test_alembic_factory_keeps_database_hooks_and_ownership(tmp_path: Path) -> N
             )
     with pytest.raises(RuntimeError, match="already been closed"), migrated.connect():
         pass
+
+
+@postgres_only
+def test_adopted_and_migration_pools_preserve_schema_lock_identity(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with (
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as owner,
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as other,
+        database_connections(owner.database_url) as adopted,
+    ):
+        with owner.connection() as connection:
+            role = cast(str, connection.scalar(text("SELECT current_user")))
+        options = f"-cstatement_timeout=10000 -crole={role} " + cast(
+            str, make_url(owner.database_url).query["options"]
+        )
+        with database_connections(
+            make_url(owner.database_url).update_query_dict({"options": options})
+        ) as configured:
+            install_migration_engines(monkeypatch, owner.engine())
+            pools = [
+                owner.engine(),
+                adopted.engine(),
+                managed_engine(request, owner.database_url),
+                configured.engine(),
+                sqlalchemy.engine_from_config({"sqlalchemy.url": owner.database_url}),
+            ]
+            with owner.session() as holder:
+                registry.lock_bank_version(holder, "OR-LOCKTEST", "BK-LOCKTEST", read=True)
+                for engine in pools:
+                    with managed_session_factory(request, engine)() as contender:
+                        _ = contender.execute(text("SET LOCAL lock_timeout='250ms'"))
+                        with pytest.raises(DBAPIError) as error:
+                            registry.lock_bank_version(contender, "OR-LOCKTEST", "BK-LOCKTEST")
+                        assert isinstance(error.value.orig, LockNotAvailable)
+                with other.session() as independent:
+                    _ = independent.execute(text("SET LOCAL lock_timeout='250ms'"))
+                    registry.lock_bank_version(independent, "OR-LOCKTEST", "BK-LOCKTEST")
+            with adopted.session() as released:
+                _ = released.execute(text("SET LOCAL lock_timeout='250ms'"))
+                registry.lock_bank_version(released, "OR-LOCKTEST", "BK-LOCKTEST")

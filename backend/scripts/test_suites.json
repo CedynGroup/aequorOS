@@ -18852,6 +18852,7 @@
     "tests/storage/test_transactional_encryption.py::test_transactional_storage_drains_admitted_writer_and_uses_rotated_version[scenario6]": "integration",
     "tests/storage/test_transactional_encryption.py::test_transactional_storage_drains_admitted_writer_and_uses_rotated_version[scenario7]": "integration",
     "tests/storage/test_transactional_encryption.py::test_uncommitted_key_version_cannot_publish_objects": "integration",
+    "tests/support/test_database.py::test_adopted_and_migration_pools_preserve_schema_lock_identity": "integration",
     "tests/support/test_database.py::test_alembic_factory_keeps_database_hooks_and_ownership": "integration",
     "tests/support/test_database.py::test_async_connections_receive_isolation_hooks_and_context": "integration",
     "tests/support/test_database.py::test_connections_share_data_and_close_resources": "integration",
