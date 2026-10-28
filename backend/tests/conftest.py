@@ -73,6 +73,7 @@ hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 #: whole suite shares: settings, the database, session and client, storage fakes
 #: and the demo tenants.
 pytest_plugins = [
+    "tests.support.database_fixtures",
     "tests.bi.fixtures",
     "tests.capital.fixtures",
     "tests.credit.fixtures",
