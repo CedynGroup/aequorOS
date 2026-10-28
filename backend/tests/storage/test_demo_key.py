@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Never
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import is_undeployed_environment
@@ -19,6 +19,7 @@ from app.db.base import Base
 from app.models import Bank, Organization
 from scripts.demo_bank_key import main
 from tests.fixtures.reference_data import seed_global_reference_data
+from tests.support.database import TestDatabaseConnections
 
 
 def test_control_loop_preserves_key_material_across_provider_instances(tmp_path: Path) -> None:
@@ -99,7 +100,8 @@ def test_provider_resolution_is_explicit_and_scoped(
 
 
 def test_connect_provisions_only_synthetic_key_metadata_in_explicit_sqlite(tmp_path: Path) -> None:
-    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'demo.db'}")
+    connections = TestDatabaseConnections(f"sqlite+pysqlite:///{tmp_path / 'demo.db'}")
+    engine = connections.engine()
     Base.metadata.create_all(engine)
     with Session(engine) as db:
         seed_global_reference_data(db)
@@ -128,7 +130,7 @@ def test_connect_provisions_only_synthetic_key_metadata_in_explicit_sqlite(tmp_p
         assert key.storage_slug == "bk-demo0001"
         bank = db.get(Bank, "BK-DEMO0001")
         assert bank is not None and bank.storage_slug == key.storage_slug
-    engine.dispose()
+    connections.close()
 
 
 def test_synthetic_reference_cannot_fall_back_to_real_aws(tmp_path: Path) -> None:
