@@ -595,10 +595,13 @@ def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path)
     )
     _ = (tests / "test_db.py").write_text("raise RuntimeError('integration module imported')\n")
     catalogue = tmp_path / "suites.json"
+    contracts = tmp_path / "contracts.json"
+    _ = contracts.write_text(json.dumps({"contracts": []}))
     _ = (tmp_path / "probe_catalogue.py").write_text(
-        "from pathlib import Path\nfrom scripts import test_suites\n"
+        "from pathlib import Path\nfrom scripts import database_contracts, test_suites\n"
         + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
         + "test_suites.catalogue.cache_clear()\n"
+        + f"database_contracts.CATALOGUE = Path({str(contracts)!r})\n"
     )
     environment = {
         **os.environ,
