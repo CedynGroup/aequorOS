@@ -20,7 +20,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.irr.standardised import (
+from app.irrbb.domain.standardised import (
     K_AO_ZERO_STATEMENT,
     POST_SHOCK_FLOOR,
     AutomaticOption,
@@ -29,17 +29,15 @@ from app.domain.irr.standardised import (
     SfInputs,
     SfOptionsUnsupportedError,
 )
-from app.domain.irr.standardised import run as sf_run
-from tests.domain.irr.test_sf_fixtures import flat_curve, sf_parameters, simple_ladder
+from app.irrbb.domain.standardised import run as sf_run
+from tests.irrbb.domain.test_sf_fixtures import flat_curve, sf_parameters, simple_ladder
 
 AS_OF = date(2026, 12, 31)
 PARAMS = sf_parameters()
 
 OPTIONS = (
     AutomaticOption(ref="CAP-1", currency="GHS", option_type="cap", notional=Decimal(5000)),
-    AutomaticOption(
-        ref="SWO-1", currency="GHS", option_type="swaption", notional=Decimal(2500)
-    ),
+    AutomaticOption(ref="SWO-1", currency="GHS", option_type="swaption", notional=Decimal(2500)),
 )
 
 
@@ -116,10 +114,9 @@ def test_a_declared_option_add_on_lands_in_delta_eve() -> None:
     up_with = next(r for r in with_add_on.scenarios if r.code == "parallel_up")
     up_without = next(r for r in without.scenarios if r.code == "parallel_up")
     assert up_with.by_currency[0].k_ao_native == Decimal("25.000000")
-    assert (
-        up_with.by_currency[0].delta_eve_native
-        == up_without.by_currency[0].delta_eve_native + Decimal(25)
-    )
+    assert up_with.by_currency[0].delta_eve_native == up_without.by_currency[
+        0
+    ].delta_eve_native + Decimal(25)
 
 
 def test_no_tier_one_means_no_outlier_test() -> None:
@@ -182,7 +179,7 @@ def test_the_absence_of_a_post_shock_floor_is_reported_not_assumed() -> None:
     the service's sentence, and that sentence was corrected on 2026-09-20 — it
     used to tell the filer that the framework prescribes no floor, which is a
     claim about a supervisory standard the platform cannot support. Pinned in
-    ``tests/services/test_regulatory_irr_sf.py`` and at the route.
+    ``tests/irrbb/service/test_regulatory_irr_sf.py`` and at the route.
     """
     result = sf_run(_inputs(), PARAMS)
 

@@ -2,7 +2,7 @@
 
 Agent 11 (Test/QA), 2026-09-19. A printed note is a claim about the engine;
 each claim is checked here against the engine's actual behaviour (pure
-``app.domain.irr.engine`` on a synthetic book), not against the note's own
+``app.irrbb.domain.engine`` on a synthetic book), not against the note's own
 wording.
 """
 
@@ -11,16 +11,16 @@ from __future__ import annotations
 import re
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.domain.irr.engine import (
+from app.domain.stress import appendix_ii
+from app.domain.stress.management_actions import RecognitionCaps
+from app.domain.stress.projection import EnterpriseProjectionInputs, project_enterprise
+from app.irrbb.domain.engine import (
     IRR_BUCKETS,
     IRR_OPTIONAL_SCENARIO_CODES,
     IRR_SCENARIO_CODES,
     IrrPosition,
     run_irr_scenarios,
 )
-from app.domain.stress import appendix_ii
-from app.domain.stress.management_actions import RecognitionCaps
-from app.domain.stress.projection import EnterpriseProjectionInputs, project_enterprise
 from app.reporting.service.registry import REGISTRY
 from app.reporting.service.templates import TEMPLATES, get_template
 from tests.domain.stress_fixtures import (

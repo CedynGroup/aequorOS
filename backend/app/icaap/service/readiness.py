@@ -139,7 +139,7 @@ def _message(
         # A console row has two names: what a reader calls it, and what staff
         # search for. Print both — a bare code is jargon, and a bare label is
         # not enough to find the row that has to be changed.
-        from app.domain.irr import standardised_params as sfp  # noqa: PLC0415
+        from app.irrbb.domain import standardised_params as sfp  # noqa: PLC0415
 
         params["param_labels"] = ", ".join(
             f"{sfp.PARAMETER_LABELS[code]} ({code})" if code in sfp.PARAMETER_LABELS else code

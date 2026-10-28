@@ -21,8 +21,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.irr import standardised_params as sp
-from tests.domain.irr.test_sf_fixtures import seed_rows, sf_parameters
+from app.irrbb.domain import standardised_params as sp
+from tests.irrbb.domain.test_sf_fixtures import seed_rows, sf_parameters
 
 
 def _without(code: str) -> Mapping[str, sp.GovernedValue]:
@@ -50,7 +50,7 @@ def test_a_missing_row_refuses_and_names_the_code(code: str) -> None:
 
 
 def test_an_uncalibrated_currency_takes_the_tables_own_other_column() -> None:
-    """"Other" is a column of the governed table, not a code fallback."""
+    """"Other" is a column of the governed table, not a code fallback."""  # fmt: skip
     params = sf_parameters()
 
     assert params.shock_bp("parallel", "JPY") == Decimal("325")
@@ -406,11 +406,7 @@ def test_the_representative_profile_is_labelled_as_representative() -> None:
     """A platform methodology must never read as a supervisory rule."""
     params = sf_parameters()
 
-    row = next(
-        item
-        for item in params.provenance
-        if item.code == sp.CODE_DEFAULT_CASH_FLOW_PROFILE
-    )
+    row = next(item for item in params.provenance if item.code == sp.CODE_DEFAULT_CASH_FLOW_PROFILE)
 
     assert row.representative is True
     assert params.representative_codes == (sp.CODE_DEFAULT_CASH_FLOW_PROFILE,)
@@ -460,9 +456,7 @@ def test_a_confirmed_row_says_so() -> None:
         }
     )
 
-    row = next(
-        item for item in params.provenance if item.code == sp.CODE_OUTLIER_THRESHOLD_PCT
-    )
+    row = next(item for item in params.provenance if item.code == sp.CODE_OUTLIER_THRESHOLD_PCT)
 
     assert row.pending_confirmation is False
     assert row.statement == "Outlier threshold: confirmed."

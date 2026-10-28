@@ -1,14 +1,14 @@
 """IRRBB Standardised Framework runs: loader, lifecycle, persistence, read model.
 
-A SIBLING of ``app.services.regulatory_irr``, not an extension of it. The
+A SIBLING of ``app.irrbb.service.regulatory_irr``, not an extension of it. The
 Standardised Framework is a different measurement — nineteen buckets against
 nine, six prescribed shapes against the platform's Basel six, per-currency
 aggregation with a materiality gate, an outlier test on LOSSES only (D-013),
 and behavioural treatment of deposits and prepayments the legacy engine has no
-vocabulary for. Extending ``domain/irr/engine.py`` in place would have moved
+vocabulary for. Extending ``app/irrbb/domain/engine.py`` in place would have moved
 every existing IRRBB golden and every filed IRRBB return; instead the SF runs
 as a new module value (``irr_sf``) on the same immutable run table, and the
-legacy engine is byte-identical (P5-DESIGN §1.7).
+legacy calculation behavior is unchanged (P5-DESIGN §1.7).
 
 What this module owns:
 
@@ -51,26 +51,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.irr import IrrRunError
-from app.domain.irr import standardised as sf
-from app.domain.irr import standardised_cash_flows as sfcf
-from app.domain.irr import standardised_params as sfp
 from app.identity.public import Bank
-from app.models import (
-    BankReportingPeriod,
-    CanonicalCounterparty,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
-    CanonicalReferenceRow,
-    RegulatoryLineItem,
-    RegulatoryMetricResult,
-    RegulatoryRun,
-    RegulatoryValidation,
-)
-from app.policy.public import jurisdictions, regulatory_parameters
-from app.reporting.service import filing_reconciliation
-from app.schemas.regulatory_irr_sf import (
+from app.irrbb.domain import IrrRunError
+from app.irrbb.domain import standardised as sf
+from app.irrbb.domain import standardised_cash_flows as sfcf
+from app.irrbb.domain import standardised_params as sfp
+from app.irrbb.schemas.regulatory_irr_sf import (
     IrrbbSfAssumptionRead,
     IrrbbSfAttemptRead,
     IrrbbSfAttemptsRead,
@@ -91,10 +77,24 @@ from app.schemas.regulatory_irr_sf import (
     IrrbbSfTable7Read,
     IrrbbSfTable8RowRead,
 )
+from app.irrbb.service.regulatory_irr import tier1_for_period
+from app.models import (
+    BankReportingPeriod,
+    CanonicalCounterparty,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+    CanonicalReferenceRow,
+    RegulatoryLineItem,
+    RegulatoryMetricResult,
+    RegulatoryRun,
+    RegulatoryValidation,
+)
+from app.policy.public import jurisdictions, regulatory_parameters
+from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_liquidity import RegulatoryRunRead
 from app.services import market_data, market_data_sources
 from app.services.audit import record_event
-from app.services.regulatory_irr import tier1_for_period
 from app.services.regulatory_liquidity import (  # noqa: PLC2701 - engine completion read
     _read_regulatory_run_execution_result,
 )

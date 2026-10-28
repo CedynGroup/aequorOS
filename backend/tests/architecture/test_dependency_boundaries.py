@@ -60,10 +60,11 @@ REGULATORY_PLANE: tuple[str, ...] = (
     "icaap/domain",
     "reporting/domain",
     "policy/domain",
+    "irrbb/domain",
     "reporting/service",
     "services/regulatory_capital.py",
     "services/regulatory_liquidity.py",
-    "services/regulatory_irr.py",
+    "irrbb/service/regulatory_irr.py",
     "services/regulatory_fx.py",
     "services/regulatory_ftp.py",
     "services/regulatory_forecasting.py",
@@ -155,6 +156,7 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
         + _python_files("icaap/domain")
         + _python_files("reporting/domain")
         + _python_files("policy/domain")
+        + _python_files("irrbb/domain")
     ):
         module = _module_name(path)
         # Module-aware: `app/domain/**` carries relative imports, and a purity
@@ -186,6 +188,10 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
                     "app.reporting.models",
                     "app.reporting.service",
                     "app.reporting.public",
+                    "app.irrbb.api",
+                    "app.irrbb.service",
+                    "app.irrbb.schemas",
+                    "app.irrbb.public",
                     "app.policy.api",
                     "app.policy.models",
                     "app.policy.service",

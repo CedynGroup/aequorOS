@@ -628,7 +628,7 @@ def test_ear_analysis_generalizes_horizon_and_persists_nothing(real_client: Test
     assert "12 months" in body_12["basis"]
 
     # N=6 drops the 6-12m bucket and re-weights the residuals (hand-derived in
-    # tests/domain/test_irr_engine.py::test_ear_six_month_horizon_hand_derived).
+    # tests/irrbb/domain/test_irr_engine.py::test_ear_six_month_horizon_hand_derived).
     six = _ear_analysis(real_client, period["id"], 6, 200)
     assert six.status_code == 200, six.text
     body_6 = six.json()

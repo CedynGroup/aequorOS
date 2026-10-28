@@ -45,7 +45,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Literal
 
-from app.domain.irr.standardised_params import (
+from app.irrbb.domain.standardised_params import (
     CODE_DEFAULT_CASH_FLOW_PROFILE,
     DAYS_IN_YEAR,
     HUNDRED,

@@ -14,7 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
-from app.domain.irr.engine import (
+from app.irrbb.domain.engine import (
     IrrComputationError,
     MissingParameterError,
     UnsupportedShockError,
@@ -25,7 +25,7 @@ from app.domain.irr.engine import (
     compute_nii,
     run_irr_scenarios,
 )
-from app.domain.irr.engine import (
+from app.irrbb.domain.engine import (
     IrrPosition as P,
 )
 

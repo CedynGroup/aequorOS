@@ -36,10 +36,10 @@ from app.icaap.schemas.workspace import (
     IcaapDataBlockRefresh,
 )
 from app.icaap.service import blocks, cycles, pillar2, readiness, sf_state
+from app.irrbb.schemas.regulatory_irr_sf import IrrbbSfRunCreate
+from app.irrbb.service import regulatory_irr_sf
 from app.models import Bank, BankReportingPeriod, RegulatoryParameter, RegulatoryRun
 from app.policy.service import regulatory_parameters
-from app.schemas.regulatory_irr_sf import IrrbbSfRunCreate
-from app.services import regulatory_irr_sf
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.icaap.service.conftest import AS_OF, rehearsal_payload
 from tests.services.sf_book import seed_book

@@ -27,6 +27,7 @@ from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.irrbb.service import regulatory_irr
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -52,7 +53,6 @@ from app.services import (
     regulatory_capital,
     regulatory_ftp,
     regulatory_fx,
-    regulatory_irr,
     regulatory_liquidity,
 )
 from app.services.fact_derivation import evaluate_balance_identity

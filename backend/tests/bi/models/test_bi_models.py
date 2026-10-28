@@ -69,7 +69,6 @@ from app.domain.capital.loan_classification import (
 from app.domain.credit.dpd_bands import DPD_BAND_CODES
 from app.domain.ingestion import optional_position_fields
 from app.domain.ingestion.reference_schemas import performance_targets
-from app.domain.irr.engine import IRR_BUCKETS
 from app.domain.liquidity.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
 from app.domain.positions.families import (
     LOAN_CATEGORY_MAP,
@@ -78,6 +77,7 @@ from app.domain.positions.families import (
     unclassified_category,
 )
 from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
+from app.irrbb.domain.engine import IRR_BUCKETS
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalGlAccount,

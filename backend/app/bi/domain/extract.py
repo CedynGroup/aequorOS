@@ -64,7 +64,6 @@ from app.domain.ingestion.optional_position_fields import (
     POSITION_ATTRIBUTE_TEXT_LIMITS,
     over_long_text_attributes,
 )
-from app.domain.irr.buckets import repricing_bucket
 from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS, ladder_bucket_index
 from app.domain.positions.families import (
     LOAN_CATEGORY_MAP,
@@ -72,6 +71,7 @@ from app.domain.positions.families import (
     loan_family,
     unclassified_category,
 )
+from app.irrbb.domain.buckets import repricing_bucket
 
 Tier = Literal["live", "official"]
 AttributionBasis = Literal["snapshot_on_or_before", "no_snapshot", "unmatched"]

@@ -39,7 +39,7 @@ from app.domain.ingestion.constants import (
     RATE_TYPES,
 )
 from app.domain.ingestion.optional_position_fields import ACCOUNT_STATUSES, CHANNELS
-from app.domain.irr.buckets import REPRICING_BUCKETS
+from app.irrbb.domain.buckets import REPRICING_BUCKETS
 
 POSITION_TABLE = "bi_fact_position_daily"
 EVENT_TABLE = "bi_fact_loan_event"

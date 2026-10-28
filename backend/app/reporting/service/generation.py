@@ -1485,7 +1485,7 @@ def _generate_capital(
 # BoG GHS IRRBB calibration (plan W6.4): the IRRBB Guideline (exposure draft,
 # Feb 2026) Appendix II–III Tables 5–6 prescribe a ±450 bp parallel GHS shock
 # (short 500 / long 300). The IRR engine currently computes only the six Basel
-# scenarios (app/domain/irr/engine.py IRR_SCENARIO_CODES) and hard-coded
+# scenarios (app/irrbb/domain/engine.py IRR_SCENARIO_CODES) and hard-coded
 # ±200 bp earnings-at-risk, so these rows are emitted ONLY when a run's
 # metrics actually carry them — never fabricated. The BoG ±450 param rows
 # (module='irr', parallel_up_450 / parallel_down_450) are stored effective-

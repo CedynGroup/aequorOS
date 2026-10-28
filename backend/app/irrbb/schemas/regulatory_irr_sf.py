@@ -1,6 +1,6 @@
 """Read model for the IRRBB Standardised Framework.
 
-A sibling of ``app/schemas/regulatory_irr.py``: the legacy Basel-six read model
+A sibling of ``app/irrbb/schemas/regulatory_irr.py``: the legacy Basel-six read model
 is untouched, because the Standardised Framework is a NEW scenario set with a
 different vocabulary (nineteen buckets, six prescribed shapes, per-currency
 aggregation, an outlier test on losses only) rather than a revision of the old

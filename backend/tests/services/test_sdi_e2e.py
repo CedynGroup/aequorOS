@@ -18,6 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
+from app.irrbb.service import regulatory_irr
 from app.models import Bank, BankReportingPeriod, RegulatoryPackage, RegulatoryParameter
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import calendar, generation
@@ -27,12 +29,10 @@ from app.reporting.service.le_generation import (
     generate_sdi_lmt,
 )
 from app.reporting.service.registry import REGISTRY
-from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.services import (
     fact_derivation,
     loan_classification,
     regulatory_capital,
-    regulatory_irr,
     sdi_capital,
     sdi_capital_checks,
     sdi_readiness,
