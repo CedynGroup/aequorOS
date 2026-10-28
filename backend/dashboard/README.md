@@ -644,6 +644,10 @@ diagnosis:
    live plane and running the product's own `pipeline.recompute_modules`.
    Without it `/basel`, `/liquidity`, `/ftp/*`, `/irr/*` and `/fx/*` all open on
    the "no computed data yet" envelope.
+4. **Bank-held keys.** The full suite requires the bank-key emulator described in
+   [the encryption journey setup](../docs/bank_encryption.md#browser-encryption-journeys).
+   Start it and export `BANK_KMS_ENDPOINT_URL` before the commands below. The local
+   service runner provisions Postgres and MinIO; it does not start this emulator.
 
 `00-ingestion-worker.spec.ts` exercises the worker path separately. It provisions
 an empty tenant and real analyst/approver bindings, uploads a balanced synthetic
@@ -974,6 +978,13 @@ the overflow you cannot remove, remove the one you can. **Design changes are
 reviewed as pixels**: follow the visual-tour capture instructions under
 [End-to-end (Playwright)](#end-to-end-playwright) and compare the screenshots
 before and after. Type-checking cannot see a clipped column.
+
+### Encryption journeys with local KMS
+
+Follow [the browser encryption journey guide](../docs/bank_encryption.md#browser-encryption-journeys)
+for emulator setup, the focused command, fixture isolation, recovery coverage and
+evidence paths. Its [emulator contract](../docs/bank_encryption.md#local-kms-emulator-and-ci)
+owns endpoint restrictions and the cross-account-grant limitation.
 
 ### Contingency funding plan lifecycle
 

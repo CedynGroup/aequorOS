@@ -53,7 +53,7 @@ from pyhanko.sign import fields as pyhanko_fields
 from pyhanko.sign import signers as pyhanko_signers
 from pyhanko_certvalidator.registry import SimpleCertificateStore
 from sqlalchemy import Engine, event, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, attributes
 from starlette.requests import Request
 
 from app.api.deps import TenantContext
@@ -64,7 +64,12 @@ from app.attestation.service.identity import ensure_signer_identity
 from app.core import security
 from app.core.authorization import RoleBundle
 from app.core.key_management import registry
-from app.core.key_management.types import KeyStatus
+from app.core.key_management.presentation import LOCKED_JSON, LockReason
+from app.core.key_management.types import (
+    KeyStatus,
+    KeyUnavailableError,
+    ProtectedSupportAccessError,
+)
 from app.models import (
     AttestationSignature,
     Bank,
@@ -462,6 +467,36 @@ def test_clean_detached_attestation_verifies_and_reports_every_check(
         assert entry["present"] is True
         assert entry["pinned_input_hash"] == entry["stored_input_hash"]
         assert entry["recomputed_input_hash"] == entry["stored_input_hash"]
+
+
+@pytest.mark.parametrize("reason", ["revoked", "unavailable", "support"])
+@pytest.mark.parametrize("has_content_digest", [False, True])
+def test_locked_snapshot_refuses_detached_verification_and_bundle(
+    db_session: Session, pki: _Pki, reason: LockReason, has_content_digest: bool
+) -> None:
+    package = _seed(db_session)
+    _fully_certify(db_session, pki, package)
+    snapshot = package.snapshot
+    snapshot_sha256 = package.snapshot_sha256
+    assert _report(db_session, package, pki=pki)["overall_passed"] is True
+    attributes.set_committed_value(package, "snapshot", {LOCKED_JSON: reason})
+    if not has_content_digest:
+        attributes.set_committed_value(package, "content_digest", None)
+
+    error = ProtectedSupportAccessError if reason == "support" else KeyUnavailableError
+    with pytest.raises(error) as refused:
+        _report(db_session, package, pki=pki)
+    assert refused.value.revoked is (reason == "revoked")
+    with pytest.raises(error):
+        verify.export_verification_bundle(db_session, MAKER, package)
+
+    attributes.set_committed_value(package, "snapshot_sha256", None)
+    with pytest.raises(error):
+        _report(db_session, package, pki=pki)
+
+    attributes.set_committed_value(package, "snapshot", snapshot)
+    attributes.set_committed_value(package, "snapshot_sha256", snapshot_sha256)
+    assert _report(db_session, package, pki=pki)["overall_passed"] is True
 
 
 @pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])

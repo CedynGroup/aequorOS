@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -1053,6 +1054,131 @@ it.each(["empty", "added"] as const)(
   },
 );
 
+it.each(
+  (["revoked", "unavailable"] as const).flatMap((reason) =>
+    (["manual", "automatic"] as const).map((recovery) => ({
+      reason,
+      recovery,
+    })),
+  ),
+)(
+  "recovers a first party draft after $reason using $recovery retry with an empty register",
+  async ({ reason, recovery }) => {
+    vi.useFakeTimers();
+    let available = true;
+    const saved: ReturnType<typeof party>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST" && url.endsWith("/related-parties")) {
+          if (!available) return refusal(reason);
+          const payload = JSON.parse(String(init.body)) as {
+            full_name: string;
+          };
+          const created = party(payload.full_name);
+          saved.push(created);
+          return Response.json(created, { status: 201 });
+        }
+        if (url.endsWith(`/banks/${BANK}`)) {
+          return Response.json(
+            { id: BANK },
+            {
+              headers: {
+                "X-Aequoros-Protected-Data": JSON.stringify({
+                  [BANK]: available ? "available" : reason,
+                }),
+              },
+            },
+          );
+        }
+        if (url.endsWith("/institution-profile")) {
+          return Response.json(
+            {
+              bank_id: BANK,
+              profile: null,
+              related_parties: saved,
+              name_history: [],
+              outlets: [],
+              licenses: [],
+              products: [],
+            },
+            {
+              headers: {
+                "X-Aequoros-Protected-Data": JSON.stringify({
+                  [BANK]: available ? "available" : reason,
+                }),
+              },
+            },
+          );
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    const client = mount(<RelatedPartiesPage />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add related party" }));
+    fireEvent.change(screen.getByLabelText(/Full name/), {
+      target: { value: "Synthetic first party" },
+    });
+    fireEvent.change(screen.getByLabelText(/Reason for change/), {
+      target: { value: "Synthetic first entry" },
+    });
+    available = false;
+    fireEvent.click(screen.getByRole("button", { name: "Add party" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(protectedDataState(BANK)).toBe(reason);
+    expect(client.getQueryData(profileKey)).toMatchObject({
+      relatedParties: [],
+    });
+    expect(client.getQueryState(profileKey)?.isInvalidated).toBe(false);
+    expect(screen.getByLabelText(/Full name/)).toBeDisabled();
+    expect(screen.getByLabelText(/Full name/)).toHaveValue(
+      "Synthetic first party",
+    );
+    expect(screen.getByRole("button", { name: "Add party" })).toBeDisabled();
+    expect(saved).toEqual([]);
+
+    const retry = async () => {
+      if (recovery === "manual") {
+        fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      } else {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5_100);
+        });
+      }
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+    };
+    await retry();
+    expect(protectedDataState(BANK)).toBe(reason);
+    expect(screen.getByRole("button", { name: "Add party" })).toBeDisabled();
+    available = true;
+    await retry();
+    expect(protectedDataState(BANK)).toBe("available");
+    expect(screen.getByLabelText(/Full name/)).toBeEnabled();
+    expect(screen.getByLabelText(/Full name/)).toHaveValue(
+      "Synthetic first party",
+    );
+    expect(screen.getByLabelText(/Reason for change/)).toHaveValue(
+      "Synthetic first entry",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add party" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(saved.map((entry) => entry.full_name)).toEqual([
+      "Synthetic first party",
+    ]);
+    expect(screen.queryByLabelText(/Full name/)).toBeNull();
+  },
+);
+
 function StopAlert() {
   const mutation = useDeactivateBiAlert(BANK);
   return (
@@ -1084,7 +1210,14 @@ it.each(["revoked", "unavailable"] as const)(
 
 function AlertRead() {
   const query = useBiAlerts(BANK);
-  return <span>{query.data ? "Alerts loaded" : "Alerts loading"}</span>;
+  return (
+    <>
+      <span>{query.data ? "Alerts loaded" : "Alerts loading"}</span>
+      {query.data?.map((alert) => (
+        <p key={alert.id}>{alert.name}</p>
+      ))}
+    </>
+  );
 }
 
 it.each(["generated", "notifications"] as const)(
@@ -1147,6 +1280,126 @@ it.each(["generated", "notifications"] as const)(
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(protectedDataState(BANK)).toBe("available"));
     expect(await screen.findByText("Synthetic owner")).toBeVisible();
+  },
+);
+
+it.each(["generated", "notifications"] as const)(
+  "rejects stale %s plaintext after a repeated same-state revocation",
+  async (clientKind) => {
+    let state = "available";
+    let delayNext = false;
+    let finishRead: ((response: Response) => void) | undefined;
+    const responseFor = (notifications: boolean, disclosure: string) =>
+      notifications
+        ? Response.json(
+            {
+              alerts:
+                disclosure === "available"
+                  ? [
+                      {
+                        id: PARTY,
+                        bank_id: BANK,
+                        name: "Synthetic notification",
+                        measure_id: "total_assets",
+                        measure_label: "Total assets",
+                        filters: [],
+                        direction: "above",
+                        threshold_basis: "stated",
+                        threshold: "100",
+                        owner_user_id: PARTY,
+                        owned_by_caller: true,
+                        notify_user_ids: [],
+                        recipients: [],
+                        is_active: true,
+                        latest_state: "not_evaluated",
+                        latest_as_of: null,
+                        latest_detail: "",
+                      },
+                    ]
+                  : [],
+            },
+            {
+              headers: {
+                "X-Aequoros-Protected-Data": JSON.stringify({
+                  [BANK]: disclosure,
+                }),
+              },
+            },
+          )
+        : profileResponse(disclosure);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const notifications = String(input).endsWith("/bi/alerts");
+        if (delayNext && notifications === (clientKind === "notifications")) {
+          delayNext = false;
+          return new Promise<Response>((resolve) => {
+            finishRead = resolve;
+          });
+        }
+        return responseFor(notifications, state);
+      }),
+    );
+    const client = mount(
+      <>
+        <RelatedPartiesPage />
+        <AlertRead />
+      </>,
+    );
+    await screen.findByText("Synthetic notification");
+    await userEvent.click(await screen.findByText("Synthetic owner"));
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await userEvent.clear(screen.getByLabelText(/Full name/));
+    await userEvent.type(screen.getByLabelText(/Full name/), "Unsaved draft");
+    const otherKey = ["institution-profile", "BK-OTHER001"];
+    client.setQueryData(otherKey, { fullName: "Other bank identity" });
+    state = "revoked";
+    await act(async () => {
+      await observeProtectedData(profileResponse(state));
+    });
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    state = "available";
+    delayNext = true;
+    const pending = client.refetchQueries({
+      predicate: (query) =>
+        clientKind === "generated"
+          ? query.queryKey.includes("institution-profile") &&
+            query.queryKey.includes(BANK)
+          : query.queryKey.includes(BANK) &&
+            !query.queryKey.includes("institution-profile"),
+    });
+    await waitFor(() => expect(finishRead).toBeTypeOf("function"));
+    state = "revoked";
+    await act(async () => {
+      await institutionProfileApi.getInstitutionProfile({ bankId: BANK });
+    });
+    await act(async () => {
+      finishRead?.(responseFor(clientKind === "notifications", "available"));
+      await pending;
+    });
+    expect(protectedDataState(BANK)).toBe("revoked");
+    expect(screen.queryByText("Synthetic owner")).toBeNull();
+    expect(screen.queryByText("Synthetic notification")).toBeNull();
+    const bankData = client
+      .getQueryCache()
+      .getAll()
+      .filter((query) => query.queryKey.includes(BANK))
+      .map((query) => query.state.data);
+    expect(JSON.stringify(bankData)).not.toContain("Synthetic owner");
+    expect(JSON.stringify(bankData)).not.toContain("Synthetic notification");
+    expect(client.getQueryData(otherKey)).toEqual({
+      fullName: "Other bank identity",
+    });
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved draft");
+    expect(screen.getByLabelText(/Full name/)).toBeDisabled();
+    state = "available";
+    await act(async () => {
+      await client.refetchQueries({ type: "active" });
+    });
+    expect(await screen.findByText("Synthetic notification")).toBeVisible();
+    expect(await screen.findByText("Synthetic owner")).toBeVisible();
+    expect(screen.getByLabelText(/Full name/)).toHaveValue("Unsaved draft");
+    expect(screen.getByLabelText(/Full name/)).toBeEnabled();
   },
 );
 

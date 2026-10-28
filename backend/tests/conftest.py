@@ -87,8 +87,7 @@ pytest_plugins = [
 ]
 
 
-@pytest.fixture(autouse=True)
-def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def _isolate_test_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "1")
     monkeypatch.setenv("TLS_CA_BUNDLE", "")
@@ -232,13 +231,20 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # otherwise add gaps to suites that have nothing to do with signing.
     monkeypatch.setenv("SIGNING_BACKEND", "software")
     monkeypatch.setenv("BANK_KMS_ENDPOINT_URL", "")
+
+
+def _clear_cached_settings() -> None:
     get_settings.cache_clear()
     get_key_settings.cache_clear()
     get_engine.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    _isolate_test_settings(monkeypatch)
+    _clear_cached_settings()
     yield
-    get_settings.cache_clear()
-    get_key_settings.cache_clear()
-    get_engine.cache_clear()
+    _clear_cached_settings()
 
 
 @pytest.fixture(autouse=True)

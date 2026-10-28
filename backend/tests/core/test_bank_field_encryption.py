@@ -58,7 +58,7 @@ from app.identity.schemas.institution_profile import (
     RelatedPartyRoleInput,
     RelatedPartyUpdate,
 )
-from app.identity.service import institution_profile
+from app.identity.service import banks, institution_profile
 from app.live import position_book
 from app.ml.behavioral import deposit_stability, nmd_duration
 from app.ml.behavioral.config import BehavioralTrainingConfig
@@ -81,7 +81,7 @@ from app.services.behavioral_liquidity import get_behavioral_liquidity_report
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.api import test_impersonation_auth as impersonation
 from tests.bi.fixtures import materialize_bi_plane
-from tests.support.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 BANK_A = "BK-SAMP0001"
@@ -2462,3 +2462,184 @@ def test_ingestion_reference_lookups_leave_unused_fields_unread(
     replacement = db_session.get(CanonicalCounterparty, replacement_id)
     assert replacement is not None and replacement.name == "Synthetic replacement"
     assert replacement.source_reference == IDENTIFIER
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_numeric_saved_bi_configuration_loads_without_a_bank_key(
+    db_session: Session, provider: LocalKeyProvider, status: KeyStatus
+) -> None:
+    connect(db_session, provider)
+    query = BiPackQuery(measures=["loans.balance_rc"], window="as_of")
+    spec = BiDashboardSpec.model_validate(
+        {
+            "widgets": [
+                {
+                    "id": "loans",
+                    "kind": "table",
+                    "title": "Loans",
+                    "query": query.model_dump(mode="json"),
+                }
+            ],
+            "layout": [{"i": "loans", "x": 0, "y": 0, "w": 6, "h": 4}],
+        }
+    ).model_dump(mode="json")
+    version = saved_version(db_session, spec)
+    subscription = BiSubscription(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        name="Numeric subscription",
+        owner_user_id=USER_1,
+        query=query.for_period(AS_OF).model_dump(mode="json"),
+        artifact_format="csv",
+        cadence="daily",
+        hour=7,
+        minute=30,
+        recipient_user_ids=[],
+    )
+    filters = [{"member": "position.currency", "op": "eq", "values": ["GHS"]}]
+    alert = BiAlert(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        owner_user_id=USER_1,
+        name="Numeric alert",
+        measure_id="loans.balance_rc",
+        filters=filters,
+        direction="above",
+        threshold_basis="stated",
+        threshold=Decimal(100),
+        notify_user_ids=[],
+    )
+    db_session.add_all([version, subscription, alert])
+    db_session.commit()
+    ids = version.id, subscription.id, alert.id
+    db_session.expunge_all()
+    provider.set_status(KEY_A, status)
+    db_session.info[SESSION_STATE] = PresentationState()
+    loaded_version = db_session.get(BiDashboardVersion, ids[0])
+    loaded_subscription = db_session.get(BiSubscription, ids[1])
+    loaded_alert = db_session.get(BiAlert, ids[2])
+    assert loaded_version is not None and loaded_version.spec == spec
+    assert loaded_subscription is not None and loaded_subscription.query == query.for_period(
+        AS_OF
+    ).model_dump(mode="json")
+    assert loaded_alert is not None and loaded_alert.filters == filters
+    assert cast(PresentationState, db_session.info[SESSION_STATE]).banks == {}
+    db_session.info.pop(SESSION_STATE)
+
+
+@pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+def test_empty_register_recovers_after_first_protected_write_refuses(
+    db_client: TestClient,
+    db_session: Session,
+    provider: LocalKeyProvider,
+    status: KeyStatus,
+) -> None:
+    connect(db_session, provider)
+    payload: dict[str, object] = {
+        "reason": "Synthetic first entry",
+        "party_type": "individual",
+        "full_name": NAME,
+        "contact": {},
+        "roles": [],
+    }
+    profile_url = f"/api/v1/banks/{BANK_A}/institution-profile"
+    parties_url = f"/api/v1/banks/{BANK_A}/related-parties"
+    provider.set_status(KEY_A, status)
+    refused = db_client.post(parties_url, headers=headers(), json=payload)
+    assert refused.status_code == 503, refused.text
+    reason = "revoked" if status == KeyStatus.DISABLED else "unavailable"
+    assert refused.json()["error"]["code"] == f"bank_key_{reason}"
+    empty = db_client.get(profile_url, headers=headers())
+    assert empty.status_code == 200, empty.text
+    assert empty.json()["related_parties"] == []
+    assert json.loads(empty.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
+
+    unavailable = db_client.get(f"/api/v1/banks/{BANK_A}", headers=headers())
+    assert unavailable.status_code == 200, unavailable.text
+    assert json.loads(unavailable.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
+    unauthorized = db_client.get(f"/api/v1/banks/{BANK_A}", headers=headers(org_id=ORG_2))
+    assert unauthorized.status_code == 404, unauthorized.text
+    assert "X-Aequoros-Protected-Data" not in unauthorized.headers
+
+    provider.set_status(KEY_A, KeyStatus.ACTIVE)
+    recovered = db_client.get(f"/api/v1/banks/{BANK_A}", headers=headers())
+    assert recovered.status_code == 200, recovered.text
+    assert json.loads(recovered.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
+    assert "no-store" in recovered.headers["cache-control"]
+    still_empty = db_client.get(profile_url, headers=headers())
+    assert still_empty.json()["related_parties"] == []
+    saved = db_client.post(parties_url, headers=headers(), json=payload)
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["full_name"] == NAME
+
+
+def test_unconnected_bank_read_does_not_confirm_key_availability(
+    db_client: TestClient, provider: LocalKeyProvider
+) -> None:
+    response = db_client.get(f"/api/v1/banks/{BANK_A}", headers=headers())
+    assert response.status_code == 200, response.text
+    assert "X-Aequoros-Protected-Data" not in response.headers
+
+
+@pytest.mark.parametrize("presentation_support", [False, True])
+def test_bank_recovery_read_does_not_unwrap_for_support(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    presentation_support: bool,
+) -> None:
+    connect(db_session, provider)
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Support recovery must not unwrap bank data")
+
+    monkeypatch.setattr(provider, "unwrap", refuse_unwrap)
+    presentation = PresentationState(support=presentation_support)
+    db_session.info[SESSION_STATE] = presentation
+    ctx = TenantContext(
+        organization_id=ORG_1,
+        impersonation_context="synthetic-support",
+        actor_operator="synthetic-operator@example.test",
+    )
+    assert banks.get_bank(db_session, ctx, BANK_A).id == BANK_A
+    assert presentation.banks == {BANK_A: "support"}
+    db_session.info.pop(SESSION_STATE)
+
+
+@pytest.mark.parametrize("status", ["deferred", "failed", "completed", None])
+def test_dedup_status_remains_operational_without_unwrapping_the_report(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    status: str | None,
+) -> None:
+    connect(db_session, provider)
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        source_system="EXCEL_CSV",
+        adapter_version="synthetic",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=AS_OF,
+        etl_report={"dedup_status": "deferred", "name": NAME},
+    )
+    db_session.add(batch)
+    db_session.commit()
+    assert batch.dedup_status == "deferred"
+    batch.etl_report = {"dedup_status": status, "name": NAME} if status else None
+    db_session.commit()
+    batch_id = batch.id
+    db_session.expunge_all()
+
+    def refuse_unwrap(*_args: object, **_kwargs: object) -> bytes:
+        pytest.fail("Operational status must not unwrap the report during support access")
+
+    monkeypatch.setattr(provider, "unwrap", refuse_unwrap)
+    db_session.info[SESSION_SUPPORT] = True
+    try:
+        loaded = db_session.get(IngestionBatch, batch_id)
+        assert loaded is not None and loaded.dedup_status == status
+        assert loaded.etl_report == {LOCKED_JSON: "support"}
+    finally:
+        db_session.info.pop(SESSION_SUPPORT)

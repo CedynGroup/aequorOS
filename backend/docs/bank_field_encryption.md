@@ -160,3 +160,8 @@ current names.
 Concentration displays configured locked limits as not evaluated and withholds a
 clean breach indicator while any configured evaluation is incomplete; independent
 numeric limits still evaluate.
+
+Recovery retries also read `GET /banks/{bank_id}` to observe the connected key
+when protected collections are empty after a refused first save. A headerless
+successful response does not clear an existing lock. Support reads never unwrap
+a bank key or poll for recovery.

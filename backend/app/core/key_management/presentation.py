@@ -9,6 +9,8 @@ from uuid import UUID
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.core.key_management.types import KeyUnavailableError, ProtectedSupportAccessError
+
 type LockReason = Literal["available", "revoked", "unavailable", "support"]
 HEADER = "X-Aequoros-Protected-Data"
 SESSION_STATE = "protected_data_presentation"
@@ -40,6 +42,15 @@ def contains_placeholder(value: object) -> bool:
     if isinstance(value, list):
         return any(contains_placeholder(item) for item in cast(list[object], value))
     return False
+
+
+def require_disclosed(value: object) -> None:
+    if not contains_placeholder(value):
+        return
+    reason = cast(dict[str, object], value).get(LOCKED_JSON) if isinstance(value, dict) else None
+    if reason == "support":
+        raise ProtectedSupportAccessError()
+    raise KeyUnavailableError("Protected data is locked.", revoked=reason == "revoked")
 
 
 class ProtectedDataMiddleware:

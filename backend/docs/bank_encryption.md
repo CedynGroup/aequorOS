@@ -313,3 +313,38 @@ rewrapping to a second key. AWS cross-account
 policy and grant enforcement are outside the emulator's model and remain covered
 by mocked provider tests. Guided key setup and historical re-encryption journeys
 belong to their separate feature stacks.
+
+### Browser encryption journeys
+
+`backend/dashboard/e2e/bank-encryption.spec.ts` exercises the real AWS provider
+through a loopback HTTP fault proxy. Set `BANK_KMS_ENDPOINT_URL` to the emulator
+above before running `pnpm --filter @aequoros/dashboard e2e bank-encryption.spec.ts`.
+A missing emulator fails the stories; they never silently substitute the local
+in-memory provider. CI supplies one emulator per shard and keeps a single browser
+worker, just like the other journeys.
+
+Each story creates its own synthetic tenant, institution and analyst, using the
+shared identity catalogue. The fixture ingests a synthetic identifier through
+the Data Engine, copies the canonical test book's platform-derived current facts and numeric live
+metrics with their analysis periods and parameter register into the isolated institution, and connects fresh emulator keys through
+the operator key service. It refuses a disabled key before connecting the active
+key. It accepts only the fixed disposable `e2e.db` file and `APP_ENV=test`.
+Finally-based cleanup restores the fault proxy, restores key access, removes only
+that story's tenant rows, and schedules its synthetic keys for deletion.
+
+The journeys save and reread protected related-party names through the browser;
+raw SQLite reads separately verify ciphertext envelopes and blind indexes, then
+the exact-identifier search service checks the ingested identifier. They cover
+bank revocation, retained drafts after a rejected write, disabled inputs and
+save buttons, numeric liquidity continuity, outage-specific Retry and automatic
+recovery, old and new records after master-key rotation, and staff-only
+placeholders. Rotation leaves existing field ciphertext unchanged and retains
+the old key for historical reads; it does not test the separate re-encryption
+job.
+
+Use `E2E_RUNTIME_DIR` for an external disposable runtime directory and
+`E2E_EVIDENCE_DIR` for screenshots. Traces and failure artifacts live under the
+runtime directory. Screenshots are review attachments, never repository assets.
+The guided setup screen and historical re-encryption job remain follow-ups on
+their sibling feature stacks; AWS cross-account grants remain mocked-test
+coverage because the emulator does not implement their enforcement.

@@ -45,6 +45,7 @@ from app.attestation.models import AttestationSignature
 from app.attestation.service import digests, layouts, register_state
 from app.attestation.service.policy import SigningPolicy, resolve_policy
 from app.core.config import get_settings
+from app.core.key_management.presentation import require_disclosed
 from app.reporting.models.packages import RegulatoryPackage
 from app.services.audit import record_event
 
@@ -102,6 +103,7 @@ def compute_binding(package: RegulatoryPackage) -> BindingInputs:
     Recomputed (never read from a cache) at certification, at every later
     signature, and at verification — that recomputation IS the tamper check.
     """
+    require_disclosed(package.snapshot)
     source_runs = list(package.source_runs or [])
     binding_class: digests.BindingClass = "engine_run" if source_runs else "master_data"
 

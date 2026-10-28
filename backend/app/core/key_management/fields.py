@@ -567,38 +567,41 @@ def _presentation_locked(
     return True
 
 
-def observe_bank_key(db: Session, organization: str, bank: str) -> None:
+def observe_bank_key(db: Session, organization: str, bank: str, *, support: bool = False) -> None:
     presentation = db.info.get(SESSION_STATE)
-    if not isinstance(presentation, PresentationState) or bank in presentation.observed_banks:
+    if not isinstance(presentation, PresentationState):
         return
-    if presentation.support or db.info.get(SESSION_SUPPORT):
+    presentation.support = presentation.support or support or bool(db.info.get(SESSION_SUPPORT))
+    if presentation.support:
         presentation.record(bank, "support")
         presentation.observed_banks.add(bank)
         return
+    if bank in presentation.observed_banks:
+        return
     registry.lock_bank_version(db, organization, bank, read=True)
     row = registry.bank_key(db, organization, bank)
-    if row is None and get_key_settings().bank_key_required:
-        presentation.record(bank, "unavailable")
+    if row is None:
+        if get_key_settings().bank_key_required:
+            presentation.record(bank, "unavailable")
         presentation.observed_banks.add(bank)
         return
-    if row is not None:
-        versions = {row.current_version_id: _envelope_context(organization, bank)}
-        versions.setdefault(row.index_version_id, _index_context(row))
-        for version, context in versions.items():
-            try:
-                if version is None:
-                    raise KeyUnavailableError("The bank data-key version is unavailable.")
-                if reason := presentation.read_locks.get(version):
-                    presentation.record(bank, reason)
-                    continue
-                registry.open_envelope(db, row, version, context, registry.provider_for)
-            except KeyIntegrityError:
-                raise
-            except KeyUnavailableError as exc:
-                reason = "revoked" if exc.revoked else "unavailable"
+    versions = {row.current_version_id: _envelope_context(organization, bank)}
+    versions.setdefault(row.index_version_id, _index_context(row))
+    for version, context in versions.items():
+        try:
+            if version is None:
+                raise KeyUnavailableError("The bank data-key version is unavailable.")
+            if reason := presentation.read_locks.get(version):
                 presentation.record(bank, reason)
-                if version is not None:
-                    presentation.read_locks[version] = reason
+                continue
+            registry.open_envelope(db, row, version, context, registry.provider_for)
+        except KeyIntegrityError:
+            raise
+        except KeyUnavailableError as exc:
+            reason = "revoked" if exc.revoked else "unavailable"
+            presentation.record(bank, reason)
+            if version is not None:
+                presentation.read_locks[version] = reason
     presentation.record(bank, "available")
     presentation.observed_banks.add(bank)
 
