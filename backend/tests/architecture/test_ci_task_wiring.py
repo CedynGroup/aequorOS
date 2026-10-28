@@ -329,7 +329,7 @@ def test_unit_suite_task_and_ci_job_are_explicit() -> None:
         "unit",
         "--suite-only",
         "-n",
-        "logical",
+        "auto",
         "--dist",
         "load",
         "--durations=20",

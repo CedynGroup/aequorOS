@@ -530,8 +530,8 @@ exact coverage; a second full-tree collection is unnecessary. Integration-only
 modules are never imported by this selector. Mixed modules still share their
 module imports, while their known integration/e2e functions are not collected.
 Numeric libraries use one thread per worker to avoid nested OpenMP/BLAS pools
-when several ML cases fit concurrently. The run uses the runner's logical CPU
-count and per-case load scheduling, retaining
+when several ML cases fit concurrently. The run uses the runner's detected CPU
+count (`-n auto`) and per-case load scheduling, retaining
 the in-memory storage audit sequence on one worker because it shares mutable
 class state. The immutable OpenAPI schema and generated shard reports also stay
 on one worker each, avoiding repeated expensive module-fixture setup. `--durations=20` reports setup/call/teardown outliers. Database
