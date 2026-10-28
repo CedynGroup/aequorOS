@@ -27,7 +27,7 @@ from app.core.key_management.types import (
     KeyStatus,
     KeyUnavailableError,
 )
-from app.db.base import utc_now
+from app.db.base import Base, utc_now
 from app.db.worker_access import KEY_SIGNATURE, has_worker_function
 
 type ProviderFactory = Callable[[str], KeyProvider]
@@ -88,7 +88,7 @@ def register(  # noqa: PLR0913 - explicit ownership and bank identity at the reg
     )
     db.add(row)
     db.flush()
-    _new_version(db, row, resolved, providers)
+    initialize_version(db, row, providers)
     _unit(db).banks.pop((organization_id, bank_id), None)
     return row
 
@@ -371,6 +371,8 @@ def current_version(db: Session, row: BankEncryptionKey) -> UUID:
 def initialize_version(
     db: Session, row: BankEncryptionKey, providers: ProviderFactory = provider_for
 ) -> None:
+    from app.core.key_management.maintenance import reindex_bank  # noqa: PLC0415 - cycle
+
     lock_bank_version(db, row.organization_id, row.bank_id)
     if row.current_version_id is not None:
         return
@@ -379,6 +381,7 @@ def initialize_version(
     )
     db.flush()
     _unit(db).current.pop((row.organization_id, row.bank_id), None)
+    reindex_bank(db, row)
 
 
 def prepare_envelope(
@@ -489,6 +492,27 @@ class DatabaseEnvelopeStore:
         if connected is None or connected.storage_slug != slug:
             raise KeyUnavailableError("The bank encryption key is not connected.")
         return connected
+
+    @property
+    def session(self) -> Session | None:
+        return self._session
+
+    @contextmanager
+    def publication(self, slug: str) -> Generator[DatabaseEnvelopeStore]:
+        from app.core.key_management.maintenance import lock_bank  # noqa: PLC0415 - cycle
+
+        with self._transaction() as db:
+            banks = Base.metadata.tables["banks"]
+            scope = db.execute(
+                select(banks.c.organization_id, banks.c.id).where(
+                    banks.c.storage_slug == slug,
+                )
+            ).one_or_none()
+            if scope is not None:
+                organization, bank = cast(tuple[str, str], tuple(scope))
+                _scope_envelopes(db, organization)
+                lock_bank(db, organization, bank)
+            yield self.for_session(db)
 
     def prepare(self, slug: str, context: dict[str, str]) -> ObjectKey:
         with self._transaction() as db:

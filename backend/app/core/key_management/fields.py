@@ -61,7 +61,7 @@ class SealedField:
 
 
 @dataclass(frozen=True)
-class _OptionalPlaintext:
+class OptionalPlaintext:
     value: object = field(repr=False)
 
 
@@ -88,7 +88,7 @@ class ProtectedField(TypeDecorator[object]):
     def _encode(self, value: object) -> object:
         if value is None:
             return None
-        if isinstance(value, _OptionalPlaintext):
+        if isinstance(value, OptionalPlaintext):
             return value.value
         if not isinstance(value, SealedField):
             raise KeyUnavailableError("Sensitive fields require a scoped ORM write.")
@@ -146,7 +146,7 @@ def _validate_value(kind: ProtectedField, value: object) -> object:
     return value
 
 
-def _identity_values(
+def identity_values(
     value: object,
     members: frozenset[str],
     transform: Callable[[object, str], object],
@@ -154,7 +154,7 @@ def _identity_values(
 ) -> object:
     if isinstance(value, list):
         return [
-            _identity_values(item, members, transform, (*path, index))
+            identity_values(item, members, transform, (*path, index))
             for index, item in enumerate(cast(list[object], value))
         ]
     if isinstance(value, dict):
@@ -164,10 +164,27 @@ def _identity_values(
             if key == "values"
             and isinstance(mapping.get("member"), str)
             and mapping["member"] in members
-            else _identity_values(item, members, transform, (*path, key))
+            else identity_values(item, members, transform, (*path, key))
             for key, item in mapping.items()
         }
     return value
+
+
+def has_protected_value(kind: ProtectedField, value: object) -> bool:
+    if value is None:
+        return False
+    if kind.protected_members is None or isinstance(value, SealedField):
+        return True
+    _ = _validate_value(kind, value)
+    found = False
+
+    def mark(item: object, _path: str) -> object:
+        nonlocal found
+        found = True
+        return item
+
+    _ = identity_values(value, kind.protected_members, mark)
+    return found
 
 
 @dataclass(frozen=True)
@@ -234,7 +251,7 @@ def _index_context(row: BankEncryptionKey) -> dict[str, str]:
     }
 
 
-def _index_key(db: Session, row: BankEncryptionKey) -> bytes:
+def index_key(db: Session, row: BankEncryptionKey) -> bytes:
     if row.index_version_id is None:
         raise KeyUnavailableError("The bank index key is unavailable.")
     return registry.open_envelope(
@@ -283,61 +300,91 @@ def blind_index(  # noqa: PLR0913 - explicit scope at the search boundary
         row = registry.bank_key(db, organization_id, bank_id, refresh=True)
         if row is None and get_key_settings().bank_key_required:
             raise KeyUnavailableError("The bank encryption key is not connected.")
-        secret = _index_key(db, row) if row is not None else None
+        secret = index_key(db, row) if row is not None else None
         return _index(secret, organization_id, bank_id, domain, value, normalization)
 
 
-def _update_indexes(
-    state: InstanceState[object], organization: str, bank: str, secret: bytes | None
-) -> None:
-    obj = state.obj()
-    if obj is None:
-        return
-    table = cast(Table, state.mapper.local_table).name
+def index_values(
+    table: str,
+    values: dict[str, object],
+    organization: str,
+    bank: str,
+    secret: bytes | None,
+) -> dict[str, object]:
     if table == "canonical_counterparties":
-        name = cast(str, state.dict["name"])
-        source = cast(str, state.dict["source_reference"])
+        name = cast(str, values["name"])
+        if len(name) > 255:
+            raise ValueError("Counterparty name must contain at most 255 characters.")
+        source = cast(str, values["source_reference"])
         group = counterparty_group_key(
             name,
-            cast(str | None, state.dict.get("group_reference")),
-            cast(dict[str, object], state.dict.get("attributes") or {}),
+            cast(str | None, values.get("group_reference")),
+            cast(dict[str, object], values.get("attributes") or {}),
         )
-        for column, domain, value, normalization in (
-            ("name_blind_index", "counterparty.name", name, "name"),
-            ("source_reference_blind_index", "counterparty.source_reference", source, "identifier"),
-            ("concentration_group_blind_index", "counterparty.group", group, "identifier"),
-        ):
-            setattr(
-                obj,
-                column,
-                _index(
-                    secret, organization, bank, domain, value, cast(Normalization, normalization)
+        result: dict[str, object] = {
+            column: _index(
+                secret, organization, bank, domain, value, cast(Normalization, normalization)
+            )
+            for column, domain, value, normalization in (
+                ("name_blind_index", "counterparty.name", name, "name"),
+                (
+                    "source_reference_blind_index",
+                    "counterparty.source_reference",
+                    source,
+                    "identifier",
+                ),
+                (
+                    "concentration_group_blind_index",
+                    "counterparty.group",
+                    group,
+                    "identifier",
                 ),
             )
-        identifiers = cast(dict[str, object], state.dict.get("external_identifiers") or {})
-        attributes.set_attribute(
-            obj,
-            "external_identifiers_blind_indexes",
-            {
-                namespace: _index(
-                    secret,
-                    organization,
-                    bank,
-                    "counterparty.identifier:" + namespace,
-                    value,
-                    "identifier",
-                )
-                for namespace, value in identifiers.items()
-                if isinstance(value, str)
-            },
-        )
-    elif table == "related_parties":
-        name = cast(str, state.dict["full_name"])
-        attributes.set_attribute(
-            obj,
-            "full_name_blind_index",
-            _index(secret, organization, bank, "related_party.full_name", name, "name"),
-        )
+        }
+        identifiers = cast(dict[str, object], values.get("external_identifiers") or {})
+        result["external_identifiers_blind_indexes"] = {
+            namespace: _index(
+                secret,
+                organization,
+                bank,
+                "counterparty.identifier:" + namespace,
+                value,
+                "identifier",
+            )
+            for namespace, value in identifiers.items()
+            if isinstance(value, str)
+        }
+        return result
+    if table == "related_parties":
+        return {
+            "full_name_blind_index": _index(
+                secret,
+                organization,
+                bank,
+                "related_party.full_name",
+                cast(str, values["full_name"]),
+                "name",
+            )
+        }
+    return {}
+
+
+def _update_indexes(
+    state: InstanceState[object],
+    organization: str,
+    bank: str,
+    secret: bytes | None,
+) -> None:
+    obj = state.obj()
+    if obj is not None:
+        for column, value in index_values(
+            cast(Table, state.mapper.local_table).name,
+            dict(state.dict),
+            organization,
+            bank,
+            secret,
+        ).items():
+            attributes.set_attribute(obj, column, value)
 
 
 @dataclass
@@ -430,14 +477,22 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
                 registry.lock_bank_version(db, organization, scope[1], read=True)
                 bank_rows[scope] = registry.bank_key(db, organization, scope[1], refresh=True)
             row = bank_rows[scope] if scope is not None else None
-            if bank is not None and row is None and get_key_settings().bank_key_required:
-                raise KeyUnavailableError("The bank encryption key is not connected.")
             changed = [
                 col
                 for col in columns
                 if state.pending or state.attrs[col.attribute].history.has_changes()
             ]
             values = {col.attribute: cast(object, state.dict.get(col.attribute)) for col in changed}
+            protected_change = any(
+                has_protected_value(col.kind, values[col.attribute]) for col in changed
+            )
+            if (
+                bank is not None
+                and row is None
+                and get_key_settings().bank_key_required
+                and protected_change
+            ):
+                raise KeyUnavailableError("The bank encryption key is not connected.")
             presentation = db.info.get(SESSION_STATE)
             reason = (
                 presentation.banks.get(bank or "")
@@ -448,8 +503,10 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
                 isinstance(presentation, PresentationState) and presentation.support
             ):
                 raise ProtectedSupportAccessError()
-            if reason in {"revoked", "unavailable"} or any(
-                contains_placeholder(state.dict.get(col.attribute)) for col in columns
+            if (
+                protected_change
+                and reason in {"revoked", "unavailable"}
+                or any(contains_placeholder(state.dict.get(col.attribute)) for col in columns)
             ):
                 raise KeyUnavailableError(
                     "Locked placeholders cannot be saved as protected data.",
@@ -460,7 +517,7 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
                 if bank is not None:
                     _update_indexes(state, organization, bank, None)
                 for key, value in values.items():
-                    setattr(instance, key, _OptionalPlaintext(value) if value is not None else None)
+                    setattr(instance, key, OptionalPlaintext(value) if value is not None else None)
                 continue
             context = _context(state, organization, row.bank_id)
             assert scope is not None
@@ -469,7 +526,7 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
                 "related_parties",
             }:
                 if scope not in index_keys:
-                    index_keys[scope] = _index_key(db, row)
+                    index_keys[scope] = index_key(db, row)
                 _update_indexes(state, organization, row.bank_id, index_keys[scope])
 
             def seal(  # noqa: PLR0913
@@ -510,8 +567,8 @@ def encrypt_pending(  # noqa: PLR0912, PLR0915 - one atomic flush boundary
                             ]
                         }
 
-                    encrypted = _OptionalPlaintext(
-                        _identity_values(value, col.kind.protected_members, seal_values)
+                    encrypted = OptionalPlaintext(
+                        identity_values(value, col.kind.protected_members, seal_values)
                     )
                 setattr(instance, col.attribute, encrypted)
 
@@ -538,11 +595,6 @@ def restore_after_failure(db: Session, _previous: object) -> None:
 
 
 def _lock_field(instance: Base, col: FieldColumn, reason: str) -> None:
-    state = cast(InstanceState[object], inspect(instance))
-    if cast(Table, state.mapper.local_table).name.startswith("bi_"):
-        if reason == "support":
-            raise ProtectedSupportAccessError()
-        raise KeyUnavailableError("Protected configuration is locked.", revoked=reason == "revoked")
     value: object = LOCKED_TEXT if isinstance(col.kind, ProtectedText) else {LOCKED_JSON: reason}
     attributes.set_committed_value(instance, col.attribute, value)
 
@@ -631,16 +683,97 @@ def _field_secret(  # noqa: PLR0913 - explicit field and bank boundaries
     except KeyIntegrityError:
         raise
     except KeyUnavailableError as exc:
-        if not isinstance(presentation, PresentationState):
-            raise
         reason = "revoked" if exc.revoked else "unavailable"
-        presentation.record(row.bank_id, reason)
-        presentation.read_locks[value.envelope_id] = reason
+        if isinstance(presentation, PresentationState):
+            presentation.record(row.bank_id, reason)
+            presentation.read_locks[value.envelope_id] = reason
+        elif col.kind.protected_members is None:
+            raise
         observe_bank_key(db, row.organization_id, row.bank_id)
         _lock_field(instance, col, reason)
         return None
     observe_bank_key(db, row.organization_id, row.bank_id)
     return secret
+
+
+def _protect_plaintext(  # noqa: PLR0913
+    db: Session,
+    row: BankEncryptionKey | None,
+    presentation: object,
+    instance: Base,
+    col: FieldColumn,
+    bank: str | None,
+    *,
+    missing_key: bool,
+) -> None:
+    if _presentation_locked(instance, col, presentation, bank, missing_key=missing_key):
+        return
+    if missing_key:
+        if col.kind.protected_members is not None:
+            _lock_field(instance, col, "unavailable")
+            return
+        raise KeyUnavailableError("The bank encryption key is not connected.")
+    if row is None:
+        return
+    if isinstance(presentation, PresentationState):
+        observe_bank_key(db, row.organization_id, row.bank_id)
+        reason = presentation.banks.get(row.bank_id)
+        if reason in {"revoked", "unavailable"}:
+            _lock_field(instance, col, reason)
+            return
+    else:
+        try:
+            _ = registry.prepare_envelope(
+                db, row, _envelope_context(row.organization_id, row.bank_id), registry.provider_for
+            )
+            _ = index_key(db, row)
+        except KeyIntegrityError:
+            raise
+        except KeyUnavailableError as exc:
+            if col.kind.protected_members is None:
+                raise
+            _lock_field(instance, col, "revoked" if exc.revoked else "unavailable")
+
+
+def _open_identity_values(
+    instance: Base,
+    col: FieldColumn,
+    row: BankEncryptionKey | None,
+    presentation: object,
+    missing_key: bool,
+) -> None:
+    db = object_session(instance)
+    assert db is not None
+    state = cast(InstanceState[object], inspect(instance))
+    organization, bank = (row.organization_id, row.bank_id) if row else _scope(db, state, [col])
+    members = col.kind.protected_members
+    assert members is not None
+    value = _validate_value(col.kind, cast(object, state.dict[col.attribute]))
+
+    def open_values(item: object, path: str) -> object:
+        leaf = replace(col, column=col.column + ":" + path)
+        if _presentation_locked(instance, leaf, presentation, bank, missing_key=missing_key):
+            return None
+        if not isinstance(item, dict) or FORMAT not in item:
+            _protect_plaintext(db, row, presentation, instance, leaf, bank, missing_key=missing_key)
+            return cast(object, item)
+        sealed = col.kind.decode(cast(dict[str, object], item)[FORMAT])
+        if row is None:
+            _lock_field(instance, col, "unavailable")
+            return None
+        secret = _field_secret(db, row, sealed, presentation, instance, leaf)
+        if secret is None:
+            return None
+        plaintext = sdk.decrypt(
+            sealed.message,
+            sdk.raw_keyring(secret, name=FORMAT),
+            {**_context(state, organization, row.bank_id), "field": leaf.column},
+        )
+        return _JSON.validate_json(plaintext)
+
+    opened = identity_values(value, members, open_values)
+    if not contains_placeholder(cast(object, state.dict[col.attribute])):
+        attributes.set_committed_value(instance, col.attribute, opened)
 
 
 def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
@@ -651,11 +784,21 @@ def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
     db = object_session(instance)
     if not columns or db is None:
         return
+    presentation = db.info.get(SESSION_STATE)
+    support = bool(db.info.get(SESSION_SUPPORT)) or (
+        isinstance(presentation, PresentationState) and presentation.support
+    )
     # Refreshes can load only a subset; do not trigger deferred loads recursively.
     present = [
         col
         for col in columns
-        if col.attribute in state.dict and (refreshed is None or col.attribute in refreshed)
+        if col.attribute in state.dict
+        and (refreshed is None or col.attribute in refreshed)
+        and (
+            has_protected_value(col.kind, cast(object, state.dict[col.attribute]))
+            or support
+            and col.kind.protected_members is None
+        )
     ]
     if not present:
         return
@@ -666,54 +809,31 @@ def _decrypt_entity(  # noqa: PLR0912 - one scoped ORM load/refresh boundary
             if attribute not in state.dict:
                 _ = cast(object, attributes.get_attribute(instance, attribute))
         organization, bank = _scope(db, state, columns)
-        row = registry.bank_key(db, organization, bank) if bank is not None else None
-        presentation = db.info.get(SESSION_STATE)
+        if bank is not None:
+            registry.lock_bank_version(db, organization, bank, read=True)
+        row = registry.bank_key(db, organization, bank, refresh=True) if bank is not None else None
         if db.info.get(SESSION_SUPPORT):
             if not isinstance(presentation, PresentationState):
                 presentation = PresentationState(support=True)
             presentation.support = True
         missing_key = bank is not None and row is None and get_key_settings().bank_key_required
-        if bank is not None and missing_key:
-            if not isinstance(presentation, PresentationState):
-                raise KeyUnavailableError("The bank encryption key is not connected.")
-            presentation.record(bank, "support" if presentation.support else "unavailable")
         for col in present:
             value = cast(object, state.dict[col.attribute])
             if col.kind.protected_members is not None and not isinstance(value, SealedField):
-                value = _validate_value(col.kind, value)
-
-                def open_values(item: object, path: str, col: FieldColumn = col) -> object:
-                    leaf = replace(col, column=col.column + ":" + path)
-                    if _presentation_locked(
-                        instance, leaf, presentation, bank, missing_key=missing_key
-                    ):
-                        return None
-                    if not isinstance(item, dict) or FORMAT not in item:
-                        return cast(object, item)
-                    sealed = col.kind.decode(cast(dict[str, object], item)[FORMAT])
-                    if row is None:
-                        raise KeyUnavailableError("The bank encryption key is not connected.")
-                    secret = _field_secret(db, row, sealed, presentation, instance, leaf)
-                    if secret is None:
-                        return None
-                    plaintext = sdk.decrypt(
-                        sealed.message,
-                        sdk.raw_keyring(secret, name=FORMAT),
-                        {**_context(state, organization, row.bank_id), "field": leaf.column},
-                    )
-                    return _JSON.validate_json(plaintext)
-
-                attributes.set_committed_value(
-                    instance,
-                    col.attribute,
-                    _identity_values(value, col.kind.protected_members, open_values),
-                )
+                _open_identity_values(instance, col, row, presentation, missing_key)
                 continue
             if _presentation_locked(instance, col, presentation, bank, missing_key=missing_key):
                 continue
             if not isinstance(value, SealedField):
+                if value is not None:
+                    _protect_plaintext(
+                        db, row, presentation, instance, col, bank, missing_key=missing_key
+                    )
                 continue
             if row is None:
+                if col.kind.protected_members is not None:
+                    _lock_field(instance, col, "unavailable")
+                    continue
                 raise KeyUnavailableError("The bank encryption key is not connected.")
             context = _context(state, organization, row.bank_id)
             secret = _field_secret(db, row, value, presentation, instance, col)

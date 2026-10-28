@@ -13,6 +13,7 @@ import ProtectedDataNotice from "../components/ui/ProtectedDataNotice";
 import {
   bindProtectedDataCache,
   clearProtectedData,
+  containsLockedData,
   observeProtectedData,
   protectedDataFetch,
   protectedDataMessages,
@@ -381,3 +382,300 @@ it.each(["available", "support"] as const)(
     expect(fetch).toHaveBeenCalledTimes(1);
   },
 );
+
+type BiRecoveryResponse = Readonly<{
+  name: string;
+  prefix: string;
+  locked: unknown;
+  recovered: unknown;
+}>;
+
+function biRecoveryResponses(message: string): BiRecoveryResponse[] {
+  const rows = (parsed: boolean, locked: boolean) => [
+    {
+      id: "numeric",
+      name: "Numeric sibling",
+      [parsed ? "lockedReason" : "locked_reason"]: null,
+    },
+    {
+      id: "identity",
+      name: "Protected item",
+      [parsed ? "lockedReason" : "locked_reason"]: locked ? message : null,
+    },
+  ];
+  const responses: BiRecoveryResponse[] = [];
+  for (const parsed of [false, true]) {
+    for (const [collection, prefix] of [
+      ["alerts", "bi-alerts"],
+      ["subscriptions", "bi-subscriptions"],
+      ["dashboards", "bi-dashboards"],
+      ["versions", "bi-dashboard-versions"],
+    ]) {
+      const body = (locked: boolean) => {
+        const items = rows(parsed, locked).map((row, index) => {
+          if (collection === "dashboards") {
+            const { name, ...metadata } = row;
+            return { ...metadata, title: name };
+          }
+          if (collection === "versions")
+            return {
+              version: index + 1,
+              title: row.name,
+              [parsed ? "lockedReason" : "locked_reason"]:
+                row[parsed ? "lockedReason" : "locked_reason"],
+            };
+          return collection === "subscriptions"
+            ? {
+                ...row,
+                query:
+                  row.id === "identity" && locked
+                    ? null
+                    : {
+                        measures: ["loans.balance_rc"],
+                        time: { as_of: "2026-08-31" },
+                        filters: [],
+                      },
+              }
+            : row;
+        });
+        return parsed &&
+          (collection === "alerts" || collection === "subscriptions")
+          ? items
+          : { [collection]: items };
+      };
+      responses.push({
+        name: `${parsed ? "parsed" : "raw"}-${collection}`,
+        prefix,
+        locked: body(true),
+        recovered: body(false),
+      });
+    }
+    responses.push({
+      name: `${parsed ? "parsed" : "raw"}-detail`,
+      prefix: "bi-dashboard",
+      locked: { id: "identity", access: "restricted", message, widgets: [] },
+      recovered: {
+        id: "identity",
+        access: "granted",
+        message: "Ready",
+        widgets: [{ id: "numeric", query: { measures: ["loans.balance_rc"] } }],
+      },
+    });
+  }
+  return responses;
+}
+
+function BiRecoveryRead({ response }: { response: BiRecoveryResponse }) {
+  const query = useQuery({
+    queryKey: [response.prefix, "tenant", "authority", BANK, response.name],
+    staleTime: Infinity,
+    queryFn: async () => {
+      const reply = await protectedDataFetch(
+        `/api/v1/banks/${BANK}/bi/${response.name}`,
+      );
+      return (await reply.json()) as unknown;
+    },
+  });
+  const locked = JSON.stringify(query.data) === JSON.stringify(response.locked);
+  return (
+    <section aria-label={response.name}>
+      <button disabled={locked}>Change {response.name}</button>
+      <output>{JSON.stringify(query.data)}</output>
+    </section>
+  );
+}
+
+it.each(
+  (["revoked", "unavailable"] as const).flatMap((state) =>
+    (["manual", "automatic"] as const).map((retry) => ({ state, retry })),
+  ),
+)(
+  "recovers successful locked BI collections and details after $state with $retry retry",
+  async ({ state, retry }) => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const responses = biRecoveryResponses(protectedDataMessages[state]);
+    let restored = false;
+    const reads = new Map<string, number>();
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      reads.set(url, (reads.get(url) ?? 0) + 1);
+      if (url.endsWith("/live-summary")) return Response.json({ ratio: 1.25 });
+      if (url.endsWith(`/banks/${BANK}`))
+        return disclosure(restored ? "available" : state);
+      const response = responses.find((candidate) =>
+        url.endsWith(`/bi/${candidate.name}`),
+      );
+      if (!response) throw new Error(`Unexpected recovery request: ${url}`);
+      return Response.json(restored ? response.recovered : response.locked, {
+        headers: {
+          "X-Aequoros-Protected-Data": JSON.stringify({
+            [BANK]: restored ? "available" : state,
+          }),
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+    await observeProtectedData(disclosure(state));
+    const view = mountNotice(
+      <>
+        <NumericScreen />
+        {responses.map((response) => (
+          <BiRecoveryRead key={response.name} response={response} />
+        ))}
+      </>,
+    );
+    const otherKey = ["bi-alerts", "tenant", "authority", "BK-SAMP0002"];
+    view.client.setQueryData(otherKey, responses[0].locked);
+    await waitFor(() => {
+      for (const response of responses)
+        expect(
+          screen.getByRole("button", { name: `Change ${response.name}` }),
+        ).toBeDisabled();
+    });
+    expect(screen.getByText("Ratio 1.25")).toBeVisible();
+    restored = true;
+    if (retry === "manual")
+      await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    else
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_100);
+      });
+    await waitFor(() => {
+      for (const response of responses) {
+        expect(
+          view.client.getQueryData([
+            response.prefix,
+            "tenant",
+            "authority",
+            BANK,
+            response.name,
+          ]),
+        ).toEqual(response.recovered);
+        expect(
+          screen.getByRole("button", { name: `Change ${response.name}` }),
+        ).toBeEnabled();
+      }
+    });
+    expect(protectedDataState(BANK)).toBe("available");
+    expect(screen.queryByText(protectedDataMessages[state])).toBeNull();
+    expect(screen.getByText("Ratio 1.25")).toBeVisible();
+    expect(view.client.getQueryData(otherKey)).toEqual(responses[0].locked);
+    expect(view.client.getQueryState(otherKey)?.isInvalidated).toBe(false);
+    expect(
+      [...reads.entries()]
+        .filter(([url]) => url.endsWith("/live-summary"))
+        .map(([, count]) => count),
+    ).toEqual([1]);
+    for (const response of responses)
+      expect(
+        [...reads.entries()].find(([url]) =>
+          url.endsWith(`/bi/${response.name}`),
+        )?.[1],
+      ).toBe(2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    for (const response of responses)
+      expect(
+        [...reads.entries()].find(([url]) =>
+          url.endsWith(`/bi/${response.name}`),
+        )?.[1],
+      ).toBe(2);
+  },
+);
+
+it.each(["support", "no-bank"] as const)(
+  "does not probe cached locked BI data in %s context",
+  async (state) => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await observeProtectedData(
+      disclosure(state === "support" ? "support" : "revoked"),
+    );
+    if (state === "no-bank") context.bank = undefined;
+    const locked = biRecoveryResponses(protectedDataMessages.revoked)[0].locked;
+    function CachedBi() {
+      useQuery({
+        queryKey: ["bi-alerts", "tenant", "authority", BANK],
+        queryFn: fetch,
+        initialData: locked,
+        staleTime: Infinity,
+      });
+      return null;
+    }
+    mountNotice(<CachedBi />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["revoked", "unavailable"] as const)(
+  "discards a late BI recovery response from the previous authority after %s",
+  async (state) => {
+    await observeProtectedData(disclosure(state));
+    let finish: ((response: Response) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
+    const pending = protectedDataFetch(`/api/v1/banks/${BANK}/bi/alerts`);
+    clearProtectedData();
+    await observeProtectedData(disclosure("support"));
+    finish?.(
+      Response.json(
+        {
+          alerts: [
+            {
+              id: "identity",
+              locked_reason: null,
+              filters: [
+                {
+                  member: "counterparty.name",
+                  values: ["Previous authority identity"],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          headers: {
+            "X-Aequoros-Protected-Data": JSON.stringify({
+              [BANK]: "available",
+            }),
+          },
+        },
+      ),
+    );
+    const response = await pending;
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "bank_key_unavailable",
+        message: protectedDataMessages.unavailable,
+      },
+    });
+    expect(protectedDataState(BANK)).toBe("support");
+  },
+);
+
+it.each([
+  { alerts: [{ locked_reason: null }] },
+  [{ lockedReason: null }],
+  { dashboards: [{ lockedReason: "" }] },
+  {
+    access: "restricted",
+    message: "Your permissions do not cover this dashboard.",
+  },
+  { access: "granted", message: protectedDataMessages.unavailable },
+])("does not retry ordinary numeric or authorization content: %j", (data) => {
+  expect(containsLockedData(data)).toBe(false);
+});

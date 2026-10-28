@@ -92,8 +92,6 @@ class ObjectKeyEnvelope(UuidV4PrimaryKeyMixin, Base):
 
     bank_id: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
-    # Only bank-version context belongs here. Object paths and field identities
-    # are authenticated in payloads, keeping customer data out of this catalogue.
     context_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     wrapped_key: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     provider: Mapped[str] = mapped_column(String(32), nullable=False)

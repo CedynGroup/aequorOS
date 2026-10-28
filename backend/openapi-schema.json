@@ -4112,6 +4112,17 @@
             ],
             "title": "Latest State"
           },
+          "locked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Reason"
+          },
           "measure_id": {
             "title": "Measure Id",
             "type": "string"
@@ -5451,6 +5462,17 @@
             "title": "Id",
             "type": "string"
           },
+          "locked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Reason"
+          },
           "owned_by_caller": {
             "title": "Owned By Caller",
             "type": "boolean"
@@ -5655,6 +5677,17 @@
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "locked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Reason"
           },
           "spec_digest": {
             "title": "Spec Digest",
@@ -8375,6 +8408,17 @@
             "title": "Is Active",
             "type": "boolean"
           },
+          "locked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Reason"
+          },
           "minute": {
             "anyOf": [
               {
@@ -8411,7 +8455,14 @@
             "type": "string"
           },
           "query": {
-            "$ref": "#/components/schemas/BiQuery"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BiQuery"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "recipient_user_ids": {
             "items": {

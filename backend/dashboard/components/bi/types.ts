@@ -245,6 +245,7 @@ export type BiSavedDashboardSummary = Readonly<{
   visibilityRole: string | null;
   version: number;
   widgetCount: number;
+  lockedReason?: string | null;
   /** The certified pack this was copied from, when it was a copy. */
   sourcePack: string | null;
   updatedAt: Date;

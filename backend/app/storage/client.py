@@ -10,10 +10,12 @@ bug in the backend, not a caller concern.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import BinaryIO, Literal, Self
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -147,6 +149,34 @@ class StorageHealth:
     detail: str = ""
 
 
+@dataclass(frozen=True)
+class EncryptionInventoryItem:
+    location: StorageLocation
+    version_id: str
+    envelope_id: UUID | None
+    retained: bool
+    size_bytes: int = 0
+
+
+@dataclass(frozen=True)
+class EncryptionCursor:
+    tier: int = 0
+    key: str | None = None
+    version: str | None = None
+
+
+@dataclass(frozen=True)
+class EncryptionPage:
+    items: list[EncryptionInventoryItem]
+    cursor: EncryptionCursor | None
+
+
+@dataclass(frozen=True)
+class ReencryptionIsolation:
+    release: Callable[[], None]
+    publication: Callable[[UUID], AbstractContextManager[bool]]
+
+
 class StorageClient(ABC):
     """The single sanctioned interface for AequorOS object storage.
 
@@ -215,6 +245,19 @@ class StorageClient(ABC):
 
     @abstractmethod
     def health_check(self) -> StorageHealth: ...
+
+    def encryption_page(
+        self, institution_slug: str, cursor: EncryptionCursor, limit: int
+    ) -> EncryptionPage:
+        raise StorageBackendError("This storage backend cannot page encryption versions.")
+
+    def reencrypt(self, item: EncryptionInventoryItem) -> bool:
+        raise StorageBackendError("This storage backend cannot migrate encryption versions.")
+
+    def reencrypt_isolated(
+        self, item: EncryptionInventoryItem, isolation: ReencryptionIsolation
+    ) -> bool:
+        raise StorageBackendError("This storage backend cannot isolate object migration.")
 
     def retain(self, location: StorageLocation, version_id: str, until: datetime) -> None:
         raise StorageBackendError("This storage backend cannot confirm compliance retention.")

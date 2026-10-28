@@ -675,6 +675,7 @@ export type BiAlertRead = Readonly<{
   latestState: "breached" | "cleared" | "not_evaluated" | null;
   latestAsOf: string | null;
   latestDetail: string;
+  lockedReason?: string | null;
 }>;
 
 /** Mirrors `BiAlertEventRead`. */
@@ -696,7 +697,7 @@ export type BiSubscriptionRead = Readonly<{
   id: string;
   bankId: string;
   name: string;
-  query: BiQuery;
+  query: BiQuery | null;
   artifactFormat: ArtifactFormat;
   cadence: Cadence;
   hour: number | null;
@@ -712,6 +713,7 @@ export type BiSubscriptionRead = Readonly<{
   isActive: boolean;
   disclosureClass: "summary" | "record_level";
   deliveryNote: string;
+  lockedReason?: string | null;
 }>;
 
 /** Mirrors `BiSubscriptionDeliveryRead`. */
@@ -853,6 +855,7 @@ function parseAlert(value: unknown): BiAlertRead {
         : null,
     latestAsOf: optStr(field(value, "latest_as_of")),
     latestDetail: str(field(value, "latest_detail")),
+    lockedReason: optStr(field(value, "locked_reason")),
   };
 }
 
@@ -898,7 +901,10 @@ function parseSubscription(value: unknown): BiSubscriptionRead {
     id: str(field(value, "id")),
     bankId: str(field(value, "bank_id")),
     name: str(field(value, "name")),
-    query: BiQueryFromJSON(field(value, "query")),
+    query:
+      field(value, "query") === null
+        ? null
+        : BiQueryFromJSON(field(value, "query")),
     artifactFormat: parseFormat(field(value, "artifact_format")),
     cadence: parseCadence(field(value, "cadence")),
     hour: optNum(field(value, "hour")),
@@ -919,6 +925,7 @@ function parseSubscription(value: unknown): BiSubscriptionRead {
         ? "record_level"
         : "summary",
     deliveryNote: str(field(value, "delivery_note")),
+    lockedReason: optStr(field(value, "locked_reason")),
   };
 }
 

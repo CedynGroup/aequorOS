@@ -13,13 +13,13 @@ from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import TypeAdapter
 from sqlalchemy import Uuid, bindparam, select, text
-from sqlalchemy.orm import Session, undefer_group
+from sqlalchemy.orm import Session, undefer, undefer_group
 
 from app.attestation.service import register_state
 from app.attestation.service.digests import register_state_digest
 from app.bi.domain.catalogue import catalogue
 from app.bi.models.content import BiDashboard, BiDashboardVersion
-from app.bi.models.marts import BiFactPositionDaily, BiFactPositionEom
+from app.bi.models.marts import BiDimCounterparty, BiFactPositionDaily, BiFactPositionEom
 from app.bi.models.notifications import BiAlert, BiSubscription
 from app.bi.schemas.content import BiDashboardSpec
 from app.bi.schemas.query import BiFilter, BiPackQuery, BiQuery, BiTime
@@ -48,7 +48,7 @@ from app.core.key_management.types import (
     KeyUnavailableError,
 )
 from app.core.tenancy import TenantContext
-from app.db.base import utc_now
+from app.db.base import Base, utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
 from app.identity.public import Bank, User
@@ -1295,11 +1295,9 @@ def test_mixed_bi_filters_protect_only_identity_values(
     db_session.commit()
     if connected:
         provider.set_status(KEY_A, KeyStatus.DISABLED)
-        with (
-            Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh,
-            pytest.raises(KeyUnavailableError),
-        ):
-            fresh.get(BiDashboardVersion, version_id)
+        with Session(db_session.connection(), join_transaction_mode="create_savepoint") as fresh:
+            locked = fresh.get(BiDashboardVersion, version_id)
+            assert locked is not None and locked.spec == {LOCKED_JSON: "revoked"}
         provider.set_status(KEY_A, KeyStatus.ACTIVE)
         widgets = cast(list[dict[str, object]], stored["widgets"])
         query = cast(dict[str, object], widgets[0]["query"])
@@ -1442,13 +1440,16 @@ def test_support_presentation_hides_fields_without_unwrapping(
 
 
 @pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+@pytest.mark.parametrize("legacy", [False, True])
 def test_profile_http_locked_read_write_and_recovery(
     db_client: TestClient,
     db_session: Session,
     provider: LocalKeyProvider,
     status: KeyStatus,
+    legacy: bool,
 ) -> None:
-    connect(db_session, provider)
+    if not legacy:
+        connect(db_session, provider)
     party = institution_profile.create_related_party(
         db_session,
         CTX,
@@ -1462,6 +1463,8 @@ def test_profile_http_locked_read_write_and_recovery(
         ),
     )
     db_session.commit()
+    if legacy:
+        connect(db_session, provider)
     provider.set_status(KEY_A, status)
     db_session.expunge_all()
     response = db_client.get(f"/api/v1/banks/{BANK_A}/institution-profile", headers=headers())
@@ -2643,3 +2646,273 @@ def test_dedup_status_remains_operational_without_unwrapping_the_report(
         assert loaded.etl_report == {LOCKED_JSON: "support"}
     finally:
         db_session.info.pop(SESSION_SUPPORT)
+
+
+@pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("mutation", ["insert", "update"])
+def test_plaintext_counterparty_name_bound_applies_before_orm_persistence(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    connected: bool,
+    mutation: str,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    party = counterparty(db_session, name="A" * 255, include_package=False)
+    party.group_reference = "G"
+    party_id = party.id
+    db_session.commit()
+    for invalid in ("A" * 256, "A" * 300):
+        with pytest.raises(ValueError, match="255"), db_session.begin_nested():
+            if mutation == "insert":
+                counterparty(db_session, reference="CP2", name=invalid, include_package=False)
+            else:
+                party.name = invalid
+                db_session.flush()
+        db_session.expire_all()
+        loaded = db_session.get(CanonicalCounterparty, party_id)
+        assert loaded is not None and loaded.name == "A" * 255
+    assert (
+        len(
+            list(
+                db_session.scalars(
+                    select(CanonicalCounterparty).where(CanonicalCounterparty.bank_id == BANK_A)
+                )
+            )
+        )
+        == 1
+    )
+
+
+@pytest.mark.parametrize("connected", [False, True])
+@pytest.mark.parametrize("bounded_field", ["name", "group_reference"])
+def test_ingested_counterparty_name_bound_preserves_bi_copy_width(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    tmp_path: Path,
+    connected: bool,
+    bounded_field: str,
+) -> None:
+    if connected:
+        connect(db_session, provider)
+    mapping = MappingConfig(
+        field_mappings={
+            "counterparty": EntityMapping(
+                source_table="Customers",
+                fields={
+                    "source_reference": "CustomerId",
+                    "name": "CustomerName",
+                    "counterparty_type": "Type",
+                    "group_reference": "Group",
+                },
+            )
+        }
+    )
+    ingestion.create_mapping_config(
+        db_session,
+        CTX,
+        BANK_A,
+        MappingConfigCreate(
+            source_system="EXCEL_CSV",
+            name="Synthetic bounded name",
+            config=mapping,
+            activate=True,
+            reason="Synthetic boundary regression",
+        ),
+    )
+    for length in (300, 255):
+        workbook = Workbook()
+        sheet = workbook.active
+        assert sheet is not None
+        sheet.title = "Customers"
+        sheet.append(["CustomerId", "CustomerName", "Type", "Group"])
+        sheet.append(
+            [
+                "CP1",
+                "A" * length if bounded_field == "name" else "A",
+                "RETAIL_INDIVIDUAL",
+                "G" * length if bounded_field == "group_reference" else "G",
+            ]
+        )
+        path = tmp_path / f"synthetic-name-{length}.xlsx"
+        workbook.save(path)
+        result = ingestion.start_ingestion(
+            db_session,
+            CTX,
+            BANK_A,
+            IngestionBatchCreate(
+                source_system="EXCEL_CSV",
+                as_of_date=AS_OF,
+                location=str(path),
+                reason="Synthetic bounded name",
+            ),
+            InMemoryStorageClient(),
+        )
+        parties = list(
+            db_session.scalars(
+                select(CanonicalCounterparty).where(CanonicalCounterparty.bank_id == BANK_A)
+            )
+        )
+        if length > 255:
+            assert result.batch.records_translated == 0 and not parties
+            failures = list(
+                db_session.scalars(
+                    select(TranslationFailure).where(
+                        TranslationFailure.ingestion_batch_id == result.batch.id
+                    )
+                )
+            )
+            assert len(failures) == 1 and "255" in failures[0].error_message
+        else:
+            assert result.batch.status in {"accepted", "accepted_with_warnings"}
+            assert len(parties) == 1
+            assert (parties[0].name if bounded_field == "name" else parties[0].group_reference) == (
+                "A" if bounded_field == "name" else "G"
+            ) * 255
+    outcome = materialize_bi_plane(db_session, organization_id=ORG_1, bank_id=BANK_A, as_of=AS_OF)
+    assert outcome is not None and outcome.status == "succeeded"
+    dimension = db_session.scalar(
+        select(BiDimCounterparty).where(BiDimCounterparty.counterparty_id == parties[0].id)
+    )
+    assert dimension is not None
+    assert dimension.name == (
+        str(parties[0].id) if connected else ("A" * 255 if bounded_field == "name" else "A")
+    )
+    assert dimension.group_reference == (
+        None if connected else ("G" * 255 if bounded_field == "group_reference" else "G")
+    )
+
+
+def assert_legacy_bi_disclosure(entity: Base, *, identity: bool) -> None:
+    if isinstance(entity, BiDashboardVersion):
+        value: object = entity.spec
+    elif isinstance(entity, BiSubscription):
+        value = entity.query
+    else:
+        assert isinstance(entity, BiAlert)
+        value = entity.filters
+    if identity:
+        assert value == {LOCKED_JSON: "revoked"}
+    else:
+        assert value == (
+            [{"borrower": NAME}] if isinstance(entity, BiAlert) else {"borrower": NAME}
+        )
+
+
+@pytest.mark.parametrize("refresh", [False, True])
+@pytest.mark.parametrize("identity", [False, True])
+def test_legacy_protected_entities_require_connected_key_on_load_and_refresh(
+    db_session: Session,
+    provider: LocalKeyProvider,
+    refresh: bool,
+    identity: bool,
+) -> None:
+    filters: list[dict[str, object]] = (
+        [{"member": "counterparty.name", "values": [NAME]}] if identity else [{"borrower": NAME}]
+    )
+    spec: dict[str, object] = {"filters": filters} if identity else {"borrower": NAME}
+    counterparty(db_session)
+    party = RelatedParty(
+        organization_id=ORG_1,
+        bank_id=BANK_A,
+        party_type="individual",
+        full_name=NAME,
+        contact={"national_id": IDENTIFIER},
+    )
+    db_session.add(party)
+    db_session.flush()
+    db_session.add(
+        RelatedPartyRole(
+            organization_id=ORG_1,
+            party_id=party.id,
+            role="director",
+            other_responsibilities=NAME,
+        )
+    )
+    db_session.add(saved_version(db_session, spec))
+    db_session.add(
+        BiSubscription(
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            name="Synthetic legacy subscription",
+            owner_user_id=USER_1,
+            query=spec,
+            artifact_format="csv",
+            cadence="daily",
+            hour=7,
+            minute=30,
+            recipient_user_ids=[],
+        )
+    )
+    db_session.add(
+        BiAlert(
+            organization_id=ORG_1,
+            bank_id=BANK_A,
+            owner_user_id=USER_1,
+            name="Synthetic legacy alert",
+            measure_id="loans.balance_rc",
+            filters=filters,
+            direction="above",
+            threshold_basis="stated",
+            threshold=Decimal(100),
+            notify_user_ids=[],
+        )
+    )
+    db_session.commit()
+    models: tuple[type[Base], ...] = (
+        CanonicalCounterparty,
+        RelatedParty,
+        RelatedPartyRole,
+        IngestionBatch,
+        LineageRecord,
+        TranslationFailure,
+        RegulatoryPackage,
+        BiDashboardVersion,
+        BiSubscription,
+        BiAlert,
+    )
+    connect(db_session, provider)
+    stored = raw_fields(db_session)
+    immutable = cast(
+        object, db_session.execute(text("SELECT spec FROM bi_dashboard_versions")).scalar_one()
+    )
+    for model in models:
+        db_session.expunge_all()
+        provider.set_status(KEY_A, KeyStatus.ACTIVE)
+        entity: Base | None = None
+        if refresh:
+            entity = db_session.scalar(select(model))
+            assert entity is not None
+        db_session.commit()
+        provider.set_status(KEY_A, KeyStatus.DISABLED)
+        presentation_read = model in {
+            RegulatoryPackage,
+            BiDashboardVersion,
+            BiSubscription,
+            BiAlert,
+        }
+        if presentation_read:
+            if refresh:
+                assert entity is not None
+                db_session.refresh(entity)
+            else:
+                entity = db_session.scalar(select(model))
+            assert entity is not None
+            if isinstance(entity, RegulatoryPackage):
+                assert isinstance(entity.snapshot, dict)
+            else:
+                assert_legacy_bi_disclosure(entity, identity=identity)
+        else:
+            with pytest.raises(KeyUnavailableError):
+                if refresh:
+                    assert entity is not None
+                    db_session.refresh(entity)
+                    if isinstance(entity, CanonicalCounterparty):
+                        _ = entity.name
+                else:
+                    entity = db_session.scalar(select(model).options(undefer("*")))
+        db_session.rollback()
+    assert raw_fields(db_session) == stored
+    assert (
+        db_session.execute(text("SELECT spec FROM bi_dashboard_versions")).scalar_one() == immutable
+    )

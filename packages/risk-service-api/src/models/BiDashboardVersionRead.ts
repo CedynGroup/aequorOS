@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { LockedReason } from "./LockedReason";
+import {
+  LockedReasonFromJSON,
+  LockedReasonFromJSONTyped,
+  LockedReasonToJSON,
+  LockedReasonToJSONTyped,
+} from "./LockedReason";
 import type { CreatedByDisplayName } from "./CreatedByDisplayName";
 import {
   CreatedByDisplayNameFromJSON,
@@ -66,6 +73,12 @@ export interface BiDashboardVersionRead {
    * @memberof BiDashboardVersionRead
    */
   description: string;
+  /**
+   *
+   * @type {LockedReason}
+   * @memberof BiDashboardVersionRead
+   */
+  lockedReason?: LockedReason;
   /**
    *
    * @type {string}
@@ -143,6 +156,10 @@ export function BiDashboardVersionReadFromJSONTyped(
     createdByUserId: json["created_by_user_id"],
     current: json["current"],
     description: json["description"],
+    lockedReason:
+      json["locked_reason"] == null
+        ? undefined
+        : LockedReasonFromJSON(json["locked_reason"]),
     specDigest: json["spec_digest"],
     title: json["title"],
     version: json["version"],
@@ -173,6 +190,7 @@ export function BiDashboardVersionReadToJSONTyped(
     created_by_user_id: value["createdByUserId"],
     current: value["current"],
     description: value["description"],
+    locked_reason: LockedReasonToJSON(value["lockedReason"]),
     spec_digest: value["specDigest"],
     title: value["title"],
     version: value["version"],

@@ -1,8 +1,9 @@
 # Bank-held field encryption
 
 Covered fields written after a bank key is connected use that bank's encryption
-key. Existing rows are not migrated. Demo datasets are re-imported through the
-Data Engine after key connection.
+key. Connecting an existing bank queues resumable re-encryption of its editable
+fields and objects. Immutable evidence stays under its existing protection and
+is explicitly reported as retained; it is never silently treated as migrated.
 
 ## Covered fields
 
@@ -31,16 +32,20 @@ Field and object encryption reuse `BankEncryptionKey`, `ObjectKeyEnvelope`,
 wrapped by the bank's KMS key. Ciphertext records its version UUID.
 
 A unit of work resolves the current version once and unwraps each required version
-once. Request-bound storage shares the session cache; standalone storage operations
-own short-lived sessions. Plaintext material is session-local and excluded from
-logs. Root transaction completion, rollback or session close discards plaintext
-key material. Field encryption itself takes no key-row or advisory locks;
-presentation readiness checks take the shared bank-version transaction lock.
-There is no persistent or process-wide plaintext cache.
-Revocation refuses the next unit once KMS enforces the permission change; an
-already admitted unit may complete. Rotation creates a new current version;
-earlier versions remain available to read earlier ciphertext. There is no
-re-encryption maintenance command.
+once. PostgreSQL units share a bank-scoped transaction advisory lock with object
+publication. First connection, index cutover, and final migration verification
+take it exclusively to drain earlier admitted writers. Request-bound storage
+shares the session cache; standalone operations own short-lived units. Plaintext
+key material is excluded from logs. Revocation refuses the next unit once KMS
+enforces the permission change; an already admitted unit may complete.
+Root transaction completion, rollback or session close discards session key
+material. Isolated large-object migration retains only its
+captured source and target object secrets for the transfer, as described below;
+they are scoped to that dispatch. No persistent or process-wide plaintext cache
+is permitted. Ordinary encryption takes no key-row locks.
+Rotation creates a new current version; earlier versions remain available to read
+earlier ciphertext. The operator API exposes an explicit re-encryption job;
+rotation itself does not queue one.
 
 Object writes use committed versions, so published ciphertext remains readable
 if the caller rolls back. Authenticated context binds fields to organization,
@@ -59,11 +64,23 @@ Optional banks without a connected key retain ordinary field storage.
 Bank-scoped HMAC-SHA-256 indexes support counterparty names, source references,
 external identifiers and related-party names. Names use Unicode normalization,
 case folding and collapsed whitespace; identifiers retain case and punctuation.
-A stable index-version pointer preserves tokens across payload-key rotation.
-Numeric concentration grouping uses opaque indexes.
+Searches scope by organization and bank and confirm decrypted candidate values.
+A stable index-version pointer keeps exact matches working across routine
+payload-key rotation. First connection re-indexes every generation, including withdrawn rows,
+atomically before publishing the connection. After a master-key replacement,
+explicit re-encryption moves the index secret to an independent envelope under
+the current key without changing tokens.
+This prevents mixed raw/HMAC natural keys during re-import and withdrawal
+reversal. The current-generation unique index also arbitrates concurrent
+re-import/reversal; a losing reversal returns 409. Numeric concentration grouping uses opaque indexes.
 
 Name index tokens are 64 characters for both connected and optional banks.
 Optional banks use unkeyed SHA-256 tokens and retain plaintext names.
+Counterparty names and group references retain the plaintext length limits defined by
+[`CounterpartyData`](../app/domain/ingestion/contracts.py) and
+[`counterparty_group_key`](../app/core/key_management/concentration_identity.py),
+including groups derived from attributes. These limits apply during ingestion and
+before persistence for both optional-key and connected-key banks.
 
 ## BI
 
@@ -89,16 +106,119 @@ rotation, numeric BI and identity refusals. PostgreSQL/storage tests exercise
 concurrent ingestion, push, exports, attachments and downloads, bounded unwrap
 counts and published-manifest readability after rollback.
 
+## Editable-data re-encryption
+
+On the staff operator API, an administrator with an active inspector session may
+POST `/operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key/reencrypt`
+to enqueue migration to the current data-key version. GET the same path to read
+the latest job's status and progress. Connection of an existing bank enqueues this
+job automatically; ordinary key rotation does not. No bank financial data is
+created by key connection or migration.
+
+For an existing aequorOS deployment, apply the
+[schema upgrade and key-access prerequisites](bank_encryption.md#onboarding-and-operator-api)
+before running editable-data migration.
+
+The core worker runs `bank_reencrypt`. Progress records the target version,
+phase, field-table/row checkpoint, exact object-version cursor, rewritten counts,
+retained counts by type, and a human-readable summary. Each dispatch processes
+at most 100 field rows or 10 object versions, checking a 30-second work budget
+between atomic operations, then commits its checkpoint and queues its successor
+in the same transaction. BI identity cleanup and catalogue cleanup also use
+bounded batches. Verification uses the same persisted cursors rather than a
+full-bank pass in one dispatch. The queue's ordinary 900-second reclaim window
+applies to normal batches. Interrupted batches resume their committed checkpoint;
+duplicate runners serialize on the shared job row and may return without further
+work only after observing committed handoff or terminal state. A rolled-back
+handoff leaves the batch reclaimable. Object retries discover already
+published current-version ciphertext. A failed or exhausted job can be requested
+again safely. If rotation changes the current version mid-run, the job restarts
+its scan for that version. Old keys must remain decrypt-capable throughout migration.
+Handed-off parents and completed progress cannot absorb a later request, even
+when a worker died before recording their final queue status.
+
+The job locks each editable row before replacing only its protected columns,
+preserving logical values and timestamps. It updates neither saved BI version
+specs nor regulatory package snapshots, even when the filing is unsigned. Other
+editable protected columns on regulatory packages can move. Audit history is
+unchanged, including its chain and captured columns. Audit records lack a
+universal bank ID, so retained audit counts conservatively include the entire
+organization's tenant and operator audit history, labelled as organization scope.
+
+Editable BI identity copies are included bank-wide, across all historical dates:
+counterparty dimension names and source references become UUID aliases, dimension
+group references are cleared, and daily/EOM position group copies are cleared.
+The builder participates in the same writer barrier, and final verification
+checks these copies alongside protected fields. Numeric mart values remain intact.
+
+Current editable stored objects are authenticated and conditionally replaced
+using their ETag, including conditional multipart completion for large objects.
+Uploads use bounded parts under the same size policy as ordinary storage writes.
+Inventory requests examine one exact object version at a time, checking the
+dispatch budget before requesting another. Their saved markers preserve the
+literal `null` version of an unversioned predecessor.
+
+Objects of at least 16 MiB run alone in a dedicated dispatch. Its persisted
+payload records the source size before claim: the queue adds eight seconds per
+MiB to the deployment's normal reclaim window, budgeting transfer and transform
+work at 1 MiB/s with margin. An interrupted large dispatch remains reclaimable
+after that finite window and retries the object from the beginning; there is
+no resumable state inside an object.
+
+The large dispatch captures authenticated source/current keys in a short
+transaction, then releases the bank writer barrier for the download, transforms,
+and multipart upload. The uploaded parts form an unpublished new object copy.
+At publication it briefly reacquires the barrier, validates the current key and
+database pins, and rechecks exact source version, ETag, metadata, retention and
+legal hold. Conditional multipart completion atomically swaps the logical
+object's pointer to the new version. A concurrent write or rotation aborts the
+copy; the next batch inventories the source again. Historical versions retain
+their exact identities. No bank-wide barrier spans the large transfer.
+Legacy platform-protected content is accepted only by this
+maintenance path after checksum verification; normal connected-bank reads keep
+refusing it. A concurrent changed object defeats the conditional replacement and
+is checked again. Historical versions, compliance/legal-hold versions, and any
+version pinned by a database record remain intact and are reported by storage
+tier. Creating a new current object version therefore retains the original when
+the bucket is versioned. Physical historical backups are not rewritten.
+
+Each verification batch drains admitted writers through the bank's writer
+barrier. Writers admitted afterward use the current version and clear derived BI
+identity copies, so older-key references cannot appear behind the saved cursor.
+A target-version change restarts verification. Across these bounded batches,
+verification checks both fields and the full object-version inventory.
+With retained records, the summary is exactly
+`complete except N retained immutable records`, with counts by type. It never
+reports plain `complete` while any such records remain outside the target
+version. This is completion of editable-data migration, not removal of every
+old-key dependency. After verification, aequorOS removes catalogue envelopes in
+bounded batches under the same writer barrier, retaining all collected references.
+It removes only envelopes that no protected field or stored object version references, preserving
+the current and blind-index versions. Retained immutable fields and historical,
+pinned or locked object versions keep their envelopes. Retirement authorization
+continues to refuse while any catalogue reference or backup hold requires the
+key, and permits retirement of an unreferenced version after backup retention
+expires. The job does not destroy keys. The worker can update only the key-version
+pointers and timestamp; operator audit retention is counted through a read-only
+audit-owner function without direct worker access to operator audit rows.
+Guard changes and audit-chain migrations are outside this workflow.
+
 ## Protected presentation reads
 
 Tenant GET/HEAD sessions disclose protected identity fields as locked placeholders
 when a bank key is revoked or unreachable. Staff and Inspector presentation sessions
-hide those fields even for optional, unconnected banks. Support filing reads expose
+hide those fields even for optional, unconnected banks without unwrapping a bank key.
+Support filing reads expose
 only filing metadata: snapshot and comparison bodies are locked, and validation,
 approval and methodology details are withheld. Bank-user filing reads retain their
 complete content. Numeric projections still
-use their stored values and indexes. Structured executable BI configuration refuses
-with a locked panel instead of substituting an empty query.
+use their stored values and indexes. Lists of alerts, subscriptions, dashboards and
+versions keep numeric entries available and mark only protected configurations
+with `locked_reason`. Locked subscriptions return no query, and locked dashboards
+return no widgets. Their editors show the reason instead of treating the masked
+configuration as an empty draft. Alert evaluation records the protected item as
+not evaluated while continuing with numeric alerts. Operator ingestion metadata
+and subscription scheduling select no protected report or query payload.
 
 The response header `X-Aequoros-Protected-Data` reports bank-scoped availability and
 protected responses use `Cache-Control: no-store`. Revocation displays “Your bank
@@ -112,8 +232,9 @@ Integrity failures remain verification errors, outside the key-outage presentati
 
 Manual **Retry** and five-second automatic retries share one in-flight recovery
 attempt for the current bank. They refetch eligible active queries for that bank;
-when none are eligible, they use `GET /api/v1/banks/{bank_id}` to observe readiness
-without loading protected registers. Bank detail checks institution coverage before
+when none are eligible, including empty protected collections after a refused first
+save, they use `GET /api/v1/banks/{bank_id}` to observe readiness without loading
+protected registers. Bank detail checks institution coverage before
 observing keys and requires no key-administration or institution-profile permission.
 Changing banks or unmounting cancels the fallback request. Available and support
 states, or no current bank, suppress recovery probes.
@@ -160,8 +281,3 @@ current names.
 Concentration displays configured locked limits as not evaluated and withholds a
 clean breach indicator while any configured evaluation is incomplete; independent
 numeric limits still evaluate.
-
-Recovery retries also read `GET /banks/{bank_id}` to observe the connected key
-when protected collections are empty after a refused first save. A headerless
-successful response does not clear an existing lock. Support reads never unwrap
-a bank key or poll for recovery.

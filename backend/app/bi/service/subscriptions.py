@@ -64,7 +64,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from loguru import logger
 from sqlalchemy import distinct, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.api.deps import TenantContext
 from app.bi.domain.catalogue import CATALOGUE_VERSION, Catalogue, catalogue
@@ -72,12 +72,14 @@ from app.bi.models.marts import MART_BUILD_SCOPES, BiMartBuild
 from app.bi.models.notifications import BiSubscription, BiSubscriptionDelivery
 from app.bi.schemas.query import BiQuery, BiTime
 from app.bi.service import data_scope, exports, provenance, query_log
-from app.bi.service.authorization import authorize_query_conjunctive, query_members
+from app.bi.service.authorization import BiAuthorization, authorize_query_conjunctive, query_members
 from app.bi.service.errors import BiQueryError
 from app.bi.service.exports import policy, runner
+from app.bi.service.identity_policy import IDENTITY_REASON
 from app.bi.service.versions import BUILDER_VERSION
 from app.core.authorization import Permission
 from app.core.config import get_settings
+from app.core.key_management.presentation import contains_placeholder
 from app.db.base import utc_now
 from app.identity.public import Bank, User
 from app.models.job import Job
@@ -227,6 +229,20 @@ def due_runs(
     subscriptions = list(
         db.scalars(
             select(BiSubscription)
+            .options(
+                load_only(
+                    BiSubscription.id,
+                    BiSubscription.organization_id,
+                    BiSubscription.bank_id,
+                    BiSubscription.cadence,
+                    BiSubscription.hour,
+                    BiSubscription.minute,
+                    BiSubscription.day_of_week,
+                    BiSubscription.day_of_month,
+                    BiSubscription.created_at,
+                    raiseload=True,
+                )
+            )
             .where(
                 BiSubscription.organization_id == organization_id,
                 BiSubscription.is_active.is_(True),
@@ -367,6 +383,14 @@ def enqueue_on_new_data(
     subscriptions = list(
         db.scalars(
             select(BiSubscription)
+            .options(
+                load_only(
+                    BiSubscription.id,
+                    BiSubscription.organization_id,
+                    BiSubscription.bank_id,
+                    raiseload=True,
+                )
+            )
             .where(
                 BiSubscription.organization_id == organization_id,
                 BiSubscription.bank_id == bank_id,
@@ -491,7 +515,7 @@ def read_request(db: Session, job: Job) -> RunRequest:
     a sibling tenant or another subscription.
     """
 
-    payload = job.payload or {}
+    payload = cast(dict[str, object], job.payload or {})
     payload_org = payload.get("organization_id")
     if payload_org is not None and str(payload_org) != job.organization_id:
         raise SubscriptionError(
@@ -586,6 +610,8 @@ def _query_for(subscription: BiSubscription, as_of: date) -> BiQuery:
     carrying either is refused rather than silently reinterpreted.
     """
 
+    if contains_placeholder(subscription.query):
+        raise SubscriptionError(IDENTITY_REASON)
     query = BiQuery.model_validate(subscription.query)
     if query.time.range is not None or query.time.compare_to is not None:
         raise SubscriptionError(REASON_UNSUPPORTED_TIME_WINDOW)
@@ -976,7 +1002,7 @@ class _Rendered:
 
     refusal: str | None = None
     payload: bytes | None = None
-    context: Any = None
+    context: exports.ExportContext | None = None
     filename: str | None = None
     media_type: str | None = None
     row_count: int | None = None
@@ -990,7 +1016,7 @@ def _render_for(  # noqa: PLR0913 - one render and every input it is made from
     request: RunRequest,
     cat: Catalogue,
     query: BiQuery,
-    decision: Any,
+    decision: BiAuthorization,
     recipient: User,
 ) -> _Rendered:
     """Compile, run and render THIS recipient's copy. Nothing is shared or cached.
@@ -1275,7 +1301,7 @@ def _export_format(value: str) -> exports.ExportFormat | None:
     """
 
     if value in exports.EXPORT_FORMATS:
-        return cast("exports.ExportFormat", value)
+        return value
     return None
 
 

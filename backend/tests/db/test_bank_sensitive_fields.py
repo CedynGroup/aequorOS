@@ -8,17 +8,21 @@ from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 from typing import cast
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import MetaData, Table, select, text
 from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session
 
+from alembic import command
 from app.bi.models.notifications import BiAlert, BiAlertEvent, BiSubscription
 from app.bi.service.identity_policy import IDENTITY_REASON
-from app.core.key_management import registry
+from app.core.key_management import fields, registry
 from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference
+from app.db.base import utc_now
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
 from app.identity.public import Bank, User
 from app.models.canonical import CanonicalCounterparty
@@ -81,6 +85,119 @@ def sensitive_db(
         )
         db.commit()
         yield db, provider, key
+
+
+def test_existing_data_upgrades_indexes_envelopes_and_connected_empty_banks(
+    sensitive_db: tuple[Session, LocalKeyProvider, KeyReference],
+) -> None:
+    db, provider, reference = sensitive_db
+    cp = counterparty(db, include_package=False)
+    party = RelatedParty(
+        organization_id=ORG_1,
+        bank_id="BK-SAMP0001",
+        party_type="individual",
+        full_name=NAME,
+    )
+    db.add(party)
+    db.add(
+        Bank(
+            id="BK-SAMP0002",
+            organization_id=ORG_1,
+            name="Synthetic empty bank",
+            short_name="Empty",
+            currency="GHS",
+            jurisdiction_code="GH",
+            institution_type="universal_bank",
+            license_type="universal_bank",
+            storage_slug="bk-samp0002",
+        )
+    )
+    db.commit()
+    cp_id, party_id = cp.id, party.id
+    db.close()
+    config = migrations.alembic_config_for_app()
+    command.downgrade(config, "202610140100")
+    connection = db.connection()
+    metadata = MetaData()
+    keys = Table("bank_encryption_keys", metadata, autoload_with=connection)
+    envelopes = Table("object_key_envelopes", metadata, autoload_with=connection)
+    for bank in ("BK-SAMP0001", "BK-SAMP0002"):
+        _ = db.execute(
+            keys.insert().values(
+                id=uuid4(),
+                bank_id=bank,
+                organization_id=ORG_1,
+                storage_slug=bank.lower(),
+                provider=reference.provider,
+                key_id=reference.key_id,
+                region=reference.region,
+                owner_account=reference.owner_account,
+                status="active",
+                checked_at=utc_now(),
+                created_at=utc_now(),
+                updated_at=utc_now(),
+            )
+        )
+    context = {"purpose": "bank-object", "object_path": "synthetic/old.csv"}
+    digest = registry.context_digest(context)
+    secret = provider.generate_data_key(reference, registry.wrapping_context("BK-SAMP0001", digest))
+    envelope_id = uuid4()
+    _ = db.execute(
+        envelopes.insert().values(
+            id=envelope_id,
+            bank_id="BK-SAMP0001",
+            organization_id=ORG_1,
+            context_digest=digest,
+            wrapped_key=secret.wrapped,
+            created_at=utc_now(),
+        )
+    )
+    db.commit()
+    command.upgrade(config, "head")
+    for bank in ("BK-SAMP0001", "BK-SAMP0002"):
+        key = registry.scoped_key(db, organization_id=ORG_1, bank_id=bank)
+        assert key.current_version_id is not None
+        assert key.index_version_id == key.current_version_id
+        assert fields.index_key(db, key)
+    key = registry.scoped_key(db, organization_id=ORG_1, bank_id="BK-SAMP0001")
+    envelope = db.get(ObjectKeyEnvelope, envelope_id)
+    assert envelope is not None and registry.reference(envelope) == reference
+    assert (
+        registry.open_envelope(db, key, envelope_id, context, lambda _: provider).plaintext
+        == secret.plaintext
+    )
+    stored = db.get(CanonicalCounterparty, cp_id)
+    related = db.get(RelatedParty, party_id)
+    assert stored is not None and related is not None
+    expected = fields.index_values(
+        "canonical_counterparties",
+        {
+            "name": stored.name,
+            "source_reference": stored.source_reference,
+            "group_reference": stored.group_reference,
+            "external_identifiers": stored.external_identifiers,
+        },
+        ORG_1,
+        "BK-SAMP0001",
+        fields.index_key(db, key),
+    )
+    for column, token in expected.items():
+        assert (
+            db.scalar(
+                select(CanonicalCounterparty.__table__.c[column]).where(
+                    CanonicalCounterparty.id == cp_id
+                )
+            )
+            == token
+        )
+    assert related.full_name_blind_index == fields.blind_index(
+        db,
+        organization_id=ORG_1,
+        bank_id="BK-SAMP0001",
+        domain="related_party.full_name",
+        value=NAME,
+        normalization="name",
+    )
 
 
 @pytest.mark.parametrize("connected", [False, True])

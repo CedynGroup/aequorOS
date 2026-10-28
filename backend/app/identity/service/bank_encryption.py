@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.key_management import registry
+from app.core.key_management import reencryption, registry
 from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.schemas import BankKeyConnect, BankKeyRead, BankKeyRotate
 from app.core.key_management.settings import get_key_settings
@@ -169,6 +169,7 @@ def connect(
     except KeyUnavailableError as exc:
         db.rollback()
         raise HTTPException(503, str(exc)) from exc
+    _ = reencryption.enqueue(db, ctx.organization_id, bank_id)
     _audit(db, ctx, bank_id, "connected", {"key_id": payload.key_id})
     db.commit()
     return status(db, ctx, bank_id)

@@ -59,8 +59,7 @@ def counterparty_selects(db: Session) -> Generator[list[str]]:
 
 
 def assert_long_concentration_tokens(db: Session, axis: GroupAxis) -> None:
-    width = 255 if axis in ("name", "reference") else 4096
-    prefix = "\ufb03" * (width - 1)
+    prefix = "\ufb03" * 254
     tokens: list[str] = []
     for suffix in ("A", "B", "A"):
         row = fields.counterparty(

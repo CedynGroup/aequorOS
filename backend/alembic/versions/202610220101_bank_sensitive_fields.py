@@ -1,18 +1,24 @@
 """Add capacity and bank-scoped blind indexes for sensitive operational fields.
 
 Revision ID: 202610220101
-Revises: 202610260001
+Revises: 202610270002
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import cast
+
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.engine import Connection
 
 from alembic import op
+from app.core.key_management.fields import index_values
+from app.db.session import force_rls_suspended
 
 revision = "202610220101"
-down_revision = "202610260001"
+down_revision = "202610270002"
 branch_labels = None
 depends_on = None
 
@@ -58,6 +64,18 @@ def _current_index(column: str) -> None:
     )
 
 
+def backfill_indexes(connection: Connection) -> None:
+    metadata = sa.MetaData()
+    for name in (COUNTERPARTIES, PARTIES):
+        table = sa.Table(name, metadata, autoload_with=connection)
+        for result in connection.execute(sa.select(table)).mappings():
+            row = cast(Mapping[str, object], result)
+            values = index_values(
+                name, dict(row), cast(str, row["organization_id"]), cast(str, row["bank_id"]), None
+            )
+            _ = connection.execute(table.update().where(table.c.id == row["id"]).values(**values))
+
+
 def upgrade() -> None:
     # Field reads and writes resolve bank key configuration in the runtime
     # session. Key registration and rotation remain control-plane mutations.
@@ -81,6 +99,9 @@ def upgrade() -> None:
         ),
     )
     op.add_column(PARTIES, sa.Column("full_name_blind_index", sa.String(255), nullable=True))
+    connection = op.get_bind()
+    with force_rls_suspended(connection, COUNTERPARTIES, PARTIES):
+        backfill_indexes(connection)
     op.drop_index("uq_canonical_counterparties_current", table_name=COUNTERPARTIES)
     _current_index("source_reference_blind_index")
     op.create_index(

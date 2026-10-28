@@ -60,11 +60,11 @@ The discriminator for the second is already in the row and needs no new value:
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
@@ -107,6 +107,7 @@ from app.bi.schemas.query import BiLayoutItem, BiPackWidget, BiPackWidgetRead
 from app.bi.service import content, query_log
 from app.bi.service.authorization import UnknownMember
 from app.bi.service.identity_policy import IDENTITY_MESSAGE, IDENTITY_REASON
+from app.core.key_management.presentation import locked_message
 from app.identity import public as grant_administration
 from app.identity.public import SodDecisionRead, SodPolicyFindingRead, User
 from app.services import audit
@@ -256,10 +257,10 @@ def _refused_members(exc: BaseException) -> tuple[str, ...]:
 
     if not isinstance(exc, HTTPException) or not isinstance(exc.detail, dict):
         return ()
-    named = exc.detail.get("denied_members")
+    named = cast(dict[str, object], exc.detail).get("denied_members")
     if not isinstance(named, list):
         return ()
-    return tuple(str(member_id) for member_id in named)
+    return tuple(str(member_id) for member_id in cast(list[object], named))
 
 
 def _row(access: BiReadAccess, meter: _Meter, *, decision: str) -> query_log.QueryRecord:
@@ -299,7 +300,7 @@ def _append(db: Session, record: query_log.QueryRecord) -> None:
 
 
 @contextmanager
-def _metered(db: Session, access: BiReadAccess, route: str, *question: object) -> Iterator[_Meter]:
+def _metered(db: Session, access: BiReadAccess, route: str, *question: object) -> Generator[_Meter]:
     """Meter one request, and leave exactly one ``bi_query_log`` row behind it.
 
     The budget is spent by ROWS, so a request that raised before writing one was
@@ -471,6 +472,7 @@ def _summary(
     widget_count: int,
     identities: Mapping[UUID, User],
     caller: UUID,
+    locked_reason: str | None = None,
 ) -> BiDashboardSummaryRead:
     return BiDashboardSummaryRead(
         id=dashboard.id,
@@ -484,6 +486,7 @@ def _summary(
         badge=_badge(dashboard.badge),
         version=dashboard.current_version,
         widget_count=widget_count,
+        locked_reason=locked_reason,
         source_pack=dashboard.source_pack,
         created_at=dashboard.created_at,
         updated_at=dashboard.updated_at,
@@ -543,14 +546,17 @@ def _widget_read(
 
 def _dashboard_read(  # noqa: PLR0913 - one document, its reader, its date and its canvas
     dashboard: BiDashboard,
-    spec: BiDashboardSpec,
+    spec: BiDashboardSpec | None,
     canvas: content.ResolvedCanvas,
     *,
     as_of: date,
     identities: Mapping[UUID, User],
     caller: UUID,
+    locked_reason: str | None = None,
 ) -> BiDashboardRead:
-    layout_by_id: Mapping[str, BiLayoutItem] = {item.i: item for item in spec.layout}
+    layout_by_id: Mapping[str, BiLayoutItem] = (
+        {item.i: item for item in spec.layout} if spec else {}
+    )
     widgets = [_widget_read(resolved, layout_by_id) for resolved in canvas.widgets]
     restricted = canvas.restricted_widgets
     readable = canvas.readable_widgets
@@ -575,8 +581,8 @@ def _dashboard_read(  # noqa: PLR0913 - one document, its reader, its date and i
         version=dashboard.current_version,
         source_pack=dashboard.source_pack,
         as_of=as_of,
-        access=canvas.access,
-        message=message,
+        access="restricted" if locked_reason else canvas.access,
+        message=locked_reason or message,
         widgets=widgets,
         restricted_widgets=restricted,
         readable_widgets=readable,
@@ -697,6 +703,9 @@ def list_bi_dashboards(bank_id: str, db: DbSession, access: BiRead) -> BiDashboa
             _summary(
                 dashboard,
                 widget_count=_widget_count(live.get(dashboard.id)),
+                locked_reason=locked_message(live[dashboard.id].spec)
+                if dashboard.id in live
+                else None,
                 identities=identities,
                 caller=access.principal_user_id,
             )
@@ -713,7 +722,9 @@ def _widget_count(version: BiDashboardVersion | None) -> int:
     a list that 500s makes both impossible. Opening it raises.
     """
 
-    return 0 if version is None else len(_stored_spec(version).widgets)
+    return (
+        0 if version is None or locked_message(version.spec) else len(_stored_spec(version).widgets)
+    )
 
 
 @router.post(
@@ -827,7 +838,8 @@ def get_bi_dashboard(  # noqa: PLR0913 - FastAPI injects db/access, the rest is 
         except content.DashboardNotFound as exc:
             raise _not_found(exc) from exc
         version = content.current_version(db, dashboard)
-        spec = _stored_spec(version)
+        reason = locked_message(version.spec)
+        spec = None if reason else _stored_spec(version)
         authority = content.ViewerAuthority(
             db=db,
             ctx=access.ctx,
@@ -835,7 +847,11 @@ def get_bi_dashboard(  # noqa: PLR0913 - FastAPI injects db/access, the rest is 
             cat=cat,
             surface=content.DASHBOARD_SURFACE,
         )
-        canvas = content.resolve_widgets(spec, as_of=as_of, authority=authority)
+        canvas = (
+            content.resolve_widgets(spec, as_of=as_of, authority=authority)
+            if spec
+            else content.ResolvedCanvas(widgets=(), denied_members=(), served_members=())
+        )
         # The members this reader was refused go in the row and NOT in the response:
         # that is where an operator sees which grant is missing. The row itself is
         # written by ``_metered`` on the way out, so there is exactly one of it
@@ -849,6 +865,7 @@ def get_bi_dashboard(  # noqa: PLR0913 - FastAPI injects db/access, the rest is 
             as_of=as_of,
             identities=identities,
             caller=access.principal_user_id,
+            locked_reason=reason,
         )
 
 
@@ -1026,7 +1043,8 @@ def list_bi_dashboard_versions(
                     title=row.title,
                     description=row.description,
                     change_note=row.change_note,
-                    widget_count=len(_stored_spec(row).widgets),
+                    widget_count=_widget_count(row),
+                    locked_reason=locked_message(row.spec),
                     spec_digest=row.spec_digest,
                     created_by_user_id=row.created_by_user_id,
                     created_by_display_name=_display_name(identities, row.created_by_user_id),
