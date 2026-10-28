@@ -189,6 +189,11 @@ def pytest_pycollect_makeitem(
         collector.config.stash[_COLLECTION_OWNERS] = prefixes
     owners = collector.config.stash[_COLLECTION_OWNERS].get(prefix, set())
     if not owners:
+        # Pytest first considers imported classes such as TestClient, then
+        # rejects their constructors. Let it decide whether an unknown class
+        # is collectible; any actual new test method is checked below it.
+        if collector.istestclass(obj, name):
+            return None
         raise pytest.UsageError(f"Unclassified test: {prefix}; refresh the census")
     return [] if collector.config.getoption("markexpr") not in owners else None
 

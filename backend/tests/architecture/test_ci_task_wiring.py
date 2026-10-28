@@ -589,7 +589,9 @@ def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path)
     tests.mkdir()
     _ = (tmp_path / "pytest.ini").write_text("[pytest]\ntestpaths=tests\n")
     nodes = {"tests/test_unit.py::test_unit": "unit", "tests/test_db.py::test_db": "integration"}
-    _ = (tests / "test_unit.py").write_text("def test_unit(): assert True\n")
+    _ = (tests / "test_unit.py").write_text(
+        "class TestClient:\n    def __init__(self): pass\ndef test_unit(): assert True\n"
+    )
     _ = (tests / "test_db.py").write_text("raise RuntimeError('integration module imported')\n")
     catalogue = tmp_path / "suites.json"
     _ = (tmp_path / "probe_catalogue.py").write_text(
