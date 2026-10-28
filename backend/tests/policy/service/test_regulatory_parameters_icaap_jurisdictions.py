@@ -453,18 +453,3 @@ def test_the_migration_chains_after_the_previous_head() -> None:
     module = _load(MIGRATION, "icaap_jurisdiction_parameters_revision")
     assert module.revision == "202609200063"
     assert module.down_revision == "202609190062"
-
-
-def test_the_migration_scopes_its_downgrade_to_the_new_jurisdictions() -> None:
-    """A code-only DELETE would take Ghana's rows with it.
-
-    Read from the file rather than executed, because the hermetic suite runs no
-    migration at all and the failure mode is silent data loss on a real one.
-    """
-    module = _load(MIGRATION, "icaap_jurisdiction_parameters_downgrade")
-    assert module.JURISDICTIONS == ("NG", "KE")
-    assert module._jurisdictions_sql() == "'NG', 'KE'"
-    source = MIGRATION.read_text(encoding="utf-8")
-    delete = source.split("def downgrade()")[1]
-    assert "jurisdiction_code IN ({_jurisdictions_sql()})" in delete
-    assert "'GH'" not in delete

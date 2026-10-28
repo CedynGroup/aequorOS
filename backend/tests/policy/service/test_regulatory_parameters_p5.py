@@ -145,25 +145,6 @@ def test_the_migrations_pinned_rows_equal_the_catalogue_today() -> None:
         assert citation == spec.source_citation, code
 
 
-def test_the_migration_does_not_import_the_live_catalogue() -> None:
-    """A later catalogue edit must not change what a deployed revision seeded.
-
-    Checked by AST, not by text: the module's own docstring explains why it
-    pins its rows, and a substring check would convict that explanation.
-    """
-    import ast  # noqa: PLC0415 - one local assertion
-
-    tree = ast.parse(MIGRATION.read_text(), filename=str(MIGRATION))
-    imported: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imported.add(node.module)
-            imported.update(f"{node.module}.{alias.name}" for alias in node.names)
-    assert not any("regulatory_parameters" in name for name in imported), sorted(imported)
-
-
 def test_every_citation_fits_the_column_it_is_stored_in() -> None:
     """A citation over the column width fails the MIGRATION, not the catalogue.
 

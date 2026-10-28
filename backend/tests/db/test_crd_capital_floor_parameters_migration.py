@@ -23,6 +23,7 @@ import pytest
 from sqlalchemy import text
 
 from alembic import command
+from app.policy.service import regulatory_parameters
 from app.policy.service.regulatory_parameters import (
     CRD_CAPITAL_FLOOR_SEEDS,
     SDI_RECOGNITION_CAP_SEEDS,
@@ -160,8 +161,6 @@ def test_the_catalogue_and_the_migration_agree() -> None:
         )
         assert spec.confirmation_status == ("pending" if code in PENDING else "confirmed")
     migration = _migration()
-    source = Path(migration.__file__ or "").read_text(encoding="utf-8")
-    assert "seed_rows" not in source and "SEED_PARAMETERS" not in source.split('"""', 2)[2]
     assert tuple(migration.SEEDS) == CRD_CAPITAL_FLOOR_SEEDS
     assert tuple(migration.SDI_SEEDS) == SDI_RECOGNITION_CAP_SEEDS
     assert migration.EFFECTIVE_FROM == SEED_EFFECTIVE_FROM
@@ -174,6 +173,7 @@ def test_the_catalogue_and_the_migration_agree() -> None:
 )
 def test_seed_is_idempotent_and_its_downgrade_removes_only_its_own_rows(
     migrated_postgres_schema: MigratedPostgresSchema,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = alembic_config_for_app()
 
@@ -231,5 +231,11 @@ def test_seed_is_idempotent_and_its_downgrade_removes_only_its_own_rows(
         connection.execute(
             text("DELETE FROM regulatory_parameter WHERE proposed_by = 'operator:maker'")
         )
+    with monkeypatch.context() as catalogue:
+        catalogue.setattr(regulatory_parameters, "SEED_PARAMETERS", ())
+        catalogue.setattr(regulatory_parameters, "CRD_CAPITAL_FLOOR_SEEDS", ())
+        catalogue.setattr(regulatory_parameters, "SDI_RECOGNITION_CAP_SEEDS", ())
+        command.upgrade(config, REVISION)
+    _assert_seeded(_rows(migrated_postgres_schema))
     command.upgrade(config, "head")
     _assert_seeded(_rows(migrated_postgres_schema))

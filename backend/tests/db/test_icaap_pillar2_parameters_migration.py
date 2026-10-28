@@ -28,6 +28,7 @@ from sqlalchemy import text
 
 from alembic import command
 from app.icaap.service.parameters import ICAAP_PARAM_CODES
+from app.policy.service import regulatory_parameters
 from app.policy.service.regulatory_parameters import (
     ICAAP_P2_SEED_PARAMETERS,
     P2_PARAMETER_CODES,
@@ -116,10 +117,12 @@ def _assert_seeded(rows: list[dict[str, Any]]) -> None:
 )
 def test_seed_is_idempotent_and_its_downgrade_removes_only_its_own_rows(
     migrated_postgres_schema: MigratedPostgresSchema,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = alembic_config_for_app()
 
-    _assert_seeded(_rows(migrated_postgres_schema))
+    original_rows = _rows(migrated_postgres_schema)
+    _assert_seeded(original_rows)
 
     # Down to the workspace revision: the Pillar 2 rows go, the workspace's stay.
     command.downgrade(config, PREVIOUS_REVISION)
@@ -179,8 +182,12 @@ def test_seed_is_idempotent_and_its_downgrade_removes_only_its_own_rows(
         connection.execute(
             text("DELETE FROM regulatory_parameter WHERE proposed_by = 'operator:maker'")
         )
+    with monkeypatch.context() as catalogue:
+        catalogue.setattr(regulatory_parameters, "SEED_PARAMETERS", ())
+        catalogue.setattr(regulatory_parameters, "ICAAP_P2_SEED_PARAMETERS", ())
+        command.upgrade(config, REVISION)
+    assert _rows(migrated_postgres_schema) == original_rows
     command.upgrade(config, "head")
-    _assert_seeded(_rows(migrated_postgres_schema))
     _assert_one_generation_per_icaap_code(migrated_postgres_schema)
 
 
@@ -212,13 +219,9 @@ def _assert_one_generation_per_icaap_code(schema: MigratedPostgresSchema) -> Non
     assert {code: count for code, count in counts.items() if count != 1} == {}
 
 
-def test_the_migration_chains_after_the_workspace_and_pins_its_own_rows() -> None:
+def test_the_migration_chains_after_the_workspace_with_disjoint_codes() -> None:
     module = _migration()
     assert (module.revision, module.down_revision) == (REVISION, PREVIOUS_REVISION)
     assert module.EFFECTIVE_FROM == SEED_EFFECTIVE_FROM
     assert set(module.PARAM_CODES) == set(P2_PARAMETER_CODES)
     assert set(module.PARAM_CODES) & set(ICAAP_PARAM_CODES) == set()
-    source = Path(module.__file__ or "").read_text(encoding="utf-8")
-    body = source.split('"""', 2)[2]
-    assert "seed_rows" not in body
-    assert "SEED_PARAMETERS" not in body

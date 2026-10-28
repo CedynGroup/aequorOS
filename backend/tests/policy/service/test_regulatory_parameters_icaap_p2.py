@@ -24,7 +24,6 @@ column, and the ``202609190056`` migration's pinned rows equal the catalogue's.
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 from collections import Counter
 from decimal import Decimal
@@ -217,23 +216,6 @@ def test_the_catalogue_and_the_migration_agree() -> None:
     assert module.EFFECTIVE_FROM == regulatory_parameters.SEED_EFFECTIVE_FROM
     assert module.SEED_ACTOR == regulatory_parameters.SEED_ACTOR
     assert module.down_revision == "202609190055"
-
-
-def test_the_migration_pins_its_own_rows_and_imports_no_catalogue() -> None:
-    """Security audit L-4: a later catalogue edit must not change what a
-    shipped revision seeded."""
-    source = MIGRATION.read_text(encoding="utf-8")
-    body = ast.parse(source)
-    imported = {
-        alias.name
-        for node in ast.walk(body)
-        if isinstance(node, ast.ImportFrom)
-        for alias in node.names
-    }
-    assert "seed_rows" not in imported
-    assert "regulatory_parameters" not in (
-        node.module or "" for node in ast.walk(body) if isinstance(node, ast.ImportFrom)
-    )
 
 
 def test_the_migration_does_not_collide_with_the_workspace_seeds() -> None:
