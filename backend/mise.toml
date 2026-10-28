@@ -110,10 +110,9 @@ run = "uv run python scripts/local_services.py run --postgres --storage --role-a
 description = "Run the full pytest suite against Postgres (local or supplied TEST_DATABASE_URL)"
 run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -n 4 --dist loadfile --ignore=tests/architecture --ignore=tests/db --ignore=tests/api/test_calculations.py --ignore=tests/api/test_liquidity.py --ignore=tests/api/test_scenarios.py --ignore=tests/storage/test_key_rotation_concurrency.py"
 
-# The DB-backed regulatory/attestation/auth/vendor API surface. It is gated on
-# REAL_DATA_DATABASE_URL pointing at the PRIMARY database (it asserts against
-# real tenant identities), so it cannot run on an ephemeral CI Postgres; without
-# that URL every one of these tests skips.
+# The legacy opt-in regulatory/attestation/auth/vendor API surface requires
+# REAL_DATA_DATABASE_URL; without it these tests skip. Database selection and
+# primary access follow README.md#test-databases-and-the-primary-database.
 #
 # The path list omitted tests/adapters and tests/equivalence until 2026-08-22,
 # so three modules — including the regulatory report/forecast run-parity suites
