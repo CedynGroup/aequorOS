@@ -91,6 +91,7 @@ dev = [
   "pytest-xdist",
   "types-requests>=2.33.0.20261006",
   "moto[kms,s3]>=5,<6",
+  "greenlet>=3.5.1",
 ]
 
 [tool.pytest.ini_options]

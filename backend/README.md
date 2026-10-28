@@ -571,6 +571,8 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
 - Hermetic and Postgres-gated mutation checks follow [Run Tests](#run-tests), including
   its dedicated test-database requirement. Tests against the primary are limited to the
   read-only live-data suite above.
+- Test connection construction, fixture selection and the direct-constructor ratchet
+  are documented in the [test connection guide](tests/support/DATABASE.md).
 - **`Base.metadata.create_all` skips migrations.** The hermetic pytest suite and the
   shared Playwright bootstrap therefore use `tests/fixtures/reference_data.py` to seed
   every GLOBAL registry from the same catalogues
