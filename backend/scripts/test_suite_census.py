@@ -2,7 +2,8 @@
 
 A skipped test proves neither database use nor database freedom. Such cases
 remain integration-owned until an admissible execution proves otherwise; their
-identities and reasons are printed separately, never inferred to be unit tests.
+identities and reasons are recorded in ``inconclusive.json``, never inferred to
+be unit tests.
 """
 
 from __future__ import annotations
