@@ -98,6 +98,7 @@ testpaths = ["tests"]
 addopts = "-p scripts.test_suites_plugin -p scripts.database_observation_plugin"
 pythonpath = ["."]
 markers = [
+  "database_contract: SQL, isolation, migration, locking, role or encryption guarantee requiring Postgres",
   "requirement(citation): behavioral regression against a cited external requirement",
   "committing_db: use real commits and independent connections in a shared schema reset before each test",
 ]

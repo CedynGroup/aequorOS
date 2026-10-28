@@ -77,6 +77,7 @@ pytest_plugins = [
     "tests.ftp.fixtures",
     "tests.fx.fixtures",
     "tests.irrbb.fixtures",
+    "tests.icaap.testing.annexes",
     "tests.market_data.fixtures",
     "tests.reporting.fixtures",
 ]

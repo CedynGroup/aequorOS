@@ -13,6 +13,16 @@ import pytest
 BACKEND = Path(__file__).parents[2]
 
 
+def _standalone_contracts(tmp_path: Path) -> str:
+    """Standalone ownership probes supply both of their catalogue inputs."""
+    path = tmp_path / "contracts.json"
+    _ = path.write_text(json.dumps({"contracts": []}))
+    return (
+        "from scripts import database_contracts\n"
+        f"database_contracts.CATALOGUE = Path({str(path)!r})\n"
+    )
+
+
 @pytest.mark.parametrize(
     ("suite", "body", "passes", "attempts"),
     [
@@ -74,6 +84,7 @@ def test_suite_execution_boundary(
         "from pathlib import Path\nfrom scripts import test_suites\n"
         + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
         + "test_suites.catalogue.cache_clear()\n"
+        + _standalone_contracts(tmp_path)
     )
     if body == "__unclassified__":
         _ = catalogue.write_text(json.dumps({"cases": {}}))
@@ -182,10 +193,10 @@ def test_ci_partition_requires_exactly_one_suite_execution(tmp_path: Path, mutat
             cases = '<testcase classname="tests.test_unit" name="test_unit"/>'
         _ = (path / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
     if mutation == "none":
-        verify_partition(tmp_path)
+        verify_partition(tmp_path, protected={})
     else:
         with pytest.raises(ValueError):
-            verify_partition(tmp_path)
+            verify_partition(tmp_path, protected={})
 
 
 def test_affected_partition_omits_only_explicitly_unselected_suite_cases(
@@ -223,10 +234,10 @@ def test_affected_partition_omits_only_explicitly_unselected_suite_cases(
     _ = (tmp_path / "unit-tests" / "collection.json").write_text(
         json.dumps({unit_case: "unit", selected: "integration", omitted: "integration"})
     )
-    verify_partition(tmp_path)
+    verify_partition(tmp_path, protected={})
     (tmp_path / f"pg-suite-{index}" / "collection-main.json").unlink()
     with pytest.raises(ValueError, match="dropped or duplicated"):
-        verify_partition(tmp_path)
+        verify_partition(tmp_path, protected={})
 
 
 @pytest.mark.parametrize("caught", [False, True])
@@ -240,6 +251,7 @@ def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
         "from pathlib import Path\nfrom scripts import test_suites\n"
         + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
         + "test_suites.catalogue.cache_clear()\n"
+        + _standalone_contracts(tmp_path)
     )
     body = "pass"
     if caught:

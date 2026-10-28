@@ -16,6 +16,7 @@ import pytest
 from _pytest.fixtures import FixtureDef, SubRequest
 from _pytest.terminal import TerminalReporter
 
+from scripts import database_contracts
 from scripts.ci_database_children import python_path
 from scripts.ci_no_database import install
 from scripts.test_suites import case_key, catalogue, owner
@@ -110,6 +111,7 @@ def pytest_load_initial_conftests(early_config: pytest.Config) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line("markers", "database_contract: a protected PostgreSQL guarantee")
     config.addinivalue_line("markers", "unit: database-free test; database connections are refused")
     config.addinivalue_line("markers", "integration: test requiring a database or external service")
     if os.getenv("CI_DATABASE_CENSUS") != "1":
@@ -132,6 +134,13 @@ def pytest_configure(config: pytest.Config) -> None:
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if os.getenv("CI_DATABASE_CENSUS") == "1":
+        for item in items:
+            database_contracts.check_collection(
+                item.nodeid,
+                None,
+                item.fixturenames if isinstance(item, pytest.Function) else [],
+                marked=item.get_closest_marker("database_contract") is not None,
+            )
         return
     nodeids = [item.nodeid for item in items]
     if len(set(nodeids)) != len(nodeids):
@@ -149,6 +158,15 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             raise pytest.UsageError(f"Double-classified or conflicting suite: {item.nodeid}")
         if not markers:
             item.add_marker(suite)
+        try:
+            database_contracts.check_collection(
+                item.nodeid,
+                suite,
+                item.fixturenames if isinstance(item, pytest.Function) else [],
+                marked=item.get_closest_marker("database_contract") is not None,
+            )
+        except ValueError as error:
+            raise pytest.UsageError(str(error)) from error
         classified[item.nodeid] = suite
     if os.getenv("CI_UNIT_REPORT_DIR") and not config.getoption("collectonly"):
         modules, overrides = catalogue()
@@ -156,6 +174,10 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             raise pytest.UsageError("Unit CI must collect the entire classified test tree")
         if set(overrides) != set(nodeids):
             raise pytest.UsageError("Stale or incomplete generated test suite catalogue")
+        try:
+            database_contracts.check_classification(classified)
+        except ValueError as error:
+            raise pytest.UsageError(str(error)) from error
         config.stash[_EXPECTED] = [
             nodeid for nodeid, suite in classified.items() if suite == "unit"
         ]
@@ -210,6 +232,16 @@ def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
 def pytest_runtest_makereport(
     item: pytest.Item, call: pytest.CallInfo[None]
 ) -> pytest.TestReport | None:
+    if database_contracts.postgres_required() and database_contracts.must_execute(
+        item.nodeid, marked=item.get_closest_marker("database_contract") is not None
+    ):
+        report = pytest.TestReport.from_item_and_call(item, call)
+        if report.skipped:
+            report.outcome = "failed"
+            report.longrepr = (
+                "Protected database contract skipped its required PostgreSQL execution"
+            )
+            return report
     # Emit a failed report so caught attempts also reach an xdist controller.
     if call.when != "teardown" or _ATTEMPTS not in item.config.stash:
         return None
@@ -221,6 +253,14 @@ def pytest_runtest_makereport(
     report.outcome = "failed"
     report.longrepr = "Unit database connection guard failed: " + attempts
     return report
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    database_contracts.check_backend(
+        item.nodeid,
+        os.getenv("TEST_DATABASE_URL"),
+        marked=item.get_closest_marker("database_contract") is not None,
+    )
 
 
 def _verify_execution(config: pytest.Config, directory: Path) -> None:
