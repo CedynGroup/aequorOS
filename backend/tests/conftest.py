@@ -69,6 +69,7 @@ hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 #: and the demo tenants.
 pytest_plugins = [
     "tests.support.database_fixtures",
+    "tests.bi.fixtures",
     "tests.capital.fixtures",
     "tests.credit.fixtures",
     "tests.forecasting.fixtures",
