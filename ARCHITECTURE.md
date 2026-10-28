@@ -1227,9 +1227,8 @@ classification, census regeneration, service prerequisites and CI execution owne
   fixture setup. These gates are what enforce the dashboard's
   fail-open guard, SSRF egress guard, and browser journeys, and they cover `frontend/`
   and `console/`. Each workflow's header comment is its gate inventory — keep it
-  accurate. Which Postgres job owns which test suites is defined by the
-  `risk-service:test-postgres-*` task comments in `backend/mise.toml` and pinned by
-  `tests/architecture/test_ci_task_wiring.py`.
+  accurate. The [backend test guide](backend/README.md#run-tests) owns suite
+  classification and CI execution ownership.
 
 ---
 
