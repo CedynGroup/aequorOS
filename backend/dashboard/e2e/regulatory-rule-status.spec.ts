@@ -611,16 +611,17 @@ test("ICAAP preparation preserves context and its own draft evidence at alternat
 test("status tooltip and source stay readable inside the viewport", async ({
   page,
 }) => {
-  await page.goto("/submissions/instruments");
-  const draft = page.locator('section[id="LMT"]');
-  await draft.locator("summary").first().click();
-  const tooltip = draft.getByRole("tooltip");
-  await expect(tooltip).toBeVisible();
-  await expect(tooltip).toContainText(/Proposed by BoG, not law yet\./i);
-  const source = tooltip.getByRole("link", { name: "Read the source" });
-  await expect(source).toHaveAttribute("href", /^https:/);
   for (const width of [1440, 768, 390]) {
+    // Resize before loading: a shell remount can close native disclosures.
     await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/submissions/instruments");
+    const draft = page.locator('section[id="LMT"]');
+    await draft.locator("summary").first().click();
+    const tooltip = draft.getByRole("tooltip");
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText(/Proposed by BoG, not law yet\./i);
+    const source = tooltip.getByRole("link", { name: "Read the source" });
+    await expect(source).toHaveAttribute("href", /^https:/);
     await expect(async () => {
       for (const element of [tooltip, source]) {
         const bounds = await element.boundingBox();

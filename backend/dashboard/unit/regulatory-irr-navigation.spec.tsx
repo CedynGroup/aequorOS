@@ -52,6 +52,7 @@ function scope(): ModuleScope {
     hasInstitutionAuthority: true,
     isResolved: true,
     irrbbAggregatedView: true,
+    irrbbConfidentialView: true,
   };
 }
 vi.mock("@/components/shell/BankContext", () => ({
@@ -193,4 +194,17 @@ it("opens the draft framework deliberately from the ICAAP method card", () => {
   fireEvent.click(link);
   expect(screen.getByText("Workspace /irr/standardised")).toBeVisible();
   expect(screen.getByText("Draft")).toBeVisible();
+});
+
+it("keeps the cross-module enterprise workbench available while the IRRBB pilot is draft", () => {
+  state.href = "/irr/enterprise-stress";
+  render(<Journey />);
+  expect(screen.getByText("Workspace /irr/enterprise-stress")).toBeVisible();
+  expect(screen.queryByText("Draft")).toBeNull();
+  expect(
+    screen.getByRole("link", { name: "Enterprise stress" }),
+  ).toHaveAttribute("href", "/irr/enterprise-stress");
+  expect(
+    screen.queryByRole("link", { name: "Standardised Framework" }),
+  ).toBeNull();
 });
