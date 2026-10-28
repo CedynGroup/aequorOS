@@ -439,20 +439,24 @@ records transition guards, coverage boundaries, and bounded Hypothesis profiles.
 ```bash
 mise run unit         # database-free tests; any database connection fails
 mise run integration  # database/external-service tests on disposable Postgres
+mise run risk-service:test-e2e  # backend Playwright contracts
 ```
 
-Both commands work at the repository root or in `backend/`. Their explicit
-pytest selectors are `-m unit` and `-m integration`; the corresponding
-`risk-service:test-unit` and `risk-service:test-integration` aliases are available.
+These commands work at the repository root or in `backend/`. Their explicit
+pytest selectors are `-m unit`, `-m integration` and `-m e2e`; unit and integration
+also have `risk-service:test-unit` and `risk-service:test-integration` aliases.
+Install dashboard dependencies with `pnpm install --frozen-lockfile` at the repository
+root before running the e2e suite or the full census.
+
 Feature-local paths stay in place, preserving imports and fixture/data paths.
 [`scripts/test_suites.json`](scripts/test_suites.json) is generated from observed
-connection acquisition for every exact parametrized test ID. There are no module
-defaults or manual function overrides. Collection rejects new/unclassified IDs,
+database and external-service requirements for every exact parametrized test ID.
+There are no module defaults or manual function overrides. Collection rejects new/unclassified IDs,
 duplicate collection and conflicting suite markers before marker deselection.
 SQLite counts as a database. Optional primary-data tests retain their explicit
 opt-in; the census never supplies primary-bank data.
 
-Refresh ownership after adding tests or changing database use:
+Refresh ownership after adding tests or changing database or service requirements:
 
 ```bash
 mise run risk-service:refresh-test-suites /absolute/path/to/empty/census-evidence
@@ -482,9 +486,10 @@ Shared-fixture evidence applies to every consumer, including failed setup and
 cached setup failures; nested fixtures and registered finalizers retain attribution.
 An attempted acquisition counts as database use even when it fails or is caught:
 the unit guard must not replace a driver's expected refusal. A fully passing case
-with no observed use is unit-owned. Positive acquisition evidence proves integration
-ownership even when execution fails or a child does not confirm instrumentation;
-neither profile may replace it with proven unit ownership. Without an acquisition,
+with no observed database or external-service use and no unconfirmed children is
+unit-owned. Positive database acquisition evidence rules out unit ownership even
+when execution fails or a child does not confirm instrumentation; neither profile
+may replace it with proven unit ownership. Without a database or service requirement,
 skipped/failed cases and unconfirmed children retain conservative integration
 ownership and appear in `inconclusive.json`. A skipped case is not
 proof that an integration test could be moved; run its applicable profile to obtain
@@ -517,9 +522,10 @@ module-wide skip condition requires that setting. No PostgreSQL service is
 provisioned, and any attempted use of the sentinel fails the connection guard.
 
 A dedicated unit run selects only generated unit-bearing modules before imports,
-then prunes known non-unit functions before parametrization. Unknown test functions,
-parameter identities and missing cases fail collection. The filesystem inventory
-must match the catalogue, and aggregate execution reports prove the other owners'
+then prunes known non-unit functions before parametrization. Unknown test functions
+and parameter identities fail collection. With CI evidence enabled, missing cases
+also fail collection and the filesystem inventory must match the catalogue.
+Aggregate execution reports prove the other owners'
 exact coverage; a second full-tree collection is unnecessary. Integration-only
 modules are never imported by this selector. Mixed modules still share their
 module imports, while their known integration/e2e functions are not collected.

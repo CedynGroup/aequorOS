@@ -36,6 +36,7 @@ name: Risk Service CI
 #   static      — ruff, basedpyright (image build: risk-service-image.yml)
 #   architecture— Unit tests: database-free logic and architecture guards,
 #                 explicit classification and connection/execution refusal
+#   backend-e2e — Backend Playwright contracts; backend/README.md#run-tests
 #   postgres    — aggregate of schema shards and the lock job: migration chain,
 #                 RLS policies, schema defaults, row/advisory locks.
 #                 `risk-service:test-postgres-schema` covers integration cases in tests/db,

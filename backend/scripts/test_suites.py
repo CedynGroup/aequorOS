@@ -1,4 +1,4 @@
-"""Explicit unit/integration ownership without moving feature-local test files.
+"""Explicit unit/integration/e2e ownership without moving feature-local test files.
 
 The generated catalogue declares every parametrized test by its exact node ID.
 There is no module default or implicit fallback for new tests.
@@ -111,7 +111,7 @@ def _verify_service_execution(reports: list[Path]) -> None:
 
 
 def verify_partition(directory: Path) -> None:
-    """Join unit, schema, suite, lock and storage reports against full collection."""
+    """Join unit, e2e, schema, suite, lock and storage reports against full collection."""
     classified = cast(
         dict[str, str], json.loads((directory / "unit-tests" / "collection.json").read_text())
     )
