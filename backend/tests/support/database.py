@@ -14,6 +14,7 @@ from contextlib import ExitStack, asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from typing import Literal, Protocol, TypedDict, Unpack, cast
 from uuid import uuid4
+from weakref import WeakSet
 
 import psycopg
 import pytest
@@ -27,6 +28,7 @@ from sqlalchemy.pool import Pool
 # Importing the application's listener makes session.info the authority for
 # transaction-local tenant context, just as it is for application sessions.
 from app.db import session as _app_session
+from tests.support.advisory_locks import isolate_encryption_locks
 
 _ = _app_session
 
@@ -122,6 +124,8 @@ class TestDatabaseConnections:
         self._resources: ExitStack = ExitStack()
         self._default_engine: Engine | None = None
         self._engines: set[Engine] = set()
+        self._connections: WeakSet[Connection] = WeakSet()
+        self._sessions: WeakSet[Session] = WeakSet()
         self._closed: bool = False
         if self.url.drivername.startswith("postgresql") and context.schema is None:
             raise ValueError("Postgres tests require an explicit disposable schema")
@@ -171,10 +175,12 @@ class TestDatabaseConnections:
             connection.autocommit = previous
 
     def _track_connection(self, connection: Connection) -> None:
-        self._resources.callback(connection.close)
+        self._connections.add(connection)
 
     def _configure(self, engine: Engine) -> None:
         event.listen(engine, "checkout", self._checkout)
+        if engine.dialect.name == "postgresql" and self.context.schema is not None:
+            isolate_encryption_locks(engine, self.context.schema)
         for hook in self._hooks:
             hook(engine)
 
@@ -188,6 +194,19 @@ class TestDatabaseConnections:
         connect_args = dict(options.pop("connect_args", {}))
         pool_options = cast(PoolOptions, options)
         engine = create_engine(self.database_url, connect_args=connect_args, **pool_options)
+        return self.adopt_engine(engine)
+
+    def adopt_engine(self, engine: Engine) -> Engine:
+        """Own an application-created engine before its first checkout.
+
+        Keep the application cache identity while applying the shared hooks and
+        cleanup. An engine cannot be adopted by two fixture lifetimes.
+        """
+        self._check_open()
+        if engine in _ENGINE_OWNERS:
+            raise ValueError("Engine already belongs to a test database factory")
+        if engine.url not in (self.url, make_url(self.database_url)):
+            raise ValueError("Adopted engine must use the owning database URL")
         self._resources.callback(engine.dispose)
         self._engines.add(engine)
         _ENGINE_OWNERS[engine] = self
@@ -218,15 +237,17 @@ class TestDatabaseConnections:
             engine = bind.engine if isinstance(bind, Connection) else bind
             if engine not in self._engines:
                 raise ValueError("Session binds must belong to this test database factory")
-        info.setdefault("organization_id", self.context.organization_id)
-        info.setdefault("bank_id", self.context.bank_id)
+        if self.context.organization_id is not None:
+            info.setdefault("organization_id", self.context.organization_id)
+        if self.context.bank_id is not None:
+            info.setdefault("bank_id", self.context.bank_id)
         owner = self
 
         class ManagedSession(Session):
             def __init__(self, **kwargs: Unpack[SessionOptions]) -> None:
                 owner._check_open()
                 super().__init__(**kwargs)
-                owner._resources.callback(self.close)
+                owner._sessions.add(self)
                 if cleanup is not None:
                     cleanup(self.close)
 
@@ -318,7 +339,12 @@ class TestDatabaseConnections:
     def close(self) -> None:
         self._closed = True
         try:
-            self._resources.close()
+            with ExitStack() as cleanup:
+                cleanup.callback(self._resources.close)
+                for connection in list(self._connections):
+                    cleanup.callback(connection.close)
+                for session in list(self._sessions):
+                    cleanup.callback(session.close)
         finally:
             for engine in self._engines:
                 if _ENGINE_OWNERS.get(engine) is self:
@@ -433,7 +459,7 @@ def managed_engine(
 
 
 def managed_session_factory(
-    request: FinalizerOwner,
+    request: FinalizerOwner | None,
     bind: Engine | Connection,
     **options: Unpack[SessionDefaults],
 ) -> sessionmaker[Session]:
@@ -445,7 +471,8 @@ def managed_session_factory(
     options.setdefault("autoflush", True)
     options.setdefault("expire_on_commit", True)
     session_options: SessionOptions = {**options, "bind": bind}
-    return owner.session_factory(cleanup=request.addfinalizer, **session_options)
+    cleanup = request.addfinalizer if request is not None else None
+    return owner.session_factory(cleanup=cleanup, **session_options)
 
 
 def install_migration_engines(monkeypatch: pytest.MonkeyPatch, engine: Engine) -> None:

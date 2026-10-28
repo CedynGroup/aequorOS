@@ -2939,14 +2939,14 @@
  "tests.conftest": {
   "reportAny": 1,
   "reportDeprecated": 4,
-  "reportMissingParameterType": 4,
+  "reportMissingParameterType": 2,
   "reportMissingTypeArgument": 7,
   "reportUnknownArgumentType": 4,
   "reportUnknownLambdaType": 4,
-  "reportUnknownMemberType": 8,
-  "reportUnknownParameterType": 11,
-  "reportUnknownVariableType": 6,
-  "reportUnusedFunction": 10
+  "reportUnknownMemberType": 5,
+  "reportUnknownParameterType": 9,
+  "reportUnknownVariableType": 5,
+  "reportUnusedFunction": 9
  },
  "tests.core.test_error_boundary": {
   "reportAny": 1,
