@@ -16,6 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.key_management.aws import AwsKmsKeyProvider
+from app.core.key_management.demo import FileDemoKeyProvider, require_local_demo
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import (
@@ -37,6 +38,10 @@ _usage_recording = Lock()
 def provider_for(provider: str) -> KeyProvider:
     if provider != "aws_kms":
         raise KeyUnavailableError("The bank encryption key provider is not supported.")
+    path = get_key_settings().demo_bank_key_file
+    if path is not None:
+        require_local_demo()
+        return FileDemoKeyProvider(path)
     return AwsKmsKeyProvider()
 
 

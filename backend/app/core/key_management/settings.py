@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class KeyManagementSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    demo_bank_key_file: Path | None = Field(default=None, alias="DEMO_BANK_KEY_FILE")
     workload_role_arn: str | None = Field(
         default=None,
         alias="ENCRYPTION_WORKLOAD_ROLE_ARN",
