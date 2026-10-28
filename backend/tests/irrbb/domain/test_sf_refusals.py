@@ -37,9 +37,7 @@ PARAMS = sf_parameters()
 
 OPTIONS = (
     AutomaticOption(ref="CAP-1", currency="GHS", option_type="cap", notional=Decimal(5000)),
-    AutomaticOption(
-        ref="SWO-1", currency="GHS", option_type="swaption", notional=Decimal(2500)
-    ),
+    AutomaticOption(ref="SWO-1", currency="GHS", option_type="swaption", notional=Decimal(2500)),
 )
 
 
@@ -116,10 +114,9 @@ def test_a_declared_option_add_on_lands_in_delta_eve() -> None:
     up_with = next(r for r in with_add_on.scenarios if r.code == "parallel_up")
     up_without = next(r for r in without.scenarios if r.code == "parallel_up")
     assert up_with.by_currency[0].k_ao_native == Decimal("25.000000")
-    assert (
-        up_with.by_currency[0].delta_eve_native
-        == up_without.by_currency[0].delta_eve_native + Decimal(25)
-    )
+    assert up_with.by_currency[0].delta_eve_native == up_without.by_currency[
+        0
+    ].delta_eve_native + Decimal(25)
 
 
 def test_no_tier_one_means_no_outlier_test() -> None:

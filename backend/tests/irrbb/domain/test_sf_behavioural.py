@@ -241,8 +241,17 @@ def test_sf5_a_core_share_with_no_duration_cannot_be_slotted() -> None:
 
 #: Base cash flows of a 1,000 bullet maturing in bucket eleven at a 10% CPR.
 SF5_CPR_BASE: tuple[str, ...] = (
-    "0.288617", "8.452994", "17.254643", "25.320448", "24.662212", "24.021086",
-    "46.185032", "43.814968", "81.000000", "72.900000", "656.100000",
+    "0.288617",
+    "8.452994",
+    "17.254643",
+    "25.320448",
+    "24.662212",
+    "24.021086",
+    "46.185032",
+    "43.814968",
+    "81.000000",
+    "72.900000",
+    "656.100000",
 )
 
 
@@ -377,9 +386,7 @@ def _term_deposit(params: sp.SfParameters, rate: str) -> Ladder:
         ("0.16", "-80.000000", "-420.000000"),
     ),
 )
-def test_sf5_redemption_splits_the_balance(
-    rate: str, overnight: str, contractual: str
-) -> None:
+def test_sf5_redemption_splits_the_balance(rate: str, overnight: str, contractual: str) -> None:
     params = sf_parameters()
 
     principal, _ = apply_redemption(_term_deposit(params, rate), Decimal(rate))
@@ -551,9 +558,7 @@ def test_sf5_a_wholesale_deposit_takes_the_exercise_worst_for_the_bank() -> None
     fixed_row = next(r for r in fixed.scenarios if r.code == "parallel_up").by_currency[0]
     # The exercise chosen is full redemption — the worse baseline for the bank.
     assert worst_row.eve_base_native < fixed_row.eve_base_native
-    assert worst_row.eve_base_native == q(
-        Decimal(-500) * (-(Decimal("0.10") * _W1_MIDPOINT)).exp()
-    )
+    assert worst_row.eve_base_native == q(Decimal(-500) * (-(Decimal("0.10") * _W1_MIDPOINT)).exp())
     # One book: every scenario row quotes the same base, and it is that one.
     assert {r.by_currency[0].eve_base_native for r in worst.scenarios} == {
         worst_row.eve_base_native

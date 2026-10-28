@@ -116,9 +116,7 @@ def test_sf1_delta_eve_for_every_scenario() -> None:
 
     result = _run_single(params, _sf1_ladder(params), "700")
 
-    assert _scenario(result, "parallel_up").by_currency[0].eve_base_native == Decimal(
-        "-362.091888"
-    )
+    assert _scenario(result, "parallel_up").by_currency[0].eve_base_native == Decimal("-362.091888")
     for code, expected in SF1_DELTA_EVE.items():
         row = _scenario(result, code).by_currency[0]
         assert row.delta_eve_native == Decimal(expected), code
@@ -155,9 +153,7 @@ def test_sf1_a_smaller_parallel_shock_would_not_have_flagged_it() -> None:
 
     result = _run_single(params, _sf1_ladder(params), "700")
 
-    assert _scenario(result, "parallel_up").by_currency[0].delta_eve_native == Decimal(
-        "54.823916"
-    )
+    assert _scenario(result, "parallel_up").by_currency[0].delta_eve_native == Decimal("54.823916")
     assert _scenario(result, "parallel_down").by_currency[0].delta_eve_native == Decimal(
         "-59.992189"
     )
@@ -218,21 +214,13 @@ def test_sf2b_a_book_that_gains_under_both_parallel_shocks() -> None:
 
     result = _run_single(params, ladder, "700")
 
-    assert _scenario(result, "parallel_up").by_currency[0].eve_base_native == Decimal(
-        "476.752986"
-    )
-    assert _scenario(result, "parallel_up").by_currency[0].delta_eve_native == Decimal(
-        "-39.323812"
-    )
+    assert _scenario(result, "parallel_up").by_currency[0].eve_base_native == Decimal("476.752986")
+    assert _scenario(result, "parallel_up").by_currency[0].delta_eve_native == Decimal("-39.323812")
     assert _scenario(result, "parallel_down").by_currency[0].delta_eve_native == Decimal(
         "-95.523853"
     )
-    assert _scenario(result, "steepener").by_currency[0].delta_eve_native == Decimal(
-        "34.353121"
-    )
-    assert _scenario(result, "short_down").by_currency[0].delta_eve_native == Decimal(
-        "47.903136"
-    )
+    assert _scenario(result, "steepener").by_currency[0].delta_eve_native == Decimal("34.353121")
+    assert _scenario(result, "short_down").by_currency[0].delta_eve_native == Decimal("47.903136")
     # Both mandatory scenarios are gains, so that measure floors at zero — and
     # the six-scenario measure does not. Which set the outlier test runs over is
     # a governed choice, and this is the book that proves it matters.
@@ -366,9 +354,7 @@ def test_sf4_gains_never_pay_for_losses() -> None:
     result = sf_run(_multi_currency_inputs(params), params)
 
     for code, (native, reporting) in SF4_USD.items():
-        usd = next(
-            row for row in _scenario(result, code).by_currency if row.currency == "USD"
-        )
+        usd = next(row for row in _scenario(result, code).by_currency if row.currency == "USD")
         assert usd.delta_eve_native == Decimal(native), code
         assert usd.delta_eve_reporting == Decimal(reporting), code
     for code, expected in SF4_LOSS.items():
@@ -511,9 +497,7 @@ def test_sf7_end_to_end_delta_eve_and_the_outlier_verdict() -> None:
 
     result = sf_run(_sf7_inputs(params), params)
 
-    assert _scenario(result, "parallel_up").by_currency[0].eve_base_native == Decimal(
-        "263.630350"
-    )
+    assert _scenario(result, "parallel_up").by_currency[0].eve_base_native == Decimal("263.630350")
     for code, expected in SF7_DELTA_EVE.items():
         assert _scenario(result, code).by_currency[0].delta_eve_native == Decimal(expected), code
     assert result.measures.all_scenarios.measure == Decimal("45.103148")
