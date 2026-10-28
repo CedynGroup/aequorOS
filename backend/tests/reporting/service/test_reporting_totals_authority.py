@@ -36,6 +36,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.service import digests, register_state
 from app.db.session import get_sessionmaker
 from app.models import Bank, RegulatoryPackage
 from app.reporting.schemas.packages import (
@@ -257,6 +258,9 @@ def _package(
         source_runs=[],
         generated_by=USER_1,
         generated_at=datetime.now(UTC),
+        register_state_digest=digests.register_state_digest(
+            register_state.project_register_state(db, CTX, bank.id)
+        ),
     )
     db.add(package)
     db.flush()

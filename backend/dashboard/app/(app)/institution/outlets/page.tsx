@@ -109,9 +109,12 @@ export default function OutletsPage() {
   const outlets = useMemo(() => query.data?.outlets ?? [], [query.data]);
 
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editor, setEditor] = useState<{
+    bankId: string | undefined;
+    row: OutletRead;
+  } | null>(null);
 
-  const editing = outlets.find((outlet) => outlet.id === editingId) ?? null;
+  const editing = editor && editor.bankId === bankId ? editor.row : null;
 
   const columns: Column<OutletRead>[] = [
     {
@@ -171,9 +174,9 @@ export default function OutletsPage() {
           type="button"
           onClick={() => {
             setAdding(false);
-            setEditingId(outlet.id);
+            setEditor({ bankId, row: outlet });
           }}
-          className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+          className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
         >
           <Pencil size={11} aria-hidden />
           Edit
@@ -191,7 +194,7 @@ export default function OutletsPage() {
           <button
             type="button"
             onClick={() => {
-              setEditingId(null);
+              setEditor(null);
               setAdding(true);
             }}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
@@ -218,6 +221,18 @@ export default function OutletsPage() {
           }
         />
 
+        {(adding || editing) && (
+          <OutletForm
+            key={editing?.id ?? "new"}
+            bankId={bankId!}
+            outlet={editing}
+            onClose={() => {
+              setAdding(false);
+              setEditor(null);
+            }}
+          />
+        )}
+
         <QueryBoundary
           contained
           isLoading={query.isLoading}
@@ -229,18 +244,6 @@ export default function OutletsPage() {
             </div>
           }
         >
-          {(adding || editing) && (
-            <OutletForm
-              key={editing?.id ?? "new"}
-              bankId={bankId!}
-              outlet={editing}
-              onClose={() => {
-                setAdding(false);
-                setEditingId(null);
-              }}
-            />
-          )}
-
           <SectionCard
             title="Outlet register"
             subtitle={`${outlets.length} ${outlets.length === 1 ? "outlet" : "outlets"} on record`}

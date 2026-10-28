@@ -487,8 +487,9 @@ def test_downtime_maps_to_structured_409_pointing_at_email_fallback(
     assert row is not None and row.status == "approved"
 
 
+@pytest.mark.parametrize("legacy", [False, True])
 def test_email_then_orass_reupload_clears_pending_flag(
-    db_session: Session, exporter_calls: list[str]
+    db_session: Session, exporter_calls: list[str], legacy: bool
 ) -> None:
     package = _seed_approved_package(db_session)
 
@@ -507,6 +508,9 @@ def test_email_then_orass_reupload_clears_pending_flag(
     row = db_session.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == package.id))
     assert row is not None
     assert workflow.has_pending_orass_reupload(db_session, row) is True
+    if legacy:
+        row.register_state_digest = None
+        db_session.commit()
 
     # Calendar/RAG treats the pending email submission as not-yet-complete.
     late = calendar.list_obligations(

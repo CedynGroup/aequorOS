@@ -198,7 +198,7 @@ def compare_versions(
                 ),
             },
         )
-    return snapshot_diff.build_comparison(base, target)
+    return snapshot_diff.build_comparison(db, base, target)
 
 
 __all__ = ["compare_versions", "get_version_chain"]

@@ -78,7 +78,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -93,10 +93,12 @@ from app.bi.service.authorization import BiDataScope, authorize_query
 from app.bi.service.compiler import compile_query
 from app.bi.service.errors import BiQueryError
 from app.bi.service.execution import execute
+from app.bi.service.identity_policy import IDENTITY_REASON
 from app.bi.service.insights.statements import render_value
 from app.bi.service.versions import BUILDER_VERSION
 from app.core.authorization import Permission
 from app.core.config import get_settings
+from app.core.key_management.presentation import contains_placeholder
 from app.db.base import utc_now
 from app.identity.public import Bank, User
 from app.models.job import Job
@@ -401,6 +403,8 @@ def _evaluate_one(  # noqa: PLR0913, PLR0911 - one alert, and every way its verd
 
     if _already_recorded(db, alert, as_of, fingerprint):
         return _no_row(alert, "already_recorded")
+    if contains_placeholder(alert.filters):
+        return _record_not_evaluated(db, alert, as_of, fingerprint, IDENTITY_REASON)
     if measure is None:
         return _record_not_evaluated(db, alert, as_of, fingerprint, REASON_UNKNOWN_MEMBER)
 
@@ -426,7 +430,10 @@ def _evaluate_one(  # noqa: PLR0913, PLR0911 - one alert, and every way its verd
     except BiQueryError:
         return _record_not_evaluated(db, alert, as_of, fingerprint, REASON_UNKNOWN_MEMBER)
     if not decision.allowed:
-        return _record_not_evaluated(db, alert, as_of, fingerprint, REASON_AUTHORIZATION_REVOKED)
+        reason = (
+            IDENTITY_REASON if decision.reason == IDENTITY_REASON else REASON_AUTHORIZATION_REVOKED
+        )
+        return _record_not_evaluated(db, alert, as_of, fingerprint, reason)
     # The owner's slice, resolved against this institution's branches. An
     # institution-grain measure never reaches here under a scoped grant —
     # ``authorize_query`` denies it — so what this filter narrows is a portfolio
@@ -623,7 +630,7 @@ def _observed_value(  # noqa: PLR0913 - one figure and every input it is read fr
     )
     if position is None:
         return None, REASON_NO_FIGURE
-    value = _as_decimal(result.rows[0][position])
+    value = _as_decimal(cast(object, result.rows[0][position]))
     if value is None:
         return None, REASON_NO_FIGURE
     return value, None

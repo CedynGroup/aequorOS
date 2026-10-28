@@ -29,6 +29,9 @@ from __future__ import annotations
 from decimal import Decimal, DivisionByZero, InvalidOperation
 from typing import Any
 
+from sqlalchemy.orm import Session
+
+from app.core.key_management.presentation import require_disclosed
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import (
     PackageComparisonRead,
@@ -36,6 +39,7 @@ from app.reporting.schemas.packages import (
     SnapshotLineDiffRead,
     SnapshotSectionDiffRead,
 )
+from app.reporting.service.common import support_presentation
 
 #: The snapshot's top-level ``totals`` are the stable headline figures (the
 #: prior-period movement check compares them across reporting dates), so they
@@ -196,6 +200,8 @@ def diff_snapshots(
     base_snapshot: dict[str, Any], target_snapshot: dict[str, Any]
 ) -> tuple[list[SnapshotSectionDiffRead], int]:
     """Section-by-section, line-by-line diff. Returns (differing, unchanged count)."""
+    require_disclosed(base_snapshot)
+    require_disclosed(target_snapshot)
     base_sections = {_section_key(item): item for item in _comparable_sections(base_snapshot)}
     target_sections = {_section_key(item): item for item in _comparable_sections(target_snapshot)}
     keys = list(target_sections) + [key for key in base_sections if key not in target_sections]
@@ -224,8 +230,22 @@ def _side(package: RegulatoryPackage) -> PackageComparisonSideRead:
     )
 
 
-def build_comparison(base: RegulatoryPackage, target: RegulatoryPackage) -> PackageComparisonRead:
+def build_comparison(
+    db: Session, base: RegulatoryPackage, target: RegulatoryPackage
+) -> PackageComparisonRead:
     """Assemble the wire comparison from two ``RegulatoryPackage`` rows."""
+    if support_presentation(db, base.bank_id):
+        return PackageComparisonRead(
+            base=_side(base),
+            target=_side(target),
+            content_locked=True,
+            identical=None,
+            changed_count=None,
+            added_count=None,
+            removed_count=None,
+            sections=[],
+            unchanged_section_count=None,
+        )
     sections, unchanged_sections = diff_snapshots(base.snapshot or {}, target.snapshot or {})
     counts = {"added": 0, "removed": 0, "changed": 0}
     for section in sections:

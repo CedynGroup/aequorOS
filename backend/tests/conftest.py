@@ -37,6 +37,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import Settings, get_settings
+from app.core.key_management.settings import get_key_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
 from app.features.ingest_data import get_ingestion_storage
@@ -84,8 +85,7 @@ pytest_plugins = [
 ]
 
 
-@pytest.fixture(autouse=True)
-def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def _isolate_test_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "1")
     monkeypatch.setenv("TLS_CA_BUNDLE", "")
@@ -228,11 +228,21 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # /health/ready reads that list; a developer's SIGNING_BACKEND=openbao would
     # otherwise add gaps to suites that have nothing to do with signing.
     monkeypatch.setenv("SIGNING_BACKEND", "software")
+    monkeypatch.setenv("BANK_KMS_ENDPOINT_URL", "")
+
+
+def _clear_cached_settings() -> None:
     get_settings.cache_clear()
+    get_key_settings.cache_clear()
     get_engine.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    _isolate_test_settings(monkeypatch)
+    _clear_cached_settings()
     yield
-    get_settings.cache_clear()
-    get_engine.cache_clear()
+    _clear_cached_settings()
 
 
 @pytest.fixture(autouse=True)
@@ -444,6 +454,20 @@ def build_test_database(
     _ = owner.adopt_engine(engine)
     try:
         Base.metadata.create_all(engine)
+        if engine.dialect.name == "postgresql":
+            with engine.begin() as connection:
+                schema = cast(str, connection.scalar(text("SELECT current_schema()")))
+                quoted = connection.dialect.identifier_preparer.quote_identifier(schema)
+                connection.execute(
+                    text(f"""
+                        CREATE FUNCTION aequoros_retained_operator_audit_count()
+                        RETURNS bigint LANGUAGE sql STABLE
+                        SET search_path = pg_catalog, pg_temp AS $$
+                            SELECT count(*) FROM {quoted}.operator_audit_log
+                            WHERE target_org = current_setting('app.organization_id', true)
+                        $$
+                    """)
+                )
         seed(engine)
         yield _TestDatabase(database_url=database_url, engine=engine, seed=seed)
     finally:

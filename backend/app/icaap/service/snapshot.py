@@ -423,7 +423,7 @@ def build(  # noqa: PLR0913 - the snapshot is assembled from named parts
         key=lambda entry: (entry["module"], str(entry["run_id"])),
     )
 
-    profile_rows = register_state.register_state_rows(db, access.ctx, access.bank.id)
+    profile_state = register_state.project_register_state(db, access.ctx, access.bank.id)
     metadata = {
         "icaap": {
             "schema": SNAPSHOT_SCHEMA,
@@ -450,8 +450,8 @@ def build(  # noqa: PLR0913 - the snapshot is assembled from named parts
                 "effective_from": framework.effective_from.isoformat(),
             },
             "institution_profile": {
-                "register_state_digest": digests.register_state_digest(profile_rows),
-                "row_count": len(profile_rows),
+                "register_state_digest": digests.register_state_digest(profile_state),
+                "row_count": len(profile_state["rows"]),
             },
             # Frozen because the exporters may not resolve it live: the filed
             # document names the regulator from the jurisdiction registry, and

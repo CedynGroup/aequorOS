@@ -310,6 +310,9 @@ def coverage(
 class _FakeStorage:
     """A storage double: object-reference refusals never reach real storage."""
 
+    def for_session(self, db: Session) -> _FakeStorage:
+        return self
+
     def __getattr__(self, _name: str) -> Any:
         raise AssertionError("object-reference coverage must not reach object storage")
 

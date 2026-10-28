@@ -687,6 +687,7 @@ def position_row(  # noqa: PLR0913 - the contract's signature: one argument per 
     *,
     base_currency: str,
     classified: ClassifiedLoan | None,
+    include_identity: bool = True,
 ) -> PositionFactRow:
     """The ``bi_fact_position_daily`` row for one current-generation snapshot.
 
@@ -796,7 +797,9 @@ def position_row(  # noqa: PLR0913 - the contract's signature: one argument per 
         exposure_category=category,
         counterparty_id=snapshot.counterparty_id,
         counterparty_type=counterparty.counterparty_type if counterparty is not None else None,
-        counterparty_group=counterparty.group_reference if counterparty is not None else None,
+        counterparty_group=(
+            counterparty.group_reference if counterparty is not None and include_identity else None
+        ),
         sector=_bounded_text(attributes, "sector") or _bounded_text(attributes, "industry"),
         employer=_bounded_text(attributes, "employer"),
         gl_account_code=gl_account.account_code if gl_account is not None else None,

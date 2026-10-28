@@ -295,6 +295,8 @@ export default function BiSubscriptionsPage() {
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
+                          disabled={Boolean(subscription.lockedReason)}
+                          title={subscription.lockedReason ?? undefined}
                           onClick={() => {
                             setEditing(subscription);
                             setComposing(true);

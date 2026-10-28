@@ -1089,7 +1089,9 @@ class WorkerSettings(BaseSettings):
     # A job stuck in ``running`` longer than this is treated as orphaned by a
     # dead worker and reclaimed (see job_queue.reclaim_stale).
     #
-    # 900s is the FLEET DEFAULT, and setting it asserts that every job type NOT
+    # Large-object bank_reencrypt dispatches extend this default from their
+    # persisted source size; see docs/bank_field_encryption.md for that contract.
+    # For other dispatches, setting the FLEET DEFAULT asserts that every type NOT
     # listed in ``job_queue.STALE_AFTER_OVERRIDES_SECONDS`` completes inside 15
     # minutes: pipeline_refresh, official_run, market_data_pull, temenos_pull,
     # scheduled_tick, reporting_deadline_scan, notification_email_mirror,
