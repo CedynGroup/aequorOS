@@ -129,13 +129,20 @@ pass a production database URL.
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
 sync facades. Encryption advisory locks receive the owning schema's namespace
-on every PostgreSQL engine, including adopted application engines and async
+on every managed PostgreSQL engine, including adopted application engines and async
 engines' sync facades, and their native cursors. The transformation runs at native
 cursor execution so raw SQL and ORM work use the same lock identity exactly once.
 Extra pools and role/tenant variants in one schema retain the same lock identity;
-independently owned schemas cannot block each other.
+these bank locks do not contend across independently owned schemas.
 The hook is installed before checkout and does not depend on a schema prefix
 or URL option ordering.
+
+Namespacing matches only the exact native statements
+`SELECT pg_advisory_xact_lock(%(key)s)` and
+`SELECT pg_advisory_xact_lock_shared(%(key)s)`, including their compiled ORM
+equivalents. Use another bind name, such as `probe_key`, for generic contention
+probes that must retain the original lock identity. Other advisory-lock SQL is
+unchanged.
 
 Run the constructor guard with `uv run python scripts/test_database_guard.py`.
 `--strict` rejects all legacy constructors. The temporary allowlist matches

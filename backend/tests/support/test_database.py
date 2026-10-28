@@ -10,11 +10,11 @@ from collections.abc import Callable, Mapping
 from contextlib import ExitStack
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import LiteralString, cast
 
+import psycopg
 import pytest
 import sqlalchemy
-import psycopg
 from psycopg import sql
 from psycopg.errors import LockNotAvailable
 from psycopg.rows import dict_row
@@ -410,7 +410,7 @@ def test_async_encryption_lock_uses_owning_schema_namespace() -> None:
                     _ = await cursor.execute(
                         "SELECT pg_advisory_xact_lock_shared(%(key)s)", {"key": key}
                     )
-                    _ = await cursor.execute(lock_identity.text)
+                    _ = await cursor.execute(cast(LiteralString, lock_identity.text))
                     row = await cursor.fetchone()
                     assert row is not None
                     assert tuple(row.values()) == (expected,)
