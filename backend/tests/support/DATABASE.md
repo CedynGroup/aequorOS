@@ -1,8 +1,9 @@
 # Test database connections
 
-`tests.support.database` owns test connection construction. Application fixtures,
-area-specific tests and database tooling use this API. The constructor allowlist
-is empty; the final stack layer removes it and makes strict enforcement the default.
+`tests.support.database` owns test connection construction, including shared
+application fixtures, area-specific tests and database tooling. The constructor
+allowlist is empty; the final stack layer removes it and makes strict enforcement
+the default.
 
 Use `isolated_db` for an **empty**, per-test PostgreSQL schema when
 `TEST_DATABASE_URL` is set, or a temporary SQLite file otherwise. It never seeds
