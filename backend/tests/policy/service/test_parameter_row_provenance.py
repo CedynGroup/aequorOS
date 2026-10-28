@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -229,7 +230,7 @@ def test_seed_reads_preserve_the_existing_run_ledger(db_session: Session) -> Non
     scalar = rows["tier1_min"]
     assert scalar is not None and scalar.value is not None
     structural = rows["icaap_report_first_as_of_date"]
-    assert structural is not None and structural.value_json is not None
+    assert structural is not None and cast(object, structural.value_json) is not None
     assert rows["unconfigured_parameter"] is None
     assert rp.consume_parameter_provenance(db_session) == expected
 
