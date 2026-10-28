@@ -8,7 +8,6 @@ the unit refusal guard must not replace the driver's failure behavior.
 from __future__ import annotations
 
 import importlib
-import json
 import os
 import socket
 import sqlite3
@@ -19,7 +18,6 @@ from collections.abc import Callable, Mapping
 from functools import wraps
 from pathlib import Path
 from typing import cast
-from urllib.parse import urlsplit
 
 import psycopg
 from sqlalchemy import Engine
@@ -29,63 +27,29 @@ from scripts.ci_database_children import (
     instrument_command,
     python_path,
 )
+from scripts.database_events import (
+    CONTEXT_ENV,
+    DIRECTORY_ENV,
+    RUN_ENV,
+    context,
+    emit,
+    service_connection,
+)
+from scripts.database_events import service_command as _command_service
 
-DIRECTORY_ENV = "CI_DATABASE_OBSERVATIONS"
-CONTEXT_ENV = "CI_DATABASE_CONTEXT"
-RUN_ENV = "CI_DATABASE_OBSERVATION_RUN"
+__all__ = ["CONTEXT_ENV", "DIRECTORY_ENV", "RUN_ENV", "context", "emit", "install"]
+
 _installed = False
 
 
-def context() -> dict[str, object]:
-    return cast(dict[str, object], json.loads(os.getenv(CONTEXT_ENV, "{}")))
-
-
-def emit(kind: str, **values: object) -> None:
-    directory = os.getenv(DIRECTORY_ENV)
-    if not directory:
-        return
-    path = Path(directory)
-    path.mkdir(parents=True, exist_ok=True)
-    event = {"kind": kind, "pid": os.getpid(), "run": os.getenv(RUN_ENV, ""), **context(), **values}
-    descriptor = os.open(
-        path / f"events-{os.getpid()}.jsonl", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
-    )
-    try:
-        _ = os.write(descriptor, (json.dumps(event, sort_keys=True) + "\n").encode())
-    finally:
-        os.close(descriptor)
-
-
 def _observe_services() -> None:
-    original_connect = socket.socket.connect
+    original = socket.socket.connect
 
     def service_connect(connection: socket.socket, address: object) -> None:
-        if isinstance(address, tuple) and len(cast(tuple[object, ...], address)) >= 2:
-            host, port = cast(tuple[str, int], address)[:2]
-            for name in ("S3_ENDPOINT", "OPENBAO_TEST_ADDR"):
-                endpoint = urlsplit(os.getenv(name, ""))
-                hosts = {endpoint.hostname}
-                if endpoint.hostname in {"localhost", "127.0.0.1", "::1"}:
-                    hosts.update({"localhost", "127.0.0.1", "::1"})
-                if host in hosts and port == (
-                    endpoint.port or (443 if endpoint.scheme == "https" else 80)
-                ):
-                    emit("service", service=name, suite="integration")
-        original_connect(connection, cast(tuple[str, int], address))
+        service_connection(address)
+        original(connection, cast(tuple[str, int], address))
 
     socket.socket.connect = service_connect
-
-
-def _command_service(command: object) -> None:
-    if isinstance(command, (tuple, list)) and command:
-        words = [str(word) for word in cast(list[object], command)]
-        executable = Path(words[0]).name
-        if executable in {"minio", "bao"}:
-            emit("service", service=executable, suite="integration")
-        if executable in {"node", "pnpm", "npm", "npx", "playwright"} and any(
-            "playwright" in word for word in words
-        ):
-            emit("service", service="playwright", suite="e2e")
 
 
 def install() -> None:

@@ -41,6 +41,13 @@ def _worker(config: pytest.Config) -> str:
     return cast(str, worker["workerid"]) if worker is not None else "main"
 
 
+def pytest_report_header(config: pytest.Config) -> str | None:
+    if config.getoption("markexpr") != "unit":
+        return None
+    workers = cast(object, config.getoption("numprocesses", default=0))
+    return f"Unit workers: {workers}; logical CPUs: {os.cpu_count()}"
+
+
 def _install(config: pytest.Config) -> None:
     directory = config.stash.get(_DIRECTORY, None)
     if directory is None:

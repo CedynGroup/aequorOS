@@ -534,6 +534,10 @@ cleanup remains permitted when the last test is unit-owned, while fixtures consu
 by a unit test retain refusal during their finalizers.
 SQLAlchemy, psycopg (including async), SQLite and installed database-direct driver
 entry points are guarded, including Python subprocesses with fresh environments.
+Ordinary Python children start with stdlib-only instrumentation; a loader wraps
+database drivers before their imports return instead of eagerly importing every
+SDK into tiny subprocess probes. SQLite also has a process-wide audit guard.
+Grandchildren retain refusal and observation even with a fresh environment.
 Attempts fail the run even when caught. The unit CI owner compares the complete
 classified collection with JUnit identities and permits no dropped, duplicated,
 skipped, failed or errored unit case. It uploads `unit-tests` classification,
