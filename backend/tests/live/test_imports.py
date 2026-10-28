@@ -28,7 +28,9 @@ def test_live_composes_from_a_fresh_interpreter(entrypoint: str) -> None:
         env={"PATH": "/usr/bin:/bin", "RUN_INPROCESS_WORKER": "0", "DATABASE_URL": ""},
         capture_output=True,
         text=True,
-        timeout=60,
+        # Cold application imports build the full schema graph on shared CI hosts.
+        # This guard checks import composition, not startup latency.
+        timeout=300,
         check=False,
     )
     assert result.returncode == 0, result.stderr

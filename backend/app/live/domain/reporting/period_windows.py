@@ -35,7 +35,7 @@ TREND_MONTHS = 12
 class HasPeriodEnd(Protocol):
     """Anything anchored on a business date — a ``BankReportingPeriod`` or a stub.
 
-    A Protocol because ``app/domain`` must not import ``app/models``. The member
+    A Protocol keeps this pure domain module independent of ORM models. The member
     is typed ``Any`` for the reason ``domain/authority/provenance.py::RunLike``
     records: the ORM declares ``period_end`` as a ``Mapped[date]`` descriptor,
     and a static checker matches a Protocol against the DECLARED type, so a
