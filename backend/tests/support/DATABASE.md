@@ -1,8 +1,8 @@
 # Test database connections
 
-`tests.support.database` owns test connection construction. Application fixtures
-and test areas not yet migrated retain their existing construction;
-`tests/architecture/test_database_connection_allowlist.json` records their direct
+`tests.support.database` owns test connection construction. Shared application
+and database/API fixtures now use this API; remaining area-specific tests migrate in subsequent stack layers.
+`tests/architecture/test_database_connection_allowlist.json` records remaining direct
 constructor calls. The architecture suite rejects new calls and stale entries.
 Remove entries as each test area moves to this API. Once the inventory is empty,
 remove the allowlist and make strict mode the default.
@@ -23,8 +23,9 @@ with isolated_db.connection() as connection:
 ```
 
 Binds from another factory are rejected so a session cannot escape its owning
-schema. The shared application fixture family remains on its existing lifecycle
-until its migration stage.
+schema. The shared application fixtures adopt the cached application engine
+before its first checkout. They retain engine identity, the outer rollback
+transaction, savepoints and the separate resettable committing database.
 
 SQLite connections enable foreign-key enforcement on every checkout, so local
 migration fixtures must define the referenced primary or unique keys.
@@ -59,9 +60,10 @@ factory = managed_session_factory(request, engine, expire_on_commit=False)
 These functions register cleanup on the supplied `request`, whether its fixture
 is function-, module- or session-scoped. URL and driver startup options supply
 schema, role and tenant defaults. An explicit `schema` can select a namespace
-before bootstrap creates it. `administrative=True` is reserved for cluster-role
-probes that have no tenant schema; their search path is pinned to `pg_catalog`.
-It does not grant any database privileges.
+before bootstrap creates it. `administrative=True` supports schema bootstrap and
+cluster-role probes without a tenant schema; absent an explicit or startup
+schema, their search path is pinned to `pg_catalog`. It does not grant any
+database privileges.
 
 For an existing schema outside a pytest request's lifecycle, use
 `database_connections(database_url, schema=schema_name)` as a context manager.
@@ -71,7 +73,13 @@ It owns connection resources without creating or dropping the schema.
 `TestDatabaseConnections.session_factory` defaults both to false for application
 sessions. Both accept explicit options, preserve explicit tenant info, and close
 sessions at their owner's teardown. Factories require an engine created by this
-support layer.
+support layer, or explicitly adopted before its first checkout. An owner can
+`adopt_engine(engine)` when the application must construct the engine itself.
+Use `managed_session_factory(None, engine)` only within an explicit owner
+lifetime; pytest fixtures normally supply their request for earlier cleanup.
+The database owner weakly tracks connections and sessions. When supplied,
+the pytest request also retains each session's close method as a finalizer until
+that request's teardown. Still-live resources close before pool disposal.
 
 Before calling Alembic in a schema fixture, install its engine factory:
 
@@ -120,11 +128,21 @@ pass a production database URL.
 `hooks=(install_hook, ...)` on `isolated_database`, `database_connections` or
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
-sync facades. The suite already installs encryption lock namespacing globally
-through `tests/support/advisory_locks.py`. It derives lock identity from the
-`risk_service_test_` search-path schema, independent of repeated options, option
-order, role or timeout settings. Other schema names do not receive that lock
-isolation automatically.
+sync facades. Encryption advisory locks receive the owning schema's namespace
+on every managed PostgreSQL engine, including adopted application engines and async
+engines' sync facades, and their native cursors. The transformation runs at native
+cursor execution so raw SQL and ORM work use the same lock identity exactly once.
+Extra pools and role/tenant variants in one schema retain the same lock identity;
+these bank locks do not contend across independently owned schemas.
+The hook is installed before checkout and does not depend on a schema prefix
+or URL option ordering.
+
+Namespacing matches only the exact native statements
+`SELECT pg_advisory_xact_lock(%(key)s)` and
+`SELECT pg_advisory_xact_lock_shared(%(key)s)`, including their compiled ORM
+equivalents. Use another bind name, such as `probe_key`, for generic contention
+probes that must retain the original lock identity. Other advisory-lock SQL is
+unchanged.
 
 Run the constructor guard with `uv run python scripts/test_database_guard.py`.
 `--strict` rejects all legacy constructors. The temporary allowlist matches

@@ -132,10 +132,13 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
         for connection in (api, legacy_api):
             connection.execute(text("SET LOCAL idle_in_transaction_session_timeout = '1s'"))
         # A transaction-scoped advisory lock proves that termination releases locks.
+        # Use a distinct bind name so encryption-lock isolation leaves this probe raw.
         lock_key = int(uuid4().hex[:14], 16)
-        api.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+        api.execute(text("SELECT pg_advisory_xact_lock(:probe_key)"), {"probe_key": lock_key})
         assert (
-            worker.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key})
+            worker.scalar(
+                text("SELECT pg_try_advisory_xact_lock(:probe_key)"), {"probe_key": lock_key}
+            )
             is False
         )
         long_job = jobs.submit(worker.scalar, text("SELECT 42 FROM pg_sleep(2)"))
@@ -156,7 +159,10 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
             assert getattr(terminated.value.orig, "sqlstate", None) == "25P03"
         assert long_job.result(timeout=10) == 42
         assert (
-            worker.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key}) is True
+            worker.scalar(
+                text("SELECT pg_try_advisory_xact_lock(:probe_key)"), {"probe_key": lock_key}
+            )
+            is True
         )
         assert bi.scalar(text("SELECT 42 FROM pg_sleep(0.1)")) == 42
         worker.commit()
