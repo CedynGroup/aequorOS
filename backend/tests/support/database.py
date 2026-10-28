@@ -1,4 +1,4 @@
-"""Managed database connections for synthetic backend tests.
+"""Managed database connections for backend tests.
 
 Use ``isolated_db`` for a fresh per-test database, or
 ``isolated_database`` for an explicitly owned fixture lifetime. Engines returned
