@@ -1,0 +1,115 @@
+{
+  "tests/api/test_authorization_object_reference_coverage.py": {
+    "sqlalchemy.create_engine": 1,
+    "sqlalchemy.orm.sessionmaker": 1
+  },
+  "tests/api/test_liquidity.py": {
+    "sqlalchemy.create_engine": 1,
+    "sqlalchemy.orm.sessionmaker": 1
+  },
+  "tests/architecture/test_bi_compiler_injection.py": {
+    "sqlalchemy.create_engine": 1
+  },
+  "tests/bi/models/test_bi_models.py": {
+    "sqlalchemy.create_engine": 1,
+    "sqlalchemy.orm.sessionmaker": 1
+  },
+  "tests/bi/models/test_bi_notification_models.py": {
+    "sqlalchemy.create_engine": 1
+  },
+  "tests/bi/service/test_execution.py": {
+    "sqlalchemy.orm.sessionmaker": 1
+  },
+  "tests/conftest.py": {
+    "sqlalchemy.create_engine": 2,
+    "sqlalchemy.orm.sessionmaker": 2
+  },
+  "tests/db/test_ai_migration.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_bank_stress_defaults_migration.py": {
+    "sqlalchemy.create_engine": 1
+  },
+  "tests/db/test_bi_builder_postgres.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_bi_export_transactions.py": {
+    "sqlalchemy.create_engine": 1
+  },
+  "tests/db/test_bi_foundation_migration.py": {
+    "sqlalchemy.create_engine": 1
+  },
+  "tests/db/test_bi_owned_tables_parity.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_bi_partition_adoption.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_bi_partition_rls.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_bi_query_log_postgres.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_bog_return_recode_migration.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_credit_exposure_basis_migration.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_current_financial_facts_rls.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_database_roles.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_database_timeouts.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_document_deletion_timeout.py": {
+    "sqlalchemy.create_engine": 1
+  },
+  "tests/db/test_forecast_assumption_versions_migration.py": {
+    "sqlalchemy.create_engine": 1
+  },
+  "tests/db/test_governance_append_only.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_icaap_filing_migration.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_icaap_risk_capital_migration.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_icaap_workspace_migration.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_postgres_migrations.py": {
+    "sqlalchemy.create_engine": 4
+  },
+  "tests/db/test_regulatory_event_append_only.py": {
+    "sqlalchemy.create_engine": 2
+  },
+  "tests/db/test_worker_database_access.py": {
+    "sqlalchemy.create_engine": 3,
+    "sqlalchemy.orm.sessionmaker": 9
+  },
+  "tests/identity/api/test_audit_log.py": {
+    "sqlalchemy.create_engine": 1
+  },
+  "tests/live_data/conftest.py": {
+    "sqlalchemy.create_engine": 1
+  },
+  "tests/models/test_nullable_json_is_sql_null.py": {
+    "sqlalchemy.create_engine": 1
+  },
+  "tests/scripts/test_dr_tooling.py": {
+    "psycopg.connect": 3
+  },
+  "tests/services/test_pipeline.py": {
+    "sqlalchemy.orm.sessionmaker": 2
+  },
+  "tests/test_worker.py": {
+    "sqlalchemy.orm.sessionmaker": 1
+  }
+}
