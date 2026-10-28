@@ -186,16 +186,14 @@ test.describe("bound FX user", () => {
   }) => {
     await signInWithFxGrants(["aggregated", "confidential"], "approver");
 
-    const periodsLoaded = page.waitForResponse(
-      (response) =>
-        /\/banks\/[^/]+\/reporting-periods$/.test(
-          new URL(response.url()).pathname,
-        ) && response.request().method() === "GET",
-    );
     await page.goto("/fx/scenarios");
-    const periodsResponse = await periodsLoaded;
-    expect(periodsResponse.ok()).toBeTruthy();
-    await periodsResponse.finished();
+    // Network completion can precede the period selection reaching the UI.
+    const period = page.getByRole("combobox", {
+      name: "As-of reporting period",
+      exact: true,
+    });
+    await expect(period).toBeEnabled();
+    await expect(period).not.toHaveValue("");
     await expect(
       page.getByRole("heading", { name: "FX Scenarios", exact: true }),
     ).toBeVisible();
@@ -204,10 +202,14 @@ test.describe("bound FX user", () => {
     ).toHaveCount(0);
     const run = page.getByRole("button", { name: "Run all FX scenarios" });
     await expect(run).toBeDisabled();
-    await run.locator("..").hover();
-    await expect(page.getByRole("tooltip")).toHaveText(
-      /Requires FX · Confidential · Run authority for the whole institution/,
-    );
+    // Focus keeps the reason open when asynchronous content changes layout.
+    const runTrigger = run.locator("..");
+    await runTrigger.focus();
+    await expect(runTrigger).toBeFocused();
+    const reason =
+      "Requires FX · Confidential · Run authority for the whole institution. Ask your organization owner or admin to grant it.";
+    await expect(page.getByRole("tooltip")).toHaveText(reason);
+    await expect(run).toHaveAccessibleDescription(reason);
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "fx-run-disabled.png"),
