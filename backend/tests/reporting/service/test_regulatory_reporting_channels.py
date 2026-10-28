@@ -43,6 +43,7 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.reporting.testing.packages import transient_package
 from tests.support.factories.attestation import relax_signing
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
@@ -73,20 +74,6 @@ REPORTING_DATE = date(2026, 3, 31)
 # ---------------------------------------------------------------------------
 
 
-def _transient_package(status: str = "approved") -> RegulatoryPackage:
-    return RegulatoryPackage(
-        organization_id=DEMO_ORG_ID,
-        bank_id=SAMPLE_BANK_ID,
-        return_code="LCR-NSFR",
-        return_family="liquidity",
-        reporting_date=REPORTING_DATE,
-        frequency="monthly",
-        status=status,
-        version=1,
-        snapshot={"institution": {"short_name": "SBL", "name": "Sample Bank Ltd"}},
-    )
-
-
 def _transient_artifact(kind: str = "xlsx") -> RegulatoryPackageArtifact:
     return RegulatoryPackageArtifact(
         organization_id=DEMO_ORG_ID,
@@ -109,7 +96,7 @@ def _poll_event(external_ref: str) -> RegulatorySubmissionEvent:
 
 def test_sandbox_submit_labels_everything_as_simulation() -> None:
     channel = OrassSandboxChannel()
-    ref = channel.submit(_transient_package(), [_transient_artifact()])
+    ref = channel.submit(transient_package(), [_transient_artifact()])
     # ORASS-style ref (alnum[:4] of the code); the sandbox marker lives in detail
     assert ref.startswith("LCRN")
     assert channel.last_detail["sandbox"] is True
@@ -122,18 +109,18 @@ def test_sandbox_submit_labels_everything_as_simulation() -> None:
 def test_sandbox_submit_precondition_failures() -> None:
     channel = OrassSandboxChannel()
     with pytest.raises(ChannelPreconditionError) as unapproved:
-        channel.submit(_transient_package(status="generated"), [_transient_artifact()])
+        channel.submit(transient_package(status="generated"), [_transient_artifact()])
     assert "approved" in unapproved.value.operator_message
 
     with pytest.raises(ChannelPreconditionError) as no_artifacts:
-        channel.submit(_transient_package(), [])
+        channel.submit(transient_package(), [])
     assert "artifact" in no_artifacts.value.operator_message
 
 
 def test_sandbox_downtime_config_raises_typed_error() -> None:
     channel = OrassSandboxChannel(config={"downtime": True})
     with pytest.raises(ChannelDowntimeError) as exc_info:
-        channel.submit(_transient_package(), [_transient_artifact()])
+        channel.submit(transient_package(), [_transient_artifact()])
     assert "email fallback" in exc_info.value.operator_message
     assert "BG/FMD/2026/07" in exc_info.value.operator_message
     # str() renders only the operator message (no internals leak).
@@ -185,7 +172,7 @@ def test_sandbox_unknown_behavior_falls_back_to_ack() -> None:
 
 def test_email_bundle_contents_and_pending_flag() -> None:
     channel = EmailFallbackChannel(config={"institution_code": "SBL-001"})
-    package = _transient_package()
+    package = transient_package()
     ref = channel.submit(package, [_transient_artifact(), _transient_artifact("pdf")])
     assert ref.startswith("EMAIL-LCR-NSFR-")
 
@@ -213,7 +200,7 @@ def test_email_bundle_contents_and_pending_flag() -> None:
 
 def test_email_configured_recipient_is_surfaced() -> None:
     channel = EmailFallbackChannel(config={"fallback_recipient": "returns.desk@examplebank.test"})
-    channel.submit(_transient_package(), [_transient_artifact()])
+    channel.submit(transient_package(), [_transient_artifact()])
     detail = channel.last_detail
     assert (
         detail["recipient_guidance"]["downtime_return_address"] == "returns.desk@examplebank.test"
@@ -224,9 +211,9 @@ def test_email_configured_recipient_is_surfaced() -> None:
 def test_email_submit_preconditions_and_poll_always_pending() -> None:
     channel = EmailFallbackChannel()
     with pytest.raises(ChannelPreconditionError):
-        channel.submit(_transient_package(status="submitted"), [_transient_artifact()])
+        channel.submit(transient_package(status="submitted"), [_transient_artifact()])
     with pytest.raises(ChannelPreconditionError):
-        channel.submit(_transient_package(), [])
+        channel.submit(transient_package(), [])
 
     status, detail = channel.poll_with_detail("EMAIL-LCR-NSFR-abc")
     assert status == "pending"
