@@ -50,7 +50,7 @@ def real_headers(
     email: str = REAL_USER_EMAIL,
     authorization_version: int = 1,
 ) -> dict[str, str]:
-    """Signed bearer token for a REAL user in a REAL org on the primary DB."""
+    """Signed bearer token for the selected suite user and organization."""
     token = create_token(
         subject=user_id,
         organization_id=org_id,
