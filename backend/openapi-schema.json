@@ -19204,6 +19204,11 @@
             "title": "Authv",
             "type": "integer"
           },
+          "can_administer_grants": {
+            "default": false,
+            "title": "Can Administer Grants",
+            "type": "boolean"
+          },
           "institution_capabilities": {
             "items": {
               "$ref": "#/components/schemas/InstitutionCapabilitiesRead"
