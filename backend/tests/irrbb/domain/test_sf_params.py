@@ -21,8 +21,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.irr import standardised_params as sp
-from tests.domain.irr.test_sf_fixtures import seed_rows, sf_parameters
+from app.irrbb.domain import standardised_params as sp
+from tests.irrbb.domain.test_sf_fixtures import seed_rows, sf_parameters
 
 
 def _without(code: str) -> Mapping[str, sp.GovernedValue]:

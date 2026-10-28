@@ -30,8 +30,8 @@ from decimal import ROUND_HALF_UP, Decimal, localcontext
 
 import pytest
 
-from app.domain.irr import standardised_params as sp
-from app.domain.irr.standardised import (
+from app.irrbb.domain import standardised_params as sp
+from app.irrbb.domain.standardised import (
     CurrencyInputs,
     Ladder,
     NmdBalance,
@@ -40,9 +40,9 @@ from app.domain.irr.standardised import (
     scenario_shifts_bp,
     short_weight,
 )
-from app.domain.irr.standardised import run as sf_run
-from app.domain.irr.standardised_cash_flows import InstrumentTerms
-from tests.domain.irr.test_sf_fixtures import (
+from app.irrbb.domain.standardised import run as sf_run
+from app.irrbb.domain.standardised_cash_flows import InstrumentTerms
+from tests.irrbb.domain.test_sf_fixtures import (
     flat_curve,
     ladder_from_instruments,
     running_outstanding,

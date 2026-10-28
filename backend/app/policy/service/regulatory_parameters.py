@@ -669,7 +669,7 @@ FILING_PARAMETER_CODES: frozenset[str] = frozenset(
 # --- P5: IRRBB Standardised Framework + full granularity adjustment ----------
 #
 # Every number the Standardised Framework reads is a row here (D-024). The
-# engine (``app/domain/irr/standardised*.py``) holds NO calibration at all — it
+# engine (``app/irrbb/domain/standardised*.py``) holds NO calibration at all — it
 # refuses with ``missing_parameter`` when a row is absent, and the golden
 # vectors move when a value here moves, which is the executable form of "fetch
 # it from the console".

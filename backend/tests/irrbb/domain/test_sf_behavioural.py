@@ -26,8 +26,8 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
-from app.domain.irr import standardised_params as sp
-from app.domain.irr.standardised import (
+from app.irrbb.domain import standardised_params as sp
+from app.irrbb.domain.standardised import (
     CurrencyInputs,
     Ladder,
     LadderKind,
@@ -39,8 +39,8 @@ from app.domain.irr.standardised import (
     apply_redemption,
     behavioural_rate,
 )
-from app.domain.irr.standardised import run as sf_run
-from tests.domain.irr.test_sf_fixtures import (
+from app.irrbb.domain.standardised import run as sf_run
+from tests.irrbb.domain.test_sf_fixtures import (
     flat_curve,
     running_outstanding,
     sf_parameters,

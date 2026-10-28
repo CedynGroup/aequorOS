@@ -23,7 +23,10 @@ from app.domain.capital.engine import (
     compute_rwa,
     tier1_capital,
 )
-from app.domain.irr.standardised_params import REQUIRED_CODES
+from app.irrbb.domain.standardised_params import REQUIRED_CODES
+from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
+from app.irrbb.schemas.regulatory_irr_sf import IrrbbSfRunCreate
+from app.irrbb.service import regulatory_irr, regulatory_irr_sf
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -38,8 +41,6 @@ from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
 from app.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.schemas.forecasting import ForecastRunCreate, OptimizerRunCreate, WhatIfRunCreate
 from app.schemas.regulatory_fx import FxScenarioBatchCreate
-from app.schemas.regulatory_irr import IrrScenarioBatchCreate
-from app.schemas.regulatory_irr_sf import IrrbbSfRunCreate
 from app.schemas.regulatory_liquidity import (
     RegulatoryRunCreate,
     RegulatoryScenarioCode,
@@ -54,8 +55,6 @@ from app.services import (
     regulatory_credit,
     regulatory_forecasting,
     regulatory_fx,
-    regulatory_irr,
-    regulatory_irr_sf,
     reverse_stress,
     sdi_rating,
 )

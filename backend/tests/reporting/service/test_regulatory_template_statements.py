@@ -13,7 +13,7 @@ A template note is printed on a filed return. Two were stale or overclaimed:
 
 from __future__ import annotations
 
-from app.domain.irr.engine import IRR_BUCKETS, IRR_OPTIONAL_SCENARIO_CODES
+from app.irrbb.domain.engine import IRR_BUCKETS, IRR_OPTIONAL_SCENARIO_CODES
 from app.reporting.service.templates import get_template
 
 

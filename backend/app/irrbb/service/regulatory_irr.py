@@ -5,7 +5,7 @@ Follows the immutable calculation-run lifecycle established by
 before executing, persist the full canonical input snapshot with a SHA-256
 ``input_hash``, and record failures as data (named error codes) rather than
 HTTP 500s. The arithmetic itself lives in the pure engine at
-``app.domain.irr.engine``.
+``app.irrbb.domain.engine``.
 
 Every IRR run computes the complete banking-book analysis — repricing gap,
 duration gap, base EVE with all six Basel scenarios, and parallel ±200 bp
@@ -49,8 +49,10 @@ from app.domain.capital.engine import (
     CapitalRegisterRefused,
     tier1_capital,
 )
-from app.domain.irr import IrrRunError
-from app.domain.irr.engine import (
+from app.domain.reporting import period_windows
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead
+from app.irrbb.domain import IrrRunError
+from app.irrbb.domain.engine import (
     BASE_CURVE_SCENARIO,
     EAR_DOWN_BP,
     EAR_UP_BP,
@@ -73,8 +75,16 @@ from app.domain.irr.engine import (
     run_irr_scenarios,
     scenario_shifts,
 )
-from app.domain.reporting import period_windows
-from app.identity.public import Bank, BankRead, BankReportingPeriodRead
+from app.irrbb.schemas.regulatory_irr import (
+    IrrDashboardRead,
+    IrrEarAnalysisRead,
+    IrrEveScenarioRead,
+    IrrGapBucketRead,
+    IrrMetricsRead,
+    IrrScenarioBatchCreate,
+    IrrTrendPointRead,
+    IrrValidationRead,
+)
 from app.models import (
     BankFinancialFact,
     BankReportingPeriod,
@@ -95,16 +105,6 @@ from app.policy.public import (
     regulatory_parameters,
 )
 from app.reporting.service import filing_reconciliation
-from app.schemas.regulatory_irr import (
-    IrrDashboardRead,
-    IrrEarAnalysisRead,
-    IrrEveScenarioRead,
-    IrrGapBucketRead,
-    IrrMetricsRead,
-    IrrScenarioBatchCreate,
-    IrrTrendPointRead,
-    IrrValidationRead,
-)
 from app.schemas.regulatory_liquidity import (
     RegulatoryRunBatchRead,
     RegulatoryRunCreate,
@@ -1303,7 +1303,7 @@ def swap_legs(fact: FinancialFactRow, curve: dict[Decimal, Decimal]) -> list[Irr
       floats at the base-curve zero for its midpoint.
 
     Both legs price into gap/EVE/duration and accrue into base NII, where they
-    net to the swap carry (see ``app.domain.irr.engine.compute_nii``). An
+    net to the swap carry (see ``app.irrbb.domain.engine.compute_nii``). An
     unrecognized direction fails the run as data rather than mispricing.
     """
     attributes = fact.attributes
@@ -1373,7 +1373,7 @@ def tier1_for_period(
 ) -> Decimal:
     """The ΔEVE denominator for a period — the SF's public seam onto this one.
 
-    ``app.services.regulatory_irr_sf`` needs exactly the figure the legacy IRR
+    ``app.irrbb.service.regulatory_irr_sf`` needs exactly the figure the legacy IRR
     module uses, and importing a private name across service modules is how two
     denominators come to disagree. The alias is additive: the legacy call sites
     keep calling ``_load_tier1`` and nothing about them changes.

@@ -107,6 +107,7 @@ from app.domain.stress.translation import (
 )
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
+from app.irrbb.public import regulatory_irr
 from app.models import (
     BankFinancialFact,
     BankReportingPeriod,
@@ -139,7 +140,6 @@ from app.services import (
     enterprise_run_visibility,
     macro_scenarios,
     management_action_plans,
-    regulatory_irr,
     sdi_capital,
 )
 from app.services.audit import record_event

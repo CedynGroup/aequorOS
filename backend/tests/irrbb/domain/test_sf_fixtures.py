@@ -3,7 +3,7 @@
 WS-B owns ``app/policy/service/regulatory_parameters.py`` and the migration that seeds
 these codes; the pure domain owns none of them. So the domain suite builds its
 own control-plane rows here, from the P5 design's seed table, and every test
-resolves through :func:`app.domain.irr.standardised_params.parse_parameters`
+resolves through :func:`app.irrbb.domain.standardised_params.parse_parameters`
 exactly as the service will. That keeps two properties true at once: the domain
 tests never reach into a service module, and they still exercise the real
 parse-and-validate path rather than hand-built objects.
@@ -19,9 +19,9 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from decimal import Decimal
 
-from app.domain.irr import standardised_params as sp
-from app.domain.irr.standardised import Ladder, LadderKind
-from app.domain.irr.standardised_cash_flows import InstrumentTerms, project
+from app.irrbb.domain import standardised_params as sp
+from app.irrbb.domain.standardised import Ladder, LadderKind
+from app.irrbb.domain.standardised_cash_flows import InstrumentTerms, project
 
 #: Bucket upper bounds and midpoints, nineteen buckets.
 _BUCKETS: tuple[tuple[str, str, str | None, str], ...] = (

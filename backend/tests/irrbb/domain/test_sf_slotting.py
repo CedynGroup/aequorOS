@@ -16,9 +16,9 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.irr.standardised_cash_flows import add_months, add_tenor, slot, year_fraction
-from app.domain.irr.standardised_params import Tenor, parse_tenor
-from tests.domain.irr.test_sf_fixtures import sf_parameters
+from app.irrbb.domain.standardised_cash_flows import add_months, add_tenor, slot, year_fraction
+from app.irrbb.domain.standardised_params import Tenor, parse_tenor
+from tests.irrbb.domain.test_sf_fixtures import sf_parameters
 
 AS_OF = date(2026, 12, 31)
 

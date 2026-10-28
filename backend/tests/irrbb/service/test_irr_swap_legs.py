@@ -17,9 +17,9 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.irr.engine import compute_gap, compute_nii
+from app.irrbb.domain.engine import compute_gap, compute_nii
+from app.irrbb.service.regulatory_irr import IrrRunError, swap_legs
 from app.models import BankFinancialFact
-from app.services.regulatory_irr import IrrRunError, swap_legs
 
 NOTIONAL = Decimal("120000000")
 FIXED_RATE = Decimal("25.3")

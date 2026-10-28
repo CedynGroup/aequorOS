@@ -201,7 +201,7 @@ documented, and reported **with and without** (¶78–81).
 - **Reverse stress:** `run_reverse_stress` (`app/services/reverse_stress.py:72`) — bisection for
   the severity _k_ breaching a floor, two **independent** axes (liquidity=LCR, capital=CET1);
   immutable `RegulatoryRun`.
-- **IRRBB:** 6 Basel ΔEVE scenarios + EaR (`app/domain/irr/engine.py:384,470`). **FX:** depreciation
+- **IRRBB:** 6 Basel ΔEVE scenarios + EaR (`app/irrbb/domain/engine.py:384,470`). **FX:** depreciation
   scenarios + stressed VaR (`app/domain/fx/engine.py:479,373`). **FTP:** curve/funding stress.
 - **Forecasting:** what-if (4 hardcoded macro-flavoured shocks, `forecasting/engine.py:141`);
   adverse scenarios (base/adverse/severely_adverse, 5-yr); strategic optimizer.
@@ -356,7 +356,7 @@ immutable `RegulatoryRun` (keep the existing reproducibility spine — value-bas
 #### 3.3.1 Current IRRBB stress inputs and recorded runs
 
 The enterprise stress IRRBB leg uses the regulatory IRRBB fact groups and
-[shared position reader](../backend/app/services/regulatory_irr.py), which owns
+[shared position reader](../backend/app/irrbb/service/regulatory_irr.py), which owns
 contractual-rate reading and receive/pay swap-leg decomposition. Both engines
 therefore price the same positions when given the same book and base curve.
 The stress leg's ΔEVE loss, `max(-delta_eve, 0)` in thousands, feeds the

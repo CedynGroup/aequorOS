@@ -1,7 +1,7 @@
 """Regulatory FX runs: net-open-position / VaR / hedge orchestration and dashboard.
 
 Follows the immutable calculation-run lifecycle established by
-``app.services.regulatory_capital`` and mirrored by ``app.services.regulatory_irr``:
+``app.services.regulatory_capital`` and mirrored by ``app.irrbb.service.regulatory_irr``:
 runs commit ``queued`` and ``running`` before executing, persist the full
 canonical input snapshot with a SHA-256 ``input_hash``, and record failures as
 data (named error codes) rather than HTTP 500s. The arithmetic itself lives in

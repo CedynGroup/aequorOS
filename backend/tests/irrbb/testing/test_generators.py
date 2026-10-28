@@ -7,8 +7,8 @@ import pytest
 from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
-from app.domain.irr.standardised import CurrencyInputs, SfInputs
-from app.domain.irr.standardised import run as sf_run
+from app.irrbb.domain.standardised import CurrencyInputs, SfInputs
+from app.irrbb.domain.standardised import run as sf_run
 from tests.irrbb.testing.assertions import (
     assert_irrbb_invariants,
     assert_irrbb_ratio_scaled,

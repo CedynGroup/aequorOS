@@ -20,7 +20,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.irr.standardised import (
+from app.irrbb.domain.standardised import (
     K_AO_ZERO_STATEMENT,
     POST_SHOCK_FLOOR,
     AutomaticOption,
@@ -29,8 +29,8 @@ from app.domain.irr.standardised import (
     SfInputs,
     SfOptionsUnsupportedError,
 )
-from app.domain.irr.standardised import run as sf_run
-from tests.domain.irr.test_sf_fixtures import flat_curve, sf_parameters, simple_ladder
+from app.irrbb.domain.standardised import run as sf_run
+from tests.irrbb.domain.test_sf_fixtures import flat_curve, sf_parameters, simple_ladder
 
 AS_OF = date(2026, 12, 31)
 PARAMS = sf_parameters()
@@ -182,7 +182,7 @@ def test_the_absence_of_a_post_shock_floor_is_reported_not_assumed() -> None:
     the service's sentence, and that sentence was corrected on 2026-09-20 — it
     used to tell the filer that the framework prescribes no floor, which is a
     claim about a supervisory standard the platform cannot support. Pinned in
-    ``tests/services/test_regulatory_irr_sf.py`` and at the route.
+    ``tests/irrbb/service/test_regulatory_irr_sf.py`` and at the route.
     """
     result = sf_run(_inputs(), PARAMS)
 

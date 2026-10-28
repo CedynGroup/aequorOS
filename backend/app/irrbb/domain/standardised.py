@@ -1,6 +1,6 @@
 """The IRRBB Standardised Framework engine (pure).
 
-A second, separate engine. ``app/domain/irr/engine.py`` — nine generic buckets,
+A second, separate engine. ``app/irrbb/domain/engine.py`` — nine generic buckets,
 annual compounding, one reporting currency, an absolute-value outlier test — is
 left untouched so every return already filed from it keeps its numbers. The
 Standardised Framework differs in every structural dimension, so it is built
@@ -51,7 +51,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, localcontext
 from typing import Literal
 
-from app.domain.irr.standardised_params import (
+from app.irrbb.domain.standardised_params import (
     BASIS_POINTS_IN_UNIT,
     HUNDRED,
     MONTHS_IN_YEAR,

@@ -13,13 +13,13 @@ from datetime import date
 
 import pytest
 
-from app.domain.irr.buckets import (
+from app.irrbb.domain.buckets import (
     BUCKET_UPPER_DAYS,
     REPRICING_BUCKETS,
     bucket_for_days,
     repricing_bucket,
 )
-from app.domain.irr.engine import IRR_BUCKETS
+from app.irrbb.domain.engine import IRR_BUCKETS
 from app.services import fact_derivation
 
 EXPECTED_BUCKETS: tuple[tuple[str, int | None, str], ...] = (

@@ -6,10 +6,10 @@ from decimal import Decimal
 
 from hypothesis import strategies as st
 
-from app.domain.irr.standardised import CurrencyInputs, Ladder, LadderKind, SfInputs
-from app.domain.irr.standardised import run as sf_run
 from app.icaap.domain.pillar2.irrbb import ScenarioDelta
-from tests.domain.irr.test_sf_fixtures import running_outstanding, sf_parameters
+from app.irrbb.domain.standardised import CurrencyInputs, Ladder, LadderKind, SfInputs
+from app.irrbb.domain.standardised import run as sf_run
+from tests.irrbb.domain.test_sf_fixtures import running_outstanding, sf_parameters
 
 PARAMS = sf_parameters()
 AS_OF = date(2026, 12, 31)

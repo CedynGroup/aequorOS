@@ -36,7 +36,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Final
 
-from app.domain.irr import standardised_params as sfp
+from app.irrbb.domain import standardised_params as sfp
 
 __all__ = [
     "SHAPES",
