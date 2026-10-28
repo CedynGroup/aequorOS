@@ -7,30 +7,41 @@ import os
 from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
+from threading import Lock
 from typing import cast
 from uuid import uuid4
 
 import pytest
 from openpyxl import load_workbook
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.key_management import reencryption, registry
+from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.models import ObjectKeyEnvelope
+from app.core.key_management.schemas import BankKeyConnect, BankKeyRotate
+from app.core.key_management.types import KeyReference, KeyStatus
 from app.core.tenancy import TenantContext
 from app.db.session import get_engine
-from app.models import Bank, Job
+from app.identity.models.institution_profile import RelatedParty
+from app.identity.schemas.bank_encryption import BankKeyScheduleConfirm
+from app.identity.service import bank_encryption
+from app.models import Bank, Job, OperatorAuditLog
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
 from app.services import assessments, documents, ingestion, job_queue
 from tests.adapters.excel_csv import fixtures as workbooks
 from tests.api.test_ingestion import FULL_MAPPING
 from tests.conftest import FakeStorage
+from tests.core.test_bank_reencryption import EmptyStorage
 from tests.db import test_postgres_migrations as migrations
 from tests.services.factories import ServiceFactories
 from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1, ORG_2
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.reencryption import drain
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
 ROLES = ("aqs_api", "aqs_worker", "aqs_bi", "aqs_operator", "aqs_audit_verifier")
@@ -250,6 +261,116 @@ def test_grants_match_reviewed_matrix(role_schema: migrations.MigratedPostgresSc
         assert privilege_snapshot(connection) == json.loads(MATRIX.read_text())
 
 
+def test_worker_reencrypts_with_scoped_audit_counts(
+    administrator: Engine,
+    role_engines: dict[str, Engine],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = LocalKeyProvider()
+    keys = [KeyReference("aws_kms", name, "us-east-1", "111122223333") for name in ("old", "new")]
+    for key in keys:
+        provider.add_key(key)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return provider
+
+    monkeypatch.setattr(registry, "provider_for", providers)
+    with Session(administrator) as db:
+        db.info["organization_id"] = ORG_1
+        bank = Bank(
+            organization_id=ORG_1,
+            name="Synthetic worker migration",
+            short_name="Synthetic",
+            storage_slug="synthetic-worker-reencryption",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="bank",
+            institution_type="universal_bank",
+        )
+        db.add(bank)
+        db.flush()
+        party = RelatedParty(
+            organization_id=ORG_1,
+            bank_id=bank.id,
+            party_type="individual",
+            full_name="Synthetic retained name",
+            contact={"email": "synthetic@example.test"},
+        )
+        db.add(party)
+        db.commit()
+        bank_id, party_id = bank.id, party.id
+        assert bank.storage_slug is not None
+        key = registry.register(
+            db,
+            organization_id=ORG_1,
+            bank_id=bank_id,
+            storage_slug=bank.storage_slug,
+            key=keys[0],
+            providers=lambda _name: provider,
+        )
+        registry.rotate(db, key, keys[1], lambda _name: provider)
+        for organization in (ORG_1, ORG_2):
+            db.add(
+                OperatorAuditLog(
+                    operator_email="synthetic@example.test",
+                    auth_mode="dev",
+                    action="synthetic.reencryption",
+                    target_org=organization,
+                    detail={"synthetic": True},
+                )
+            )
+        job = reencryption.enqueue(db, ORG_1, bank_id)
+        db.commit()
+        job_id = job.id
+        expected_audit_count = db.scalar(
+            select(func.count())
+            .select_from(OperatorAuditLog)
+            .where(OperatorAuditLog.target_org == ORG_1)
+        )
+    with Session(role_engines["aqs_worker"]) as db:
+        db.info["organization_id"] = ORG_1
+        job = db.get(Job, job_id)
+        assert job is not None
+        job = drain(db, job, EmptyStorage())
+        progress = reencryption.Progress.model_validate(job.progress)
+        assert progress.fields_rewritten == 2
+        assert progress.retained == {
+            "operator_audit_log (organization scope)": expected_audit_count
+        }
+        party = db.get(RelatedParty, party_id)
+        assert party is not None and party.full_name == "Synthetic retained name"
+        key = registry.scoped_key(db, organization_id=ORG_1, bank_id=bank_id)
+        index = db.get(ObjectKeyEnvelope, key.index_version_id)
+        assert index is not None and registry.reference(index) == registry.reference(key)
+        db.commit()
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "SELECT * FROM operator_audit_log",
+        "INSERT INTO operator_audit_log (id,operator_email,auth_mode,action,detail,created_at) "
+        "VALUES (gen_random_uuid(),'synthetic@example.test','dev','forbidden','{}',now())",
+        "UPDATE operator_audit_log SET action='forbidden'",
+        "DELETE FROM operator_audit_log",
+        "UPDATE bank_encryption_keys SET key_id='forbidden'",
+        "UPDATE bank_encryption_keys SET status='disabled'",
+    ],
+)
+def test_worker_cannot_access_operator_audit_rows_or_other_key_columns(
+    role_engines: dict[str, Engine], statement: str
+) -> None:
+    with role_engines["aqs_worker"].connect() as connection, connection.begin():
+        with pytest.raises(DBAPIError) as error:
+            connection.execute(text(statement))
+        assert getattr(error.value.orig, "sqlstate", None) == "42501"
+
+
+def test_worker_operator_audit_count_requires_tenant_scope(role_engines: dict[str, Engine]) -> None:
+    with role_engines["aqs_worker"].connect() as connection, connection.begin():
+        assert connection.scalar(text("SELECT aequoros_retained_operator_audit_count()")) == 0
+
+
 def test_matrix_detects_an_unexpected_grant(administrator: Engine) -> None:
     with administrator.connect() as connection, connection.begin():
         before = privilege_snapshot(connection)
@@ -277,6 +398,10 @@ def test_matrix_detects_public_column_grants(administrator: Engine, privilege: s
             ["bank_encryption_keys", column, role, privilege, False]
             for column in ("bank_id", "key_id")
             for role in sorted(ROLES)
+            if privilege
+            not in cast(dict[str, dict[str, list[str]]], before["tables"])[
+                "bank_encryption_keys"
+            ].get(role, [])
         ]
         connection.rollback()
 
@@ -771,3 +896,95 @@ def test_shared_url_pools_have_distinct_application_names(
         for engine in engines:
             engine.dispose()
         get_engine.cache_clear()
+
+
+def test_api_role_can_connect_test_rotate_and_confirm_bank_key(
+    administrator: Engine, role_engines: dict[str, Engine], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payloads = [
+        BankKeyConnect(
+            key_id=f"arn:aws:kms:us-east-1:123456789012:key/{uuid4()}",
+            region="us-east-1",
+            owner_account="123456789012",
+        )
+        for _ in range(2)
+    ]
+    provider = LocalKeyProvider()
+    for payload in payloads:
+        provider.add_key(payload.reference())
+
+    def factory(_name: str) -> LocalKeyProvider:
+        return provider
+
+    recording = Lock()
+    monkeypatch.setattr(registry, "provider_for", factory)
+    monkeypatch.setattr(registry, "_usage_recording", recording)
+    with Session(administrator) as admin:
+        bank = Bank(
+            organization_id=ORG_1,
+            name="Key privilege fixture",
+            short_name="Key privilege",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="bank",
+            institution_type="universal_bank",
+            storage_slug=f"key-privilege-{uuid4().hex}",
+        )
+        admin.add(bank)
+        admin.commit()
+        bank_id = bank.id
+    ctx = TenantContext(organization_id=ORG_1)
+    with Session(role_engines["aqs_api"]) as api:
+        api.info["organization_id"] = ORG_1
+        connected = bank_encryption.connect(api, ctx, bank_id, payloads[0])
+        assert connected.connected and connected.current_version
+        assert bank_encryption.test_connection(api, ctx, bank_id, payloads[0]).passed
+        provider.set_status(payloads[0].reference(), KeyStatus.DISABLED)
+        assert not bank_encryption.test_connection(api, ctx, bank_id, payloads[0]).passed
+        provider.set_status(payloads[0].reference(), KeyStatus.ACTIVE)
+        for payload in (payloads[1], payloads[0], payloads[1]):
+            rotated = bank_encryption.rotate(
+                api,
+                ctx,
+                bank_id,
+                BankKeyRotate(
+                    key_id=payload.key_id,
+                    region=payload.region,
+                    owner_account=payload.owner_account,
+                    reason="Synthetic privilege rotation",
+                ),
+            )
+            assert rotated.current_version != connected.current_version
+            confirmed = bank_encryption.confirm_schedule(
+                api,
+                ctx,
+                bank_id,
+                BankKeyScheduleConfirm(
+                    key_id=payload.key_id,
+                    period_days=365,
+                    reason="Synthetic bank-reported rotation schedule",
+                ),
+            )
+            assert confirmed.rotation_period_days == 365
+    with Session(role_engines["aqs_worker"]) as worker:
+        worker.info["organization_id"] = ORG_1
+        row = registry.bank_key(worker, ORG_1, bank_id)
+        assert row is not None
+        key = registry.prepare_envelope(worker, row, {"purpose": "worker-role"}, lambda _: provider)
+        worker.commit()
+        assert key.key_id == payloads[1].key_id
+    assert recording.acquire(timeout=5)
+    recording.release()
+    with Session(role_engines["aqs_worker"]) as worker:
+        worker.info["organization_id"] = ORG_1
+        row = registry.bank_key(worker, ORG_1, bank_id)
+        assert row is not None
+        assert registry.last_successful_use(worker, row) is not None
+        assert (
+            worker.scalar(
+                select(ObjectKeyEnvelope.last_successful_use_at).where(
+                    ObjectKeyEnvelope.id == key.envelope_id
+                )
+            )
+            is not None
+        )

@@ -175,6 +175,7 @@ class BiAlertUpsert(BiClosedModel):
 class BiAlertRead(BiClosedModel):
     """One alert as a surface shows it."""
 
+    locked_reason: str | None = None
     id: UUID
     bank_id: str
     name: str
@@ -318,10 +319,11 @@ class BiSubscriptionUpsert(BiClosedModel):
 class BiSubscriptionRead(BiClosedModel):
     """One subscription as a surface shows it."""
 
+    locked_reason: str | None = None
     id: UUID
     bank_id: str
     name: str
-    query: BiQuery
+    query: BiQuery | None
     artifact_format: BiSubscriptionFormat
     cadence: BiSubscriptionCadence
     hour: int | None = None

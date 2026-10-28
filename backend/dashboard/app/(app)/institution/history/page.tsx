@@ -47,8 +47,11 @@ export default function NameHistoryPage() {
   }, [query.data]);
 
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const editing = entries.find((entry) => entry.id === editingId) ?? null;
+  const [editor, setEditor] = useState<{
+    bankId: string | undefined;
+    row: BankNameHistoryRead;
+  } | null>(null);
+  const editing = editor && editor.bankId === bankId ? editor.row : null;
 
   return (
     <>
@@ -59,7 +62,7 @@ export default function NameHistoryPage() {
           <button
             type="button"
             onClick={() => {
-              setEditingId(null);
+              setEditor(null);
               setAdding(true);
             }}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
@@ -71,6 +74,18 @@ export default function NameHistoryPage() {
       />
 
       <PageContainer className="py-6 space-y-6">
+        {(adding || editing) && (
+          <NameHistoryForm
+            key={editing?.id ?? "new"}
+            bankId={bankId!}
+            entry={editing}
+            onClose={() => {
+              setAdding(false);
+              setEditor(null);
+            }}
+          />
+        )}
+
         <QueryBoundary
           contained
           isLoading={query.isLoading}
@@ -78,18 +93,6 @@ export default function NameHistoryPage() {
           onRetry={() => query.refetch()}
           skeleton={<SkeletonCard />}
         >
-          {(adding || editing) && (
-            <NameHistoryForm
-              key={editing?.id ?? "new"}
-              bankId={bankId!}
-              entry={editing}
-              onClose={() => {
-                setAdding(false);
-                setEditingId(null);
-              }}
-            />
-          )}
-
           <SectionCard
             title="Timeline"
             subtitle={
@@ -133,9 +136,9 @@ export default function NameHistoryPage() {
                         type="button"
                         onClick={() => {
                           setAdding(false);
-                          setEditingId(entry.id);
+                          setEditor({ bankId, row: entry });
                         }}
-                        className="ml-auto inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                        className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
                       >
                         <Pencil size={11} aria-hidden />
                         Edit

@@ -299,6 +299,7 @@ def upload_package_attachment(  # noqa: PLR0913 - an upload is its named parts
     max_bytes: int,
 ) -> PackageAttachmentRead:
     """Attach one document to a package, proving what it is from its bytes."""
+    storage = storage.for_session(db)
     from app.attestation.public import package_policy  # noqa: PLC0415
 
     actor_user_id = ctx.actor_user_id

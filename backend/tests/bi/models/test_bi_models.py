@@ -54,6 +54,7 @@ from app.bi.models.marts import (
 )
 from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.core.config import get_settings
+from app.core.key_management.fields import ProtectedText
 from app.db.base import Base
 from app.db.session import get_bi_engine, get_bi_sessionmaker, set_tenant_rls_context
 from app.domain.authority.registry import REGISTRY, AdvisoryDesignation, MetricFamily, Regime
@@ -781,6 +782,14 @@ def test_string_columns_are_at_least_as_wide_as_their_vocabulary(
 def test_copied_columns_are_at_least_as_wide_as_their_source(
     table_name: str, column_name: str, source: type, source_column: str
 ) -> None:
+    source_type = _table(source).c[source_column].type
+    if isinstance(source_type, ProtectedText):
+        # Optional-key banks copy bounded input; connected banks use UUID aliases
+        # / NULL and reject identity queries (issue 595).
+        assert source is CanonicalCounterparty
+        assert source_column in {"name", "source_reference", "group_reference"}
+        assert _width(table_name, column_name) >= 255
+        return
     source_width = _width(_table(source).name, source_column)
     assert _width(table_name, column_name) >= source_width, (
         f"{table_name}.{column_name} is narrower than {_table(source).name}.{source_column} "

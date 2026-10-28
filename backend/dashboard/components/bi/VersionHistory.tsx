@@ -84,9 +84,10 @@ export default function VersionHistory({
                       {fmtTimestamp(entry.createdAt)}
                     </span>{" "}
                     ·{" "}
-                    {entry.widgetCount === 1
-                      ? "1 view"
-                      : `${fmtInt(entry.widgetCount)} views`}
+                    {entry.lockedReason ??
+                      (entry.widgetCount === 1
+                        ? "1 view"
+                        : `${fmtInt(entry.widgetCount)} views`)}
                   </p>
                   <p className="text-caption leading-relaxed text-slate">
                     {entry.changeNote.length > 0

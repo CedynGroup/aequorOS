@@ -10,7 +10,7 @@ that could not be translated.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import (
@@ -23,13 +23,13 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    Text,
     UniqueConstraint,
     Uuid,
 )
 from sqlalchemy import text as sql_text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
+from app.core.key_management.fields import ProtectedJSON, ProtectedText
 from app.db.base import (
     Base,
     TimestampMixin,
@@ -124,16 +124,33 @@ class IngestionBatch(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         Integer, default=0, server_default=sql_text("0"), nullable=False
     )
     validation_report: Mapped[dict[str, Any]] = mapped_column(
-        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+        ProtectedJSON(empty_object=True),
+        default=dict,
+        server_default=sql_text("'{}'"),
+        nullable=False,
     )
     # Compact ML-ETL summary (preprocess op/flag counts, dedup linkage counts, samples)
     # produced by app.etl.run_etl between extraction and translation. Null for batches
     # ingested before the ETL layer, or that failed before the ETL pass.
-    etl_report: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    etl_report: Mapped[dict[str, Any] | None] = mapped_column(ProtectedJSON(), nullable=True)
+    # Public lifecycle metadata remains usable when the report is redacted.
+    dedup_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    @validates("etl_report")
+    def _sync_dedup_status(self, _key: str, value: object) -> object:
+        if value is None or isinstance(value, dict):
+            status = (
+                cast(dict[str, object], value).get("dedup_status")
+                if isinstance(value, dict)
+                else None
+            )
+            self.dedup_status = status if isinstance(status, str) else None
+        return cast(object, value)
+
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(ProtectedText(), nullable=True)
     created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     # Object paths in the institution's storage buckets (storage.md §1.3):
     # the raw source file in the `raw` tier and the validation report in
@@ -188,7 +205,10 @@ class LineageRecord(UuidV7PrimaryKeyMixin, Base):
         JSON, default=list, server_default=sql_text("'[]'"), nullable=False
     )
     details: Mapped[dict[str, Any]] = mapped_column(
-        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+        ProtectedJSON(empty_object=True),
+        default=dict,
+        server_default=sql_text("'{}'"),
+        nullable=False,
     )
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -283,9 +303,11 @@ class TranslationFailure(UuidV7PrimaryKeyMixin, Base):
     entity_type: Mapped[str] = mapped_column(String(40), nullable=False)
     # Where in the source the record came from, e.g. "positions.xlsx#Sheet1!R14".
     source_locator: Mapped[str] = mapped_column(String(255), nullable=False)
-    raw_record: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    raw_record: Mapped[dict[str, Any]] = mapped_column(
+        ProtectedJSON(empty_object=True), nullable=False
+    )
     error_code: Mapped[str] = mapped_column(String(120), nullable=False)
-    error_message: Mapped[str] = mapped_column(Text, nullable=False)
+    error_message: Mapped[str] = mapped_column(ProtectedText(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
