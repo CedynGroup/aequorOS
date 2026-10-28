@@ -39,7 +39,6 @@ from app.core.authorization import (
 from app.core.config import Settings, get_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
-from app.features.ingest_data import get_ingestion_storage
 from app.identity.service import authorization
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
@@ -70,7 +69,6 @@ hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 #: and the demo tenants.
 pytest_plugins = [
     "tests.support.database_fixtures",
-    "tests.bi.fixtures",
     "tests.capital.fixtures",
     "tests.credit.fixtures",
     "tests.forecasting.fixtures",
@@ -729,6 +727,7 @@ def _db_client_lifecycle(
     fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
+    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
 
     def object_storage_override() -> FakeStorage:
         return fake_storage
@@ -851,6 +850,8 @@ def real_client(
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
     """A TestClient wired to the ACTUAL primary, transaction-isolated."""
+    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
+
     app = _create_app()
     app.dependency_overrides[get_object_storage] = lambda: fake_storage
     app.dependency_overrides[get_ingestion_storage] = lambda: storage_engine

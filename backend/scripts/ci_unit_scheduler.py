@@ -28,6 +28,10 @@ def scheduler(config: pytest.Config, log: object) -> object:
             # more than their independent assertions can save in parallel.
             ("openapi-schema", ("tests/api/test_openapi_contract.py::",)),
             (
+                "job-reachability",
+                ("tests/architecture/test_job_enqueue_reachability.py::",),
+            ),
+            (
                 "shard-reports",
                 (
                     "tests/architecture/test_ci_postgres.py::test_real_workers_partition_every_test_and_preserve_junit_names",

@@ -71,6 +71,8 @@ import ast
 from collections import deque
 from pathlib import Path
 
+import pytest
+
 from app.services.job_queue import JOB_TYPES
 
 APP_ROOT = Path(__file__).resolve().parents[2] / "app"
@@ -424,10 +426,15 @@ def _analyse(root: Path = APP_ROOT) -> tuple[dict[str, set[str]], set[str], list
     return sites, reachable, unresolved
 
 
-_SITES, _REACHABLE, _UNRESOLVED = _analyse()
+Analysis = tuple[dict[str, set[str]], set[str], list[str]]
 
 
-def test_every_enqueue_call_names_a_resolvable_job_type() -> None:
+@pytest.fixture(scope="module")
+def job_analysis() -> Analysis:
+    return _analyse()
+
+
+def test_every_enqueue_call_names_a_resolvable_job_type(job_analysis: Analysis) -> None:
     """A job type computed at run time cannot be checked by anything.
 
     ``job_queue.enqueue`` validates the name against ``JOB_TYPES`` at the insert,
@@ -436,16 +443,18 @@ def test_every_enqueue_call_names_a_resolvable_job_type() -> None:
     Keep every call site's type a literal or a module constant.
     """
 
-    assert _UNRESOLVED == [], (
+    _, _, unresolved = job_analysis
+    assert unresolved == [], (
         "these job_queue.enqueue calls pass a job_type this guard cannot resolve, "
-        f"so the type they enqueue is unverifiable: {_UNRESOLVED}"
+        f"so the type they enqueue is unverifiable: {unresolved}"
     )
 
 
-def test_every_job_type_has_an_enqueue_site() -> None:
+def test_every_job_type_has_an_enqueue_site(job_analysis: Analysis) -> None:
     """A type nothing enqueues is a feature that never runs (the alerts defect)."""
 
-    missing = sorted(set(JOB_TYPES) - set(_SITES))
+    sites, _, _ = job_analysis
+    missing = sorted(set(JOB_TYPES) - set(sites))
     assert missing == [], (
         "these job types are registered, handled and claimable, but NOTHING in "
         f"app/ enqueues them, so they can never run: {missing}. Either add the "
@@ -453,32 +462,34 @@ def test_every_job_type_has_an_enqueue_site() -> None:
     )
 
 
-def test_every_job_types_enqueue_site_is_reachable() -> None:
+def test_every_job_types_enqueue_site_is_reachable(job_analysis: Analysis) -> None:
     """And a site nothing calls is the same defect wearing a call site.
 
     ``alerts.enqueue_evaluation`` was complete, correct and called by nobody.
     """
 
+    sites, reachable, _ = job_analysis
     unreachable = sorted(
         job_type
-        for job_type, callers in _SITES.items()
-        if job_type in JOB_TYPES and job_type not in _JUSTIFIED_INERT and not (callers & _REACHABLE)
+        for job_type, callers in sites.items()
+        if job_type in JOB_TYPES and job_type not in _JUSTIFIED_INERT and not (callers & reachable)
     )
     assert unreachable == [], (
         "every enqueue site for these job types sits in a function no route, "
         "handler or callback reaches, so the feature cannot be triggered: "
-        f"{ {job: sorted(_SITES[job]) for job in unreachable} }"
+        f"{ {job: sorted(sites[job]) for job in unreachable} }"
     )
 
 
-def test_no_enqueue_site_is_registered_for_an_unknown_job_type() -> None:
+def test_no_enqueue_site_is_registered_for_an_unknown_job_type(job_analysis: Analysis) -> None:
     """The reverse direction: a site for a type ``JOB_TYPES`` does not list."""
 
-    unknown = sorted(set(_SITES) - set(JOB_TYPES))
+    sites, _, _ = job_analysis
+    unknown = sorted(set(sites) - set(JOB_TYPES))
     assert unknown == [], f"these job types are enqueued but not registered in JOB_TYPES: {unknown}"
 
 
-def test_the_guard_can_actually_see_the_bi_importlib_seam() -> None:
+def test_the_guard_can_actually_see_the_bi_importlib_seam(job_analysis: Analysis) -> None:
     """Negative control: without the importlib resolution this guard is vacuous.
 
     ``app/jobs/*`` may not write an ``import`` statement for its service (the
@@ -488,10 +499,11 @@ def test_the_guard_can_actually_see_the_bi_importlib_seam() -> None:
     and the reachability test above is passing for the wrong reason.
     """
 
-    assert "app.bi.jobs.bi_mart_refresh:run_bi_mart_refresh" in _REACHABLE
-    alert_callers = _SITES.get("bi_alert_evaluate", set())
+    sites, reachable, _ = job_analysis
+    assert "app.bi.jobs.bi_mart_refresh:run_bi_mart_refresh" in reachable
+    alert_callers = sites.get("bi_alert_evaluate", set())
     assert alert_callers, "the alerts enqueue site disappeared"
-    assert alert_callers & _REACHABLE, (
+    assert alert_callers & reachable, (
         "the mart build's alert enqueue is no longer reachable, which is exactly "
         "the defect this file was written for"
     )
