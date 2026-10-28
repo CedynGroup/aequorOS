@@ -60,6 +60,7 @@ REGULATORY_PLANE: tuple[str, ...] = (
     "icaap/domain",
     "reporting/domain",
     "policy/domain",
+    "live/domain",
     "reporting/service",
     "services/regulatory_capital.py",
     "services/regulatory_liquidity.py",
@@ -71,8 +72,8 @@ REGULATORY_PLANE: tuple[str, ...] = (
     "services/sdi_capital.py",
     "services/sdi_capital_assurance.py",
     "services/sdi_capital_checks.py",
-    "services/fact_derivation.py",
-    "services/pipeline.py",
+    "live/service/fact_derivation.py",
+    "live/service/pipeline.py",
     "services/enterprise_stress.py",
     "services/reverse_stress.py",
     # The ICAAP workspace seals a Board-approved filing from the same runs.
@@ -155,6 +156,7 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
         + _python_files("icaap/domain")
         + _python_files("reporting/domain")
         + _python_files("policy/domain")
+        + _python_files("live/domain")
     ):
         module = _module_name(path)
         # Module-aware: `app/domain/**` carries relative imports, and a purity
@@ -190,6 +192,10 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
                     "app.policy.models",
                     "app.policy.service",
                     "app.policy.public",
+                    "app.live.api",
+                    "app.live.models",
+                    "app.live.service",
+                    "app.live.public",
                 )
             )
         }

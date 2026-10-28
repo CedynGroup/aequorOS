@@ -24,6 +24,7 @@ from app.domain.capital.engine import (
     tier1_capital,
 )
 from app.domain.irr.standardised_params import REQUIRED_CODES
+from app.live.service.fact_derivation import derive_current_facts, derive_facts
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -59,7 +60,6 @@ from app.services import (
     reverse_stress,
     sdi_rating,
 )
-from app.services.fact_derivation import derive_current_facts, derive_facts
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import (

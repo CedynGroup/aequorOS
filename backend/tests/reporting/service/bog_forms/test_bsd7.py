@@ -29,10 +29,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
+from app.live.models.regulatory import BankFinancialFact
 from app.models import Bank, BankReportingPeriod
 from app.models.canonical import CanonicalGlAccount
 from app.models.ingestion import IngestionBatch, LineageRecord
-from app.models.regulatory import BankFinancialFact
 from app.reporting.service.bog_forms.layout import load_layout
 from app.reporting.service.bog_forms.linemaps import line_maps_for
 from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver

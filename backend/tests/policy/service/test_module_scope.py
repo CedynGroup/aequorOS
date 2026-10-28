@@ -18,10 +18,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.live.service import data_activation
 from app.models import Bank
 from app.policy.service import module_scope
 from app.policy.service.institution_types import InstitutionTypeUnresolved
-from app.services import data_activation
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -153,7 +153,7 @@ def test_both_tiers_read_one_authority(db_session: Session) -> None:
     ``module_scope``; this pins that a module the official tier runs is one the
     live tier would also compute (for the modules both tiers implement).
     """
-    from app.services import pipeline  # noqa: PLC0415 - avoids an import cycle at collection
+    from app.live.service import pipeline  # noqa: PLC0415 - avoids an import cycle at collection
 
     materialize_canonical_test_book(db_session)
     bank = _as_class(db_session, "savings_and_loans")

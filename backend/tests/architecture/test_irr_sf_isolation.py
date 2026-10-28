@@ -114,7 +114,7 @@ def test_the_live_plane_never_reaches_the_framework_service() -> None:
 
 
 def test_the_framework_is_not_registered_as_a_live_module() -> None:
-    from app.models.live import LIVE_MODULES  # noqa: PLC0415 - narrow, local assertion
+    from app.live.models.live import LIVE_MODULES  # noqa: PLC0415 - narrow, local assertion
     from app.services.regulatory_irr_sf import MODULE_IRR_SF  # noqa: PLC0415
 
     assert MODULE_IRR_SF not in LIVE_MODULES

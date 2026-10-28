@@ -8,8 +8,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.identity.public import BankRead, BankReportingPeriodRead
+from app.live.public import LiveModuleView
 from app.schemas.common import FigureRefusalRead
-from app.schemas.live import LiveModuleView
 
 type RegulatoryModule = Literal[
     "liquidity",

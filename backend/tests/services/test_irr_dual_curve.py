@@ -39,6 +39,7 @@ from app.domain.irr.engine import (
     compute_duration,
     compute_eve,
 )
+from app.live.service.fact_derivation import derive_facts
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -51,7 +52,6 @@ from app.models import (
 )
 from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.services import market_data_sources, regulatory_irr
-from app.services.fact_derivation import derive_facts
 from app.services.market_data import get_discount_curve
 from app.services.regulatory_irr import discount_curve_midpoints_pct
 from tests.fixtures.canonical_bank_fixture import (

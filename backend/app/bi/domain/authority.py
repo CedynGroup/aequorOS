@@ -33,7 +33,7 @@ from app.domain.authority.registry import AdvisoryDesignation as RegistryDesigna
 #: BI designations; Basel references map to internal advisory analysis.
 AdvisoryDesignation = Literal["filed", "supervisory_monitoring", "advisory_only", "unregistered"]
 
-#: The live-engine module vocabulary (``app.models.live.LIVE_MODULES``), restated
+#: The live-engine module vocabulary (``app.live.models.live.LIVE_MODULES``), restated
 #: here because the domain may not import the model. Parity is pinned by
 #: ``tests/bi/service/test_catalogue_parity.py``.
 ENGINE_MODULES: tuple[str, ...] = (

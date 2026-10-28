@@ -28,6 +28,7 @@ from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.domain.authority.outcomes import OutcomeState, outcome
 from app.identity.public import Bank
+from app.live.public import live_refresh_triggers
 from app.policy.public import (
     ParamLiquidityHaircut,
     ParamLiquidityThreshold,
@@ -46,7 +47,6 @@ from app.schemas.liquidity_thresholds import (
     LiquidityThresholdRegisterRead,
     LiquidityThresholdUpdate,
 )
-from app.services import live_refresh_triggers
 from app.services.audit import record_event
 
 # LMTD Table 1 published minimums for BANKS.

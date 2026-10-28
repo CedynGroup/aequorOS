@@ -68,7 +68,7 @@ from app.data_engine.public import (
 )
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState, outcome
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.domain.positions.fx import fx_position_refusal, spot_or_none
+from app.live.domain.positions.fx import fx_position_refusal, spot_or_none
 from app.live.public import (
     BankFinancialFact,
     RegulatoryRun,

@@ -60,7 +60,6 @@ from app.domain.liquidity.engine import (
     LiquidityParams,
     consumed_hqla_levels,
 )
-from app.domain.positions.credit import capital_credit_class, specific_deductions
 from app.domain.stress.appendix_ii import Pillar2Requirement, build_appendix_ii, thousands
 from app.domain.stress.concentration import (
     ConcentrationExposure,
@@ -107,13 +106,9 @@ from app.domain.stress.translation import (
 )
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
-from app.models import (
-    BankFinancialFact,
-    BankReportingPeriod,
-    FinancialFactRow,
-    ManagementActionPlan,
-    RegulatoryRun,
-)
+from app.live.domain.positions.credit import capital_credit_class, specific_deductions
+from app.live.public import BankFinancialFact, BankReportingPeriod, FinancialFactRow, RegulatoryRun
+from app.models import ManagementActionPlan
 from app.policy.public import (
     ParamCapitalThreshold,
     ParamCrmHaircut,

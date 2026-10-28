@@ -26,8 +26,9 @@ from app.core.key_management.presentation import (
 )
 from app.db.base import utc_now
 from app.domain.capital.ecl import ALL_SEGMENTS, normalize_segment
-from app.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
 from app.identity.public import Bank
+from app.live.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
+from app.live.public import live_refresh_triggers
 from app.policy.public import (
     ParamConcentrationLimit,
     ParamCreditThreshold,
@@ -51,7 +52,6 @@ from app.schemas.regulatory_credit import (
     CreditThresholdRegisterRead,
     CreditThresholdUpdate,
 )
-from app.services import live_refresh_triggers
 from app.services.audit import record_event
 from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 

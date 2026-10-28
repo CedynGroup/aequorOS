@@ -56,17 +56,19 @@ from app.domain.irr import standardised as sf
 from app.domain.irr import standardised_cash_flows as sfcf
 from app.domain.irr import standardised_params as sfp
 from app.identity.public import Bank
-from app.models import (
+from app.live.public import (
     BankReportingPeriod,
+    RegulatoryLineItem,
+    RegulatoryMetricResult,
+    RegulatoryRun,
+    RegulatoryValidation,
+)
+from app.models import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
     CanonicalReferenceRow,
-    RegulatoryLineItem,
-    RegulatoryMetricResult,
-    RegulatoryRun,
-    RegulatoryValidation,
 )
 from app.policy.public import jurisdictions, regulatory_parameters
 from app.reporting.service import filing_reconciliation

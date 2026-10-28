@@ -15,7 +15,7 @@ from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
 from app.domain.authority.results import Computed, FigureResult
 from app.domain.liquidity.engine import LcrResult, NsfrResult
-from app.domain.reporting import period_windows
+from app.live.domain.reporting import period_windows
 from app.models import (
     Bank,
     BankReportingPeriod,

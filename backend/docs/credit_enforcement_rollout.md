@@ -106,7 +106,7 @@ the intended one.
 The gate is the same one the other engines use: `scoped_authorization.evaluate_bank_permission`
 per engine with `Permission.VIEW`, `Sensitivity.AGGREGATED`, evaluated against
 the resolved bank. Each surface names its gate list in one tuple
-(`_GATED_ENGINE_MODULES` in `app/services/live_view.py`, `alerts.py`,
+(`_GATED_ENGINE_MODULES` in `app/live/service/live_view.py`, `alerts.py`,
 `window_analytics.py`); `tests/architecture/test_credit_module.py` pins that
 `("credit", Module.CREDIT)` is in every one of them.
 

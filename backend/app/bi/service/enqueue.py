@@ -57,8 +57,8 @@ from app.bi.service.versions import BUILDER_VERSION
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.identity.public import Bank
+from app.live.public import CurrentFinancialFact
 from app.models.job import Job
-from app.models.live import CurrentFinancialFact
 from app.services import job_queue
 
 #: The job type this seam enqueues. Literal here (not imported from the

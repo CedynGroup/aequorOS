@@ -56,6 +56,7 @@ from app.core.ids import new_uuid7
 from app.core.key_management import registry
 from app.db.base import utc_now
 from app.identity.public import Bank
+from app.live.service import live_refresh_triggers
 from app.models import (
     CanonicalCounterparty,
     CanonicalGlAccount,
@@ -68,7 +69,7 @@ from app.models import (
 )
 from app.models.canonical import CanonicalMetadataMixin, is_current_generation
 from app.models.canonical_withdrawal import WITHDRAWABLE_ENTITIES
-from app.services import live_refresh_triggers, system_of_record
+from app.services import system_of_record
 from app.services.audit import record_event
 from app.services.withdrawal_impact import invalidate_register
 

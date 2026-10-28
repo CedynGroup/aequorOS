@@ -98,7 +98,7 @@ LOAN_EVENT_ATTRIBUTION_BASES: tuple[str, ...] = (
 ENGINE_METRIC_TIERS: tuple[str, ...] = ("live", "official")
 
 #: ``bi_fact_gl_monthly.balance_basis`` — BSD7's own vocabulary, carried
-#: through ``app/domain/gl/pl_mapping.py`` (D-021).
+#: through ``app/live/domain/gl/pl_mapping.py`` (D-021).
 GL_BALANCE_BASES: tuple[str, ...] = ("ytd", "period")
 
 #: ``bi_fact_target`` vocabularies, mirroring
@@ -485,7 +485,7 @@ class BiFactGlMonthly(_BuilderStamp, Base):
     """Monthly GL balances and movements mapped to neutral P&L lines.
 
     Movement is YTD minus the prior month's YTD through BSD7's own logic in
-    ``app/domain/gl/pl_mapping.py`` (D-021); a missing prior month gives NULL
+    ``app/live/domain/gl/pl_mapping.py`` (D-021); a missing prior month gives NULL
     and ``missing_prior``. ``currency`` is ``''`` for the base currency so it
     can sit in the primary key.
     """
