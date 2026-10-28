@@ -10,17 +10,20 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from inspect import unwrap
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 from uuid import uuid4
 
 import jwt
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from alembic.script import ScriptDirectory
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 from sqlalchemy import select, text
-from sqlalchemy.engine import Engine, make_url
+from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -31,8 +34,7 @@ from app.bi.service.versions import BUILDER_VERSION
 from app.core import audit_integrity, security
 from app.core.config import get_operator_settings, get_settings
 from app.core.key_management.local import LocalKeyProvider
-from app.core.key_management.models import BankEncryptionKey
-from app.core.key_management.registry import DatabaseEnvelopeStore
+from app.core.key_management.registry import DatabaseEnvelopeStore, register
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyUnavailableError
 from app.db import session as database
@@ -163,6 +165,138 @@ def test_claim_reclaim_and_seed_without_unscoped_tenant_reads(
         assert {job.organization_id for job in ticks} == {ORG_1, ORG_2}
 
 
+@pytest.mark.parametrize("exhausted", [False, True])
+def test_native_reaper_preserves_large_reencryption_claim_window(
+    role_engines: dict[str, Engine],
+    administrator: Engine,
+    role_banks: dict[str, str],
+    exhausted: bool,
+) -> None:
+    with Session(administrator) as admin:
+        job = job_queue.enqueue(
+            admin,
+            ORG_1,
+            "bank_reencrypt",
+            bank_id=role_banks[ORG_1],
+            payload={"reencryption_bytes": 500 * 1024 * 1024},
+        )
+        job.attempts = job.max_attempts if exhausted else 0
+        job_id = job.id
+        admin.commit()
+    with Session(role_engines["aqs_worker"]) as session:
+        claimed = job_queue.claim_next(session, NOW, ("bank_reencrypt",))
+        assert claimed is not None and claimed.id == job_id
+        assert session.scalars(select(Job)).all() == []
+        for seconds in (901, 4899, 4900):
+            assert (
+                job_queue.reclaim_stale(
+                    session,
+                    NOW + timedelta(seconds=seconds),
+                    stale_after=timedelta(seconds=900),
+                    job_types=("bank_reencrypt",),
+                )
+                == 0
+            )
+        assert (
+            job_queue.reclaim_stale(
+                session,
+                NOW + timedelta(seconds=4901),
+                stale_after=timedelta(seconds=900),
+                job_types=("bank_reencrypt",),
+            )
+            == 1
+        )
+    with Session(administrator) as admin:
+        persisted = admin.get(Job, job_id)
+        assert persisted is not None
+        assert persisted.status == ("failed" if exhausted else "queued")
+        assert persisted.attempts == (persisted.max_attempts if exhausted else 1)
+        assert (persisted.completed_at is not None) == exhausted
+        assert (persisted.started_at is not None) == exhausted
+
+
+@pytest.mark.parametrize("size", [None, 0, -1, True, "524288000", 524288000.0])
+def test_native_reaper_uses_default_window_without_positive_integer_size(
+    role_engines: dict[str, Engine],
+    administrator: Engine,
+    role_banks: dict[str, str],
+    size: object,
+) -> None:
+    with Session(administrator) as admin:
+        job = job_queue.enqueue(
+            admin,
+            ORG_1,
+            "bank_reencrypt",
+            bank_id=role_banks[ORG_1],
+            payload={"reencryption_bytes": size},
+        )
+        job_id = job.id
+        admin.commit()
+    with Session(role_engines["aqs_worker"]) as session:
+        claimed = job_queue.claim_next(session, NOW, ("bank_reencrypt",))
+        assert claimed is not None and claimed.id == job_id
+        assert (
+            job_queue.reclaim_stale(
+                session,
+                NOW + timedelta(seconds=900),
+                stale_after=timedelta(seconds=900),
+                job_types=("bank_reencrypt",),
+            )
+            == 0
+        )
+        assert (
+            job_queue.reclaim_stale(
+                session,
+                NOW + timedelta(seconds=900, microseconds=1),
+                stale_after=timedelta(seconds=900),
+                job_types=("bank_reencrypt",),
+            )
+            == 1
+        )
+
+
+class ReaperMigration(Protocol):
+    def upgrade(self) -> None: ...
+    def downgrade(self) -> None: ...
+
+
+def reaper_authority(connection: Connection) -> tuple[object, ...]:
+    return cast(
+        tuple[object, ...],
+        tuple(
+            connection.execute(
+                text(
+                    "SELECT proowner, prosecdef, proacl::text, proconfig FROM pg_proc "
+                    "WHERE oid=to_regprocedure('aqs_worker_reclaim_jobs(timestamptz,jsonb)')"
+                )
+            ).one()
+        ),
+    )
+
+
+def test_reaper_revision_preserves_function_authority_and_single_head(
+    administrator: Engine,
+    role_engines: dict[str, Engine],
+) -> None:
+    scripts = ScriptDirectory.from_config(migrations.alembic_config_for_app())
+    assert len(scripts.get_heads()) == 1
+    revision = scripts.get_revision("202610270002")
+    assert revision is not None and revision.down_revision == "202610260001"
+    migration = cast(ReaperMigration, cast(object, revision.module))
+    login = role_engines["aqs_worker"].url.username
+    assert login is not None
+    with administrator.begin() as connection:
+        quoted = connection.dialect.identifier_preparer.quote_identifier(login)
+        signature = "aqs_worker_reclaim_jobs(timestamptz,jsonb)"
+        _ = connection.execute(text(f"GRANT EXECUTE ON FUNCTION {signature} TO {quoted}"))
+        before = reaper_authority(connection)
+        for change in (migration.downgrade, migration.upgrade, migration.upgrade):
+            with Operations.context(MigrationContext.configure(connection)):
+                change()
+            assert reaper_authority(connection) == before
+        _ = connection.execute(text(f"REVOKE EXECUTE ON FUNCTION {signature} FROM {quoted}"))
+
+
 def test_context_survives_transactions_and_clears_on_pool_reuse(
     role_engines: dict[str, Engine], role_banks: dict[str, str]
 ) -> None:
@@ -244,46 +378,54 @@ def test_worker_key_resolution_is_job_scoped_and_storage_uses_worker_credentials
     monkeypatch: pytest.MonkeyPatch,
     request: pytest.FixtureRequest,
 ) -> None:
-    with Session(administrator) as admin:
-        for org in (ORG_1, ORG_2):
-            admin.add(
-                BankEncryptionKey(
+    provider = LocalKeyProvider()
+    try:
+        with Session(administrator) as admin:
+            for org in (ORG_1, ORG_2):
+                key = KeyReference("aws_kms", f"synthetic-{org}", "eu-west-1", "123456789012")
+                provider.add_key(key)
+                register(
+                    admin,
                     bank_id=role_banks[org],
                     organization_id=org,
                     storage_slug=f"worker-{org}",
-                    provider="aws_kms",
-                    key_id=f"synthetic-{org}",
-                    region="eu-west-1",
-                    owner_account="123456789012",
-                    status="active",
+                    key=key,
+                    providers=lambda _name: provider,
                 )
-            )
-        admin.commit()
-    monkeypatch.setattr(
-        "app.db.session.get_worker_sessionmaker",
-        lambda: managed_session_factory(request, role_engines["aqs_worker"]),
-    )
-    with worker_tenant_context(ORG_1, role_banks[ORG_1]), get_storage_session() as session:
-        own = DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_1}")
-        assert own is not None and own.bank_id == role_banks[ORG_1]
-        assert DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_2}") is None
-        with pytest.raises(DBAPIError):
-            session.scalars(select(BankEncryptionKey)).all()
-    with Session(role_engines["aqs_worker"]) as session:
-        assert DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_1}") is None
+            admin.commit()
+        monkeypatch.setattr(
+            "app.db.session.get_worker_sessionmaker",
+            lambda: managed_session_factory(request, role_engines["aqs_worker"]),
+        )
+        with worker_tenant_context(ORG_1, role_banks[ORG_1]), get_storage_session() as session:
+            own = DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_1}")
+            assert own is not None and own.bank_id == role_banks[ORG_1]
+            assert DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_2}") is None
+        with Session(role_engines["aqs_worker"]) as session:
+            assert DatabaseEnvelopeStore.resolve_bank(session, f"worker-{ORG_1}") is None
 
-    provider = LocalKeyProvider()
-    provider.add_key(KeyReference("aws_kms", f"synthetic-{ORG_1}", "eu-west-1", "123456789012"))
-    store = DatabaseEnvelopeStore(get_storage_session, lambda _name: provider)
-    context = {"purpose": "worker-storage-fixture"}
-    with worker_tenant_context(ORG_1, role_banks[ORG_1]):
-        prepared = store.prepare(f"worker-{ORG_1}", context)
-        reopened = store.open(f"worker-{ORG_1}", prepared.envelope_id, context)
-        assert reopened.plaintext == prepared.plaintext
-        with pytest.raises(KeyUnavailableError):
-            store.prepare(f"worker-{ORG_2}", context)
-    with worker_tenant_context(ORG_2, role_banks[ORG_2]), pytest.raises(KeyUnavailableError):
-        store.open(f"worker-{ORG_1}", prepared.envelope_id, context)
+        store = DatabaseEnvelopeStore(get_storage_session, lambda _name: provider)
+        context = {"purpose": "worker-storage-fixture"}
+        with worker_tenant_context(ORG_1, role_banks[ORG_1]):
+            prepared = store.prepare(f"worker-{ORG_1}", context)
+            reopened = store.open(f"worker-{ORG_1}", prepared.envelope_id, context)
+            assert reopened.plaintext == prepared.plaintext
+            with pytest.raises(KeyUnavailableError):
+                store.prepare(f"worker-{ORG_2}", context)
+        with worker_tenant_context(ORG_2, role_banks[ORG_2]), pytest.raises(KeyUnavailableError):
+            store.open(f"worker-{ORG_1}", prepared.envelope_id, context)
+    finally:
+        with administrator.begin() as connection:
+            for statement in (
+                "UPDATE bank_encryption_keys "
+                "SET current_version_id = NULL, index_version_id = NULL",
+                "DELETE FROM object_key_envelopes",
+                "DELETE FROM bank_encryption_keys",
+            ):
+                connection.execute(
+                    text(statement + " WHERE bank_id = ANY(:banks)"),
+                    {"banks": list(role_banks.values())},
+                )
 
 
 def test_optional_encryption_refuses_foreign_and_same_org_other_bank_storage(

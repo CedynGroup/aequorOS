@@ -42,9 +42,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.attestation.models import AttestationSignature
-from app.attestation.service import digests, layouts
+from app.attestation.service import digests, layouts, register_state
 from app.attestation.service.policy import SigningPolicy, resolve_policy
 from app.core.config import get_settings
+from app.core.key_management.presentation import require_disclosed
 from app.reporting.models.packages import RegulatoryPackage
 from app.services.audit import record_event
 
@@ -102,6 +103,7 @@ def compute_binding(package: RegulatoryPackage) -> BindingInputs:
     Recomputed (never read from a cache) at certification, at every later
     signature, and at verification — that recomputation IS the tamper check.
     """
+    require_disclosed(package.snapshot)
     source_runs = list(package.source_runs or [])
     binding_class: digests.BindingClass = "engine_run" if source_runs else "master_data"
 
@@ -126,7 +128,7 @@ def compute_binding(package: RegulatoryPackage) -> BindingInputs:
         content_digest_value=content,
         binding_class=binding_class,
         source_runs=source_runs if binding_class == "engine_run" else None,
-        register_state_digest_value=register_state if binding_class == "master_data" else None,
+        register_state_digest_value=register_state,
     )
     return BindingInputs(
         binding_class=binding_class,
@@ -229,6 +231,21 @@ def verify_chain(db: Session, ctx: TenantContext) -> tuple[bool, str | None]:
 
 
 # --- guards -----------------------------------------------------------------
+
+
+def ensure_register_current(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> None:
+    """Refuse forward review or first submission of a stale register commitment."""
+    if package.status == "submitted":
+        return
+    current = digests.register_state_digest(
+        register_state.project_register_state(db, ctx, package.bank_id)
+    )
+    if current != package.register_state_digest:
+        raise AttestationConflict(
+            "register_state_changed",
+            "The institution register or its encryption key version changed. "
+            "Regenerate this return before certifying, approving or filing it.",
+        )
 
 
 def ensure_certifiable(
@@ -502,6 +519,7 @@ def ensure_submittable(db: Session, ctx: TenantContext, package: RegulatoryPacka
     )
     from app.reporting.service import family_hooks  # noqa: PLC0415
 
+    ensure_register_current(db, ctx, package)
     policy = package_policy(db, ctx, package)
     if policy.require_signature:
         ensure_signing_configured()

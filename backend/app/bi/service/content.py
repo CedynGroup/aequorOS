@@ -67,6 +67,7 @@ from app.bi.schemas.query import BiQuery as BiQuerySchema
 from app.bi.service.authorization import authorize_query, query_members, scope_pairs
 from app.bi.service.compiler import expand_calculated_measures
 from app.bi.service.errors import UnknownMember
+from app.bi.service.identity_policy import IDENTITY_REASON, query_identity_members, refused_identity
 from app.core.authorization import (
     BindingStatus,
     ConditionCheck,
@@ -402,6 +403,15 @@ class ViewerAuthority:
             bank_id=self.bank.id,
         )
         members = query_members(self.cat, expanded)
+        refused = refused_identity(
+            self.db,
+            self.ctx.organization_id,
+            self.bank.id,
+            query_identity_members(self.cat, expanded),
+        )
+        if refused:
+            self._reason = IDENTITY_REASON
+            return refused
         pairs = scope_pairs(members)
         unknown = [pair for pair in pairs if pair not in self._verdicts]
         if unknown:
@@ -485,6 +495,7 @@ class ResolvedCanvas:
     denied_members: tuple[str, ...]
     #: Member ids actually served, for the same log row.
     served_members: tuple[str, ...]
+    refusal_reason: str = ""
 
     @property
     def readable_widgets(self) -> int:
@@ -537,7 +548,10 @@ def resolve_widgets(
         )
         resolved.append(ResolvedWidget(widget=widget, query=query, granted=True))
     return ResolvedCanvas(
-        widgets=tuple(resolved), denied_members=tuple(denied), served_members=tuple(served)
+        widgets=tuple(resolved),
+        denied_members=tuple(denied),
+        served_members=tuple(served),
+        refusal_reason=authority.reason,
     )
 
 

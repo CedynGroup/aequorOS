@@ -390,8 +390,9 @@ before deploying this migration in production or staging:
 
 `202610100091` forbids financial-content updates on every generated package:
 identity, version, source-run references, input snapshot and its hash, and the
-master-data `register_state_digest` used by LRT attestation and evidence exports. Application
-roles lose table UPDATE and receive only the lifecycle-column grants (including
+`register_state_digest` used by attestation and evidence exports. Its scope follows
+[the attestation digest contract](../../docs/attestation_esignature.md#31-what-gets-signed--two-artefacts-per-signature).
+Application roles lose table UPDATE and receive only the lifecycle-column grants (including
 `id` for PostgreSQL foreign-key key-share locking; changing it is trigger-blocked).
 Application roles also lose DELETE/TRUNCATE on packages, regulatory runs and
 attestation signatures, including unsigned packages and unfinished runs.

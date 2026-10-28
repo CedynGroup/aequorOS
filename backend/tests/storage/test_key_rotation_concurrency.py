@@ -1,174 +1,264 @@
 from __future__ import annotations
 
-import io
-from concurrent.futures import ThreadPoolExecutor
-from queue import Queue
-from threading import Event
-from time import monotonic, sleep
-from typing import Protocol, cast
+from collections.abc import Iterable, Iterator
+from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
+from threading import Event, Lock
+from typing import cast
 
 import pytest
 from sqlalchemy import Connection, Engine, event, select, text
-from sqlalchemy.orm import Session, SessionTransaction
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session, SessionTransaction, UOWTransaction
 
 from app.core.key_management import registry
-from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
-from app.core.key_management.types import KeyReference, KeyStatus
-from app.storage.client import StorageLocation
-from tests.storage.contract import metadata_for
+from app.core.key_management.models import ObjectKeyEnvelope
+from app.core.key_management.types import KeyUnavailableError
 from tests.storage.test_bank_encryption import KEY, NEXT_KEY, SLUG, BankStorage, bank_storage
 from tests.support.helpers import ORG_1
+from tests.support.key_concurrency import assert_blocked, backend_pid
 
 __all__ = ["bank_storage"]
 pytestmark = pytest.mark.committing_db
 
 
-class _Body(Protocol):
-    def read(self) -> bytes: ...
+def test_rotation_drains_an_active_reader(bank_storage: BankStorage, db_session: Session) -> None:
+    database = db_session.get_bind()
+    if not isinstance(database, Engine) or database.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL independent connections are required.")
+    store = registry.DatabaseEnvelopeStore(
+        lambda: Session(database), lambda _name: bank_storage.provider
+    )
+    context = {"purpose": "synthetic-reader"}
+    original = store.prepare(SLUG, context)
+    reader = store.for_session(db_session)
+    assert reader.open(SLUG, original.envelope_id, context) == original
+    db_session.flush()
+    blocker = backend_pid(db_session)
+    waiter: Future[int] = Future()
+
+    def rotate() -> None:
+        with Session(database) as writer, writer.begin():
+            _ = writer.execute(text("SET LOCAL lock_timeout='1s'"))
+            waiter.set_result(backend_pid(writer))
+            row = registry.scoped_key(writer, bank_id="BK-SAMP0001", organization_id=ORG_1)
+            registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        rotating = pool.submit(rotate)
+        try:
+            assert_blocked(database, blocker, waiter.result(timeout=5), rotating)
+            assert reader.prepare(SLUG, context).envelope_id == original.envelope_id
+        finally:
+            db_session.commit()
+        rotating.result(timeout=5)
+    assert reader.prepare(SLUG, context).envelope_id != original.envelope_id
+    assert store.open(SLUG, original.envelope_id, context) == original
 
 
-def _wait_for_row_lock(database: Engine, pid: int) -> None:
-    deadline = monotonic() + 10
-    while monotonic() < deadline:
-        with Session(database) as observer:
-            blocked = cast(
-                object,
-                observer.scalar(
-                    text("SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = :pid"),
-                    {"pid": pid},
-                ),
-            )
-        if blocked is True:
-            return
-        sleep(0.01)
-    pytest.fail("The operation did not wait for the bank-key row lock.")
-
-
-def _observed_session(database: Engine, waiting_pids: Queue[int]) -> Session:
-    db = Session(database)
-
-    def record_pid(
-        _session: Session, _transaction: SessionTransaction, connection: Connection
-    ) -> None:
-        pid = cast(object, connection.scalar(text("SELECT pg_backend_pid()")))
-        assert isinstance(pid, int)
-        waiting_pids.put(pid)
-
-    event.listen(db, "after_begin", record_pid)
-    return db
-
-
-def test_rotation_resumes_waiting_readers_and_new_writers_without_reencrypting_files(
-    bank_storage: BankStorage,
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
+def test_readers_wait_for_uncommitted_rotation(
+    bank_storage: BankStorage, db_session: Session
 ) -> None:
     database = db_session.get_bind()
     if not isinstance(database, Engine) or database.dialect.name != "postgresql":
-        pytest.skip("PostgreSQL row locks and independent connections are required.")
-    location = StorageLocation(SLUG, "outputs", "synthetic/rotation.pdf")
-    content = b"synthetic uploaded file"
-    descriptor = bank_storage.storage.write(
-        location, io.BytesIO(content), metadata_for(SLUG, "outputs", content)
+        pytest.skip("PostgreSQL independent connections are required.")
+    store = registry.DatabaseEnvelopeStore(
+        lambda: Session(database), lambda _name: bank_storage.provider
     )
-    before = bank_storage.s3.get_object(
-        Bucket=location.bucket_name("dev"), Key=location.object_path
-    )
-    ciphertext = cast(_Body, before["Body"]).read()
-    provider = bank_storage.provider
-    store = registry.DatabaseEnvelopeStore(lambda: Session(database), lambda _name: provider)
-    context = {"purpose": "synthetic-concurrent-object"}
+    context = {"purpose": "synthetic-rotation"}
     original = store.prepare(SLUG, context)
     entered, release = Event(), Event()
-    waiting_pids: Queue[int] = Queue()
-    rotate = provider.rotate
+    blocker: Future[int] = Future()
+    waiter: Future[int] = Future()
 
-    def paused_rotation(
-        source: KeyReference,
-        destination: KeyReference,
-        wrapped: bytes,
-        context: dict[str, str],
-    ) -> bytes:
-        replacement = rotate(source, destination, wrapped, context)
-        entered.set()
-        if not release.wait(15):
-            raise RuntimeError("The test did not release the rotation.")
-        return replacement
+    def rotate() -> None:
+        with Session(database) as writer, writer.begin():
+            row = registry.scoped_key(writer, bank_id="BK-SAMP0001", organization_id=ORG_1)
+            registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
+            blocker.set_result(backend_pid(writer))
+            entered.set()
+            assert release.wait(10)
 
-    def rotation() -> int:
-        with Session(database) as db, db.begin():
-            _ = db.execute(
-                text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG_1}
-            )
-            row = registry.scoped_key(db, bank_id="BK-SAMP0001", organization_id=ORG_1)
-            return registry.rotate(db, row, NEXT_KEY, lambda _name: provider)
+    def read() -> None:
+        with Session(database) as peer:
+            waiter.set_result(backend_pid(peer))
+            assert store.for_session(peer).open(SLUG, original.envelope_id, context) == original
+            assert store.for_session(peer).prepare(SLUG, context).key_id == NEXT_KEY.key_id
 
-    monkeypatch.setattr(provider, "rotate", paused_rotation)
-    waiting = registry.DatabaseEnvelopeStore(
-        lambda: _observed_session(database, waiting_pids), lambda _name: provider
-    )
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        rotating = pool.submit(rotation)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        rotating = pool.submit(rotate)
+        assert entered.wait(5)
+        reading = pool.submit(read)
         try:
-            assert entered.wait(10)
-            reading = pool.submit(waiting.open, SLUG, original.envelope_id, context)
-            writing = pool.submit(waiting.prepare, SLUG, {"purpose": "synthetic-new-object"})
-            for _ in range(2):
-                _wait_for_row_lock(database, waiting_pids.get(timeout=10))
-            assert not reading.done() and not writing.done()
+            assert_blocked(database, blocker.result(timeout=5), waiter.result(timeout=5), reading)
         finally:
             release.set()
-        assert rotating.result(timeout=10) == 2
-        result = reading.result(timeout=10)
-        assert result.plaintext == original.plaintext and result.key_id == NEXT_KEY.key_id
-        assert writing.result(timeout=10).key_id == NEXT_KEY.key_id
-    provider.set_status(KEY, KeyStatus.DISABLED)
-    assert store.open(SLUG, original.envelope_id, context).plaintext == original.plaintext
-    after = bank_storage.s3.get_object(Bucket=location.bucket_name("dev"), Key=location.object_path)
-    assert cast(_Body, after["Body"]).read() == ciphertext
-    assert after["VersionId"] == descriptor.version_id
-    _, downloaded = bank_storage.storage.read(location, descriptor.version_id)
-    with downloaded:
-        assert downloaded.read() == content
+        rotating.result(timeout=5)
+        reading.result(timeout=5)
+    current = store.prepare(SLUG, context)
+    assert current.envelope_id != original.envelope_id and current.key_id == NEXT_KEY.key_id
+    with Session(database) as db:
+        row = registry.scoped_key(db, bank_id="BK-SAMP0001", organization_id=ORG_1)
+        with pytest.raises(
+            KeyUnavailableError, match="indefinite|retained encryption versions|retention expires"
+        ):
+            registry.authorize_retirement(db, row, KEY)
 
 
-def test_read_refreshes_preloaded_reference_and_wrapper_after_rotation(
-    bank_storage: BankStorage,
-    db_session: Session,
+@pytest.fixture(autouse=True)
+def completed_usage(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Iterator[Lock]:
+    recording = Lock()
+    monkeypatch.setattr(registry, "_usage_recording", recording)
+    yield recording
+    # End caller work before restoring the lock used by asynchronous usage writers.
+    db_session.rollback()
+    assert recording.acquire(timeout=5)
+    recording.release()
+
+
+def test_usage_recording_cannot_delay_same_bank_operations_or_rotation(
+    bank_storage: BankStorage, db_session: Session, completed_usage: Lock
 ) -> None:
     database = db_session.get_bind()
     if not isinstance(database, Engine) or database.dialect.name != "postgresql":
-        pytest.skip("PostgreSQL committed snapshots and independent connections are required.")
-    provider = bank_storage.provider
-    store = registry.DatabaseEnvelopeStore(lambda: Session(database), lambda _name: provider)
-    context = {"purpose": "synthetic-stale-reader"}
-    original = store.prepare(SLUG, context)
-    stale = Session(database, expire_on_commit=False)
+        pytest.skip("PostgreSQL independent connections are required.")
+    store = registry.DatabaseEnvelopeStore(
+        lambda: Session(database), lambda _name: bank_storage.provider
+    )
+    entered, release = Event(), Event()
+
+    def pause_usage(peer: Session, _flush: UOWTransaction) -> None:
+        dirty = cast(Iterable[object], peer.dirty)
+        if any(isinstance(row, ObjectKeyEnvelope) for row in dirty):
+            entered.set()
+            assert release.wait(10)
+
+    event.listen(Session, "after_flush", pause_usage)
     try:
-        _ = stale.execute(
-            text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG_1}
-        )
-        old_reference = stale.scalar(
-            select(BankEncryptionKey).where(BankEncryptionKey.bank_id == "BK-SAMP0001")
-        )
-        old_envelope = stale.scalar(
-            select(ObjectKeyEnvelope).where(ObjectKeyEnvelope.id == original.envelope_id)
-        )
-        assert old_reference is not None and old_envelope is not None
-        wrapped = old_envelope.wrapped_key
-        stale.commit()
-        with Session(database) as db, db.begin():
-            _ = db.execute(
-                text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG_1}
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(store.prepare, SLUG, {"purpose": "first"}).result(timeout=5)
+            assert entered.wait(5)
+            second = pool.submit(store.prepare, SLUG, {"purpose": "second"}).result(timeout=5)
+            assert second.envelope_id == first.envelope_id
+            assert (
+                pool.submit(store.open, SLUG, first.envelope_id, {"purpose": "first"}).result(
+                    timeout=5
+                )
+                == first
             )
-            row = registry.scoped_key(db, bank_id="BK-SAMP0001", organization_id=ORG_1)
-            assert registry.rotate(db, row, NEXT_KEY, lambda _name: provider) == 1
-        assert old_reference.key_id == KEY.key_id and old_envelope.wrapped_key == wrapped
-        provider.set_status(KEY, KeyStatus.DISABLED)
-        reading = registry.DatabaseEnvelopeStore(lambda: stale, lambda _name: provider)
-        result = reading.open(SLUG, original.envelope_id, context)
-        assert result.key_id == NEXT_KEY.key_id and result.plaintext == original.plaintext
-        assert old_reference.key_id == NEXT_KEY.key_id
-        assert old_envelope.wrapped_key != wrapped
+
+            def rotate() -> None:
+                with Session(database) as writer, writer.begin():
+                    _ = writer.execute(text("SET LOCAL lock_timeout='100ms'"))
+                    row = registry.scoped_key(writer, bank_id="BK-SAMP0001", organization_id=ORG_1)
+                    registry.rotate(writer, row, NEXT_KEY, lambda _name: bank_storage.provider)
+
+            pool.submit(rotate).result(timeout=5)
     finally:
-        stale.close()
+        release.set()
+        assert completed_usage.acquire(timeout=5)
+        completed_usage.release()
+        event.remove(Session, "after_flush", pause_usage)
+    with Session(database) as peer:
+        assert (
+            peer.scalar(
+                select(ObjectKeyEnvelope.last_successful_use_at).where(
+                    ObjectKeyEnvelope.id == first.envelope_id
+                )
+            )
+            is not None
+        )
+    assert store.prepare(SLUG, {"purpose": "rotated"}).key_id == NEXT_KEY.key_id
+
+
+def test_usage_is_recorded_after_completion_and_throttled(
+    bank_storage: BankStorage, db_session: Session, completed_usage: Lock
+) -> None:
+    database = db_session.get_bind()
+    if not isinstance(database, Engine):
+        pytest.skip("Independent connections are required.")
+    context = {"purpose": "usage-completion"}
+    store = registry.DatabaseEnvelopeStore(
+        lambda: Session(database), lambda _name: bank_storage.provider
+    )
+    with Session(database) as caller:
+        bound = store.for_session(caller)
+        key = bound.prepare(SLUG, context)
+        caller.flush()
+        with Session(database) as peer:
+            assert (
+                peer.scalar(
+                    select(ObjectKeyEnvelope.last_successful_use_at).where(
+                        ObjectKeyEnvelope.id == key.envelope_id
+                    )
+                )
+                is None
+            )
+        caller.commit()
+    assert completed_usage.acquire(timeout=5)
+    completed_usage.release()
+    with Session(database) as peer:
+        recorded = peer.scalar(
+            select(ObjectKeyEnvelope.last_successful_use_at).where(
+                ObjectKeyEnvelope.id == key.envelope_id
+            )
+        )
+        assert recorded is not None
+        bank = registry.bank_key(peer, ORG_1, "BK-SAMP0001")
+        assert bank is not None
+        assert registry.last_successful_use(peer, bank) == recorded
+    assert store.open(SLUG, key.envelope_id, context) == key
+    assert completed_usage.acquire(timeout=5)
+    completed_usage.release()
+    with Session(database) as peer, peer.begin():
+        envelope = peer.get(ObjectKeyEnvelope, key.envelope_id)
+        assert envelope is not None
+        assert envelope.last_successful_use_at == recorded
+        envelope.last_successful_use_at = datetime.now(UTC) - timedelta(minutes=6)
+    assert store.open(SLUG, key.envelope_id, context) == key
+    assert completed_usage.acquire(timeout=5)
+    completed_usage.release()
+    with Session(database) as peer:
+        refreshed = peer.scalar(
+            select(ObjectKeyEnvelope.last_successful_use_at).where(
+                ObjectKeyEnvelope.id == key.envelope_id
+            )
+        )
+        assert refreshed is not None and refreshed > recorded
+
+
+def test_usage_database_failure_does_not_fail_encryption(
+    bank_storage: BankStorage, db_session: Session, completed_usage: Lock
+) -> None:
+    row = registry.bank_key(db_session, ORG_1, "BK-SAMP0001")
+    assert row is not None
+    key = registry.prepare_envelope(
+        db_session, row, {"purpose": "telemetry-outage"}, lambda _: bank_storage.provider
+    )
+    failed = Event()
+
+    def refuse_usage(
+        peer: Session, _transaction: SessionTransaction, _connection: Connection
+    ) -> None:
+        if peer is not db_session:
+            failed.set()
+            raise SQLAlchemyError("Synthetic telemetry database outage")
+
+    event.listen(Session, "after_begin", refuse_usage)
+    try:
+        db_session.commit()
+        assert failed.wait(5)
+        assert completed_usage.acquire(timeout=5)
+        completed_usage.release()
+    finally:
+        event.remove(Session, "after_begin", refuse_usage)
+    assert len(key.plaintext) == 32
+    with Session(db_session.get_bind()) as peer:
+        assert (
+            peer.scalar(
+                select(ObjectKeyEnvelope.last_successful_use_at).where(
+                    ObjectKeyEnvelope.id == key.envelope_id
+                )
+            )
+            is None
+        )

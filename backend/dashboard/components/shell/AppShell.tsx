@@ -1,5 +1,6 @@
 "use client";
 
+import ProtectedDataNotice from "@/components/ui/ProtectedDataNotice";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
@@ -49,7 +50,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               type="button"
               aria-label="Close menu"
               onClick={() => setMobileOpen(false)}
-              className="absolute inset-0 bg-black/50 backdrop-blur-xs"
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             />
             <div className="relative">
               <Sidebar />
@@ -69,7 +70,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               !isPersonalSettingsPath(pathname) ? (
                 <NoAuthorizedInstitutionsPanel />
               ) : (
-                children
+                <>
+                  <ProtectedDataNotice />
+                  {children}
+                </>
               )}
             </ModuleGuard>
           </main>

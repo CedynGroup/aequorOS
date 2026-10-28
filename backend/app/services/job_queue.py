@@ -53,6 +53,7 @@ def _as_aware(value: datetime | None) -> datetime | None:
 # ``tests/services/test_desk_capture_job.py::test_every_job_type_has_a_worker_handler``
 # enforces this; keep it green.
 JOB_TYPES = (
+    "bank_reencrypt",
     "session_purge",
     "document_delete",
     "pipeline_refresh",
@@ -150,8 +151,9 @@ _BACKOFF_BASE_SECONDS = 5
 #: so the measured 2h02m is an upper bound, not a typical case. A deployment that
 #: raises that bound to get the full pass must raise this window with it.
 #:
-#: Everything NOT listed here is on the deployment default and therefore asserts
-#: that it completes well inside it — see ``WorkerSettings.worker_stale_job_seconds``.
+#: Other jobs use the deployment default, except isolated large-object
+#: ``bank_reencrypt`` dispatches; see docs/bank_field_encryption.md for their
+#: size-based extension. See ``WorkerSettings.worker_stale_job_seconds``.
 STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
     "etl_dedup": 4 * 60 * 60,
     # ``desk_capture`` walks the Bank of Ghana's published tables over HTTP, so
@@ -535,6 +537,10 @@ def reclaim_stale(
     reclaimed = 0
     for job in running:
         window = stale_after_for(job.job_type, stale_after)
+        if job.job_type == "bank_reencrypt":
+            size = cast(object, job.payload.get("reencryption_bytes"))
+            if type(size) is int and size > 0:
+                window += timedelta(seconds=8 * size / (1024 * 1024))
         started = _as_aware(job.started_at)
         if started is None or started >= now - window:
             continue

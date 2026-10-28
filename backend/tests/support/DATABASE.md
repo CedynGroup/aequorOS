@@ -159,9 +159,12 @@ cluster URL must point at a disposable test cluster and all source rows are synt
 `hooks=(install_hook, ...)` on `isolated_database`, `database_connections` or
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
-sync facades. The encryption stack's schema-scoped lock isolation is still a
-pending integration; this foundation does not claim to fix that CI failure.
-Its implementation must become a default shared hook when that stack lands.
+sync facades. Encryption advisory locks automatically receive the owning schema's namespace
+on every PostgreSQL engine, including adopted application engines and async
+engines' sync facades. Extra pools and role/tenant variants in one schema retain
+the same lock identity; independently owned schemas cannot block each other.
+The hook is installed before checkout and does not depend on a schema prefix
+or URL option ordering.
 
 Run the constructor guard with `uv run python scripts/test_database_guard.py`.
 Direct constructors fail unconditionally. Only `tests/support/database.py` is

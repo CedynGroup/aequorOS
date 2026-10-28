@@ -1,7 +1,12 @@
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-const DATABASE = path.resolve(__dirname, "../.tmp/e2e.db");
+const DATABASE = path.join(
+  process.env.E2E_RUNTIME_DIR
+    ? path.resolve(process.env.E2E_RUNTIME_DIR)
+    : path.resolve(__dirname, "../.tmp"),
+  "e2e.db",
+);
 
 /** Read the disposable fixture's current generation; never guess after a mutation. */
 export function currentAuthorizationVersion(

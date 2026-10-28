@@ -271,6 +271,7 @@ export function savedDashboardSummary(
     visibilityRole: row.visibilityRole,
     version: row.version,
     widgetCount: row.widgetCount,
+    lockedReason: row.lockedReason,
     sourcePack: row.sourcePack,
     updatedAt: row.updatedAt,
   };

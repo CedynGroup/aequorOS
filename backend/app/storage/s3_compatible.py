@@ -8,7 +8,7 @@ and never leak through the interface. GCS lands later as a true second
 implementation against the same contract suite.
 
 Objects of banks with connected keys use AWS Encryption SDK messages.
-Their object keys are wrapped by bank-held master keys in the key registry.
+Their key hierarchy follows ``backend/docs/bank_encryption.md``.
 During optional rollout, banks without keys retain platform storage encryption.
 Bucket SSE also protects platform audit logs.
 
@@ -18,9 +18,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterator
+from copy import copy
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any, BinaryIO, Literal, Protocol, cast
+from typing import Any, BinaryIO, Literal, Protocol, Self, cast
 
 import boto3
 from boto3.exceptions import S3UploadFailedError
@@ -29,13 +30,20 @@ from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.key_management.types import KeyUnavailableError
 from app.core.tls import require_boto_tls, require_https
+from app.storage import reencryption
 from app.storage.access_log import AccessLogHook, HashChainedAccessLog, null_access_log
 from app.storage.client import (
     RETAINED_TIERS,
+    EncryptionCursor,
+    EncryptionInventoryItem,
+    EncryptionPage,
     ObjectMetadata,
+    ReencryptionIsolation,
     StorageAccessError,
     StorageBackendError,
     StorageClient,
@@ -78,11 +86,9 @@ _NOT_FOUND_CODES = {"NoSuchKey", "NoSuchBucket", "NoSuchVersion", "404", "NotFou
 # every part except the last to be >= 5 MiB, so the chunk size stays comfortably
 # above that. This makes writes size-independent — the correct fix, not a cap on
 # how much data a bank can load.
-_MULTIPART_THRESHOLD_BYTES = 16 * 1024 * 1024
-_MULTIPART_CHUNKSIZE_BYTES = 16 * 1024 * 1024
 _UPLOAD_TRANSFER_CONFIG = TransferConfig(
-    multipart_threshold=_MULTIPART_THRESHOLD_BYTES,
-    multipart_chunksize=_MULTIPART_CHUNKSIZE_BYTES,
+    multipart_threshold=reencryption.MULTIPART_SIZE,
+    multipart_chunksize=reencryption.MULTIPART_SIZE,
     use_threads=True,
 )
 
@@ -130,6 +136,11 @@ class S3CompatibleStorageClient(StorageClient):
         if client_factory is None:
             require_boto_tls(cast(object, self._s3))
 
+    def for_session(self, db: Session) -> Self:
+        bound = copy(self)
+        bound._encryption = self._encryption.for_session(db)
+        return bound
+
     # -- contract operations ------------------------------------------------
 
     def write(
@@ -138,6 +149,18 @@ class S3CompatibleStorageClient(StorageClient):
         data: BinaryIO,
         metadata: ObjectMetadata,
         content_type: str = "application/octet-stream",
+    ) -> StorageObject:
+        with self._encryption.publication(location) as encryption:
+            bound = copy(self)
+            bound._encryption = encryption
+            return bound._write(location, data, metadata, content_type)
+
+    def _write(
+        self,
+        location: StorageLocation,
+        data: BinaryIO,
+        metadata: ObjectMetadata,
+        content_type: str,
     ) -> StorageObject:
         self._validate_metadata(location, metadata)
         self._require_output_retention_policy(location)
@@ -156,7 +179,7 @@ class S3CompatibleStorageClient(StorageClient):
 
         try:
             encrypted, envelope_id, bank_key_id = self._encryption.encrypt(location, data, metadata)
-        except StorageAccessError:
+        except (StorageAccessError, KeyUnavailableError):
             self._log("write", location, result="key-refused")
             raise
         effective_sse_key = self._settings.kms_key_id
@@ -202,6 +225,47 @@ class S3CompatibleStorageClient(StorageClient):
         self._log("write", location, version_id=version_id)
         return self._to_storage_object(location, stat, version_id=version_id)
 
+    def reencrypt(self, item: EncryptionInventoryItem) -> bool:
+        result = reencryption.reencrypt(
+            cast(reencryption.S3MaintenanceClient, cast(object, self._s3)),
+            self._env,
+            self._encryption,
+            item,
+            self._settings.kms_key_id,
+            self._stat_object,
+        )
+        if result:
+            self._log("reencrypt", item.location, version_id=item.version_id)
+        return result
+
+    def encryption_page(
+        self, institution_slug: str, cursor: EncryptionCursor, limit: int
+    ) -> EncryptionPage:
+        return reencryption.inventory_page(
+            cast(reencryption.S3MaintenanceClient, cast(object, self._s3)),
+            self._env,
+            institution_slug,
+            self._stat_object,
+            cursor,
+            limit,
+        )
+
+    def reencrypt_isolated(
+        self, item: EncryptionInventoryItem, isolation: ReencryptionIsolation
+    ) -> bool:
+        result = reencryption.reencrypt(
+            cast(reencryption.S3MaintenanceClient, cast(object, self._s3)),
+            self._env,
+            self._encryption,
+            item,
+            self._settings.kms_key_id,
+            self._stat_object,
+            isolation=isolation,
+        )
+        if result:
+            self._log("reencrypt", item.location, version_id=item.version_id)
+        return result
+
     def retain(self, location: StorageLocation, version_id: str, until: datetime) -> None:
         self._require_output_retention_policy(location)
         if location.tier != "outputs":
@@ -230,7 +294,7 @@ class S3CompatibleStorageClient(StorageClient):
         )
         body = cast(BinaryIO, response["Body"])
         try:
-            descriptor = self._to_storage_object(location, response)
+            descriptor = self._to_storage_object(location, response, version_id=version_id)
             headers = {
                 key.lower(): value
                 for key, value in _OBJECT_HEADERS.validate_python(
@@ -238,6 +302,10 @@ class S3CompatibleStorageClient(StorageClient):
                 ).items()
             }
             plaintext = self._encryption.decrypt(location, body, descriptor.metadata, headers)
+        except KeyUnavailableError:
+            body.close()
+            self._log("read", location, result="key-refused")
+            raise
         except (StorageError, ValidationError, ValueError, KeyError) as exc:
             body.close()
             self._log("read", location, result="verification-refused")
@@ -364,7 +432,12 @@ class S3CompatibleStorageClient(StorageClient):
         if operation == "write":
             self._require_output_retention_policy(location)
         try:
+            if operation == "read":
+                self._encryption.require_read_access()
             bank_key_required = self._encryption.bank_key_required(location)
+        except KeyUnavailableError:
+            self._log(audit_operation, location, result="key-refused")
+            raise
         except (RuntimeError, SQLAlchemyError) as exc:
             self._log(audit_operation, location, result="configuration-refused")
             raise StorageAccessError("The bank key configuration could not be verified.") from exc

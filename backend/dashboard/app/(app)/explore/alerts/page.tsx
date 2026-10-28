@@ -71,6 +71,7 @@ function stateLabel(
   alert: BiAlertRead,
   evaluationEnabled: boolean | undefined,
 ): string {
+  if (alert.lockedReason) return "Protected data locked";
   if (!alert.isActive) return "Stopped";
   if (alert.latestState === "breached") return "Past its threshold";
   if (alert.latestState === "cleared") return "Within its threshold";
@@ -168,7 +169,11 @@ export default function BiAlertsPage() {
             role="status"
             className="flex items-start gap-2.5 rounded-md border border-border bg-surface px-4 py-3 text-caption text-navy"
           >
-            <BellOff size={15} className="mt-0.5 shrink-0 text-slate" aria-hidden />
+            <BellOff
+              size={15}
+              className="mt-0.5 shrink-0 text-slate"
+              aria-hidden
+            />
             <p>
               <span className="font-medium">Not judging alerts here.</span>{" "}
               {EVALUATION_OFF}
@@ -275,6 +280,8 @@ export default function BiAlertsPage() {
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
+                          disabled={Boolean(alert.lockedReason)}
+                          title={alert.lockedReason ?? undefined}
                           onClick={() => {
                             setEditing(alert);
                             setComposing(true);

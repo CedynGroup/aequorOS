@@ -163,9 +163,10 @@ export default function DashboardsPage() {
                       )}
                       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-micro text-slate">
                         <span>
-                          {dashboard.widgetCount === 1
-                            ? "1 view"
-                            : `${fmtInt(dashboard.widgetCount)} views`}
+                          {dashboard.lockedReason ??
+                            (dashboard.widgetCount === 1
+                              ? "1 view"
+                              : `${fmtInt(dashboard.widgetCount)} views`)}
                         </span>
                         <span>
                           {dashboard.ownedByCaller

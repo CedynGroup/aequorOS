@@ -15,9 +15,12 @@ from typing import cast
 
 import pytest
 import sqlalchemy
-from sqlalchemy import Engine, event, inspect, text
+from sqlalchemy import Connection, Engine, event, inspect, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError, ResourceClosedError
+from sqlalchemy.orm import Session
 
+from app.core.key_management.registry import lock_bank_version
 from tests.support.database import (
     DatabaseContext,
     TestDatabaseConnections,
@@ -469,3 +472,71 @@ def test_plain_postgres_raw_url_keeps_schema_hooks_and_cleanup() -> None:
             assert raw.execute("SELECT current_schema()").fetchone() == (schema.context.schema,)
             assert len(hooks) == 1
         assert raw.closed
+
+
+@postgres_only
+@pytest.mark.parametrize("shared", [False, True])
+@pytest.mark.parametrize("startup_options", [False, True])
+def test_encryption_lock_namespace_follows_schema_across_pools(
+    shared: bool, startup_options: bool
+) -> None:
+    """Replacement pools agree, while identical bank keys in other schemas do not."""
+    lock_identity = text(
+        "SELECT (classid::bigint << 32) | objid::bigint FROM pg_locks "
+        "WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted"
+    )
+    url = make_url(os.environ["TEST_DATABASE_URL"])
+    if startup_options:
+        url = url.update_query_dict({"options": "-capplication_name=isolated_db"})
+    with isolated_database(url) as owner:
+        identities: list[int] = []
+        with owner.connection() as connection:
+            role = cast(str, connection.scalar(text("SELECT current_user")))
+        variant = owner.with_context(replace(owner.context, role=role, bank_id="BK-OTHER"))
+        for db, engine in (
+            (owner, owner.engine()),
+            (owner, owner.migration_engine()),
+            (variant, variant.engine()),
+        ):
+            with db.session(bind=engine) as session:
+                lock_bank_version(session, "OR-TEST", "BK-TEST", read=shared)
+                identities.append(cast(int, session.scalar(lock_identity)))
+        assert len(set(identities)) == 1
+        with owner.session() as first, isolated_database(url) as other:
+            lock_bank_version(first, "OR-TEST", "BK-TEST")
+            with other.session() as second:
+                # A broken namespace fails promptly instead of hanging the worker.
+                _ = second.execute(text("SET LOCAL lock_timeout = '500ms'"))
+                lock_bank_version(second, "OR-TEST", "BK-TEST")
+                assert second.scalar(lock_identity) != first.scalar(lock_identity)
+            with variant.connection() as contender:
+                assert (
+                    contender.scalar(
+                        text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": identities[0]}
+                    )
+                    is False
+                )
+
+
+@postgres_only
+def test_async_encryption_lock_uses_owning_schema_namespace() -> None:
+    lock_identity = text(
+        "SELECT (classid::bigint << 32) | objid::bigint FROM pg_locks "
+        "WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted"
+    )
+    with isolated_database(os.environ["TEST_DATABASE_URL"]) as owner:
+        with owner.session() as session:
+            lock_bank_version(session, "OR-TEST", "BK-TEST", read=True)
+            expected = cast(int, session.scalar(lock_identity))
+
+        async def run() -> None:
+            async with owner.async_engine() as engine, engine.connect() as connection:
+
+                def acquire(sync: Connection) -> object:
+                    with Session(sync) as session:
+                        lock_bank_version(session, "OR-TEST", "BK-TEST", read=True)
+                        return cast(int, session.scalar(lock_identity))
+
+                assert await connection.run_sync(acquire) == expected
+
+        asyncio.run(run())

@@ -497,6 +497,7 @@ export function authoredWidget(
 export function draftFromDashboard(
   read: BiDashboardRead,
 ): { draft: BuilderDraft } | { unrestatable: BiCanvasUnrestatable } {
+  if (read.access === "restricted") return { unrestatable: "refused" };
   const widgets: BiPackWidget[] = [];
   for (const widget of read.widgets) {
     const restated = authoredWidget(widget);

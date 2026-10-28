@@ -83,9 +83,18 @@ def sibling_banks_scenario(connection: Connection) -> None:
 
 
 def insert_row(connection: Connection, table: str, row: dict[str, object]) -> UUID:
-    mapped = Base.metadata.tables[table]
+    # Constraint probes target the deployed schema, including historical revisions;
+    # current ORM field encryption does not belong in this path. Retain the
+    # ordinary client defaults (timestamps, UUIDs) required by these records.
+    mapped = sa.Table(table, sa.MetaData(), autoload_with=connection, resolve_fks=False)
+    for column in mapped.c:
+        column.default = Base.metadata.tables[table].c[column.name].default
+    values = dict(row)
+    if table == "canonical_counterparties" and "source_reference_blind_index" in mapped.c:
+        values["source_reference_blind_index"] = values["source_reference"]
     return cast(
-        UUID, connection.execute(mapped.insert().values(**row).returning(mapped.c.id)).scalar_one()
+        UUID,
+        connection.execute(mapped.insert().values(**values).returning(mapped.c.id)).scalar_one(),
     )
 
 
@@ -193,7 +202,7 @@ def test_a_parent_from_a_sibling_bank_is_refused(
             connection, parent, canonical_row(connection, parent, SIBLING_BANK)
         )
         with pytest.raises(IntegrityError) as failure:
-            connection.execute(Base.metadata.tables[table].insert().values(**row))
+            insert_row(connection, table, row)
         database_error = failure.value.orig
         assert isinstance(database_error, ForeignKeyViolation)
         assert database_error.diag.constraint_name == f"fk_{table}_{column}_bank"
@@ -262,7 +271,7 @@ def test_existing_cross_bank_references_fail_migration_verification(
             connection.execute(
                 sa.text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG}
             )
-            connection.execute(Base.metadata.tables[table].insert().values(**row))
+            insert_row(connection, table, row)
             connection.execute(sa.text("SELECT set_config('app.organization_id', '', true)"))
             with pytest.raises(RuntimeError, match=f"{table}.{column}: 1 references violate"):
                 migration.upgrade()
@@ -280,7 +289,7 @@ def test_batch_bound_lineage_cannot_omit_its_bank(
         row = canonical_row(connection, "lineage_records", BANK)
         row["bank_id"] = None
         with pytest.raises(IntegrityError) as failure:
-            connection.execute(Base.metadata.tables["lineage_records"].insert().values(**row))
+            insert_row(connection, "lineage_records", row)
         database_error = failure.value.orig
         assert isinstance(database_error, CheckViolation)
         assert database_error.diag.constraint_name == "ck_lineage_records_batch_bank"
