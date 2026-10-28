@@ -72,7 +72,7 @@ run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -
 
 [tasks.unit]
 description = "Run database-free unit tests with database connections refused"
-run = "uv run pytest -m unit -n 4 --dist loadfile"
+run = "uv run pytest -m unit --suite-only -n logical --dist load --durations=20"
 
 [tasks.integration]
 description = "Run integration tests against disposable local Postgres"
@@ -86,6 +86,10 @@ run = 'uv run python -m scripts.test_suite_census refresh "${usage_evidence_dir?
 [tasks."risk-service:test-unit"]
 description = "Run the unit suite"
 depends = ["unit"]
+
+[tasks."risk-service:test-e2e"]
+description = "Run backend Playwright e2e contracts"
+run = "uv run pytest -m e2e --suite-only"
 
 [tasks."risk-service:test-integration"]
 description = "Run the integration suite"

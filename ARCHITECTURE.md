@@ -1193,7 +1193,7 @@ Each workflow carries its own gate inventory in a header comment; keep it accura
 add a step.
 
 The combined SQLite compatibility run remains available as `mise run risk-service:test`.
-The [backend test guide](backend/README.md#run-tests) owns unit/integration
+The [backend test guide](backend/README.md#run-tests) owns unit/integration/e2e
 classification, census regeneration, service prerequisites and CI execution ownership.
 
 ### CI enforcement

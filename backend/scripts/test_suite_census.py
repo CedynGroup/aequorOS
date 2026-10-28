@@ -35,7 +35,9 @@ def _fixtures(event: dict[str, object]) -> list[str]:
     return [f"{event['namespace']}:{key}" for key in cast(list[str], event.get("fixtures", []))]
 
 
-def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:  # noqa: PLR0912, PLR0915
+def classify(  # noqa: PLR0912, PLR0915
+    directory: Path, *, services_only: bool = False
+) -> tuple[dict[str, str], dict[str, str]]:
     events: list[dict[str, object]] = []
     for path in sorted(directory.rglob("events-*.jsonl")):
         for line in path.read_text().splitlines():
@@ -55,6 +57,8 @@ def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:  # noqa:
     consumers: dict[str, set[str]] = defaultdict(set)
     direct: set[str] = set()
     fixture_database: set[str] = set()
+    services: dict[str, set[str]] = defaultdict(set)
+    fixture_services: dict[str, set[str]] = defaultdict(set)
     instrumented = {_process(e) for e in events if e["kind"] == "instrumented"}
     uncertain: set[str] = set()
     uncertain_fixtures: set[str] = set()
@@ -74,6 +78,18 @@ def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:  # noqa:
                 direct.add(nodeid)
             elif not nodeid and not fixtures:
                 raise ValueError("Database use outside a test or tracked fixture")
+        elif kind == "service":
+            suite = cast(str, event["suite"])
+            if suite not in {"integration", "e2e"}:
+                raise ValueError("Unknown external service owner")
+            fixtures = _fixtures(event)
+            if fixtures:
+                for fixture in fixtures:
+                    fixture_services[fixture].add(suite)
+            elif nodeid:
+                services[nodeid].add(suite)
+            else:
+                raise ValueError("Service use outside a test or tracked fixture")
         elif kind == "python_child" and _process(event, "child") not in instrumented:
             fixtures = _fixtures(event)
             if fixtures:
@@ -105,19 +121,33 @@ def classify(directory: Path) -> tuple[dict[str, str], dict[str, str]]:  # noqa:
         if set(phase_map) != required:
             raise ValueError(f"Incomplete execution phases: {nodeid}")
         database = nodeid in direct or bool(consumers[nodeid] & fixture_database)
+        external = set(services[nodeid])
+        for fixture in consumers[nodeid]:
+            external.update(fixture_services[fixture])
+        if services_only and not external:
+            continue
         if consumers[nodeid] & uncertain_fixtures:
             uncertain.add(nodeid)
         passed = dict(phases) == {"setup": "passed", "call": "passed", "teardown": "passed"}
-        if not database and (not passed or nodeid in uncertain):
+        if not database and not external and (not passed or nodeid in uncertain):
             inconclusive[nodeid] = (
                 "unconfirmed Python child" if nodeid in uncertain else str(dict(phases))
             )
-        cases[nodeid] = "integration" if database or not passed or nodeid in uncertain else "unit"
+        cases[nodeid] = (
+            "e2e"
+            if "e2e" in external
+            else "integration"
+            if database or external or not passed or nodeid in uncertain
+            else "unit"
+        )
     return cases, inconclusive
 
 
-def generate(directory: Path, output: Path, supplement: Path | None = None) -> None:
+def generate(
+    directory: Path, output: Path, supplement: Path | None = None, services: Path | None = None
+) -> None:
     cases, inconclusive = classify(directory)
+    service_owners, _ = classify(directory, services_only=True)
     if supplement is not None:
         extra, unresolved = classify(supplement)
         if not set(extra) <= set(cases):
@@ -129,7 +159,21 @@ def generate(directory: Path, output: Path, supplement: Path | None = None) -> N
                 raise ValueError(f"Conflicting database evidence across profiles: {nodeid}")
             cases[nodeid] = suite
             _ = inconclusive.pop(nodeid, None)
-    _ = output.write_text(json.dumps({"cases": cases}, indent=2, sort_keys=True) + "\n")
+    if services is not None:
+        # Older database-only profiles cannot prove external-service freedom.
+        # Enrich them only with positive service acquisitions from a complete
+        # observed profile; an absent service event never demotes an owner.
+        external, _ = classify(services, services_only=True)
+        if not set(external) <= set(cases):
+            raise ValueError("Service profile contains tests outside the full census")
+        cases.update(external)
+        service_owners.update(external)
+        for nodeid in external:
+            _ = inconclusive.pop(nodeid, None)
+    payload = {"cases": cases}
+    if service_owners:
+        payload["services"] = service_owners
+    _ = output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     print(f"Generated {len(cases)} test owners: {dict(Counter(cases.values()))}")
     print(f"{len(inconclusive)} inconclusive cases conservatively owned by integration")
     _ = (directory / "inconclusive.json").write_text(json.dumps(inconclusive, indent=2) + "\n")
@@ -253,6 +297,7 @@ def main() -> int:
     _ = parser.add_argument("directory", type=Path)
     _ = parser.add_argument("--output", type=Path, default=CATALOGUE)
     _ = parser.add_argument("--supplement", type=Path)
+    _ = parser.add_argument("--services", type=Path)
     _ = parser.add_argument("--mode", choices=["native", "docker"], default="native")
     arguments = parser.parse_args()
     directory = cast(Path, arguments.directory)
@@ -260,7 +305,12 @@ def main() -> int:
     if action == "refresh":
         return refresh(directory, cast(str, arguments.mode))
     if action == "generate":
-        generate(directory, cast(Path, arguments.output), cast(Path | None, arguments.supplement))
+        generate(
+            directory,
+            cast(Path, arguments.output),
+            cast(Path | None, arguments.supplement),
+            cast(Path | None, arguments.services),
+        )
     else:
         check(directory, cast(Path, arguments.output))
     return 0

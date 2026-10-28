@@ -487,19 +487,23 @@ ownership and appear in `inconclusive.json`. A skipped case is not
 proof that an integration test could be moved; run its applicable profile to obtain
 evidence. This preserves explicit ownership without changing product assertions.
 
-The unit CI owner also starts disposable MinIO and OpenBao for storage/signing
-cases that use those HTTP services without opening a database. PostgreSQL is never
-provisioned there, and connection refusal stays active. The managed MinIO endpoint
-is scoped to storage/schema packages, matching their existing service owners;
-production-TLS and mocked AWS tests elsewhere retain their ordinary endpoint
-configuration. Tests can still set an explicit endpoint in their own fixtures.
-Locally, provide the
-corresponding S3/OpenBao test settings to exercise those service-gated cases.
+The unit owner has no PostgreSQL, MinIO, OpenBao or dashboard dependency setup.
+Observed MinIO/OpenBao connections and native service processes are integration
+requirements; Playwright launches are e2e requirements. A declared
+`requires_service` marker covers contracts whose assertions consume state from
+earlier service-using cases. The generated catalogue also records these service
+requirements so the aggregate rejects skipped service contracts. To enrich an
+older database-only census, pass `--services <complete-service-profile>` to
+`generate`; only positive service requirements can change ownership. MinIO runs
+in storage/schema jobs and the shard containing native service contracts;
+OpenBao runs in its integration shard. Backend Playwright contracts have one
+explicit e2e job beside dashboard journeys. Every test has one of three owners:
+unit, integration or e2e.
 
 Every CI owner emits the same observations alongside its JUnit report. The final
 integration gate invokes `scripts/test_suite_census.py check` on those existing
-executions: observed unit database use and fully executed integration cases with
-no database use both fail with the exact IDs to refresh. The independent partition
+executions: observed unit database/service use and fully executed integration/e2e cases without
+their observed dependency both fail with the exact IDs to refresh. The independent partition
 guard proves the observed selection has exactly one execution owner, including
 conservative affected-module CI runs. Original database-free files remain in
 place; classification never changes test imports or fixtures.
@@ -509,8 +513,17 @@ collection. This enables model-only checks inside mixed migration modules whose
 module-wide skip condition requires that setting. No PostgreSQL service is
 provisioned, and any attempted use of the sentinel fails the connection guard.
 
-A dedicated unit run uses four workers with `--dist loadfile` and refuses
-database connections before collection. Each process records attempts separately;
+A dedicated unit run selects only generated unit-bearing modules before imports,
+then prunes known non-unit functions before parametrization. Unknown test functions,
+parameter identities and missing cases fail collection. The filesystem inventory
+must match the catalogue, and aggregate execution reports prove the other owners'
+exact coverage; a second full-tree collection is unnecessary. Integration-only
+modules are never imported by this selector. Mixed modules still share their
+module imports, while their known integration/e2e functions are not collected.
+The run uses the runner's logical CPU count and per-case load scheduling, retaining
+the in-memory storage audit sequence on one worker because it shares mutable
+class state. `--durations=20` reports setup/call/teardown outliers. Database
+connections are refused before collection. Each process records attempts separately;
 the controller requires identical worker classifications and exact combined JUnit
 coverage. Combined local runs also refuse connections for each unit test, before
 fixture setup. Finalization follows fixture ownership: integration-only fixture
@@ -521,8 +534,7 @@ entry points are guarded, including Python subprocesses with fresh environments.
 Attempts fail the run even when caught. The unit CI owner compares the complete
 classified collection with JUnit identities and permits no dropped, duplicated,
 skipped, failed or errored unit case. It uploads `unit-tests` classification,
-connection-attempt and execution evidence. The full-tree module collection check
-also remains enforced.
+connection-attempt and execution evidence. Module inventory and exact case coverage remain enforced in that same collection.
 
 `mise run risk-service:test` remains the combined compatibility run:
 
@@ -584,8 +596,8 @@ CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 release binaries and verify pinned SHA256 digests before execution. MinIO uses a
 disposable built-in KMS key named `aequoros-key`; it also serves
 [dashboard journeys](dashboard/README.md#end-to-end-playwright).
-The integration shard owning live signing cases also starts OpenBao, alongside
-the unit owner's service setup described above. Both services listen on loopback
+The integration shard owning live signing cases also starts OpenBao. Both
+services listen on loopback
 and stop at job cleanup. Other API,
 health and operator provisioning tests retain their in-process storage fakes;
 credential-vault encryption tests need no vault server. The live storage and
@@ -593,7 +605,7 @@ OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
 
 The integration aggregate also joins the lock and storage execution reports with
-unit and Postgres shard evidence. Their selected union must match the classified
+unit, e2e and Postgres shard evidence. Their selected union must match the classified
 collection exactly once. Storage integration cases run only in the storage job,
 except key-rotation concurrency, which belongs to locks. The storage job also
 runs for merge groups. A conservative affected-module run excludes only the

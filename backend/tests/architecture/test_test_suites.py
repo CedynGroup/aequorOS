@@ -152,18 +152,30 @@ def test_suite_execution_boundary(
 
 
 @pytest.mark.parametrize("mutation", ["none", "missing", "duplicate", "wrong-suite"])
-def test_ci_partition_requires_exactly_one_suite_execution(tmp_path: Path, mutation: str) -> None:
+def test_ci_partition_requires_exactly_one_suite_execution(
+    tmp_path: Path, mutation: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts import test_suites  # noqa: PLC0415
     from scripts.test_suites import verify_partition  # noqa: PLC0415
 
+    e2e_node = "tests/test_browser.py::test_browser"
+    catalogue = tmp_path / "suites.json"
+    _ = catalogue.write_text(json.dumps({"services": {e2e_node: "e2e"}}))
+    monkeypatch.setattr(test_suites, "CATALOGUE", catalogue)
     unit = tmp_path / "unit-tests"
     unit.mkdir()
     _ = (unit / "collection.json").write_text(
         json.dumps(
-            {"tests/test_unit.py::test_unit": "unit", "tests/test_db.py::test_db": "integration"}
+            {
+                "tests/test_unit.py::test_unit": "unit",
+                "tests/test_db.py::test_db": "integration",
+                e2e_node: "e2e",
+            }
         )
     )
     for name in [
         "unit-tests",
+        "e2e-tests",
         "pg-locks",
         "storage-tests",
         *[f"pg-suite-{i}" for i in range(1, 5)],
@@ -172,6 +184,8 @@ def test_ci_partition_requires_exactly_one_suite_execution(tmp_path: Path, mutat
         path = tmp_path / name
         path.mkdir(exist_ok=True)
         cases = ""
+        if name == "e2e-tests":
+            cases = '<testcase classname="tests.test_browser" name="test_browser"/>'
         if name == "unit-tests":
             cases = '<testcase classname="tests.test_unit" name="test_unit"/>'
         if name == "pg-suite-1" and mutation != "missing":
@@ -183,6 +197,12 @@ def test_ci_partition_requires_exactly_one_suite_execution(tmp_path: Path, mutat
         _ = (path / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
     if mutation == "none":
         verify_partition(tmp_path)
+        _ = (tmp_path / "e2e-tests/report.xml").write_text(
+            '<testsuite><testcase classname="tests.test_browser" name="test_browser">'
+            "<skipped/></testcase></testsuite>"
+        )
+        with pytest.raises(ValueError, match="External service contract skipped"):
+            verify_partition(tmp_path)
     else:
         with pytest.raises(ValueError):
             verify_partition(tmp_path)

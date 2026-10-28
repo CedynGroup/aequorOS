@@ -492,6 +492,32 @@ def _assert_supplement_preserves_acquisitions(tmp_path: Path) -> None:
     integrations = dict.fromkeys(nodes, "integration")
     output = tmp_path / "generated.json"
     assert classify(unit) == (units, {})
+    for suite in ("integration", "e2e"):
+        for outcome in ("passed", "skipped"):
+            service = tmp_path / f"service-{suite}-{outcome}"
+            _ = _write_census_profile(service, "none", outcome)
+            with (service / "events-1.jsonl").open("a") as stream:
+                for node in nodes:
+                    stream.write(
+                        json.dumps(
+                            {"kind": "consumes", "pid": 1, "nodeid": node, "fixtures": ["service"]}
+                        )
+                        + "\n"
+                    )
+                stream.write(
+                    json.dumps(
+                        {"kind": "service", "pid": 1, "fixtures": ["service"], "suite": suite}
+                    )
+                    + "\n"
+                )
+            owners = dict.fromkeys(nodes, suite)
+            assert classify(service) == (owners, {})
+            generate(unit, output, services=service)
+            assert json.loads(output.read_text()) == {"cases": owners, "services": owners}
+            check(service, output)
+            generate(unit, output)
+            with pytest.raises(ValueError, match="ownership drift"):
+                check(service, output)
     for source in ("direct", "fixture", "child"):
         for outcome in ("passed", "setup", "call", "teardown", "skipped", "child"):
             positive = tmp_path / f"positive-{source}-{outcome}"

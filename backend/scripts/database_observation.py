@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import socket
 import sqlite3
 import sqlite3.dbapi2 as sqlite_dbapi
 import subprocess
@@ -18,6 +19,7 @@ from collections.abc import Callable, Mapping
 from functools import wraps
 from pathlib import Path
 from typing import cast
+from urllib.parse import urlsplit
 
 import psycopg
 from sqlalchemy import Engine
@@ -52,6 +54,38 @@ def emit(kind: str, **values: object) -> None:
         _ = os.write(descriptor, (json.dumps(event, sort_keys=True) + "\n").encode())
     finally:
         os.close(descriptor)
+
+
+def _observe_services() -> None:
+    original_connect = socket.socket.connect
+
+    def service_connect(connection: socket.socket, address: object) -> None:
+        if isinstance(address, tuple) and len(cast(tuple[object, ...], address)) >= 2:
+            host, port = cast(tuple[str, int], address)[:2]
+            for name in ("S3_ENDPOINT", "OPENBAO_TEST_ADDR"):
+                endpoint = urlsplit(os.getenv(name, ""))
+                hosts = {endpoint.hostname}
+                if endpoint.hostname in {"localhost", "127.0.0.1", "::1"}:
+                    hosts.update({"localhost", "127.0.0.1", "::1"})
+                if host in hosts and port == (
+                    endpoint.port or (443 if endpoint.scheme == "https" else 80)
+                ):
+                    emit("service", service=name, suite="integration")
+        original_connect(connection, cast(tuple[str, int], address))
+
+    socket.socket.connect = service_connect
+
+
+def _command_service(command: object) -> None:
+    if isinstance(command, (tuple, list)) and command:
+        words = [str(word) for word in cast(list[object], command)]
+        executable = Path(words[0]).name
+        if executable in {"minio", "bao"}:
+            emit("service", service=executable, suite="integration")
+        if executable in {"node", "pnpm", "npm", "npx", "playwright"} and any(
+            "playwright" in word for word in words
+        ):
+            emit("service", service="playwright", suite="e2e")
 
 
 def install() -> None:
@@ -95,6 +129,8 @@ def install() -> None:
             if hasattr(driver, attribute):
                 instrument(driver, attribute)
 
+    _observe_services()
+
     original_popen = cast(Callable[..., None], subprocess.Popen.__init__)
 
     def observed_popen(*args: object, **kwargs: object) -> None:
@@ -107,6 +143,7 @@ def install() -> None:
         environment["PYTHONPATH"] = python_path(environment.get("PYTHONPATH", ""))
         kwargs["env"] = environment
         command = args[1] if len(args) > 1 else kwargs.get("args")
+        _command_service(command)
         replacement = instrument_command(command)
         if len(args) > 1:
             args = (args[0], replacement, *args[2:])

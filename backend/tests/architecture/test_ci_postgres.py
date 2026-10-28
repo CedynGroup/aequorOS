@@ -50,7 +50,13 @@ def test_leaf_body_change_selects_only_its_module(selection_repo: tuple[Path, st
     assert selected["mode"] == "affected"
     assert selected["files"] == ["tests/domain/test_leaf_example.py"]
     assert selected["matrix"] == {
-        "include": [{"shard": shard_for("tests/domain/test_leaf_example.py"), "openbao": False}]
+        "include": [
+            {
+                "shard": shard_for("tests/domain/test_leaf_example.py"),
+                "openbao": False,
+                "minio": False,
+            }
+        ]
     }
 
 
@@ -159,6 +165,11 @@ def test_uncertain_changes_run_every_shard(
             {
                 "shard": index,
                 "openbao": index == module_shards().get(BAO_MODULE, shard_for(BAO_MODULE)),
+                "minio": index
+                == module_shards().get(
+                    "tests/scripts/test_local_services.py",
+                    shard_for("tests/scripts/test_local_services.py"),
+                ),
             }
             for index in range(1, SHARDS + 1)
         ]
@@ -301,6 +312,7 @@ def test_workflow_preserves_required_names_and_joins_all_postgres_jobs() -> None
         "postgres",
         "storage",
         "architecture",
+        "backend-e2e",
     }
     schema_strategy = cast(dict[str, object], jobs["postgres-schema"]["strategy"])
     matrix = cast(dict[str, object], schema_strategy["matrix"])
