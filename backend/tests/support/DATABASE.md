@@ -1,7 +1,7 @@
 # Test database connections
 
-`tests.support.database` owns test connection construction. The first migration
-stage leaves existing application fixtures and area-specific tests in place;
+`tests.support.database` owns test connection construction. Application fixtures
+and test areas not yet migrated retain their existing construction;
 `tests/architecture/test_database_connection_allowlist.json` records their direct
 constructor calls. The architecture suite rejects new calls and stale entries.
 Remove entries as each test area moves to this API. Once the inventory is empty,
@@ -63,6 +63,10 @@ before bootstrap creates it. `administrative=True` is reserved for cluster-role
 probes that have no tenant schema; their search path is pinned to `pg_catalog`.
 It does not grant any database privileges.
 
+For an existing schema outside a pytest request's lifecycle, use
+`database_connections(database_url, schema=schema_name)` as a context manager.
+It owns connection resources without creating or dropping the schema.
+
 `managed_session_factory` preserves SQLAlchemy's autoflush and expiry defaults;
 `TestDatabaseConnections.session_factory` defaults both to false for application
 sessions. Both accept explicit options, preserve explicit tenant info, and close
@@ -109,10 +113,11 @@ tenant from an earlier pool user.
 For a module-scoped or standalone fixture, use
 `isolated_database(os.environ["TEST_DATABASE_URL"], ...)`. It owns a generated
 schema and drops it after disposing all test engines. SQLite callers supply a
-path in pytest's temporary directory. PostgreSQL factories reject construction
-without an explicit disposable schema. Never pass a production database URL.
+path in pytest's temporary directory. PostgreSQL factories require an explicit
+disposable schema, except for the administrative probes described above. Never
+pass a production database URL.
 
-`hooks=(install_hook, ...)` on `isolated_database` or
+`hooks=(install_hook, ...)` on `isolated_database`, `database_connections` or
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
 sync facades. The encryption stack's schema-scoped lock isolation is still a
