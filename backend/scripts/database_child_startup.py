@@ -7,6 +7,7 @@ import subprocess
 import sys
 import uuid
 from collections.abc import Callable, Mapping, Sequence
+from functools import wraps
 from importlib.abc import Loader, MetaPathFinder
 from importlib.machinery import ModuleSpec, PathFinder
 from types import ModuleType
@@ -35,13 +36,11 @@ _DRIVERS = {
     "jaydebeapi",
     "snowflake.connector",
     "asyncpg",
-    "scripts.ci_no_database",
-    "scripts.database_observation",
 }
 
 
 class _ObservedLoader(Loader):
-    def __init__(self, loader: Loader, activate: Callable[[], None]) -> None:
+    def __init__(self, loader: Loader, activate: Callable[[ModuleType], None]) -> None:
         self.loader = loader
         self.activate = activate
 
@@ -52,7 +51,7 @@ class _ObservedLoader(Loader):
     @override
     def exec_module(self, module: ModuleType) -> None:
         self.loader.exec_module(module)
-        self.activate()
+        self.activate(module)
 
     def __getattr__(self, name: str) -> object:
         # Preserve package resource readers and other loader capabilities.
@@ -60,7 +59,7 @@ class _ObservedLoader(Loader):
 
 
 class _DriverFinder(MetaPathFinder):
-    def __init__(self, activate: Callable[[], None]) -> None:
+    def __init__(self, activate: Callable[[ModuleType], None]) -> None:
         self.activate = activate
 
     @override
@@ -107,14 +106,7 @@ def _install_children(inherited: dict[str, str]) -> None:
 def _install_audit(inherited: dict[str, str]) -> None:
     def audit(event: str, arguments: tuple[object, ...]) -> None:
         if event == "sqlite3.connect":
-            emit("database", entrypoint=event)
-            attempts = os.getenv("CI_NO_DATABASE_ATTEMPTS") or inherited.get(
-                "CI_NO_DATABASE_ATTEMPTS"
-            )
-            if attempts:
-                with open(attempts, "a") as stream:
-                    _ = stream.write(f"Database connection attempted by process {os.getpid()}\n")
-                raise AssertionError("Database connections are forbidden in unit tests")
+            _database_attempt(event, inherited)
         elif event == "socket.connect":
             service_connection(arguments[1])
         elif event == "subprocess.Popen":
@@ -123,18 +115,50 @@ def _install_audit(inherited: dict[str, str]) -> None:
             if isinstance(command, (list, tuple)) and command:
                 executable = str(cast(list[object], command)[0]).rsplit("/", 1)[-1]
                 if executable in {"psql", "sqlite3", "mysql", "sqlcmd"}:
-                    emit("database", entrypoint=executable)
-                    attempts = os.getenv("CI_NO_DATABASE_ATTEMPTS") or inherited.get(
-                        "CI_NO_DATABASE_ATTEMPTS"
-                    )
-                    if attempts:
-                        with open(attempts, "a") as stream:
-                            _ = stream.write(
-                                f"Database connection attempted by process {os.getpid()}\n"
-                            )
-                        raise AssertionError("Database connections are forbidden in unit tests")
+                    _database_attempt(executable, inherited)
 
     sys.addaudithook(audit)
+
+
+def _database_attempt(entrypoint: str, inherited: dict[str, str]) -> None:
+    emit("database", entrypoint=entrypoint)
+    attempts = os.getenv("CI_NO_DATABASE_ATTEMPTS") or inherited.get("CI_NO_DATABASE_ATTEMPTS")
+    if attempts:
+        with open(attempts, "a") as stream:
+            _ = stream.write(f"Database connection attempted by process {os.getpid()}\n")
+        raise AssertionError("Database connections are forbidden in unit tests")
+
+
+def _instrument_driver(module: ModuleType, inherited: dict[str, str]) -> None:
+    targets: list[object] = [module]
+    if module.__name__ == "sqlalchemy":
+        targets = [cast(object, module.Engine)]
+    elif module.__name__ == "psycopg":
+        targets.extend(
+            [cast(object, getattr(module, name)) for name in ("Connection", "AsyncConnection")]
+        )
+
+    def instrument(target: object, name: str) -> None:
+        original = cast(Callable[..., object], getattr(target, name))
+
+        @wraps(original)
+        def observed(*args: object, **kwargs: object) -> object:
+            _database_attempt(f"{module.__name__}.{name}", inherited)
+            return original(*args, **kwargs)
+
+        patch: Callable[[object, str, object], None] = setattr
+        patch(target, name, observed)
+
+    for target in targets:
+        for name in (
+            "connect",
+            "raw_connection",
+            "connect_async",
+            "create_pool",
+            "create_pool_async",
+        ):
+            if callable(getattr(target, name, None)):
+                instrument(target, name)
 
 
 def install() -> None:
@@ -144,40 +168,17 @@ def install() -> None:
         for name in (DIRECTORY_ENV, CONTEXT_ENV, RUN_ENV, "CI_NO_DATABASE_ATTEMPTS")
         if name in os.environ
     }
-    activating = False
-    activated = False
 
-    def activate() -> None:
-        nonlocal activating, activated
-        if activating or activated:
-            return
-        # A pytest plugin may itself be importing the guard. Wait for that
-        # module's loader to finish rather than recurse into a partial module.
-        for name in ("scripts.ci_no_database", "scripts.database_observation"):
-            module = sys.modules.get(name)
-            if module is not None and not hasattr(module, "install"):
-                return
-        activating = True
-        try:
-            attempts = os.getenv("CI_NO_DATABASE_ATTEMPTS") or inherited.get(
-                "CI_NO_DATABASE_ATTEMPTS"
-            )
-            if attempts:
-                os.environ["CI_NO_DATABASE_ATTEMPTS"] = attempts
-                from scripts.ci_no_database import install as refuse  # noqa: PLC0415
+    def instrument(module: ModuleType) -> None:
+        # Each loader patches only its completed module. Importing other drivers
+        # here would race or deadlock with concurrent imports on other threads.
+        _instrument_driver(module, inherited)
 
-                refuse()
-            if os.getenv(DIRECTORY_ENV):
-                from scripts.database_observation import install as observe  # noqa: PLC0415
-
-                observe()
-            activated = True
-        finally:
-            activating = False
-
-    sys.meta_path.insert(0, _DriverFinder(activate))
-    if any(name in sys.modules for name in _DRIVERS):
-        activate()
+    sys.meta_path.insert(0, _DriverFinder(instrument))
+    for name in _DRIVERS:
+        module = sys.modules.get(name)
+        if module is not None:
+            instrument(module)
 
     _install_children(inherited)
 
