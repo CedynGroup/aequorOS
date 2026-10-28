@@ -3696,13 +3696,13 @@
  "tests.scripts.test_local_services": {
   "reportAny": 1,
   "reportArgumentType": 1,
-  "reportMissingParameterType": 51,
+  "reportMissingParameterType": 50,
   "reportMissingTypeStubs": 1,
-  "reportUnknownArgumentType": 35,
+  "reportUnknownArgumentType": 33,
   "reportUnknownLambdaType": 14,
-  "reportUnknownMemberType": 79,
-  "reportUnknownParameterType": 52,
-  "reportUnknownVariableType": 23
+  "reportUnknownMemberType": 77,
+  "reportUnknownParameterType": 51,
+  "reportUnknownVariableType": 22
  },
  "tests.services.ai.test_client_mapping": {
   "reportAny": 17,

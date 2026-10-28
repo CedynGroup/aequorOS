@@ -220,7 +220,7 @@ def test_failed_start_rolls_back_services_started_by_run(monkeypatch, tmp_path):
     assert stopped == ["postgres"]
 
 
-def test_sigterm_stops_child_before_returning(tmp_path):
+def test_sigterm_stops_child_before_returning(tmp_path: Path) -> None:
     pidfile = tmp_path / "child.pid"
     script = Path(local_services.__file__)
     env = {**os.environ, "AQS_LOCAL_SERVICES": "external"}
