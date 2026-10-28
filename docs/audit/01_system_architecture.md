@@ -137,13 +137,11 @@ Healthy, unhealthy and exception paths are covered by `tests/test_health.py`.
 
 ## 5. Purity of the domain layer
 
-`app/domain/**` is pure Decimal computation. `app/policy/domain/resolver.py` (606 lines)
-imports no SQLAlchemy, no FastAPI and nothing from `app.services`;
-`app/policy/service/regulatory_parameters.py` is a thin database adapter over it (`ARCH-2`).
-The purity rule is enforced by
-`tests/architecture/test_dependency_boundaries.py::test_the_pure_domain_layer_imports_no_application_state`.
+Domain purity follows the [feature layout](../../CODEBASE_CONVENTIONS.md#5-feature-layout).
+The policy resolver and its database adapter are covered in
+[policy governance](04_policy_governance.md#1-the-resolution-order).
 
-Shared primitives, all in `app/domain/`:
+Shared primitives:
 
 | Primitive                             | Module                               | Lines |
 | ------------------------------------- | ------------------------------------ | ----- |

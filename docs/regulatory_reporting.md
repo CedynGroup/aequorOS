@@ -294,7 +294,7 @@ the calendar still never lists event-driven packs as obligations.
   computed snapshots (`anchors.computed_snapshot_dates`, labelled
   `reporting_date_source='computed_snapshot'`) — rule in §5a above.
 - **Publication status and commencement are separate.**
-  `domain/regulatory_instruments.py` resolves a final instrument against the reporting
+  `app/policy/domain/regulatory_instruments.py` resolves a final instrument against the reporting
   date; an `exposure_draft` or `unpublished` instrument never becomes in force merely
   because a proposed date arrives. `eligibility.py` resolves literal or bank-governed
   commencement. The calendar omits drafts, unpublished instruments and reporting dates

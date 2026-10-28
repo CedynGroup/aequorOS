@@ -3,7 +3,7 @@
 Class/type-keyed regulatory numbers — CAR floors, exposure limits, paid-up
 capital floors, LMTD liquidity floors, provisioning rates, reserve ratios — held
 as DATA: effective-dated, operator-audited, confirmation-status-aware, resolvable
-without a deploy. Engines FETCH these through ``app.policy.service.regulatory_parameters``
+without a deploy. Engines FETCH these through ``app.policy.public.regulatory_parameters``
 instead of embedding a literal (founder directive: no regulatory number is
 hardcoded).
 

@@ -5,9 +5,9 @@ The single resolution chain every governed regulatory number goes through::
     Jurisdiction -> Regulator -> Institution Type -> Regime -> Return Family
                  -> Parameter Set -> Effective Date
 
-Pure by construction (no SQLAlchemy / FastAPI / ``app.services``). The database
-adapter is ``app/policy/service/regulatory_parameters.py``; import THAT when you have a
-``Session`` and a ``Bank``, and import from here when you have plain values.
+Pure by construction (no SQLAlchemy / FastAPI / ``app.services``). For database
+resolution with a ``Session`` and a ``Bank``, import ``regulatory_parameters``
+from ``app.policy.public``; import from here when you have plain values.
 """
 
 from app.policy.domain.resolver import (

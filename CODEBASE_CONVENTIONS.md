@@ -478,7 +478,7 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
   `centralBankName()`/`currencyCode()`; never literal `'GHS'`, `'en-GH'`, `'BoG'`,
   `'Bank of Ghana'` in display code. Module-level constants evaluate before the binding —
   use jurisdiction-neutral wording there ("regulatory minimum", "supervisory severe"), not
-  getter calls. Backend: services resolve names via `app/policy/service/jurisdictions.py`
+  getter calls. Backend: services resolve names via `jurisdictions` from `app.policy.public`
   (BSD-2/BSD-3 headers do); fact derivation reads `_Canonical.base_currency` (from
   `bank.currency`) for FX base-leg and curve selection. Deliberate exceptions
   (Ghana-factual content, keep literal): the BoG return-family artifacts — BSD
