@@ -346,6 +346,7 @@ def test_unit_suite_task_and_ci_job_are_explicit() -> None:
     assert not any("setup-postgres" in str(step.get("uses", "")) for step in steps)
     assert job["if"] == "needs.preflight.outputs.guards == 'true'"
     assert document["jobs"]["postgres-suite"]["name"] == "Integration tests"
+    assert {"architecture", "backend-e2e"} <= set(_needs(document["jobs"]["gate"]))
 
 
 # --------------------------------------------------------------------------

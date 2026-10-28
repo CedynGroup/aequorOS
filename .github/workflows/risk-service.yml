@@ -815,6 +815,7 @@ jobs:
       - preflight
       - static
       - architecture
+      - backend-e2e
       - postgres
       - postgres-suite
       - storage
