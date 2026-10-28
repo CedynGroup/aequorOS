@@ -5,10 +5,10 @@ Standardised Framework is a different measurement — nineteen buckets against
 nine, six prescribed shapes against the platform's Basel six, per-currency
 aggregation with a materiality gate, an outlier test on LOSSES only (D-013),
 and behavioural treatment of deposits and prepayments the legacy engine has no
-vocabulary for. Extending ``domain/irr/engine.py`` in place would have moved
+vocabulary for. Extending ``app/irrbb/domain/engine.py`` in place would have moved
 every existing IRRBB golden and every filed IRRBB return; instead the SF runs
 as a new module value (``irr_sf``) on the same immutable run table, and the
-legacy engine is byte-identical (P5-DESIGN §1.7).
+legacy calculation behavior is unchanged (P5-DESIGN §1.7).
 
 What this module owns:
 
