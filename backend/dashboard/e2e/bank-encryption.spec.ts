@@ -45,7 +45,9 @@ async function identityAndNumericDashboard(page: Page, story: EncryptionStory) {
   expect(response.ok()).toBe(true);
   expect(await response.json()).toMatchObject({ organization_id: org });
   const numeric = await page.context().newPage();
-  await numeric.goto("/liquidity");
+  // LCR is unpublished reference analysis, so exercise its numeric workspace
+  // through the same deliberate preparation entry as the liquidity journeys.
+  await numeric.goto("/liquidity?preparing=1");
   const tile = kpi(numeric, "Liquidity Coverage Ratio");
   await expect(tile.locator("span[title]")).toHaveText(/\d[\d,.]*%/);
   const before = await tile.locator("span[title]").innerText();
