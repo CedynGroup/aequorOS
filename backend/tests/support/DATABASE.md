@@ -130,8 +130,10 @@ pass a production database URL.
 including extra pools, context variants, migration engines and async engines'
 sync facades. Encryption advisory locks receive the owning schema's namespace
 on every PostgreSQL engine, including adopted application engines and async
-engines' sync facades. Extra pools and role/tenant variants in one schema retain
-the same lock identity; independently owned schemas cannot block each other.
+engines' sync facades, and their native cursors. The transformation runs at native
+cursor execution so raw SQL and ORM work use the same lock identity exactly once.
+Extra pools and role/tenant variants in one schema retain the same lock identity;
+independently owned schemas cannot block each other.
 The hook is installed before checkout and does not depend on a schema prefix
 or URL option ordering.
 
