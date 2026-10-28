@@ -159,7 +159,7 @@ cluster URL must point at a disposable test cluster and all source rows are synt
 `hooks=(install_hook, ...)` on `isolated_database`, `database_connections` or
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
-sync facades. Encryption advisory locks automatically receive the owning schema's namespace
+sync facades. Encryption advisory locks receive the owning schema's namespace
 on every PostgreSQL engine, including adopted application engines and async
 engines' sync facades. Extra pools and role/tenant variants in one schema retain
 the same lock identity; independently owned schemas cannot block each other.
