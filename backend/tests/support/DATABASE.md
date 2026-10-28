@@ -4,16 +4,16 @@
 area-specific tests and database tooling use this API. The architecture guard
 rejects direct construction everywhere else in tests.
 
-Use `test_db_connections` for an **empty**, per-test PostgreSQL schema when
+Use `isolated_db` for an **empty**, per-test PostgreSQL schema when
 `TEST_DATABASE_URL` is set, or a temporary SQLite file otherwise. It never seeds
 financial data. Use `db_session` and `db_client` when testing the existing shared
 application baseline. A session can bind to an outer transaction opened through
 the same factory:
 
 ```python
-with test_db_connections.connection() as connection:
+with isolated_db.connection() as connection:
     with connection.begin():
-        with test_db_connections.session(
+        with isolated_db.session(
             bind=connection, join_transaction_mode="create_savepoint"
         ) as session:
             ...
@@ -61,9 +61,14 @@ factory = managed_session_factory(request, engine, expire_on_commit=False)
 These functions register cleanup on the supplied `request`, whether its fixture
 is function-, module- or session-scoped. URL and driver startup options supply
 schema, role and tenant defaults. An explicit `schema` can select a namespace
-before bootstrap creates it. `administrative=True` is reserved for cluster-role
-probes that have no tenant schema; their search path is pinned to `pg_catalog`.
-It does not grant any database privileges.
+before bootstrap creates it. `administrative=True` supports schema bootstrap and
+cluster-role probes without a tenant schema; absent an explicit or startup
+schema, their search path is pinned to `pg_catalog`. It does not grant any
+database privileges.
+
+For an existing schema outside a pytest request's lifecycle, use
+`database_connections(database_url, schema=schema_name)` as a context manager.
+It owns connection resources without creating or dropping the schema.
 
 The legacy read-only and outer-rollback data fixtures use an explicit
 `default_schema="public"` fallback only when their URL does not name a schema.
@@ -85,9 +90,10 @@ shared hooks and request-owned teardown. This preserves factory and cache behavi
 
 Use `managed_session_factory(None, engine)` only within an explicit owner
 lifetime; pytest fixtures normally supply their request for earlier cleanup.
-Closed connections, sessions and raw pool borrowers are weakly tracked, so
-long-lived owners do not retain every completed request. Still-live resources
-close before pool disposal, including raw contexts left active at owner teardown.
+The database owner weakly tracks connections, sessions and raw pool borrowers.
+When supplied, the pytest request also retains each session's close method as a
+finalizer until that request's teardown. Still-live resources close before pool
+disposal, including raw contexts left active at owner teardown.
 
 Before calling Alembic in a schema fixture, install its engine factory:
 
@@ -117,9 +123,9 @@ Set explicit tenant and role defaults without leaving the test's schema:
 ```python
 from dataclasses import replace
 
-tenant = test_db_connections.with_context(
+tenant = isolated_db.with_context(
     replace(
-        test_db_connections.context,
+        isolated_db.context,
         organization_id="OR-TEST",
         bank_id="BK-TEST",
         role="aqs_api",
@@ -139,8 +145,9 @@ tenant from an earlier pool user.
 For a module-scoped or standalone fixture, use
 `isolated_database(os.environ["TEST_DATABASE_URL"], ...)`. It owns a generated
 schema and drops it after disposing all test engines. SQLite callers supply a
-path in pytest's temporary directory. PostgreSQL factories reject construction
-without an explicit disposable schema. Never pass a production database URL.
+path in pytest's temporary directory. PostgreSQL factories require an explicit
+disposable schema, except for the administrative probes described above. Never
+pass a production database URL.
 
 Backup/restore tests need database-level isolation. Use
 `isolated_postgres_database(explicit_test_cluster_url)` with an isolated cluster
@@ -149,7 +156,7 @@ namespace, closes all source pools and drops the database on exit. The drill tes
 retains the tooling's protected-cluster check before provisioning. Its optional
 cluster URL must point at a disposable test cluster and all source rows are synthetic.
 
-`hooks=(install_hook, ...)` on `isolated_database` or
+`hooks=(install_hook, ...)` on `isolated_database`, `database_connections` or
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
 sync facades. The encryption stack's schema-scoped lock isolation is still a

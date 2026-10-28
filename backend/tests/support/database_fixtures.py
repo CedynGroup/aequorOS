@@ -23,7 +23,7 @@ def managed_application_engines(administrator: Engine, monkeypatch: pytest.Monke
 
 
 @pytest.fixture
-def test_db_connections(tmp_path: Path) -> Iterator[TestDatabaseConnections]:
+def isolated_db(tmp_path: Path) -> Iterator[TestDatabaseConnections]:
     """An empty per-test schema/file, without financial data or global seeds.
 
     Use existing ``db_session``/``db_client`` for the shared application baseline.
