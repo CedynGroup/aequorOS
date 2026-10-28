@@ -37,8 +37,8 @@ LEGACY_ENGINE = APP / "domain" / "irr" / "engine.py"
 #: Modules that run on the LIVE tier, or that every module's freshness and
 #: rating paths go through. None of them may reach the framework.
 LIVE_PLANE: tuple[Path, ...] = (
-    APP / "services" / "pipeline.py",
-    APP / "services" / "freshness.py",
+    APP / "live" / "service" / "pipeline.py",
+    APP / "live" / "service" / "freshness.py",
     APP / "services" / "implied_rating.py",
     APP / "reporting" / "service" / "generation.py",
 )
@@ -104,8 +104,7 @@ def test_the_live_plane_never_reaches_the_framework_service() -> None:
     offenders = [
         path.name
         for path in LIVE_PLANE
-        if path.exists()
-        and any(name.startswith(SF_SERVICE_MODULE) for name in _imported_names(path))
+        if any(name.startswith(SF_SERVICE_MODULE) for name in _imported_names(path))
     ]
     assert offenders == [], (
         "the Standardised Framework mints immutable filing evidence on request; "
