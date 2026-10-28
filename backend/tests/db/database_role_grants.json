@@ -1,5 +1,14 @@
 {
   "columns": [
+    [
+      "bank_encryption_keys",
+      "current_version_id",
+      "aqs_worker",
+      "UPDATE",
+      false
+    ],
+    ["bank_encryption_keys", "index_version_id", "aqs_worker", "UPDATE", false],
+    ["bank_encryption_keys", "updated_at", "aqs_worker", "UPDATE", false],
     ["jobs", "bank_id", "aqs_api", "UPDATE", false],
     ["jobs", "completed_at", "aqs_api", "UPDATE", false],
     ["jobs", "error", "aqs_api", "UPDATE", false],
@@ -92,6 +101,7 @@
     ["aequoros_regulatory_event_append_only_guard", "", "aqs_bi"],
     ["aequoros_regulatory_event_append_only_guard", "", "aqs_operator"],
     ["aequoros_regulatory_event_append_only_guard", "", "aqs_worker"],
+    ["aequoros_retained_operator_audit_count", "", "aqs_worker"],
     ["aequoros_retained_register_guard", "", "aqs_api"],
     ["aequoros_retained_register_guard", "", "aqs_audit_verifier"],
     ["aequoros_retained_register_guard", "", "aqs_bi"],
@@ -168,7 +178,10 @@
       "aqs_api": ["INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
     },
-    "bank_encryption_keys": {},
+    "bank_encryption_keys": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["SELECT"]
+    },
     "bank_financial_facts": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
@@ -852,7 +865,9 @@
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
-    "retained_bank_keys": {},
+    "retained_bank_keys": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"]
+    },
     "return_signature_placements": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]

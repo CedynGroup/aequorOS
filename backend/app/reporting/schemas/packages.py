@@ -780,14 +780,15 @@ class PackageComparisonRead(ClosedModel):
 
     base: PackageComparisonSideRead
     target: PackageComparisonSideRead
-    identical: bool
-    changed_count: int
-    added_count: int
-    removed_count: int
+    content_locked: bool = False
+    identical: bool | None
+    changed_count: int | None
+    added_count: int | None
+    removed_count: int | None
     #: Sections that differ, in the target's order, with base-only sections
     #: appended. Sections whose every figure matches are omitted.
     sections: list[SnapshotSectionDiffRead]
-    unchanged_section_count: int
+    unchanged_section_count: int | None
 
 
 class EmailRecipientGuidanceRead(ClosedModel):

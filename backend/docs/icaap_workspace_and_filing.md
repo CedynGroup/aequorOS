@@ -227,14 +227,17 @@ but not registry-driven (no `ReturnDefinition` can reach it), so it cannot
 reproduce that failure. Closing it properly means giving every engine an
 explicit provenance window instead of an ambient ledger.
 
-**Digests stay value-based**, following the
+**Calculation and content digests stay value-based**, following the
 [calculation input-hash contract](../../ARCHITECTURE.md#3-the-calculation-run-pattern-reuse-this-for-every-new-engine).
 `content_digest` strips `metadata.generated_at` and the execution-identity keys
 on each `provenance.source_runs` entry; the stored snapshot keeps the full
 provenance untouched, because run identity, timing and actor are the evidence a
-supervisor asks for. Never add a volatile field to a digest input, and never
+supervisor asks for. Never add a volatile field to these digest inputs, and never
 remove a key from `VOLATILE_METADATA_KEYS` — that would change every historical
 digest.
+
+The institution-profile register commitment follows the
+[attestation digest contract](../../docs/attestation_esignature.md#31-what-gets-signed--two-artefacts-per-signature).
 
 ---
 

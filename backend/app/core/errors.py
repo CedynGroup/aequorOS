@@ -11,6 +11,11 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.key_management.types import (
+    KeyIntegrityError,
+    KeyUnavailableError,
+    ProtectedSupportAccessError,
+)
 from app.core.logging import get_request_id, logger
 from app.schemas.common import ErrorBody, ErrorResponse
 
@@ -100,6 +105,40 @@ def register_exception_handlers(app: FastAPI) -> None:
             ),
             headers=exc.headers,
         )
+
+    async def bank_key_unavailable_handler(_request: Request, _exc: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=build_error_payload(
+                code=(
+                    "bank_protected_support"
+                    if isinstance(_exc, ProtectedSupportAccessError)
+                    else "bank_key_revoked"
+                    if isinstance(_exc, KeyUnavailableError) and _exc.revoked
+                    else "bank_key_unavailable"
+                ),
+                message=(
+                    _exc.public_message
+                    if isinstance(_exc, KeyUnavailableError)
+                    else "Can't reach your bank's key service. Retrying."
+                ),
+                request_id=get_request_id(),
+            ),
+        )
+
+    app.add_exception_handler(KeyUnavailableError, bank_key_unavailable_handler)
+
+    async def bank_key_integrity_handler(_request: Request, _exc: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=build_error_payload(
+                code="bank_key_integrity",
+                message="The protected data could not be verified.",
+                request_id=get_request_id(),
+            ),
+        )
+
+    app.add_exception_handler(KeyIntegrityError, bank_key_integrity_handler)
 
     @app.exception_handler(ModuleDataUnavailable)
     async def module_unavailable_handler(

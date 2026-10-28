@@ -20,6 +20,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.attestation.service import workflow as attestation_workflow
+from app.core.key_management.presentation import LOCKED_JSON, LockReason
+from app.core.key_management.types import KeyUnavailableError, ProtectedSupportAccessError
 from app.models import (
     AttestationSignature,
     BankReportingPeriod,
@@ -98,6 +100,35 @@ def test_diff_of_a_snapshot_against_itself_is_empty() -> None:
     sections, unchanged_sections = snapshot_diff.diff_snapshots(snapshot, snapshot)
     assert sections == []
     assert unchanged_sections == 1
+
+
+@pytest.mark.parametrize("reason", ["revoked", "unavailable", "support"])
+@pytest.mark.parametrize("locked_side", ["base", "target", "both"])
+def test_comparisons_refuse_locked_snapshots(
+    db_session: Session, reason: LockReason, locked_side: str
+) -> None:
+    base = _snapshot([{"code": "1.1", "description": "Cash", "value": "100.00"}])
+    target = _snapshot([{"code": "1.1", "description": "Cash", "value": "120.00"}])
+    if locked_side in {"base", "both"}:
+        base = {LOCKED_JSON: reason}
+    if locked_side in {"target", "both"}:
+        target = {LOCKED_JSON: reason}
+    error = ProtectedSupportAccessError if reason == "support" else KeyUnavailableError
+    with pytest.raises(error) as refused:
+        snapshot_diff.diff_snapshots(base, target)
+    assert refused.value.revoked is (reason == "revoked")
+    with pytest.raises(error):
+        snapshot_diff.build_comparison(
+            db_session, RegulatoryPackage(snapshot=base), RegulatoryPackage(snapshot=target)
+        )
+
+
+@pytest.mark.parametrize("reason", ["revoked", "unavailable", "support"])
+def test_snapshot_seals_refuse_locked_data(reason: LockReason) -> None:
+    error = ProtectedSupportAccessError if reason == "support" else KeyUnavailableError
+    with pytest.raises(error) as refused:
+        generation.snapshot_content_hash({LOCKED_JSON: reason})
+    assert refused.value.revoked is (reason == "revoked")
 
 
 def test_volatile_generation_metadata_is_not_a_figures_change() -> None:
@@ -349,4 +380,5 @@ def test_comparing_a_version_with_itself_yields_no_differences(
     assert comparison.added_count == 0
     assert comparison.removed_count == 0
     assert comparison.sections == []
+    assert comparison.unchanged_section_count is not None
     assert comparison.unchanged_section_count > 0

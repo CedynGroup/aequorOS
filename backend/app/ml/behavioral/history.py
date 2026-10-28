@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass
+from typing import cast as type_cast
 
 from sqlalchemy import Float, cast, func, select
 from sqlalchemy.orm import Session
@@ -110,8 +111,7 @@ def load_deposit_month_aggregates(  # noqa: PLR0913
     if non_maturing_only:
         conds.append(CanonicalPositionSnapshot.contractual_maturity.is_(None))
     concentration_group = func.coalesce(
-        CanonicalCounterparty.group_reference,
-        CanonicalCounterparty.name,
+        CanonicalCounterparty.concentration_group_blind_index,
         "<unattributed>",
     ).label("concentration_group")
     branch_id = func.coalesce(
@@ -152,7 +152,7 @@ def load_deposit_month_aggregates(  # noqa: PLR0913
             n_accounts=int(n or 0),
             avg_rate=float(rate) if rate is not None else None,
             counterparty_type=ct,
-            concentration_group=group or "<unattributed>",
+            concentration_group=type_cast(str, group),
             branch_id=branch or "<unassigned>",
         )
         for pc, ct, group, branch, d, bal, n, rate in rows

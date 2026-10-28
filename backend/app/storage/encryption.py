@@ -1,17 +1,31 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Generator
+from contextlib import contextmanager
+from copy import copy
+from dataclasses import dataclass
 from typing import BinaryIO, cast
 from uuid import UUID
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from app.core.key_management import sdk
 from app.core.key_management.models import BankEncryptionKey
-from app.core.key_management.registry import DatabaseEnvelopeStore, EnvelopeStore
+from app.core.key_management.presentation import (
+    SESSION_STATE,
+    SESSION_SUPPORT,
+    PresentationState,
+)
+from app.core.key_management.registry import DatabaseEnvelopeStore, EnvelopeStore, ObjectKey
 from app.core.key_management.settings import get_key_settings
-from app.core.key_management.types import KeyUnavailableError
+from app.core.key_management.types import (
+    KeyIntegrityError,
+    KeyUnavailableError,
+    ProtectedSupportAccessError,
+)
 from app.db import session as database
 from app.db.worker_access import STORAGE_KEY_SIGNATURE, has_worker_function
 from app.storage.client import ObjectMetadata, StorageAccessError, StorageLocation
@@ -29,44 +43,109 @@ def object_context(location: StorageLocation, checksum: str) -> dict[str, str]:
     }
 
 
+@dataclass(frozen=True, repr=False)
+class _DetachedEnvelopes:
+    slug: str
+    context: dict[str, str]
+    target: ObjectKey
+    source: ObjectKey | None
+
+    def for_session(self, db: Session) -> _DetachedEnvelopes:
+        return self
+
+    def prepare(self, slug: str, context: dict[str, str]) -> ObjectKey:
+        if slug != self.slug or context != self.context:
+            raise KeyUnavailableError("Object copy context changed.")
+        return self.target
+
+    def open(self, slug: str, envelope_id: UUID, context: dict[str, str]) -> ObjectKey:
+        _ = self.prepare(slug, context)
+        if self.source is None or self.source.envelope_id != envelope_id:
+            raise KeyUnavailableError("Object copy source changed.")
+        return self.source
+
+
 class ObjectEncryption:
     def __init__(self, store: EnvelopeStore | None = None) -> None:
         self._store = store
         self._injected_store = store is not None
+        self._session: Session | None = None
+
+    def for_session(self, db: Session) -> ObjectEncryption:
+        bound = copy(self)
+        bound._session = db
+        return bound
+
+    def require_read_access(self) -> None:
+        if self._session is not None:
+            presentation = self._session.info.get(SESSION_STATE)
+            if self._session.info.get(SESSION_SUPPORT) or (
+                isinstance(presentation, PresentationState) and presentation.support
+            ):
+                raise ProtectedSupportAccessError()
 
     def bank_key_required(self, location: StorageLocation) -> bool:
         """Connected keys always fail closed, independently of the rollout flag."""
         if self._injected_store or get_key_settings().bank_key_required:
             return True
+        if self._session is not None:
+            with self._session.no_autoflush:
+                return self._bank_key_required(self._session, location)
         with database.get_storage_session() as db:
-            if db.info.get("worker_context") is True and has_worker_function(
-                db, STORAGE_KEY_SIGNATURE
-            ):
-                required = cast(
-                    bool | None,
-                    db.scalar(
-                        text("SELECT aqs_worker_storage_key_required(:slug)"),
-                        {"slug": location.institution_slug},
-                    ),
-                )
-                if required is None:
-                    raise KeyUnavailableError(
-                        "Storage location does not belong to this worker job."
-                    )
-                return required
-            return (
+            return self._bank_key_required(db, location)
+
+    @staticmethod
+    def _bank_key_required(db: Session, location: StorageLocation) -> bool:
+        if db.info.get("worker_context") is True and has_worker_function(db, STORAGE_KEY_SIGNATURE):
+            required = cast(
+                bool | None,
                 db.scalar(
-                    select(BankEncryptionKey.id).where(
-                        BankEncryptionKey.storage_slug == location.institution_slug
-                    )
-                )
-                is not None
+                    text("SELECT aqs_worker_storage_key_required(:slug)"),
+                    {"slug": location.institution_slug},
+                ),
             )
+            if required is None:
+                raise KeyUnavailableError("Storage location does not belong to this worker job.")
+            return required
+        return (
+            db.scalar(
+                select(BankEncryptionKey.id).where(
+                    BankEncryptionKey.storage_slug == location.institution_slug
+                )
+            )
+            is not None
+        )
 
     def _envelopes(self) -> EnvelopeStore:
         if self._store is None:
             self._store = DatabaseEnvelopeStore(database.get_storage_session)
-        return self._store
+        return self._store.for_session(self._session) if self._session is not None else self._store
+
+    def detached(
+        self, location: StorageLocation, metadata: ObjectMetadata, envelope_id: UUID | None
+    ) -> ObjectEncryption:
+        context = object_context(location, metadata.checksum_sha256)
+        store = self._envelopes()
+        source = (
+            store.open(location.institution_slug, envelope_id, context) if envelope_id else None
+        )
+        target = store.prepare(location.institution_slug, context)
+        return ObjectEncryption(
+            _DetachedEnvelopes(location.institution_slug, context, target, source)
+        )
+
+    @contextmanager
+    def publication(self, location: StorageLocation) -> Generator[ObjectEncryption]:
+        store = self._envelopes()
+        if isinstance(store, DatabaseEnvelopeStore):
+            with store.publication(location.institution_slug) as bound:
+                encryption = copy(self)
+                encryption._store = bound
+                # Keep optional-bank policy checks in the publication unit.
+                encryption._session = bound.session
+                yield encryption
+        else:
+            yield self
 
     def encrypt(
         self, location: StorageLocation, data: BinaryIO, metadata: ObjectMetadata
@@ -78,7 +157,9 @@ class ObjectEncryption:
             key = self._envelopes().prepare(location.institution_slug, context)
             encrypted = sdk.transform_file(data, key.plaintext, context)
             return encrypted, str(key.envelope_id), key.key_id
-        except (KeyUnavailableError, RuntimeError, SQLAlchemyError) as exc:
+        except KeyUnavailableError:
+            raise
+        except (RuntimeError, SQLAlchemyError) as exc:
             raise StorageAccessError(
                 "The bank encryption key is unavailable; storage access refused."
             ) from exc
@@ -92,11 +173,12 @@ class ObjectEncryption:
     ) -> BinaryIO:
         close_source = True
         try:
+            self.require_read_access()
             if "encryption-format" not in headers and not self.bank_key_required(location):
                 close_source = False
                 return data
             if headers.get("encryption-format") != ENCRYPTION_FORMAT:
-                raise KeyUnavailableError("An encrypted bank object is required.")
+                raise KeyIntegrityError("An encrypted bank object is required.")
             envelope_id = UUID(headers["key-envelope-id"])
             context = object_context(location, metadata.checksum_sha256)
             key = self._envelopes().open(location.institution_slug, envelope_id, context)
@@ -106,10 +188,16 @@ class ObjectEncryption:
                 digest.update(chunk)
             if digest.hexdigest() != metadata.checksum_sha256:
                 decrypted.close()
-                raise KeyUnavailableError("The encrypted object's checksum does not match.")
+                raise KeyIntegrityError("The encrypted object's checksum does not match.")
             _ = decrypted.seek(0)
             return decrypted
-        except (KeyUnavailableError, ValueError, KeyError, RuntimeError, SQLAlchemyError) as exc:
+        except KeyIntegrityError as exc:
+            raise StorageAccessError(
+                "The bank key or encrypted object could not be verified."
+            ) from exc
+        except KeyUnavailableError:
+            raise
+        except (ValueError, KeyError, RuntimeError, SQLAlchemyError) as exc:
             raise StorageAccessError(
                 "The bank key or encrypted object could not be verified."
             ) from exc

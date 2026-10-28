@@ -2,8 +2,8 @@
 
 Every mutation payload carries a non-empty ``reason`` (canonical-mutation
 convention): the service records it in the audit trail and returns the
-refreshed read model. Update payloads are full replacements; a related
-party's ``roles`` list uses replace-on-write semantics.
+refreshed read model. Related-party updates change supplied fields only; an
+explicit ``roles`` list uses replace-on-write semantics.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 type PartyType = Literal["individual", "legal_entity"]
 type PartyStatus = Literal["active", "inactive"]
@@ -115,8 +115,55 @@ class RelatedPartyCreate(ClosedModel):
     roles: list[RelatedPartyRoleInput] = Field(default_factory=list)
 
 
-class RelatedPartyUpdate(RelatedPartyCreate):
-    """Full replacement; ``roles`` is replace-on-write."""
+class RelatedPartyRoleUpdate(ClosedModel):
+    role_id: UUID
+    role: RelatedPartyRoleCode | None = None
+    other_responsibilities: str | None = Field(default=None, max_length=2000)
+    appointed_on: date | None = None
+    term_of_appointment: str | None = Field(default=None, max_length=80)
+    sitting_allowance: Decimal | None = Field(default=None, ge=0)
+    travel_allowance: Decimal | None = Field(default=None, ge=0)
+    annual_fees: Decimal | None = Field(default=None, ge=0)
+    icag_registration: str | None = Field(default=None, max_length=60)
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def reject_null_role(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("role cannot be null.")
+        return value
+
+
+class RelatedPartyUpdate(ClosedModel):
+    """Supplied fields change; explicit roles replace, role_updates retain IDs."""
+
+    reason: str = Field(min_length=1, max_length=500)
+    party_type: PartyType | None = None
+    full_name: str | None = Field(default=None, min_length=1, max_length=200)
+    contact: dict[str, Any] | None = None
+    regulated_elsewhere: bool | None = None
+    regulated_jurisdiction: str | None = Field(default=None, max_length=80)
+    status: PartyStatus | None = None
+    roles: list[RelatedPartyRoleInput] = Field(default_factory=list)
+    role_updates: list[RelatedPartyRoleUpdate] = Field(default_factory=list)
+
+    @field_validator(
+        "party_type", "full_name", "contact", "regulated_elsewhere", "status", mode="before"
+    )
+    @classmethod
+    def reject_null_fields(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("This field cannot be null.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_role_changes(self) -> RelatedPartyUpdate:
+        if {"roles", "role_updates"} <= self.model_fields_set:
+            raise ValueError("Supply roles or role_updates, not both.")
+        ids = [update.role_id for update in self.role_updates]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Each role may only be updated once.")
+        return self
 
 
 class RelatedPartyRoleRead(ClosedModel):

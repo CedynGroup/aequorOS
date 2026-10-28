@@ -117,9 +117,7 @@ def certification_digest(package: dict[str, Any]) -> str:
         )
         if binding_class == "engine_run"
         else [],
-        "register_state_digest": (
-            package.get("register_state_digest") if binding_class == "master_data" else None
-        ),
+        "register_state_digest": package.get("register_state_digest"),
     }
     return digest_of(payload)
 

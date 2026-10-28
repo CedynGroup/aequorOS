@@ -244,8 +244,11 @@ def test_aws_revoked_decrypt_grant_refuses_after_warm_read() -> None:
                 service_error_code="AccessDeniedException",
                 service_message="bank revoked the workload grant",
             )
-            with pytest.raises(KeyUnavailableError):
+            with pytest.raises(
+                KeyUnavailableError, match="Access denied for kms:Decrypt"
+            ) as denial:
                 provider.unwrap(key, data_key.wrapped, _CONTEXT)
+            assert "bank revoked the workload grant" not in str(denial.value)
             typed.assert_no_pending_responses()
 
 

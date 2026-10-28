@@ -162,7 +162,7 @@ def _master_data_package(
     db: Session, *, prior: RegulatoryPackage | None = None
 ) -> RegulatoryPackage:
     version = prior.version + 1 if prior is not None else 1
-    snapshot = {"institution_name": f"Sealed Bank revision {version}"}
+    snapshot: dict[str, object] = {"institution_name": f"Sealed Bank revision {version}"}
     actor = prior.generated_by if prior is not None else uuid4()
     if prior is None:
         db.add(User(id=actor, organization_id=ORG_1, email=f"{actor}@example.test"))
@@ -183,14 +183,19 @@ def _master_data_package(
         snapshot_sha256=snapshot_content_hash(snapshot),
         content_digest=digests.content_digest(snapshot),
         register_state_digest=digests.register_state_digest(
-            [
-                {
-                    "table": "banks",
-                    "id": "BK-SEAL001",
-                    "updated_at": "2026-09-30T00:00:00Z",
-                    "values": snapshot,
-                }
-            ]
+            {
+                "organization_id": ORG_1,
+                "bank_id": "BK-SEAL001",
+                "key_version": None,
+                "rows": [
+                    {
+                        "table": "banks",
+                        "id": "BK-SEAL001",
+                        "updated_at": "2026-09-30T00:00:00Z",
+                        "values": snapshot,
+                    }
+                ],
+            }
         ),
         generated_by=actor,
         generated_at=datetime.now(UTC),
