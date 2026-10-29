@@ -29,6 +29,7 @@ from app.api.deps import TenantContext
 from app.domain.authority.outcomes import OutcomeDetail, OutcomeState
 from app.domain.authority.registry import REGISTRY, InstitutionClass, MetricFamily
 from app.domain.capital.engine import CapitalFact, compute_rwa
+from app.live.service import pipeline
 from app.models import (
     Bank,
     CanonicalPosition,
@@ -45,7 +46,6 @@ from app.schemas.liquidity_thresholds import LiquidityThresholdUpdate
 from app.services import (
     enterprise_stress,
     liquidity_thresholds,
-    pipeline,
     regulatory_capital,
     regulatory_forecasting,
     sdi_capital,

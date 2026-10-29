@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.ids import new_uuid7
+from app.live.service.fact_derivation import DerivationError, derive_facts
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalGlAccount,
@@ -39,7 +40,6 @@ from app.models.canonical import (
     CanonicalReferenceRow,
 )
 from app.models.ingestion import IngestionBatch, LineageRecord
-from app.services.fact_derivation import DerivationError, derive_facts
 
 # Panel column contracts live with the simulator; import lazily to avoid a hard
 # dependency when the package layout differs.

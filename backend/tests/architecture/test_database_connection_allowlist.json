@@ -18,6 +18,9 @@
   "tests/identity/api/test_audit_log.py": {
     "sqlalchemy.create_engine": 1
   },
+  "tests/live/service/test_pipeline.py": {
+    "sqlalchemy.orm.sessionmaker": 2
+  },
   "tests/live_data/conftest.py": {
     "sqlalchemy.create_engine": 1
   },
@@ -26,9 +29,6 @@
   },
   "tests/scripts/test_dr_tooling.py": {
     "psycopg.connect": 3
-  },
-  "tests/services/test_pipeline.py": {
-    "sqlalchemy.orm.sessionmaker": 2
   },
   "tests/test_worker.py": {
     "sqlalchemy.orm.sessionmaker": 1

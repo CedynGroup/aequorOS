@@ -46,7 +46,8 @@ from app.db.base import utc_now
 from app.identity import public as membership
 from app.identity import public as organization_ownership
 from app.identity.public import Bank, SsoConnection, User
-from app.models import BankReportingPeriod, Organization, TenantStorage
+from app.live.public import BankReportingPeriod
+from app.models import Organization, TenantStorage
 from app.operator.deps import OperatorContext, record_operator_action
 from app.policy.public import InstitutionType, Jurisdiction, institution_types, parameter_register
 from app.schemas.operator import (

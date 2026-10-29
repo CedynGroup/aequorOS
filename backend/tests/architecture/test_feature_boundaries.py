@@ -140,15 +140,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         r"^(models/notification|schemas/notifications|features/manage_notifications)$",
         "notifications",
     ),
-    # ---- live engine and the facts spine
-    (
-        r"^services/(fact_derivation|pipeline|live_.*|freshness|alerts|reporting_periods"
-        r"|regulatory_dashboard_batching|data_activation)$",
-        "live",
-    ),
-    (r"^models/(facts|live|regulatory|regulatory_run)$", "live"),
-    (r"^(schemas/live|features/manage_live_engine)$", "live"),
-    (r"^domain/(positions|reporting|gl)/", "live"),
     # ---- data engine
     (r"^adapters/__init__$", "data_engine"),
     (r"^adapters/(api_push|database_direct|excel_csv|temenos_t24)(/|$)", "data_engine"),
@@ -489,7 +480,7 @@ def test_the_scanner_charges_each_rule() -> None:
 @pytest.mark.parametrize(
     "layout",
     [
-        ("app.models.regulatory", "live", "app.services.regulatory_fx"),
+        ("app.live.models.regulatory", "live", "app.services.regulatory_fx"),
         ("app.identity.models", "identity", "app.fx.service"),
     ],
 )
@@ -587,7 +578,7 @@ class _ModelSplitScenario:
         moved_source = {
             "app.api.deps": "app.core.dependency",
             "app.services.ai.grounding": "app.ai.service",
-            "app.services.fact_derivation": "app.live.service",
+            "app.live.service.fact_derivation": "app.live.service",
         }[self.source]
         path.unlink()
         moved_path = _write_synthetic_module(
@@ -633,7 +624,7 @@ class _ModelSplitScenario:
             json.dumps(
                 {
                     target: {
-                        "module": "app.models.regulatory",
+                        "module": "app.live.models.regulatory",
                         "feature": "live",
                         "importers": [self.source],
                     }
@@ -693,7 +684,7 @@ class _ModelSplitScenario:
 @pytest.mark.parametrize("import_style", ["direct", "registry", "relative", "dynamic"])
 @pytest.mark.parametrize(
     "source",
-    ["app.api.deps", "app.services.ai.grounding", "app.services.fact_derivation"],
+    ["app.api.deps", "app.services.ai.grounding", "app.live.service.fact_derivation"],
 )
 def test_model_splits_preserve_historical_boundary_identities(
     tmp_path: Path,
@@ -715,11 +706,11 @@ def test_model_splits_preserve_historical_boundary_identities(
 
     try:
         _write_synthetic_module(app, "app.models.__init__")
-        _write_synthetic_module(app, "app.models.regulatory", "class Authority: pass\n")
+        _write_synthetic_module(app, "app.live.models.regulatory", "class Authority: pass\n")
         source_path = _write_synthetic_module(
             app,
             source,
-            _synthetic_import_content(app, source, "app.models.regulatory", import_style),
+            _synthetic_import_content(app, source, "app.live.models.regulatory", import_style),
         )
         original = _scan_synthetic_boundaries()
         write_baseline()

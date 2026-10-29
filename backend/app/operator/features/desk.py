@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
 
 from app.identity.public import Bank
+from app.live.public import live_refresh_triggers
 from app.models import (
     DeskDetermination,
     DeskMethodology,
@@ -59,7 +60,6 @@ from app.schemas.market_desk import (
     DeskPublicationRead,
     DeskResearchAdjustmentsPut,
 )
-from app.services import live_refresh_triggers
 from app.services.market_desk import (
     calculation,
     determinations,

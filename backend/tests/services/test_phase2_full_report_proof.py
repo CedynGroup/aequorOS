@@ -31,13 +31,14 @@ from app.identity.schemas.institution_profile import (
     RelatedPartyRoleInput,
 )
 from app.identity.service import institution_profile
+from app.live.service import data_activation
 from app.models import BankReportingPeriod, RegulatoryPackage
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation
 from app.reporting.service.exports import export_package
 from app.reporting.service.registry import REGISTRY
 from app.schemas.reverse_stress import ReverseStressRunCreate
-from app.services import data_activation, reverse_stress
+from app.services import reverse_stress
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

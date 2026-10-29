@@ -21,6 +21,7 @@ from app.credit.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.credit.service import regulatory_credit
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.live.service import data_activation, pipeline
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -34,7 +35,7 @@ from app.models import (
 )
 from app.reporting.models.packages import RETURN_FAMILIES
 from app.reporting.service.registry import REGISTRY
-from app.services import data_activation, job_queue, pipeline, scheduler
+from app.services import job_queue, scheduler
 from tests.api.test_fx_authorization import _add_regulatory_run
 from tests.credit.api.test_credit_authorization import _seed_live_rows
 from tests.credit.api.test_credit_route_authorization import (

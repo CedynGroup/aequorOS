@@ -21,14 +21,14 @@ from app.domain.forecasting.engine import ForecastFact
 from app.domain.stress.credit_bottom_up import BottomUpCreditInputs, compute_bottom_up_credit
 from app.domain.stress.orchestrator import EnterpriseStressInputs, run_enterprise_stress
 from app.domain.stress.projection import EnterpriseProjectionInputs, project_enterprise
-from app.models import BankFinancialFact, CanonicalGlAccount, RegulatoryRun
-from app.schemas.reverse_stress import ReverseStressRunCreate
-from app.services import enterprise_stress, reverse_stress
-from app.services.fact_derivation import (
+from app.live.service.fact_derivation import (
     _derive_specs,  # pyright: ignore[reportPrivateUsage]
     _PositionRow,  # pyright: ignore[reportPrivateUsage]
     derive_facts,
 )
+from app.models import BankFinancialFact, CanonicalGlAccount, RegulatoryRun
+from app.schemas.reverse_stress import ReverseStressRunCreate
+from app.services import enterprise_stress, reverse_stress
 from tests.credit.service.test_crd_credit_exposures import (
     _credit_rwa,  # pyright: ignore[reportPrivateUsage]
     _stress_row,  # pyright: ignore[reportPrivateUsage]

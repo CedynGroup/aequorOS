@@ -37,8 +37,8 @@ LEGACY_ENGINE = APP / "irrbb" / "domain" / "engine.py"
 #: Modules that run on the LIVE tier, or that every module's freshness and
 #: rating paths go through. None of them may reach the framework.
 LIVE_PLANE: tuple[Path, ...] = (
-    APP / "services" / "pipeline.py",
-    APP / "services" / "freshness.py",
+    APP / "live" / "service" / "pipeline.py",
+    APP / "live" / "service" / "freshness.py",
     APP / "services" / "implied_rating.py",
     APP / "reporting" / "service" / "generation.py",
 )
@@ -104,8 +104,7 @@ def test_the_live_plane_never_reaches_the_framework_service() -> None:
     offenders = [
         path.name
         for path in LIVE_PLANE
-        if path.exists()
-        and any(name.startswith(SF_SERVICE_MODULE) for name in _imported_names(path))
+        if any(name.startswith(SF_SERVICE_MODULE) for name in _imported_names(path))
     ]
     assert offenders == [], (
         "the Standardised Framework mints immutable filing evidence on request; "
@@ -115,7 +114,7 @@ def test_the_live_plane_never_reaches_the_framework_service() -> None:
 
 def test_the_framework_is_not_registered_as_a_live_module() -> None:
     from app.irrbb.service.regulatory_irr_sf import MODULE_IRR_SF  # noqa: PLC0415
-    from app.models.live import LIVE_MODULES  # noqa: PLC0415 - narrow, local assertion
+    from app.live.models.live import LIVE_MODULES  # noqa: PLC0415 - narrow, local assertion
 
     assert MODULE_IRR_SF not in LIVE_MODULES
 

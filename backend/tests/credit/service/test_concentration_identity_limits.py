@@ -20,6 +20,7 @@ from app.credit.schemas.regulatory_credit import (
     CreditConcentrationRead,
 )
 from app.credit.service import credit_concentration, credit_params, regulatory_credit
+from app.live.service import fact_derivation
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -27,7 +28,6 @@ from app.models import (
     CanonicalPositionSnapshot,
     ParamConcentrationLimit,
 )
-from app.services import fact_derivation
 from tests.api import test_impersonation_auth as impersonation
 from tests.core import test_key_unavailable_numeric as encrypted
 from tests.core.test_bank_field_encryption import KEY_A

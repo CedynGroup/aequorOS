@@ -27,7 +27,8 @@ from app.core.authorization import ConditionCheck, ConditionKind, Module, Permis
 from app.db.base import utc_now
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
-from app.models import CapitalPlan, IlaapSnapshot, RegulatoryMetricResult, RegulatoryRun
+from app.live.public import RegulatoryMetricResult, RegulatoryRun
+from app.models import CapitalPlan, IlaapSnapshot
 from app.policy.domain import PolicyUnresolvedError
 from app.policy.public import (
     InstitutionTypeUnresolved,

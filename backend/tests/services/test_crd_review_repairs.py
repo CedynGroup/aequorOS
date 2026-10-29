@@ -18,6 +18,10 @@ from app.domain.capital.engine import (
 )
 from app.domain.stress.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
 from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
+from app.live.service.fact_derivation import (
+    _derive_specs,  # pyright: ignore[reportPrivateUsage]
+    _load_canonical,  # pyright: ignore[reportPrivateUsage]
+)
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -28,10 +32,6 @@ from app.models import (
 )
 from app.services.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
-)
-from app.services.fact_derivation import (
-    _derive_specs,  # pyright: ignore[reportPrivateUsage]
-    _load_canonical,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.api.test_enterprise_stress import (
     RUNS_URL,

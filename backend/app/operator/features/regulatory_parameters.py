@@ -18,6 +18,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
+from app.live.public import live_refresh_triggers
 from app.operator.deps import Operator, OperatorDb, record_operator_action
 from app.operator.services import regulatory_parameters as service
 from app.policy.public import RegulatoryParameter
@@ -27,7 +28,6 @@ from app.schemas.operator import (
     RegulatoryParameterProposeRequest,
     RegulatoryParameterRead,
 )
-from app.services import live_refresh_triggers
 
 #: Observability (docs/sdi.md §19) — a structured runtime-log line for every
 #: control-plane mutation, alongside the persistent ``operator_audit_log`` record.

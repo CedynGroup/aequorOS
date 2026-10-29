@@ -142,8 +142,8 @@ _BANK_MODEL_FILES: tuple[str, ...] = (
     "identity/models/bank.py",
     "models/canonical.py",
     "policy/models/parameter_register.py",
-    "models/regulatory.py",
-    "models/regulatory_run.py",
+    "live/models/regulatory.py",
+    "live/models/regulatory_run.py",
     "reporting/models/packages.py",
 )
 

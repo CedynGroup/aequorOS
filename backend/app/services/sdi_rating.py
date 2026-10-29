@@ -273,7 +273,7 @@ def _facts(
     is preferred and the official one is the fallback, so an assessment resolves
     on whichever plane produced facts for that date.
     """
-    from app.models import (  # noqa: PLC0415
+    from app.live.public import (  # noqa: PLC0415 - retain the deferred fact lookup
         BankFinancialFact,
         BankReportingPeriod,
         CurrentFinancialFact,

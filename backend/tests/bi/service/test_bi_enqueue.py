@@ -6,7 +6,7 @@ when on it queues exactly one coalesced job per ``(bank, as_of)`` with the
 contract payload. The hook sites — ingestion, the live-plane triggers — are
 proven here through their real entrypoints; the withdrawal and pipeline hooks
 are proven beside the tests that already drive those paths
-(``tests/api/test_system_of_record.py``, ``tests/services/test_pipeline.py``).
+(``tests/api/test_system_of_record.py``, ``tests/live/service/test_pipeline.py``).
 """
 
 from __future__ import annotations
@@ -28,8 +28,9 @@ from app.bi.service import enqueue, versions
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.live.service import live_refresh_triggers
 from app.models import BiFactPositionEom, CurrentFinancialFact, Job
-from app.services import job_queue, live_refresh_triggers
+from app.services import job_queue
 from tests.adapters.excel_csv import fixtures
 from tests.api.test_ingestion import (
     FULL_MAPPING,
@@ -211,8 +212,8 @@ def test_the_regulatory_plane_imports_only_the_seam_and_the_versions_module() ->
     hook_sites = (
         "app/services/scheduler.py",
         "app/services/ingestion.py",
-        "app/services/pipeline.py",
-        "app/services/live_refresh_triggers.py",
+        "app/live/service/pipeline.py",
+        "app/live/service/live_refresh_triggers.py",
         "app/services/canonical_withdrawal.py",
     )
     allowed = {"app.bi.service.enqueue", "app.bi.service.versions"}

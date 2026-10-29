@@ -433,9 +433,6 @@
   "reportUnknownMemberType": 8,
   "reportUnknownVariableType": 1
  },
- "app.domain.gl.pl_mapping": {
-  "reportAny": 5
- },
  "app.domain.icaap.ai_convert": {
   "reportAny": 1,
   "reportUnknownArgumentType": 2,
@@ -527,9 +524,6 @@
  "app.domain.policy.parameter_shapes": {
   "reportAny": 32,
   "reportUnknownVariableType": 3
- },
- "app.domain.reporting.period_windows": {
-  "reportAny": 9
  },
  "app.domain.stress.concentration": {
   "reportAny": 2
@@ -691,6 +685,41 @@
  "app.jobs.bi_subscriptions": {
   "reportAny": 22
  },
+ "app.live.domain.gl.pl_mapping": {
+  "reportAny": 5
+ },
+ "app.live.domain.reporting.period_windows": {
+  "reportAny": 9
+ },
+ "app.live.models.live": {
+  "reportAny": 4
+ },
+ "app.live.models.regulatory": {
+  "reportAny": 2
+ },
+ "app.live.models.regulatory_run": {
+  "reportAny": 4
+ },
+ "app.live.service.data_activation": {
+  "reportAny": 13,
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 4,
+  "reportUnknownVariableType": 1
+ },
+ "app.live.service.fact_derivation": {
+  "reportAny": 35,
+  "reportUnknownVariableType": 2
+ },
+ "app.live.service.live_view": {
+  "reportAny": 1,
+  "reportUnknownArgumentType": 3,
+  "reportUnknownMemberType": 2,
+  "reportUnknownVariableType": 2
+ },
+ "app.live.service.pipeline": {
+  "reportAny": 2,
+  "reportUnusedFunction": 1
+ },
  "app.ml.behavioral.config": {
   "reportMissingTypeArgument": 1,
   "reportUnknownVariableType": 1
@@ -837,9 +866,6 @@
  "app.models.liquidity_cfp": {
   "reportAny": 3
  },
- "app.models.live": {
-  "reportAny": 4
- },
  "app.models.market_data": {
   "reportAny": 3
  },
@@ -861,18 +887,12 @@
  "app.models.reconciliation": {
   "reportAny": 1
  },
- "app.models.regulatory": {
-  "reportAny": 2
- },
  "app.models.regulatory_parameter": {
   "reportAny": 1,
   "reportMissingTypeArgument": 1
  },
  "app.models.regulatory_reporting": {
   "reportAny": 9
- },
- "app.models.regulatory_run": {
-  "reportAny": 4
  },
  "app.models.risk": {
   "reportAny": 7
@@ -1198,12 +1218,6 @@
  "app.services.credit_exposure_book": {
   "reportAny": 7
  },
- "app.services.data_activation": {
-  "reportAny": 13,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 4,
-  "reportUnknownVariableType": 1
- },
  "app.services.database_connections": {
   "reportAny": 6,
   "reportUnknownArgumentType": 1
@@ -1240,10 +1254,6 @@
  },
  "app.services.examiner_mode": {
   "reportAny": 1
- },
- "app.services.fact_derivation": {
-  "reportAny": 35,
-  "reportUnknownVariableType": 2
  },
  "app.services.filing_reconciliation": {
   "reportAny": 6,
@@ -1578,12 +1588,6 @@
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 3
  },
- "app.services.live_view": {
-  "reportAny": 1,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 2,
-  "reportUnknownVariableType": 2
- },
  "app.services.loan_classification": {
   "reportAny": 19,
   "reportUnknownArgumentType": 2,
@@ -1699,10 +1703,6 @@
  },
  "app.services.parameter_register": {
   "reportAny": 18
- },
- "app.services.pipeline": {
-  "reportAny": 2,
-  "reportUnusedFunction": 1
  },
  "app.services.push_ingestion": {
   "reportAny": 34
@@ -2489,11 +2489,11 @@
   "reportUnknownLambdaType": 6,
   "reportUnknownMemberType": 1
  },
- "tests.api.test_credit_authorization": {
+ "tests.credit.api.test_credit_authorization": {
   "reportAny": 2,
   "reportUnusedFunction": 1
  },
- "tests.api.test_credit_route_authorization": {
+ "tests.credit.api.test_credit_route_authorization": {
   "reportAny": 60,
   "reportUnusedFunction": 1
  },
@@ -2792,7 +2792,7 @@
  "tests.api.test_regulatory_capital": {
   "reportAny": 139
  },
- "tests.api.test_regulatory_credit": {
+ "tests.credit.api.test_regulatory_credit": {
   "reportAny": 48
  },
  "tests.api.test_regulatory_ftp": {
@@ -3200,13 +3200,13 @@
   "reportAny": 4,
   "reportPrivateUsage": 2
  },
- "tests.domain.credit.ga_fixtures": {
+ "tests.credit.domain.ga_fixtures": {
   "reportAny": 3
  },
- "tests.domain.credit.test_dpd_bands": {
+ "tests.credit.domain.test_dpd_bands": {
   "reportPrivateUsage": 2
  },
- "tests.domain.credit.test_granularity": {
+ "tests.credit.domain.test_granularity": {
   "reportAny": 6
  },
  "tests.domain.curves.test_bootstrap": {
@@ -4289,7 +4289,7 @@
  "tests.services.test_cashflow_window": {
   "reportAny": 2
  },
- "tests.services.test_credit_exposure_book": {
+ "tests.credit.service.test_credit_exposure_book": {
   "reportPrivateUsage": 5
  },
  "tests.services.test_curve_construction": {
@@ -4461,7 +4461,7 @@
   "reportAny": 28,
   "reportPrivateUsage": 1
  },
- "tests.services.test_loan_classification_service": {
+ "tests.credit.service.test_loan_classification_service": {
   "reportAny": 3,
   "reportMissingTypeArgument": 2,
   "reportUnknownArgumentType": 4,
@@ -4579,7 +4579,7 @@
  "tests.services.test_reconciliation_control": {
   "reportAny": 7
  },
- "tests.services.test_regulatory_credit": {
+ "tests.credit.service.test_regulatory_credit": {
   "reportAny": 14,
   "reportMissingParameterType": 1,
   "reportMissingTypeArgument": 1,

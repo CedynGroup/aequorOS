@@ -17,6 +17,7 @@ from app.credit.schemas.regulatory_credit import (
     CreditThresholdUpdate,
 )
 from app.credit.service import credit_concentration, credit_params
+from app.live.service import fact_derivation
 from app.models import (
     Bank,
     CanonicalPosition,
@@ -24,7 +25,6 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from app.services import fact_derivation
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1

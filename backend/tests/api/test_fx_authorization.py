@@ -28,6 +28,7 @@ from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
+from app.live.service import data_activation, pipeline
 from app.models import (
     AuthorizationBinding,
     Bank,
@@ -46,14 +47,7 @@ from app.schemas.data_activation import DataActivationCreate
 from app.schemas.regulatory_fx import FxScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
 from app.schemas.scenario_workbench import ScenarioResultRead
-from app.services import (
-    analysis_workbench,
-    data_activation,
-    enterprise_stress,
-    pipeline,
-    regulatory_fx,
-    scheduler,
-)
+from app.services import analysis_workbench, enterprise_stress, regulatory_fx, scheduler
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,

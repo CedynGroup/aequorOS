@@ -70,14 +70,16 @@ from app.domain.capital.loan_classification import (
 from app.domain.ingestion import optional_position_fields
 from app.domain.ingestion.reference_schemas import performance_targets
 from app.domain.liquidity.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
-from app.domain.positions.families import (
+from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
+from app.irrbb.domain.engine import IRR_BUCKETS
+from app.live.domain.positions.families import (
     LOAN_CATEGORY_MAP,
     PAST_DUE_CATEGORY,
     UNCLASSIFIED_FAMILY,
     unclassified_category,
 )
-from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
-from app.irrbb.domain.engine import IRR_BUCKETS
+from app.live.models.live import LIVE_MODULES, LiveMetric
+from app.live.models.regulatory_run import RegulatoryRun
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalGlAccount,
@@ -86,8 +88,6 @@ from app.models.canonical import (
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.models.live import LIVE_MODULES, LiveMetric
-from app.models.regulatory_run import RegulatoryRun
 from app.policy.models.institution_type import InstitutionType
 
 MODELS: tuple[type, ...] = (

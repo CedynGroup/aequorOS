@@ -31,7 +31,6 @@ from app.features.manage_enterprise_stress_signoff import (
 )
 from app.features.manage_liquidity_cfp import router as liquidity_cfp_router
 from app.features.manage_liquidity_thresholds import router as liquidity_thresholds_router
-from app.features.manage_live_engine import router as live_engine_router
 from app.features.manage_macro_scenarios import router as macro_scenarios_router
 from app.features.manage_management_actions import router as management_actions_router
 from app.features.manage_market_data_connections import router as market_data_connections_router
@@ -101,6 +100,7 @@ from app.identity.api.manage_institution_profile import router as institution_pr
 from app.identity.api.manage_integration_keys import router as integration_keys_router
 from app.identity.api.read_feature_flags import router as feature_flags_router
 from app.irrbb.api.run_regulatory_irr import router as regulatory_irr_router
+from app.live.api.manage_live_engine import router as live_engine_router
 from app.reporting.api.examiner_surfaces import router as examiner_router
 from app.reporting.api.manage_filing_workflow import router as filing_workflow_router
 from app.reporting.api.manage_package_attachments import router as package_attachments_router

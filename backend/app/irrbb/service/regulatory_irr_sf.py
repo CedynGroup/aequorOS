@@ -78,17 +78,19 @@ from app.irrbb.schemas.regulatory_irr_sf import (
     IrrbbSfTable8RowRead,
 )
 from app.irrbb.service.regulatory_irr import tier1_for_period
-from app.models import (
+from app.live.public import (
     BankReportingPeriod,
+    RegulatoryLineItem,
+    RegulatoryMetricResult,
+    RegulatoryRun,
+    RegulatoryValidation,
+)
+from app.models import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
     CanonicalReferenceRow,
-    RegulatoryLineItem,
-    RegulatoryMetricResult,
-    RegulatoryRun,
-    RegulatoryValidation,
 )
 from app.policy.public import jurisdictions, regulatory_parameters
 from app.reporting.service import filing_reconciliation

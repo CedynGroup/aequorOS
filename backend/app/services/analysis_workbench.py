@@ -58,7 +58,8 @@ from app.irrbb.domain.engine import (
     UnsupportedShockError as IrrUnsupportedShock,
 )
 from app.irrbb.public import regulatory_irr
-from app.models import BankReportingPeriod, SavedScenarioAnalysis, StressScenario
+from app.live.public import BankReportingPeriod
+from app.models import SavedScenarioAnalysis, StressScenario
 from app.schemas.common import FigureRefusalRead
 from app.schemas.scenario_workbench import (
     AnalysisRunCreate,

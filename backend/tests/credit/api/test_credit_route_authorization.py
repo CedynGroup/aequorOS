@@ -37,6 +37,7 @@ from app.core.authorization import (
 )
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
+from app.live.service import pipeline
 from app.models import (
     AuthorizationBinding,
     Bank,
@@ -47,7 +48,7 @@ from app.models import (
     User,
 )
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
-from app.services import job_queue, pipeline
+from app.services import job_queue
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
