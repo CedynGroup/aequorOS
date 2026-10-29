@@ -34,10 +34,10 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.domain.policy import parameter_shapes
 from app.icaap.domain.pillar2 import bands as band_domain
 from app.icaap.domain.pillar2.types import MissingParameter, ParameterUse
 from app.identity.public import Bank
+from app.policy.domain import parameter_shapes
 from app.policy.public import regulatory_parameters
 
 #: Rows whose citation begins with this marker are invented starting points,

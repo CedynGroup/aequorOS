@@ -2,7 +2,7 @@
  * Shared display metadata for the IRRBB workspace.
  *
  * Scenario codes come from the backend `IrrScenarioCode` enum; shock shapes
- * are owned by `app/domain/irr/engine.py`. Dashboard attribution rules live in
+ * are owned by `app/irrbb/domain/engine.py`. Dashboard attribution rules live in
  * `README.md` under "Regulatory attribution rules for copy in this package".
  * Display-only — no regulatory math happens client-side.
  */

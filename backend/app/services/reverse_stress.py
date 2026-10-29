@@ -26,9 +26,10 @@ from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
-from app.models import BankReportingPeriod, RegulatoryRun
+from app.live.public import BankReportingPeriod, RegulatoryRun
+from app.policy.public import regulatory_parameters
 from app.schemas.reverse_stress import ReverseStressRead, ReverseStressRunCreate
-from app.services import regulatory_capital, regulatory_liquidity, regulatory_parameters
+from app.services import regulatory_capital, regulatory_liquidity
 from app.services.audit import record_event
 
 ENGINE_VERSION = "reverse-stress-v1.0.0"

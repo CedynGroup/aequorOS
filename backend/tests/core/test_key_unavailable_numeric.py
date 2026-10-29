@@ -17,12 +17,13 @@ from app.domain.credit import pd
 from app.identity.public import Bank, RelatedParty
 from app.identity.service.authorization import ALL_INSTITUTION_DATA
 from app.live.public import BankReportingPeriod
+from app.live.service import fact_derivation
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import PackageApprovalRequestCreate, RegulatoryPackageCreate
 from app.reporting.service import generation, validation, workflow
 from app.reporting.service.filing_workflow import chain
 from app.schemas.regulatory_credit import CreditScenarioBatchCreate
-from app.services import fact_derivation, regulatory_credit
+from app.services import regulatory_credit
 from tests.core.test_bank_field_encryption import KEY_A, NEXT
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.reporting.service import test_filing_workflow_chain as review

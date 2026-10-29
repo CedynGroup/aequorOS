@@ -28,7 +28,7 @@ from app.core.authorization import DataScope, GrantorType, InstitutionScope, Mod
 from app.db.base import utc_now
 from app.identity.service import authorization, membership
 from app.models import Bank, Organization, User
-from app.services.parameter_register import seed_tenant_register
+from app.policy.service.parameter_register import seed_tenant_register
 
 database, org, own, sibling, identity = sys.argv[1:6]
 with Session(create_engine(f"sqlite+pysqlite:///{database}")) as session:

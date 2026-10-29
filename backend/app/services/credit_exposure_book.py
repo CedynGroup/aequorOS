@@ -50,8 +50,8 @@ from app.api.deps import TenantContext
 from app.core.key_management.types import KeyIntegrityError
 from app.data_engine.public import CanonicalCounterparty
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
-from app.domain.positions.credit import credit_classification_attributes
 from app.identity.public import Bank
+from app.live.domain.positions.credit import credit_classification_attributes
 from app.live.public import (
     CREDIT_POSITION_TYPES,
     INCLUDED_VALIDATION_STATUSES,
@@ -59,7 +59,7 @@ from app.live.public import (
     credit_source_basis,
     load_position_records,
 )
-from app.services import jurisdictions
+from app.policy.public import jurisdictions
 
 #: Adds the securities book, because issuer and sovereign concentration is real
 #: concentration even where the holding is not a counterparty credit exposure.

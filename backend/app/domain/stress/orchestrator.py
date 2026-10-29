@@ -67,15 +67,6 @@ from app.domain.fx.engine import (
     compute_nop,
     run_fx_scenarios,
 )
-from app.domain.irr.engine import (
-    SHOCK_PARALLEL_BP,
-    GapResult,
-    IrrPosition,
-    compute_ear,
-    compute_eve,
-    compute_gap,
-    scenario_shifts,
-)
 from app.domain.liquidity.engine import (
     LcrResult,
     LiquidityFact,
@@ -127,6 +118,15 @@ from app.domain.stress.translation import (
 # as "not a loss (audit M8)" — see that module's docstring for why.
 from app.icaap.domain.pillar2 import fx as icaap_fx
 from app.icaap.domain.units import pillar1_capital
+from app.irrbb.domain.engine import (
+    SHOCK_PARALLEL_BP,
+    GapResult,
+    IrrPosition,
+    compute_ear,
+    compute_eve,
+    compute_gap,
+    scenario_shifts,
+)
 
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")

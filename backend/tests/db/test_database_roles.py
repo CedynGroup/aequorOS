@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import pytest
 from openpyxl import load_workbook
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ from app.identity.models.institution_profile import RelatedParty
 from app.identity.schemas.bank_encryption import BankKeyScheduleConfirm
 from app.identity.service import bank_encryption
 from app.models import Bank, Job, OperatorAuditLog
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
 from app.services import assessments, documents, ingestion, job_queue
 from tests.adapters.excel_csv import fixtures as workbooks
 from tests.api.test_ingestion import FULL_MAPPING
@@ -38,6 +38,7 @@ from tests.conftest import FakeStorage
 from tests.core.test_bank_reencryption import EmptyStorage
 from tests.db import test_postgres_migrations as migrations
 from tests.services.factories import ServiceFactories
+from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1, ORG_2
 from tests.support.inmemory_storage import InMemoryStorageClient
 from tests.support.reencryption import drain
@@ -162,11 +163,13 @@ def role_schema() -> Iterator[migrations.MigratedPostgresSchema]:
 
 
 @pytest.fixture(scope="module")
-def administrator(role_schema: migrations.MigratedPostgresSchema) -> Iterator[Engine]:
+def administrator(
+    role_schema: migrations.MigratedPostgresSchema, request: pytest.FixtureRequest
+) -> Iterator[Engine]:
     url = migrations.postgres_schema_url(
         migrations.postgres_administrator_url(), role_schema.schema_name
     )
-    engine = create_engine(url)
+    engine = managed_engine(request, url)
     try:
         with engine.begin() as connection:
             for org in (ORG_1, ORG_2):
@@ -183,7 +186,9 @@ def administrator(role_schema: migrations.MigratedPostgresSchema) -> Iterator[En
 
 
 @pytest.fixture(scope="module")
-def role_engines(administrator: Engine) -> Iterator[dict[str, Engine]]:
+def role_engines(
+    administrator: Engine, request: pytest.FixtureRequest
+) -> Iterator[dict[str, Engine]]:
     engines: dict[str, Engine] = {}
     names: list[str] = []
     try:
@@ -205,7 +210,7 @@ def role_engines(administrator: Engine) -> Iterator[dict[str, Engine]]:
                 )
                 connection.execute(text(f"GRANT {role} TO {name}{options}"))
             url = make_url(administrator.url).set(username=name, password=password)
-            engines[role] = create_engine(url)
+            engines[role] = managed_engine(request, url)
         yield engines
     finally:
         for engine in engines.values():
@@ -683,10 +688,10 @@ def test_api_coalesces_two_accepted_uploads_before_pickup(
             api_session,
             ctx,
             bank_id,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system="EXCEL_CSV",
                 as_of_date=workbooks.AS_OF,
-                location=str(path),
+                location=path,
                 reason="Test upload compatibility",
             ),
             storage,

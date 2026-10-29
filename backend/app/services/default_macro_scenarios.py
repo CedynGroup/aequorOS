@@ -21,8 +21,7 @@ from decimal import Decimal
 from uuid import UUID, uuid5
 
 from app.models.stress import MACRO_VARIABLES
-from app.services.institution_types import SEED_TYPES
-from app.services.parameter_register import IRRBB_SHOCKS
+from app.policy.public import IRRBB_SHOCKS, SEED_TYPES
 
 _NAMESPACE = UUID("ae2d2ed5-27c4-4bdd-bd4f-82417ad4b527")
 SYSTEM_CREATED_AT = datetime(2026, 9, 17, tzinfo=UTC)

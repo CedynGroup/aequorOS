@@ -44,20 +44,22 @@ from app.domain.fx.engine import (
 from app.domain.fx.engine import (
     MissingParameterError as FxMissingParameter,
 )
-from app.domain.irr.engine import (
-    IrrComputationError,
-)
-from app.domain.irr.engine import (
-    MissingParameterError as IrrMissingParameter,
-)
-from app.domain.irr.engine import (
-    UnsupportedShockError as IrrUnsupportedShock,
-)
 from app.domain.liquidity.engine import (
     UnsupportedShockError as LiquidityUnsupportedShock,
 )
 from app.identity.public import Bank
-from app.models import BankReportingPeriod, SavedScenarioAnalysis, StressScenario
+from app.irrbb.domain.engine import (
+    IrrComputationError,
+)
+from app.irrbb.domain.engine import (
+    MissingParameterError as IrrMissingParameter,
+)
+from app.irrbb.domain.engine import (
+    UnsupportedShockError as IrrUnsupportedShock,
+)
+from app.irrbb.public import regulatory_irr
+from app.live.public import BankReportingPeriod
+from app.models import SavedScenarioAnalysis, StressScenario
 from app.schemas.common import FigureRefusalRead
 from app.schemas.scenario_workbench import (
     AnalysisRunCreate,
@@ -74,7 +76,6 @@ from app.services import (
     regulatory_capital,
     regulatory_ftp,
     regulatory_fx,
-    regulatory_irr,
     regulatory_liquidity,
     scenario_workbench_authorization,
 )

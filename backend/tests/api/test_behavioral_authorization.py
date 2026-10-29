@@ -29,8 +29,8 @@ from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.ml.behavioral.config import MODEL_VERSIONS, Accuracy, ModelResult
 from app.models import AuditEvent, AuthorizationBinding, Bank, IngestionBatch, User
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.services import behavioral_models
-from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers, integration_key_headers
 

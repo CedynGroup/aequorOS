@@ -41,7 +41,6 @@ from app.core import observability
 from app.core.key_management.presentation import require_disclosed
 from app.data_engine.public import withdrawal_impact
 from app.domain.authority.outcomes import NotComputable
-from app.domain.policy import Direction, direction_for
 from app.forecasting.public import regulatory_forecasting
 from app.identity.public import Bank, InstitutionProfile, User
 from app.liquidity.public import Bsd3SummaryRowRead, regulatory_liquidity
@@ -51,6 +50,7 @@ from app.live.public import (
     RegulatoryRun,
     require_fx_run_coverage,
 )
+from app.policy.domain import Direction, direction_for
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.reporting.service import family_access, family_hooks, filing_reconciliation
@@ -1485,7 +1485,7 @@ def _generate_capital(
 # BoG GHS IRRBB calibration (plan W6.4): the IRRBB Guideline (exposure draft,
 # Feb 2026) Appendix II–III Tables 5–6 prescribe a ±450 bp parallel GHS shock
 # (short 500 / long 300). The IRR engine currently computes only the six Basel
-# scenarios (app/domain/irr/engine.py IRR_SCENARIO_CODES) and hard-coded
+# scenarios (app/irrbb/domain/engine.py IRR_SCENARIO_CODES) and hard-coded
 # ±200 bp earnings-at-risk, so these rows are emitted ONLY when a run's
 # metrics actually carry them — never fabricated. The BoG ±450 param rows
 # (module='irr', parallel_up_450 / parallel_down_450) are stored effective-
@@ -2685,7 +2685,7 @@ _GOVERNED_ROW_FIELDS = (
     "parameter_id",
 )
 
-#: The resolver's layer order (``app.domain.policy.resolution_order``): a
+#: The resolver's layer order (``app.policy.domain.resolution_order``): a
 #: licence-type row wins over the class row whatever their dates.
 _RESOLUTION_LAYER_RANK: dict[str, int] = {"institution_type": 0, "institution_class": 1}
 

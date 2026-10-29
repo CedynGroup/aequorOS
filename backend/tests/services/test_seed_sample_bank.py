@@ -19,7 +19,7 @@ from app.models import (
     ParamRiskWeight,
     ParamStressShock,
 )
-from app.services.params import get_active_params
+from app.policy.service.params import get_active_params
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 
@@ -36,6 +36,7 @@ from tests.db.test_postgres_migrations import (
     migrated_postgres_schema,
     postgres_schema_url,
 )
+from tests.support.database import managed_engine
 
 __all__ = ["migrated_postgres_schema"]
 
@@ -369,6 +370,7 @@ def _temporary_non_owner_role(admin: Connection, name: str) -> bool:
 
 def test_a_non_owner_worker_drops_and_recreates_children_only_through_the_functions(
     migrated_postgres_schema: MigratedPostgresSchema,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Retention runs as the BYPASSRLS worker, which owns nothing (audit A4-03).
 
@@ -401,10 +403,11 @@ def test_a_non_owner_worker_drops_and_recreates_children_only_through_the_functi
             for signature in functions:
                 admin.execute(text(f"GRANT EXECUTE ON FUNCTION {signature} TO {role}"))
 
-        worker_engine = create_engine(
+        worker_engine = managed_engine(
+            request,
             postgres_schema_url(
                 engine.url.render_as_string(hide_password=False), schema_name, role=role
-            )
+            ),
         )
         try:
             with worker_engine.begin() as worker:

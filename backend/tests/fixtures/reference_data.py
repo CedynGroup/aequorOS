@@ -33,11 +33,13 @@ from app.icaap.service.parameters import (
 )
 from app.icaap.service.parameters import seed_rows as icaap_parameter_seed_rows
 from app.models import InstitutionType, Jurisdiction, RegulatoryParameter
-from app.services.institution_types import seed_rows as institution_type_seed_rows
-from app.services.regulatory_parameters import filing_seed_rows as icaap_filing_parameter_seed_rows
-from app.services.regulatory_parameters import p2_seed_rows as icaap_p2_parameter_seed_rows
-from app.services.regulatory_parameters import p5_seed_rows as p5_parameter_seed_rows
-from app.services.regulatory_parameters import seed_rows as regulatory_parameter_seed_rows
+from app.policy.service.institution_types import seed_rows as institution_type_seed_rows
+from app.policy.service.regulatory_parameters import (
+    filing_seed_rows as icaap_filing_parameter_seed_rows,
+)
+from app.policy.service.regulatory_parameters import p2_seed_rows as icaap_p2_parameter_seed_rows
+from app.policy.service.regulatory_parameters import p5_seed_rows as p5_parameter_seed_rows
+from app.policy.service.regulatory_parameters import seed_rows as regulatory_parameter_seed_rows
 
 #: Ghana, Nigeria and Kenya — the three jurisdictions something in the suite now
 #: uses. Ghana is every fixture bank's; NG and KE arrived with the CBN and CBK
@@ -100,9 +102,9 @@ def seed_global_reference_data(session: Session) -> None:
     # row rather than under the "table is empty" guard above: a database built
     # before ICAAP shipped has parameters but not these. The five sets are
     # disjoint on (code, jurisdiction) — each row is seeded exactly once, and
-    # tests/services/test_regulatory_parameters_icaap_p2.py,
-    # tests/services/test_regulatory_parameters_p5.py and
-    # tests/services/test_regulatory_parameters_icaap_jurisdictions.py pin that.
+    # tests/policy/service/test_regulatory_parameters_icaap_p2.py,
+    # tests/policy/service/test_regulatory_parameters_p5.py and
+    # tests/policy/service/test_regulatory_parameters_icaap_jurisdictions.py pin that.
     for row in (
         *icaap_parameter_seed_rows(),
         *icaap_p2_parameter_seed_rows(),

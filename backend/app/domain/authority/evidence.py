@@ -8,7 +8,7 @@ detector instructs an operator to perform, and its refusal message states the
 stake in words: a withdrawal *"removes data from every filed number derived for
 this date."* Nothing guarded that statement.
 
-A :class:`~app.models.regulatory_run.RegulatoryRun` sealed BEFORE the withdrawal
+A :class:`~app.live.models.regulatory_run.RegulatoryRun` sealed BEFORE the withdrawal
 keeps its immutable ``inputs`` snapshot and its ``input_hash``. The next
 derivation excludes the withdrawn rows and produces a different hash. The sealed
 run is neither wrong nor deletable — it is a faithful record of what the book
@@ -44,7 +44,7 @@ mechanism:
 The intersection rule
 ---------------------
 A withdrawal ``W`` orphans a run ``R`` when ALL of the following hold. Each
-clause mirrors a real predicate in ``app/services/fact_derivation.py`` rather
+clause mirrors a real predicate in ``app/live/service/fact_derivation.py`` rather
 than a guess, and every unknown resolves toward "affected" (fail-closed).
 
 ``W.status == 'applied'``

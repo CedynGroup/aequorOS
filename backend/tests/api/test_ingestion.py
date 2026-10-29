@@ -22,10 +22,17 @@ from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig, ReferenceMapping
+from app.domain.ingestion.locations import StagedIngestionLocation
+from app.live.service.fact_derivation import _load_position_rows
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot, CanonicalReferenceRow
-from app.schemas.ingestion import IngestionBatchCreate
+from app.schemas.ingestion import (
+    CanonicalPositionListRead,
+    IngestionBatchListRead,
+    IngestionBatchStartRead,
+    IngestionUploadRead,
+    InternalIngestionBatchCreate,
+)
 from app.services import ingestion
-from app.services.fact_derivation import _load_position_rows
 from app.storage.client import StorageLocation
 from tests.adapters.excel_csv import fixtures
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
@@ -121,10 +128,12 @@ def seed_bank(client: TestClient) -> str:
     return SAMPLE_BANK_ID
 
 
-def activate_mapping(client: TestClient, bank_id: str, mapping: MappingConfig) -> str:
+def activate_mapping(
+    client: TestClient, bank_id: str, mapping: MappingConfig, *, organization_id: str = ORG_1
+) -> str:
     response = client.post(
         f"/api/v1/banks/{bank_id}/mapping-configs",
-        headers=headers(),
+        headers=headers(organization_id),
         json={
             "source_system": "EXCEL_CSV",
             "name": "Workbook mapping",
@@ -137,16 +146,30 @@ def activate_mapping(client: TestClient, bank_id: str, mapping: MappingConfig) -
     return cast(str, response.json()["id"])
 
 
+def stage_source(
+    client: TestClient, bank_id: str, path: Path, *, organization_id: str = ORG_1
+) -> IngestionUploadRead:
+    with path.open("rb") as handle:
+        response = client.post(
+            f"/api/v1/banks/{bank_id}/ingestion-uploads",
+            headers=headers(organization_id),
+            files={"file": (path.name, handle, "application/octet-stream")},
+        )
+    assert response.status_code == 201, response.text
+    return IngestionUploadRead.model_validate(response.json())
+
+
 def start_batch(
     client: TestClient, bank_id: str, location: Path, *, as_of_date: str = AS_OF
 ) -> dict[str, Any]:
+    staged = stage_source(client, bank_id, location)
     response = client.post(
         f"/api/v1/banks/{bank_id}/ingestion-batches",
         headers=headers(),
         json={
             "source_system": "EXCEL_CSV",
             "as_of_date": as_of_date,
-            "location": str(location),
+            "location": staged.location,
             "reason": "Month-end ingestion.",
         },
     )
@@ -428,16 +451,23 @@ class TestGatingAndFailure:
         started = start_batch(db_client, bank_id, workbook)
         assert started["batch"]["status"] == "accepted"
 
-    def test_missing_file_persists_a_failed_batch(
-        self, db_client: TestClient, tmp_path: Path
-    ) -> None:
+    def test_missing_file_persists_a_failed_batch(self, db_client: TestClient) -> None:
         bank_id = seed_bank(db_client)
         activate_mapping(db_client, bank_id, FULL_MAPPING)
-        started = start_batch(db_client, bank_id, tmp_path / "nowhere.xlsx")
-        batch = started["batch"]
+        response = db_client.post(
+            f"/api/v1/banks/{bank_id}/ingestion-batches",
+            headers=headers(),
+            json={
+                "source_system": "EXCEL_CSV",
+                "as_of_date": AS_OF,
+                "location": "temp://uploads/never-staged/nowhere.xlsx",
+                "reason": "Attempt a missing staged source.",
+            },
+        )
+        assert response.status_code == 201
+        batch = response.json()["batch"]
         assert batch["status"] == "failed"
-        assert batch["error_code"] == "connection_failed"
-        assert "does not exist" in batch["error_message"]
+        assert batch["error_code"] == "storage_error"
         assert batch["raw_artifact_path"] is None
         assert batch["report_artifact_path"] is None
 
@@ -464,13 +494,14 @@ class TestGatingAndFailure:
     ) -> None:
         bank_id = seed_bank(db_client)
         workbook = fixtures.build_well_formed(tmp_path / "bank.xlsx")
+        staged = stage_source(db_client, bank_id, workbook)
         response = db_client.post(
             f"/api/v1/banks/{bank_id}/ingestion-batches",
             headers=headers(),
             json={
                 "source_system": "EXCEL_CSV",
                 "as_of_date": AS_OF,
-                "location": str(workbook),
+                "location": staged.location,
                 "reason": "No mapping yet.",
             },
         )
@@ -822,10 +853,10 @@ def test_concurrent_identity_correction_observes_the_first_acceptance(  # noqa: 
                 session,
                 ctx,
                 bank_id,
-                IngestionBatchCreate(
+                InternalIngestionBatchCreate(
                     source_system="EXCEL_CSV",
                     as_of_date=second_date,
-                    location=str(second_workbook),
+                    location=second_workbook,
                     reason="Concurrent correction.",
                 ),
                 storage_engine,
@@ -838,10 +869,10 @@ def test_concurrent_identity_correction_observes_the_first_acceptance(  # noqa: 
             first_session,
             ctx,
             bank_id,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system="EXCEL_CSV",
                 as_of_date=first_date,
-                location=str(first_workbook),
+                location=first_workbook,
                 reason="First correction.",
             ),
             storage_engine,
@@ -931,15 +962,141 @@ class TestStorageArtifacts:
 
 
 class TestUploadFlow:
-    def upload(self, client: TestClient, bank_id: str, path: Path) -> dict[str, Any]:
-        with path.open("rb") as handle:
-            response = client.post(
-                f"/api/v1/banks/{bank_id}/ingestion-uploads",
+    def test_server_file_cannot_be_ingested(
+        self,
+        db_client: TestClient,
+        tmp_path: Path,
+        storage_engine: InMemoryStorageClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        # Synthetic source outside tenant staging; never use a real server secret.
+        source = fixtures.build_well_formed(tmp_path / "server-private.xlsx")
+        link = tmp_path / "staged-link.xlsx"
+        link.symlink_to(source)
+        subdirectory = tmp_path / "scratch"
+        subdirectory.mkdir()
+        url = f"/api/v1/banks/{bank_id}/ingestion-batches"
+        batches_before = IngestionBatchListRead.model_validate(
+            db_client.get(url, headers=headers()).json()
+        )
+
+        def refuse_source_io(*args: object, **kwargs: object) -> None:
+            pytest.fail("Invalid location reached source or storage I/O")
+
+        monkeypatch.setattr("app.adapters.excel_csv.adapter.read_source", refuse_source_io)
+        monkeypatch.setattr(storage_engine, "read", refuse_source_io)
+        monkeypatch.setattr(storage_engine, "write", refuse_source_io)
+        locations = [
+            str(source),
+            str(link),
+            str(subdirectory / ".." / source.name),
+            "../server-private.xlsx",
+            source.as_uri(),
+            "https://example.test/source.xlsx",
+            "http://example.test/source.xlsx",
+            "s3://other-bank/source.xlsx",
+            "tafj://bank-t24.internal",
+            "TEMP://uploads/source.xlsx",
+            "temp:/uploads/source.xlsx",
+            "temp://",
+            f"temp://{source}",
+            "temp://uploads/../source.xlsx",
+            "temp://./source.xlsx",
+            "temp://uploads/..",
+            "temp://uploads//source.xlsx",
+            "temp://uploads/source.xlsx/",
+            "temp://uploads/%2e%2e/source.xlsx",
+            r"temp://uploads\..\source.xlsx",
+            "temp://file:///source.xlsx",
+            "temp://uploads/source.xlsx?path=other",
+            "temp://uploads/source.xlsx\n",
+            "temp://uploads/source.xlsx\x00",
+            {"path": str(source)},
+            {"root": "temp://uploads/source.xlsx"},
+        ]
+        for location in locations:
+            response = db_client.post(
+                url,
                 headers=headers(),
-                files={"file": (path.name, handle, "application/octet-stream")},
+                json={
+                    "source_system": "EXCEL_CSV",
+                    "as_of_date": AS_OF,
+                    "location": location,
+                    "reason": "Attempt to read a server file.",
+                },
             )
+            assert response.status_code == 422, (location, response.text)
+        assert (
+            IngestionBatchListRead.model_validate(db_client.get(url, headers=headers()).json())
+            == batches_before
+        )
+
+    def upload(self, client: TestClient, bank_id: str, path: Path) -> dict[str, Any]:
+        return stage_source(client, bank_id, path).model_dump(mode="json")
+
+    @pytest.mark.parametrize("filename", ["..", "../path/source name.xlsx", ".hidden.xlsx"])
+    def test_upload_returns_a_valid_staged_handle(
+        self, db_client: TestClient, filename: str
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        response = db_client.post(
+            f"/api/v1/banks/{bank_id}/ingestion-uploads",
+            headers=headers(),
+            files={"file": (filename, b"synthetic upload bytes", "application/octet-stream")},
+        )
         assert response.status_code == 201, response.text
-        return response.json()
+        staged = IngestionUploadRead.model_validate(response.json())
+        location = StagedIngestionLocation.model_validate(staged.location)
+        assert location.object_path == staged.object_path
+        assert "/" not in staged.filename
+        assert staged.filename not in {".", ".."}
+
+    @pytest.mark.parametrize("source_organization", [ORG_1, ORG_2])
+    def test_staged_handle_cannot_read_another_banks_upload(
+        self, db_client: TestClient, tmp_path: Path, source_organization: str
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        activate_mapping(db_client, bank_id, FULL_MAPPING)
+        with get_sessionmaker()() as db:
+            bank = db.get(Bank, bank_id)
+            assert bank is not None
+            source_bank = Bank(
+                organization_id=source_organization,
+                name="Foreign staging bank",
+                short_name="Foreign staging bank",
+                currency=bank.currency,
+                jurisdiction_code=bank.jurisdiction_code,
+                license_type=bank.license_type,
+                institution_type=bank.institution_type,
+            )
+            db.add(source_bank)
+            db.commit()
+            source_bank_id = source_bank.id
+        source = fixtures.build_well_formed(tmp_path / "foreign.xlsx")
+        staged = stage_source(
+            db_client, source_bank_id, source, organization_id=source_organization
+        )
+        response = db_client.post(
+            f"/api/v1/banks/{bank_id}/ingestion-batches",
+            headers=headers(),
+            json={
+                "source_system": "EXCEL_CSV",
+                "as_of_date": AS_OF,
+                "location": staged.location,
+                "reason": "Attempt to ingest another bank's staged object.",
+            },
+        )
+        assert response.status_code == 201, response.text
+        batch = IngestionBatchStartRead.model_validate(response.json()).batch
+        assert batch.status == "failed"
+        assert batch.error_code == "storage_error"
+        assert batch.records_extracted == 0
+        assert batch.raw_artifact_path is None
+        assert batch.report_artifact_path is None
+        positions = db_client.get(f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers())
+        assert CanonicalPositionListRead.model_validate(positions.json()).positions == []
 
     def test_upload_then_ingest_from_temp_tier(
         self, db_client: TestClient, tmp_path: Path, storage_engine
@@ -1160,8 +1317,8 @@ class TestManualOverride:
 class TestT24ThroughTheApi:
     def test_t24_ingestion_requires_a_staged_bundle(self, db_client: TestClient) -> None:
         # T24 ingests through the stage-then-ingest path: a pull stages a bundle
-        # to the temp tier and passes its temp:// location. A raw non-bundle
-        # location fails connection honestly rather than crashing.
+        # to the temp tier and passes its temp:// location. Direct endpoints
+        # are rejected at the tenant boundary before creating a batch.
         bank_id = seed_bank(db_client)
         response = db_client.post(
             f"/api/v1/banks/{bank_id}/mapping-configs",
@@ -1185,11 +1342,8 @@ class TestT24ThroughTheApi:
                 "reason": "Attempt direct T24 ingestion.",
             },
         )
-        assert started.status_code == 201
-        batch = started.json()["batch"]
-        assert batch["status"] == "failed"
-        assert batch["error_code"] == "connection_failed"
-        assert "bundle" in batch["error_message"].lower()
+        assert started.status_code == 422
+        assert started.json()["error"]["code"] == "validation_error"
 
 
 class TestMappingConfigVersioning:

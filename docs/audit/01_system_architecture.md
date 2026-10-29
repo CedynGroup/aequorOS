@@ -86,7 +86,7 @@ case financial records; the pure domain layer imports no application state — p
 
 ## 3. The two computation tiers
 
-One canonical store, two tiers (`ARCHITECTURE.md` §3b, verified in `app/services/pipeline.py`,
+One canonical store, two tiers (`ARCHITECTURE.md` §3b, verified in `app/live/service/pipeline.py`,
 `app/services/job_queue.py`, `app/worker.py`):
 
 | Tier     | Job type           | Writes                                                     | Purpose                                                   |
@@ -137,20 +137,18 @@ Healthy, unhealthy and exception paths are covered by `tests/test_health.py`.
 
 ## 5. Purity of the domain layer
 
-`app/domain/**` is pure Decimal computation. `app/domain/policy/resolver.py` (606 lines)
-imports no SQLAlchemy, no FastAPI and nothing from `app.services`;
-`app/services/regulatory_parameters.py` is a thin database adapter over it (`ARCH-2`).
-The purity rule is enforced by
-`tests/architecture/test_dependency_boundaries.py::test_the_pure_domain_layer_imports_no_application_state`.
+Domain purity follows the [feature layout](../../CODEBASE_CONVENTIONS.md#5-feature-layout).
+The policy resolver and its database adapter are covered in
+[policy governance](04_policy_governance.md#1-the-resolution-order).
 
-Shared primitives, all in `app/domain/`:
+Shared primitives:
 
 | Primitive                             | Module                               | Lines |
 | ------------------------------------- | ------------------------------------ | ----- |
 | Metric authority registry (`ARCH-1`)  | `app/domain/authority/registry.py`   | 1,785 |
 | Fail-closed outcome states (`ARCH-3`) | `app/domain/authority/outcomes.py`   | 386   |
 | Calculation provenance (`ARCH-4`)     | `app/domain/authority/provenance.py` | 282   |
-| Policy resolver (`ARCH-2`)            | `app/domain/policy/resolver.py`      | 606   |
+| Policy resolver (`ARCH-2`)            | `app/policy/domain/resolver.py`      | 606   |
 
 `OutcomeState` (`outcomes.py:82-93`) declares exactly five refusal states —
 `not_computable`, `missing_required_input`, `policy_unresolved`, `data_quality_block`,

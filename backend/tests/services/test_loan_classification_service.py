@@ -34,8 +34,8 @@ from app.models import (
     LineageRecord,
     RegulatoryParameter,
 )
+from app.policy.service import regulatory_parameters as rp
 from app.services import loan_classification as svc
-from app.services import regulatory_parameters as rp
 from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = date(2026, 6, 30)

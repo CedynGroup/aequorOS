@@ -164,6 +164,17 @@ App-session API requests use an access token issued by password or SSO login:
 Authorization: Bearer <app-access-token>
 ```
 
+### Data Engine file ingestion
+
+With an authorized app session, first upload the source file as multipart field
+`file` to `POST /api/v1/banks/{bank_id}/ingestion-uploads`. Pass the returned
+`location` unchanged to `POST /api/v1/banks/{bank_id}/ingestion-batches`, together
+with the source system, reporting date and reason required by the API schema.
+The location is an opaque `temp://` handle resolved only within that bank's temp
+storage tier. Server filesystem paths and other URL schemes return HTTP 422;
+malformed handles are rejected before a batch is created. Upload to the same bank
+that will ingest the file, even when two banks share an organization.
+
 ### API transactions and external waits
 
 Governed BI exports commit authorization before running the query. Certified

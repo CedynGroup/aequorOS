@@ -28,13 +28,9 @@ from sqlalchemy.orm import Session, load_only
 from app.db.base import utc_now
 from app.domain.ingestion.constants import STUCK_DEDUP_STATUSES
 from app.identity.public import Bank
-from app.models import (
-    BankReportingPeriod,
-    IngestionBatch,
-    MappingConfigRecord,
-    ParamCapitalThreshold,
-    ParamLiquidityThreshold,
-)
+from app.live.public import BankReportingPeriod
+from app.models import IngestionBatch, MappingConfigRecord
+from app.policy.public import ParamCapitalThreshold, ParamLiquidityThreshold
 from app.schemas.operator import (
     FixConfigChangeRead,
     FixConfigRequest,

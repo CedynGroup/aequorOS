@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 
 from app.api.deps import DbSession, MutationTenant, Tenant
 from app.domain.ingestion.constants import SourceSystem
+from app.live.service import data_activation
 from app.schemas.data_activation import (
     DataActivationCreate,
     DataActivationListRead,
@@ -30,7 +31,7 @@ from app.schemas.ingestion import (
     PositionSnapshotRead,
     TranslationFailureListRead,
 )
-from app.services import data_activation, ingestion
+from app.services import ingestion
 from app.storage.client import StorageClient, StorageValidationError
 from app.storage.config import StorageRetiredError
 from app.storage.factory import get_storage_client
@@ -114,7 +115,7 @@ def start_ingestion_batch(
     ctx: MutationTenant,
     storage: IngestionStorage,
 ) -> IngestionBatchStartRead:
-    return ingestion.start_ingestion(db, ctx, bank_id, payload, storage)
+    return ingestion.start_uploaded_ingestion(db, ctx, bank_id, payload, storage)
 
 
 @router.get(

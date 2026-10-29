@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Literal
 
-from app.domain.regulatory_instruments import InstrumentStatus
+from app.policy.domain.regulatory_instruments import InstrumentStatus
 
 type FidelityGrade = Literal["CONFIRMED", "PARTIAL", "REPRESENTATIVE"]
 type ReturnFamily = Literal[

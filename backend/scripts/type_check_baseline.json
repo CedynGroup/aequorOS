@@ -433,9 +433,6 @@
   "reportUnknownMemberType": 8,
   "reportUnknownVariableType": 1
  },
- "app.domain.gl.pl_mapping": {
-  "reportAny": 5
- },
  "app.domain.icaap.ai_convert": {
   "reportAny": 1,
   "reportUnknownArgumentType": 2,
@@ -527,9 +524,6 @@
  "app.domain.policy.parameter_shapes": {
   "reportAny": 32,
   "reportUnknownVariableType": 3
- },
- "app.domain.reporting.period_windows": {
-  "reportAny": 9
  },
  "app.domain.stress.concentration": {
   "reportAny": 2
@@ -691,6 +685,41 @@
  "app.jobs.bi_subscriptions": {
   "reportAny": 22
  },
+ "app.live.domain.gl.pl_mapping": {
+  "reportAny": 5
+ },
+ "app.live.domain.reporting.period_windows": {
+  "reportAny": 9
+ },
+ "app.live.models.live": {
+  "reportAny": 4
+ },
+ "app.live.models.regulatory": {
+  "reportAny": 2
+ },
+ "app.live.models.regulatory_run": {
+  "reportAny": 4
+ },
+ "app.live.service.data_activation": {
+  "reportAny": 13,
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 4,
+  "reportUnknownVariableType": 1
+ },
+ "app.live.service.fact_derivation": {
+  "reportAny": 35,
+  "reportUnknownVariableType": 2
+ },
+ "app.live.service.live_view": {
+  "reportAny": 1,
+  "reportUnknownArgumentType": 3,
+  "reportUnknownMemberType": 2,
+  "reportUnknownVariableType": 2
+ },
+ "app.live.service.pipeline": {
+  "reportAny": 2,
+  "reportUnusedFunction": 1
+ },
  "app.ml.behavioral.config": {
   "reportMissingTypeArgument": 1,
   "reportUnknownVariableType": 1
@@ -837,9 +866,6 @@
  "app.models.liquidity_cfp": {
   "reportAny": 3
  },
- "app.models.live": {
-  "reportAny": 4
- },
  "app.models.market_data": {
   "reportAny": 3
  },
@@ -861,18 +887,12 @@
  "app.models.reconciliation": {
   "reportAny": 1
  },
- "app.models.regulatory": {
-  "reportAny": 2
- },
  "app.models.regulatory_parameter": {
   "reportAny": 1,
   "reportMissingTypeArgument": 1
  },
  "app.models.regulatory_reporting": {
   "reportAny": 9
- },
- "app.models.regulatory_run": {
-  "reportAny": 4
  },
  "app.models.risk": {
   "reportAny": 7
@@ -1198,12 +1218,6 @@
  "app.services.credit_exposure_book": {
   "reportAny": 7
  },
- "app.services.data_activation": {
-  "reportAny": 13,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 4,
-  "reportUnknownVariableType": 1
- },
  "app.services.database_connections": {
   "reportAny": 6,
   "reportUnknownArgumentType": 1
@@ -1240,10 +1254,6 @@
  },
  "app.services.examiner_mode": {
   "reportAny": 1
- },
- "app.services.fact_derivation": {
-  "reportAny": 35,
-  "reportUnknownVariableType": 2
  },
  "app.services.filing_reconciliation": {
   "reportAny": 6,
@@ -1578,12 +1588,6 @@
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 3
  },
- "app.services.live_view": {
-  "reportAny": 1,
-  "reportUnknownArgumentType": 3,
-  "reportUnknownMemberType": 2,
-  "reportUnknownVariableType": 2
- },
  "app.services.loan_classification": {
   "reportAny": 19,
   "reportUnknownArgumentType": 2,
@@ -1699,10 +1703,6 @@
  },
  "app.services.parameter_register": {
   "reportAny": 18
- },
- "app.services.pipeline": {
-  "reportAny": 2,
-  "reportUnusedFunction": 1
  },
  "app.services.push_ingestion": {
   "reportAny": 34
@@ -2660,7 +2660,7 @@
   "reportUnknownParameterType": 3
  },
  "tests.api.test_ingestion": {
-  "reportAny": 120,
+  "reportAny": 117,
   "reportMissingParameterType": 5,
   "reportPrivateUsage": 1,
   "reportUnknownArgumentType": 11,
@@ -2939,14 +2939,14 @@
  "tests.conftest": {
   "reportAny": 1,
   "reportDeprecated": 4,
-  "reportMissingParameterType": 4,
+  "reportMissingParameterType": 2,
   "reportMissingTypeArgument": 7,
   "reportUnknownArgumentType": 4,
   "reportUnknownLambdaType": 4,
-  "reportUnknownMemberType": 8,
-  "reportUnknownParameterType": 11,
-  "reportUnknownVariableType": 6,
-  "reportUnusedFunction": 10
+  "reportUnknownMemberType": 5,
+  "reportUnknownParameterType": 9,
+  "reportUnknownVariableType": 5,
+  "reportUnusedFunction": 9
  },
  "tests.core.test_error_boundary": {
   "reportAny": 1,
@@ -4617,7 +4617,7 @@
   "reportAny": 33
  },
  "tests.services.test_regulatory_parameters_icaap_jurisdictions": {
-  "reportAny": 21,
+  "reportAny": 19,
   "reportUnknownMemberType": 1
  },
  "tests.services.test_regulatory_parameters_icaap_p2": {
