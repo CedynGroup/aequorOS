@@ -113,7 +113,7 @@ def test_profile_upsert_roundtrip_and_audit(real_client: TestClient, real_sessio
         f"{BASE}/institution-profile", headers=real_headers(), json=PROFILE_PAYLOAD
     )
     assert created.status_code == 200, created.text
-    profile = created.json()
+    profile: dict[str, Any] = created.json()
     assert profile["institution_type"] == "Universal Bank"
     assert {"tin", "registration_number", "orass_institution_code"}.isdisjoint(profile)
     assert profile["traded_on_exchange"] is True
