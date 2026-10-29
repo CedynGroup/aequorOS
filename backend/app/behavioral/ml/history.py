@@ -17,7 +17,7 @@ from sqlalchemy import Float, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models.canonical import (
+from app.data_engine.public import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,

@@ -20,14 +20,14 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from app.ml.behavioral.config import (
+from app.behavioral.ml.config import (
     MODEL_VERSIONS,
     Accuracy,
     BehavioralTrainingConfig,
     ModelResult,
     ProductEstimate,
 )
-from app.ml.behavioral.features import clamp, compute_confidence, timeseries_cv_rmse
+from app.behavioral.ml.features import clamp, compute_confidence, timeseries_cv_rmse
 
 if TYPE_CHECKING:
     # Type-only import: sklearn is imported lazily at runtime (see ``_make_gbm``)

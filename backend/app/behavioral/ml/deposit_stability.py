@@ -17,11 +17,11 @@ import numpy as np
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.ml.behavioral import history
-from app.ml.behavioral.baseline import GENERIC_PRIOR, VALUE_RANGE
-from app.ml.behavioral.config import ASSUMPTION_TYPE, UNIT, BehavioralTrainingConfig, ModelResult
-from app.ml.behavioral.estimator import estimate as _estimate
-from app.ml.behavioral.features import month_num, month_sin_cos, trailing_series_features
+from app.behavioral.ml import history
+from app.behavioral.ml.baseline import GENERIC_PRIOR, VALUE_RANGE
+from app.behavioral.ml.config import ASSUMPTION_TYPE, UNIT, BehavioralTrainingConfig, ModelResult
+from app.behavioral.ml.estimator import estimate as _estimate
+from app.behavioral.ml.features import month_num, month_sin_cos, trailing_series_features
 
 _SLUG = "deposit-stability"
 

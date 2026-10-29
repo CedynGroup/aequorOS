@@ -21,21 +21,21 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import Module, Permission, Sensitivity
-from app.core.config import get_settings
-from app.core.ids import new_uuid7
-from app.db.base import utc_now
-from app.identity import public as scoped_authorization
-from app.identity.public import Bank
-from app.ml.behavioral import deposit_stability, nmd_duration, prepayment
-from app.ml.behavioral.config import (
+from app.behavioral.ml import deposit_stability, nmd_duration, prepayment
+from app.behavioral.ml.config import (
     ASSUMPTION_TYPE,
     MODEL_SLUGS,
     BehavioralTrainingConfig,
     ModelResult,
 )
-from app.ml.behavioral.history import available_as_of_dates
-from app.models.canonical import CanonicalReferenceRow
+from app.behavioral.ml.history import available_as_of_dates
+from app.core.authorization import Module, Permission, Sensitivity
+from app.core.config import get_settings
+from app.core.ids import new_uuid7
+from app.data_engine.public import CanonicalReferenceRow
+from app.db.base import utc_now
+from app.identity import public as scoped_authorization
+from app.identity.public import Bank
 from app.models.ingestion import IngestionBatch, LineageRecord
 
 _MODULES = {
@@ -142,7 +142,7 @@ def _compute(db: Session, ctx: TenantContext, bank_id: str, model: str) -> Model
     dates = available_as_of_dates(db, ctx, bank_id)
     if not dates:
         # No canonical history at all — return an empty baseline result.
-        from app.ml.behavioral.config import MODEL_VERSIONS, Accuracy  # noqa: PLC0415
+        from app.behavioral.ml.config import MODEL_VERSIONS, Accuracy  # noqa: PLC0415
 
         return ModelResult(
             model_id=MODEL_VERSIONS[model],
@@ -185,7 +185,7 @@ def apply_estimates(  # noqa: PLR0913
     dates = available_as_of_dates(db, ctx, bank_id)
     as_of_date = dates[-1] if dates else utc_now().date()
 
-    from app.ml.behavioral.config import MODEL_VERSIONS  # noqa: PLC0415
+    from app.behavioral.ml.config import MODEL_VERSIONS  # noqa: PLC0415
 
     kept = [
         p
@@ -322,7 +322,7 @@ def _load_artifact(key: tuple[str, str, str]) -> ModelResult | None:
 
 
 def _result_from_dict(d: dict) -> ModelResult:
-    from app.ml.behavioral.config import Accuracy, ProductEstimate  # noqa: PLC0415
+    from app.behavioral.ml.config import Accuracy, ProductEstimate  # noqa: PLC0415
 
     return ModelResult(
         model_id=d["model_id"],

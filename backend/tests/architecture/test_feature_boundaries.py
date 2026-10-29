@@ -233,11 +233,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "rating",
     ),
     (
-        r"^(services/behavioral_models|ml/behavioral/.*|schemas/behavioral_models"
-        r"|features/read_behavioral_models)$",
-        "behavioral",
-    ),
-    (
         r"^(services/(regulatory_forecasting|cashflow_forecast)|domain/forecasting/.*"
         r"|schemas/(forecasting|cashflow_forecast)"
         r"|features/(run_forecasting|read_cashflow_forecast)|ml/.*)$",

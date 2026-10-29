@@ -766,5 +766,20 @@
   ["tests.services.test_crd_credit_exposures", "tests.credit.service.test_crd_credit_exposures"],
   ["tests.api.test_credit_authorization", "tests.credit.api.test_credit_authorization"],
   ["tests.api.test_credit_route_authorization", "tests.credit.api.test_credit_route_authorization"],
-  ["tests.api.test_regulatory_credit", "tests.credit.api.test_regulatory_credit"]
+  ["tests.api.test_regulatory_credit", "tests.credit.api.test_regulatory_credit"],
+  ["app.ml.behavioral", "app.behavioral.ml"],
+  ["app.ml.behavioral.baseline", "app.behavioral.ml.baseline"],
+  ["app.ml.behavioral.config", "app.behavioral.ml.config"],
+  ["app.ml.behavioral.deposit_stability", "app.behavioral.ml.deposit_stability"],
+  ["app.ml.behavioral.estimator", "app.behavioral.ml.estimator"],
+  ["app.ml.behavioral.features", "app.behavioral.ml.features"],
+  ["app.ml.behavioral.history", "app.behavioral.ml.history"],
+  ["app.ml.behavioral.nmd_duration", "app.behavioral.ml.nmd_duration"],
+  ["app.ml.behavioral.prepayment", "app.behavioral.ml.prepayment"],
+  ["app.services.behavioral_models", "app.behavioral.service"],
+  ["app.schemas.behavioral_models", "app.behavioral.schemas"],
+  ["app.features.read_behavioral_models", "app.behavioral.api.read_behavioral_models"],
+  ["tests.ml.test_behavioral_estimator", "tests.behavioral.ml.test_behavioral_estimator"],
+  ["tests.api.test_behavioral_authorization", "tests.behavioral.api.test_behavioral_authorization"],
+  ["tests.api.test_behavioral_liquidity", "tests.behavioral.api.test_behavioral_liquidity"]
 ]
