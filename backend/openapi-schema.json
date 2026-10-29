@@ -39029,6 +39029,7 @@
         "type": "object"
       },
       "IngestionBatchCreate": {
+        "description": "Tenant ingestion request: only a staged handle in this bank's temp tier.",
         "properties": {
           "adapter_options": {
             "additionalProperties": true,
@@ -39041,9 +39042,8 @@
             "type": "string"
           },
           "location": {
-            "minLength": 1,
-            "title": "Location",
-            "type": "string"
+            "$ref": "#/components/schemas/StagedIngestionLocation",
+            "description": "temp:// handle returned by this bank's ingestion upload endpoint."
           },
           "mapping_config_id": {
             "anyOf": [
@@ -39091,8 +39091,8 @@
         "required": [
           "source_system",
           "as_of_date",
-          "location",
-          "reason"
+          "reason",
+          "location"
         ],
         "title": "IngestionBatchCreate",
         "type": "object"
@@ -58234,6 +58234,12 @@
         ],
         "title": "SsoStatusResponse",
         "type": "object"
+      },
+      "StagedIngestionLocation": {
+        "description": "An opaque key in the requesting bank's temp tier, never a server path.\n\nHandles are consumed literally: no URL decoding or filesystem normalization.\nThe bank's storage namespace is selected separately from authenticated context.",
+        "pattern": "^temp://[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$",
+        "title": "StagedIngestionLocation",
+        "type": "string"
       },
       "StepUpGrantedRead": {
         "additionalProperties": false,

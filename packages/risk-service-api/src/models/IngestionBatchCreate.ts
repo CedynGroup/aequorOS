@@ -12,7 +12,7 @@
 
 import { mapValues } from "../runtime";
 /**
- *
+ * Tenant ingestion request: only a staged handle in this bank's temp tier.
  * @export
  * @interface IngestionBatchCreate
  */
@@ -30,7 +30,10 @@ export interface IngestionBatchCreate {
    */
   asOfDate: Date;
   /**
+   * An opaque key in the requesting bank's temp tier, never a server path.
    *
+   * Handles are consumed literally: no URL decoding or filesystem normalization.
+   * The bank's storage namespace is selected separately from authenticated context.
    * @type {string}
    * @memberof IngestionBatchCreate
    */

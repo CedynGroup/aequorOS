@@ -2660,7 +2660,7 @@
   "reportUnknownParameterType": 3
  },
  "tests.api.test_ingestion": {
-  "reportAny": 120,
+  "reportAny": 117,
   "reportMissingParameterType": 5,
   "reportPrivateUsage": 1,
   "reportUnknownArgumentType": 11,

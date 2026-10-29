@@ -27,6 +27,7 @@ from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.domain.ingestion.locations import StagedIngestionLocation
 from app.irrbb.service import regulatory_irr
 from app.live.service import live_refresh_triggers, live_view, pipeline
 from app.live.service.fact_derivation import evaluate_balance_identity
@@ -586,7 +587,7 @@ def test_official_remint_reports_same_date_cash_correction_in_bsd2(db_session: S
                 source_system="EXCEL_CSV",
                 mapping_config_id=mapping.id,
                 as_of_date=FIXTURE_AS_OF,
-                location=uploaded.location,
+                location=StagedIngestionLocation(uploaded.location),
                 reason="Correct cash and matching equity for the reporting date.",
             ),
             storage,

@@ -30,7 +30,7 @@ from app.models import (
     Job,
     LineageRecord,
 )
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
 from app.services import etl_dedup_jobs, ingestion
 from tests.support.helpers import ORG_1, USER_1
 from tests.support.inmemory_storage import InMemoryStorageClient
@@ -126,10 +126,10 @@ def _ingest(
         db_session,
         _ctx(),
         bank.id,
-        IngestionBatchCreate(
+        InternalIngestionBatchCreate(
             source_system="EXCEL_CSV",
             as_of_date=AS_OF,
-            location=str(location),
+            location=location,
             mapping_config_id=None,
             reason="dedup job test ingestion",
         ),
