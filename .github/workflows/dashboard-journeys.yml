@@ -23,7 +23,7 @@ concurrency:
 jobs:
   changes:
     name: Detect journey changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       journeys: ${{ steps.areas.outputs.journeys }}
@@ -49,7 +49,7 @@ jobs:
         shard: [1, 2, 3, 4]
     # Each runner owns its disposable database, fixture bank and MinIO. Keep
     # Playwright's single worker; shard files without sharing mutable fixtures.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     services:
       bank-kms:
@@ -204,7 +204,7 @@ jobs:
 
   gate:
     name: Dashboard journeys gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     if: always()
     needs: [changes, journeys]
