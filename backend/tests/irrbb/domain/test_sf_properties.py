@@ -17,8 +17,8 @@ from decimal import Decimal
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from app.domain.irr import standardised_params as sp
-from app.domain.irr.standardised import (
+from app.irrbb.domain import standardised_params as sp
+from app.irrbb.domain.standardised import (
     CurrencyInputs,
     Ladder,
     SfInputs,
@@ -27,8 +27,8 @@ from app.domain.irr.standardised import (
     apply_redemption,
     behavioural_rate,
 )
-from app.domain.irr.standardised import run as sf_run
-from tests.domain.irr.test_sf_fixtures import (
+from app.irrbb.domain.standardised import run as sf_run
+from tests.irrbb.domain.test_sf_fixtures import (
     seed_rows,
     sf_parameters,
 )

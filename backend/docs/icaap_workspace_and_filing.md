@@ -61,7 +61,7 @@ sections of ProseMirror text, data blocks bound to computed evidence, a
 requirement checklist, a stage/decision chain, attachments.
 
 **The Pillar 2 engines** (`app/icaap/domain/pillar2/`, plus
-`app/domain/credit/`, `app/domain/irr/standardised*.py`) are pure. They take
+`app/domain/credit/`, `app/irrbb/domain/standardised*.py`) are pure. They take
 governed parameters and a book, and return typed results or typed refusals.
 
 **The filing plane** is the existing regulatory-reporting plane, unchanged in
@@ -185,7 +185,7 @@ has to be made in a test that says so.
 in the service catalogue, in the migration and in the domain test fixture. An
 assertion that compares one of them with a constant in its own file proves
 nothing. Compare copies against each other
-(`tests/domain/irr/test_sf_fixtures.py::test_the_fixture_reproduces_the_seed_table`
+(`tests/irrbb/domain/test_sf_fixtures.py::test_the_fixture_reproduces_the_seed_table`
 compares the fixture to the seeded catalogue row by row; it caught a unit drift
 the day it was written).
 

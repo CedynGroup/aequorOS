@@ -2246,7 +2246,7 @@ REGISTRY.register_all(
         _irr("duration_gap", engine="app.domain.irr.engine:compute_duration"),
         # The two terms of the gap identity that duration_gap already stands on:
         # ``duration_gap = asset_modified - (PV_liabilities / PV_assets) *
-        # liability_modified`` (app/domain/irr/engine.py:338). One call to
+        # liability_modified`` (app/irrbb/domain/engine.py:338). One call to
         # compute_duration returns all three. An authority over the difference
         # that does not reach its own operands is not an authority over anything,
         # so these carry the SAME citation rather than a new one.

@@ -1,6 +1,6 @@
 """The IRRBB Standardised Framework engine (pure).
 
-A second, separate engine. ``app/domain/irr/engine.py`` — nine generic buckets,
+A second, separate engine. ``app/irrbb/domain/engine.py`` — nine generic buckets,
 annual compounding, one reporting currency, an absolute-value outlier test — is
 left untouched so every return already filed from it keeps its numbers. The
 Standardised Framework differs in every structural dimension, so it is built
@@ -51,7 +51,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, localcontext
 from typing import Literal
 
-from app.domain.irr.standardised_params import (
+from app.irrbb.domain.standardised_params import (
     BASIS_POINTS_IN_UNIT,
     HUNDRED,
     MONTHS_IN_YEAR,
@@ -395,9 +395,7 @@ def short_weight(t: Decimal, decay_x: Decimal) -> Decimal:
     return (-t / decay_x).exp()
 
 
-def scenario_shifts_bp(
-    params: SfParameters, currency: str, scenario: str
-) -> tuple[Decimal, ...]:
+def scenario_shifts_bp(params: SfParameters, currency: str, scenario: str) -> tuple[Decimal, ...]:
     """The scenario's shift at each bucket midpoint, in basis points."""
     parallel = params.shock_bp("parallel", currency)
     short = params.shock_bp("short", currency)
@@ -408,9 +406,7 @@ def scenario_shifts_bp(
         weight = short_weight(midpoint, params.short_decay_x)
         short_shift = short * weight
         long_shift = long * (ONE - weight)
-        shifts.append(
-            _one_shift(scenario, parallel, abs(short_shift), abs(long_shift), rotation)
-        )
+        shifts.append(_one_shift(scenario, parallel, abs(short_shift), abs(long_shift), rotation))
     return tuple(shifts)
 
 
@@ -557,9 +553,7 @@ def _tally(counter: dict[str, int], marker: str, count: int = 1) -> None:
     counter[marker] = counter.get(marker, 0) + count
 
 
-def _core_estimates(
-    balances: Sequence[NmdBalance], work: _NmdWork
-) -> list[Decimal]:
+def _core_estimates(balances: Sequence[NmdBalance], work: _NmdWork) -> list[Decimal]:
     """The bank's core amount per product, before the category cap."""
     cores: list[Decimal] = []
     for balance in balances:
@@ -607,9 +601,7 @@ def _nmd_category(
             core_cap_pct=cap.core_cap_pct,
             cap_binding=binding,
             average_core_maturity_years=_ratio(_weighted(slotted)),
-            longest_core_maturity_years=_ratio(
-                max((years for _, years in slotted), default=ZERO)
-            ),
+            longest_core_maturity_years=_ratio(max((years for _, years in slotted), default=ZERO)),
         )
     )
 
@@ -625,9 +617,7 @@ def _slotted_core(
     )
 
 
-def _check_history(
-    balances: Sequence[NmdBalance], params: SfParameters, work: _NmdWork
-) -> None:
+def _check_history(balances: Sequence[NmdBalance], params: SfParameters, work: _NmdWork) -> None:
     for balance in balances:
         if balance.history_years is None or balance.history_years < params.nmd_history_years:
             _tally(work.tallies, TALLY_NMD_HISTORY_SHORT)
@@ -648,9 +638,7 @@ def _check_maturity_cap(
         return
     average = _weighted(slotted)
     if average > cap.avg_maturity_cap_years:
-        raise NmdMaturityCapExceededError(
-            currency, category, average, cap.avg_maturity_cap_years
-        )
+        raise NmdMaturityCapExceededError(currency, category, average, cap.avg_maturity_cap_years)
 
 
 def _append_nmd_ladders(
@@ -808,9 +796,7 @@ def _exercise_policies(ladder: Ladder) -> tuple[str, ...]:
     return (POLICY_CONTRACTUAL,)
 
 
-def _exercise_policy(
-    ladder: Ladder, params: SfParameters, base_factors: Sequence[Decimal]
-) -> str:
+def _exercise_policy(ladder: Ladder, params: SfParameters, base_factors: Sequence[Decimal]) -> str:
     """The exercise most disadvantageous to the bank, chosen ONCE per ladder.
 
     A term deposit the depositor may break without penalty is an option the
@@ -894,8 +880,7 @@ def _scenario_results(
     results: list[ScenarioResult] = []
     for scenario in SCENARIOS:
         rows = tuple(
-            _currency_scenario_row(inputs, params, runs[c.currency], c, scenario)
-            for c in material
+            _currency_scenario_row(inputs, params, runs[c.currency], c, scenario) for c in material
         )
         losses = (row.delta_eve_reporting for row in rows if row.delta_eve_reporting > ZERO)
         loss = sum(losses, ZERO)
@@ -1034,8 +1019,9 @@ def _table7(assigned: Sequence[tuple[Decimal, Decimal]]) -> Table7Quantitative:
 
 
 def _statements(params: SfParameters, tallies: Mapping[str, int]) -> tuple[str, ...]:
-    lines = [row.statement for row in params.provenance if row.representative or
-             row.pending_confirmation]
+    lines = [
+        row.statement for row in params.provenance if row.representative or row.pending_confirmation
+    ]
     if tallies:
         lines.append(
             "Modelling assumptions were substituted where positions arrived without terms; "
@@ -1095,9 +1081,7 @@ def _run(inputs: SfInputs, params: SfParameters) -> SfResult:
         reporting_currency=inputs.reporting_currency,
         bucket_keys=params.bucket_keys,
         currencies=scopes,
-        excluded_currencies=tuple(
-            scope.currency for scope in scopes if not scope.material
-        ),
+        excluded_currencies=tuple(scope.currency for scope in scopes if not scope.material),
         scenarios=results,
         measures=measures,
         tier1=_money(inputs.tier1),
@@ -1117,7 +1101,5 @@ def _run(inputs: SfInputs, params: SfParameters) -> SfResult:
 
 def _ladders_for(currency: str, inputs: SfInputs, nmd: _NmdWork) -> tuple[Ladder, ...]:
     return tuple(
-        ladder
-        for ladder in (*inputs.ladders, *nmd.ladders)
-        if ladder.currency == currency
+        ladder for ladder in (*inputs.ladders, *nmd.ladders) if ladder.currency == currency
     )

@@ -426,9 +426,7 @@ def run_irr_scenarios(  # noqa: PLR0913 - the scenario sweep names its full scop
         # Jurisdiction add-ons are informational until their directive takes
         # effect (BoG IRRBB: 1 Jan 2027) — they never trip the outlier limit.
         informational = code in IRR_OPTIONAL_SCENARIO_CODES
-        breach = (
-            False if informational else ratio_pct(abs(delta) / tier1 * _HUNDRED) > limit_pct
-        )
+        breach = False if informational else ratio_pct(abs(delta) / tier1 * _HUNDRED) > limit_pct
         scenarios.append(
             EveScenario(
                 scenario_code=code,

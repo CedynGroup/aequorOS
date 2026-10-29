@@ -23,8 +23,8 @@ from typing import Any
 
 import pytest
 
-from app.domain.irr import standardised_params as sfp
 from app.icaap.service.parameters import ICAAP_PARAM_CODES
+from app.irrbb.domain import standardised_params as sfp
 from app.models import RegulatoryParameter
 from app.policy.domain import parameter_shapes
 from app.policy.service import regulatory_parameters as rp
@@ -322,7 +322,7 @@ def test_the_domain_fixture_reproduces_the_production_shock_table(kind: str) -> 
     away from production without a single failure. Checked from THIS side of
     the boundary, where importing both is allowed.
     """
-    from tests.domain.irr import test_sf_fixtures as fixture  # noqa: PLC0415
+    from tests.irrbb.domain import test_sf_fixtures as fixture  # noqa: PLC0415
 
     table = {"parallel": fixture.PARALLEL_BP, "short": fixture.SHORT_BP, "long": fixture.LONG_BP}
 

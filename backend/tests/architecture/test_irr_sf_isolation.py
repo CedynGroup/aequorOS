@@ -2,7 +2,7 @@
 
 P5-DESIGN §1.7. Every existing IRRBB return — the quarterly pilot, the SDI
 return, the enterprise-stress overlay, the implied rating — is produced by
-``app/domain/irr/engine.py``, and its goldens are filed evidence. The framework
+``app/irrbb/domain/engine.py``, and its goldens are filed evidence. The framework
 is therefore a SIBLING: a new module value on the same immutable run table,
 reached through its own service, sharing nothing but the Tier 1 denominator.
 
@@ -27,12 +27,12 @@ APP = Path(__file__).resolve().parents[2] / "app"
 
 #: The pure framework modules (workstream A) and its service (workstream B).
 SF_MODULES: tuple[Path, ...] = (
-    APP / "domain" / "irr" / "standardised.py",
-    APP / "domain" / "irr" / "standardised_cash_flows.py",
-    APP / "domain" / "irr" / "standardised_params.py",
-    APP / "services" / "regulatory_irr_sf.py",
+    APP / "irrbb" / "domain" / "standardised.py",
+    APP / "irrbb" / "domain" / "standardised_cash_flows.py",
+    APP / "irrbb" / "domain" / "standardised_params.py",
+    APP / "irrbb" / "service" / "regulatory_irr_sf.py",
 )
-LEGACY_ENGINE = APP / "domain" / "irr" / "engine.py"
+LEGACY_ENGINE = APP / "irrbb" / "domain" / "engine.py"
 
 #: Modules that run on the LIVE tier, or that every module's freshness and
 #: rating paths go through. None of them may reach the framework.
@@ -43,7 +43,7 @@ LIVE_PLANE: tuple[Path, ...] = (
     APP / "reporting" / "service" / "generation.py",
 )
 
-SF_SERVICE_MODULE = "app.services.regulatory_irr_sf"
+SF_SERVICE_MODULE = "app.irrbb.service.regulatory_irr_sf"
 
 
 def _imported_names(path: Path) -> set[str]:
@@ -66,7 +66,7 @@ def test_the_framework_never_imports_the_legacy_engine_arithmetic() -> None:
         engine_imports = {
             name
             for name in _imported_names(path)
-            if name.endswith("irr.engine") or ".irr.engine." in name
+            if name.endswith("irrbb.domain.engine") or ".irrbb.domain.engine." in name
         }
         if engine_imports:
             offenders[path.name] = engine_imports
@@ -79,7 +79,7 @@ def test_the_framework_never_imports_the_legacy_engine_arithmetic() -> None:
 def test_the_legacy_engine_never_imports_the_framework() -> None:
     names = _imported_names(LEGACY_ENGINE)
     assert not any("standardised" in name for name in names), (
-        "app/domain/irr/engine.py must stay byte-identical to its pre-P5 form; "
+        "app/irrbb/domain/engine.py must stay byte-identical to its pre-P5 form; "
         f"it now imports {sorted(name for name in names if 'standardised' in name)}"
     )
 
@@ -91,11 +91,11 @@ def test_the_framework_service_borrows_only_the_tier_one_denominator() -> None:
     import is expected — but it must be the ONE public seam, not a reach into
     the legacy service's internals.
     """
-    names = _imported_names(APP / "services" / "regulatory_irr_sf.py")
-    legacy = {name for name in names if "services.regulatory_irr" in name}
+    names = _imported_names(APP / "irrbb" / "service" / "regulatory_irr_sf.py")
+    legacy = {name for name in names if "irrbb.service.regulatory_irr" in name}
     assert legacy == {
-        "app.services.regulatory_irr",
-        "app.services.regulatory_irr.tier1_for_period",
+        "app.irrbb.service.regulatory_irr",
+        "app.irrbb.service.regulatory_irr.tier1_for_period",
     }, sorted(legacy)
 
 
@@ -113,8 +113,8 @@ def test_the_live_plane_never_reaches_the_framework_service() -> None:
 
 
 def test_the_framework_is_not_registered_as_a_live_module() -> None:
+    from app.irrbb.service.regulatory_irr_sf import MODULE_IRR_SF  # noqa: PLC0415
     from app.live.models.live import LIVE_MODULES  # noqa: PLC0415 - narrow, local assertion
-    from app.services.regulatory_irr_sf import MODULE_IRR_SF  # noqa: PLC0415
 
     assert MODULE_IRR_SF not in LIVE_MODULES
 
@@ -147,7 +147,7 @@ def test_the_framework_service_has_no_live_computation_entry_point() -> None:
     callable fails here and has to be justified in this list; the live plane's
     own entry points are pinned separately, by import, above.
     """
-    from app.services import regulatory_irr_sf  # noqa: PLC0415 - narrow, local assertion
+    from app.irrbb.service import regulatory_irr_sf  # noqa: PLC0415 - narrow, local assertion
 
     public = {
         name

@@ -495,8 +495,8 @@ _ENGINE_VERSION_MODULES = (
     "app.services.regulatory_forecasting",
     "app.services.regulatory_ftp",
     "app.services.regulatory_fx",
-    "app.services.regulatory_irr",
-    "app.services.regulatory_irr_sf",
+    "app.irrbb.service.regulatory_irr",
+    "app.irrbb.service.regulatory_irr_sf",
     "app.services.regulatory_liquidity",
     "app.services.reverse_stress",
 )

@@ -1,6 +1,6 @@
 """Repricing-bucket assignment for the nine IRRBB buckets (pure).
 
-``app.domain.irr.engine.IRR_BUCKETS`` names the buckets and fixes their
+``app.irrbb.domain.engine.IRR_BUCKETS`` names the buckets and fixes their
 midpoints; it says nothing about WHERE a position's repricing horizon falls,
 because the engine receives positions already bucketed. The one thing this
 module adds is the upper bound, in days, of each bucket — defined here once —
@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Protocol
 
-from app.domain.irr.engine import IRR_BUCKETS
+from app.irrbb.domain.engine import IRR_BUCKETS
 
 #: Upper bound of each bucket's repricing horizon in days, keyed by the engine's
 #: bucket name; ``None`` marks the unbounded long end.

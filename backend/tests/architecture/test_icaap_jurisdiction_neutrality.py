@@ -44,9 +44,9 @@ SCANNED_FILES = (
 #: Matched as globs so a module that has not been written yet is simply not
 #: scanned, rather than failing the whole guard on a missing path.
 SCANNED_GLOBS = (
-    "app/domain/irr/standardised*.py",
+    "app/irrbb/domain/standardised*.py",
     "app/domain/credit/granularity.py",
-    "app/services/regulatory_irr_sf.py",
+    "app/irrbb/service/regulatory_irr_sf.py",
 )
 
 #: Country, regulator and currency identity. Each is resolved from the

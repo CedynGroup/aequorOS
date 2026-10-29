@@ -30,6 +30,8 @@ from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
+from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
+from app.irrbb.service import regulatory_irr
 from app.live.service.fact_derivation import DerivationError, DerivationResult, derive_facts
 from app.models import AuditEvent
 from app.policy.public import module_scope
@@ -46,7 +48,6 @@ from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.schemas.regulatory_ftp import FtpScenarioBatchCreate
 from app.schemas.regulatory_fx import FxScenarioBatchCreate
-from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
 from app.services import (
     implied_rating,
@@ -55,7 +56,6 @@ from app.services import (
     regulatory_forecasting,
     regulatory_ftp,
     regulatory_fx,
-    regulatory_irr,
     regulatory_liquidity,
 )
 from app.services.audit import record_event

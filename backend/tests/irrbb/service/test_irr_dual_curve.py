@@ -33,12 +33,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.irr.engine import (
+from app.irrbb.domain.engine import (
     IRR_BUCKETS,
     IrrPosition,
     compute_duration,
     compute_eve,
 )
+from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
+from app.irrbb.service import regulatory_irr
+from app.irrbb.service.regulatory_irr import discount_curve_midpoints_pct
 from app.live.service.fact_derivation import derive_facts
 from app.models import (
     Bank,
@@ -50,10 +53,8 @@ from app.models import (
     LineageRecord,
     ParamStressShock,
 )
-from app.schemas.regulatory_irr import IrrScenarioBatchCreate
-from app.services import market_data_sources, regulatory_irr
+from app.services import market_data_sources
 from app.services.market_data import get_discount_curve
-from app.services.regulatory_irr import discount_curve_midpoints_pct
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

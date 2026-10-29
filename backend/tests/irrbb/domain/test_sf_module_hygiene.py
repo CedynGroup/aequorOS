@@ -9,7 +9,7 @@ one, a pair, months in a year, days in a year, per cent and basis points — plu
 a short list of structural constants that each say why they are not regulatory.
 Every calibration must arrive from the control plane.
 
-**Isolation from the legacy engine (design §1.7).** ``app/domain/irr/engine.py``
+**Isolation from the legacy engine (design §1.7).** ``app/irrbb/domain/engine.py``
 computes the returns banks have already filed. The Standardised Framework is a
 second engine, deliberately built alongside rather than folded in, and an
 import either way would let a change to one move the other's numbers. The
@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 BACKEND = Path(__file__).parents[3]
-IRR = BACKEND / "app" / "domain" / "irr"
+IRR = BACKEND / "app" / "irrbb" / "domain"
 SF_MODULES: tuple[str, ...] = (
     "standardised.py",
     "standardised_params.py",
@@ -154,9 +154,7 @@ def _imported(name: str) -> set[str]:
 
 @pytest.mark.parametrize("name", SF_MODULES)
 def test_the_standardised_framework_never_reaches_into_the_legacy_engine(name: str) -> None:
-    offenders = {
-        module for module in _imported(name) if module.endswith("irr.engine")
-    }
+    offenders = {module for module in _imported(name) if module.endswith("irrbb.domain.engine")}
 
     assert offenders == set(), f"{name} imports the legacy engine: {offenders}"
 

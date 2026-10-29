@@ -16,47 +16,45 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.irr.standardised_cash_flows import add_months, add_tenor, slot, year_fraction
-from app.domain.irr.standardised_params import Tenor, parse_tenor
-from tests.domain.irr.test_sf_fixtures import sf_parameters
+from app.irrbb.domain.standardised_cash_flows import add_months, add_tenor, slot, year_fraction
+from app.irrbb.domain.standardised_params import Tenor, parse_tenor
+from tests.irrbb.domain.test_sf_fixtures import sf_parameters
 
 AS_OF = date(2026, 12, 31)
 
 #: (flow date, expected bucket key). Each pair sits on a bound or one day past.
 BOUNDARIES: tuple[tuple[date, str], ...] = (
-    (date(2020, 1, 1), "b01"),      # long past due
-    (date(2026, 12, 30), "b01"),    # yesterday
-    (date(2026, 12, 31), "b01"),    # today
-    (date(2027, 1, 1), "b01"),      # exactly one day: still overnight
+    (date(2020, 1, 1), "b01"),  # long past due
+    (date(2026, 12, 30), "b01"),  # yesterday
+    (date(2026, 12, 31), "b01"),  # today
+    (date(2027, 1, 1), "b01"),  # exactly one day: still overnight
     (date(2027, 1, 2), "b02"),
-    (date(2027, 1, 31), "b02"),     # one month, clamped to month end
+    (date(2027, 1, 31), "b02"),  # one month, clamped to month end
     (date(2027, 2, 1), "b03"),
-    (date(2027, 3, 31), "b03"),     # three months
+    (date(2027, 3, 31), "b03"),  # three months
     (date(2027, 4, 1), "b04"),
-    (date(2027, 6, 30), "b04"),     # six months
+    (date(2027, 6, 30), "b04"),  # six months
     (date(2027, 7, 1), "b05"),
-    (date(2027, 9, 30), "b05"),     # nine months
+    (date(2027, 9, 30), "b05"),  # nine months
     (date(2027, 10, 1), "b06"),
-    (date(2027, 12, 31), "b06"),    # twelve months
+    (date(2027, 12, 31), "b06"),  # twelve months
     (date(2028, 1, 1), "b07"),
-    (date(2028, 6, 30), "b07"),     # eighteen months
+    (date(2028, 6, 30), "b07"),  # eighteen months
     (date(2028, 7, 1), "b08"),
-    (date(2028, 12, 31), "b08"),    # two years
+    (date(2028, 12, 31), "b08"),  # two years
     (date(2029, 1, 1), "b09"),
-    (date(2029, 12, 31), "b09"),    # three years
-    (date(2031, 12, 31), "b11"),    # five years
+    (date(2029, 12, 31), "b09"),  # three years
+    (date(2031, 12, 31), "b11"),  # five years
     (date(2032, 1, 1), "b12"),
-    (date(2041, 12, 31), "b17"),    # fifteen years
-    (date(2046, 12, 31), "b18"),    # twenty years
-    (date(2047, 1, 1), "b19"),      # past the last bound: the open bucket
+    (date(2041, 12, 31), "b17"),  # fifteen years
+    (date(2046, 12, 31), "b18"),  # twenty years
+    (date(2047, 1, 1), "b19"),  # past the last bound: the open bucket
     (date(2099, 1, 1), "b19"),
 )
 
 
 @pytest.mark.parametrize(("when", "expected"), BOUNDARIES)
-def test_a_flow_lands_in_the_bucket_whose_upper_bound_it_reaches(
-    when: date, expected: str
-) -> None:
+def test_a_flow_lands_in_the_bucket_whose_upper_bound_it_reaches(when: date, expected: str) -> None:
     params = sf_parameters()
 
     index = slot(AS_OF, when, params.buckets)

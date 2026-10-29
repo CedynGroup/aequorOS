@@ -24,6 +24,7 @@ from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
+from app.irrbb.service import regulatory_irr
 from app.live.service import data_activation
 from app.models import (
     AuditEvent,
@@ -43,7 +44,7 @@ from app.models import (
 from app.policy.service import module_scope
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import analysis_workbench, regulatory_capital, regulatory_irr
+from app.services import analysis_workbench, regulatory_capital
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 

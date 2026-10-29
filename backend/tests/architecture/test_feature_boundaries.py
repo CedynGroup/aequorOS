@@ -212,11 +212,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "liquidity",
     ),
     (
-        r"^(services/regulatory_irr(_sf)?|domain/irr/.*|schemas/regulatory_irr(_sf)?"
-        r"|features/run_regulatory_irr)$",
-        "irrbb",
-    ),
-    (
         r"^(services/regulatory_fx|domain/fx/.*|schemas/regulatory_fx"
         r"|features/run_regulatory_fx)$",
         "fx",

@@ -280,10 +280,10 @@ from app.domain.ingestion.capital_tiers import (
 from app.domain.ingestion.reference_schemas.business_units import (
     normalise_row as _normalise_business_unit_row,
 )
-from app.domain.irr.buckets import REPRICING_BUCKETS as _IRR_BUCKETS
-from app.domain.irr.buckets import bucket_for_days as _bucket_for_days
-from app.domain.irr.buckets import repricing_bucket as _repricing_bucket
 from app.identity.public import Bank
+from app.irrbb.domain.buckets import REPRICING_BUCKETS as _IRR_BUCKETS
+from app.irrbb.domain.buckets import bucket_for_days as _bucket_for_days
+from app.irrbb.domain.buckets import repricing_bucket as _repricing_bucket
 from app.live import position_book
 from app.live.domain.positions.credit import (
     capital_credit_class,
@@ -339,7 +339,7 @@ _DEFAULT_NMD_DURATION_MONTHS = Decimal("12")
 # The nine canonical IRRBB buckets (``_IRR_BUCKETS``: name, upper bound in
 # days, midpoint years) and the loan taxonomy (``_LOAN_CATEGORY_MAP``,
 # ``_PAST_DUE_CATEGORY``, ``_RETAIL_LOAN_CATEGORIES``, ``_loan_family``) are
-# ``app.domain.irr.buckets`` and ``app.live.domain.positions.families`` (P0-8),
+# ``app.irrbb.domain.buckets`` and ``app.live.domain.positions.families`` (P0-8),
 # re-imported above under the names this module has always used.
 _BUCKET_MIDPOINT = {name: midpoint for name, _, midpoint in _IRR_BUCKETS}
 _SAVINGS_REPRICING_BUCKET = "3-6m"
@@ -3632,7 +3632,7 @@ def _derive_capital_components(canonical: _Canonical, groups: list[GroupResult])
 # IRR
 # ---------------------------------------------------------------------------
 #
-# ``_bucket_for_days`` and ``_repricing_bucket`` are ``app.domain.irr.buckets``
+# ``_bucket_for_days`` and ``_repricing_bucket`` are ``app.irrbb.domain.buckets``
 # (P0-8): floating → next repricing date, else contractual maturity, ``None``
 # when a position states neither.
 

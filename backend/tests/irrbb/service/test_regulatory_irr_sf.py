@@ -2,7 +2,7 @@
 
 These tests are about the SERVICE, not the arithmetic. The eight golden vectors
 of P5-DESIGN §3 already pin every number the engine produces
-(``tests/domain/irr/``), so nothing here asserts a magnitude the engine chose.
+(``tests/irrbb/domain/``), so nothing here asserts a magnitude the engine chose.
 What is asserted instead:
 
 * a run is minted, sealed and reproducible — the same book hashes the same way;
@@ -24,9 +24,12 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.irr import standardised as sf
-from app.domain.irr import standardised_cash_flows as sfcf
-from app.domain.irr import standardised_params as sfp
+from app.irrbb.domain import standardised as sf
+from app.irrbb.domain import standardised_cash_flows as sfcf
+from app.irrbb.domain import standardised_params as sfp
+from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
+from app.irrbb.schemas.regulatory_irr_sf import IrrbbSfRunCreate
+from app.irrbb.service import regulatory_irr, regulatory_irr_sf
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -36,9 +39,6 @@ from app.models import (
     RegulatoryValidation,
 )
 from app.policy.service import jurisdictions
-from app.schemas.regulatory_irr import IrrScenarioBatchCreate
-from app.schemas.regulatory_irr_sf import IrrbbSfRunCreate
-from app.services import regulatory_irr, regulatory_irr_sf
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

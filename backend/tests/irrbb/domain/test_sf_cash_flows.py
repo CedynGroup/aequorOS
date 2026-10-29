@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.domain.irr.standardised_cash_flows import (
+from app.irrbb.domain.standardised_cash_flows import (
     TALLY_ACCRUAL_START_UNKNOWN,
     TALLY_HORIZONLESS,
     TALLY_MARKERS,
@@ -27,7 +27,7 @@ from app.domain.irr.standardised_cash_flows import (
     project,
     swap_legs,
 )
-from tests.domain.irr.test_sf_fixtures import sf_parameters
+from tests.irrbb.domain.test_sf_fixtures import sf_parameters
 
 AS_OF = date(2026, 12, 31)
 SIX = Decimal("0.000001")

@@ -8,18 +8,18 @@ from fastapi import APIRouter, Query, status
 from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.core.authorization import Module, Permission, Sensitivity
 from app.identity import public as scoped_authorization
-from app.schemas.regulatory_irr import (
+from app.irrbb.schemas.regulatory_irr import (
     IrrDashboardRead,
     IrrEarAnalysisRead,
     IrrScenarioBatchCreate,
 )
-from app.schemas.regulatory_irr_sf import (
+from app.irrbb.schemas.regulatory_irr_sf import (
     IrrbbSfAttemptsRead,
     IrrbbSfRead,
     IrrbbSfRunCreate,
 )
+from app.irrbb.service import regulatory_irr, regulatory_irr_sf
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead, RegulatoryRunRead
-from app.services import regulatory_irr, regulatory_irr_sf
 
 router = APIRouter(tags=["regulatory-irr"])
 
