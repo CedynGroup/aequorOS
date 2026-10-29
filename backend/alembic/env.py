@@ -5,7 +5,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import make_url
 
-import app.models
+import app.models as model_registry
 from alembic import context
 from app.core.config import get_migration_database_url
 from app.core.tls import database_connect_args
@@ -13,7 +13,7 @@ from app.db.base import Base
 from app.db.session import database_timeout_connect_args
 
 #: The registry: importing it maps every feature's tables onto ``Base.metadata``.
-_ = app.models
+_ = model_registry
 
 config = context.config
 
