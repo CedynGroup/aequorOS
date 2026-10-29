@@ -17,6 +17,9 @@ from sqlalchemy.orm import Session, undefer, undefer_group
 
 from app.attestation.service import register_state
 from app.attestation.service.digests import register_state_digest
+from app.behavioral.ml import deposit_stability, nmd_duration
+from app.behavioral.ml.config import BehavioralTrainingConfig
+from app.behavioral.ml.history import load_deposit_month_aggregates
 from app.bi.domain.catalogue import catalogue
 from app.bi.models.content import BiDashboard, BiDashboardVersion
 from app.bi.models.marts import BiDimCounterparty, BiFactPositionDaily, BiFactPositionEom
@@ -62,9 +65,6 @@ from app.identity.schemas.institution_profile import (
 from app.identity.service import banks, institution_profile
 from app.live import position_book
 from app.live.service import fact_derivation
-from app.ml.behavioral import deposit_stability, nmd_duration
-from app.ml.behavioral.config import BehavioralTrainingConfig
-from app.ml.behavioral.history import load_deposit_month_aggregates
 from app.models import ParamConcentrationLimit
 from app.models.audit_event import AuditEvent
 from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot

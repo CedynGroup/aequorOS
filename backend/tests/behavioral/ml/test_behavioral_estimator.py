@@ -12,8 +12,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from app.ml.behavioral.config import BehavioralTrainingConfig
-from app.ml.behavioral.estimator import estimate
+from app.behavioral.ml.config import BehavioralTrainingConfig
+from app.behavioral.ml.estimator import estimate
 
 _CFG = BehavioralTrainingConfig(min_months=3, min_samples=6, cv_folds=2)
 
