@@ -24,6 +24,8 @@ from app.domain.capital.engine import (
     compute_rwa,
     tier1_capital,
 )
+from app.fx import service as regulatory_fx
+from app.fx.schemas import FxScenarioBatchCreate
 from app.irrbb.domain.standardised_params import REQUIRED_CODES
 from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.irrbb.schemas.regulatory_irr_sf import IrrbbSfRunCreate
@@ -42,7 +44,6 @@ from app.models.stress import MacroScenario, MacroScenarioPath
 from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
 from app.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.schemas.forecasting import ForecastRunCreate, OptimizerRunCreate, WhatIfRunCreate
-from app.schemas.regulatory_fx import FxScenarioBatchCreate
 from app.schemas.regulatory_liquidity import (
     RegulatoryRunCreate,
     RegulatoryScenarioCode,
@@ -54,7 +55,6 @@ from app.services import (
     enterprise_stress,
     regulatory_capital,
     regulatory_forecasting,
-    regulatory_fx,
     reverse_stress,
     sdi_rating,
 )

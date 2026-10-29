@@ -38,15 +38,16 @@ from app.domain.ftp.engine import (
 from app.domain.ftp.engine import (
     MissingParameterError as FtpMissingParameter,
 )
-from app.domain.fx.engine import (
-    FxComputationError,
-)
-from app.domain.fx.engine import (
-    MissingParameterError as FxMissingParameter,
-)
 from app.domain.liquidity.engine import (
     UnsupportedShockError as LiquidityUnsupportedShock,
 )
+from app.fx.domain.engine import (
+    FxComputationError,
+)
+from app.fx.domain.engine import (
+    MissingParameterError as FxMissingParameter,
+)
+from app.fx.public import regulatory_fx
 from app.identity.public import Bank
 from app.irrbb.domain.engine import (
     IrrComputationError,
@@ -75,7 +76,6 @@ from app.schemas.scenario_workbench import (
 from app.services import (
     regulatory_capital,
     regulatory_ftp,
-    regulatory_fx,
     regulatory_liquidity,
     scenario_workbench_authorization,
 )

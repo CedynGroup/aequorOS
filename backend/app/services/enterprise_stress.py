@@ -54,7 +54,6 @@ from app.domain.capital.engine import (
 )
 from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.domain.forecasting.engine import ForecastAssumptions, ForecastFact, ForecastParams
-from app.domain.fx.engine import FxPosition
 from app.domain.liquidity.engine import (
     HQLA_LEVEL_1,
     LiquidityFact,
@@ -105,6 +104,7 @@ from app.domain.stress.translation import (
     missing_variables,
     required_variables,
 )
+from app.fx.domain.engine import FxPosition
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.irrbb.public import regulatory_irr

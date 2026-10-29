@@ -16,6 +16,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.fx import service as regulatory_fx
+from app.fx.schemas import FxScenarioBatchCreate
 from app.models import BankReportingPeriod, RegulatoryPackage
 from app.reporting.schemas.packages import (
     RegulatoryPackageCreate,
@@ -30,9 +32,8 @@ from app.reporting.service.registry import (
     daily_next_business_day,
     get_definition,
 )
-from app.schemas.regulatory_fx import FxScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_fx, regulatory_liquidity
+from app.services import regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

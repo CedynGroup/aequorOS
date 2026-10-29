@@ -39,8 +39,8 @@ from app.models import (
     User,
 )
 from app.services import default_macro_scenarios
-from tests.api.test_fx_authorization import _grant
 from tests.api.test_ingestion import seed_bank
+from tests.fx.api.test_fx_authorization import _grant
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 pytestmark = pytest.mark.usefixtures("irrbb_run_authority")

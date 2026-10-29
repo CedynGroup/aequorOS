@@ -202,7 +202,7 @@ documented, and reported **with and without** (¶78–81).
   the severity _k_ breaching a floor, two **independent** axes (liquidity=LCR, capital=CET1);
   immutable `RegulatoryRun`.
 - **IRRBB:** 6 Basel ΔEVE scenarios + EaR (`app/irrbb/domain/engine.py:384,470`). **FX:** depreciation
-  scenarios + stressed VaR (`app/domain/fx/engine.py:479,373`). **FTP:** curve/funding stress.
+  scenarios + stressed VaR (`app/fx/domain/engine.py:479,373`). **FTP:** curve/funding stress.
 - **Forecasting:** what-if (4 hardcoded macro-flavoured shocks, `forecasting/engine.py:141`);
   adverse scenarios (base/adverse/severely_adverse, 5-yr); strategic optimizer.
 - **Returns:** STRESS-PACK (`generation.py:1305`, event-driven, own format) and ICAAP-STRESS

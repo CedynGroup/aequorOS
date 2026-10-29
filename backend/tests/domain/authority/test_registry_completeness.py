@@ -1025,7 +1025,7 @@ def test_a_named_line_item_no_authority_claims_fails() -> None:
         _evidence(
             filed_line_item_codes={
                 "ratio:car": "app/domain/capital/engine.py:911",
-                "fx_var:diversification_benefit": "app/domain/fx/engine.py:340",
+                "fx_var:diversification_benefit": "app/fx/domain/engine.py:340",
             }
         )
     )
@@ -1046,7 +1046,7 @@ def test_a_data_keyed_line_code_is_measured_and_never_demanded() -> None:
     assert not registry.check_completeness(
         _evidence(
             data_keyed_line_item_codes={
-                "fx_position:position.currency": "app/domain/fx/engine.py:264",
+                "fx_position:position.currency": "app/fx/domain/engine.py:264",
                 "ftp_product:product.product": "app/domain/ftp/engine.py:382",
             }
         )

@@ -6,9 +6,9 @@ from uuid import UUID
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import DbSession, FxAggregatedView, FxRun
-from app.schemas.regulatory_fx import FxDashboardRead, FxScenarioBatchCreate
+from app.fx import service as regulatory_fx
+from app.fx.schemas import FxDashboardRead, FxScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
-from app.services import regulatory_fx
 
 router = APIRouter(tags=["regulatory-fx"])
 
