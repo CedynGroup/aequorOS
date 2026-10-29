@@ -39,7 +39,7 @@ LEGACY_ENGINE = APP / "irrbb" / "domain" / "engine.py"
 LIVE_PLANE: tuple[Path, ...] = (
     APP / "live" / "service" / "pipeline.py",
     APP / "live" / "service" / "freshness.py",
-    APP / "services" / "implied_rating.py",
+    APP / "rating" / "service" / "implied_rating.py",
     APP / "reporting" / "service" / "generation.py",
 )
 
