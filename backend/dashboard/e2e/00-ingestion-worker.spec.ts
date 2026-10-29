@@ -12,6 +12,7 @@ import { expectKpi } from "./support/figures";
 import { generateCurrentVersion } from "./support/generate";
 import { E2E_USERS, writeStorageState } from "./support/mint";
 import { requireObjectStorage } from "./support/object-storage";
+import { readSqliteForPoll, SQLITE_READ_BUSY } from "./support/sqlite-poll";
 import {
   WORKER_APPROVER_ROLE,
   WORKER_BANK,
@@ -275,7 +276,8 @@ test("an uploaded book becomes fresh 645.16% liquidity coverage and the BSD2 cas
                 `Worker exited before completing the refresh; see ${log}`,
               );
             }
-            const job = readWorkerJob();
+            const job = readSqliteForPoll(readWorkerJob);
+            if (job === SQLITE_READ_BUSY) return "database_busy";
             if (job?.error) {
               throw new Error(
                 `Worker refresh failed: ${job.error}; progress=${job.progress}`,

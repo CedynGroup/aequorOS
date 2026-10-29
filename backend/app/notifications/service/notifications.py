@@ -23,8 +23,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.security import ROLES
 from app.identity.public import Bank, User
-from app.models import Notification, RegulatoryPackage
-from app.reporting.models.packages import RETURN_FAMILIES
+from app.notifications.models import Notification
+from app.reporting.models.packages import RETURN_FAMILIES, RegulatoryPackage
 from app.reporting.service import family_access
 from app.reporting.service.registry import REGISTRY
 

@@ -14,12 +14,12 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 
 from app.api.deps import DbSession, MutationTenant, Tenant
-from app.schemas.notifications import (
+from app.notifications.schemas import (
     NotificationListRead,
     NotificationRead,
     NotificationsMarkAllRead,
 )
-from app.services import notifications
+from app.notifications.service import notifications
 
 router = APIRouter(tags=["notifications"])
 

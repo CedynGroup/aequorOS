@@ -34,8 +34,10 @@ from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.core.security import ACCOUNT_ADMIN_ROLE, ADMIN_ROLE
 from app.identity.public import User
-from app.models import Job, Notification
-from app.services import job_queue, mailer, notifications
+from app.models.job import Job
+from app.notifications.models import Notification
+from app.notifications.service import notifications
+from app.services import job_queue, mailer
 
 JOB_TYPE = "notification_email_mirror"
 # One batch per cycle; stragglers roll to the next tick.

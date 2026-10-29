@@ -781,5 +781,14 @@
   ["app.features.read_behavioral_models", "app.behavioral.api.read_behavioral_models"],
   ["tests.ml.test_behavioral_estimator", "tests.behavioral.ml.test_behavioral_estimator"],
   ["tests.api.test_behavioral_authorization", "tests.behavioral.api.test_behavioral_authorization"],
-  ["tests.api.test_behavioral_liquidity", "tests.behavioral.api.test_behavioral_liquidity"]
+  ["tests.api.test_behavioral_liquidity", "tests.behavioral.api.test_behavioral_liquidity"],
+  ["app.services.notifications", "app.notifications.service.notifications"],
+  ["app.services.notification_email_mirror", "app.notifications.service.notification_email_mirror"],
+  ["app.services.reporting_deadline_scan", "app.notifications.service.reporting_deadline_scan"],
+  ["app.models.notification", "app.notifications.models"],
+  ["app.schemas.notifications", "app.notifications.schemas"],
+  ["app.features.manage_notifications", "app.notifications.api.manage_notifications"],
+  ["tests.services.test_notifications", "tests.notifications.service.test_notifications"],
+  ["tests.services.test_notification_email_mirror", "tests.notifications.service.test_notification_email_mirror"],
+  ["tests.api.test_notification_authorization", "tests.notifications.api.test_notification_authorization"]
 ]

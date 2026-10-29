@@ -131,15 +131,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
     # ---- staff operator console
     (r"^(models|schemas)/operator$", "operator"),
-    # ---- notifications
-    (
-        r"^services/(notifications|notification_email_mirror|reporting_deadline_scan)$",
-        "notifications",
-    ),
-    (
-        r"^(models/notification|schemas/notifications|features/manage_notifications)$",
-        "notifications",
-    ),
     # ---- data engine
     (r"^adapters/__init__$", "data_engine"),
     (r"^adapters/(api_push|database_direct|excel_csv|temenos_t24)(/|$)", "data_engine"),
