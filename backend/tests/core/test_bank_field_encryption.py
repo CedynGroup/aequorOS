@@ -89,10 +89,13 @@ NAME = "Synthetic Borrower Ñ"
 EXPANDING_NAME = "\ufb03" * 130
 IDENTIFIER = "SYNTHETIC-CARD-17"
 CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, roles=("admin",))
+REGISTER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 @pytest.fixture
-def provider(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> LocalKeyProvider:
+def provider(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, institution_profile_authority: None
+) -> LocalKeyProvider:
     provider = LocalKeyProvider()
     for key in (KEY_A, KEY_B, NEXT):
         provider.add_key(key)
@@ -461,7 +464,7 @@ def test_register_crud_and_new_audits_omit_names(
             RelatedPartyRoleInput(role="ultimate_beneficial_owner"),
         ],
     )
-    created = institution_profile.create_related_party(db_session, CTX, BANK_A, payload)
+    created = institution_profile.create_related_party(db_session, REGISTER_CTX, BANK_A, payload)
     assert created.full_name == NAME
     db_session.expire_all()
     profile = institution_profile.get_full_profile(db_session, CTX, BANK_A)
@@ -475,7 +478,7 @@ def test_register_crud_and_new_audits_omit_names(
     assert NAME not in json.dumps(audits[0].details, ensure_ascii=False)
     updated = institution_profile.update_related_party(
         db_session,
-        CTX,
+        REGISTER_CTX,
         BANK_A,
         created.id,
         RelatedPartyUpdate.model_validate(
@@ -497,7 +500,7 @@ def assert_unicode_name_round_trip(db: Session, connected: bool) -> None:
     borrower_id = borrower.id
     party = institution_profile.create_related_party(
         db,
-        CTX,
+        REGISTER_CTX,
         BANK_A,
         RelatedPartyCreate(
             reason="Synthetic Unicode names", party_type="individual", full_name=EXPANDING_NAME
@@ -510,7 +513,7 @@ def assert_unicode_name_round_trip(db: Session, connected: bool) -> None:
             borrower.name = name
             institution_profile.update_related_party(
                 db,
-                CTX,
+                REGISTER_CTX,
                 BANK_A,
                 party.id,
                 RelatedPartyUpdate(
@@ -1447,7 +1450,7 @@ def test_profile_http_locked_read_write_and_recovery(
         connect(db_session, provider)
     party = institution_profile.create_related_party(
         db_session,
-        CTX,
+        REGISTER_CTX,
         BANK_A,
         RelatedPartyCreate(
             reason="Synthetic protected profile",
@@ -1551,14 +1554,14 @@ def test_rotated_profile_keeps_failure_until_both_write_keys_recover(
         contact={"email": "retained@example.test"},
         roles=[RelatedPartyRoleInput(role="director", sitting_allowance=Decimal(45))],
     )
-    retained = institution_profile.create_related_party(db_session, CTX, BANK_A, payload)
+    retained = institution_profile.create_related_party(db_session, REGISTER_CTX, BANK_A, payload)
     row = registry.scoped_key(db_session, bank_id=BANK_A, organization_id=ORG_1)
     registry.rotate(db_session, row, NEXT, lambda _name: provider)
     assert row.current_version_id != row.index_version_id
     db_session.commit()
     current = institution_profile.create_related_party(
         db_session,
-        CTX,
+        REGISTER_CTX,
         BANK_A,
         payload.model_copy(update={"full_name": "Synthetic current-key party"}),
     )
@@ -1623,7 +1626,7 @@ def test_profile_recovery_unwraps_each_required_version_once(
     for index in range(3):
         institution_profile.create_related_party(
             db_session,
-            CTX,
+            REGISTER_CTX,
             BANK_A,
             RelatedPartyCreate(
                 reason="Synthetic bounded key observation",
@@ -1674,7 +1677,7 @@ def test_rotated_profiles_combine_prerequisite_failure_severity(
     if populated:
         institution_profile.create_related_party(
             db_session,
-            CTX,
+            REGISTER_CTX,
             BANK_A,
             RelatedPartyCreate(
                 reason="Synthetic historical field failure",
@@ -1734,7 +1737,7 @@ def test_prerequisite_observation_is_independent_of_historical_read_order(
     db_session.commit()
     institution_profile.create_related_party(
         db_session,
-        CTX,
+        REGISTER_CTX,
         BANK_A,
         RelatedPartyCreate(
             reason="Synthetic independent historical key",
@@ -1803,7 +1806,7 @@ def test_inspector_profile_read_never_releases_protected_identity(
         connect(db_session, provider)
     institution_profile.create_related_party(
         db_session,
-        CTX,
+        REGISTER_CTX,
         BANK_A,
         RelatedPartyCreate(
             reason="Synthetic staff disclosure proof",
@@ -1837,7 +1840,7 @@ def test_corrupted_protected_read_is_an_integrity_refusal_not_an_outage(
     connect(db_session, provider)
     party = institution_profile.create_related_party(
         db_session,
-        CTX,
+        REGISTER_CTX,
         BANK_A,
         RelatedPartyCreate(
             reason="Synthetic integrity proof",

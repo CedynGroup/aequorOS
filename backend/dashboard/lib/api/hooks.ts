@@ -3207,14 +3207,17 @@ export function useSaveChannelConfig(bankId: string | undefined) {
 // ---------------------------------------------------------------------------
 
 /** The composed corporate register (profile may be null until first configured). */
-export function useInstitutionProfile(bankId: string | undefined) {
+export function useInstitutionProfile(
+  bankId: string | undefined,
+  enabled = false,
+) {
   return useQuery({
     queryKey: ["institution-profile", bankId],
     queryFn: () =>
       apiCall(() =>
         institutionProfileApi.getInstitutionProfile({ bankId: bankId! }),
       ),
-    enabled: Boolean(bankId),
+    enabled: Boolean(bankId) && enabled,
   });
 }
 

@@ -34,7 +34,7 @@ from tests.support.factories.attestation import relax_signing
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1
 
-pytestmark = pytest.mark.usefixtures("return_generation_authority")
+pytestmark = pytest.mark.usefixtures("return_generation_authority", "institution_profile_authority")
 
 
 def connect(db: Session, monkeypatch: pytest.MonkeyPatch) -> LocalKeyProvider:
