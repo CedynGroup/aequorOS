@@ -53,7 +53,7 @@ from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
 from app.identity.public import Bank, User
 from app.identity.schemas.institution_profile import (
-    InstitutionProfileFullRead,
+    InstitutionProfileAccessRead,
     RelatedPartyCreate,
     RelatedPartyRoleInput,
     RelatedPartyUpdate,
@@ -1584,7 +1584,7 @@ def test_rotated_profile_keeps_failure_until_both_write_keys_recover(
         assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: reason}
         parties = {
             party.id: party
-            for party in InstitutionProfileFullRead.model_validate_json(
+            for party in InstitutionProfileAccessRead.model_validate_json(
                 response.content
             ).related_parties
         }
@@ -1604,7 +1604,7 @@ def test_rotated_profile_keeps_failure_until_both_write_keys_recover(
     recovered = db_client.get(url, headers=headers())
     assert recovered.status_code == 200, recovered.text
     assert json.loads(recovered.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
-    restored = InstitutionProfileFullRead.model_validate_json(recovered.content)
+    restored = InstitutionProfileAccessRead.model_validate_json(recovered.content)
     assert {party.full_name for party in restored.related_parties} == {
         retained.full_name,
         current.full_name,
@@ -1652,7 +1652,7 @@ def test_profile_recovery_unwraps_each_required_version_once(
     assert response.status_code == 200, response.text
     assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "available"}
     assert (
-        len(InstitutionProfileFullRead.model_validate_json(response.content).related_parties) == 3
+        len(InstitutionProfileAccessRead.model_validate_json(response.content).related_parties) == 3
     )
     assert calls.count(KEY_A) == 1 and calls.count(NEXT) == int(rotated)
     assert len(calls) == 1 + int(rotated)
@@ -1697,7 +1697,7 @@ def test_rotated_profiles_combine_prerequisite_failure_severity(
     for expected in ("revoked", "unavailable", "available"):
         response = db_client.get(url, headers=headers())
         assert response.status_code == 200, response.text
-        parties = InstitutionProfileFullRead.model_validate_json(response.content).related_parties
+        parties = InstitutionProfileAccessRead.model_validate_json(response.content).related_parties
         assert len(parties) == int(populated)
         if populated:
             assert parties[0].full_name == (
@@ -1826,10 +1826,8 @@ def test_inspector_profile_read_never_releases_protected_identity(
     response = db_client.get(
         f"/api/v1/banks/{BANK_A}/institution-profile", headers={"Authorization": f"Bearer {token}"}
     )
-    assert response.status_code == 200, response.text
-    assert response.json()["related_parties"][0]["full_name"] == LOCKED_TEXT
+    assert response.status_code == 403, response.text
     assert NAME not in response.text and "identity@example.test" not in response.text
-    assert json.loads(response.headers["X-Aequoros-Protected-Data"]) == {BANK_A: "support"}
 
 
 def test_corrupted_protected_read_is_an_integrity_refusal_not_an_outage(
