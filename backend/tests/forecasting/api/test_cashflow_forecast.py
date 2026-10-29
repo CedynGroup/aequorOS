@@ -31,10 +31,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
-from app.ml.cashflow_history import load_bank_daily_series
-from app.ml.config import TrainingConfig
-from app.ml.synthetic import DailyFlow, generate_daily_series
-from app.services import cashflow_forecast
+from app.forecasting.ml.cashflow_history import load_bank_daily_series
+from app.forecasting.ml.config import TrainingConfig
+from app.forecasting.ml.synthetic import DailyFlow, generate_daily_series
+from app.forecasting.service import cashflow_forecast
 from tests.real_data import (
     REAL_BANK_ID,
     REAL_ORG_ID,
@@ -82,7 +82,7 @@ def _training_window_days() -> int:
 
 
 def _xfail_if_own_series_untrainable(own_series: list[DailyFlow]) -> None:
-    """KNOWN BUG (app/ml/cashflow_history.py, not fixable from a test): the loader
+    """KNOWN BUG (app/forecasting/ml/cashflow_history.py, not fixable from a test): the loader
     reads ``inflow_ghs``/``outflow_ghs``/``net_ghs`` while the canonical
     ``historical_cashflows`` rows (and ``fact_derivation``) carry
     ``deposit_inflow_ghs``/``deposit_outflow_ghs``/``net_cashflow_ghs``, so the real
@@ -93,7 +93,8 @@ def _xfail_if_own_series_untrainable(own_series: list[DailyFlow]) -> None:
     window = own_series[-_training_window_days() :]
     if len(own_series) >= _training_window_days() and all(flow.net == 0 for flow in window):
         pytest.xfail(
-            "app/ml/cashflow_history parses the bank's canonical historical_cashflows as "
+            "app/forecasting/ml/cashflow_history parses the bank's "
+            "canonical historical_cashflows as "
             "all zeros (field-name mismatch) -> bank-specific training has zero variance"
         )
 

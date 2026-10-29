@@ -141,7 +141,7 @@ including axes that breached before reaching that limit.
   divide what the API returns; it may not decide a number the engines own. See
   "Client-side arithmetic" below for the line between the two.
 - **No ML the backend does not have.** The only machine-learning surfaces are
-  the cash-flow LSTM (`backend/app/ml`) and the per-tenant behavioral GBMs.
+  the cash-flow LSTM (`backend/app/forecasting/ml`) and the per-tenant behavioral GBMs.
   There is no reinforcement-learning optimizer and no gradient-boosting FX
   ensemble; the forecasting optimizer is a deterministic grid search and the
   balance-sheet forecast is deterministic arithmetic.

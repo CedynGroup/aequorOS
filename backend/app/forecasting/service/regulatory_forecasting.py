@@ -5,7 +5,7 @@ Follows the immutable calculation-run lifecycle established by
 before executing, persist the full canonical input snapshot with a SHA-256
 ``input_hash``, and record failures as data (named error codes) rather than
 HTTP 500s. The arithmetic itself lives in the pure engine at
-``app.domain.forecasting.engine``, which computes the projected regulatory
+``app.forecasting.domain.engine``, which computes the projected regulatory
 ratios by calling the liquidity and capital engines on the projected fact
 sets. Projection outputs are persisted in the run's ``metrics`` JSON
 (stringified Decimals); forecast runs additionally persist headline
@@ -42,7 +42,20 @@ from app.domain.capital.engine import (
 from app.domain.capital.engine import (
     MissingParameterError as CapitalMissingParameterError,
 )
-from app.domain.forecasting.engine import (
+from app.domain.liquidity.engine import (
+    FACT_GROUP_SECURITIES,
+    HQLA_LEVEL_1,
+    HQLA_LEVELS,
+    LiquidityComputationError,
+    LiquidityParams,
+    classify_ratio,
+)
+from app.domain.liquidity.engine import (
+    MissingParameterError as LiquidityMissingParameterError,
+)
+from app.forecasting import service as assumption_register
+from app.forecasting.domain.assumptions import ASSUMPTION_KEYS, PRESET_CODES
+from app.forecasting.domain.engine import (
     DEFAULT_FEE_INCOME_PCT_ASSETS,
     DEFAULT_SECURITIES_SHIFT_PP,
     DEFAULT_TAX_RATE_PCT,
@@ -66,19 +79,29 @@ from app.domain.forecasting.engine import (
     run_optimizer,
     run_whatif,
 )
-from app.domain.liquidity.engine import (
-    FACT_GROUP_SECURITIES,
-    HQLA_LEVEL_1,
-    HQLA_LEVELS,
-    LiquidityComputationError,
-    LiquidityParams,
-    classify_ratio,
+from app.forecasting.schemas.forecasting import (
+    ForecastAssumptionDefaultsRead,
+    ForecastAssumptionsRead,
+    ForecastAssumptionsUpdate,
+    ForecastRunCreate,
+    ForecastRunListRead,
+    ForecastRunRead,
+    ForecastRunSummaryRead,
+    ForecastScenarioListRead,
+    ForecastScenarioRead,
+    OptimizerCandidateRead,
+    OptimizerConstraintStatusRead,
+    OptimizerDecisionRead,
+    OptimizerResultRead,
+    OptimizerRunCreate,
+    ProjectionSummaryRead,
+    ProjectionYearRead,
+    WhatIfMetricComparisonRead,
+    WhatIfResultRead,
+    WhatIfRunCreate,
+    WhatIfYear5ComparisonRead,
+    WhatIfYearDeltaRead,
 )
-from app.domain.liquidity.engine import (
-    MissingParameterError as LiquidityMissingParameterError,
-)
-from app.forecasting import service as assumption_register
-from app.forecasting.domain.assumptions import ASSUMPTION_KEYS, PRESET_CODES
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.live.public import (
@@ -103,29 +126,6 @@ from app.policy.public import (
     get_active_params,
     regulatory_parameters,
     sdi_regime,
-)
-from app.schemas.forecasting import (
-    ForecastAssumptionDefaultsRead,
-    ForecastAssumptionsRead,
-    ForecastAssumptionsUpdate,
-    ForecastRunCreate,
-    ForecastRunListRead,
-    ForecastRunRead,
-    ForecastRunSummaryRead,
-    ForecastScenarioListRead,
-    ForecastScenarioRead,
-    OptimizerCandidateRead,
-    OptimizerConstraintStatusRead,
-    OptimizerDecisionRead,
-    OptimizerResultRead,
-    OptimizerRunCreate,
-    ProjectionSummaryRead,
-    ProjectionYearRead,
-    WhatIfMetricComparisonRead,
-    WhatIfResultRead,
-    WhatIfRunCreate,
-    WhatIfYear5ComparisonRead,
-    WhatIfYearDeltaRead,
 )
 from app.schemas.regulatory_liquidity import (
     RegulatoryMetricResultRead,

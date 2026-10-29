@@ -3,8 +3,13 @@ from __future__ import annotations
 import datetime
 from statistics import fmean, median
 
-from app.ml.features import is_business_day, is_mid_month, is_month_end_window, is_payday
-from app.ml.synthetic import DEMO_AS_OF_DATE, generate_daily_series
+from app.forecasting.ml.features import (
+    is_business_day,
+    is_mid_month,
+    is_month_end_window,
+    is_payday,
+)
+from app.forecasting.ml.synthetic import DEMO_AS_OF_DATE, generate_daily_series
 
 
 def test_same_seed_is_deterministic():

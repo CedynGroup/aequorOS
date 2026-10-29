@@ -45,8 +45,9 @@ from app.domain.capital.engine import (
     compute_capital_ratios,
     compute_rwa,
 )
-from app.domain.forecasting import engine as forecast_engine
-from app.domain.forecasting.engine import (
+from app.domain.liquidity.engine import compute_lcr, compute_nsfr
+from app.forecasting.domain import engine as forecast_engine
+from app.forecasting.domain.engine import (
     ForecastFact,
     ForecastParams,
     _parse_facts,
@@ -55,17 +56,16 @@ from app.domain.forecasting.engine import (
     _to_liquidity_facts,
     project,
 )
-from app.domain.liquidity.engine import compute_lcr, compute_nsfr
+from app.forecasting.service.regulatory_forecasting import _FORECAST_FACT_GROUPS
 from app.services.regulatory_capital import _CAPITAL_FACT_GROUPS
-from app.services.regulatory_forecasting import _FORECAST_FACT_GROUPS
 from app.services.regulatory_liquidity import _LIQUIDITY_FACT_GROUPS
-from tests.domain.test_forecasting_engine import (
+from tests.equivalence.conftest import EXACT
+from tests.forecasting.domain.test_forecasting_engine import (
     BASE_ASSUMPTIONS,
     SEVERELY_ADVERSE_ASSUMPTIONS,
     bog_forecast_params,
     sample_bank_latest_facts,
 )
-from tests.equivalence.conftest import EXACT
 
 M = Decimal("1000000")
 

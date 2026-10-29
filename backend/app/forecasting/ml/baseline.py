@@ -13,8 +13,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from statistics import fmean
 
-from app.ml.features import is_month_end_window, is_payday
-from app.ml.synthetic import DailyFlow
+from app.forecasting.ml.features import is_month_end_window, is_payday
+from app.forecasting.ml.synthetic import DailyFlow
 
 BucketKey = tuple[int, bool, bool]
 

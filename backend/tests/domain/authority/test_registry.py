@@ -492,7 +492,7 @@ _ENGINE_VERSION_MODULES = (
     "app.rating.service.implied_rating",
     "app.services.regulatory_capital",
     "app.credit.service.regulatory_credit",
-    "app.services.regulatory_forecasting",
+    "app.forecasting.service.regulatory_forecasting",
     "app.ftp.service",
     "app.fx.service",
     "app.irrbb.service.regulatory_irr",

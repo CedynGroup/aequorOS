@@ -647,6 +647,36 @@
   "reportAny": 3,
   "reportUnknownMemberType": 1
  },
+ "app.forecasting.ml.cashflow_history": {
+  "reportAny": 5
+ },
+ "app.forecasting.ml.model": {
+  "reportAny": 18,
+  "reportUnknownMemberType": 2
+ },
+ "app.forecasting.ml.real_series": {
+  "reportAny": 2,
+  "reportMissingTypeStubs": 1,
+  "reportUnknownArgumentType": 8,
+  "reportUnknownMemberType": 7,
+  "reportUnknownVariableType": 7
+ },
+ "app.forecasting.ml.synthetic": {
+  "reportAny": 2
+ },
+ "app.forecasting.service.cashflow_forecast": {
+  "reportAny": 20,
+  "reportUnknownArgumentType": 1,
+  "reportUnknownMemberType": 1,
+  "reportUnknownVariableType": 1,
+  "reportUnusedFunction": 1
+ },
+ "app.forecasting.service.regulatory_forecasting": {
+  "reportAny": 78,
+  "reportUnknownArgumentType": 5,
+  "reportUnknownMemberType": 1,
+  "reportUnknownVariableType": 1
+ },
  "app.integrations.storage.s3": {
   "reportMissingTypeStubs": 3,
   "reportUnknownArgumentType": 4,
@@ -771,23 +801,6 @@
   "reportUnknownMemberType": 3,
   "reportUnknownParameterType": 1,
   "reportUnknownVariableType": 9
- },
- "app.ml.cashflow_history": {
-  "reportAny": 5
- },
- "app.ml.model": {
-  "reportAny": 18,
-  "reportUnknownMemberType": 2
- },
- "app.ml.real_series": {
-  "reportAny": 2,
-  "reportMissingTypeStubs": 1,
-  "reportUnknownArgumentType": 8,
-  "reportUnknownMemberType": 7,
-  "reportUnknownVariableType": 7
- },
- "app.ml.synthetic": {
-  "reportAny": 2
  },
  "app.models.ai": {
   "reportAny": 1
@@ -1197,13 +1210,6 @@
   "reportUnknownParameterType": 2,
   "reportUnknownVariableType": 1,
   "reportUnnecessaryIsInstance": 2
- },
- "app.services.cashflow_forecast": {
-  "reportAny": 20,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 1,
-  "reportUnusedFunction": 1
  },
  "app.services.cashflow_window": {
   "reportAny": 3,
@@ -1725,12 +1731,6 @@
   "reportUnknownMemberType": 15,
   "reportUnknownParameterType": 1,
   "reportUnknownVariableType": 4
- },
- "app.services.regulatory_forecasting": {
-  "reportAny": 78,
-  "reportUnknownArgumentType": 5,
-  "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 1
  },
  "app.services.regulatory_ftp": {
   "reportAny": 66,

@@ -32,6 +32,8 @@ from app.core.authorization import (
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.forecasting.schemas.forecasting import ForecastRunCreate
+from app.forecasting.service import regulatory_forecasting
 from app.identity.service import authorization
 from app.live.service import data_activation, pipeline
 from app.models import (
@@ -49,8 +51,7 @@ from app.models import (
 )
 from app.policy.service import module_scope
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
-from app.schemas.forecasting import ForecastRunCreate
-from app.services import regulatory_forecasting, scheduler
+from app.services import scheduler
 from app.stress.schemas.reverse_stress import ReverseStressRunCreate
 from app.stress.service import reverse_stress
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book

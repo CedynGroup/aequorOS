@@ -1686,7 +1686,10 @@ REGISTRY.register(
             ),
             resolution_status=UNRESOLVED_AUDIT_FINDING,
             equality_assertion_forbidden=False,
-            evidence=("backend/tests/api/test_forecasting.py - divergence asserted in a comment",),
+            evidence=(
+                "backend/tests/forecasting/api/test_forecasting.py - "
+                "divergence asserted in a comment",
+            ),
         ),
         notes=(
             "Value lives at RegulatoryRun(forecast).metrics['path'][n]['car_pct'], not as a "

@@ -39,7 +39,7 @@ with confidential view retain full metrics on rows admitted by aggregated view.
 The per-module summary policy lives in
 `regulatory_liquidity._REGULATORY_RUN_AUTHORIZATION`; this cutover applies it
 only to Forecasting, leaving FTP, FX, and IRRBB output unchanged. Regression
-coverage is in `tests/api/test_forecasting_authorization.py`.
+coverage is in `tests/forecasting/api/test_forecasting_authorization.py`.
 
 Run-detail denials use 404 "Regulatory run not found."; the period-keyed latest
 reverse-stress read denies missing authority with 403.

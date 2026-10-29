@@ -38,11 +38,17 @@ STRICT_MODULES: tuple[str, ...] = (
     "app.policy.models.parameter_register",
 )
 
-#: Exact-file exceptions for the live layout move, retaining only the existing legacy
-#: counts at their new paths. Remove each exception when its baseline entry is retired;
-#: new files and every other module under ``app.live`` remain strict.
+#: Exact-file exceptions for layout moves, retaining only existing legacy counts at
+#: their new paths. Remove each exception when its baseline entry is retired; new files
+#: and every other module under the promoted packages remain strict.
 TRANSITIONAL_LEGACY_MODULES = frozenset(
     {
+        "app.forecasting.ml.cashflow_history",
+        "app.forecasting.ml.model",
+        "app.forecasting.ml.real_series",
+        "app.forecasting.ml.synthetic",
+        "app.forecasting.service.cashflow_forecast",
+        "app.forecasting.service.regulatory_forecasting",
         "app.live.domain.gl.pl_mapping",
         "app.live.domain.reporting.period_windows",
         "app.live.models.live",
@@ -144,7 +150,7 @@ def baseline_module(module: str, moves: Sequence[tuple[str, str]]) -> str:
     """The name ``module``'s errors are counted under.
 
     A module in a strict path is counted where it is, so it never inherits a legacy
-    allowance. The exact transitional live exceptions also use their current names.
+    allowance. The exact transitional layout exceptions also use their current names.
     Any other module takes the name it had before its recorded moves, so a codemod
     move keeps its baseline entries and stays a pure rename.
     """

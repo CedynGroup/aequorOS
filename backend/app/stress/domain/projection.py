@@ -8,7 +8,7 @@ remains above ALL minima — CAR 13%, CET1, Tier1, leverage, paid-up (¶77).
 
 This is a PURE, deterministic engine. It does **not** reinvent the capital
 tiering or the balance-sheet roll-forward: it reuses the validated forecasting
-engine's roll-forward primitives (``app.domain.forecasting.engine``) so the
+engine's roll-forward primitives (``app.forecasting.domain.engine``) so the
 projected book is byte-identical in structure to the production 5-year forecast,
 and it drives the pure capital/liquidity engines (``compute_rwa``,
 ``compute_capital_ratios``, ``compute_lcr``, ``compute_nsfr``) for every
@@ -70,7 +70,8 @@ from app.domain.capital.engine import (
     compute_rwa,
     has_complete_ecl_coverage,
 )
-from app.domain.forecasting.engine import (
+from app.domain.liquidity.engine import compute_lcr, compute_nsfr
+from app.forecasting.domain.engine import (
     RETAINED_EARNINGS_CATEGORY,
     ForecastAssumptions,
     ForecastFact,
@@ -85,7 +86,6 @@ from app.domain.forecasting.engine import (
     _to_liquidity_facts,
     scale_credit_exposures,
 )
-from app.domain.liquidity.engine import compute_lcr, compute_nsfr
 from app.stress.domain.credit_bottom_up import (
     CreditExposure,
     apply_credit_collateral,

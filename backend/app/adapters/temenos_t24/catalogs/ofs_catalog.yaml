@@ -499,7 +499,7 @@ OFF_BALANCE_COMMITMENTS:
 #     can fix. AA payment schedules are forward-looking contractual amounts per
 #     arrangement; `historical_cashflows` is a realised bank-level daily deposit
 #     inflow/outflow series (fact_derivation._derive_cashflow_summary sums the
-#     last 90 days into facts, and app/ml/cashflow_history trains a per-tenant
+#     last 90 days into facts, and app/forecasting/ml/cashflow_history trains a per-tenant
 #     forecast on it). Feeding schedules there would report loan repayments due
 #     as deposit inflows that happened. To close: decide which dataset a
 #     contractual schedule belongs in — there is no register for one today —

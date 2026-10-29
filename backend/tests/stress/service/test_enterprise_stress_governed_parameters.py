@@ -25,8 +25,9 @@ from decimal import Decimal
 from app.domain.capital.ecl import EclAssumption
 from app.domain.capital.engine import CapitalParams
 from app.domain.liquidity.engine import LiquidityFact, LiquidityParams, consumed_hqla_levels
+from app.forecasting.service import regulatory_forecasting
 from app.models import CurrentFinancialFact
-from app.services import regulatory_forecasting, regulatory_liquidity
+from app.services import regulatory_liquidity
 from app.stress.service import enterprise_stress as svc
 
 _GOVERNED = svc._governed_parameters  # pyright: ignore[reportPrivateUsage]

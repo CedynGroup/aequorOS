@@ -148,6 +148,49 @@ def test_strict_modules_exist_and_have_no_baseline_entry() -> None:
     assert covered == []
 
 
+def test_forecasting_transitional_allowances_are_exact_file_and_shrink_only() -> None:
+    approved = {
+        "app.forecasting.ml.cashflow_history": {"reportAny": 5},
+        "app.forecasting.ml.model": {"reportAny": 18, "reportUnknownMemberType": 2},
+        "app.forecasting.ml.real_series": {
+            "reportAny": 2,
+            "reportMissingTypeStubs": 1,
+            "reportUnknownArgumentType": 8,
+            "reportUnknownMemberType": 7,
+            "reportUnknownVariableType": 7,
+        },
+        "app.forecasting.ml.synthetic": {"reportAny": 2},
+        "app.forecasting.service.cashflow_forecast": {
+            "reportAny": 20,
+            "reportUnknownArgumentType": 1,
+            "reportUnknownMemberType": 1,
+            "reportUnknownVariableType": 1,
+            "reportUnusedFunction": 1,
+        },
+        "app.forecasting.service.regulatory_forecasting": {
+            "reportAny": 78,
+            "reportUnknownArgumentType": 5,
+            "reportUnknownMemberType": 1,
+            "reportUnknownVariableType": 1,
+        },
+    }
+    exceptions = {
+        module
+        for module in type_check.TRANSITIONAL_LEGACY_MODULES
+        if module.startswith("app.forecasting.")
+    }
+    assert exceptions <= approved.keys()
+    baseline = type_check.load_baseline()
+    for module in exceptions:
+        assert baseline[module].keys() <= approved[module].keys()
+        assert all(count <= approved[module][rule] for rule, count in baseline[module].items())
+        assert type_check.is_strict_module(f"{module}.another_module")
+    for path in (BACKEND / "app" / "forecasting").rglob("*.py"):
+        module = type_check.module_of(path)
+        if module not in exceptions:
+            assert type_check.is_strict_module(module), module
+
+
 def test_modules_are_named_by_their_current_location() -> None:
     package = BACKEND / "app" / "forecasting" / "__init__.py"
     assert type_check.module_of(package) == "app.forecasting"

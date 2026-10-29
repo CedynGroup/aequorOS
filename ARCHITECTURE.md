@@ -1139,18 +1139,18 @@ Verified in `backend/mise.toml`, root `mise.toml`, and `.pre-commit-config.yaml`
 
 ---
 
-## 7. Cash-flow ML module (`backend/app/ml`)
+## 7. Cash-flow ML module (`backend/app/forecasting/ml`)
 
-**Status: built and folded into the backend (originally a standalone `backend/app/ml`
+**Status: built and folded into the backend (originally a standalone `backend/app/forecasting/ml`
 sidecar; merged 2026-07 so all seven capability modules live in one deployable).**
 
-- `backend/app/ml`: PyTorch LSTM + static-baseline cash-flow forecasting as an internal
+- `backend/app/forecasting/ml`: PyTorch LSTM + static-baseline cash-flow forecasting as an internal
   package of the risk service — `synthetic.py` (deterministic demo series), `features.py`
   (calendar features), `baseline.py`, `model.py` (train/persist/forecast), `config.py`
   (`TrainingConfig`, model version).
 - Endpoints (`/banks/{id}/cashflow-forecast`, `/banks/{id}/cashflow-history`) enforce tenant
   scoping (verified bearer credential → `TenantContext` → bank ownership) in
-  `app/services/cashflow_forecast.py`, which lazy-trains on first forecast (or loads saved
+  `app/forecasting/service/cashflow_forecast.py`, which lazy-trains on first forecast (or loads saved
   artifacts) via an in-process `ForecastService` singleton. The ML package itself is
   tenant-unaware compute; the service layer owns authorization and response shaping.
 - Settings live in `app/core/config.py` (`CashflowSettings`): `CASHFLOW_ARTIFACTS_DIR`
@@ -1279,8 +1279,8 @@ and [public ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/pub
 A directive proposed relocating the Python backend into `dashboard` and deleting
 `frontend` / `aequoros-web`. This was **declined** as based on a misread of the layout:
 the backend was already cleanly consolidated in `backend` (FastAPI) and
-`backend/app/ml` (LSTM) — since flattened into a single `backend/` service with the LSTM
-as the in-process `app/ml` module. Moving a Python/uv/alembic service inside a Next.js/pnpm package
+`backend/app/forecasting/ml` (LSTM) — since flattened into a single `backend/` service with the LSTM
+as the in-process `app/forecasting/ml` module. Moving a Python/uv/alembic service inside a Next.js/pnpm package
 would break the workspace, migrations, RLS, the OpenAPI client-gen pipeline, and the test
 suite. The monorepo was kept intact; nothing was moved or deleted.
 
@@ -1321,7 +1321,7 @@ remains architectural debt; the Command Center contract and polling policy are u
 | 1   | Liquidity      | LCR / NSFR / stress                                  | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
 | 2   | Basel Capital  | RWA / CAR-Tier1-CET1-leverage / stress               | `/banks/{id}/capital/*`, `/submissions/bsd2`   |
 | 3   | Forecasting    | 5y projection / optimizer / what-if                  | `/banks/{id}/forecast/*`                       |
-| 4   | Cash-flow LSTM | in-process `backend/app/ml` (LSTM + static baseline) | `/banks/{id}/cashflow-forecast`                |
+| 4   | Cash-flow LSTM | in-process `backend/app/forecasting/ml` (LSTM + static baseline) | `/banks/{id}/cashflow-forecast`                |
 | 5   | IRR (IRRBB)    | gap / duration / EVE (6 Basel) / EaR                 | `/banks/{id}/irr/*`                            |
 | 6   | FX             | NOP / historical-sim VaR / IFRS 9 hedges             | `/banks/{id}/fx/*`                             |
 | 7   | FTP            | matched-maturity curve / product & branch P&L / NMD  | `/banks/{id}/ftp/*`                            |

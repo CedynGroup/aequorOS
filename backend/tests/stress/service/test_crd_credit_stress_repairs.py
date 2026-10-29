@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import ModuleScope, SensitivityScope
 from app.domain.capital.engine import CapitalFact
-from app.domain.forecasting.engine import ForecastFact
+from app.forecasting.domain.engine import ForecastFact
 from app.live.service.fact_derivation import (
     _derive_specs,  # pyright: ignore[reportPrivateUsage]
     _PositionRow,  # pyright: ignore[reportPrivateUsage]

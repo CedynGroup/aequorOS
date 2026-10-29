@@ -6,7 +6,7 @@ assumptions, and persists an immutable `CalculationRun` with one
 `CalculationForecastPeriod` per projected period.
 
 This is the CASE plane and is not the regulatory forecast. The bank's official
-5-year projection is `app.services.regulatory_forecasting`, which runs the
+5-year projection is `app.forecasting.service.regulatory_forecasting`, which runs the
 Basel capital and liquidity engines over projected `BankFinancialFact` sets
 and seals a `RegulatoryRun(module="forecast")`. The two share no input, no
 formula and no output table.

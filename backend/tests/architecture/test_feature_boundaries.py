@@ -208,12 +208,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         r"|features/(run_regulatory_capital|manage_capital_plan|read_sdi_diagnostics))$",
         "capital",
     ),
-    (
-        r"^(services/(regulatory_forecasting|cashflow_forecast)|domain/forecasting/.*"
-        r"|schemas/(forecasting|cashflow_forecast)"
-        r"|features/(run_forecasting|read_cashflow_forecast)|ml/.*)$",
-        "forecasting",
-    ),
     # ---- stress, attestation, filing, ICAAP, BI, AI
     (r"^(services/ai/.*|domain/ai/.*|models/ai|schemas/ai|features/manage_ai_settings)$", "ai"),
 )
