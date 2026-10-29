@@ -136,7 +136,7 @@ run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -
 # everything while implying a tier that does not exist.
 [tasks."risk-service:test-real-data"]
 description = "Run the opt-in real-data API suite; requires REAL_DATA_DATABASE_URL"
-run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features tests/identity tests/icaap tests/irrbb tests/fx tests/reporting tests/attestation tests/bi tests/live tests/services"
+run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features tests/identity tests/icaap tests/irrbb tests/fx tests/ftp tests/reporting tests/attestation tests/bi tests/live tests/services"
 
 # Storage suite execution and CI service setup: README.md#run-tests.
 #
