@@ -47,11 +47,12 @@ const ledger = [
   {
     dot: "bg-live",
     title: "LIVE TODAY",
+    sourceHref: "/security#security-sources",
     rows: [
       "Data Engine with file upload and secure API push",
       "Seven calculation engines on one canonical book",
       "Bank of Ghana BSD returns, generated and export-ready",
-      "Audit records for key actions, traceable data, and repeatable runs",
+      "Audit records for key actions, traceable data, and saved calculation runs",
     ],
   },
   {
@@ -361,6 +362,14 @@ export default function HomePage() {
                   </p>
                 ))}
               </div>
+              {col.sourceHref ? (
+                <Link
+                  href={col.sourceHref}
+                  className="text-[13px] text-ink-soft underline hover:text-ink"
+                >
+                  Audit and traceability sources
+                </Link>
+              ) : null}
             </div>
           ))}
         </div>

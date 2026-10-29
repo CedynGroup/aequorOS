@@ -5,13 +5,23 @@ import PageHeader from "@/components/PageHeader";
 export const metadata: Metadata = {
   title: "Security — AequorOS",
   description:
-    "Tenant isolation enforced at the database, immutable lineage, reproducible regulatory returns, maker-checker e-signatures, and role-based access. The tour we give a bank's IT and audit teams.",
+    "Tenant isolation enforced at the database, data lineage, saved calculation runs, maker-checker e-signatures, and role-based access, with repository sources for each claim.",
 };
+
+const sourceRoot =
+  "https://github.com/CedynGroup/aequorOS/blob/14b478bf195605ce83c947d84480fe65ef8ca370/";
 
 const facts = [
   {
     title: "Tenant isolation",
     body: "The database keeps each organization's data apart, so a bank user's session sees only their own organization. Searches are also limited to the bank's own records.",
+    sources: [
+      { label: "Database isolation", path: "ARCHITECTURE.md#2-tenancy-model" },
+      {
+        label: "Bank-scoped lookups",
+        path: "backend/docs/authorization_foundation.md#standing-rules-at-a-glance",
+      },
+    ],
     icon: (
       <svg
         width="24"
@@ -28,8 +38,18 @@ const facts = [
     ),
   },
   {
-    title: "Immutable lineage",
-    body: "Each figure traces to the load, batch, and timestamp that produced it. Corrections supersede prior records; nothing is silently overwritten.",
+    title: "Data lineage",
+    body: "Accepted data records carry their source batch, lineage, and ingestion time. Corrections create new snapshots and retain prior records.",
+    sources: [
+      {
+        label: "Record provenance",
+        path: "backend/app/models/canonical.py#L75-L97",
+      },
+      {
+        label: "Snapshot corrections",
+        path: "docs/data_engine.md#83-snapshots-and-point-in-time-reproducibility",
+      },
+    ],
     icon: (
       <svg
         width="24"
@@ -46,8 +66,18 @@ const facts = [
     ),
   },
   {
-    title: "Reproducible returns",
-    body: "Sealed calculation runs are hashed on their input values. A past return can be regenerated exactly, figure by figure, in front of an examiner.",
+    title: "Saved calculation runs",
+    body: "Calculation runs retain input values and their hashes. An examiner can check whether a saved run's inputs still match its recorded hash.",
+    sources: [
+      {
+        label: "Examiner checks",
+        path: "backend/app/reporting/service/examiner_mode.py",
+      },
+      {
+        label: "Saved input and filing seals",
+        path: "backend/docs/tamper_evident_records.md#filing-and-input-seals",
+      },
+    ],
     icon: (
       <svg
         width="24"
@@ -65,7 +95,21 @@ const facts = [
   },
   {
     title: "Maker-checker signing",
-    body: "Returns require a preparer and an approver, each signing under their own identity. Signed PDFs are certified so that any later change is detectable.",
+    body: "The default signing policy requires a preparer and an approver, each signing under their own identity. Banks can configure the signing requirements. Signed PDFs are certified so that later changes can be detected.",
+    sources: [
+      {
+        label: "Signing policy",
+        path: "backend/app/attestation/service/policy.py",
+      },
+      {
+        label: "Separate signers",
+        path: "backend/app/attestation/service/workflow.py",
+      },
+      {
+        label: "PDF certification",
+        path: "backend/app/attestation/service/pdf_signing.py",
+      },
+    ],
     icon: (
       <svg
         width="24"
@@ -84,20 +128,21 @@ const facts = [
   },
   {
     title: "Encryption",
-    body: (
-      <>
-        Login details for connected services are kept in an encrypted vault.
-        Stored files can be encrypted with a key we configure, and a bank can
-        choose to encrypt its{" "}
-        <a
-          className="underline"
-          href="https://github.com/CedynGroup/aequorOS/issues/352"
-        >
-          files
-        </a>{" "}
-        with its own key.
-      </>
-    ),
+    body: "Login details for connected services are kept in an encrypted vault. Stored files can be encrypted with a key we configure, and a bank can choose to encrypt its files with its own key.",
+    sources: [
+      {
+        label: "Credential vault",
+        path: "backend/app/adapters/market_data/credential_manager.py",
+      },
+      {
+        label: "Storage encryption",
+        path: "backend/app/storage/s3_compatible.py#L175-L198",
+      },
+      {
+        label: "Bank-held keys",
+        path: "backend/docs/bank_encryption.md#standing-contract",
+      },
+    ],
     icon: (
       <svg
         width="24"
@@ -116,6 +161,20 @@ const facts = [
   {
     title: "Access control",
     body: "Each user can reach only their assigned scope, and examiners get a read-only view. Selected business actions are recorded in an audit log that can be added to but never changed. Staff actions are recorded in a separate internal log.",
+    sources: [
+      {
+        label: "Scoped access",
+        path: "backend/docs/authorization_foundation.md#standing-rules-at-a-glance",
+      },
+      {
+        label: "Examiner view",
+        path: "backend/app/reporting/service/examiner_mode.py",
+      },
+      {
+        label: "Business and staff audit logs",
+        path: "backend/docs/tamper_evident_records.md#audit-chain",
+      },
+    ],
     icon: (
       <svg
         width="24"
@@ -142,7 +201,10 @@ export default function SecurityPage() {
         lede="A regulatory platform should welcome scrutiny. This page is the tour we give a bank's IT, risk, and audit teams, in the same words."
       />
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 pb-16">
+      <div
+        id="security-sources"
+        className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 pb-16 scroll-mt-24"
+      >
         {facts.map((fact) => (
           <div
             key={fact.title}
@@ -153,6 +215,21 @@ export default function SecurityPage() {
             <p className="text-[14.5px] leading-[1.65] text-ink-soft">
               {fact.body}
             </p>
+            <ul
+              aria-label={`${fact.title} sources`}
+              className="mt-auto pt-2 flex flex-wrap gap-x-3 gap-y-2 text-[13px] text-ink-soft"
+            >
+              {fact.sources.map((source) => (
+                <li key={source.path}>
+                  <a
+                    className="underline hover:text-ink"
+                    href={`${sourceRoot}${source.path}`}
+                  >
+                    {source.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         ))}
       </div>
