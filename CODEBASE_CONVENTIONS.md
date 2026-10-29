@@ -357,7 +357,7 @@ fc.assert(
       reason: "no_value",
     });
   }),
-  { numRuns: 100 }
+  { numRuns: 100 },
 );
 ```
 
@@ -563,7 +563,8 @@ feature. New code goes in the target layout; existing code moves one feature per
   imports, string patch targets, slash paths and doc references in the text files selected by
   `tracked_text_files()` in `backend/scripts/feature_moves.py`. This includes Dockerfile COPY
   paths and generated Python in Python, JavaScript and TypeScript strings; generated
-  `packages/` files and the codemod's own source and tests are excluded. Schema class and
+  `packages/` files, the codemod's own source and tests, and the dated evidence pack
+  (`docs/compliance/bog-evidence-pack.md`) are excluded. Schema class and
   routed function docstrings are preserved because Pydantic and FastAPI publish them as OpenAPI
   descriptions; a move must not churn the generated client. The boundary baseline
   retains its historical names as described above.

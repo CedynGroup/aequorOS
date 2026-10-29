@@ -609,9 +609,10 @@ Every canonical record's `lineage_id` points into this graph. From any output fi
 
 ### 8.3 Snapshots and Point-in-Time Reproducibility
 
-Every canonical record belongs to an `as_of_date`. Snapshots are immutable. If yesterday's LCR was 105% and today we discover an error in yesterday's data, we do not modify yesterday's record. We create a new snapshot for the same `as_of_date` with a `restatement_reason`, and mark the old one as superseded. The original submission remains reproducible.
+Every canonical record belongs to an `as_of_date`. Corrections to accepted data create new records for the same `as_of_date` and mark the prior records as superseded, retaining their values.
 
-This means every regulatory report AequorOS produces can be regenerated years later exactly as filed, even if the underlying data has since been restated.
+Saved calculation inputs and filed-artifact integrity follow
+[the filing and input-seal contract](../backend/docs/tamper_evident_records.md#filing-and-input-seals).
 
 A position's identity is shared by its snapshots. For the same institution, source system and source reference in the current generation, re-ingestion updates `position_type`, `currency` and a supplied `origination_date` until that identity has had its first snapshot with validation status `accepted` or `warning`. A batch that is rejected does not apply corrections. An existing unsettled identity also stays unchanged if the supplied identity values cannot be stored in the canonical model; its error snapshot and validation findings still persist for a non-rejected batch.
 
