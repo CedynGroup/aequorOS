@@ -40,8 +40,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY, CapitalRegisterRefused
-from app.domain.rating.engine import ComponentScore, grade_for_score, score_components
-from app.domain.rating.sdi_scorecard import (
+from app.identity.public import Bank
+from app.models import DeskMethodology
+from app.rating.domain.engine import ComponentScore, grade_for_score, score_components
+from app.rating.domain.sdi_scorecard import (
     CANDIDATE_COMPONENTS,
     CANDIDATE_RATIOS,
     CANDIDATE_STRUCTURE_VERSION,
@@ -51,8 +53,6 @@ from app.domain.rating.sdi_scorecard import (
     candidate_parameters,
     grade_cutpoints,
 )
-from app.identity.public import Bank
-from app.models import DeskMethodology
 
 #: An advisory INTERNAL grade is now derived from the composite (founder
 #: decision, 2026-08-23). It is not an agency rating, not a filing input, and it
@@ -202,7 +202,7 @@ def _dec(value: Any) -> Decimal | None:
 def _capital_evidence(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> list[RatioEvidence]:
-    from app.services import sdi_capital  # noqa: PLC0415 - breaks an import cycle
+    from app.capital.public import sdi_capital  # noqa: PLC0415 - breaks an import cycle
 
     try:
         components = _capital_components(db, ctx, bank, as_of)
@@ -754,7 +754,7 @@ def _sovereign_ceiling(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
     NOT applied rather than assumed at some default, because guessing a
     sovereign grade would move every institution's issued grade.
     """
-    from app.services import implied_rating  # noqa: PLC0415 - breaks an import cycle
+    from app.rating.service import implied_rating  # noqa: PLC0415 - breaks an import cycle
 
     try:
         sovereign = implied_rating._current_sovereign(db, ctx.organization_id, bank.id, as_of)
@@ -769,7 +769,7 @@ def _sovereign_ceiling(db: Session, ctx: TenantContext, bank: Bank, as_of: date)
 
 def _apply_ceiling(standalone: str, ceiling: str | None) -> tuple[str, bool]:
     """Cap ``standalone`` at the sovereign ceiling. Returns (issued, applied)."""
-    from app.services import implied_rating  # noqa: PLC0415 - same cycle
+    from app.rating.service import implied_rating  # noqa: PLC0415 - same cycle
 
     order = implied_rating.GRADE_ORDER
     if ceiling is None or standalone not in order or ceiling not in order:

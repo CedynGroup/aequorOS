@@ -26,7 +26,7 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.services import implied_rating
+from app.rating.service import implied_rating
 from tests.bi.service.test_catalogue_parity import assert_published_metrics
 
 ORG_ID = "OR-RAT00001"

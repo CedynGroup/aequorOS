@@ -7,7 +7,7 @@ operator emails (workforce IdP), never tenant users.
 ``inputs`` and ``breakdown`` are typed as open JSON objects with documented
 shapes (the same treatment ``DeskDeterminationRead`` gives ``derived_values``/
 ``qa_results``): the ``breakdown`` mirrors
-``app.domain.rating.operating_environment.OperatingEnvironmentResult``.
+``app.rating.domain.operating_environment.OperatingEnvironmentResult``.
 """
 
 from __future__ import annotations

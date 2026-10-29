@@ -23,7 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.rating.sdi_scorecard import (
+from app.models import Bank, DeskMethodology
+from app.rating.domain.sdi_scorecard import (
     CANDIDATE_COMPONENTS,
     CANDIDATE_GRADE_CUTPOINTS,
     CANDIDATE_RATIOS,
@@ -31,8 +32,7 @@ from app.domain.rating.sdi_scorecard import (
     OPTIONAL_COMPONENTS,
     candidate_parameters,
 )
-from app.models import Bank, DeskMethodology
-from app.services import sdi_rating
+from app.rating.service import sdi_rating
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

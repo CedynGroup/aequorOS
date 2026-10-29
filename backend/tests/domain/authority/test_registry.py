@@ -489,7 +489,7 @@ _ENGINE_VERSION_MODULES = (
     "app.services.calculations",
     "app.services.capital",
     "app.services.enterprise_stress",
-    "app.services.implied_rating",
+    "app.rating.service.implied_rating",
     "app.services.regulatory_capital",
     "app.credit.service.regulatory_credit",
     "app.services.regulatory_forecasting",

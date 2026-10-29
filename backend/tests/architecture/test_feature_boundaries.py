@@ -209,11 +209,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "capital",
     ),
     (
-        r"^(services/(implied_rating|sdi_rating)|domain/rating/.*|models/implied_rating"
-        r"|schemas/implied_rating|features/run_implied_rating)$",
-        "rating",
-    ),
-    (
         r"^(services/(regulatory_forecasting|cashflow_forecast)|domain/forecasting/.*"
         r"|schemas/(forecasting|cashflow_forecast)"
         r"|features/(run_forecasting|read_cashflow_forecast)|ml/.*)$",
