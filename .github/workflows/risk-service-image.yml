@@ -44,6 +44,7 @@ jobs:
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         shell: bash
         run: |
+          set -euo pipefail
           case "$GITHUB_REF" in
             refs/heads/main|refs/heads/release|refs/heads/release/*|refs/tags/v*)
               echo "trusted=true" >> "$GITHUB_OUTPUT"
