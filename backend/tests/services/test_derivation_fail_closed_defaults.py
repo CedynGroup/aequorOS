@@ -20,6 +20,7 @@ from app.domain.capital.engine import (
     RiskWeightUnavailable,
     resolve_risk_weight,
 )
+from app.fx.service import _read_positions
 from app.live.domain.positions.credit import sovereign_evidence
 from app.live.service.fact_derivation import (
     GroupResult,
@@ -40,7 +41,6 @@ from app.live.service.fact_derivation import (
     _split_securities,
 )
 from app.models import BankFinancialFact, CanonicalPosition, CanonicalPositionSnapshot
-from app.services.regulatory_fx import _read_positions
 
 AS_OF = date(2026, 6, 30)
 GHS_NAMES = ("ghana", "bank of ghana", "government of ghana")

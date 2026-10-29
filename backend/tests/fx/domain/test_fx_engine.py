@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.fx.engine import (
+from app.fx.domain.engine import (
     FxComputationError,
     FxHedge,
     FxPosition,

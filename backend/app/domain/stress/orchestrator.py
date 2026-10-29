@@ -61,12 +61,6 @@ from app.domain.capital.engine import (
     has_complete_ecl_coverage,
     run_capital_stress,
 )
-from app.domain.fx.engine import (
-    FxPosition,
-    NopResult,
-    compute_nop,
-    run_fx_scenarios,
-)
 from app.domain.liquidity.engine import (
     LcrResult,
     LiquidityFact,
@@ -107,6 +101,12 @@ from app.domain.stress.translation import (
     require_macro_variables,
     signed_peak_delta,
     translate,
+)
+from app.fx.domain.engine import (
+    FxPosition,
+    NopResult,
+    compute_nop,
+    run_fx_scenarios,
 )
 
 # D-038: the Pillar 2 FX add-on has ONE definition, and it lives in the ICAAP

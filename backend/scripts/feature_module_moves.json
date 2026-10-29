@@ -790,5 +790,15 @@
   ["app.features.manage_notifications", "app.notifications.api.manage_notifications"],
   ["tests.services.test_notifications", "tests.notifications.service.test_notifications"],
   ["tests.services.test_notification_email_mirror", "tests.notifications.service.test_notification_email_mirror"],
-  ["tests.api.test_notification_authorization", "tests.notifications.api.test_notification_authorization"]
+  ["tests.api.test_notification_authorization", "tests.notifications.api.test_notification_authorization"],
+  ["app.domain.fx", "app.fx.domain"],
+  ["app.domain.fx.engine", "app.fx.domain.engine"],
+  ["app.services.regulatory_fx", "app.fx.service"],
+  ["app.schemas.regulatory_fx", "app.fx.schemas"],
+  ["app.features.run_regulatory_fx", "app.fx.api.run_regulatory_fx"],
+  ["tests.domain.test_fx_engine", "tests.fx.domain.test_fx_engine"],
+  ["tests.services.test_regulatory_fx_fail_closed", "tests.fx.service.test_regulatory_fx_fail_closed"],
+  ["tests.services.test_fx_var_calendar", "tests.fx.service.test_fx_var_calendar"],
+  ["tests.api.test_regulatory_fx", "tests.fx.api.test_regulatory_fx"],
+  ["tests.api.test_fx_authorization", "tests.fx.api.test_fx_authorization"]
 ]

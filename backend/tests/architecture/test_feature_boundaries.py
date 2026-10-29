@@ -203,11 +203,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "liquidity",
     ),
     (
-        r"^(services/regulatory_fx|domain/fx/.*|schemas/regulatory_fx"
-        r"|features/run_regulatory_fx)$",
-        "fx",
-    ),
-    (
         r"^(services/regulatory_ftp|domain/ftp/.*|schemas/regulatory_ftp"
         r"|features/run_regulatory_ftp)$",
         "ftp",
@@ -453,11 +448,9 @@ def test_the_scanner_charges_each_rule() -> None:
     assert _violation("identity", "live", "app.live.public") == "layer"
     assert _violation("liquidity", "fx", "app.fx.public") == "layer"
     assert _violation(KERNEL, "icaap", "app.icaap.public") == "layer"
-    assert _violation("stress", "fx", "app.services.regulatory_fx") == "private"
     assert _violation("stress", "fx", "app.fx.service") == "private"
     assert _violation("stress", "fx", "app.fx.public") is None
     assert _violation("stress", "fx", "app.fx.domain.engine") is None
-    assert _violation("stress", "fx", "app.domain.fx.engine") is None
     assert _violation("fx", "liquidity", "app.liquidity.public") is None
     assert _violation(COMPOSITION, "icaap", "app.icaap.service.workspace") is None
     assert _violation("icaap", KERNEL, "app.services.audit") is None
@@ -466,7 +459,7 @@ def test_the_scanner_charges_each_rule() -> None:
 @pytest.mark.parametrize(
     "layout",
     [
-        ("app.live.models.regulatory", "live", "app.services.regulatory_fx"),
+        ("app.live.models.regulatory", "live", "app.fx.service"),
         ("app.identity.models", "identity", "app.fx.service"),
     ],
 )

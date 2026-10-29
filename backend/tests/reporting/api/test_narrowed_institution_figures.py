@@ -36,7 +36,6 @@ from app.models import (
 from app.reporting.models.packages import RETURN_FAMILIES
 from app.reporting.service.registry import REGISTRY
 from app.services import job_queue, scheduler
-from tests.api.test_fx_authorization import _add_regulatory_run
 from tests.credit.api.test_credit_authorization import _seed_live_rows
 from tests.credit.api.test_credit_route_authorization import (
     BASE,
@@ -48,6 +47,7 @@ from tests.credit.api.test_credit_route_authorization import (
     _seed_book,
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.fx.api.test_fx_authorization import _add_regulatory_run
 from tests.reporting.api.test_package_authorization import _read_routes
 from tests.support.factories.canonical import FIXTURE_AS_OF
 from tests.support.helpers import ORG_1, USER_1, headers

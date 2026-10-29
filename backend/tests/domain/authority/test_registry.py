@@ -494,7 +494,7 @@ _ENGINE_VERSION_MODULES = (
     "app.credit.service.regulatory_credit",
     "app.services.regulatory_forecasting",
     "app.services.regulatory_ftp",
-    "app.services.regulatory_fx",
+    "app.fx.service",
     "app.irrbb.service.regulatory_irr",
     "app.irrbb.service.regulatory_irr_sf",
     "app.services.regulatory_liquidity",

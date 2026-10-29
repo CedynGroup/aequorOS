@@ -21,12 +21,12 @@ from typing import Protocol, cast
 
 import pytest
 
-from app.domain.fx.engine import FxPosition
 from app.domain.stress.appendix_ii import build_appendix_ii
 from app.domain.stress.management_actions import RecognitionCaps
 from app.domain.stress.orchestrator import EnterpriseStressOutcome
 from app.domain.stress.projection import EnterpriseProjection
 from app.domain.stress.translation import MacroPathPoint
+from app.fx.domain.engine import FxPosition
 from app.icaap.domain.frameworks import registry
 from app.services import enterprise_stress
 from tests.domain import test_stress_appendix_ii, test_stress_orchestrator

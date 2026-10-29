@@ -5,7 +5,7 @@ Follows the immutable calculation-run lifecycle established by
 runs commit ``queued`` and ``running`` before executing, persist the full
 canonical input snapshot with a SHA-256 ``input_hash``, and record failures as
 data (named error codes) rather than HTTP 500s. The arithmetic itself lives in
-the pure engine at ``app.domain.fx.engine``.
+the pure engine at ``app.fx.domain.engine``.
 
 Every FX run computes the complete foreign-exchange analysis - per-currency and
 aggregate net open position vs Tier 1, 99% 1-day historical-simulation VaR (base
@@ -46,7 +46,7 @@ from app.domain.capital.engine import (
     CapitalRegisterRefused,
     tier1_capital,
 )
-from app.domain.fx.engine import (
+from app.fx.domain.engine import (
     FX_SAMPLE_POLICY,
     FX_SAMPLE_TARGET,
     FxComputationError,
@@ -66,6 +66,17 @@ from app.domain.fx.engine import (
     run_fx_scenarios,
     stressed_sample_range,
     stressed_var_line_item,
+)
+from app.fx.schemas import (
+    FxCurrencyPositionRead,
+    FxDashboardRead,
+    FxHedgeRead,
+    FxMetricsRead,
+    FxScenarioBatchCreate,
+    FxScenarioNopRead,
+    FxStandaloneVarRead,
+    FxTrendPointRead,
+    FxValidationRead,
 )
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank, BankRead, BankReportingPeriodRead
@@ -108,17 +119,6 @@ from app.policy.public import (
     prefetch_active_params,
 )
 from app.reporting.service import filing_reconciliation
-from app.schemas.regulatory_fx import (
-    FxCurrencyPositionRead,
-    FxDashboardRead,
-    FxHedgeRead,
-    FxMetricsRead,
-    FxScenarioBatchCreate,
-    FxScenarioNopRead,
-    FxStandaloneVarRead,
-    FxTrendPointRead,
-    FxValidationRead,
-)
 from app.schemas.regulatory_liquidity import (
     RegulatoryRunBatchRead,
     RegulatoryRunRead,

@@ -12,13 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import ModuleDataUnavailable
-from app.domain.fx.engine import FxComputationError, FxPosition, compute_var
+from app.fx import service as regulatory_fx
+from app.fx.domain.engine import FxComputationError, FxPosition, compute_var
 from app.live.service.fact_derivation import (
     _Canonical,  # pyright: ignore[reportPrivateUsage]
     _derive_fx_returns,  # pyright: ignore[reportPrivateUsage]
 )
 from app.models import BankFinancialFact, BankReportingPeriod, LiveMetric, RegulatoryRun
-from app.services import regulatory_fx
 from tests.fixtures.live_plane import materialize_live_plane
 from tests.services.test_nop_currency_coverage import (
     _add_unrepresented_currency,  # pyright: ignore[reportPrivateUsage]

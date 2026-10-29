@@ -13,7 +13,7 @@ rather than assumed:
   on absence alone would fail a filed run over a matched book.
 * ``spot_ghs`` is carried for DISCLOSURE only. Every measured figure — NOP, VaR,
   stressed VaR, every scenario — computes on ``net_ghs`` and ``net_ccy``
-  (``app/domain/fx/engine.py``). So the dangerous state is not a missing rate,
+  (``app/fx/domain/engine.py``). So the dangerous state is not a missing rate,
   it is a ``net_ghs`` that contradicts its own ``net_ccy``: the signature of
   ``fact_derivation._position_row`` converting an unconvertible position to
   zero.
@@ -32,13 +32,13 @@ from decimal import Decimal
 import pytest
 
 from app.domain.authority.outcomes import NotComputable, OutcomeState
-from app.models import BankFinancialFact
-from app.services.regulatory_fx import (
+from app.fx.service import (
     _fx_error_from,
     _positions_from_facts,
     _read_positions,
     _spot_or_none,
 )
+from app.models import BankFinancialFact
 
 
 def _fx_position(

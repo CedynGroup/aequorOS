@@ -27,6 +27,8 @@ from app.core.config import get_settings
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.fx import service as regulatory_fx
+from app.fx.schemas import FxScenarioBatchCreate
 from app.identity.service import authorization
 from app.live.service import data_activation, pipeline
 from app.models import (
@@ -44,10 +46,9 @@ from app.models import (
 )
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.schemas.data_activation import DataActivationCreate
-from app.schemas.regulatory_fx import FxScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
 from app.schemas.scenario_workbench import ScenarioResultRead
-from app.services import analysis_workbench, enterprise_stress, regulatory_fx, scheduler
+from app.services import analysis_workbench, enterprise_stress, scheduler
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
