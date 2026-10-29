@@ -4641,14 +4641,11 @@
  },
  "tests.services.test_regulatory_reporting_fidelity": {
   "reportAny": 2,
-  "reportMissingParameterType": 8,
-  "reportMissingTypeArgument": 1,
-  "reportUnknownArgumentType": 3,
+  "reportMissingParameterType": 5,
+  "reportUnknownArgumentType": 1,
   "reportUnknownLambdaType": 1,
-  "reportUnknownMemberType": 7,
-  "reportUnknownParameterType": 8,
-  "reportUnknownVariableType": 1,
-  "reportUnusedFunction": 1
+  "reportUnknownMemberType": 6,
+  "reportUnknownParameterType": 5
  },
  "tests.services.test_regulatory_reporting_pdf_layout": {
   "reportAny": 2,
