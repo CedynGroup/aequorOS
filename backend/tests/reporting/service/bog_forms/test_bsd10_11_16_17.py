@@ -413,7 +413,9 @@ VOLTA_COLLATERAL = 20 * M  # crm_collateral_ghs on the loan
 
 
 @pytest.fixture
-def statutory_book(db_client: TestClient, hermetic_book: str) -> str:
+def statutory_book(
+    db_client: TestClient, hermetic_book: str, institution_profile_authority: None
+) -> str:
     """Hermetic book + three directors, one officer (register API) + facilities."""
     reporting_date = hermetic_book
     kofi = _party(

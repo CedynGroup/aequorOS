@@ -13,6 +13,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import type { EffectiveCapabilityRead } from "@aequoros/risk-service-api";
 import InstitutionProfilePage from "../app/(app)/institution/page";
 import RelatedPartiesPage from "../app/(app)/institution/parties/page";
 import NameHistoryPage from "../app/(app)/institution/history/page";
@@ -38,7 +39,22 @@ const profileKey = ["institution-profile", BANK];
 const disposals: (() => void)[] = [];
 
 vi.mock("../components/shell/BankContext", () => ({
-  useBankContext: () => ({ bank: { id: "BK-SAMP0001", currency: "GHS" } }),
+  useBankContext: () => ({
+    bank: { id: "BK-SAMP0001", currency: "GHS" },
+    authorityPending: false,
+    institutionCapabilities: (["confidential", "restricted"] as const).flatMap(
+      (sensitivity) =>
+        (["view", "create", "edit"] as const).map(
+          (permission): EffectiveCapabilityRead => ({
+            module: "institution",
+            sensitivity,
+            permission,
+            requiresContextualAuthorization: false,
+            dataScope: { kind: "all", branches: [], regions: [] },
+          }),
+        ),
+    ),
+  }),
 }));
 
 afterEach(() => {
@@ -76,6 +92,9 @@ function profileResponse(
     JSON.stringify({
       bank_id: BANK,
       profile: null,
+      general_visible: true,
+      restricted_visible: true,
+      identifiers: null,
       related_parties: [record],
       name_history: [],
       outlets: [],
@@ -157,6 +176,9 @@ it.each(["manual", "automatic"] as const)(
           JSON.stringify({
             bank_id: BANK,
             profile: null,
+            general_visible: true,
+            restricted_visible: true,
+            identifiers: null,
             related_parties: [],
             name_history: [],
             outlets: [],
@@ -381,6 +403,9 @@ it.each([
           {
             bank_id: BANK,
             profile: null,
+            general_visible: true,
+            restricted_visible: true,
+            identifiers: null,
             related_parties: [
               record(),
               ...(refreshed
@@ -1097,6 +1122,9 @@ it.each(
             {
               bank_id: BANK,
               profile: null,
+              general_visible: true,
+              restricted_visible: true,
+              identifiers: null,
               related_parties: saved,
               name_history: [],
               outlets: [],
@@ -1450,6 +1478,9 @@ it.each([
           JSON.stringify({
             bank_id: BANK,
             profile: null,
+            general_visible: true,
+            restricted_visible: true,
+            identifiers: null,
             related_parties: [],
             name_history: [
               {
@@ -1542,6 +1573,13 @@ it("keeps the corporate-profile draft visible during a locked refetch", async ()
       return new Response(
         JSON.stringify({
           bank_id: BANK,
+          general_visible: true,
+          restricted_visible: true,
+          identifiers: {
+            tin: "Synthetic tax ID",
+            registration_number: null,
+            orass_institution_code: null,
+          },
           related_parties: [],
           name_history: [],
           outlets: [],
@@ -1551,7 +1589,6 @@ it("keeps the corporate-profile draft visible during a locked refetch", async ()
             bank_id: BANK,
             institution_type: "bank",
             legal_entity_structure: "limited_liability",
-            tin: "Synthetic tax ID",
             warnings: [],
             traded_on_exchange: false,
             created_at: "2026-06-30T00:00:00Z",
