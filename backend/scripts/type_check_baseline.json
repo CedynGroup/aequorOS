@@ -2489,11 +2489,11 @@
   "reportUnknownLambdaType": 6,
   "reportUnknownMemberType": 1
  },
- "tests.credit.api.test_credit_authorization": {
+ "tests.api.test_credit_authorization": {
   "reportAny": 2,
   "reportUnusedFunction": 1
  },
- "tests.credit.api.test_credit_route_authorization": {
+ "tests.api.test_credit_route_authorization": {
   "reportAny": 60,
   "reportUnusedFunction": 1
  },
@@ -2792,7 +2792,7 @@
  "tests.api.test_regulatory_capital": {
   "reportAny": 139
  },
- "tests.credit.api.test_regulatory_credit": {
+ "tests.api.test_regulatory_credit": {
   "reportAny": 48
  },
  "tests.api.test_regulatory_ftp": {
@@ -3200,13 +3200,13 @@
   "reportAny": 4,
   "reportPrivateUsage": 2
  },
- "tests.credit.domain.ga_fixtures": {
+ "tests.domain.credit.ga_fixtures": {
   "reportAny": 3
  },
- "tests.credit.domain.test_dpd_bands": {
+ "tests.domain.credit.test_dpd_bands": {
   "reportPrivateUsage": 2
  },
- "tests.credit.domain.test_granularity": {
+ "tests.domain.credit.test_granularity": {
   "reportAny": 6
  },
  "tests.domain.curves.test_bootstrap": {
@@ -4289,7 +4289,7 @@
  "tests.services.test_cashflow_window": {
   "reportAny": 2
  },
- "tests.credit.service.test_credit_exposure_book": {
+ "tests.services.test_credit_exposure_book": {
   "reportPrivateUsage": 5
  },
  "tests.services.test_curve_construction": {
@@ -4461,7 +4461,7 @@
   "reportAny": 28,
   "reportPrivateUsage": 1
  },
- "tests.credit.service.test_loan_classification_service": {
+ "tests.services.test_loan_classification_service": {
   "reportAny": 3,
   "reportMissingTypeArgument": 2,
   "reportUnknownArgumentType": 4,
@@ -4579,7 +4579,7 @@
  "tests.services.test_reconciliation_control": {
   "reportAny": 7
  },
- "tests.credit.service.test_regulatory_credit": {
+ "tests.services.test_regulatory_credit": {
   "reportAny": 14,
   "reportMissingParameterType": 1,
   "reportMissingTypeArgument": 1,
