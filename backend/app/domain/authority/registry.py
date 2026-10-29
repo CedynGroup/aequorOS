@@ -2225,7 +2225,7 @@ REGISTRY.register_all(
                 "an EXPOSURE DRAFT (February 2026, effective 1 January 2027 at P9), which "
                 "is why the methodology's citation still carries the sentinel. Persisted "
                 "only when the active parameter set carries the parallel_up_450 shock; "
-                "app/services/scenario_catalog.py labels the scenario 'informational', "
+                "app/stress/service/scenario_catalog.py labels the scenario 'informational', "
                 "which is correct while the guideline is not in force and becomes wrong "
                 "on the day it is."
             ),

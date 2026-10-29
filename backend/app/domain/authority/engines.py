@@ -57,7 +57,7 @@ ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
     "app.domain.rating.engine:compute_rating": ("app.rating.domain.engine", "compute_rating"),
     "app.domain.rating.engine:ddep_stress": ("app.rating.domain.engine", "ddep_stress"),
     "app.domain.stress.orchestrator:run_enterprise_stress": (
-        "app.domain.stress.orchestrator",
+        "app.stress.domain.orchestrator",
         "run_enterprise_stress",
     ),
     "app.services.regulatory_capital:capital_breach_multiplier": (

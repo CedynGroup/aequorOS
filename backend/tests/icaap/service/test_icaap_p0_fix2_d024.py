@@ -29,19 +29,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.authority.outcomes import NotComputable, OutcomeState
-from app.domain.stress.appendix_ii import build_appendix_ii
-from app.domain.stress.management_actions import (
-    ActionTrigger,
-    ManagementAction,
-    ManagementActionNotComputable,
-    ManagementActionPlan,
-    RecognitionCaps,
-    apply_management_actions,
-)
-from app.domain.stress.projection import (
-    EnterpriseProjectionInputs,
-    project_enterprise,
-)
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -58,14 +45,20 @@ from app.reporting.service.templates import report_notes
 from app.schemas.operator import RegulatoryParameterProposeRequest
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import capital_plan, regulatory_capital
-from app.services.enterprise_stress import EnterpriseStressError
-from tests.domain.stress_fixtures import (
-    BASE_ASSUMPTIONS,
-    bog_capital_params,
-    bog_forecast_params,
-    sample_bank_latest_facts,
-    severe_paths,
+from app.stress.domain.appendix_ii import build_appendix_ii
+from app.stress.domain.management_actions import (
+    ActionTrigger,
+    ManagementAction,
+    ManagementActionNotComputable,
+    ManagementActionPlan,
+    RecognitionCaps,
+    apply_management_actions,
 )
+from app.stress.domain.projection import (
+    EnterpriseProjectionInputs,
+    project_enterprise,
+)
+from app.stress.service.enterprise_stress import EnterpriseStressError
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,
@@ -83,6 +76,13 @@ from tests.icaap.service.test_icaap_stress_appendix2_report import (
     storage,
 )
 from tests.services.test_capital_plan import _run_forecast
+from tests.stress.domain.stress_fixtures import (
+    BASE_ASSUMPTIONS,
+    bog_capital_params,
+    bog_forecast_params,
+    sample_bank_latest_facts,
+    severe_paths,
+)
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 __all__ = ["storage"]

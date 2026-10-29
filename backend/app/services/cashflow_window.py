@@ -40,7 +40,7 @@ from app.schemas.cashflow_window import (
     CashflowWindowOverallRead,
     CashflowWindowRead,
 )
-from app.services.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
+from app.stress.service.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
 
 _MAX_WINDOW_MONTHS = 36
 # Side classification mirrors regulatory_liquidity._CCY_ASSET_TYPES /

@@ -31,8 +31,8 @@ from app.identity.service import authentication, authorization, grant_administra
 from app.identity.service.organization_ownership import assign_initial_owner
 from app.models import Bank, Job, MacroScenario, Organization, User
 from app.policy.service.parameter_register import seed_tenant_register
-from app.schemas.stress import MacroScenarioTransition
-from app.services import macro_scenarios
+from app.stress.schemas.stress import MacroScenarioTransition
+from app.stress.service import macro_scenarios
 
 SOURCE_ORG = "OR-DEM00001"
 SOURCE_BANK = "BK-SAMP0001"

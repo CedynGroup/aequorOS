@@ -485,10 +485,10 @@ def test_entries_needing_external_verification_are_flagged_not_guessed() -> None
 #: re-audit D-5, where two engines changed methodology and neither the constant
 #: nor the registry moved.
 _ENGINE_VERSION_MODULES = (
-    "app.domain.stress.orchestrator",
+    "app.stress.domain.orchestrator",
     "app.services.calculations",
     "app.services.capital",
-    "app.services.enterprise_stress",
+    "app.stress.service.enterprise_stress",
     "app.rating.service.implied_rating",
     "app.services.regulatory_capital",
     "app.credit.service.regulatory_credit",
@@ -498,7 +498,7 @@ _ENGINE_VERSION_MODULES = (
     "app.irrbb.service.regulatory_irr",
     "app.irrbb.service.regulatory_irr_sf",
     "app.services.regulatory_liquidity",
-    "app.services.reverse_stress",
+    "app.stress.service.reverse_stress",
 )
 
 #: ``calculation_version`` values that are deliberately NOT an engine constant,

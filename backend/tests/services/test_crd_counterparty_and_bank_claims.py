@@ -17,7 +17,6 @@ from app.domain.capital.engine import (
     RiskWeightUnavailable,
     _credit_line_items,  # pyright: ignore[reportPrivateUsage]
 )
-from app.domain.stress.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
 from app.live.service.fact_derivation import _position_row  # pyright: ignore[reportPrivateUsage]
 from app.models import (
     Bank,
@@ -26,7 +25,8 @@ from app.models import (
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.services.enterprise_stress import (
+from app.stress.domain.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
+from app.stress.service.enterprise_stress import (
     EnterpriseStressError,
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
@@ -37,11 +37,11 @@ from tests.credit.service.test_crd_credit_exposures import (
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
-from tests.services.test_crd_credit_stress_repairs import (
-    _capital_facts,  # pyright: ignore[reportPrivateUsage]
-)
 from tests.services.test_derivation_fail_closed_defaults import (
     _row,  # pyright: ignore[reportPrivateUsage]
+)
+from tests.stress.service.test_crd_credit_stress_repairs import (
+    _capital_facts,  # pyright: ignore[reportPrivateUsage]
 )
 
 pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶117–124")

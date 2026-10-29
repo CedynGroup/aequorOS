@@ -21,16 +21,16 @@ from typing import Protocol, cast
 
 import pytest
 
-from app.domain.stress.appendix_ii import build_appendix_ii
-from app.domain.stress.management_actions import RecognitionCaps
-from app.domain.stress.orchestrator import EnterpriseStressOutcome
-from app.domain.stress.projection import EnterpriseProjection
-from app.domain.stress.translation import MacroPathPoint
 from app.fx.domain.engine import FxPosition
 from app.icaap.domain.frameworks import registry
-from app.services import enterprise_stress
-from tests.domain import test_stress_appendix_ii, test_stress_orchestrator
-from tests.domain.stress_fixtures import severe_paths
+from app.stress.domain.appendix_ii import build_appendix_ii
+from app.stress.domain.management_actions import RecognitionCaps
+from app.stress.domain.orchestrator import EnterpriseStressOutcome
+from app.stress.domain.projection import EnterpriseProjection
+from app.stress.domain.translation import MacroPathPoint
+from app.stress.service import enterprise_stress
+from tests.stress.domain import test_stress_appendix_ii, test_stress_orchestrator
+from tests.stress.domain.stress_fixtures import severe_paths
 
 
 class _AppendixFixtures(Protocol):

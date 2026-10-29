@@ -61,7 +61,7 @@ from app.services.regulatory_liquidity import (
 from app.services.regulatory_liquidity import (
     _scalar_metrics as _liquidity_run_metrics,  # noqa: PLC2701 - dashboard-trend parity
 )
-from app.services.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
+from app.stress.service.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
 
 _MAX_WINDOW_MONTHS = 36
 # Averages quantize to the run metrics' own 6-dp precision, so a one-point

@@ -1369,7 +1369,7 @@ of its final snapshot, or a missing recorded source basis requires official
 re-derivation before stress; the refusal is HTTP 409 and creates no run. An empty
 book with a matching recorded basis remains valid. This source
 provenance stays outside financial facts, calculation input snapshots and hashes.
-Regression coverage: `backend/tests/services/test_crd_stress_basis_reconciliation.py`.
+Regression coverage: `backend/tests/stress/service/test_crd_stress_basis_reconciliation.py`.
 
 The bottom-up migration and FX overlay covers loans and interbank placements.
 It applies exposure-level RWA deltas to each year's grown net credit buckets after
@@ -1448,7 +1448,7 @@ Current calculation versions are owned by the
 `ENGINE_VERSION` constants. New versions append runs; stored inputs, hashes and
 results of historical runs remain unchanged. Regression evidence lives in
 `backend/tests/services/test_ecl_and_crm.py` and
-`backend/tests/domain/test_stress_orchestrator.py`.
+`backend/tests/stress/domain/test_stress_orchestrator.py`.
 
 ### Governed forecast assumptions
 

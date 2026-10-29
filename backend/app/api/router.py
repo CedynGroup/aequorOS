@@ -26,20 +26,13 @@ from app.features.manage_ai_settings import router as ai_settings_router
 from app.features.manage_capital import router as capital_router
 from app.features.manage_capital_plan import router as capital_plan_router
 from app.features.manage_documents import router as documents_router
-from app.features.manage_enterprise_stress import router as enterprise_stress_router
-from app.features.manage_enterprise_stress_signoff import (
-    router as enterprise_stress_signoff_router,
-)
 from app.features.manage_liquidity_cfp import router as liquidity_cfp_router
 from app.features.manage_liquidity_thresholds import router as liquidity_thresholds_router
-from app.features.manage_macro_scenarios import router as macro_scenarios_router
-from app.features.manage_management_actions import router as management_actions_router
 from app.features.manage_market_data_connections import router as market_data_connections_router
 from app.features.manage_market_data_overlays import router as market_data_overlays_router
 from app.features.manage_market_data_uploads import router as market_data_uploads_router
 from app.features.manage_reconciliation import router as reconciliation_router
 from app.features.manage_scenarios import router as scenarios_router
-from app.features.manage_stress_scenarios import router as stress_scenarios_router
 from app.features.manage_system_of_record import router as system_of_record_router
 from app.features.manage_temenos_connections import router as temenos_connections_router
 from app.features.market_data_sources import router as market_data_sources_router
@@ -60,8 +53,6 @@ from app.features.run_calculations import router as calculations_router
 from app.features.run_forecasting import router as forecasting_router
 from app.features.run_regulatory_capital import router as regulatory_capital_router
 from app.features.run_regulatory_liquidity import router as regulatory_liquidity_router
-from app.features.run_reverse_stress import router as reverse_stress_router
-from app.features.run_scenario_analysis import router as scenario_analysis_router
 from app.features.track_jobs import router as jobs_router
 from app.forecasting.api.manage_forecast_assumptions import (
     router as forecast_assumptions_router,
@@ -106,6 +97,15 @@ from app.reporting.api.manage_filing_workflow import router as filing_workflow_r
 from app.reporting.api.manage_package_attachments import router as package_attachments_router
 from app.reporting.api.manage_regulatory_reporting import router as regulatory_reporting_router
 from app.storage.api import router as storage_download_router
+from app.stress.api.manage_enterprise_stress import router as enterprise_stress_router
+from app.stress.api.manage_enterprise_stress_signoff import (
+    router as enterprise_stress_signoff_router,
+)
+from app.stress.api.manage_macro_scenarios import router as macro_scenarios_router
+from app.stress.api.manage_management_actions import router as management_actions_router
+from app.stress.api.manage_stress_scenarios import router as stress_scenarios_router
+from app.stress.api.run_reverse_stress import router as reverse_stress_router
+from app.stress.api.run_scenario_analysis import router as scenario_analysis_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)

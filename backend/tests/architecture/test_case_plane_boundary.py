@@ -144,6 +144,7 @@ REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "fx/domain/**/*.py",
     "ftp/domain/**/*.py",
     "rating/domain/**/*.py",
+    "stress/domain/**/*.py",
     "ftp/service.py",
     "ftp/api/**/*.py",
     "fx/service.py",
@@ -160,15 +161,15 @@ REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "live/service/pipeline.py",
     "policy/service/params.py",
     "services/capital_plan.py",
-    "services/enterprise_stress*.py",
-    "services/reverse_stress.py",
+    "stress/service/enterprise_stress*.py",
+    "stress/service/reverse_stress.py",
     "live/service/live_*.py",
     "live/service/regulatory_dashboard_batching.py",
     "features/run_regulatory_*.py",
     "features/run_forecasting.py",
-    "features/run_reverse_stress.py",
+    "stress/api/run_reverse_stress.py",
     "reporting/api/manage_regulatory_reporting.py",
-    "features/manage_enterprise_stress*.py",
+    "stress/api/manage_enterprise_stress*.py",
     "features/manage_capital_plan.py",
     "attestation/api/manage_attestation.py",
 )
@@ -216,7 +217,7 @@ BANK_PLANE_MODULES: frozenset[str] = frozenset(
         "app.credit.service.regulatory_credit",
         "app.fx.domain",
         "app.ftp.domain",
-        "app.domain.stress",
+        "app.stress.domain",
     }
 )
 
