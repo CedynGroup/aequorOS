@@ -21,10 +21,12 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.ai.domain import placeholders
+from app.ai.models import AiCommentarySettings
+from app.ai.service import client as ai_client
 from app.api.deps import IcaapAccess
 from app.core.config import get_settings
 from app.db.base import utc_now
-from app.domain.ai import placeholders
 from app.icaap.models.ai import IcaapAiSuggestion
 from app.icaap.models.workspace import IcaapCycle
 from app.icaap.schemas.ai import (
@@ -36,9 +38,7 @@ from app.icaap.schemas.ai import (
 from app.icaap.schemas.workspace import IcaapCycleRead, IcaapDataBlockCreate
 from app.icaap.service import ai_drafting, ai_jobs, blocks, sections
 from app.models import Job
-from app.models.ai import AiCommentarySettings
 from app.services import job_queue
-from app.services.ai import client as ai_client
 from tests.support.helpers import ORG_1, USER_1
 
 pytestmark = pytest.mark.usefixtures("capital_run_authority")
@@ -201,7 +201,7 @@ def test_the_frozen_sheet_carries_no_tenant_identity(
     """The identifiability rule, asserted against the tenant's OWN registers."""
     import json  # noqa: PLC0415
 
-    from app.services.ai import pseudonymise  # noqa: PLC0415
+    from app.ai.service import pseudonymise  # noqa: PLC0415
 
     _ = tenant_consented
     read, _created = ai_drafting.enqueue(canonical_book, access, bound_cycle.id, SECTION)

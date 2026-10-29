@@ -49,6 +49,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.ai.domain.grounding import GroundingError, GroundingResult
 from app.ai.public import AiFeature, gates, observability, quota
 from app.ai.public import client as ai_client
 from app.api.deps import TenantContext
@@ -60,7 +61,6 @@ from app.bi.models.commentary import (
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
-from app.domain.ai.grounding import GroundingError, GroundingResult
 from app.identity.public import Bank
 from app.models.job import Job
 from app.services import audit, job_queue

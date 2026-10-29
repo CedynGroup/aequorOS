@@ -146,6 +146,7 @@ REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "rating/domain/**/*.py",
     "stress/domain/**/*.py",
     "forecasting/domain/**/*.py",
+    "ai/domain/**/*.py",
     "forecasting/service/regulatory_forecasting.py",
     "ftp/service.py",
     "ftp/api/**/*.py",

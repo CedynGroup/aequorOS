@@ -1,3 +1,4 @@
+from app.ai.models import AiCommentarySettings
 from app.attestation.models import (
     AdoptedSignatureAppearance,
     AttestationSignature,
@@ -114,7 +115,6 @@ from app.live.models.regulatory_run import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.models.ai import AiCommentarySettings
 from app.models.audit_event import AuditEvent
 from app.models.calculation import (
     CalculationForecastPeriod,

@@ -209,7 +209,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "capital",
     ),
     # ---- stress, attestation, filing, ICAAP, BI, AI
-    (r"^(services/ai/.*|domain/ai/.*|models/ai|schemas/ai|features/manage_ai_settings)$", "ai"),
 )
 _COMPILED_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     (re.compile(pattern), feature) for pattern, feature in FEATURE_RULES
@@ -529,7 +528,7 @@ class _ModelSplitScenario:
     def check_source_move(self, path: Path, target: str, moves: list[list[str]]) -> Path:
         moved_source = {
             "app.api.deps": "app.core.dependency",
-            "app.services.ai.grounding": "app.ai.service",
+            "app.ai.service.grounding": "app.ai.service",
             "app.live.service.fact_derivation": "app.live.service",
         }[self.source]
         path.unlink()
@@ -636,7 +635,7 @@ class _ModelSplitScenario:
 @pytest.mark.parametrize("import_style", ["direct", "registry", "relative", "dynamic"])
 @pytest.mark.parametrize(
     "source",
-    ["app.api.deps", "app.services.ai.grounding", "app.live.service.fact_derivation"],
+    ["app.api.deps", "app.ai.service.grounding", "app.live.service.fact_derivation"],
 )
 def test_model_splits_preserve_historical_boundary_identities(
     tmp_path: Path,
