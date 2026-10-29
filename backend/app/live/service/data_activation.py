@@ -41,6 +41,7 @@ from app.irrbb.service import regulatory_irr
 from app.live.service.fact_derivation import DerivationError, DerivationResult, derive_facts
 from app.models import AuditEvent
 from app.policy.public import module_scope
+from app.rating.service import implied_rating
 from app.schemas.data_activation import (
     ActivationGroupRead,
     ActivationRunRead,
@@ -52,12 +53,7 @@ from app.schemas.data_activation import (
 from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
-from app.services import (
-    implied_rating,
-    regulatory_capital,
-    regulatory_forecasting,
-    regulatory_liquidity,
-)
+from app.services import regulatory_capital, regulatory_forecasting, regulatory_liquidity
 from app.services.audit import record_event
 
 ACTIVATION_EVENT = "bank_data.activated"

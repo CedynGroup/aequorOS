@@ -458,8 +458,7 @@ def _calibration(rows: Sequence[tuple[str, Decimal, int, int]]) -> Calibration:
         hl_groups.append((predicted_pd, obligors, defaults))
     hl = hosmer_lemeshow(hl_groups) if len(hl_groups) >= _HL_MIN_GROUPS else None
     hl_note = (
-        "Hosmer-Lemeshow omitted: fewer than "
-        f"{_HL_MIN_GROUPS} grades (needs groups - 2 >= 1 df)."
+        f"Hosmer-Lemeshow omitted: fewer than {_HL_MIN_GROUPS} grades (needs groups - 2 >= 1 df)."
         if hl is None
         else "Hosmer-Lemeshow computed across grades."
     )

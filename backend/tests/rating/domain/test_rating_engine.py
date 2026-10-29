@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.domain.rating.engine import (
+from app.rating.domain.engine import (
     ComponentDefinition,
     RatingInputs,
     RatingMethodology,
@@ -49,8 +49,7 @@ def _methodology() -> RatingMethodology:
         },
         grade_order=GRADE_ORDER,
         grade_pd_anchors_pct={
-            grade: Decimal(index + 1) / Decimal("10")
-            for index, grade in enumerate(GRADE_ORDER)
+            grade: Decimal(index + 1) / Decimal("10") for index, grade in enumerate(GRADE_ORDER)
         },
         confidence_level=Decimal("0.90"),
         moc_k_sigma=Decimal("1"),

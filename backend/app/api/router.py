@@ -58,7 +58,6 @@ from app.features.review_liquidity import router as liquidity_router
 from app.features.run_assessments import router as assessments_router
 from app.features.run_calculations import router as calculations_router
 from app.features.run_forecasting import router as forecasting_router
-from app.features.run_implied_rating import router as implied_rating_router
 from app.features.run_regulatory_capital import router as regulatory_capital_router
 from app.features.run_regulatory_liquidity import router as regulatory_liquidity_router
 from app.features.run_reverse_stress import router as reverse_stress_router
@@ -101,6 +100,7 @@ from app.identity.api.read_feature_flags import router as feature_flags_router
 from app.irrbb.api.run_regulatory_irr import router as regulatory_irr_router
 from app.live.api.manage_live_engine import router as live_engine_router
 from app.notifications.api.manage_notifications import router as notifications_router
+from app.rating.api.run_implied_rating import router as implied_rating_router
 from app.reporting.api.examiner_surfaces import router as examiner_router
 from app.reporting.api.manage_filing_workflow import router as filing_workflow_router
 from app.reporting.api.manage_package_attachments import router as package_attachments_router

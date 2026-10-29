@@ -11,7 +11,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.rating.operating_environment import (
+from app.rating.domain.operating_environment import (
     DEFAULT_PARAMETERS,
     OperatingEnvironmentError,
     OperatingEnvironmentInputs,

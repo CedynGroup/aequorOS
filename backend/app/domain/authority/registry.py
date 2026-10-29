@@ -2696,7 +2696,7 @@ REGISTRY.register(
 
 # --- CREDIT: implied bank rating and PD (advisory only) -------------------
 
-#: The scorecard's own parameter register version. ``app.services.implied_rating``
+#: The scorecard's own parameter register version. ``app.rating.service.implied_rating``
 #: is already one of the engine modules the registry test suite imports, so this
 #: string cannot drift from the constant it copies.
 _RATING_VERSION = "rating-scorecard/1.0"
@@ -2716,7 +2716,7 @@ _RATING_NO_AUTHORITY = (
 )
 
 _RATING_NOTES = (
-    "Published to the live plane only (app/services/implied_rating.py::compute_live) and "
+    "Published to the live plane only (app/rating/service/implied_rating.py::compute_live) and "
     "sealed into ImpliedRatingRun, never into a RegulatoryRun. The module feeds no return: "
     "nothing under app/reporting/service/ reads it. ADVISORY_ONLY is therefore "
     "the operative constraint as well as the honest label - these figures must not reach a "
@@ -2754,7 +2754,7 @@ def _rating(metric_id: str, *, engine: str, notes: str = "") -> MetricAuthority:
             "reference:sovereign_counterparty_rating",
             "param:desk_methodology.AEQ-GHS-BANK-PD",
         ),
-        policy_resolver="app.services.implied_rating:ensure_default_methodology",
+        policy_resolver="app.rating.service.implied_rating:ensure_default_methodology",
         calculation_engine=engine,
         calculation_version=_RATING_VERSION,
         parameter_set=("DeskMethodology.AEQ-GHS-BANK-PD",),

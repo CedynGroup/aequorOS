@@ -32,7 +32,7 @@ execution pass)**
 > 2. **Four things are filed or published on no registered authority.** A test is red on
 >    purpose naming each: the metrics `car_pct_end` (a stressed CAR compared against a
 >    threshold) and `diversification_benefit_ghs`; the sealed line item
->    `fx_var:diversification_benefit`; and **`app/services/implied_rating.py`, an entire
+>    `fx_var:diversification_benefit`; and **`app/rating/service/implied_rating.py`, an entire
 >    module publishing 22 live figures** — PDs, rating grades, a sovereign ceiling, a DDEP
 >    eligibility determination — with no declared basis. These are founder decisions, not bugs.
 > 3. **`D-11` is fully open and unowned**: three dashboard sites render fabricated regulatory

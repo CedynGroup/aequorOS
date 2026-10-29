@@ -23,14 +23,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.domain.capital.engine import CapitalRegisterRefused, assert_capital_register_usable
-from app.domain.rating.engine import (
-    ComponentDefinition,
-    RatingInputs,
-    RatingMethodology,
-    RatioDefinition,
-    compute_rating,
-    ddep_stress,
-)
 from app.identity.public import Bank, InstitutionProfile
 from app.live.public import (
     BankFinancialFact,
@@ -46,9 +38,17 @@ from app.models import (
     CanonicalCounterpartyRating,
     CanonicalMarketIndex,
     DeskMethodology,
-    ImpliedRatingRun,
 )
 from app.policy.public import Jurisdiction, institution_types
+from app.rating.domain.engine import (
+    ComponentDefinition,
+    RatingInputs,
+    RatingMethodology,
+    RatioDefinition,
+    compute_rating,
+    ddep_stress,
+)
+from app.rating.models import ImpliedRatingRun
 from app.services import sdi_readiness
 from app.services.audit import record_event
 
@@ -113,7 +113,7 @@ def _sdi_methodology_pending(
     unvalidated credit assessment. The dedicated methodology dossier defines
     the governed release gate; until it passes, no grade or PD is emitted.
     """
-    from app.services import sdi_rating  # noqa: PLC0415 - breaks an import cycle
+    from app.rating.service import sdi_rating  # noqa: PLC0415 - breaks an import cycle
 
     evidence = sdi_readiness.assess_sdi_readiness(db, ctx, bank, period.period_end)
     blocked = any(item.status == sdi_readiness.BLOCKED for item in evidence)

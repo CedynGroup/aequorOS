@@ -41,6 +41,7 @@ from app.models import (
     RegulatoryRun,
 )
 from app.models.stress import MacroScenario, MacroScenarioPath
+from app.rating.service import sdi_rating
 from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
 from app.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.schemas.forecasting import ForecastRunCreate, OptimizerRunCreate, WhatIfRunCreate
@@ -56,7 +57,6 @@ from app.services import (
     regulatory_capital,
     regulatory_forecasting,
     reverse_stress,
-    sdi_rating,
 )
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID

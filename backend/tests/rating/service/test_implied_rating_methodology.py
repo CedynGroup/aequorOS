@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from app.models import DeskMethodology
-from app.services import implied_rating
+from app.rating.service import implied_rating
 
 
 def test_default_rating_methodology_activates_automatically(db_session) -> None:

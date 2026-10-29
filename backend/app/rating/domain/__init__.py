@@ -1,0 +1,1 @@
+"""Pure implied-credit-rating and probability-of-default calculations."""
