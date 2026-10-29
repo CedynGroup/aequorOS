@@ -32,7 +32,7 @@ New code is strict; legacy code may only get stricter.
   `backend/scripts/type_check_baseline.json`.
 - **Strict modules** may have no errors and never take a baseline entry: every new module, every
   module that passed when the baseline was recorded, and the packages and modules listed in
-  `STRICT_MODULES` in the script.
+  `STRICT_MODULES` in the script, except the exact-file migration allowances described below.
 - **A legacy module may not add errors.** A rule's count above its baseline fails.
 - **Record every fix.** A count below its baseline also fails until
   `uv run python scripts/type_check_baseline.py update`, run from `backend/`, writes the lower
@@ -357,7 +357,7 @@ fc.assert(
       reason: "no_value",
     });
   }),
-  { numRuns: 100 },
+  { numRuns: 100 }
 );
 ```
 
