@@ -34,6 +34,9 @@ from app.core.authorization import (
 )
 from app.core.config import AuthSettings, get_settings
 from app.core.tenancy import TenantContext
+from app.credit.schemas.credit_params import CrmHaircutUpdate, EclAssumptionUpdate
+from app.credit.schemas.regulatory_credit import ConcentrationLimitUpdate, CreditThresholdUpdate
+from app.credit.service import credit_params
 from app.domain.capital.engine import CapitalParams, CapitalRatiosResult, RwaResult
 from app.icaap.schemas.workspace import (
     IcaapCycleCreate,
@@ -91,14 +94,11 @@ from app.reporting.schemas.filing_workflow import (
 )
 from app.reporting.service import workflow
 from app.reporting.service.filing_workflow import templates
-from app.schemas.credit_params import CrmHaircutUpdate, EclAssumptionUpdate
 from app.schemas.database_connection import DatabaseConnectionCreate
 from app.schemas.ingestion import PositionSnapshotOverrideCreate
 from app.schemas.liquidity_thresholds import LiquidityHaircutUpdate, LiquidityThresholdUpdate
 from app.schemas.push import PushBatchOpen, PushRecordsPage
-from app.schemas.regulatory_credit import ConcentrationLimitUpdate, CreditThresholdUpdate
 from app.services import (
-    credit_params,
     database_connections,
     ingestion,
     liquidity_thresholds,

@@ -116,10 +116,9 @@ mise run risk-service:hooks
 ```
 
 The service runs against the **shared remote Postgres** (`<postgres-host>:<port>/<database>`) —
-`DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape). The
-default test run needs no database at all (isolated SQLite); Postgres-gated tests opt in via
-`TEST_DATABASE_URL`; use a dedicated test database as described under
-[Run Tests](#run-tests). The bundled Docker Compose remains available for fully-local/offline work.
+`DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape).
+Test commands and database prerequisites are documented under [Run Tests](#run-tests).
+The bundled Docker Compose remains available for fully-local/offline work.
 
 ## Run The API
 
@@ -163,6 +162,17 @@ App-session API requests use an access token issued by password or SSO login:
 ```http
 Authorization: Bearer <app-access-token>
 ```
+
+### Data Engine file ingestion
+
+With an authorized app session, first upload the source file as multipart field
+`file` to `POST /api/v1/banks/{bank_id}/ingestion-uploads`. Pass the returned
+`location` unchanged to `POST /api/v1/banks/{bank_id}/ingestion-batches`, together
+with the source system, reporting date and reason required by the API schema.
+The location is an opaque `temp://` handle resolved only within that bank's temp
+storage tier. Server filesystem paths and other URL schemes return HTTP 422;
+malformed handles are rejected before a batch is created. Upload to the same bank
+that will ingest the file, even when two banks share an organization.
 
 ### API transactions and external waits
 
@@ -721,8 +731,14 @@ assignment before removing transferred modules from the refreshed weights.
   (`backend/tests/conftest.py`): tenant API rollback-isolated tests share one
   schema through a savepoint-bound sessionmaker, and `@pytest.mark.committing_db`
   tests share a second schema that is TRUNCATEd and reseeded before each test.
-  Both default tenant fixture families reuse one application per process. Bank audit
-  API tests reuse a module-scoped migrated schema and lazily constructed application
+  Both default tenant fixture families reuse one application per process.
+  BI export header cases (`tests/bi/api/test_bi_exports.py`) reuse a separate
+  module-scoped app, built lazily after hermetic settings, BI flags and the fixed
+  CORS origin are installed. Each case installs its current dependency overrides,
+  opens a fresh client and clears overrides in `finally`; sessions and storage
+  fakes remain function-scoped. Settings-sensitive CORS/TLS tests must build their
+  own app.
+  Bank audit API tests reuse a module-scoped migrated schema and lazily constructed application
   (`tests/identity/api/test_audit_log.py`), with fresh clients, per-test rollback and
   `aqs_api` authority for HTTP database dependencies; the dependency override is
   restored at teardown. Operator tests reuse a separate application and SQLite database,

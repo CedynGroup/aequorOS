@@ -16,7 +16,6 @@ from typing import cast
 import pytest
 
 from app.domain.capital.ecl import EclAssumption, EclComputationError, EclExposure
-from app.domain.fx.engine import FxPosition
 from app.domain.stress import orchestrator
 from app.domain.stress.concentration import ConcentrationExposure, ConcentrationInputs
 from app.domain.stress.contingent_leverage import (
@@ -34,6 +33,7 @@ from app.domain.stress.orchestrator import (
     run_enterprise_stress,
 )
 from app.domain.stress.translation import MacroPathPoint
+from app.fx.domain.engine import FxPosition
 from app.icaap.domain.pillar2 import fx as icaap_fx
 from app.irrbb.domain.engine import IrrPosition
 from tests.domain.stress_fixtures import base_paths as base_macro_paths

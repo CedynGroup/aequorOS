@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.credit.service import loan_classification
 from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.irrbb.service import regulatory_irr
 from app.live.service import fact_derivation
@@ -31,13 +32,7 @@ from app.reporting.service.le_generation import (
     generate_sdi_lmt,
 )
 from app.reporting.service.registry import REGISTRY
-from app.services import (
-    loan_classification,
-    regulatory_capital,
-    sdi_capital,
-    sdi_capital_checks,
-    sdi_readiness,
-)
+from app.services import regulatory_capital, sdi_capital, sdi_capital_checks, sdi_readiness
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1

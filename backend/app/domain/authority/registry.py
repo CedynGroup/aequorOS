@@ -2298,7 +2298,7 @@ REGISTRY.register_all(
         # regulator requires them.
         #
         # Also NOT bound here: fx_var:diversification_benefit. That line is no
-        # longer written at all (app/domain/fx/engine.py::compute_var); the
+        # longer written at all (app/fx/domain/engine.py::compute_var); the
         # residual of two value-at-risk figures cannot have a firmer basis than
         # the figures themselves, and it was reaching a sealed run on both planes
         # — as an fx_var line item and as the diversification_benefit_ghs metric

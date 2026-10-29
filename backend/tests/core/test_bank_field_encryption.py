@@ -17,6 +17,9 @@ from sqlalchemy.orm import Session, undefer, undefer_group
 
 from app.attestation.service import register_state
 from app.attestation.service.digests import register_state_digest
+from app.behavioral.ml import deposit_stability, nmd_duration
+from app.behavioral.ml.config import BehavioralTrainingConfig
+from app.behavioral.ml.history import load_deposit_month_aggregates
 from app.bi.domain.catalogue import catalogue
 from app.bi.models.content import BiDashboard, BiDashboardVersion
 from app.bi.models.marts import BiDimCounterparty, BiFactPositionDaily, BiFactPositionEom
@@ -48,6 +51,7 @@ from app.core.key_management.types import (
     KeyUnavailableError,
 )
 from app.core.tenancy import TenantContext
+from app.credit.service import credit_concentration, credit_exposure_book
 from app.db.base import Base, utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
@@ -61,17 +65,14 @@ from app.identity.schemas.institution_profile import (
 from app.identity.service import banks, institution_profile
 from app.live import position_book
 from app.live.service import fact_derivation
-from app.ml.behavioral import deposit_stability, nmd_duration
-from app.ml.behavioral.config import BehavioralTrainingConfig
-from app.ml.behavioral.history import load_deposit_month_aggregates
 from app.models import ParamConcentrationLimit
 from app.models.audit_event import AuditEvent
 from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
 from app.models.canonical_withdrawal import CanonicalWithdrawal
 from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailure
 from app.reporting.models.packages import RegulatoryPackage
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import canonical_withdrawal, credit_concentration, credit_exposure_book, ingestion
+from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
+from app.services import canonical_withdrawal, ingestion
 from app.services.behavioral_liquidity import get_behavioral_liquidity_report
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.api import test_impersonation_auth as impersonation
@@ -758,10 +759,10 @@ def test_ingestion_and_replacement_keep_identity_reads_working(  # noqa: PLR0913
             db_session,
             CTX,
             BANK_A,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system="EXCEL_CSV",
                 as_of_date=AS_OF,
-                location=str(path),
+                location=path,
                 mapping_config_id=None,
                 reason="Synthetic encrypted ingestion",
             ),
@@ -2309,7 +2310,7 @@ def test_positional_concentration_limit_matches_without_key(
 @pytest.fixture
 def reference_ingestion_upload(
     db_session: Session, provider: LocalKeyProvider, tmp_path: Path
-) -> IngestionBatchCreate:
+) -> InternalIngestionBatchCreate:
     mapping = MappingConfig(
         field_mappings={
             "counterparty": EntityMapping(
@@ -2356,10 +2357,10 @@ def reference_ingestion_upload(
     loans.append(["replacement-loan", "LOAN", "GHS", 200, IDENTIFIER])
     path = tmp_path / "reference-lookups.xlsx"
     workbook.save(path)
-    return IngestionBatchCreate(
+    return InternalIngestionBatchCreate(
         source_system="EXCEL_CSV",
         as_of_date=AS_OF,
-        location=str(path),
+        location=path,
         mapping_config_id=None,
         reason="Synthetic reference lookup",
     )
@@ -2369,7 +2370,7 @@ def reference_ingestion_upload(
 def test_ingestion_reference_lookups_leave_unused_fields_unread(
     db_session: Session,
     provider: LocalKeyProvider,
-    reference_ingestion_upload: IngestionBatchCreate,
+    reference_ingestion_upload: InternalIngestionBatchCreate,
     connected: bool,
 ) -> None:
     if connected:
@@ -2735,10 +2736,10 @@ def test_ingested_counterparty_name_bound_preserves_bi_copy_width(
             db_session,
             CTX,
             BANK_A,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system="EXCEL_CSV",
                 as_of_date=AS_OF,
-                location=str(path),
+                location=path,
                 reason="Synthetic bounded name",
             ),
             InMemoryStorageClient(),

@@ -35,8 +35,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
 from app.core.authorization import ConditionCheck, ConditionKind
+from app.credit.domain import granularity as granularity_credit
 from app.db.base import utc_now
-from app.domain.credit import granularity as granularity_credit
 from app.icaap.domain.blocks import BLOCK_CATALOGUE
 from app.icaap.domain.frameworks.schema import Framework, Pillar2Component
 from app.icaap.domain.methods import PILLAR2_METHODS

@@ -358,7 +358,7 @@ scope. The same filter governs lists, totals, unread badges, individual mark-rea
 responses (404 when hidden), mark-all-read and each email-mirror recipient. An
 org-wide notification or an administrator email destination confers no return
 access. The HTTP contract is pinned by
-`backend/tests/api/test_notification_authorization.py`; calendar and anchor
+`backend/tests/notifications/api/test_notification_authorization.py`; calendar and anchor
 redaction by `backend/tests/reporting/api/test_narrowed_institution_figures.py`.
 
 ## 6. API (`app/reporting/api/manage_regulatory_reporting.py`)

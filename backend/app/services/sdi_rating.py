@@ -350,7 +350,7 @@ def _paid_up_floor(db: Session, bank: Bank, as_of: date) -> Decimal | None:
 def _asset_quality_evidence(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> list[RatioEvidence]:
-    from app.services import loan_classification  # noqa: PLC0415 - breaks an import cycle
+    from app.credit.service import loan_classification  # noqa: PLC0415 - breaks an import cycle
 
     try:
         report = loan_classification.classify_loan_book(db, ctx, bank, as_of)

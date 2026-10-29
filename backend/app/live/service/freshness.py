@@ -45,13 +45,15 @@ def get_bank_freshness(
     bank_id: str,
     reporting_period_id: UUID | None = None,
 ) -> BankFreshnessRead:
+    from app.credit.service import (  # noqa: PLC0415 - engines consume live contracts
+        regulatory_credit,
+    )
+    from app.fx import service as regulatory_fx  # noqa: PLC0415 - engines consume live contracts
     from app.irrbb.service import regulatory_irr  # noqa: PLC0415 - engines consume live contracts
     from app.services import (  # noqa: PLC0415 - engines consume live contracts
         implied_rating,
         regulatory_capital,
-        regulatory_credit,
         regulatory_ftp,
-        regulatory_fx,
         regulatory_liquidity,
     )
 

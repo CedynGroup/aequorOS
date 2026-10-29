@@ -32,7 +32,7 @@ from app.models import (
     IngestionBatch,
     TranslationFailure,
 )
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
 from app.services import ingestion, sdi_capital, sdi_capital_checks
 from app.services.sdi_capital import net_own_funds
 from tests.fixtures.canonical_bank_fixture import (
@@ -245,10 +245,10 @@ def test_refused_capital_row_rejects_the_batch_without_publishing_a_partial_regi
             db_session,
             MAKER,
             SAMPLE_BANK_ID,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system=source_system,
                 as_of_date=REPORTING_DATE,
-                location=str(source),
+                location=source,
                 reason="Test register replacement.",
             ),
             storage,

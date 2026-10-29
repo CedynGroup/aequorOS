@@ -464,7 +464,7 @@ not yet assert the new column (owed).
 Pinned by: `tests/bi/service/test_data_scope.py`, `tests/bi/api/test_bi_data_scope.py`,
 `tests/identity/api/test_data_scope_grants.py`, the A10-01 cases in
 `tests/bi/service/test_bi_authorization.py`, `tests/bi/api/test_bi_feeds.py` and,
-for the credit blotter, `tests/api/test_credit_route_authorization.py`.
+for the credit blotter, `tests/credit/api/test_credit_route_authorization.py`.
 
 Turning BI on in production is an ordered sequence with its own hazards; it is
 recorded in [`bi_turn_on_runbook.md`](bi_turn_on_runbook.md).

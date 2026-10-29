@@ -37,6 +37,7 @@ from app.domain.liquidity.engine import (
     SHOCK_RSF_SECURITIES_OVERRIDE,
     SHOCK_RUNOFF_PREFIX,
 )
+from app.fx.public import FX_RUN_SCENARIO_CODES, SHOCK_DEPRECIATION
 from app.identity.public import Bank
 from app.irrbb.domain.engine import (
     SHOCK_DECAY_YEARS,
@@ -58,7 +59,6 @@ from app.services.regulatory_ftp import (
     SHOCK_NMD_CORE_MAX_PCT,
     SHOCK_NMD_CORE_MIN_PCT,
 )
-from app.services.regulatory_fx import FX_RUN_SCENARIO_CODES, SHOCK_DEPRECIATION
 from app.services.regulatory_liquidity import LIQUIDITY_SCENARIO_CODES
 
 WORKBENCH_MODULES = ("liquidity", "capital", "irr", "fx", "ftp")

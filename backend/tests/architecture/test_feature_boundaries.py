@@ -131,15 +131,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
     # ---- staff operator console
     (r"^(models|schemas)/operator$", "operator"),
-    # ---- notifications
-    (
-        r"^services/(notifications|notification_email_mirror|reporting_deadline_scan)$",
-        "notifications",
-    ),
-    (
-        r"^(models/notification|schemas/notifications|features/manage_notifications)$",
-        "notifications",
-    ),
     # ---- data engine
     (r"^adapters/__init__$", "data_engine"),
     (r"^adapters/(api_push|database_direct|excel_csv|temenos_t24)(/|$)", "data_engine"),
@@ -212,11 +203,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "liquidity",
     ),
     (
-        r"^(services/regulatory_fx|domain/fx/.*|schemas/regulatory_fx"
-        r"|features/run_regulatory_fx)$",
-        "fx",
-    ),
-    (
         r"^(services/regulatory_ftp|domain/ftp/.*|schemas/regulatory_ftp"
         r"|features/run_regulatory_ftp)$",
         "ftp",
@@ -228,20 +214,9 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "capital",
     ),
     (
-        r"^(services/(regulatory_credit|credit_.*|loan_classification)|domain/credit/.*"
-        r"|schemas/(regulatory_credit|credit_params)"
-        r"|features/(run_regulatory_credit|manage_credit_params))$",
-        "credit",
-    ),
-    (
         r"^(services/(implied_rating|sdi_rating)|domain/rating/.*|models/implied_rating"
         r"|schemas/implied_rating|features/run_implied_rating)$",
         "rating",
-    ),
-    (
-        r"^(services/behavioral_models|ml/behavioral/.*|schemas/behavioral_models"
-        r"|features/read_behavioral_models)$",
-        "behavioral",
     ),
     (
         r"^(services/(regulatory_forecasting|cashflow_forecast)|domain/forecasting/.*"
@@ -473,11 +448,9 @@ def test_the_scanner_charges_each_rule() -> None:
     assert _violation("identity", "live", "app.live.public") == "layer"
     assert _violation("liquidity", "fx", "app.fx.public") == "layer"
     assert _violation(KERNEL, "icaap", "app.icaap.public") == "layer"
-    assert _violation("stress", "fx", "app.services.regulatory_fx") == "private"
     assert _violation("stress", "fx", "app.fx.service") == "private"
     assert _violation("stress", "fx", "app.fx.public") is None
     assert _violation("stress", "fx", "app.fx.domain.engine") is None
-    assert _violation("stress", "fx", "app.domain.fx.engine") is None
     assert _violation("fx", "liquidity", "app.liquidity.public") is None
     assert _violation(COMPOSITION, "icaap", "app.icaap.service.workspace") is None
     assert _violation("icaap", KERNEL, "app.services.audit") is None
@@ -486,7 +459,7 @@ def test_the_scanner_charges_each_rule() -> None:
 @pytest.mark.parametrize(
     "layout",
     [
-        ("app.live.models.regulatory", "live", "app.services.regulatory_fx"),
+        ("app.live.models.regulatory", "live", "app.fx.service"),
         ("app.identity.models", "identity", "app.fx.service"),
     ],
 )

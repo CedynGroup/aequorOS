@@ -148,7 +148,7 @@ ENGINE_THRESHOLDS: dict[str, str] = {
 #: because the guess it used to make — "anything without a unit suffix is a
 #: ratio" — is how ``nop_pct_tier1`` and ``worst_eve_change_pct_tier1`` came to
 #: be typed as bare ratios. Both are ``x / tier1 × 100`` in their own engines
-#: (``app/domain/fx/engine.py``, ``app/irrbb/domain/engine.py``), so they are
+#: (``app/fx/domain/engine.py``, ``app/irrbb/domain/engine.py``), so they are
 #: percentages that were rendered unscaled, reading ``0.12`` where the bank filed
 #: ``12.00 %``. A new registry metric now has to say what its figure is.
 _VALUE_TYPE_OVERRIDES: dict[str, ValueType] = {

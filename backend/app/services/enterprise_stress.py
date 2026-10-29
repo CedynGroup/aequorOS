@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
+from app.credit.public import credit_exposure_book
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
 from app.domain.capital.ecl import (
     STRESS_CHARGE_TAX_TREATMENT,
@@ -53,7 +54,6 @@ from app.domain.capital.engine import (
 )
 from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.domain.forecasting.engine import ForecastAssumptions, ForecastFact, ForecastParams
-from app.domain.fx.engine import FxPosition
 from app.domain.liquidity.engine import (
     HQLA_LEVEL_1,
     LiquidityFact,
@@ -104,6 +104,7 @@ from app.domain.stress.translation import (
     missing_variables,
     required_variables,
 )
+from app.fx.domain.engine import FxPosition
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.irrbb.public import regulatory_irr
@@ -131,7 +132,6 @@ from app.schemas.enterprise_stress import (
     PlanAssumptionsIn,
 )
 from app.services import (
-    credit_exposure_book,
     enterprise_run_visibility,
     macro_scenarios,
     management_action_plans,

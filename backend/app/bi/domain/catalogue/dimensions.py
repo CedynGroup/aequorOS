@@ -23,6 +23,7 @@ from app.bi.domain.catalogue.members import (
     ValueType,
 )
 from app.bi.domain.extract import MATURITY_BUCKETS, PRODUCT_FAMILY_LABELS
+from app.credit.domain.dpd_bands import DPD_BANDS
 from app.domain.capital.loan_classification import (
     BANK_GRADE_ORDER,
     BASIS_DAYS_PAST_DUE,
@@ -30,7 +31,6 @@ from app.domain.capital.loan_classification import (
     BASIS_STAGE_PROXY,
     BASIS_UNCLASSIFIED,
 )
-from app.domain.credit.dpd_bands import DPD_BANDS
 from app.domain.ingestion.constants import (
     COUNTERPARTY_TYPES,
     DEPOSIT_ACCOUNT_TYPES,

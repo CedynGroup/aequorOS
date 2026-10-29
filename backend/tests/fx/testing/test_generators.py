@@ -5,7 +5,7 @@ from dataclasses import replace
 from hypothesis import given
 from hypothesis import strategies as st
 
-from app.domain.fx.engine import MONEY, compute_nop, money
+from app.fx.domain.engine import MONEY, compute_nop, money
 from app.live.domain.positions.fx import fx_position_refusal
 from tests.fx.testing.assertions import (
     TOLERANCE,

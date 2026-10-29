@@ -22,6 +22,7 @@ from app.api.deps import (
     Tenant,
     TenantContext,
 )
+from app.credit.service import loan_classification
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity import public as banks_service
 from app.identity.public import Bank
@@ -53,7 +54,6 @@ from app.schemas.sdi import (
     SdiRwaRiskClassRead,
 )
 from app.services import (
-    loan_classification,
     sdi_capital,
     sdi_capital_assurance,
     sdi_capital_checks,

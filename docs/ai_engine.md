@@ -39,7 +39,7 @@ The AI Engine is architected to be the second-most-strategic engineering artifac
 | M-FX-01 (FX prediction) | XGBoost + LSTM ensemble | Deterministic FX engine (hist-sim VaR/NOP/hedge) — no forecast. | ⬜ No ML |
 | M-IRRBB-01 (hedge opt.) | Deep RL + LSTM | Deterministic IRRBB engine; hedge ratio is an input, not optimized. | ⬜ No ML |
 
-**Plus three per-tenant behavioral GBMs** (`app/ml/behavioral/`) not separately listed in §3 but central to the product: **NMD duration** (= M-FTP-01), **prepayment** (feeds Liquidity/LCR inflows), **deposit stability** (feeds the LCR stable/less-stable split + NMD core share). All are `HistGradientBoostingRegressor` with a data-sufficiency gate (≥24 samples / 18 months) that degrades to empirical mean → generic prior; outputs are written back as an accepted `behavioral_assumptions` canonical batch consumed by `fact_derivation` (LCR, FTP, IRR). Retrain = `POST /banks/{id}/behavioral/{model}/train`. This applied-as-assumptions seam is the most complete AI→module integration in the codebase.
+**Plus three per-tenant behavioral GBMs** (`app/behavioral/ml/`) not separately listed in §3 but central to the product: **NMD duration** (= M-FTP-01), **prepayment** (feeds Liquidity/LCR inflows), **deposit stability** (feeds the LCR stable/less-stable split + NMD core share). All are `HistGradientBoostingRegressor` with a data-sufficiency gate (≥24 samples / 18 months) that degrades to empirical mean → generic prior; outputs are written back as an accepted `behavioral_assumptions` canonical batch consumed by `fact_derivation` (LCR, FTP, IRR). Retrain = `POST /banks/{id}/behavioral/{model}/train`. This applied-as-assumptions seam is the most complete AI→module integration in the codebase.
 
 ### Data-Engine intelligence models (§3.2 / §3.3)
 
@@ -173,7 +173,7 @@ Each calculation module talks to Layer 4 (Serving) via a standardized inference 
 
 ## 5. Layer 1: Feature Store
 
-> **As-built status (§1A): ⬜ Not built.** No shared feature store, `@feature` decorator, or domain-organized feature definitions exist. Feature engineering is ad-hoc and embedded per model (`app/ml/features.py`, `app/ml/behavioral/features.py`, `app/etl/…/fingerprint.py`). The nearest thing to a feature contract is the per-artifact `feature_names` tuple on `ModelCard`. The section below is the target design.
+> **As-built status (§1A): ⬜ Not built.** No shared feature store, `@feature` decorator, or domain-organized feature definitions exist. Feature engineering is ad-hoc and embedded per model (`app/ml/features.py`, `app/behavioral/ml/features.py`, `app/etl/…/fingerprint.py`). The nearest thing to a feature contract is the per-artifact `feature_names` tuple on `ModelCard`. The section below is the target design.
 
 Purpose: define, compute, and serve canonical features that both training and inference consume, ensuring train-serve consistency.
 
@@ -231,7 +231,7 @@ Phase 3: adopt a managed Feature Store (Feast per Product Documentation, or Vert
 
 ## 6. Layer 2: Training
 
-> **As-built status (§1A): 🟡 Partial.** Real, reproducible, seeded per-model training exists — cash-flow LSTM with holdout eval (`app/ml/model.py`), behavioral GBMs with expanding-window time-series CV (`app/ml/behavioral/estimator.py`), and the two ETL models with train-and-validate on injected corruptions (`app/etl/models/*/training.py`). But there is no unified DAG, no scheduled or drift-triggered retrain (triggers are manual: `POST …/behavioral/{model}/train` or `python -m …training`), and no cross-model backtesting harness. The section below is the target design.
+> **As-built status (§1A): 🟡 Partial.** Real, reproducible, seeded per-model training exists — cash-flow LSTM with holdout eval (`app/ml/model.py`), behavioral GBMs with expanding-window time-series CV (`app/behavioral/ml/estimator.py`), and the two ETL models with train-and-validate on injected corruptions (`app/etl/models/*/training.py`). But there is no unified DAG, no scheduled or drift-triggered retrain (triggers are manual: `POST …/behavioral/{model}/train` or `python -m …training`), and no cross-model backtesting harness. The section below is the target design.
 
 Purpose: reproducibly train models from feature data, validate them, and produce artifacts ready for the Registry.
 

@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from app.credit.domain.concentration_monitor import ConcentrationMonitorResult
 from app.domain.capital.loan_classification import ClassificationResult
-from app.domain.credit.concentration_monitor import ConcentrationMonitorResult
 from tests.support.assertions import TolerancePolicy
 
 

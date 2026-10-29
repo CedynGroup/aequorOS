@@ -181,7 +181,6 @@ from app.models.market_desk import (
     DeskSourceCapture,
 )
 from app.models.market_desk_curves import DeskCurveDefinition
-from app.models.notification import Notification
 from app.models.operator import (
     OperatorAuditLog,
     OperatorInspectorSession,
@@ -214,6 +213,7 @@ from app.models.stress import (
 )
 from app.models.system_of_record import SystemOfRecordDeclaration
 from app.models.temenos import TemenosConnection
+from app.notifications.models import Notification
 from app.policy.models.institution_type import InstitutionType
 from app.policy.models.jurisdiction import Jurisdiction
 from app.policy.models.parameter_register import (
