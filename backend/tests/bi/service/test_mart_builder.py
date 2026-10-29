@@ -38,6 +38,8 @@ from app.bi.service import compiler, mart_builder, partitions, provenance
 from app.bi.service.compiler import compile_query
 from app.bi.service.mart_builder import BuildOutcome
 from app.bi.service.versions import BUILDER_VERSION
+from app.live.models.live import LIVE_MODULES
+from app.live.service import pipeline
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -63,8 +65,6 @@ from app.models import (
     Outlet,
     RegulatoryRun,
 )
-from app.models.live import LIVE_MODULES
-from app.services import pipeline
 from tests.bi.fixtures import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture

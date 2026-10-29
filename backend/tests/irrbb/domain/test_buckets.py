@@ -20,7 +20,7 @@ from app.irrbb.domain.buckets import (
     repricing_bucket,
 )
 from app.irrbb.domain.engine import IRR_BUCKETS
-from app.services import fact_derivation
+from app.live.service import fact_derivation
 
 EXPECTED_BUCKETS: tuple[tuple[str, int | None, str], ...] = (
     ("overnight", 1, "0.003"),

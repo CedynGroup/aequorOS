@@ -51,6 +51,7 @@ from app.db.session import (
 from app.db.worker_access import DESK_SIGNATURE, has_worker_function
 from app.icaap.service import ai_jobs as icaap_ai_jobs
 from app.identity.public import run_session_purge
+from app.live.service import pipeline
 from app.models import (
     Bank,
     DeskCurveDefinition,
@@ -69,7 +70,6 @@ from app.services import (
     job_queue,
     market_data_jobs,
     notification_email_mirror,
-    pipeline,
     reporting_deadline_scan,
     scheduler,
     temenos_jobs,

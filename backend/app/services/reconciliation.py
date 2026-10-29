@@ -87,9 +87,9 @@ from app.domain.authority.outcomes import (
 )
 from app.domain.authority.outcomes import outcome as build_outcome
 from app.identity.public import Bank
+from app.live.service import live_refresh_triggers
 from app.models import ReconciliationException
 from app.policy.public import regulatory_parameters
-from app.services import live_refresh_triggers
 from app.services.audit import record_event
 
 # ---------------------------------------------------------------------------

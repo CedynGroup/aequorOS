@@ -27,6 +27,7 @@ from app.irrbb.domain.standardised_params import REQUIRED_CODES
 from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.irrbb.schemas.regulatory_irr_sf import IrrbbSfRunCreate
 from app.irrbb.service import regulatory_irr, regulatory_irr_sf
+from app.live.service.fact_derivation import derive_current_facts, derive_facts
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -58,7 +59,6 @@ from app.services import (
     reverse_stress,
     sdi_rating,
 )
-from app.services.fact_derivation import derive_current_facts, derive_facts
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import (

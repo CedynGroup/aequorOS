@@ -20,9 +20,8 @@ from app.domain.capital.engine import (
     RiskWeightUnavailable,
     resolve_risk_weight,
 )
-from app.domain.positions.credit import sovereign_evidence
-from app.models import BankFinancialFact, CanonicalPosition, CanonicalPositionSnapshot
-from app.services.fact_derivation import (
+from app.live.domain.positions.credit import sovereign_evidence
+from app.live.service.fact_derivation import (
     GroupResult,
     _Canonical,
     _classify_loans,
@@ -40,6 +39,7 @@ from app.services.fact_derivation import (
     _resolve_spot,
     _split_securities,
 )
+from app.models import BankFinancialFact, CanonicalPosition, CanonicalPositionSnapshot
 from app.services.regulatory_fx import _read_positions
 
 AS_OF = date(2026, 6, 30)

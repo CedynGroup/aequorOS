@@ -23,7 +23,7 @@ from app.identity.schemas.banks import (
     JurisdictionRead,
 )
 from app.identity.service import authorization
-from app.models.regulatory import BankFinancialFact, BankReportingPeriod
+from app.live.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.policy.models.institution_type import InstitutionType
 from app.policy.models.jurisdiction import Jurisdiction
 from app.policy.service import regulatory_parameters

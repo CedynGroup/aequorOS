@@ -19,6 +19,7 @@ from app.core.authorization import DataScope, ModuleScope, RoleBundle, Sensitivi
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.live.service import data_activation, pipeline
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -33,7 +34,7 @@ from app.models import (
 from app.reporting.models.packages import RETURN_FAMILIES
 from app.reporting.service.registry import REGISTRY
 from app.schemas.regulatory_credit import CreditScenarioBatchCreate
-from app.services import data_activation, job_queue, pipeline, regulatory_credit, scheduler
+from app.services import job_queue, regulatory_credit, scheduler
 from tests.api.test_credit_authorization import _seed_live_rows
 from tests.api.test_credit_route_authorization import (
     BASE,

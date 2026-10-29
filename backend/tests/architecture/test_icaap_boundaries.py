@@ -83,10 +83,10 @@ SCANNED_FILES = tuple(
 
 #: Modules that hold or serve continuously-recomputed state.
 FORBIDDEN_MODULES = (
-    "app.services.live_block",
-    "app.services.live_state",
-    "app.services.live_view",
-    "app.models.live",
+    "app.live.service.live_block",
+    "app.live.service.live_state",
+    "app.live.service.live_view",
+    "app.live.models.live",
 )
 #: Functions that would reach the live plane (or re-derive facts) indirectly.
 FORBIDDEN_CALLS = frozenset(
@@ -215,13 +215,13 @@ def test_the_scanner_would_catch_a_deliberate_violation(tmp_path: Path) -> None:
     """Proof the guard reports rather than merely being present."""
     violation = tmp_path / "leaky.py"
     violation.write_text(
-        "from app.services.live_block import live_block\n\n\n"
+        "from app.live.service.live_block import live_block\n\n\n"
         "def read():\n    return live_block()\n",
         encoding="utf-8",
     )
     tree = ast.parse(violation.read_text(encoding="utf-8"))
     imported = _imported_modules(tree, "app.icaap.service.leaky")
-    assert any(name.startswith("app.services.live_block") for name in imported)
+    assert any(name.startswith("app.live.service.live_block") for name in imported)
     assert _called_names(tree) & FORBIDDEN_CALLS
 
 

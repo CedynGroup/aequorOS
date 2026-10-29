@@ -11,6 +11,10 @@ from pydantic import TypeAdapter
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.live.service.fact_derivation import (
+    _derive_specs,  # pyright: ignore[reportPrivateUsage]
+    _load_canonical,  # pyright: ignore[reportPrivateUsage]
+)
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -20,10 +24,6 @@ from app.models import (
     CanonicalProduct,
     ParamCrmHaircut,
     ParamEclAssumption,
-)
-from app.services.fact_derivation import (
-    _derive_specs,  # pyright: ignore[reportPrivateUsage]
-    _load_canonical,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.api.test_enterprise_stress import RUNS_URL
 from tests.api.test_enterprise_stress_phase4 import (

@@ -86,7 +86,7 @@ case financial records; the pure domain layer imports no application state — p
 
 ## 3. The two computation tiers
 
-One canonical store, two tiers (`ARCHITECTURE.md` §3b, verified in `app/services/pipeline.py`,
+One canonical store, two tiers (`ARCHITECTURE.md` §3b, verified in `app/live/service/pipeline.py`,
 `app/services/job_queue.py`, `app/worker.py`):
 
 | Tier     | Job type           | Writes                                                     | Purpose                                                   |

@@ -17,8 +17,12 @@ from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.domain.fx.engine import compute_nop
-from app.domain.positions.fx import FX_ASSET_TYPES, FX_LIABILITY_TYPES
+from app.live.domain.positions.fx import FX_ASSET_TYPES, FX_LIABILITY_TYPES
 from app.live.public import required_fx_currencies_by_date
+from app.live.service.fact_derivation import (
+    GroupResult,
+    _derive_fx_positions,  # pyright: ignore[reportPrivateUsage]
+)
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -34,10 +38,6 @@ from app.reporting.service.bog_forms.sources import ResolveContext
 from app.reporting.service.bog_forms.sources_ext import bsd13
 from app.reporting.service.registry import get_definition
 from app.services import regulatory_fx
-from app.services.fact_derivation import (
-    GroupResult,
-    _derive_fx_positions,  # pyright: ignore[reportPrivateUsage]
-)
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.fixtures.live_plane import materialize_live_plane
 from tests.services.test_derivation_fail_closed_defaults import (
