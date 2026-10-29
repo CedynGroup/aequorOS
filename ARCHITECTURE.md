@@ -1318,7 +1318,7 @@ accounts from residual RWA to avoid deducting the same provision twice; general 
 credit RWA. Official, live, forecast and enterprise-stress readers must include
 this group; a missing basis refuses fresh calculations until facts are re-derived.
 Older immutable snapshots retain their original measurement basis.
-Regression coverage: `backend/tests/services/test_crd_credit_exposures.py`.
+Regression coverage: `backend/tests/credit/service/test_crd_credit_exposures.py`.
 
 Enterprise stress compares the current accepted loan and placement source identities,
 lineage and values with the source basis recorded on `bank_reporting_periods` by

@@ -45,12 +45,12 @@ from tests.api.test_enterprise_stress_phase4 import (
     _seed_canonical_positions,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.api.test_ingestion import seed_bank
+from tests.credit.service.test_crd_credit_exposures import (
+    _stress_row,  # pyright: ignore[reportPrivateUsage]
+)
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE
-from tests.services.test_crd_credit_exposures import (
-    _stress_row,  # pyright: ignore[reportPrivateUsage]
-)
 from tests.services.test_derivation_fail_closed_defaults import (
     _canonical,  # pyright: ignore[reportPrivateUsage]
     _row,  # pyright: ignore[reportPrivateUsage]

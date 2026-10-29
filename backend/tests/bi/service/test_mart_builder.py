@@ -1342,11 +1342,8 @@ def test_unknown_bank_is_refused_before_anything_is_written(db_session: Session)
 
 
 def test_baseline_scenario_matches_the_modules_own_constant() -> None:
-    from app.services import (  # noqa: PLC0415
-        regulatory_capital,
-        regulatory_credit,
-        regulatory_liquidity,
-    )
+    from app.credit.service import regulatory_credit  # noqa: PLC0415
+    from app.services import regulatory_capital, regulatory_liquidity  # noqa: PLC0415
 
     for module in (regulatory_capital, regulatory_credit, regulatory_liquidity):
         assert module.BASELINE_SCENARIO == mart_builder.BASELINE_SCENARIO

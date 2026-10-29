@@ -48,6 +48,7 @@ from app.core.key_management.types import (
     KeyUnavailableError,
 )
 from app.core.tenancy import TenantContext
+from app.credit.service import credit_concentration, credit_exposure_book
 from app.db.base import Base, utc_now
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
@@ -70,13 +71,7 @@ from app.models.canonical_withdrawal import CanonicalWithdrawal
 from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailure
 from app.reporting.models.packages import RegulatoryPackage
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import (
-    canonical_withdrawal,
-    credit_concentration,
-    credit_exposure_book,
-    fact_derivation,
-    ingestion,
-)
+from app.services import canonical_withdrawal, fact_derivation, ingestion
 from app.services.behavioral_liquidity import get_behavioral_liquidity_report
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.api import test_impersonation_auth as impersonation

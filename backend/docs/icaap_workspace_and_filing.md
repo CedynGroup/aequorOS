@@ -61,7 +61,7 @@ sections of ProseMirror text, data blocks bound to computed evidence, a
 requirement checklist, a stage/decision chain, attachments.
 
 **The Pillar 2 engines** (`app/icaap/domain/pillar2/`, plus
-`app/domain/credit/`, `app/irrbb/domain/standardised*.py`) are pure. They take
+`app/credit/domain/`, `app/irrbb/domain/standardised*.py`) are pure. They take
 governed parameters and a book, and return typed results or typed refusals.
 
 **The filing plane** is the existing regulatory-reporting plane, unchanged in

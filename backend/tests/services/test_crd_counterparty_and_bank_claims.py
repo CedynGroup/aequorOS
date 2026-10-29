@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.credit.service.credit_exposure_book import load_exposure_rows
 from app.domain.capital.engine import (
     RiskWeightUnavailable,
     _credit_line_items,  # pyright: ignore[reportPrivateUsage]
@@ -24,19 +25,18 @@ from app.models import (
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.services.credit_exposure_book import load_exposure_rows
 from app.services.enterprise_stress import (
     EnterpriseStressError,
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
 from app.services.fact_derivation import _position_row  # pyright: ignore[reportPrivateUsage]
-from tests.domain.test_capital_engine import bog_capital_params
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
-from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
-from tests.services.test_crd_credit_exposures import (
+from tests.credit.service.test_crd_credit_exposures import (
     _credit_rwa,  # pyright: ignore[reportPrivateUsage]
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.domain.test_capital_engine import bog_capital_params
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
 from tests.services.test_crd_credit_stress_repairs import (
     _capital_facts,  # pyright: ignore[reportPrivateUsage]
 )

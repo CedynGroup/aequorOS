@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.credit.service.credit_exposure_book import ExposureRow
 from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
@@ -17,7 +18,6 @@ from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
 from app.domain.stress.translation import MacroPathPoint
 from app.models import CanonicalGlAccount
 from app.services import enterprise_stress
-from app.services.credit_exposure_book import ExposureRow
 from app.services.fact_derivation import (
     DerivationError,
     _derive_specs,  # pyright: ignore[reportPrivateUsage]

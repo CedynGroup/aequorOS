@@ -1,6 +1,6 @@
 """Scoped-binding enforcement and data scopes on the DIRECT credit routes.
 
-``tests/api/test_credit_authorization.py`` covers Phase 1 — the credit rows of
+``tests/credit/api/test_credit_authorization.py`` covers Phase 1 — the credit rows of
 the shared live surfaces. This file covers the Phase 4 cutover
 (``backend/docs/credit_enforcement_rollout.md``): every ``/credit/*`` route now
 requires a complete ``Module.CREDIT`` binding chosen from what the response

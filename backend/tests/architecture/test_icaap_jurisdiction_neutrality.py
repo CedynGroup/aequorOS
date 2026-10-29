@@ -45,7 +45,7 @@ SCANNED_FILES = (
 #: scanned, rather than failing the whole guard on a missing path.
 SCANNED_GLOBS = (
     "app/irrbb/domain/standardised*.py",
-    "app/domain/credit/granularity.py",
+    "app/credit/domain/granularity.py",
     "app/irrbb/service/regulatory_irr_sf.py",
 )
 

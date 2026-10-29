@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.domain.credit.pd import TransitionObservation, estimate_pd
+from app.credit.domain.pd import TransitionObservation, estimate_pd
 
 
 def _many(grade: str, months: int, defaults: int, segment: str | None = None):

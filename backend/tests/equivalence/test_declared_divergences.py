@@ -80,7 +80,7 @@ _TABLE1 = "lmtd_table1_ratio"
 _GRADES = "bog_five_grade_classification"
 _GRADES4 = "nbfi_four_grade_classification"
 _NPL_MONTHLY_TEST = (
-    "tests/services/test_regulatory_credit.py::"
+    "tests/credit/service/test_regulatory_credit.py::"
     "test_npl_monthly_return_generates_from_the_sealed_run"
 )
 

@@ -54,9 +54,7 @@ def restructure_holds_npl(
     frequency = (repayment_frequency or "").strip().lower() or None
     if frequency == FREQUENCY_BULLET:
         return True
-    required = (
-        cure_payments_semi_annual if frequency == FREQUENCY_SEMI_ANNUAL else cure_payments
-    )
+    required = cure_payments_semi_annual if frequency == FREQUENCY_SEMI_ANNUAL else cure_payments
     if payments_met is None:
         return True
     return payments_met < int(required)

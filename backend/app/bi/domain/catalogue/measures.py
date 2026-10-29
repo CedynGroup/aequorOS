@@ -41,7 +41,7 @@ from app.bi.domain.catalogue.members import (
     ValueType,
 )
 from app.bi.domain.extract import DEMAND_DEPOSIT_TYPES
-from app.domain.credit.dpd_bands import DPD_BANDS
+from app.credit.domain.dpd_bands import DPD_BANDS
 
 #: Authorization module → ``institution_types.default_modules`` entitlement slug
 #: (BANK_MODULES / SDI_MODULES). ``risk`` is in both classes' sets; ``positions``

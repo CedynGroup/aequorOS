@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.domain.credit.migration import LoanState, compute_migration
-from app.domain.credit.restructure import restructure_holds_npl
+from app.credit.domain.migration import LoanState, compute_migration
+from app.credit.domain.restructure import restructure_holds_npl
 
 
 def _d(value: str) -> Decimal:

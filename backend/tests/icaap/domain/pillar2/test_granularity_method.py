@@ -20,7 +20,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.credit.granularity import (
+from app.credit.domain.granularity import (
     REASON_BELOW_MIN_EFFECTIVE_NAMES,
     SEGMENT_CORPORATE,
     WARNING_EXCEEDS_K_STAR,
@@ -46,7 +46,7 @@ from app.icaap.domain.pillar2.granularity_method import (
 )
 from app.icaap.domain.pillar2.types import MethodStatus, MissingParameter
 from app.icaap.domain.units import Basis
-from tests.domain.credit.ga_fixtures import (
+from tests.credit.domain.ga_fixtures import (
     ASSET_CORRELATION_BODY,
     CONFIDENCE_Q,
     CORRELATIONS,

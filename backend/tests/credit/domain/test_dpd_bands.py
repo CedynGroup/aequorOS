@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.credit import migration
-from app.domain.credit.dpd_bands import DPD_BAND_CODES, DPD_BANDS, DpdBand, dpd_band
-from app.services import loan_classification, regulatory_credit
+from app.credit.domain import migration
+from app.credit.domain.dpd_bands import DPD_BAND_CODES, DPD_BANDS, DpdBand, dpd_band
+from app.credit.service import loan_classification, regulatory_credit
 
 EXPECTED_BANDS: tuple[tuple[str, str, int, int | None], ...] = (
     ("current", "Current", 0, 0),

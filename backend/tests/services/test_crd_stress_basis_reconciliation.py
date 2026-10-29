@@ -16,6 +16,7 @@ from app.api.deps import TenantContext
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
+from app.credit.service import credit_exposure_book
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.domain.forecasting.engine import ForecastFact
 from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
@@ -33,7 +34,7 @@ from app.models import (
     CanonicalPositionSnapshot,
     RegulatoryRun,
 )
-from app.services import canonical_withdrawal, credit_exposure_book, enterprise_stress
+from app.services import canonical_withdrawal, enterprise_stress
 from app.services.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
@@ -53,6 +54,9 @@ from tests.api.test_enterprise_stress_phase4 import (
     _seed_canonical_positions,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.api.test_ingestion import seed_bank
+from tests.credit.service.test_crd_credit_exposures import (
+    _stress_row,  # pyright: ignore[reportPrivateUsage]
+)
 from tests.domain.stress_fixtures import (
     BASE_ASSUMPTIONS,
     base_paths,
@@ -61,9 +65,6 @@ from tests.domain.stress_fixtures import (
 )
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.capital_structure import MAKER
-from tests.services.test_crd_credit_exposures import (
-    _stress_row,  # pyright: ignore[reportPrivateUsage]
-)
 from tests.services.test_crd_credit_stress_repairs import (
     _capital_facts,  # pyright: ignore[reportPrivateUsage]
 )

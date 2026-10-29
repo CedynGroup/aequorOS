@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.credit.service import regulatory_credit
 from app.identity.public import Bank
 from app.irrbb.service import regulatory_irr
 from app.models import BankReportingPeriod, ImpliedRatingRun, LiveMetric, RegulatoryRun
@@ -24,7 +25,6 @@ from app.schemas.live import BankFreshnessRead, FreshnessModuleRead
 from app.services import (
     implied_rating,
     regulatory_capital,
-    regulatory_credit,
     regulatory_ftp,
     regulatory_fx,
     regulatory_liquidity,

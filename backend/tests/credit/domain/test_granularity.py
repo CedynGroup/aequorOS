@@ -19,7 +19,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.credit.granularity import (
+from app.credit.domain.granularity import (
     REASON_BELOW_MIN_EFFECTIVE_NAMES,
     REASON_NO_EXPOSURES,
     SEGMENT_CORPORATE,
@@ -34,7 +34,7 @@ from app.domain.credit.granularity import (
     exposure_k_and_r,
     granularity_adjustment,
 )
-from tests.domain.credit.ga_fixtures import (
+from tests.credit.domain.ga_fixtures import (
     CORRELATIONS,
     DELTA,
     DELTA_EXACT,

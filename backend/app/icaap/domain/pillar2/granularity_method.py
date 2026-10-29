@@ -2,9 +2,9 @@
 
 This adapter is the only thing that may be called a granularity adjustment
 (D-016). It wraps the pure Gordy-Lütkebohmert derivation in
-``app/domain/credit/granularity.py`` in the Pillar 2 method protocol, and holds
+``app/credit/domain/granularity.py`` in the Pillar 2 method protocol, and holds
 no arithmetic of its own: it parses the governed console bodies into
-:class:`~app.domain.credit.granularity.GaParams`, calls the pure function, and
+:class:`~app.credit.domain.granularity.GaParams`, calls the pure function, and
 translates the answer.
 
 **How a reader tells this apart from the simplified charge.** The sibling module
@@ -41,7 +41,7 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from app.domain.credit.granularity import (
+from app.credit.domain.granularity import (
     TOP_CONTRIBUTORS,
     Correlation,
     GaExposure,

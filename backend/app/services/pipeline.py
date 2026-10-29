@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.bi.service.enqueue import enqueue_mart_refresh
 from app.core.authorization import Module, Permission, Sensitivity
+from app.credit.service import regulatory_credit
 from app.db.base import utc_now
 from app.domain.authority.registry import MetricFamily
 from app.identity import public as scoped_authorization
@@ -51,7 +52,6 @@ from app.services import (
     data_activation,
     implied_rating,
     regulatory_capital,
-    regulatory_credit,
     regulatory_forecasting,
     regulatory_ftp,
     regulatory_fx,

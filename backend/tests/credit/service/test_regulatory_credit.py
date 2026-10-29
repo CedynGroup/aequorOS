@@ -12,7 +12,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.credit.dpd_bands import dpd_band
+from app.credit.domain.dpd_bands import dpd_band
+from app.credit.schemas.regulatory_credit import CreditLoansPageRead, CreditScenarioBatchCreate
+from app.credit.service import regulatory_credit
 from app.identity.service.authorization import ALL_INSTITUTION_DATA
 from app.models import (
     Bank,
@@ -27,8 +29,7 @@ from app.models import (
 )
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation as reporting_generation
-from app.schemas.regulatory_credit import CreditLoansPageRead, CreditScenarioBatchCreate
-from app.services import fact_derivation, regulatory_credit, reporting_periods
+from app.services import fact_derivation, reporting_periods
 from app.services.regulatory_liquidity import get_regulatory_run, list_regulatory_runs
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
@@ -529,7 +530,7 @@ def test_pd_estimates_from_matched_migrations(
     never 0.00%; MAY-ONLY departed → excluded and counted. The pooled cell
     becomes the single suggested ALL/stage-1 register row — a suggestion the
     platform never writes anywhere."""
-    from app.domain.credit import pd as pd_module  # noqa: PLC0415
+    from app.credit.domain import pd as pd_module  # noqa: PLC0415
 
     monkeypatch.setattr(regulatory_credit, "_PD_MIN_MONTH_PAIRS", 1)
     monkeypatch.setattr(pd_module, "DEFAULT_MIN_LOAN_MONTHS", 1)
@@ -563,8 +564,8 @@ def test_pd_estimates_from_matched_migrations(
 
 
 def _set_thresholds(db_session: Session, thresholds: dict[str, Decimal]) -> None:
-    from app.schemas.regulatory_credit import CreditThresholdUpdate  # noqa: PLC0415
-    from app.services import credit_params  # noqa: PLC0415
+    from app.credit.schemas.regulatory_credit import CreditThresholdUpdate  # noqa: PLC0415
+    from app.credit.service import credit_params  # noqa: PLC0415
 
     credit_params.update_credit_threshold_register(
         db_session,
@@ -1024,7 +1025,7 @@ def test_blotter_narrows_to_the_sector_stage_and_dpd_band_it_is_sent(
     """A reader who follows a BI figure into the rows behind it lands on that
     figure's slice. Each filter reads the CLASSIFIED row, so the page can never
     disagree with the grades shown on it, and the band is the one
-    ``app.domain.credit.dpd_bands`` definition rather than a restated boundary."""
+    ``app.credit.domain.dpd_bands`` definition rather than a restated boundary."""
     _prepare(db_session)
     fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
     for reference, balance, dpd, sector in (

@@ -93,9 +93,7 @@ def compute_vintages(
                 exposure_ghs=exposure,
                 par30_exposure_ghs=par30,
                 par30_pct=(
-                    (par30 / exposure * _HUNDRED).quantize(_PCT_Q)
-                    if exposure > _ZERO
-                    else _ZERO
+                    (par30 / exposure * _HUNDRED).quantize(_PCT_Q) if exposure > _ZERO else _ZERO
                 ),
                 loan_count=count,
             )

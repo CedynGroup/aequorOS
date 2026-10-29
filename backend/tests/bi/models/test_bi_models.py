@@ -55,6 +55,7 @@ from app.bi.models.marts import (
 from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.core.config import get_settings
 from app.core.key_management.fields import ProtectedText
+from app.credit.domain.dpd_bands import DPD_BAND_CODES
 from app.db.base import Base
 from app.db.session import get_bi_engine, get_bi_sessionmaker, set_tenant_rls_context
 from app.domain.authority.registry import REGISTRY, AdvisoryDesignation, MetricFamily, Regime
@@ -66,7 +67,6 @@ from app.domain.capital.loan_classification import (
     BASIS_UNCLASSIFIED,
     SDI_GRADE_ORDER,
 )
-from app.domain.credit.dpd_bands import DPD_BAND_CODES
 from app.domain.ingestion import optional_position_fields
 from app.domain.ingestion.reference_schemas import performance_targets
 from app.domain.liquidity.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B

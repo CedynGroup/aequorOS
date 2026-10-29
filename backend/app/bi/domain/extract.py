@@ -57,8 +57,8 @@ from app.bi.domain.authority import (
     designation_of,
     resolve_authority,
 )
+from app.credit.domain.dpd_bands import dpd_band
 from app.domain.capital.loan_classification import ClassifiedLoan
-from app.domain.credit.dpd_bands import dpd_band
 from app.domain.gl import pl_mapping
 from app.domain.ingestion.optional_position_fields import (
     POSITION_ATTRIBUTE_TEXT_LIMITS,

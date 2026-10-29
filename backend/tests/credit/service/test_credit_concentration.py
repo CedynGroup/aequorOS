@@ -11,6 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.credit.schemas.regulatory_credit import (
+    ConcentrationLimitEntry,
+    ConcentrationLimitUpdate,
+    CreditThresholdUpdate,
+)
+from app.credit.service import credit_concentration, credit_params
 from app.models import (
     Bank,
     CanonicalPosition,
@@ -18,12 +24,7 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from app.schemas.regulatory_credit import (
-    ConcentrationLimitEntry,
-    ConcentrationLimitUpdate,
-    CreditThresholdUpdate,
-)
-from app.services import credit_concentration, credit_params, fact_derivation
+from app.services import fact_derivation
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1

@@ -122,7 +122,7 @@ def test_credit_official_run_seals_a_reproducible_baseline(
     ``viewer / all / all`` baseline because the route was gated on a scalar
     mutation role. ``run`` is not in the Viewer bundle, so the fixture now grants
     the sentence explicitly; the run's own properties below are unchanged, and
-    ``tests/api/test_credit_route_authorization.py`` pins that the SAME request
+    ``tests/credit/api/test_credit_route_authorization.py`` pins that the SAME request
     without that sentence is refused.
     """
     _ = credit_run_authority

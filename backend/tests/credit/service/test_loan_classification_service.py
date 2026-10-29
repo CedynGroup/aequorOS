@@ -26,6 +26,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.credit.service import loan_classification as svc
 from app.models import (
     Bank,
     CanonicalPosition,
@@ -35,7 +36,6 @@ from app.models import (
     RegulatoryParameter,
 )
 from app.policy.service import regulatory_parameters as rp
-from app.services import loan_classification as svc
 from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = date(2026, 6, 30)

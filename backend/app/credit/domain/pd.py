@@ -58,9 +58,7 @@ class PdResult:
     total_loan_months: int
 
     def for_grade(self, grade: str, segment: str | None = None) -> PdEstimate | None:
-        return next(
-            (e for e in self.estimates if e.grade == grade and e.segment == segment), None
-        )
+        return next((e for e in self.estimates if e.grade == grade and e.segment == segment), None)
 
 
 def _annualise(hazard: Decimal) -> Decimal:

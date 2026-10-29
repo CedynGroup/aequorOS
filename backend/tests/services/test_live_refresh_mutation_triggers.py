@@ -7,17 +7,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, CurrentFinancialFact, Job
-from app.schemas.credit_params import (
+from app.credit.schemas.credit_params import (
     CrmHaircutUpdate,
     EclAssumptionEntry,
     EclAssumptionUpdate,
 )
+from app.credit.service import credit_params
+from app.models import Bank, CurrentFinancialFact, Job
 from app.schemas.liquidity_thresholds import (
     LiquidityHaircutUpdate,
     LiquidityThresholdUpdate,
 )
-from app.services import credit_params, liquidity_thresholds, reconciliation
+from app.services import liquidity_thresholds, reconciliation
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,

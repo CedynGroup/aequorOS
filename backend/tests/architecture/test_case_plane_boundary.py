@@ -139,6 +139,9 @@ REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "irrbb/domain/**/*.py",
     "irrbb/service/**/*.py",
     "irrbb/api/**/*.py",
+    "credit/domain/**/*.py",
+    "credit/service/regulatory_credit.py",
+    "credit/api/run_regulatory_credit.py",
     "policy/service/regulatory_parameters.py",
     "policy/service/sdi_regime.py",
     "services/regulatory_*.py",
@@ -200,6 +203,8 @@ BANK_PLANE_MODULES: frozenset[str] = frozenset(
         "app.domain.liquidity",
         "app.domain.forecasting",
         "app.irrbb.domain",
+        "app.credit.domain",
+        "app.credit.service.regulatory_credit",
         "app.domain.fx",
         "app.domain.ftp",
         "app.domain.stress",
@@ -403,6 +408,9 @@ def test_the_regulatory_plane_scan_is_not_vacuous() -> None:
     scanned = {_module_name(path) for path in _files(REGULATORY_PLANE_GLOBS)}
 
     required = {
+        "app.credit.domain.pd",
+        "app.credit.service.regulatory_credit",
+        "app.credit.api.run_regulatory_credit",
         "app.domain.capital.engine",
         "app.domain.liquidity.engine",
         "app.domain.forecasting.engine",
