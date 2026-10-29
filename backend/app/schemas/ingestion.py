@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.ingestion.constants import (
     BatchStatus,
@@ -17,6 +18,7 @@ from app.domain.ingestion.constants import (
     ValidationStatus,
 )
 from app.domain.ingestion.contracts import MappingConfig
+from app.domain.ingestion.locations import StagedIngestionLocation
 
 
 class MappingConfigCreate(BaseModel):
@@ -58,18 +60,37 @@ class IngestionUploadRead(BaseModel):
     location: str
 
 
-class IngestionBatchCreate(BaseModel):
+class _IngestionBatchFields(BaseModel):
+    model_config = ConfigDict(revalidate_instances="always")
+
     source_system: SourceSystem
     # Specific source instance (e.g. a database-direct connection id); selects the
     # per-source mapping. Empty = the source-system-wide mapping.
     source_ref: str = Field(default="", max_length=255)
     as_of_date: date
-    # Source location: a server file path, or "temp://{object_path}" for a
-    # file previously staged via the upload endpoint.
-    location: str = Field(min_length=1)
     mapping_config_id: UUID | None = None
     adapter_options: dict[str, Any] = Field(default_factory=dict)
     reason: str = Field(min_length=1)
+
+
+class IngestionBatchCreate(_IngestionBatchFields):
+    """Tenant ingestion request: only a staged handle in this bank's temp tier."""
+
+    location: StagedIngestionLocation = Field(
+        description="temp:// handle returned by this bank's ingestion upload endpoint."
+    )
+
+
+class InternalIngestionBatchCreate(_IngestionBatchFields):
+    """Trusted in-process caller with a locally constructed source file path.
+
+    Never use this model as a tenant request body.
+    """
+
+    location: Path
+
+
+type IngestionBatchPayload = IngestionBatchCreate | InternalIngestionBatchCreate
 
 
 class IngestionBatchRead(BaseModel):

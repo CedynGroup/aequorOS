@@ -28,6 +28,7 @@ from app.adapters.temenos_t24.transport import (
     T24Transport,
     build_domain_request,
 )
+from app.domain.ingestion.locations import StagedIngestionLocation
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
 class StagedPull:
     """The staged bundle plus its temp-tier location."""
 
-    location: str
+    location: StagedIngestionLocation
     bundle: dict[str, Any]
     responses: tuple[RawDomainResponse, ...]
 
@@ -142,7 +143,9 @@ def stage_extract(  # noqa: PLR0913 - a pull binds connection + transport + auth
     content = json.dumps(bundle, ensure_ascii=False, sort_keys=True).encode("utf-8")
     filename = f"t24-{mode.lower()}-{as_of.isoformat()}.json"
     upload: IngestionUploadRead = upload_source(db, ctx, bank_id, storage, filename, content)
-    return StagedPull(location=upload.location, bundle=bundle, responses=tuple(responses))
+    return StagedPull(
+        location=StagedIngestionLocation(upload.location), bundle=bundle, responses=tuple(responses)
+    )
 
 
 def pull_and_ingest(  # noqa: PLR0913 - a pull binds connection + transport + auth inputs
