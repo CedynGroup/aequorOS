@@ -732,8 +732,14 @@ assignment before removing transferred modules from the refreshed weights.
   (`backend/tests/conftest.py`): tenant API rollback-isolated tests share one
   schema through a savepoint-bound sessionmaker, and `@pytest.mark.committing_db`
   tests share a second schema that is TRUNCATEd and reseeded before each test.
-  Both default tenant fixture families reuse one application per process. Bank audit
-  API tests reuse a module-scoped migrated schema and lazily constructed application
+  Both default tenant fixture families reuse one application per process.
+  BI export header cases (`tests/bi/api/test_bi_exports.py`) reuse a separate
+  module-scoped app, built lazily after hermetic settings, BI flags and the fixed
+  CORS origin are installed. Each case installs its current dependency overrides,
+  opens a fresh client and clears overrides in `finally`; sessions and storage
+  fakes remain function-scoped. Settings-sensitive CORS/TLS tests must build their
+  own app.
+  Bank audit API tests reuse a module-scoped migrated schema and lazily constructed application
   (`tests/identity/api/test_audit_log.py`), with fresh clients, per-test rollback and
   `aqs_api` authority for HTTP database dependencies; the dependency override is
   restored at teardown. Operator tests reuse a separate application and SQLite database,
