@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import ModuleScope, SensitivityScope
 from app.core.errors import ModuleDataUnavailable
+from app.credit.service import credit_concentration, regulatory_credit
 from app.domain.authority.outcomes import OutcomeState
 from app.domain.capital.engine import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
@@ -50,10 +51,8 @@ from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn, WorkbenchModule
 from app.services import (
     analysis_workbench,
-    credit_concentration,
     enterprise_stress,
     regulatory_capital,
-    regulatory_credit,
     regulatory_forecasting,
     regulatory_fx,
     reverse_stress,

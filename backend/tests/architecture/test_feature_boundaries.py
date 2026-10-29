@@ -228,20 +228,9 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "capital",
     ),
     (
-        r"^(services/(regulatory_credit|credit_.*|loan_classification)|domain/credit/.*"
-        r"|schemas/(regulatory_credit|credit_params)"
-        r"|features/(run_regulatory_credit|manage_credit_params))$",
-        "credit",
-    ),
-    (
         r"^(services/(implied_rating|sdi_rating)|domain/rating/.*|models/implied_rating"
         r"|schemas/implied_rating|features/run_implied_rating)$",
         "rating",
-    ),
-    (
-        r"^(services/behavioral_models|ml/behavioral/.*|schemas/behavioral_models"
-        r"|features/read_behavioral_models)$",
-        "behavioral",
     ),
     (
         r"^(services/(regulatory_forecasting|cashflow_forecast)|domain/forecasting/.*"

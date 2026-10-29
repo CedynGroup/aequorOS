@@ -432,7 +432,7 @@ class CashflowSettings(BaseSettings):
 
 
 class BehavioralSettings(BaseSettings):
-    """Per-tenant behavioral ML models (``app/ml/behavioral``) settings.
+    """Per-tenant behavioral ML models (``app/behavioral/ml``) settings.
 
     ``BEHAVIORAL_FAST_TEST=1`` lowers the min-data gate for tests;
     ``BEHAVIORAL_ARTIFACTS_DIR`` relocates the per-(org,bank) model artifacts.

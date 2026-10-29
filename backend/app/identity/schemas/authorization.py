@@ -94,6 +94,8 @@ class InstitutionCapabilitiesRead(ClosedModel):
 
 
 class EffectiveAuthorityRead(ClosedModel):
+    # Evaluated Org Owner authority; Account administer alone cannot manage grants.
+    can_administer_grants: bool = False
     authv: int
     organization_capabilities: list[EffectiveCapabilityRead]
     institution_capabilities: list[InstitutionCapabilitiesRead]

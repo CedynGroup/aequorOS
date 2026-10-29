@@ -17,6 +17,8 @@ from sqlalchemy import delete, select
 from app.api.deps import TenantContext
 from app.core.authorization import DataScope, ModuleScope, RoleBundle, SensitivityScope
 from app.core.config import get_settings
+from app.credit.schemas.regulatory_credit import CreditScenarioBatchCreate
+from app.credit.service import regulatory_credit
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.live.service import data_activation, pipeline
@@ -33,10 +35,10 @@ from app.models import (
 )
 from app.reporting.models.packages import RETURN_FAMILIES
 from app.reporting.service.registry import REGISTRY
-from app.schemas.regulatory_credit import CreditScenarioBatchCreate
-from app.services import job_queue, regulatory_credit, scheduler
-from tests.api.test_credit_authorization import _seed_live_rows
-from tests.api.test_credit_route_authorization import (
+from app.services import job_queue, scheduler
+from tests.api.test_fx_authorization import _add_regulatory_run
+from tests.credit.api.test_credit_authorization import _seed_live_rows
+from tests.credit.api.test_credit_route_authorization import (
     BASE,
     BR_ONE,
     BR_ONE_LOANS,
@@ -45,7 +47,6 @@ from tests.api.test_credit_route_authorization import (
     _period_id,
     _seed_book,
 )
-from tests.api.test_fx_authorization import _add_regulatory_run
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.reporting.api.test_package_authorization import _read_routes
 from tests.support.factories.canonical import FIXTURE_AS_OF

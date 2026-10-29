@@ -67,6 +67,7 @@ from app.adapters.database_direct.query_builder import build_count_select, build
 from app.adapters.market_data.credential_manager import derive_status
 from app.core.outbound import OutboundTargetBlocked, check_host_port
 from app.db.base import utc_now
+from app.domain.ingestion.locations import StagedIngestionLocation
 from app.identity.public import Bank
 from app.models.database_connection import DatabaseDirectConnection
 from app.schemas.database_connection import (
@@ -488,7 +489,7 @@ def sync_now(  # noqa: PLR0913 - a sync binds bank, connection, storage, and req
         # connection so two DB_DIRECT sources at one bank stay separate.
         source_ref=str(connection.id),
         as_of_date=as_of,
-        location=upload.location,
+        location=StagedIngestionLocation(upload.location),
         reason=payload.reason,
     )
     started = start_ingestion(db, ctx, bank_id, batch_payload, storage)

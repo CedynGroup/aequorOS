@@ -1,6 +1,4 @@
 import { expect, type APIRequestContext } from "@playwright/test";
-import path from "node:path";
-import { E2E_TMP } from "../../playwright.config";
 import { biApi } from "./bi";
 import { requireObjectStorage } from "./object-storage";
 
@@ -27,7 +25,7 @@ export async function createFailedIngestion(
     data: {
       source_system: "EXCEL_CSV",
       as_of_date: new Date().toISOString().slice(0, 10),
-      location: path.join(E2E_TMP, "missing-navigation-source.csv"),
+      location: "temp://uploads/never-staged/missing-navigation-source.csv",
       reason: "Inspect a missing source attempt",
     },
   });

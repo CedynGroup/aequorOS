@@ -135,7 +135,7 @@ def _generate_npl_monthly(  # noqa: PLR0912, PLR0915 - one branch/statement per 
     sections = [snapshot_section("npl_levels", "NPL Level and Flows", level_rows)]
 
     # --- table 2: migration ------------------------------------------------
-    from app.domain.credit.migration import compute_migration  # noqa: PLC0415
+    from app.credit.domain.migration import compute_migration  # noqa: PLC0415
 
     opening_as_of = _previous_month_end_as_of(db, ctx, bank, period.period_end)
     if opening_as_of is None:

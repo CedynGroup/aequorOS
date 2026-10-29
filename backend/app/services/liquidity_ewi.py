@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.credit.service import loan_classification
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.live.public import BankReportingPeriod, LiveMetric
@@ -39,7 +40,6 @@ from app.schemas.liquidity_cfp import (
     EwiStatus,
     EwiUnit,
 )
-from app.services import loan_classification
 from app.services.audit import record_event
 
 _ASSET_TYPES = ("LOAN", "SECURITY_HOLDING", "CASH", "INTERBANK_PLACEMENT", "OTHER_ASSET")
