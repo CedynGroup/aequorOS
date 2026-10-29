@@ -6,7 +6,7 @@ import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { accessIndexDestination } from "@/lib/api/accountAdministration";
 
 /**
- * Lands administrators on the Members table and everyone else on My access;
+ * Lands organization owners on Members and everyone else on My access;
  * the decision needs the projected authority, so it runs client-side.
  */
 export default function AccessPage() {

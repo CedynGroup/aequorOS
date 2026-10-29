@@ -456,6 +456,13 @@ authority sentence. Both advance the grantee's authorization version and revoke
 their refresh families in the same transaction; unrelated binding rows remain
 active. Baseline membership ends only through [deactivation](#baseline-membership).
 
+The dashboard's effective-authority response projects `can_administer_grants`
+from the same complete Org Owner decision. `/access` lands on Members only
+when that flag is true; delegated Account administrators land on My access.
+The Members tab and deep-link boundary use that flag before mounting owner-only
+requests. Authentication and Integration keys keep their Account administration
+gate. Missing projection data denies Members access.
+
 The Members response is tenant-filtered and aggregates identity, lifecycle,
 SSO-access-request state, last activity, authentication method, active grant
 count, and complete binding summaries. Access → Members renders a grant count
