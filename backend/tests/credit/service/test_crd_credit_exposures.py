@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.credit.service.credit_exposure_book import ExposureRow
 from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
@@ -23,7 +24,6 @@ from app.live.service.fact_derivation import (
 )
 from app.models import CanonicalGlAccount
 from app.services import enterprise_stress
-from app.services.credit_exposure_book import ExposureRow
 from tests.domain.stress_fixtures import base_paths
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.services.test_derivation_fail_closed_defaults import (

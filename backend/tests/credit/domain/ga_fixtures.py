@@ -22,7 +22,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from app.domain.credit.granularity import (
+from app.credit.domain.granularity import (
     SEGMENT_CORPORATE,
     SEGMENT_RETAIL_OTHER,
     Correlation,

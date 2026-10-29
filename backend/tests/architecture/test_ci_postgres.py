@@ -413,7 +413,8 @@ def test_pure_owner_change_does_not_select_an_empty_postgres_shard(
     selection_repo: tuple[Path, str, Path],
 ) -> None:
     root, _, test = selection_repo
-    pure = test.with_name("test_credit_pd.py")
+    pure = root / "backend/tests/credit/domain/test_credit_pd.py"
+    pure.parent.mkdir(parents=True)
     test.rename(pure)
     _ = run_git(root, "add", "-A")
     _ = run_git(root, "commit", "-qm", "pure owner baseline")

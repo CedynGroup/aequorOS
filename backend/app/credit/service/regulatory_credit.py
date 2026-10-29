@@ -43,9 +43,37 @@ from sqlalchemy.orm import Load, Session
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
-from app.domain.credit.dpd_bands import DPD_BAND_CODES
-from app.domain.credit.dpd_bands import dpd_band as _dpd_bucket
-from app.domain.credit.migration import LoanState, compute_migration
+from app.credit.domain.dpd_bands import DPD_BAND_CODES
+from app.credit.domain.dpd_bands import dpd_band as _dpd_bucket
+from app.credit.domain.migration import LoanState, compute_migration
+from app.credit.schemas.regulatory_credit import (
+    CreditActivityRead,
+    CreditDashboardRead,
+    CreditDataScopeRead,
+    CreditFacetCountRead,
+    CreditLoanFacetsRead,
+    CreditLoanRead,
+    CreditLoansPageRead,
+    CreditMetricsRead,
+    CreditMigrationRead,
+    CreditPdRead,
+    CreditScenarioBatchCreate,
+    CreditValidationRead,
+    CreditVintagesRead,
+    EclSuggestionRead,
+    LoanEventRead,
+    MigrationCellRead,
+    MonthlyFlowRead,
+    PdEstimateRead,
+    RollRateCellRead,
+    VintageCohortRead,
+    VintagePointRead,
+)
+from app.credit.service.loan_classification import (
+    LoanClassificationReport,
+    classified_loans,
+    classify_loan_book,
+)
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.domain.ingestion.reference_schemas import business_units
 from app.identity import public as scoped_authorization
@@ -72,29 +100,6 @@ from app.models import (
 from app.policy.public import ParamCreditThreshold, get_active_params, jurisdictions
 from app.policy.public import regulatory_parameters as rp
 from app.reporting.service import filing_reconciliation
-from app.schemas.regulatory_credit import (
-    CreditActivityRead,
-    CreditDashboardRead,
-    CreditDataScopeRead,
-    CreditFacetCountRead,
-    CreditLoanFacetsRead,
-    CreditLoanRead,
-    CreditLoansPageRead,
-    CreditMetricsRead,
-    CreditMigrationRead,
-    CreditPdRead,
-    CreditScenarioBatchCreate,
-    CreditValidationRead,
-    CreditVintagesRead,
-    EclSuggestionRead,
-    LoanEventRead,
-    MigrationCellRead,
-    MonthlyFlowRead,
-    PdEstimateRead,
-    RollRateCellRead,
-    VintageCohortRead,
-    VintagePointRead,
-)
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead, RegulatoryRunRead
 from app.schemas.sdi import (
     DelinquencyBucketRead,
@@ -103,11 +108,6 @@ from app.schemas.sdi import (
     ProvisionsHeldRead,
 )
 from app.services.audit import record_event
-from app.services.loan_classification import (
-    LoanClassificationReport,
-    classified_loans,
-    classify_loan_book,
-)
 from app.services.regulatory_liquidity import _read_regulatory_run_execution_result
 
 ENGINE_VERSION = "regulatory-credit-v1.0.0"
@@ -745,7 +745,7 @@ def compute_live(
 
 def _concentration_or_none(db: Session, ctx: TenantContext, bank: Bank, as_of: date):
     """The standing monitor, or ``None`` when there are no credit exposures."""
-    from app.services import credit_concentration  # noqa: PLC0415 - service cycle
+    from app.credit.service import credit_concentration  # noqa: PLC0415 - service cycle
 
     try:
         return credit_concentration.monitor(db, ctx, bank, as_of)
@@ -1083,7 +1083,7 @@ def get_credit_dashboard(
 
 def get_credit_concentration(db: Session, ctx: TenantContext, bank_id: str):
     """The standing concentration monitor read (credit PR-3)."""
-    from app.services import credit_concentration  # noqa: PLC0415 - service cycle
+    from app.credit.service import credit_concentration  # noqa: PLC0415 - service cycle
 
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
@@ -1289,7 +1289,7 @@ def _require_stage(stage: int | None) -> int | None:
 
 
 def _require_dpd_band(band: str | None) -> str | None:
-    """``band`` as ``app.domain.credit.dpd_bands`` defines it, or refuse.
+    """``band`` as ``app.credit.domain.dpd_bands`` defines it, or refuse.
 
     The vocabulary is read from that module — the one band definition, shared
     with the classification service, the migration engine and the roll-rate
@@ -1404,7 +1404,7 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     rather than a second query: the sector, the stage and the days-past-due band
     a row is filtered by are the very values the row carries, so a filtered page
     can never disagree with the grades shown beside it. ``dpd_band`` is the band
-    of ``row.days_past_due`` under ``app.domain.credit.dpd_bands`` — the same
+    of ``row.days_past_due`` under ``app.credit.domain.dpd_bands`` — the same
     pure function the migration engine and the BI fact row use, never a second
     banding.
 
@@ -1891,7 +1891,7 @@ def get_credit_activity(
 # monthly migration (credit PR-5)
 # ---------------------------------------------------------------------------
 
-# ``_dpd_bucket`` is ``app.domain.credit.dpd_bands.dpd_band`` — the one band
+# ``_dpd_bucket`` is ``app.credit.domain.dpd_bands.dpd_band`` — the one band
 # definition, shared with the classification service and the migration engine.
 
 
@@ -2031,7 +2031,7 @@ def get_credit_vintages(db: Session, ctx: TenantContext, bank_id: str) -> Credit
     disclosed as coverage, never grouped as "Unknown". Fewer than three
     month-end books is a SOFT unavailable state inside the payload.
     """
-    from app.domain.credit.vintage import (  # noqa: PLC0415 - keeps the heavy import local
+    from app.credit.domain.vintage import (  # noqa: PLC0415 - keeps the heavy import local
         VintageObservation,
         compute_vintages,
     )
@@ -2146,14 +2146,14 @@ ADVISORY_PD_STATEMENT = (
 def get_credit_pd(db: Session, ctx: TenantContext, bank_id: str) -> CreditPdRead:
     """12-month PDs implied by the institution's own monthly migrations.
 
-    Pure estimator: :mod:`app.domain.credit.pd`. Observations are matched
+    Pure estimator: :mod:`app.credit.domain.pd`. Observations are matched
     performing loan-months over consecutive month-end book pairs; the closing
     book decides whether the loan ENTERED non-performing. Thin history is a
     SOFT state inside the payload, and every released figure carries its
     evidence base. Nothing here writes to any register - the ECL suggestions
     are display-only rows the approver may adopt by hand.
     """
-    from app.domain.credit.pd import (  # noqa: PLC0415 - keeps the heavy import local
+    from app.credit.domain.pd import (  # noqa: PLC0415 - keeps the heavy import local
         DEFAULT_MIN_LOAN_MONTHS,
         TransitionObservation,
         estimate_pd,

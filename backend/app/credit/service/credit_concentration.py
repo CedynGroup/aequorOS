@@ -27,14 +27,15 @@ from app.core.errors import ModuleDataUnavailable
 from app.core.key_management.fields import blind_index
 from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
 from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
-from app.data_engine.public import counterparty_group_labels
-from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
-from app.domain.credit.concentration_monitor import (
+from app.credit.domain.concentration_monitor import (
     BucketReading,
     ConcentrationLimit,
     ConcentrationMonitorResult,
     monitor_concentration,
 )
+from app.credit.service.credit_exposure_book import canonical_group_key
+from app.data_engine.public import counterparty_group_labels
+from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.domain.stress.concentration import DIM_SINGLE_NAME, ConcentrationExposure
 from app.identity.public import Bank
 from app.live.public import load_current_facts
@@ -51,7 +52,6 @@ from app.policy.public import (
     jurisdictions,
 )
 from app.services import sdi_capital
-from app.services.credit_exposure_book import canonical_group_key
 
 _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 _CONCENTRATION_POSITION_TYPES = ("LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDING")
@@ -248,7 +248,7 @@ def monitor(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> Concent
 
 def concentration_read(db: Session, ctx: TenantContext, bank: Bank, as_of: date):
     """The monitor as its wire schema (CreditConcentrationRead)."""
-    from app.schemas.regulatory_credit import (  # noqa: PLC0415 - schema import cycle
+    from app.credit.schemas.regulatory_credit import (  # noqa: PLC0415 - schema import cycle
         ConcentrationBucketRead,
         ConcentrationDimensionRead,
         CreditConcentrationRead,

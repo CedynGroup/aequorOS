@@ -38,9 +38,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.credit.domain.dpd_bands import DPD_BANDS as _DPD_BANDS
+from app.credit.domain.restructure import restructure_holds_npl
 from app.domain.capital import loan_classification as engine
-from app.domain.credit.dpd_bands import DPD_BANDS as _DPD_BANDS
-from app.domain.credit.restructure import restructure_holds_npl
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity.public import Bank
 from app.models import CanonicalPosition, CanonicalPositionSnapshot
@@ -115,7 +115,7 @@ class _DpdExposure:
 
 
 # The analytical portfolio-at-risk bands (``_DPD_BANDS``) are the ONE definition
-# in ``app.domain.credit.dpd_bands`` — not regulatory classification boundaries,
+# in ``app.credit.domain.dpd_bands`` — not regulatory classification boundaries,
 # which are always resolved from the control plane.
 _PAR_THRESHOLDS: tuple[tuple[str, str, int], ...] = (
     ("par_30", "PAR 30+", 30),

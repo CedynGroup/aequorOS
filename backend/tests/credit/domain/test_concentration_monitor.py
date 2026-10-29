@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.domain.credit.concentration_monitor import (
+from app.credit.domain.concentration_monitor import (
     LIMIT_HHI,
     LIMIT_SHARE_OF_BOOK,
     LIMIT_SHARE_OF_CAPITAL,

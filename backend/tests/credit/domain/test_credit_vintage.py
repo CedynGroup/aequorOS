@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.domain.credit.vintage import VintageObservation, compute_vintages
+from app.credit.domain.vintage import VintageObservation, compute_vintages
 
 
 def _obs(key: str, cohort: str, mob: int, exposure: str, par30: bool) -> VintageObservation:

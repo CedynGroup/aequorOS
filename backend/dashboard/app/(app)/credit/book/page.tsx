@@ -62,7 +62,7 @@ const PAGE_SIZES = [100, 250, 500];
 /**
  * The days-past-due bands, in band order, as the platform defines them.
  *
- * The authority is `app/domain/credit/dpd_bands.py` — one definition shared by
+ * The authority is `app/credit/domain/dpd_bands.py` — one definition shared by
  * the classification service, the migration engine and the BI fact row — and
  * these are its codes and labels, not a second banding. The server refuses a
  * code outside the list, so this control cannot offer one it would reject.

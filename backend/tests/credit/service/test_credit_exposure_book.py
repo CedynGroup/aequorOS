@@ -1,4 +1,4 @@
-"""The shared canonical exposure book (``app/services/credit_exposure_book.py``).
+"""The shared canonical exposure book (``app/credit/service/credit_exposure_book.py``).
 
 Extracted from ``enterprise_stress`` so the ICAAP granularity adjustment reads
 the same slice of the book. Two things are pinned here:
@@ -21,13 +21,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.credit.service import credit_exposure_book
 from app.models import (
     Bank,
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
 )
-from app.services import credit_exposure_book, enterprise_stress
+from app.services import enterprise_stress
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1

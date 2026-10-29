@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.credit.service import loan_classification
 from app.domain.stress.appendix_ii import _STATUTORY
 from app.identity.public import Bank
 from app.models import (
@@ -23,7 +24,7 @@ from app.models import (
     CanonicalPositionSnapshot,
     CanonicalReferenceRow,
 )
-from app.services import loan_classification, sdi_capital, sdi_capital_checks
+from app.services import sdi_capital, sdi_capital_checks
 
 _ZERO = Decimal("0")
 _INCLUDED = ("accepted", "warning")

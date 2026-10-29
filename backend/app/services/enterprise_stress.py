@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
+from app.credit.public import credit_exposure_book
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
 from app.domain.capital.ecl import (
     STRESS_CHARGE_TAX_TREATMENT,
@@ -131,7 +132,6 @@ from app.schemas.enterprise_stress import (
     PlanAssumptionsIn,
 )
 from app.services import (
-    credit_exposure_book,
     enterprise_run_visibility,
     macro_scenarios,
     management_action_plans,

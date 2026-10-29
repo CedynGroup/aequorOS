@@ -1,6 +1,6 @@
 """Credit / Loan Book module routes (credit PR-2; scoped-binding cutover P4-C).
 
-Thin delegation into ``app.services.regulatory_credit``. Mounted with
+Thin delegation into ``app.credit.service.regulatory_credit``. Mounted with
 ``require_module_access("credit")`` in the API router — the module is in every
 institution class's default set, so that gate is about per-tenant CONFIGURATION,
 not authority, and it stays because entitlement is orthogonal to a sentence.
@@ -41,7 +41,7 @@ from app.api.deps import (
     CreditRun,
     DbSession,
 )
-from app.schemas.regulatory_credit import (
+from app.credit.schemas.regulatory_credit import (
     CreditActivityRead,
     CreditConcentrationRead,
     CreditDashboardRead,
@@ -52,8 +52,8 @@ from app.schemas.regulatory_credit import (
     CreditScenarioBatchCreate,
     CreditVintagesRead,
 )
+from app.credit.service import regulatory_credit
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
-from app.services import regulatory_credit
 
 router = APIRouter(tags=["regulatory-credit"])
 

@@ -13,6 +13,13 @@ from sqlalchemy.orm import Session, undefer_group
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.presentation import HEADER, LOCKED_TEXT, SESSION_SUPPORT
 from app.core.key_management.types import KeyStatus
+from app.credit.schemas.regulatory_credit import (
+    ConcentrationLimitEntry,
+    ConcentrationLimitRegisterRead,
+    ConcentrationLimitUpdate,
+    CreditConcentrationRead,
+)
+from app.credit.service import credit_concentration, credit_params, regulatory_credit
 from app.live.service import fact_derivation
 from app.models import (
     Bank,
@@ -21,18 +28,11 @@ from app.models import (
     CanonicalPositionSnapshot,
     ParamConcentrationLimit,
 )
-from app.schemas.regulatory_credit import (
-    ConcentrationLimitEntry,
-    ConcentrationLimitRegisterRead,
-    ConcentrationLimitUpdate,
-    CreditConcentrationRead,
-)
-from app.services import credit_concentration, credit_params, regulatory_credit
 from tests.api import test_impersonation_auth as impersonation
 from tests.core import test_key_unavailable_numeric as encrypted
 from tests.core.test_bank_field_encryption import KEY_A
+from tests.credit.service.test_credit_concentration import CTX
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
-from tests.services.test_credit_concentration import CTX
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, headers
 

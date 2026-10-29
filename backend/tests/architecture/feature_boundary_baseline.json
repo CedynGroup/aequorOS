@@ -293,7 +293,6 @@
  "private stress->capital: app.services.enterprise_stress -> app.services.sdi_capital",
  "private stress->capital: app.services.reverse_stress -> app.services.regulatory_capital",
  "private stress->capital: app.services.scenario_catalog -> app.services.regulatory_capital",
- "private stress->credit: app.services.enterprise_stress -> app.services.credit_exposure_book",
  "private stress->ftp: app.services.analysis_workbench -> app.services.regulatory_ftp",
  "private stress->ftp: app.services.scenario_catalog -> app.services.regulatory_ftp",
  "private stress->fx: app.services.analysis_workbench -> app.services.regulatory_fx",

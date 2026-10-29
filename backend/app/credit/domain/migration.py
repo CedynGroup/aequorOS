@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.domain.credit.dpd_bands import DPD_BAND_CODES
+from app.credit.domain.dpd_bands import DPD_BAND_CODES
 
 #: The Notice's three states, in its printed order.
 STATE_PERFORMING = "performing"
@@ -153,9 +153,7 @@ def compute_migration(
             for (f, t), (amount, count) in sorted(matrix.items())
         ),
         entries=tuple(
-            MigrationCell(
-                from_state="new", to_state=state, exposure_ghs=amount, loan_count=count
-            )
+            MigrationCell(from_state="new", to_state=state, exposure_ghs=amount, loan_count=count)
             for state, (amount, count) in sorted(entries.items())
         ),
         exits=tuple(

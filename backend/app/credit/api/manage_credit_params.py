@@ -13,19 +13,19 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.api.deps import ApproverTenant, DbSession, Tenant
-from app.schemas.credit_params import (
+from app.credit.schemas.credit_params import (
     CrmHaircutRegisterRead,
     CrmHaircutUpdate,
     EclAssumptionRegisterRead,
     EclAssumptionUpdate,
 )
-from app.schemas.regulatory_credit import (
+from app.credit.schemas.regulatory_credit import (
     ConcentrationLimitRegisterRead,
     ConcentrationLimitUpdate,
     CreditThresholdRegisterRead,
     CreditThresholdUpdate,
 )
-from app.services import credit_params
+from app.credit.service import credit_params
 
 router = APIRouter(tags=["credit-params"])
 
