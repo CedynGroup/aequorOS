@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import DataScope, ModuleScope, RoleBundle, SensitivityScope
 from app.models import AuthorizationBinding, Bank, Notification, RegulatorySubmissionEvent
+from app.notifications.service import notifications, reporting_deadline_scan
 from app.reporting.schemas.packages import ReportingObligationRead
 from app.reporting.service.registry import REGISTRY
-from app.services import notifications, reporting_deadline_scan
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.reporting.api.test_package_authorization import _add_bank, _grant, _package
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers

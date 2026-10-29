@@ -216,7 +216,6 @@
  "private liquidity->data_engine: app.services.liquidity_ewi -> app.models.canonical",
  "private liquidity->data_engine: app.services.regulatory_liquidity -> app.models.canonical",
  "private liquidity->data_engine: app.services.regulatory_liquidity -> app.services.withdrawal_impact",
- "private liquidity->notifications: app.services.liquidity_cfp -> app.services.notifications",
  "private live->data_engine: app.services.data_activation -> app.schemas.data_activation",
  "private live->data_engine: app.services.fact_derivation -> app.models.canonical",
  "private live->data_engine: app.services.fact_derivation -> app.models.ingestion",

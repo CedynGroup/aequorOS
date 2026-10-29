@@ -62,6 +62,7 @@ from app.models import (
     Job,
     WorkerHeartbeat,
 )
+from app.notifications.service import notification_email_mirror, reporting_deadline_scan
 from app.services import (
     database_direct_jobs,
     documents,
@@ -69,8 +70,6 @@ from app.services import (
     ingestion,
     job_queue,
     market_data_jobs,
-    notification_email_mirror,
-    reporting_deadline_scan,
     scheduler,
     temenos_jobs,
 )

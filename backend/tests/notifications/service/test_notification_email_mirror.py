@@ -15,11 +15,12 @@ from app.api.deps import TenantContext
 from app.core.authorization import RoleBundle
 from app.core.config import get_settings
 from app.models import AuthorizationBinding, Job, Notification, User
-from app.services import job_queue, notifications
-from app.services.notification_email_mirror import (
+from app.notifications.service import notifications
+from app.notifications.service.notification_email_mirror import (
     enqueue_due_notification_mirror,
     run_notification_email_mirror,
 )
+from app.services import job_queue
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.reporting.api.test_package_authorization import _add_bank, _package
 from tests.support.factories.authorization import grant_institution_authority

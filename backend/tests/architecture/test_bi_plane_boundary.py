@@ -671,7 +671,7 @@ PERMITTED_MEDIATED_WRITES: dict[tuple[str, str], str] = {
         "alert evaluation, subscription runs, AI drafts) and may never insert a "
         "`jobs` row by hand — the writer owns idempotency keys, lanes and reclaim."
     ),
-    ("app.services.notifications.emit", "notifications"): (
+    ("app.notifications.service.notifications.emit", "notifications"): (
         "A threshold alert that breaches is delivered to the bank's notification "
         "inbox through the platform's one emitter, beside every other platform "
         "notice, so the inbox's read/acknowledge lifecycle is not re-implemented "
