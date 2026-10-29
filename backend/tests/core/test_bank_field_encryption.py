@@ -60,6 +60,7 @@ from app.identity.schemas.institution_profile import (
 )
 from app.identity.service import banks, institution_profile
 from app.live import position_book
+from app.live.service import fact_derivation
 from app.ml.behavioral import deposit_stability, nmd_duration
 from app.ml.behavioral.config import BehavioralTrainingConfig
 from app.ml.behavioral.history import load_deposit_month_aggregates
@@ -70,13 +71,7 @@ from app.models.canonical_withdrawal import CanonicalWithdrawal
 from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailure
 from app.reporting.models.packages import RegulatoryPackage
 from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import (
-    canonical_withdrawal,
-    credit_concentration,
-    credit_exposure_book,
-    fact_derivation,
-    ingestion,
-)
+from app.services import canonical_withdrawal, credit_concentration, credit_exposure_book, ingestion
 from app.services.behavioral_liquidity import get_behavioral_liquidity_report
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.api import test_impersonation_auth as impersonation

@@ -59,6 +59,7 @@ from app.domain.authority.evidence import (
     assess_run_evidence,
 )
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
+from app.live.models.regulatory_run import RegulatoryRun
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalGlAccount,
@@ -66,7 +67,6 @@ from app.models.canonical import (
     CanonicalProduct,
 )
 from app.models.canonical_withdrawal import CanonicalWithdrawal
-from app.models.regulatory_run import RegulatoryRun
 from app.reporting.models.packages import RegulatoryPackage
 
 __all__ = [

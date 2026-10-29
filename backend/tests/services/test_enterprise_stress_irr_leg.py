@@ -21,13 +21,14 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.irr.engine import IRR_BUCKETS, IrrPosition, compute_nii
 from app.domain.stress import orchestrator
 from app.domain.stress.appendix_ii import thousands
+from app.irrbb.domain.engine import IRR_BUCKETS, IrrPosition, compute_nii
+from app.irrbb.service import regulatory_irr
 from app.models import BankFinancialFact, RegulatoryRun
 from app.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import default_macro_scenarios, enterprise_stress, regulatory_irr
+from app.services import default_macro_scenarios, enterprise_stress
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.icaap.service.test_icaap_stress_appendix2_report import (
     MAKER,

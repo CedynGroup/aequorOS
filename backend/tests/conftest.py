@@ -23,7 +23,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from hypothesis import settings as hypothesis_settings
-from sqlalchemy import Engine, create_engine, event, text
+from sqlalchemy import Engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -46,12 +46,10 @@ from app.integrations.storage.s3 import get_object_storage
 from app.models import Organization, User
 from tests.fixtures.reference_data import seed_global_reference_data
 from tests.real_data import REAL_DATA_DATABASE_URL
-from tests.support.advisory_locks import isolate_encryption_locks
 from tests.support.api_factories import ApiFactories
+from tests.support.database import database_connections, managed_session_factory
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.support.inmemory_storage import InMemoryStorageClient
-
-isolate_encryption_locks()
 
 # No scheduled property-test job exists: local and PR runs share this bounded,
 # reproducible budget. Expensive database machines may lower it explicitly.
@@ -352,14 +350,6 @@ class FakeStorage:
         self.deleted.append((bucket, object_key))
 
 
-def _enable_sqlite_foreign_keys(engine: Engine) -> None:
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_connection, _connection_record) -> None:
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-
 def _postgres_schema_url(database_url: str, schema_name: str) -> str:
     url = make_url(database_url)
     return url.update_query_dict({"options": f"-csearch_path={schema_name}"}).render_as_string(
@@ -371,12 +361,11 @@ def _drop_postgres_schema(database_url: str, schema_name: str | None) -> None:
     if schema_name is None:
         return
 
-    admin_engine = create_engine(database_url, isolation_level="AUTOCOMMIT")
-    try:
-        with admin_engine.connect() as connection:
-            connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
-    finally:
-        admin_engine.dispose()
+    with (
+        database_connections(database_url, administrative=True) as admin,
+        admin.engine(isolation_level="AUTOCOMMIT").connect() as connection,
+    ):
+        connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
 
 
 def _seed_demo_tenants(engine: Engine) -> None:
@@ -467,8 +456,8 @@ def build_test_database(
     directory and a Postgres schema is dropped with CASCADE by its creator.
     """
     engine = get_engine(database_url)
-    if engine.dialect.name == "sqlite":
-        _enable_sqlite_foreign_keys(engine)
+    owner = database_connections(database_url)
+    _ = owner.adopt_engine(engine)
     try:
         Base.metadata.create_all(engine)
         if engine.dialect.name == "postgresql":
@@ -488,7 +477,7 @@ def build_test_database(
         seed(engine)
         yield _TestDatabase(database_url=database_url, engine=engine, seed=seed)
     finally:
-        engine.dispose()
+        owner.close()
         get_settings.cache_clear()
         get_engine.cache_clear()
 
@@ -506,12 +495,11 @@ def _session_test_database(
         database_url = sqlite_database_url(tmp_path_factory, name)
     else:
         schema_name = f"risk_service_test_{uuid4().hex}"
-        admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
-        try:
-            with admin_engine.connect() as connection:
-                connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
-        finally:
-            admin_engine.dispose()
+        with (
+            database_connections(test_database_url, administrative=True) as admin,
+            admin.engine(isolation_level="AUTOCOMMIT").connect() as connection,
+        ):
+            connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
         database_url = _postgres_schema_url(test_database_url, schema_name)
 
     try:
@@ -582,8 +570,9 @@ def _rollback_sessionmaker_lifecycle(
     outer = connection.begin()
     if connection.dialect.name == "sqlite":
         connection.exec_driver_sql("BEGIN")
-    bound_sessionmaker = sessionmaker(
-        bind=connection,
+    bound_sessionmaker = managed_session_factory(
+        None,
+        connection,
         join_transaction_mode="create_savepoint",
         autoflush=False,
         expire_on_commit=False,
@@ -693,8 +682,8 @@ def _committing_test_database(
     # own engine only outlives it so the schema can be dropped at the end.
     engine = get_engine(database_url)
     monkeypatch.setattr(auth_mod, "get_sessionmaker", get_sessionmaker)
-    if engine.dialect.name == "sqlite":
-        _enable_sqlite_foreign_keys(engine)
+    owner = database_connections(database_url)
+    _ = owner.adopt_engine(engine)
     database = _TestDatabase(
         database_url=database_url, engine=engine, seed=_shared_committing_database.seed
     )
@@ -702,7 +691,7 @@ def _committing_test_database(
         _reset_test_database(database)
         yield database
     finally:
-        engine.dispose()
+        owner.close()
         get_settings.cache_clear()
         get_engine.cache_clear()
 

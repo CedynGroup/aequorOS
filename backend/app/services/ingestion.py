@@ -64,6 +64,7 @@ from app.domain.ingestion.validation import (
 )
 from app.etl import EtlConfig, etl_summary, model_loading, run_etl
 from app.identity.public import Bank
+from app.live.service.data_activation import ACTIVATION_EVENT
 from app.models import (
     AuditEvent,
     CanonicalCounterparty,
@@ -104,7 +105,6 @@ from app.schemas.ingestion import (
 )
 from app.services import job_queue
 from app.services.audit import record_event
-from app.services.data_activation import ACTIVATION_EVENT
 from app.storage.client import (
     ObjectMetadata,
     StorageClient,

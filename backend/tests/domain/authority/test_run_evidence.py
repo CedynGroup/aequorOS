@@ -9,7 +9,7 @@ those rows and carried nothing to say so.
 Retaining those runs is correct — they are immutable evidence of what the book
 said. Letting them present as CURRENT is not. These tests pin the rule that
 tells the two apart, clause by clause, with no database and no framework: every
-clause mirrors a real predicate in ``app/services/fact_derivation.py``, and
+clause mirrors a real predicate in ``app/live/service/fact_derivation.py``, and
 every unknown resolves toward *affected*.
 """
 

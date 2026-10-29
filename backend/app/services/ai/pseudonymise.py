@@ -27,8 +27,8 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.identity.public import Bank, User
 from app.models import Organization
-from app.models.jurisdiction import Jurisdiction
-from app.services import jurisdictions as jurisdictions_service
+from app.policy.public import Jurisdiction
+from app.policy.public import jurisdictions as jurisdictions_service
 
 #: key -> the ROLE the model is told. Values are resolved server-side and never
 #: cross the boundary. ``sub_N`` is reserved for a subsidiary register that does

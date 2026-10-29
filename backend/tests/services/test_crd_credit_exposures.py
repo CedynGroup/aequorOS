@@ -15,15 +15,15 @@ from app.domain.capital.engine import (
 from app.domain.stress.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
 from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
 from app.domain.stress.translation import MacroPathPoint
-from app.models import CanonicalGlAccount
-from app.services import enterprise_stress
-from app.services.credit_exposure_book import ExposureRow
-from app.services.fact_derivation import (
+from app.live.service.fact_derivation import (
     DerivationError,
     _derive_specs,  # pyright: ignore[reportPrivateUsage]
     _PositionRow,  # pyright: ignore[reportPrivateUsage]
     _split_securities,  # pyright: ignore[reportPrivateUsage]
 )
+from app.models import CanonicalGlAccount
+from app.services import enterprise_stress
+from app.services.credit_exposure_book import ExposureRow
 from tests.domain.stress_fixtures import base_paths
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.services.test_derivation_fail_closed_defaults import (

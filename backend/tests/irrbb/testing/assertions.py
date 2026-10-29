@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.domain.irr.standardised import MONEY, RATIO_PCT, SfResult
 from app.icaap.domain.pillar2.types import MethodResult
+from app.irrbb.domain.standardised import MONEY, RATIO_PCT, SfResult
 from tests.support.assertions import TolerancePolicy
 
 

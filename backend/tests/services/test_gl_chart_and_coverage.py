@@ -26,8 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import BankFinancialFact, CanonicalGlAccount, IngestionBatch, LineageRecord
-from app.services.fact_derivation import (
+from app.live.service.fact_derivation import (
     _CentralBankNames,
     _classify_gl_assets,
     _classify_gl_funding,
@@ -42,6 +41,7 @@ from app.services.fact_derivation import (
     _resolve_gl_chart,
     derive_facts,
 )
+from app.models import BankFinancialFact, CanonicalGlAccount, IngestionBatch, LineageRecord
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1

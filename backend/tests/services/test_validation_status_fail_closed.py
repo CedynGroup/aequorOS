@@ -29,6 +29,7 @@ from app.domain.ingestion.constants import (
     VALIDATION_STATUSES,
 )
 from app.domain.ingestion.contracts import CanonicalRecords, GlAccountData
+from app.live.service.fact_derivation import _INCLUDED_VALIDATION_STATUSES
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -43,7 +44,6 @@ from app.reporting.service.bog_forms.generation import compute_with_dependencies
 from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
 from app.reporting.service.bog_forms.sources_ext.bsd11 import largest_exposures
 from app.services import ingestion
-from app.services.fact_derivation import _INCLUDED_VALIDATION_STATUSES
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

@@ -19,6 +19,7 @@ import pytest
 from sqlalchemy import select, update
 
 from app.db.session import get_sessionmaker
+from app.live.service.reporting_periods import new_snapshot_period
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -26,7 +27,6 @@ from app.models import (
     CurrentFinancialFact,
     LiveMetric,
 )
-from app.services.reporting_periods import new_snapshot_period
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,

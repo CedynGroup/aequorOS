@@ -131,14 +131,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
     # ---- staff operator console
     (r"^(models|schemas)/operator$", "operator"),
-    # ---- policy: jurisdiction, regime, parameter registers
-    (
-        r"^services/(regulatory_parameters|jurisdictions|institution_types|module_scope"
-        r"|parameter_register|params|sdi_regime)$",
-        "policy",
-    ),
-    (r"^models/(regulatory_parameter|parameter_register|jurisdiction|institution_type)$", "policy"),
-    (r"^domain/(policy/|regulatory_instruments$)", "policy"),
     # ---- notifications
     (
         r"^services/(notifications|notification_email_mirror|reporting_deadline_scan)$",
@@ -148,15 +140,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         r"^(models/notification|schemas/notifications|features/manage_notifications)$",
         "notifications",
     ),
-    # ---- live engine and the facts spine
-    (
-        r"^services/(fact_derivation|pipeline|live_.*|freshness|alerts|reporting_periods"
-        r"|regulatory_dashboard_batching|data_activation)$",
-        "live",
-    ),
-    (r"^models/(facts|live|regulatory|regulatory_run)$", "live"),
-    (r"^(schemas/live|features/manage_live_engine)$", "live"),
-    (r"^domain/(positions|reporting|gl)/", "live"),
     # ---- data engine
     (r"^adapters/__init__$", "data_engine"),
     (r"^adapters/(api_push|database_direct|excel_csv|temenos_t24)(/|$)", "data_engine"),
@@ -227,11 +210,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         r"|features/(run_regulatory_liquidity|manage_liquidity_cfp|manage_liquidity_thresholds"
         r"|read_liquidity_monitoring|read_cashflow_window|read_window_analytics))$",
         "liquidity",
-    ),
-    (
-        r"^(services/regulatory_irr(_sf)?|domain/irr/.*|schemas/regulatory_irr(_sf)?"
-        r"|features/run_regulatory_irr)$",
-        "irrbb",
     ),
     (
         r"^(services/regulatory_fx|domain/fx/.*|schemas/regulatory_fx"
@@ -508,7 +486,7 @@ def test_the_scanner_charges_each_rule() -> None:
 @pytest.mark.parametrize(
     "layout",
     [
-        ("app.models.regulatory", "live", "app.services.regulatory_fx"),
+        ("app.live.models.regulatory", "live", "app.services.regulatory_fx"),
         ("app.identity.models", "identity", "app.fx.service"),
     ],
 )
@@ -606,7 +584,7 @@ class _ModelSplitScenario:
         moved_source = {
             "app.api.deps": "app.core.dependency",
             "app.services.ai.grounding": "app.ai.service",
-            "app.services.fact_derivation": "app.live.service",
+            "app.live.service.fact_derivation": "app.live.service",
         }[self.source]
         path.unlink()
         moved_path = _write_synthetic_module(
@@ -629,7 +607,7 @@ class _ModelSplitScenario:
     def check_new_sibling(self, path: Path, target: str, split: str) -> None:
         sibling = "parameter_register" if split == "bank" else "bank"
         sibling_target = (
-            "app.identity.models.bank" if sibling == "bank" else f"app.models.{sibling}"
+            "app.identity.models.bank" if sibling == "bank" else f"app.policy.models.{sibling}"
         )
         sibling_path = _write_synthetic_module(self.app, sibling_target, "class Authority: pass\n")
         path.write_text(
@@ -652,7 +630,7 @@ class _ModelSplitScenario:
             json.dumps(
                 {
                     target: {
-                        "module": "app.models.regulatory",
+                        "module": "app.live.models.regulatory",
                         "feature": "live",
                         "importers": [self.source],
                     }
@@ -712,7 +690,7 @@ class _ModelSplitScenario:
 @pytest.mark.parametrize("import_style", ["direct", "registry", "relative", "dynamic"])
 @pytest.mark.parametrize(
     "source",
-    ["app.api.deps", "app.services.ai.grounding", "app.services.fact_derivation"],
+    ["app.api.deps", "app.services.ai.grounding", "app.live.service.fact_derivation"],
 )
 def test_model_splits_preserve_historical_boundary_identities(
     tmp_path: Path,
@@ -734,11 +712,11 @@ def test_model_splits_preserve_historical_boundary_identities(
 
     try:
         _write_synthetic_module(app, "app.models.__init__")
-        _write_synthetic_module(app, "app.models.regulatory", "class Authority: pass\n")
+        _write_synthetic_module(app, "app.live.models.regulatory", "class Authority: pass\n")
         source_path = _write_synthetic_module(
             app,
             source,
-            _synthetic_import_content(app, source, "app.models.regulatory", import_style),
+            _synthetic_import_content(app, source, "app.live.models.regulatory", import_style),
         )
         original = _scan_synthetic_boundaries()
         write_baseline()
@@ -763,11 +741,19 @@ def test_model_splits_preserve_historical_boundary_identities(
     "edge",
     [
         ("app.live.service", "app.identity.models.bank", "private live->identity"),
-        ("app.live.service", "app.models.parameter_register", "private live->policy"),
-        ("app.identity.models.bank", "app.models.parameter_register", "layer identity->policy"),
-        ("app.models.parameter_register", "app.identity.models.bank", "private policy->identity"),
+        ("app.live.service", "app.policy.models.parameter_register", "private live->policy"),
+        (
+            "app.identity.models.bank",
+            "app.policy.models.parameter_register",
+            "layer identity->policy",
+        ),
+        (
+            "app.policy.models.parameter_register",
+            "app.identity.models.bank",
+            "private policy->identity",
+        ),
         ("app.identity.models.bank", "app.live.service", "layer identity->live"),
-        ("app.models.parameter_register", "app.live.service", "layer policy->live"),
+        ("app.policy.models.parameter_register", "app.live.service", "layer policy->live"),
     ],
 )
 def test_new_split_dependencies_use_current_ownership(
