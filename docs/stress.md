@@ -481,8 +481,9 @@ The directive applies to **savings & loans and finance houses** (¶3), on a **pr
 
 - **Part IV ICAAP is banks-only** (fn.16) — so an SDI runs **solvency + liquidity stress** and the
   AppI risk methods, but **not** the full ICAAP capital-restoration projection. The SDI stress
-  scope is the enterprise scenario + liquidity stress (against the **binding LMTD Table 1 ratios**,
-  per `sdi.md §4.1`) + a simplified s.29 capital stress — **not** the Basel 3-tier Table 2 build.
+  scope is the enterprise scenario + liquidity stress + a simplified s.29 capital stress —
+  **not** the Basel 3-tier Table 2 build. LMTD Table 1 applicability follows the
+  [reporting-date contract](regulatory_reporting.md#5b-reporting-date-standing-rules).
 - Proportionality: an SDI's material risks are **credit, liquidity, concentration, operational** —
   market/IRRBB/FX are conditional (`sdi.md §3`). Its macro drivers reduce to GDP, inflation, policy
   rate, FX (if any book), unemployment.

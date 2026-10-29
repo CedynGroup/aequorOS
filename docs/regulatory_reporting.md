@@ -353,7 +353,7 @@ The deadline worker uses `calendar.deadline_scan_obligations`, a tenant/bank-sco
 lifecycle projection independent of a human grant, to distinguish filed returns,
 arrears and pending ORASS re-uploads. Tenant routes never call this projection.
 At disclosure time, `notifications.visibility_conditions` applies current family
-visibility to deadline and package notifications in addition to tenant/recipient
+visibility to deadline, instrument and package notifications in addition to tenant/recipient
 scope. The same filter governs lists, totals, unread badges, individual mark-read
 responses (404 when hidden), mark-all-read and each email-mirror recipient. An
 org-wide notification or an administrator email destination confers no return

@@ -6,7 +6,7 @@ notifications: ``due_soon`` once per T-7/T-3/T-1 threshold, ``overdue`` once
 per day, and pending ORASS re-upload (BG/FMD/2026/07 downtime email
 submissions) once per day.
 
-Idempotency: each emission's deterministic dedupe key IS its ``type`` value —
+Deadline idempotency: each emission's deterministic dedupe key IS its ``type`` value —
 ``reporting.deadline.<kind>:<return_code>:<reporting_date>[:<scan_date>]`` —
 scoped to the bank via ``entity_type='bank'``/``entity_id``. A second scan of
 the same day finds the existing row and emits nothing. Daily kinds append the
@@ -15,7 +15,9 @@ scan date; threshold kinds do not, so each threshold fires exactly once.
 Scheduling: ``enqueue_due_deadline_scan`` is called from the hourly
 ``scheduled_tick`` (see ``scheduler.run_tick``); the scan date rides the job
 coalesce key so each org gets at most one ``reporting_deadline_scan`` job per
-day. The worker handler is ``run_reporting_deadline_scan``.
+day. ``app.worker._run_reporting_scan`` injects the instrument observer before
+calling ``run_reporting_deadline_scan``. Instrument notification rules are owned by
+``docs/regulatory_reporting.md`` §5b.
 """
 
 from __future__ import annotations

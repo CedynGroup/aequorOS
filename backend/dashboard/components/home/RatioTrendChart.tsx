@@ -50,8 +50,8 @@ export default function RatioTrendChart({
 }) {
   const [range, setRange] = useState<RangePreset>("1Y");
   const tokens = useChartTokens();
-  // An SDI does not file Basel LCR/NSFR (docs/sdi.md §4.6) — its capital headline
-  // is the s.29 CAR; liquidity is supervised via LMTD on the Liquidity page.
+  // Keep reference ratios out of compliance trends; applicability is owned by
+  // docs/regulatory_reporting.md §5b.
   const moduleScope = useModuleScope();
   const rules = useBankRules(bankId);
   const showLiquidity =
