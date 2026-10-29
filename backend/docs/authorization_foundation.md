@@ -96,7 +96,7 @@ aggregation are live. Subsequent product cutovers are tracked in the
   `backend/docs/filing_submit_authority_rollout.md`; design + remaining steps:
   `backend/docs/filing_workflow_redesign.md`.
 - **Every new `RoleBundle` or `ModuleScope` value needs a CHECK-widening migration** —
-  see the [migration contract and Postgres regression guard](#institution-vocabulary-built-2026-09-20).
+  see the [migration contract and Postgres regression guard](#institution-register-enforcement).
 
 ## Authority model
 
@@ -720,18 +720,16 @@ design it implements is [filing_workflow_redesign.md](filing_workflow_redesign.m
 
 ## Institution register enforcement
 
-`Module.INSTITUTION` (`institution`) governs the institution profile, outlets,
-products, licences, name history and related-party register. The interactive
-surface requires complete scoped Institution bindings and independently
-projects confidential general data and restricted identifiers/parties. Account
-and Regulatory grants do not open source registers. Dashboard tabs, requests and
-write controls follow the selected institution's exact capabilities. The
-[Institution rollout contract](institution_enforcement_rollout.md) owns the
-fourteen-route matrix, trusted internal readers and deployment grant inventory.
+The [Institution rollout contract](institution_enforcement_rollout.md) owns the
+register's route and sensitivity matrix, dashboard access, trusted internal
+readers and deployment grant requirements.
 
 Migration `202609300081` introduced the grantable vocabulary and widened
 `ck_authorization_bindings_module_scope`; this enforcement cutover adds no bundle,
-migration or automatic grant. Credit retains its own module and
+migration or automatic grant. A migrated database retains its literal CHECK
+list, while the hermetic schema derives it from the enum;
+`tests/db/test_bindings_constraint_migrations.py` pins both vocabularies against
+a migrated schema. Credit retains its own module and
 [rollout contract](credit_enforcement_rollout.md).
 
 ## Product rollout boundary
@@ -762,7 +760,9 @@ the `credit` module, its `risk`-to-`credit` mirror migration, the credit rows
 of the shared live summary / alerts / window / snapshot surfaces, the direct
 `/credit/*` route cutover, and the first surfaces to apply a binding's
 branch/region `data_scope` to the rows AND to every count — is
-owned by the [credit rollout contract](credit_enforcement_rollout.md). The bank
+owned by the [credit rollout contract](credit_enforcement_rollout.md). Institution
+register surfaces are owned by the
+[Institution rollout contract](institution_enforcement_rollout.md). The bank
 audit-route cutover is owned by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,

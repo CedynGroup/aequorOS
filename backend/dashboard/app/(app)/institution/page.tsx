@@ -3,10 +3,11 @@
 /**
  * Institution Profile — the corporate profile card of the register: legal
  * identity, authorisation, capital, listing, and ownership split, with the
- * backend's advisory warnings surfaced as amber notes. Editing PUTs the full
- * profile with a required audit reason; the register is the data source for
- * the LRT return family (deep link to the Returns workspace, opened on the
- * institution's latest computed position so the pack is ready to generate).
+ * backend's advisory warnings surfaced as amber notes. Saves require an audit
+ * reason and omit identifiers outside the editor's authority to preserve them.
+ * The register feeds the LRT return family (deep link to the Returns workspace,
+ * opened on the institution's latest computed position so the pack is ready
+ * to generate).
  */
 
 import { useState } from "react";

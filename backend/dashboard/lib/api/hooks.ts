@@ -3206,7 +3206,7 @@ export function useSaveChannelConfig(bankId: string | undefined) {
 // payloads carry a required non-empty `reason` (canonical-mutation convention).
 // ---------------------------------------------------------------------------
 
-/** The composed corporate register (profile may be null until first configured). */
+/** Section-authorized register; visibility flags distinguish denied and empty sections. */
 export function useInstitutionProfile(
   bankId: string | undefined,
   enabled = false,
