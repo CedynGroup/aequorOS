@@ -115,7 +115,7 @@ def start_ingestion_batch(
     ctx: MutationTenant,
     storage: IngestionStorage,
 ) -> IngestionBatchStartRead:
-    return ingestion.start_ingestion(db, ctx, bank_id, payload, storage)
+    return ingestion.start_uploaded_ingestion(db, ctx, bank_id, payload, storage)
 
 
 @router.get(

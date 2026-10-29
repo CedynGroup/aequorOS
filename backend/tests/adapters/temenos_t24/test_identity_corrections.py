@@ -23,7 +23,7 @@ from app.domain.ingestion.validation import (
     run_validation,
 )
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
 from app.services.ingestion import create_mapping_config, start_ingestion
 from tests.support.helpers import ORG_1, USER_1
 from tests.support.inmemory_storage import InMemoryStorageClient
@@ -161,10 +161,10 @@ def test_t24_bundle_date_correction_updates_or_refuses_the_persisted_identity(
         db_session,
         ctx,
         bank.id,
-        IngestionBatchCreate(
+        InternalIngestionBatchCreate(
             source_system="T24",
             as_of_date=date(2026, 6, 30),
-            location=str(initial_path),
+            location=initial_path,
             reason="Initial position.",
         ),
         storage,
@@ -180,10 +180,10 @@ def test_t24_bundle_date_correction_updates_or_refuses_the_persisted_identity(
         db_session,
         ctx,
         bank.id,
-        IngestionBatchCreate(
+        InternalIngestionBatchCreate(
             source_system="T24",
             as_of_date=date(2026, 7, 31),
-            location=str(corrected_path),
+            location=corrected_path,
             reason="Correct the position.",
         ),
         storage,

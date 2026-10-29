@@ -30,6 +30,7 @@ from app.adapters.api_push import identity_mapping_config
 from app.api.deps import TenantContext
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
+from app.domain.ingestion.locations import TEMP_SCHEME, StagedIngestionLocation
 from app.identity.public import Bank
 from app.models import IngestionBatch, MappingConfigRecord
 from app.schemas.ingestion import (
@@ -46,7 +47,6 @@ from app.schemas.push import (
 )
 from app.services.audit import record_event
 from app.services.ingestion import (
-    TEMP_SCHEME,
     bank_slug,
     create_mapping_config,
     start_ingestion,
@@ -224,7 +224,7 @@ def commit_push_batch(
         IngestionBatchCreate(
             source_system="API_PUSH",
             as_of_date=date.fromisoformat(manifest["as_of_date"]),
-            location=f"{TEMP_SCHEME}{source_location.object_path}",
+            location=StagedIngestionLocation(f"{TEMP_SCHEME}{source_location.object_path}"),
             reason=manifest["reason"],
         ),
         storage,

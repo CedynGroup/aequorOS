@@ -30,7 +30,7 @@ from app.identity.models.institution_profile import RelatedParty
 from app.identity.schemas.bank_encryption import BankKeyScheduleConfirm
 from app.identity.service import bank_encryption
 from app.models import Bank, Job, OperatorAuditLog
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
 from app.services import assessments, documents, ingestion, job_queue
 from tests.adapters.excel_csv import fixtures as workbooks
 from tests.api.test_ingestion import FULL_MAPPING
@@ -688,10 +688,10 @@ def test_api_coalesces_two_accepted_uploads_before_pickup(
             api_session,
             ctx,
             bank_id,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system="EXCEL_CSV",
                 as_of_date=workbooks.AS_OF,
-                location=str(path),
+                location=path,
                 reason="Test upload compatibility",
             ),
             storage,

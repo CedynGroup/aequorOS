@@ -37,7 +37,7 @@ from app.identity.service import authorization, membership
 from app.models import Bank, Organization, User
 from app.models.canonical import CanonicalCounterparty
 from app.operator.services import bank_encryption
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
 from app.services import ingestion
 from tests.support.inmemory_storage import InMemoryStorageClient
 
@@ -208,10 +208,10 @@ def _ingest_identity(db: Session, identity: Identity, bank: str, directory: Path
         db,
         ctx,
         bank,
-        IngestionBatchCreate(
+        InternalIngestionBatchCreate(
             source_system="EXCEL_CSV",
             as_of_date=date(2026, 6, 30),
-            location=str(location),
+            location=location,
             reason="Synthetic encrypted identity ingestion",
         ),
         InMemoryStorageClient(),
