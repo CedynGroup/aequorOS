@@ -56,10 +56,12 @@ commencement entries show the default and institution dates, plus the recorded
 approver and approval date. Missing dates, links or mappings are stated explicitly.
 Expand a status badge to read its shared plain-language disclosure and source
 details; legal status is separate from template fidelity and calculation readiness.
+Use **Search instruments** to filter by title, and **Status** to narrow the results
+by legal status.
 
 **Upcoming rules** (`/submissions/upcoming`) lists exposure drafts and final rules
-awaiting commencement. Use **Return** to prepare a particular return or **Open
-preparation workspace** for an available module. Preparation links preserve
+awaiting commencement. Select a linked return title to prepare that return or
+**Open preparation workspace** for an available module. Preparation links preserve
 `preparing=1` across module navigation; existing institution and module permissions
 still apply. Ordinary Returns and rule-governed module tabs show in-force material;
 the calendar's applicability and preparation-anchor rules are defined in the
