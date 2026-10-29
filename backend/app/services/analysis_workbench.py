@@ -31,16 +31,17 @@ from app.domain.capital.engine import (
 from app.domain.capital.engine import (
     UnsupportedShockError as CapitalUnsupportedShock,
 )
-from app.domain.ftp.engine import (
-    FtpComputationError,
-    classify_core_band,
-)
-from app.domain.ftp.engine import (
-    MissingParameterError as FtpMissingParameter,
-)
 from app.domain.liquidity.engine import (
     UnsupportedShockError as LiquidityUnsupportedShock,
 )
+from app.ftp.domain.engine import (
+    FtpComputationError,
+    classify_core_band,
+)
+from app.ftp.domain.engine import (
+    MissingParameterError as FtpMissingParameter,
+)
+from app.ftp.public import regulatory_ftp
 from app.fx.domain.engine import (
     FxComputationError,
 )
@@ -73,12 +74,7 @@ from app.schemas.scenario_workbench import (
     ScenarioResultRead,
     WorkbenchModule,
 )
-from app.services import (
-    regulatory_capital,
-    regulatory_ftp,
-    regulatory_liquidity,
-    scenario_workbench_authorization,
-)
+from app.services import regulatory_capital, regulatory_liquidity, scenario_workbench_authorization
 from app.services.audit import record_event
 from app.services.scenario_catalog import SYSTEM_SCENARIOS, system_shocks, validate_shocks
 from app.services.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard

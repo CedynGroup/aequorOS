@@ -36,6 +36,7 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.credit.service import regulatory_credit
 from app.db.base import utc_now
 from app.domain.authority.registry import MetricFamily
+from app.ftp import service as regulatory_ftp
 from app.fx import service as regulatory_fx
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank, User
@@ -53,7 +54,6 @@ from app.services import (
     implied_rating,
     regulatory_capital,
     regulatory_forecasting,
-    regulatory_ftp,
     regulatory_liquidity,
 )
 from app.services.audit import record_event

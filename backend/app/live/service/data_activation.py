@@ -30,6 +30,8 @@ from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.credit.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.credit.service import regulatory_credit
+from app.ftp import service as regulatory_ftp
+from app.ftp.schemas import FtpScenarioBatchCreate
 from app.fx import service as regulatory_fx
 from app.fx.schemas import FxScenarioBatchCreate
 from app.identity import public as scoped_authorization
@@ -49,13 +51,11 @@ from app.schemas.data_activation import (
 )
 from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.schemas.regulatory_ftp import FtpScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
 from app.services import (
     implied_rating,
     regulatory_capital,
     regulatory_forecasting,
-    regulatory_ftp,
     regulatory_liquidity,
 )
 from app.services.audit import record_event

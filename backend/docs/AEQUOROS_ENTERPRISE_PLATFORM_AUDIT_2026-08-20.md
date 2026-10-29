@@ -225,7 +225,7 @@ These are open, verified, and carry no fix in the working tree.
 
 The clamp moved into `backend/app/policy/domain/resolver.py:520` and is now applied register-wide through `clamp_overrides` (`backend/app/policy/service/regulatory_parameters.py:1131-1166`) at three sites: capital, forecasting (where the raw re-read is gone), and enterprise stress. The direction register now declares **26** codes (`resolver.py:466-505`). [V-B]
 
-Three paths still read the tenant board register raw and unclamped, and one of them reaches a filed return: `backend/app/reporting/service/le_generation.py:1248-1252` (a weakened board liquidity floor goes straight into the filed return), `backend/app/services/capital_plan.py:140-147`, and `backend/app/services/regulatory_ftp.py:1176-1181`.
+Three paths still read the tenant board register raw and unclamped, and one of them reaches a filed return: `backend/app/reporting/service/le_generation.py:1248-1252` (a weakened board liquidity floor goes straight into the filed return), `backend/app/services/capital_plan.py:140-147`, and `backend/app/ftp/service.py:1176-1181`.
 
 ### 2.3 Regulatory submission channel
 

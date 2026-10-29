@@ -7,10 +7,10 @@ from fastapi import APIRouter, Query, status
 
 from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.core.authorization import Module, Permission, Sensitivity
+from app.ftp import service as regulatory_ftp
+from app.ftp.schemas import FtpDashboardRead, FtpScenarioBatchCreate
 from app.identity import public as scoped_authorization
-from app.schemas.regulatory_ftp import FtpDashboardRead, FtpScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
-from app.services import regulatory_ftp
 
 router = APIRouter(tags=["regulatory-ftp"])
 

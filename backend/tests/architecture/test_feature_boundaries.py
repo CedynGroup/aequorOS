@@ -203,11 +203,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "liquidity",
     ),
     (
-        r"^(services/regulatory_ftp|domain/ftp/.*|schemas/regulatory_ftp"
-        r"|features/run_regulatory_ftp)$",
-        "ftp",
-    ),
-    (
         r"^(services/(regulatory_capital|sdi_capital.*|sdi_views|sdi_readiness|capital_plan)"
         r"|domain/capital/.*|models/capital_plan|schemas/(regulatory_capital|sdi|capital_plan)"
         r"|features/(run_regulatory_capital|manage_capital_plan|read_sdi_diagnostics))$",
@@ -448,11 +443,11 @@ def test_the_scanner_charges_each_rule() -> None:
     assert _violation("identity", "live", "app.live.public") == "layer"
     assert _violation("liquidity", "fx", "app.fx.public") == "layer"
     assert _violation(KERNEL, "icaap", "app.icaap.public") == "layer"
-    assert _violation("stress", "fx", "app.services.regulatory_fx") == "private"
+    assert _violation("stress", "fx", "app.fx.service") == "private"
     assert _violation("stress", "fx", "app.fx.service") == "private"
     assert _violation("stress", "fx", "app.fx.public") is None
     assert _violation("stress", "fx", "app.fx.domain.engine") is None
-    assert _violation("stress", "fx", "app.domain.fx.engine") is None
+    assert _violation("stress", "fx", "app.fx.domain.engine") is None
     assert _violation("fx", "liquidity", "app.liquidity.public") is None
     assert _violation(COMPOSITION, "icaap", "app.icaap.service.workspace") is None
     assert _violation("icaap", KERNEL, "app.services.audit") is None

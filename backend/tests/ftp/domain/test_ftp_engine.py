@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.ftp.engine import (
+from app.ftp.domain.engine import (
     CurvePoint,
     FtpBranch,
     FtpComputationError,

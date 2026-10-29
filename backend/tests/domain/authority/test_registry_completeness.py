@@ -1047,7 +1047,7 @@ def test_a_data_keyed_line_code_is_measured_and_never_demanded() -> None:
         _evidence(
             data_keyed_line_item_codes={
                 "fx_position:position.currency": "app/fx/domain/engine.py:264",
-                "ftp_product:product.product": "app/domain/ftp/engine.py:382",
+                "ftp_product:product.product": "app/ftp/domain/engine.py:382",
             }
         )
     )

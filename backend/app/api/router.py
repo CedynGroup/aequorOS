@@ -60,7 +60,6 @@ from app.features.run_calculations import router as calculations_router
 from app.features.run_forecasting import router as forecasting_router
 from app.features.run_implied_rating import router as implied_rating_router
 from app.features.run_regulatory_capital import router as regulatory_capital_router
-from app.features.run_regulatory_ftp import router as regulatory_ftp_router
 from app.features.run_regulatory_liquidity import router as regulatory_liquidity_router
 from app.features.run_reverse_stress import router as reverse_stress_router
 from app.features.run_scenario_analysis import router as scenario_analysis_router
@@ -68,6 +67,7 @@ from app.features.track_jobs import router as jobs_router
 from app.forecasting.api.manage_forecast_assumptions import (
     router as forecast_assumptions_router,
 )
+from app.ftp.api.run_regulatory_ftp import router as regulatory_ftp_router
 from app.fx.api.run_regulatory_fx import router as regulatory_fx_router
 from app.icaap.api.export_icaap_drafts import router as icaap_draft_exports_router
 from app.icaap.api.manage_icaap import router as icaap_router
