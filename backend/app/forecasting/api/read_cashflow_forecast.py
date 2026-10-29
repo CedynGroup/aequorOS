@@ -5,14 +5,14 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.api.deps import DbSession, LiquidityConfidentialResource
-from app.schemas.cashflow_forecast import (
+from app.forecasting.schemas.cashflow_forecast import (
     CashflowForecastMode,
     CashflowForecastRead,
     CashflowForecastScenario,
     CashflowHistoryRead,
     CashflowHorizon,
 )
-from app.services import cashflow_forecast
+from app.forecasting.service import cashflow_forecast
 
 router = APIRouter(tags=["cashflow-forecast"])
 

@@ -12,7 +12,7 @@ from app.forecasting.domain.assumptions import (
     InvalidAssumptionSet,
     validate_presets,
 )
-from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
+from tests.forecasting.assumption_fixtures import FORECAST_PRESETS
 
 
 def _complete() -> dict[str, dict[str, object]]:

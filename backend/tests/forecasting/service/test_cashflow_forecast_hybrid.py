@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.services import cashflow_forecast
+from app.forecasting.service import cashflow_forecast
 
 
 def test_adverse_and_severe_scenarios_reduce_behavioural_cash_flow() -> None:

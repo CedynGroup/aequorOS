@@ -21,8 +21,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.ml.synthetic import DailyFlow
-from app.models.canonical import CanonicalReferenceRow
+from app.data_engine.public import CanonicalReferenceRow
+from app.forecasting.ml.synthetic import DailyFlow
 
 DATASET_KIND = "historical_cashflows"
 

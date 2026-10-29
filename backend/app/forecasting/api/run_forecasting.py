@@ -20,7 +20,7 @@ from app.api.deps import (
     ForecastingRun,
     ForecastingRunDetailView,
 )
-from app.schemas.forecasting import (
+from app.forecasting.schemas.forecasting import (
     ForecastRunCreate,
     ForecastRunListRead,
     ForecastRunRead,
@@ -30,7 +30,7 @@ from app.schemas.forecasting import (
     WhatIfResultRead,
     WhatIfRunCreate,
 )
-from app.services import regulatory_forecasting
+from app.forecasting.service import regulatory_forecasting
 
 router = APIRouter(tags=["forecasting"])
 

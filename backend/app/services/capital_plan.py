@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission, Sensitivity
 from app.db.base import utc_now
+from app.forecasting.service import regulatory_forecasting
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.live.public import RegulatoryMetricResult, RegulatoryRun
@@ -53,7 +54,6 @@ from app.schemas.capital_plan import (
     IlaapSnapshotRead,
     ProjectionUnavailableRead,
 )
-from app.services import regulatory_forecasting
 from app.services.audit import record_event
 from app.services.liquidity_cfp import get_cfp
 from app.services.liquidity_ewi import (

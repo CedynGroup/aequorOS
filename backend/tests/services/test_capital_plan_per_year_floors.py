@@ -20,10 +20,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.forecasting.schemas.forecasting import ForecastRunCreate
+from app.forecasting.service import regulatory_forecasting
 from app.models import Bank, BankReportingPeriod, RegulatoryParameter
 from app.schemas.capital_plan import CapitalPlanPut
-from app.schemas.forecasting import ForecastRunCreate
-from app.services import capital_plan, regulatory_forecasting
+from app.services import capital_plan
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.services.test_capital_plan import _content
 from tests.support.helpers import ORG_1, USER_1

@@ -180,8 +180,6 @@
  "private credit->liquidity: app.services.regulatory_credit -> app.schemas.regulatory_liquidity",
  "private credit->liquidity: app.services.regulatory_credit -> app.services.regulatory_liquidity",
  "private forecasting->capital: app.services.regulatory_forecasting -> app.services.regulatory_capital",
- "private forecasting->data_engine: app.ml.cashflow_history -> app.models.canonical",
- "private forecasting->data_engine: app.services.cashflow_forecast -> app.models.canonical",
  "private forecasting->liquidity: app.schemas.forecasting -> app.schemas.regulatory_liquidity",
  "private forecasting->liquidity: app.services.regulatory_forecasting -> app.schemas.regulatory_liquidity",
  "private ftp->liquidity: app.features.run_regulatory_ftp -> app.schemas.regulatory_liquidity",

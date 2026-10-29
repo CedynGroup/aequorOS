@@ -165,7 +165,7 @@ The seven platform defaults **still exist, unchanged in value**, at `backend/app
 **This is why it is only partial.** `backend/app/stress/service/enterprise_stress_signoff.py:325-380` checks the status transition and that the maker is not the checker; it does **not** read the provenance. A board can still attest an internal capital adequacy assessment whose base case is seven platform constants. The run says so; nothing stops it.
 
 **P0-14 — two validations asserted rather than tested. CLOSED.** [V-B]
-The projection-balance check now actually compares per-year asset and funding residuals against a tolerance and returns the offending period labels on failure (`backend/app/services/regulatory_forecasting.py:837,840-899`); the only remaining unconditional pass is the honest fewer-than-two-periods case, which says so. Executable balance and disclosure checks live in `backend/tests/reporting/service/test_reporting_validation_honesty.py`.
+The projection-balance check now actually compares per-year asset and funding residuals against a tolerance and returns the offending period labels on failure (`backend/app/forecasting/service/regulatory_forecasting.py:837,840-899`); the only remaining unconditional pass is the honest fewer-than-two-periods case, which says so. Executable balance and disclosure checks live in `backend/tests/reporting/service/test_reporting_validation_honesty.py`.
 
 The movement rule no longer skips a zero-to-non-zero movement — it emits a warning at the same severity a large swing gets — and the clean-run statement now names how many totals were actually compared and how many could not be (`backend/app/reporting/service/validation.py:205-220,255-272`). No blanket all-clear survives.
 
@@ -215,7 +215,7 @@ These are open, verified, and carry no fix in the working tree.
 ### 2.1 Substitutions that remain
 
 - **Swap floating leg priced at 0% on a curve-node miss.** `backend/app/irrbb/service/regulatory_irr.py:1143,1148` — both branches read the curve with a zero default, and the curve is built only from base-curve shock rows (`:1226-1236`), so a swap midpoint with no seeded node prices the floating leg at zero. [V-A]
-- **Foreign-currency cash flows summed at face value.** `backend/app/services/cashflow_forecast.py:359` falls back to the native balance when the reporting-currency attribute is absent, with no currency test anywhere in the file. The equivalent read is correctly guarded in the capital and liquidity modules. [V-A]
+- **Foreign-currency cash flows summed at face value.** `backend/app/forecasting/service/cashflow_forecast.py:359` falls back to the native balance when the reporting-currency attribute is absent, with no currency test anywhere in the file. The equivalent read is correctly guarded in the capital and liquidity modules. [V-A]
 - **Foreign-exchange spot implied from the position book.** The 1.0 fallback is gone — `backend/app/live/service/fact_derivation.py:2735` returns `None` and the caller excludes the currency — but `:2727-2734` still derives an implied rate by dividing the reporting-currency leg by the native leg, and records it with a warning rather than refusing. See §3.2 for what that division does when the two legs disagree. [V-B]
 - **Missing swap direction assumed to be pay-fixed, in the engine.** Derivation now excludes a directionless swap, but `backend/app/irrbb/service/regulatory_irr.py:1130` still reads an absent `direction` key as pay-fixed; only an _unrecognised_ value raises. [V-B]
 - **Paid-up capital minimum resolves to zero for a universal bank.** `backend/app/stress/service/enterprise_stress.py:2152` — the board register is consulted, then the specialised-institution branch resolves the governed parameter, and the bank falls through to `return _ZERO`. The specialised path was fixed; the bank path retains the zero, documented as deliberate to preserve golden outputs. A deliberate zero in a capital minimum is still a zero. [V-A]
@@ -269,7 +269,7 @@ Residual: `audit_events.organization_id` is still `ondelete="SET NULL"` (`backen
 
 Genuinely trained per-tenant models exist. The narrowing the prior edition asked for still applies: `backend/app/behavioral/ml/nmd_duration.py:62` regresses a closed-form function of features 0 and 1 of its own input row — the stability score is computed from the coefficient of variation and the minimum mean, which are exactly those two features (`backend/app/behavioral/ml/features.py:56-60`, `deposit_stability.py:55-57`). It is a formula wearing a gradient-boosted model. [V-B]
 
-The stale-constant test failure is resolved by the two values now agreeing (`backend/tests/ml/test_model.py:24` and `backend/app/ml/config.py:15` both read the same version), not by removing the duplication. The substantive assertion — that the trained model beats its static baseline — passed throughout and stands.
+The stale-constant test failure is resolved by the two values now agreeing (`backend/tests/forecasting/ml/test_model.py:24` and `backend/app/forecasting/ml/config.py:15` both read the same version), not by removing the duplication. The substantive assertion — that the trained model beats its static baseline — passed throughout and stands.
 
 Defensible claim: _trained per-tenant models where an institution's history supports them, with documented deterministic fallbacks otherwise._
 

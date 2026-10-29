@@ -26,7 +26,7 @@ ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
         "classify_book",
     ),
     "app.domain.credit.pd:estimate_pd": ("app.credit.domain.pd", "estimate_pd"),
-    "app.domain.forecasting.engine:project": ("app.domain.forecasting.engine", "project"),
+    "app.domain.forecasting.engine:project": ("app.forecasting.domain.engine", "project"),
     "app.domain.ftp.engine:branch_profitability": ("app.ftp.domain.engine", "branch_profitability"),
     "app.domain.ftp.engine:build_curve": ("app.ftp.domain.engine", "build_curve"),
     "app.domain.ftp.engine:nmd_split": ("app.ftp.domain.engine", "nmd_split"),

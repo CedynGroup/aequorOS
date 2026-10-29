@@ -39,7 +39,7 @@ from app.models import (
 )
 from app.policy.models.parameter_register import RegulatoryParameterMixin
 from app.policy.service import parameter_register
-from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
+from tests.forecasting.assumption_fixtures import FORECAST_PRESETS
 from tests.support.factories.reconciliation import allow_fixture_balance_gap
 
 # Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-

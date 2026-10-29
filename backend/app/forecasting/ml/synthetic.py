@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from app.ml.features import is_mid_month, is_month_end_window, is_payday
+from app.forecasting.ml.features import is_mid_month, is_month_end_window, is_payday
 
 DEMO_AS_OF_DATE = datetime.date(2026, 3, 31)
 DEFAULT_DAYS = 730

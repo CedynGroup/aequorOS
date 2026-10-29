@@ -1,6 +1,6 @@
 """Load the simulator's real 10-year daily cash-flow series as ``DailyFlow``s.
 
-The cash-flow LSTM trains on a ``list[DailyFlow]`` (see ``app.ml.synthetic``).
+The cash-flow LSTM trains on a ``list[DailyFlow]`` (see ``app.forecasting.ml.synthetic``).
 By default that list comes from the in-code synthetic generator; when
 ``CASHFLOW_USE_REAL_SERIES`` is set, training and serving read the real daily
 series produced by ``data/simulator`` instead (parquet ``daily_cashflows``
@@ -17,10 +17,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.ml.synthetic import DailyFlow
+from app.forecasting.ml.synthetic import DailyFlow
 
-# Repo root: backend/app/ml/real_series.py -> parents[3]
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+# Repository root, above backend/.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 _DEFAULT_PANEL = _REPO_ROOT / "data" / "history" / "panels" / "daily_cashflows"
 _TRUTHY = ("1", "true", "yes", "on")
 

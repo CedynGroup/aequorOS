@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.core.config import CashflowSettings
-from app.ml.real_series import real_series_enabled
+from app.forecasting.ml.real_series import real_series_enabled
 
 MODEL_VERSION = "lstm-v1.1.0"
 

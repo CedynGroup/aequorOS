@@ -12,10 +12,10 @@ from dataclasses import replace
 from decimal import Decimal
 
 from app.domain.capital.engine import CapitalFact
-from app.domain.forecasting.engine import ForecastFact
 from app.domain.liquidity.engine import LiquidityFact
+from app.forecasting.domain.engine import ForecastFact
 from app.stress.domain.translation import MacroPathPoint
-from tests.domain.test_forecasting_engine import (
+from tests.forecasting.domain.test_forecasting_engine import (
     BASE_ASSUMPTIONS,
     bog_capital_params,
     bog_forecast_params,
