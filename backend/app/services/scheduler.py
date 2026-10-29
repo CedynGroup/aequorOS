@@ -45,7 +45,8 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.services import job_queue, module_scope
+from app.policy.service import module_scope
+from app.services import job_queue
 from app.services.job_queue import enqueue_platform_daily
 
 SCHEDULED_TICK = "scheduled_tick"

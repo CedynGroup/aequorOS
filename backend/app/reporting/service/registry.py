@@ -2,7 +2,7 @@
 
 from typing import cast
 
-from app.domain.policy.return_registry import (
+from app.policy.domain.return_registry import (
     ACCRA_TZ,
     REGISTRY,
     ChannelCode,

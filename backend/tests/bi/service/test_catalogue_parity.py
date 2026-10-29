@@ -33,16 +33,12 @@ from app.bi.domain.authority import (
 from app.core.authorization import Module
 from app.domain.authority.registry import REGISTRY
 from app.domain.ingestion.optional_position_fields import OPTIONAL_POSITION_ATTRIBUTE_KEYS
-from app.domain.positions.families import loan_family
+from app.live.domain.positions.families import loan_family
+from app.live.models.live import LIVE_MODULES
+from app.live.service import fact_derivation, pipeline
 from app.models import Bank, BankFinancialFact, BankReportingPeriod, CanonicalPositionSnapshot
-from app.models.live import LIVE_MODULES
-from app.services import (
-    fact_derivation,
-    loan_classification,
-    module_scope,
-    pipeline,
-    regulatory_capital,
-)
+from app.policy.service import module_scope
+from app.services import loan_classification, regulatory_capital
 from tests.bi.domain.test_extract import Position, Snapshot
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture

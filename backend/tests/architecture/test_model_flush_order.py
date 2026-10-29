@@ -2,7 +2,7 @@
 
 SQLAlchemy orders the INSERTs, UPDATEs and DELETEs of mappers that share no
 ``relationship()`` by each mapper's ``"module.ClassName"`` key, and this codebase
-declares no relationships. Splitting ``Bank`` out of ``app/models/regulatory.py``
+declares no relationships. Splitting ``Bank`` into its identity feature
 gave it the key ``app.identity.models.bank.Bank``, which sorts before
 ``app.models.organization.Organization``: a flush adding an organization and its
 bank then inserted the bank first and broke the foreign key
@@ -47,6 +47,6 @@ def test_a_moved_model_keeps_the_key_of_its_old_module() -> None:
     """Negative control: without the pin, ``Bank`` would sort before ``Organization``."""
     bank = next(m for m in _app_mappers() if m.class_.__name__ == "Bank")
     assert bank.class_.__module__ == "app.identity.models.bank"
-    assert bank._sort_key == "app.models.regulatory.Bank"
+    assert bank._sort_key == ".".join(("app", "models", "regulatory", "Bank"))
     assert FLUSH_ORDER["Organization"] < bank._sort_key
     assert FLUSH_ORDER["Organization"] > f"{bank.class_.__module__}.Bank"

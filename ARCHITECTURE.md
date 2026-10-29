@@ -355,12 +355,12 @@ on one canonical store — the live tier for intraday awareness, the official ti
   filing. Every mint re-derives the reporting period's facts from the accepted canonical book,
   including same-date corrections. Prior runs and generated packages retain their frozen evidence;
   unchanged financial values reproduce the same `input_hash` per run (see §3). Regression:
-  `backend/tests/services/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
-- **Freshness** (`app/services/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
+  `backend/tests/live/service/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
+- **Freshness** (`app/live/service/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
   live `input_hash` to the latest official run's `input_hash`. Because the hash is value-based, a
   bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as
   stale ("data changed since last filing run — mint an official run").
-- **Alerts** (`app/services/alerts.py`, `GET /banks/{id}/alerts`): open `critical`/`high`
+- **Alerts** (`app/live/service/alerts.py`, `GET /banks/{id}/alerts`): open `critical`/`high`
   `live_findings` across modules, surfaced by the header bell (cheap, jittered polling).
 - **Scheduler** (`app/services/scheduler.py`): the worker enqueues a `scheduled_tick`; the handler
   enqueues an `official_run` per bank whose daily filing time (`OFFICIAL_RUN_HOUR`) is due. With
@@ -1383,7 +1383,7 @@ outcomes label their ECL basis and incremental credit-loss tax treatment.
 
 Register updates at `/api/v1/banks/{bank_id}/ecl-assumptions` accept `ALL` or a
 loan exposure category from `LOAN_EXPOSURE_CATEGORIES` in
-`backend/app/domain/positions/families.py`. Save and lookup trim segments and
+`backend/app/live/domain/positions/families.py`. Save and lookup trim segments and
 normalize them to upper case; a segment-specific row takes precedence over
 `ALL` for the same stage. Unknown segments return HTTP 422. The category
 vocabulary is owned by the loan-family map, not a separate documentation list.

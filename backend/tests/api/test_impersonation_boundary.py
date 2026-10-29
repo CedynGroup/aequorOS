@@ -47,7 +47,7 @@ from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.integrations.storage.base import StoredObjectHead
 from app.models import Bank, RegulatoryPackage, User
-from app.services.institution_types import FALLBACK_TYPE_CODE
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.api_factories import CaseFactory, DocumentFactory
 from tests.support.helpers import ORG_1, USER_1, headers

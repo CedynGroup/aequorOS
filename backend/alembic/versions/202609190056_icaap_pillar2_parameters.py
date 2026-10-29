@@ -21,10 +21,10 @@ severities or sovereign haircuts, so their citations begin "REPRESENTATIVE:" and
 they ship ``confirmation_status='pending'``. Every output that consumes one says
 so, and staff replace them in the operator console — which now validates the
 SHAPE of a table-valued value before accepting it
-(``app/domain/policy/parameter_shapes.py``) — without a code change.
+(``app/policy/domain/parameter_shapes.py``) — without a code change.
 
 As in ``202609190054`` and ``202609190055`` the rows are PINNED here rather than
-imported from ``app.services.regulatory_parameters``: a later catalogue edit must
+imported from ``app.policy.service.regulatory_parameters``: a later catalogue edit must
 not change what this revision seeded. A test holds the pinned rows equal to the
 catalogue's today.
 

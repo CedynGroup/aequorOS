@@ -17,6 +17,7 @@ from app.domain.capital.engine import (
     _credit_line_items,  # pyright: ignore[reportPrivateUsage]
 )
 from app.domain.stress.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
+from app.live.service.fact_derivation import _position_row  # pyright: ignore[reportPrivateUsage]
 from app.models import (
     Bank,
     CanonicalCounterparty,
@@ -29,7 +30,6 @@ from app.services.enterprise_stress import (
     EnterpriseStressError,
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
-from app.services.fact_derivation import _position_row  # pyright: ignore[reportPrivateUsage]
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book

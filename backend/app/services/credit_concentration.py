@@ -37,17 +37,21 @@ from app.domain.credit.concentration_monitor import (
 )
 from app.domain.stress.concentration import DIM_SINGLE_NAME, ConcentrationExposure
 from app.identity.public import Bank
+from app.live.public import load_current_facts
 from app.models import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
-    ParamConcentrationLimit,
 )
-from app.services import institution_types, jurisdictions, sdi_capital
+from app.policy.public import (
+    ParamConcentrationLimit,
+    get_active_params,
+    institution_types,
+    jurisdictions,
+)
+from app.services import sdi_capital
 from app.services.credit_exposure_book import canonical_group_key
-from app.services.live_state import load_current_facts
-from app.services.params import get_active_params
 
 _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 _CONCENTRATION_POSITION_TYPES = ("LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDING")

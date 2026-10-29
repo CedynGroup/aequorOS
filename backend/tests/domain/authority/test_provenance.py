@@ -17,7 +17,7 @@ from app.domain.authority.provenance import (
     RunLike,
     parameter_digest,
 )
-from app.models.regulatory_run import RegulatoryRun
+from app.live.models.regulatory_run import RegulatoryRun
 from app.reporting.service.generation import _source_run_entry
 
 BANK_ID = "BK-SAMP0001"

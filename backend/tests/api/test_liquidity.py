@@ -8,8 +8,8 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, create_engine, delete, event, select, text
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import Engine, delete, event, select, text
+from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
@@ -31,6 +31,7 @@ from app.services import calculations, liquidity
 from app.services.liquidity import generate_findings
 from tests.api.test_calculations import _financial_inputs, _ready_scenario
 from tests.support.api_factories import CaseFactory
+from tests.support.database import managed_engine, managed_session_factory
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.support.postgres import wait_for_blocker
 
@@ -1285,6 +1286,7 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
 @requires_committing_db
 def test_publication_lock_and_transaction_share_a_constrained_pool_connection(
     db_client: TestClient,
+    request: pytest.FixtureRequest,
 ) -> None:
     configured_sessionmaker = get_sessionmaker()
     configured_engine = configured_sessionmaker.kw["bind"]
@@ -1299,14 +1301,16 @@ def test_publication_lock_and_transaction_share_a_constrained_pool_connection(
         headers=headers(),
         json={"scenario_id": scenario["id"]},
     ).json()
-    constrained_engine = create_engine(
+    constrained_engine = managed_engine(
+        request,
         configured_engine.url,
         pool_size=1,
         max_overflow=0,
         pool_timeout=0.25,
     )
-    constrained_sessionmaker = sessionmaker(
-        bind=constrained_engine,
+    constrained_sessionmaker = managed_session_factory(
+        request,
+        constrained_engine,
         autoflush=False,
         expire_on_commit=False,
     )

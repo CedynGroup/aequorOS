@@ -10,8 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.regulatory_instruments import instrument_status_on
 from app.identity.public import require_institution_coverage
+from app.policy.domain.regulatory_instruments import instrument_status_on
 from app.policy.public import regulatory_parameters
 from app.reporting.models.filing_workflow import PackageWorkflowStage
 from app.reporting.models.packages import RegulatoryPackage

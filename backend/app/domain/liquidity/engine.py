@@ -17,7 +17,7 @@ from typing import Literal
 
 from app.domain.authority.outcomes import OutcomeState, outcome
 from app.domain.authority.results import Computed, FigureResult, Refused
-from app.domain.policy.ratios import classify_ratio
+from app.policy.domain.ratios import classify_ratio
 
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
@@ -80,7 +80,7 @@ HQLA_LEVEL_2_LEVELS: tuple[str, ...] = (HQLA_LEVEL_2A, HQLA_LEVEL_2B)
 #: refused with *"No active liquidity parameter covers category
 #: 'hqla_haircut:L2A'"* — a code that exists nowhere in the control plane. The
 #: stored codes are ``hqla_l1_haircut_pct`` / ``hqla_l2a_haircut_pct`` /
-#: ``hqla_l2b_haircut_pct`` (``services.regulatory_parameters.HQLA_HAIRCUT_CODES``,
+#: ``hqla_l2b_haircut_pct`` (``app.policy.public.regulatory_parameters.HQLA_HAIRCUT_CODES``,
 #: seeded by alembic ``202608220034``). That is the worst possible moment to be
 #: wrong: the message fires exactly when an operator is trying to fix the
 #: configuration it names. The template below is a naming convention, not a

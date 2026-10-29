@@ -23,6 +23,7 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
+from app.live.service.reporting_periods import new_snapshot_period
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -36,9 +37,8 @@ from app.models import (
     ParamStressShock,
     User,
 )
-from app.models.parameter_register import RegulatoryParameterMixin
-from app.services import parameter_register
-from app.services.reporting_periods import new_snapshot_period
+from app.policy.models.parameter_register import RegulatoryParameterMixin
+from app.policy.service import parameter_register
 from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
 from tests.support.factories.reconciliation import allow_fixture_balance_gap
 

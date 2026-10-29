@@ -7,7 +7,6 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.policy import Direction
 from app.icaap.domain.triggers import (
     TRIGGER_METRICS,
     PathPoint,
@@ -16,6 +15,7 @@ from app.icaap.domain.triggers import (
     evaluate,
     resolve_metric,
 )
+from app.policy.domain import Direction
 
 YEAR_ONE = date(2026, 12, 31)
 YEAR_TWO = date(2027, 12, 31)

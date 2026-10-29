@@ -39,6 +39,7 @@ export async function biApi(
       Authorization: `Bearer ${await mintBackendToken(role)}`,
       // Browser ceremonies can outlast the API's idle keep-alive window.
       // Fresh test connections avoid racing its close without replaying writes.
+
       Connection: "close",
     },
   });

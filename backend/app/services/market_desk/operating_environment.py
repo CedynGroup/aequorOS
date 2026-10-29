@@ -60,9 +60,9 @@ from app.models import (
     CanonicalMarketIndex,
     DeskObservation,
     DeskOperatingEnvironmentAssessment,
-    Jurisdiction,
     Organization,
 )
+from app.policy.public import Jurisdiction
 from app.services.ingestion import bank_slug
 
 if TYPE_CHECKING:

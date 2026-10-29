@@ -21,8 +21,8 @@ from app.api.deps import TenantContext
 from app.bi.domain.catalogue import catalogue
 from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.domain.authority.registry import REGISTRY as AUTHORITY_REGISTRY
-from app.domain.regulatory_instruments import InstrumentStatus, instrument_status_on
 from app.models import Bank, RegulatoryParameter, User
+from app.policy.domain.regulatory_instruments import InstrumentStatus, instrument_status_on
 from app.reporting.service import calendar, generation, packages
 from app.reporting.service.eligibility import resolve_eligibility
 from app.reporting.service.provenance import build_template_provenance

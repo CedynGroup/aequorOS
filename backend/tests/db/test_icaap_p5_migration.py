@@ -32,7 +32,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 
 from alembic import command
-from app.services.regulatory_parameters import P5_SEED_PARAMETERS
+from app.policy.service import regulatory_parameters
+from app.policy.service.regulatory_parameters import P5_SEED_PARAMETERS
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
@@ -116,10 +117,12 @@ def _assert_seeded(rows: list[dict[str, Any]]) -> None:
 @requires_postgres
 def test_the_seed_is_idempotent_and_leaves_an_operator_generation_alone(
     migrated_postgres_schema: MigratedPostgresSchema,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = alembic_config_for_app()
 
-    _assert_seeded(_rows(migrated_postgres_schema))
+    original_rows = _rows(migrated_postgres_schema)
+    _assert_seeded(original_rows)
 
     command.downgrade(config, PREVIOUS_REVISION)
     assert _rows(migrated_postgres_schema) == []
@@ -174,8 +177,11 @@ def test_the_seed_is_idempotent_and_leaves_an_operator_generation_alone(
     # upgrade to head here is a no-op and the code the operator row suppressed
     # would never be seeded. Re-running the revision is the thing under test.
     command.downgrade(config, PREVIOUS_REVISION)
-    command.upgrade(config, REVISION)
-    _assert_seeded(_rows(migrated_postgres_schema))
+    with monkeypatch.context() as catalogue:
+        catalogue.setattr(regulatory_parameters, "SEED_PARAMETERS", ())
+        catalogue.setattr(regulatory_parameters, "P5_SEED_PARAMETERS", ())
+        command.upgrade(config, REVISION)
+    assert _rows(migrated_postgres_schema) == original_rows
 
     with migrated_postgres_schema.app_engine.begin() as connection:
         generations = connection.execute(

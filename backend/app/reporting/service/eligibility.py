@@ -57,8 +57,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.regulatory_instruments import InstrumentStatus, instrument_status_on
 from app.identity.public import Bank
+from app.policy.domain.regulatory_instruments import InstrumentStatus, instrument_status_on
 from app.policy.public import get_jurisdiction, regulator_short
 from app.policy.public import institution_class as resolve_institution_class
 from app.policy.public import jurisdiction_code as resolve_jurisdiction_code

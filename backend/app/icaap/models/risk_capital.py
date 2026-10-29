@@ -73,7 +73,7 @@ from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin, utc_now
 #: exports ``ICAAP_BASES``, meaning the REPORTING basis (solo / consolidated).
 #: This one is the AMOUNT basis. Neither is re-exported from ``app.models``, so
 #: an importer must name the module and cannot pick one up by accident;
-#: ``tests/domain/policy/test_parameter_shapes.py`` pins the two apart.
+#: ``tests/policy/domain/test_parameter_shapes.py`` pins the two apart.
 ICAAP_BASES: tuple[str, ...] = (
     "pct_total_rwa",
     "pct_credit_rwa",
@@ -142,7 +142,7 @@ ICAAP_APPETITE_UNITS: tuple[str, ...] = (
     "years",
 )
 ICAAP_MEASURE_KINDS: tuple[str, ...] = ("quantitative", "qualitative")
-#: Same values as ``app.domain.policy.Direction``: a floor is breached downward,
+#: Same values as ``app.policy.domain.Direction``: a floor is breached downward,
 #: a ceiling upward. The appetite/tolerance/capacity ordering flips with it.
 ICAAP_DIRECTIONS: tuple[str, ...] = ("floor", "ceiling")
 ICAAP_APPETITE_VALUE_SOURCES: tuple[str, ...] = ("block_fact", "manual")

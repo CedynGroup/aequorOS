@@ -29,17 +29,12 @@ from app.core.authorization import (
 )
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
-from app.domain.reporting.period_windows import trailing_month_end_window
 from app.identity.service import authorization
+from app.live.domain.reporting.period_windows import trailing_month_end_window
+from app.live.service import pipeline
 from app.models import BankReportingPeriod, LiveMetricSnapshot, RegulatoryRun, User
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import (
-    job_queue,
-    pipeline,
-    regulatory_capital,
-    regulatory_liquidity,
-    window_analytics,
-)
+from app.services import job_queue, regulatory_capital, regulatory_liquidity, window_analytics
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

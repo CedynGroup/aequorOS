@@ -28,12 +28,6 @@ from app.api.deps import TenantContext
 from app.domain.capital.engine import (
     REQUIRED_STRESS_SHOCK_KEYS as CAPITAL_REQUIRED_KEYS,
 )
-from app.domain.irr.engine import (
-    SHOCK_DECAY_YEARS,
-    SHOCK_LONG_BP,
-    SHOCK_PARALLEL_BP,
-    SHOCK_SHORT_BP,
-)
 from app.domain.liquidity.engine import (
     SHOCK_ASF_PREFIX,
     SHOCK_FX_DEPRECIATION,
@@ -44,8 +38,14 @@ from app.domain.liquidity.engine import (
     SHOCK_RUNOFF_PREFIX,
 )
 from app.identity.public import Bank
-from app.models import ParamStressShock
-from app.services.params import get_active_params
+from app.irrbb.domain.engine import (
+    SHOCK_DECAY_YEARS,
+    SHOCK_LONG_BP,
+    SHOCK_PARALLEL_BP,
+    SHOCK_SHORT_BP,
+)
+from app.irrbb.public import IRR_RUN_SCENARIO_CODES
+from app.policy.public import ParamStressShock, get_active_params
 from app.services.regulatory_capital import (
     CAPITAL_SCENARIO_CODES,
     ECL_CONDITIONING_KEYS,
@@ -59,7 +59,6 @@ from app.services.regulatory_ftp import (
     SHOCK_NMD_CORE_MIN_PCT,
 )
 from app.services.regulatory_fx import FX_RUN_SCENARIO_CODES, SHOCK_DEPRECIATION
-from app.services.regulatory_irr import IRR_RUN_SCENARIO_CODES
 from app.services.regulatory_liquidity import LIQUIDITY_SCENARIO_CODES
 
 WORKBENCH_MODULES = ("liquidity", "capital", "irr", "fx", "ftp")

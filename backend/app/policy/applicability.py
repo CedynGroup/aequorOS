@@ -6,12 +6,12 @@ from typing import Literal, cast
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.policy.return_registry import REGISTRY
-from app.domain.regulatory_instruments import forecast_status, instrument_status_on
 from app.identity.public import Bank
-from app.models.parameter_register import ParamCapitalThreshold
-from app.services import regulatory_parameters
-from app.services.params import get_active_params
+from app.policy.domain.regulatory_instruments import forecast_status, instrument_status_on
+from app.policy.domain.return_registry import REGISTRY
+from app.policy.models.parameter_register import ParamCapitalThreshold
+from app.policy.service import regulatory_parameters
+from app.policy.service.params import get_active_params
 
 
 def rule_in_force(

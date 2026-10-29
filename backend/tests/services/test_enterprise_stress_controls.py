@@ -27,9 +27,9 @@ from app.domain.authority.outcomes import OutcomeState
 from app.domain.capital.engine import CapitalFact, CapitalParams
 from app.domain.stress.translation import MacroPathPoint
 from app.models import Bank
+from app.policy.service import regulatory_parameters
 from app.schemas.enterprise_stress import EnterpriseStressRunCreate, PlanAssumptionsIn
 from app.services import enterprise_stress as svc
-from app.services import regulatory_parameters
 from app.services.credit_exposure_book import ExposureRow
 from tests.support.helpers import ORG_1
 

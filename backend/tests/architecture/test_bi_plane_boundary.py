@@ -133,8 +133,8 @@ SEAM_IMPORTERS: frozenset[str] = frozenset(
     {
         "app/services/ingestion.py",
         "app/services/canonical_withdrawal.py",
-        "app/services/pipeline.py",
-        "app/services/live_refresh_triggers.py",
+        "app/live/service/pipeline.py",
+        "app/live/service/live_refresh_triggers.py",
         "app/services/scheduler.py",
     }
 )
@@ -583,7 +583,7 @@ def test_the_derivation_guard_catches_a_deliberate_violation(tmp_path: Path) -> 
     probe = tmp_path / "probe.py"
     probe.write_text(
         '"""A mart builder that mentions derive_facts in prose."""\n\n'
-        "from app.services.fact_derivation import derive_facts\n\n\n"
+        "from app.live.service.fact_derivation import derive_facts\n\n\n"
         "def build(db, **kwargs):\n"
         "    return derive_facts(db, **kwargs)\n",
         encoding="utf-8",

@@ -29,7 +29,7 @@ from collections.abc import Iterator
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -47,6 +47,7 @@ from tests.db.test_postgres_migrations import (
     clear_database_caches,
     postgres_schema_url,
 )
+from tests.support.database import install_migration_engines, managed_engine
 from tests.support.helpers import ORG_1
 
 _ = set_tenant_rls_context
@@ -86,7 +87,7 @@ def _record(**overrides: object) -> query_log.QueryRecord:
 
 
 @pytest.fixture(scope="module")
-def log_schema() -> Iterator[MigratedPostgresSchema]:
+def log_schema(request: pytest.FixtureRequest) -> Iterator[MigratedPostgresSchema]:
     """A migrated disposable schema holding one tenant, one institution, and the
     September child created through the definer function."""
 
@@ -94,14 +95,17 @@ def log_schema() -> Iterator[MigratedPostgresSchema]:
     schema_name = f"risk_service_bi_qlog_{uuid4().hex}"
     database_url = postgres_schema_url(test_database_url, schema_name)
     monkeypatch = pytest.MonkeyPatch()
-    admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
-    app_engine = create_engine(database_url)
+    admin_engine = managed_engine(
+        request, test_database_url, isolation_level="AUTOCOMMIT", schema=schema_name
+    )
+    app_engine = managed_engine(request, database_url)
     monkeypatch.setenv("DATABASE_URL", database_url)
     clear_database_caches()
 
     with admin_engine.connect() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
     try:
+        install_migration_engines(monkeypatch, app_engine)
         command.upgrade(alembic_config_for_app(), "head")
         with app_engine.connect() as connection:
             is_super, bypasses = connection.execute(

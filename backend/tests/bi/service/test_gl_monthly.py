@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.bi.domain import extract
 from app.db.base import Base
-from app.domain.gl import pl_mapping
+from app.live.domain.gl import pl_mapping
 from app.models import (
     Bank,
     BankReportingPeriod,

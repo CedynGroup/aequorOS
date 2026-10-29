@@ -69,7 +69,7 @@ from app.domain.ingestion.capital_tiers import (
     TIER_CET1,
     TIER_T2,
 )
-from app.domain.policy.ratios import (
+from app.policy.domain.ratios import (
     GREEN_BUFFER_PP,
     classify_capital_ratio,
 )

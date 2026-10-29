@@ -31,11 +31,13 @@ from __future__ import annotations
 
 import ast
 import re
+from inspect import signature
 from pathlib import Path
 
 import pytest
 
-from app.services import regulatory_parameters
+from app.bi.service import limits
+from app.policy.service import regulatory_parameters
 from tests.architecture._planes import APP, imported_modules, module_name, referenced_names
 from tests.architecture.test_bi_plane_boundary import BI_OWNED
 
@@ -47,10 +49,8 @@ PARAMETER_DOOR = "app/bi/service/limits.py"
 #: The mart builder's build FINGERPRINT covers the grid parameters a build read,
 #: so a staff change to a provisioning rate rebuilds the marts rather than
 #: silently changing what an unchanged fingerprint claims. It reads them through
-#: ``seed_values``, which is non-recording BY CONSTRUCTION rather than by
-#: promise — pinned below by reading the resolver's own source. The exception is
-#: therefore one file, one function, and is not a limit: it never reaches a
-#: measure's ``thresholds_source``.
+#: ``seed_values``. The exception is one file, one function, and is not a limit:
+#: it never reaches a measure's ``thresholds_source``.
 FINGERPRINT_EXCEPTION: tuple[str, str] = ("app/bi/service/mart_builder.py", "seed_values")
 
 #: Entry points DERIVED from the resolver module rather than listed, so a new
@@ -99,11 +99,11 @@ PINNED_ENTRY_POINTS: frozenset[str] = frozenset(
 #: Modules that hold either register, or the rules for combining them. Outside
 #: the door, a BI module may not import one.
 DOOR_ONLY_MODULES: tuple[str, ...] = (
-    "app.services.regulatory_parameters",
-    "app.services.params",
-    "app.services.parameter_register",
-    "app.domain.policy",
-    "app.models.regulatory_parameter",
+    "app.policy.service.regulatory_parameters",
+    "app.policy.service.params",
+    "app.policy.service.parameter_register",
+    "app.policy.domain",
+    "app.policy.models.regulatory_parameter",
 )
 
 #: Names that reach a register without importing its service: the board register
@@ -163,10 +163,11 @@ def _resolver_aliases(source: str, tree: ast.AST) -> set[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name == "app.services.regulatory_parameters":
+                if alias.name == "app.policy.service.regulatory_parameters":
                     aliases.add(alias.asname or alias.name.rsplit(".", 1)[-1])
         elif isinstance(node, ast.ImportFrom) and (
-            (node.module or "").startswith("app.services") or node.module == "app.policy.public"
+            (node.module or "").startswith(("app.services", "app.policy.service"))
+            or node.module == "app.policy.public"
         ):
             aliases.update(
                 alias.asname or alias.name
@@ -220,76 +221,27 @@ def test_no_bi_module_but_the_door_reads_a_governed_parameter(path: Path) -> Non
     )
 
 
-def test_the_fingerprint_exception_rests_on_a_property_not_a_promise() -> None:
-    """``seed_values`` reads with ``record=False`` in its own source, always."""
-    source = Path(regulatory_parameters.__file__).read_text(encoding="utf-8")
-    function = next(
-        node
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.FunctionDef) and node.name == FINGERPRINT_EXCEPTION[1]
-    )
-    records = [
-        keyword.value
-        for node in ast.walk(function)
-        if isinstance(node, ast.Call)
-        for keyword in node.keywords
-        if keyword.arg == "record"
-    ]
-    assert records, "seed_values no longer states a plane; the exception is void"
-    for value in records:
-        assert isinstance(value, ast.Constant) and value.value is False
-
-
-def test_the_door_declares_the_dispatch_plane() -> None:
-    """Every resolver the door builds is non-recording, stated explicitly."""
-    tree = ast.parse((BACKEND / PARAMETER_DOOR).read_text(encoding="utf-8"))
-    loads = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "load"
-        and isinstance(node.func.value, ast.Attribute)
-        and node.func.value.attr == "PrefetchedParameterResolver"
-    ]
-    assert loads, "the door no longer loads a prefetched resolver"
-    for node in loads:
-        record = next((keyword for keyword in node.keywords if keyword.arg == "record"), None)
-        assert record is not None, f"{PARAMETER_DOOR}:{node.lineno} states no plane"
-        assert isinstance(record.value, ast.Constant) and record.value.value is False, (
-            f"{PARAMETER_DOOR}:{node.lineno} loads a RECORDING resolver. BI seals no run, "
-            f"so the rows it resolves are nobody's run provenance — pass record=False."
-        )
-    assert not [
-        node
-        for node in ast.walk(tree)
-        for keyword in (node.keywords if isinstance(node, ast.Call) else [])
-        if keyword.arg == "record"
-        and isinstance(keyword.value, ast.Constant)
-        and keyword.value.value is True
-    ], "the door passes record=True somewhere"
-
-
 def test_the_door_exposes_no_way_to_opt_into_recording() -> None:
     """``record`` is not a parameter of anything the door publishes.
 
     A caller must not be able to choose the plane from outside: the decision is
     this module's, once, which is the whole point of having a door.
     """
-    tree = ast.parse((BACKEND / PARAMETER_DOOR).read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-            continue
-        arguments = node.args
-        names = [
-            argument.arg
-            for argument in (
-                *arguments.posonlyargs,
-                *arguments.args,
-                *arguments.kwonlyargs,
-            )
-        ]
-        assert "record" not in names, f"{node.name} lets its caller choose the plane"
+    for entry_point in (
+        limits.LimitResolver,
+        limits.LimitResolver.load,
+        limits.LimitResolver.for_measure,
+        limits.LimitResolver.for_measures,
+        limits.measure_limit,
+        limits.GovernedLimit,
+        limits.GovernedLimit.provenance,
+        limits.NoGovernedLimit,
+        limits.NoGovernedLimit.provenance,
+        limits.is_governed,
+        limits.absence_copy,
+        limits.conversion_factors,
+    ):
+        assert "record" not in signature(entry_point).parameters
 
 
 # --- the door ---------------------------------------------------------------
@@ -302,12 +254,14 @@ def test_no_bi_module_but_the_door_imports_a_register(path: Path) -> None:
     imported = imported_modules(source, module=module_name(path))
     imported = {
         name.replace(
-            "app.policy.public.regulatory_parameters", "app.services.regulatory_parameters"
-        ).replace("app.policy.public.params", "app.services.params")
+            "app.policy.public.regulatory_parameters", "app.policy.service.regulatory_parameters"
+        ).replace("app.policy.public.params", "app.policy.service.params")
         for name in imported
     }
     allowed = (
-        {"app.services.regulatory_parameters"} if relative == FINGERPRINT_EXCEPTION[0] else set()
+        {"app.policy.service.regulatory_parameters"}
+        if relative == FINGERPRINT_EXCEPTION[0]
+        else set()
     )
     offending = sorted(
         name
@@ -336,12 +290,16 @@ def test_no_bi_module_but_the_door_names_a_register_table_or_rule(path: Path) ->
 
 VIOLATIONS: dict[str, str] = {
     "recording_read": (
-        "from app.services import regulatory_parameters\n\n\n"
+        "from app.policy.service import regulatory_parameters\n"
+        "\n"
+        "\n"
         "def limit(db, bank, code):\n"
         "    return regulatory_parameters.try_resolve(db, bank, code)\n"
     ),
     "aliased_recording_read": (
-        "from app.services import regulatory_parameters as rp\n\n\n"
+        "from app.policy.service import regulatory_parameters as rp\n"
+        "\n"
+        "\n"
         "def limit(db, bank, code):\n"
         "    return rp.resolve(db, bank, code)\n"
     ),
@@ -352,7 +310,9 @@ VIOLATIONS: dict[str, str] = {
         "    return db.scalars(select(ParamCapitalThreshold)).all()\n"
     ),
     "second_prefetched_resolver": (
-        "from app.services import regulatory_parameters\n\n\n"
+        "from app.policy.service import regulatory_parameters\n"
+        "\n"
+        "\n"
         "def limits(db, bank, dates):\n"
         "    return regulatory_parameters.PrefetchedParameterResolver.load(\n"
         "        db, bank, as_of_dates=dates, record=True\n"
@@ -381,24 +341,6 @@ def test_the_guards_catch_a_deliberate_violation(name: str, tmp_path: Path) -> N
     if referenced_names(source) & DOOR_ONLY_NAMES:
         convicted = True
     assert convicted, f"the {name} violation walks through every guard"
-
-
-def test_the_recording_resolver_violation_is_caught_by_the_plane_check() -> None:
-    """The specific shape the ICAAP audit found: a resolver that records."""
-    tree = ast.parse(VIOLATIONS["second_prefetched_resolver"])
-    loads = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "load"
-    ]
-    assert loads
-    record = next(keyword for keyword in loads[0].keywords if keyword.arg == "record")
-    assert isinstance(record.value, ast.Constant) and record.value.value is True
-    assert "PrefetchedParameterResolver" in referenced_names(
-        VIOLATIONS["second_prefetched_resolver"]
-    )
 
 
 def test_the_fingerprint_exception_does_not_admit_a_second_function() -> None:

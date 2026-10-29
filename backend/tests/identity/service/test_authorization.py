@@ -30,7 +30,7 @@ from app.core.authorization import (
 from app.db.base import utc_now
 from app.identity.service import authentication, authorization
 from app.models import AuthorizationBinding, Bank, RefreshToken, User
-from app.services.institution_types import FALLBACK_TYPE_CODE
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1
 
 BANK_1 = "BK-AUTH0001"
