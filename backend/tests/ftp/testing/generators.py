@@ -6,7 +6,7 @@ from decimal import Decimal
 from hypothesis import strategies as st
 
 from app.domain.ftp.engine import CurvePoint, FtpCategory, FtpNmd, FtpProduct, build_curve
-from app.services.parameter_register import BANK_FTP_THRESHOLDS
+from app.policy.service.parameter_register import BANK_FTP_THRESHOLDS
 
 
 @dataclass(frozen=True)

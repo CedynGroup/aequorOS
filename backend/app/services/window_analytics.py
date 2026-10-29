@@ -28,7 +28,7 @@ from app.domain.capital.engine import CapitalComputationError
 from app.domain.capital.engine import MissingParameterError as CapitalMissingParameter
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
-from app.models import BankReportingPeriod, LiveMetricSnapshot
+from app.live.public import BankReportingPeriod, LiveMetricSnapshot
 from app.schemas.window_analytics import (
     WindowAnalyticsRead,
     WindowDailyStatRead,

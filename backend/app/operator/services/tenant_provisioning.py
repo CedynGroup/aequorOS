@@ -46,20 +46,16 @@ from app.db.base import utc_now
 from app.identity import public as membership
 from app.identity import public as organization_ownership
 from app.identity.public import Bank, SsoConnection, User
-from app.models import (
-    BankReportingPeriod,
-    InstitutionType,
-    Jurisdiction,
-    Organization,
-    TenantStorage,
-)
+from app.live.public import BankReportingPeriod
+from app.models import Organization, TenantStorage
 from app.operator.deps import OperatorContext, record_operator_action
+from app.policy.public import InstitutionType, Jurisdiction, institution_types, parameter_register
 from app.schemas.operator import (
     ProvisioningResultRead,
     ProvisioningStepRead,
     TenantProvisionCreate,
 )
-from app.services import institution_types, job_queue, parameter_register
+from app.services import job_queue
 from app.services.market_desk import publication as desk_publication
 from app.storage.client import StorageLocation
 from app.storage.config import StorageEngineSettings
@@ -348,7 +344,7 @@ def _step_parameters(
 
     Regime-scoped by construction: a licence class receives only the parameters
     its own entitled modules read, so an SDI is never given a Basel LCR floor
-    BoG does not impose on it (``services/parameter_register.py``).
+    BoG does not impose on it (``app/policy/service/parameter_register.py``).
 
     The governed capital minima are not written into the register (founder
     directives D-024 / D-042): the calculations take them from the regulatory

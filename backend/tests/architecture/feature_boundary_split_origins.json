@@ -3,26 +3,5 @@
     "module": "app.models.regulatory",
     "feature": "live",
     "importers": ["app.api.deps"]
-  },
-  "app.models.parameter_register": {
-    "module": "app.models.regulatory",
-    "feature": "live",
-    "importers": [
-      "app.operator.services.inspector_fix",
-      "app.operator.services.inspector_reads",
-      "app.services.capital_plan",
-      "app.services.credit_concentration",
-      "app.services.credit_params",
-      "app.services.enterprise_stress",
-      "app.services.liquidity_thresholds",
-      "app.services.regulatory_capital",
-      "app.services.regulatory_credit",
-      "app.services.regulatory_forecasting",
-      "app.services.regulatory_ftp",
-      "app.services.regulatory_fx",
-      "app.services.regulatory_irr",
-      "app.services.regulatory_liquidity",
-      "app.services.scenario_catalog"
-    ]
   }
 }

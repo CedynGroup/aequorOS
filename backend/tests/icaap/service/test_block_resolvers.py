@@ -274,9 +274,9 @@ def test_one_block_of_each_kind_per_cycle(
 
 
 _LIVE_PLANE_SEAMS = (
-    ("app.services.live_block", "live_block"),
-    ("app.services.live_state", "current_fact_period_or_409"),
-    ("app.services.fact_derivation", "derive_current_facts"),
+    ("app.live.service.live_block", "live_block"),
+    ("app.live.service.live_state", "current_fact_period_or_409"),
+    ("app.live.service.fact_derivation", "derive_current_facts"),
 )
 
 

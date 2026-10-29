@@ -33,7 +33,9 @@ from app.core.authorization import (
 from app.db.base import utc_now
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
+from app.live.public import current_fact_period_or_409
 from app.models import CfpActivationEvent, ContingencyFundingPlan
+from app.policy.public import regulator_short
 from app.schemas.liquidity_cfp import (
     CfpActivationCreate,
     CfpApprove,
@@ -48,14 +50,12 @@ from app.schemas.liquidity_cfp import (
 )
 from app.services import notifications
 from app.services.audit import record_event
-from app.services.jurisdictions import regulator_short
 from app.services.liquidity_ewi import (
     _get_bank_or_404,  # noqa: PLC2701 - shared tenant guards, one definition
     _get_period_or_404,  # noqa: PLC2701
     escalation_state,
     evaluate_ewis,
 )
-from app.services.live_state import current_fact_period_or_409
 
 # ¶71: Board approval is (at least) annual.
 _APPROVAL_VALIDITY_DAYS = 365

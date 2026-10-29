@@ -1,7 +1,7 @@
 """Regulatory FX runs: net-open-position / VaR / hedge orchestration and dashboard.
 
 Follows the immutable calculation-run lifecycle established by
-``app.services.regulatory_capital`` and mirrored by ``app.services.regulatory_irr``:
+``app.services.regulatory_capital`` and mirrored by ``app.irrbb.service.regulatory_irr``:
 runs commit ``queued`` and ``running`` before executing, persist the full
 canonical input snapshot with a SHA-256 ``input_hash``, and record failures as
 data (named error codes) rather than HTTP 500s. The arithmetic itself lives in
@@ -67,33 +67,45 @@ from app.domain.fx.engine import (
     stressed_sample_range,
     stressed_var_line_item,
 )
-from app.domain.positions.fx import (
-    fx_position_refusal as _unstatable_position,
-)
-from app.domain.positions.fx import (
-    require_currency_coverage,
-)
-from app.domain.positions.fx import (
-    spot_or_none as _spot_or_none,
-)
-from app.domain.reporting import period_windows
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank, BankRead, BankReportingPeriodRead
-from app.live.public import (
-    require_fx_fact_coverage,
-    require_run_currency_coverage,
-    required_fx_currencies_by_date,
+from app.live.domain.positions.fx import (
+    fx_position_refusal as _unstatable_position,
 )
-from app.models import (
+from app.live.domain.positions.fx import (
+    require_currency_coverage,
+)
+from app.live.domain.positions.fx import (
+    spot_or_none as _spot_or_none,
+)
+from app.live.domain.reporting import period_windows
+from app.live.public import (
     BankFinancialFact,
     BankReportingPeriod,
     FinancialFactRow,
-    ParamCapitalThreshold,
-    ParamStressShock,
+    LiveModuleResult,
     RegulatoryLineItem,
     RegulatoryMetricResult,
     RegulatoryRun,
     RegulatoryValidation,
+    current_fact_period_or_409,
+    current_snapshot,
+    findings_from_validations,
+    live_block,
+    load_current_facts,
+    regulatory_dashboard_batching,
+    require_fx_fact_coverage,
+    require_run_currency_coverage,
+    required_fx_currencies_by_date,
+    worst_status,
+)
+from app.policy.public import (
+    ParamCapitalThreshold,
+    ParamStressShock,
+    PrefetchedActiveParams,
+    base_currency,
+    get_active_params,
+    prefetch_active_params,
 )
 from app.reporting.service import filing_reconciliation
 from app.schemas.regulatory_fx import (
@@ -111,17 +123,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunBatchRead,
     RegulatoryRunRead,
 )
-from app.services import regulatory_dashboard_batching
 from app.services.audit import record_event
-from app.services.jurisdictions import base_currency
-from app.services.live_block import live_block
-from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
-from app.services.live_types import (
-    LiveModuleResult,
-    findings_from_validations,
-    worst_status,
-)
-from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
 ENGINE_VERSION = "regulatory-fx-v1.2.0"

@@ -31,6 +31,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
+from app.irrbb.service import regulatory_irr
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -53,9 +55,8 @@ from app.reporting.service import calendar, generation, validation
 from app.reporting.service.common import UNVALIDATED_BOOK_RULE
 from app.reporting.service.exports import export_package
 from app.reporting.service.registry import REGISTRY
-from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_capital, regulatory_irr, regulatory_liquidity
+from app.services import regulatory_capital, regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

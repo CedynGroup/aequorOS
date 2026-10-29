@@ -20,7 +20,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from app.identity.public import BankRead, BankReportingPeriodRead
-from app.schemas.live import LiveModuleView
+from app.live.public import LiveModuleView
 from app.schemas.regulatory_liquidity import RegulatoryValidationSeverity
 from app.schemas.sdi import (
     DelinquencyBucketRead,

@@ -29,7 +29,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DatabaseError
 
@@ -40,6 +40,7 @@ from tests.db.test_postgres_migrations import (
     clear_database_caches,
     postgres_schema_url,
 )
+from tests.support.database import install_migration_engines, managed_engine
 from tests.support.helpers import ORG_1, ORG_2
 
 postgres_only = pytest.mark.skipif(
@@ -73,12 +74,14 @@ UNALTERABLE = (
 
 
 @pytest.fixture(scope="module")
-def icaap_schema() -> Iterator[MigratedPostgresSchema]:
+def icaap_schema(request: pytest.FixtureRequest) -> Iterator[MigratedPostgresSchema]:
     test_database_url = os.environ["TEST_DATABASE_URL"]
     schema_name = f"risk_service_icaap_{uuid4().hex}"
     database_url = postgres_schema_url(test_database_url, schema_name)
-    admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
-    app_engine = create_engine(database_url)
+    admin_engine = managed_engine(
+        request, test_database_url, isolation_level="AUTOCOMMIT", schema=schema_name
+    )
+    app_engine = managed_engine(request, database_url)
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setenv("DATABASE_URL", database_url)
     clear_database_caches()
@@ -86,6 +89,7 @@ def icaap_schema() -> Iterator[MigratedPostgresSchema]:
     with admin_engine.connect() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
     try:
+        install_migration_engines(monkeypatch, app_engine)
         command.upgrade(alembic_config_for_app(), "head")
         with app_engine.connect() as connection:
             for organization, bank in ((ORG_1, _BANK), (ORG_2, _OTHER_BANK)):

@@ -12,7 +12,7 @@ from app.icaap.domain.annexes import AnnexKey, AnnexVersion
 from app.icaap.service.current_annexes import PostgresCurrentAnnexRepository
 from app.icaap.service.validation_rules import findings
 from app.models import Bank, RegulatoryPackage
-from app.services.institution_types import FALLBACK_TYPE_CODE
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 pytestmark = pytest.mark.database_contract

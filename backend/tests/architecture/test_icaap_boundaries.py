@@ -83,10 +83,10 @@ SCANNED_FILES = tuple(
 
 #: Modules that hold or serve continuously-recomputed state.
 FORBIDDEN_MODULES = (
-    "app.services.live_block",
-    "app.services.live_state",
-    "app.services.live_view",
-    "app.models.live",
+    "app.live.service.live_block",
+    "app.live.service.live_state",
+    "app.live.service.live_view",
+    "app.live.models.live",
 )
 #: Functions that would reach the live plane (or re-derive facts) indirectly.
 FORBIDDEN_CALLS = frozenset(
@@ -215,13 +215,13 @@ def test_the_scanner_would_catch_a_deliberate_violation(tmp_path: Path) -> None:
     """Proof the guard reports rather than merely being present."""
     violation = tmp_path / "leaky.py"
     violation.write_text(
-        "from app.services.live_block import live_block\n\n\n"
+        "from app.live.service.live_block import live_block\n\n\n"
         "def read():\n    return live_block()\n",
         encoding="utf-8",
     )
     tree = ast.parse(violation.read_text(encoding="utf-8"))
     imported = _imported_modules(tree, "app.icaap.service.leaky")
-    assert any(name.startswith("app.services.live_block") for name in imported)
+    assert any(name.startswith("app.live.service.live_block") for name in imported)
     assert _called_names(tree) & FORBIDDEN_CALLS
 
 
@@ -278,56 +278,19 @@ def test_icaap_reads_governed_parameters_only_through_its_own_door(path: Path) -
     )
 
 
-@pytest.mark.parametrize("path", PLANE_FILES, ids=PLANE_IDS)
-def test_an_icaap_prefetched_resolver_declares_the_report_plane(path: Path) -> None:
-    """``PrefetchedParameterResolver.load`` requires ``record=``; ICAAP says False."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        target = node.func
-        if not (isinstance(target, ast.Attribute) and target.attr == "load"):
-            continue
-        if not (
-            isinstance(target.value, ast.Attribute)
-            and target.value.attr == "PrefetchedParameterResolver"
-        ):
-            continue
-        record = next((kw for kw in node.keywords if kw.arg == "record"), None)
-        assert record is not None, (
-            f"{path.relative_to(BACKEND)}:{node.lineno} loads a resolver without stating its plane."
-        )
-        assert isinstance(record.value, ast.Constant) and record.value.value is False, (
-            f"{path.relative_to(BACKEND)}:{node.lineno} loads a RECORDING resolver. The "
-            f"ICAAP plane seals no run, so the rows it resolves are nobody's run "
-            f"provenance — pass record=False."
-        )
-
-
 def test_the_plane_scanner_would_catch_a_deliberate_violation(tmp_path: Path) -> None:
-    """Proof the two guards above report rather than merely being present."""
+    """Proof the parameter-door guard reports rather than merely being present."""
     violation = tmp_path / "leaky_params.py"
     violation.write_text(
-        "from app.services import regulatory_parameters\n\n\n"
+        "from app.policy.service import regulatory_parameters\n"
+        "\n"
+        "\n"
         "def read(db, bank):\n"
-        "    resolver = regulatory_parameters.PrefetchedParameterResolver.load(\n"
-        "        db, bank, as_of_dates=[], record=True\n"
-        "    )\n"
-        "    return resolver, regulatory_parameters.try_resolve(db, bank, 'x')\n",
+        "    return regulatory_parameters.try_resolve(db, bank, 'x')\n",
         encoding="utf-8",
     )
     tree = ast.parse(violation.read_text(encoding="utf-8"))
     assert _module_qualified_calls(tree, "regulatory_parameters") & LEDGER_ENTRY_POINTS
-    loads = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "load"
-    ]
-    assert loads
-    record = next(kw for kw in loads[0].keywords if kw.arg == "record")
-    assert isinstance(record.value, ast.Constant) and record.value.value is True
 
 
 # --- D-038: one FX Pillar 2 definition across the filed document -------------

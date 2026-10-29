@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import MetaData, Table, create_engine, text
+from sqlalchemy import MetaData, Table, text
 from sqlalchemy.exc import IntegrityError
 
 from alembic import command
@@ -22,6 +22,7 @@ from tests.db.test_postgres_migrations import (
     clear_database_caches,
     migrated_postgres_schema,
 )
+from tests.support.database import managed_engine
 
 __all__ = ["migrated_postgres_schema"]
 
@@ -151,7 +152,9 @@ def test_upgrade_leaves_legacy_presets_without_approved_versions(
     }
 
 
-def test_sqlite_upgrade_preserves_legacy_rows_and_requires_a_checker() -> None:
+def test_sqlite_upgrade_preserves_legacy_rows_and_requires_a_checker(
+    request: pytest.FixtureRequest,
+) -> None:
     path = (
         Path(__file__).parents[2] / "alembic/versions/202610070084_forecast_assumption_versions.py"
     )
@@ -159,12 +162,12 @@ def test_sqlite_upgrade_preserves_legacy_rows_and_requires_a_checker() -> None:
     assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
-    engine = create_engine("sqlite://")
+    engine = managed_engine(request, "sqlite://")
     with engine.begin() as connection:
         for statement in (
             "CREATE TABLE organizations (id TEXT PRIMARY KEY)",
             "CREATE TABLE banks (id TEXT PRIMARY KEY, organization_id TEXT, "
-            "jurisdiction_code TEXT)",
+            "jurisdiction_code TEXT, UNIQUE (organization_id, id))",
             "CREATE TABLE regulatory_runs (id TEXT PRIMARY KEY, input_hash TEXT, "
             "input_snapshot TEXT, metrics TEXT)",
             "CREATE TABLE param_stress_shock (id TEXT PRIMARY KEY, organization_id TEXT, "

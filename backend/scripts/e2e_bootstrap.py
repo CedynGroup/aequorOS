@@ -80,6 +80,11 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.identity.service import authorization, membership, sso_config
 from app.identity.service.organization_ownership import assign_initial_owner
+from app.live.service.fact_derivation import (
+    _derive_specs,  # pyright: ignore[reportPrivateUsage]
+    _fact,  # pyright: ignore[reportPrivateUsage]
+    _load_canonical,  # pyright: ignore[reportPrivateUsage]
+)
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -90,11 +95,6 @@ from app.models import (
     Organization,
     RegulatoryParameter,
     User,
-)
-from app.services.fact_derivation import (
-    _derive_specs,  # pyright: ignore[reportPrivateUsage]
-    _fact,  # pyright: ignore[reportPrivateUsage]
-    _load_canonical,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.bi.fixtures import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import (

@@ -17,7 +17,6 @@ import pytest
 
 from app.domain.capital.ecl import EclAssumption, EclComputationError, EclExposure
 from app.domain.fx.engine import FxPosition
-from app.domain.irr.engine import IrrPosition
 from app.domain.stress import orchestrator
 from app.domain.stress.concentration import ConcentrationExposure, ConcentrationInputs
 from app.domain.stress.contingent_leverage import (
@@ -36,6 +35,7 @@ from app.domain.stress.orchestrator import (
 )
 from app.domain.stress.translation import MacroPathPoint
 from app.icaap.domain.pillar2 import fx as icaap_fx
+from app.irrbb.domain.engine import IrrPosition
 from tests.domain.stress_fixtures import base_paths as base_macro_paths
 from tests.domain.stress_fixtures import (
     bog_capital_params,

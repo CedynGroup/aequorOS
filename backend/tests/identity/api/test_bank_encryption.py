@@ -32,7 +32,7 @@ from app.identity.schemas.bank_encryption import BankKeyStatusRead
 from app.identity.service import authorization, bank_encryption
 from app.models import AuditEvent, User
 from app.models.job import Job
-from app.services.institution_types import FALLBACK_TYPE_CODE
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 BANK = "BK-KEYUX001"

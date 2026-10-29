@@ -22,10 +22,10 @@ from app.api.deps import TenantContext
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig, ReferenceMapping
+from app.live.service.fact_derivation import _load_position_rows
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot, CanonicalReferenceRow
 from app.schemas.ingestion import IngestionBatchCreate
 from app.services import ingestion
-from app.services.fact_derivation import _load_position_rows
 from app.storage.client import StorageLocation
 from tests.adapters.excel_csv import fixtures
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book

@@ -31,7 +31,7 @@ from decimal import Decimal
 from types import MappingProxyType
 from typing import Literal
 
-from app.domain.policy import Direction
+from app.policy.domain import Direction
 
 TriggerStatus = Literal["clear", "early_warning", "action", "regulatory_breach", "not_evaluable"]
 FindingCode = Literal[

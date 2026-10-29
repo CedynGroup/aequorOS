@@ -8,7 +8,7 @@ one immutable ``RegulatoryRun`` (module ``enterprise_stress``) with a value-base
 ``input_hash`` — the same reproducibility spine every official run carries.
 
 It reads ``BankFinancialFact`` and the effective-dated ``Param*`` registers via
-``app.services.params.get_active_params``. The IRRBB leg shares the regulatory
+``app.policy.service.params.get_active_params``. The IRRBB leg shares the regulatory
 IRRBB fact reader, ``regulatory_irr.positions_from_facts``, so contractual rates
 and swap-leg decomposition have one implementation.
 """
@@ -60,7 +60,6 @@ from app.domain.liquidity.engine import (
     LiquidityParams,
     consumed_hqla_levels,
 )
-from app.domain.positions.credit import capital_credit_class, specific_deductions
 from app.domain.stress.appendix_ii import Pillar2Requirement, build_appendix_ii, thousands
 from app.domain.stress.concentration import (
     ConcentrationExposure,
@@ -107,11 +106,11 @@ from app.domain.stress.translation import (
 )
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
-from app.models import (
-    BankFinancialFact,
-    BankReportingPeriod,
-    FinancialFactRow,
-    ManagementActionPlan,
+from app.irrbb.public import regulatory_irr
+from app.live.domain.positions.credit import capital_credit_class, specific_deductions
+from app.live.public import BankFinancialFact, BankReportingPeriod, FinancialFactRow, RegulatoryRun
+from app.models import ManagementActionPlan
+from app.policy.public import (
     ParamCapitalThreshold,
     ParamCrmHaircut,
     ParamEclAssumption,
@@ -119,7 +118,10 @@ from app.models import (
     ParamNsfrWeight,
     ParamRiskWeight,
     ParamStressShock,
-    RegulatoryRun,
+    get_active_params,
+    institution_types,
+    jurisdictions,
+    regulatory_parameters,
 )
 from app.schemas.enterprise_stress import (
     EnterpriseStressRead,
@@ -131,16 +133,11 @@ from app.schemas.enterprise_stress import (
 from app.services import (
     credit_exposure_book,
     enterprise_run_visibility,
-    institution_types,
-    jurisdictions,
     macro_scenarios,
     management_action_plans,
-    regulatory_irr,
-    regulatory_parameters,
     sdi_capital,
 )
 from app.services.audit import record_event
-from app.services.params import get_active_params
 from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL, DEFAULT_CRM_HAIRCUTS
 
 #: v2 (#306): the IRRBB leg prices the book regulatory IRRBB prices — swap

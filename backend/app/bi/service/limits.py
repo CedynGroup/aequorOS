@@ -12,15 +12,15 @@ Two registers, one precedence — the engines' own
 ------------------------------------------------
 A limit BI draws must be the same limit the engine judged the figure against,
 or the platform states two limits for one number. The chain is the one
-``app/services/parameter_register.py`` describes and every engine applies:
+``app/policy/service/parameter_register.py`` describes and every engine applies:
 
 * the institution's **board register** (``param_capital_threshold``: the board's
   own monitoring levels, its internal liquidity floors, its EVE/NII tolerances
-  and its net-open-position limits), read through ``app.services.params`` on the
+  and its net-open-position limits), read through ``app.policy.service.params`` on the
   same active-window rule every other reader uses; then
 * the **regulatory control plane** (``regulatory_parameter``: what the regulator
   imposes, licence row before class row), read through
-  ``app.services.regulatory_parameters``; and
+  ``app.policy.service.regulatory_parameters``; and
 * between them the tighten-only clamp — a board value stands only when it is
   stricter, and the evidence that it was overridden travels on the answer
   (:attr:`GovernedLimit.clamped_from`) rather than being applied silently.

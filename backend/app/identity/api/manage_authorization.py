@@ -60,8 +60,8 @@ from app.identity.schemas.authorization import (
 )
 from app.identity.service import authorization, grant_administration
 from app.models.canonical import CanonicalReferenceRow
-from app.models.institution_type import InstitutionType
 from app.models.organization import Organization
+from app.policy.models.institution_type import InstitutionType
 from app.services.audit import record_event
 
 router = APIRouter(tags=["authorization"])
