@@ -267,7 +267,7 @@ Residual: `audit_events.organization_id` is still `ondelete="SET NULL"` (`backen
 
 ### 2.8 Machine learning
 
-Genuinely trained per-tenant models exist. The narrowing the prior edition asked for still applies: `backend/app/ml/behavioral/nmd_duration.py:62` regresses a closed-form function of features 0 and 1 of its own input row — the stability score is computed from the coefficient of variation and the minimum mean, which are exactly those two features (`backend/app/ml/behavioral/features.py:56-60`, `deposit_stability.py:55-57`). It is a formula wearing a gradient-boosted model. [V-B]
+Genuinely trained per-tenant models exist. The narrowing the prior edition asked for still applies: `backend/app/behavioral/ml/nmd_duration.py:62` regresses a closed-form function of features 0 and 1 of its own input row — the stability score is computed from the coefficient of variation and the minimum mean, which are exactly those two features (`backend/app/behavioral/ml/features.py:56-60`, `deposit_stability.py:55-57`). It is a formula wearing a gradient-boosted model. [V-B]
 
 The stale-constant test failure is resolved by the two values now agreeing (`backend/tests/ml/test_model.py:24` and `backend/app/ml/config.py:15` both read the same version), not by removing the duplication. The substantive assertion — that the trained model beats its static baseline — passed throughout and stands.
 

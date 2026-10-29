@@ -8,7 +8,7 @@ from typing import Literal
 from app.core.config import BehavioralSettings
 
 # Behavioral estimation method. Mirrors ``BehavioralMethod`` in
-# ``app.schemas.behavioral_models`` (kept in sync here so the ml layer stays
+# ``app.behavioral.schemas`` (kept in sync here so the ml layer stays
 # decoupled from the API schema layer); values flow straight into the read
 # contract, which expects this exact literal.
 type BehavioralMethod = Literal["ml", "baseline"]

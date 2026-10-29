@@ -5,10 +5,9 @@ from datetime import date
 from fastapi import APIRouter
 
 from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
-from app.core.authorization import Module, Permission, Sensitivity
-from app.identity import public as scoped_authorization
-from app.ml.behavioral.config import ModelResult
-from app.schemas.behavioral_models import (
+from app.behavioral import service as behavioral_models
+from app.behavioral.ml.config import ModelResult
+from app.behavioral.schemas import (
     BehavioralAccuracyRead,
     BehavioralApplyRead,
     BehavioralApplyRequest,
@@ -20,7 +19,9 @@ from app.schemas.behavioral_models import (
     BehavioralProductEstimate,
     IncentivePoint,
 )
-from app.services import behavioral_liquidity, behavioral_models
+from app.core.authorization import Module, Permission, Sensitivity
+from app.identity import public as scoped_authorization
+from app.services import behavioral_liquidity
 
 router = APIRouter(tags=["behavioral-models"])
 
