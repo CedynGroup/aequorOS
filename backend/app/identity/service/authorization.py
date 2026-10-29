@@ -510,7 +510,25 @@ def project_effective_authority(
                         capabilities=capabilities,
                     )
                 )
+        grant_administration = evaluate_grants(
+            principal,
+            Permission.ADMINISTER,
+            ResourceLocator(
+                principal.organization_id,
+                InstitutionScope.ORGANIZATION,
+                None,
+                Module.ACCOUNT,
+                Sensitivity.RESTRICTED,
+            ),
+            effective_bindings,
+            conditions=request_conditions,
+        )
         return EffectiveAuthorityRead(
+            can_administer_grants=grant_administration.allowed
+            and any(
+                trace.matched and trace.role_bundle is RoleBundle.ORG_OWNER
+                for trace in grant_administration.binding_trace
+            ),
             authv=user.authorization_version,
             organization_capabilities=organization_capabilities,
             institution_capabilities=institution_capabilities,

@@ -181,7 +181,7 @@ test.describe("fresh active member baseline", () => {
     await expect(
       page.getByRole("tooltip").filter({
         hasText:
-          "Requires Account · restricted · administer. Ask your organization owner or admin to grant it.",
+          "Requires Organization Owner authority. Delegated administrators can use Authentication and Integration keys.",
       }),
     ).toBeVisible();
 
@@ -190,7 +190,9 @@ test.describe("fresh active member baseline", () => {
       await expect(page).toHaveURL(new RegExp(`/access/${route}$`));
       await expect(
         page.getByText(
-          "This section is available to organization owners and administrators.",
+          route === "members"
+            ? "Only organization owners can manage members and grants."
+            : "This section is available to organization owners and administrators.",
           { exact: true },
         ),
       ).toBeVisible();
