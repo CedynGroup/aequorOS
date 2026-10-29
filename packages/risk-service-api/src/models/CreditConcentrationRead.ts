@@ -25,6 +25,13 @@ import {
   ConcentrationBucketReadToJSON,
   ConcentrationBucketReadToJSONTyped,
 } from "./ConcentrationBucketRead";
+import type { LockedConcentrationLimitRead } from "./LockedConcentrationLimitRead";
+import {
+  LockedConcentrationLimitReadFromJSON,
+  LockedConcentrationLimitReadFromJSONTyped,
+  LockedConcentrationLimitReadToJSON,
+  LockedConcentrationLimitReadToJSONTyped,
+} from "./LockedConcentrationLimitRead";
 import type { CapitalBaseGhs } from "./CapitalBaseGhs";
 import {
   CapitalBaseGhsFromJSON,
@@ -77,6 +84,12 @@ export interface CreditConcentrationRead {
   limitCount: number;
   /**
    *
+   * @type {Array<LockedConcentrationLimitRead>}
+   * @memberof CreditConcentrationRead
+   */
+  lockedLimits: Array<LockedConcentrationLimitRead>;
+  /**
+   *
    * @type {string}
    * @memberof CreditConcentrationRead
    */
@@ -96,6 +109,8 @@ export function instanceOfCreditConcentrationRead(
   if (!("dimensions" in value) || value["dimensions"] === undefined)
     return false;
   if (!("limitCount" in value) || value["limitCount"] === undefined)
+    return false;
+  if (!("lockedLimits" in value) || value["lockedLimits"] === undefined)
     return false;
   if (!("totalBookGhs" in value) || value["totalBookGhs"] === undefined)
     return false;
@@ -130,6 +145,9 @@ export function CreditConcentrationReadFromJSONTyped(
       ConcentrationDimensionReadFromJSON,
     ),
     limitCount: json["limit_count"],
+    lockedLimits: (json["locked_limits"] as Array<any>).map(
+      LockedConcentrationLimitReadFromJSON,
+    ),
     totalBookGhs: json["total_book_ghs"],
   };
 }
@@ -159,6 +177,9 @@ export function CreditConcentrationReadToJSONTyped(
       ConcentrationDimensionReadToJSON,
     ),
     limit_count: value["limitCount"],
+    locked_limits: (value["lockedLimits"] as Array<any>).map(
+      LockedConcentrationLimitReadToJSON,
+    ),
     total_book_ghs: value["totalBookGhs"],
   };
 }

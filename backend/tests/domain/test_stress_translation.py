@@ -13,7 +13,6 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.irr.engine import scenario_shifts
 from app.domain.stress.translation import (
     DEFAULT_ELASTICITIES,
     TRANSLATION_MODULES,
@@ -24,6 +23,7 @@ from app.domain.stress.translation import (
     signed_peak_delta,
     translate,
 )
+from app.irrbb.domain.engine import scenario_shifts
 from app.services import default_macro_scenarios
 from app.services.scenario_catalog import SHOCK_VOCABULARY, validate_shocks
 

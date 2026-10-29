@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, undefer_group
 
 from app.domain.capital.engine import (
     CapitalFact,
@@ -18,6 +18,10 @@ from app.domain.capital.engine import (
 )
 from app.domain.stress.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
 from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
+from app.live.service.fact_derivation import (
+    _derive_specs,  # pyright: ignore[reportPrivateUsage]
+    _load_canonical,  # pyright: ignore[reportPrivateUsage]
+)
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -28,10 +32,6 @@ from app.models import (
 )
 from app.services.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
-)
-from app.services.fact_derivation import (
-    _derive_specs,  # pyright: ignore[reportPrivateUsage]
-    _load_canonical,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.api.test_enterprise_stress import (
     RUNS_URL,
@@ -45,12 +45,12 @@ from tests.api.test_enterprise_stress_phase4 import (
     _seed_canonical_positions,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.api.test_ingestion import seed_bank
+from tests.credit.service.test_crd_credit_exposures import (
+    _stress_row,  # pyright: ignore[reportPrivateUsage]
+)
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE
-from tests.services.test_crd_credit_exposures import (
-    _stress_row,  # pyright: ignore[reportPrivateUsage]
-)
 from tests.services.test_derivation_fail_closed_defaults import (
     _canonical,  # pyright: ignore[reportPrivateUsage]
     _row,  # pyright: ignore[reportPrivateUsage]
@@ -196,11 +196,22 @@ def test_enterprise_expected_credit_refusals_return_409_without_creating_runs(
     if failure == "stale_bucket":
         product.regulatory_category = "SME_UNRATED"
     else:
-        cp = session.scalar(
-            select(CanonicalCounterparty).where(
-                CanonicalCounterparty.bank_id == bank_id,
-                CanonicalCounterparty.source_reference == "CP/BIGCORP",
-            )
+        cp = next(
+            (
+                row
+                for row in session.scalars(
+                    select(CanonicalCounterparty)
+                    .options(undefer_group("bank_identity"))
+                    .where(
+                        CanonicalCounterparty.organization_id == MAKER.organization_id,
+                        CanonicalCounterparty.bank_id == bank_id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                    )
+                )
+                if row.source_reference == "CP/BIGCORP"
+            ),
+            None,
         )
         assert cp is not None
         cp.counterparty_type = "GOVERNMENT_ENTITY"

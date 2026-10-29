@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # The signing vocabulary is owned by the attestation contract; reusing the alias
 # keeps one enum on the wire rather than two that could drift apart.
 from app.attestation.public import SigningRole
-from app.domain.regulatory_instruments import InstrumentStatus
+from app.policy.domain.regulatory_instruments import InstrumentStatus
 
 type ReturnFamily = Literal[
     "liquidity",
@@ -780,14 +780,15 @@ class PackageComparisonRead(ClosedModel):
 
     base: PackageComparisonSideRead
     target: PackageComparisonSideRead
-    identical: bool
-    changed_count: int
-    added_count: int
-    removed_count: int
+    content_locked: bool = False
+    identical: bool | None
+    changed_count: int | None
+    added_count: int | None
+    removed_count: int | None
     #: Sections that differ, in the target's order, with base-only sections
     #: appended. Sections whose every figure matches are omitted.
     sections: list[SnapshotSectionDiffRead]
-    unchanged_section_count: int
+    unchanged_section_count: int | None
 
 
 class EmailRecipientGuidanceRead(ClosedModel):

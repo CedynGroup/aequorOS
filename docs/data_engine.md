@@ -975,8 +975,10 @@ bank-visible access evidence are tracked in
 
 ### 14.2 Encryption
 
-[The bank encryption contract](../backend/docs/bank_encryption.md) owns connected
-bank-key object access and the optional rollout boundary.
+[The bank key setup guide](../backend/docs/bank_key_setup.md) owns connected
+bank-key object access and the rollout boundary.
+[The bank-held field encryption contract](../backend/docs/bank_field_encryption.md)
+owns sensitive fields and identity indexes.
 [The transport control and evidence contract](../backend/docs/transport_security.md)
 owns service transport enforcement and required deployment evidence. These
 implementations do not establish active pilot key custody, backup coverage or

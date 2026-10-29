@@ -34,7 +34,7 @@ jobs:
   changes:
     if: github.event_name != 'merge_group'
     name: Detect changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       web: ${{ steps.areas.outputs.web }}
@@ -53,7 +53,7 @@ jobs:
     name: Marketing site
     needs: changes
     if: github.event_name != 'merge_group' && needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
     name: Operator console
     needs: changes
     if: github.event_name != 'merge_group' && needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -92,7 +92,7 @@ jobs:
   # The single context to mark required for this workflow.
   gate:
     name: Web gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     if: always()
     needs: [changes, frontend, console]

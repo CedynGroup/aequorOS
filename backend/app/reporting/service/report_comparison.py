@@ -183,7 +183,7 @@ LOWER_BETTER: frozenset[str] = frozenset(
 
 #: Signed metrics the engine judges on MAGNITUDE. ΔEVE is stored with its sign
 #: (``delta = eve - base_eve``, so a loss is negative) and the IRRBB outlier
-#: test compares |ΔEVE| to the limit (``app/domain/irr/engine.py`` picks the
+#: test compares |ΔEVE| to the limit (``app/irrbb/domain/engine.py`` picks the
 #: worst scenario by ``abs()``; ``regulatory_irr`` classifies status on ``abs()``).
 #: A move from −8% to −12% is therefore a WORSE position even though the figure
 #: went down, which plain ``lower_better`` would have read as favorable.

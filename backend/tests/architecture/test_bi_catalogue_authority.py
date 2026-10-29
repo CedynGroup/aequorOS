@@ -38,7 +38,7 @@ from app.bi.domain.catalogue.members import SENSITIVITIES
 from app.core.authorization import Module, ModuleScope, Sensitivity
 from app.db.base import Base
 from app.domain.authority.registry import REGISTRY, Regime, UnknownMetricError
-from app.services import module_scope
+from app.policy.service import module_scope
 
 BACKEND = Path(__file__).parents[2]
 BI_DOMAIN = BACKEND / "app" / "bi" / "domain"

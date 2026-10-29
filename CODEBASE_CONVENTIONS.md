@@ -32,7 +32,7 @@ New code is strict; legacy code may only get stricter.
   `backend/scripts/type_check_baseline.json`.
 - **Strict modules** may have no errors and never take a baseline entry: every new module, every
   module that passed when the baseline was recorded, and the packages and modules listed in
-  `STRICT_MODULES` in the script.
+  `STRICT_MODULES` in the script, except the exact-file migration allowances described below.
 - **A legacy module may not add errors.** A rule's count above its baseline fails.
 - **Record every fix.** A count below its baseline also fails until
   `uv run python scripts/type_check_baseline.py update`, run from `backend/`, writes the lower
@@ -43,7 +43,10 @@ New code is strict; legacy code may only get stricter.
   promoted, so a move PR stays a pure rename (§5). The check counts it under the name it had
   before its moves in `backend/scripts/feature_module_moves.json`. A module whose new location is
   already in `STRICT_MODULES` gets no allowance: fix its errors in the move PR, and `update` then
-  removes its old entry.
+  removes its old entry. The live layout migration has nine exact-file exceptions listed in
+  `TRANSITIONAL_LEGACY_MODULES`, with their existing per-rule counts moved to their current
+  names. All other live modules remain strict. Retire each exception when its errors are fixed
+  and its baseline entry is removed; do not extend the exception set to new files.
 - **Promoting a package.** A package joins `STRICT_MODULES` once it is clean: fix its modules'
   errors, run `update` so the baseline holds no entry for them (moved modules' entries sit under
   their pre-move names), then add the package to `STRICT_MODULES`.
@@ -354,7 +357,7 @@ fc.assert(
       reason: "no_value",
     });
   }),
-  { numRuns: 100 },
+  { numRuns: 100 }
 );
 ```
 
@@ -478,7 +481,7 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
   `centralBankName()`/`currencyCode()`; never literal `'GHS'`, `'en-GH'`, `'BoG'`,
   `'Bank of Ghana'` in display code. Module-level constants evaluate before the binding —
   use jurisdiction-neutral wording there ("regulatory minimum", "supervisory severe"), not
-  getter calls. Backend: services resolve names via `app/services/jurisdictions.py`
+  getter calls. Backend: services resolve names via `jurisdictions` from `app.policy.public`
   (BSD-2/BSD-3 headers do); fact derivation reads `_Canonical.base_currency` (from
   `bank.currency`) for FX base-leg and curve selection. Deliberate exceptions
   (Ghana-factual content, keep literal): the BoG return-family artifacts — BSD
@@ -502,7 +505,7 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
   `jurisdictions.base_currency(bank)`, which deliberately has no fallback: an unset
   currency is a skipped decision at the creation site, not a Ghanaian bank. Never write a
   currency literal into bank-facing narrative — the guard suite
-  `tests/services/test_jurisdiction_neutrality.py` exercises currency-labelled liquidity
+  `tests/policy/service/test_jurisdiction_neutrality.py` exercises currency-labelled liquidity
   narratives and unresolved-identity refusals, alongside registry and model checks. On the dashboard,
   `fmtCurrency(value)` uses the active jurisdiction; passing a second argument OVERRIDES
   it, so pass it only when the currency is genuinely not the bank's own.

@@ -14,6 +14,10 @@ surface consults (`tests/bi/api/test_bi_authorization_matrix.py`,
 `tests/bi/service/test_bi_authorization.py`), and every data route calls it
 before it reads anything (`tests/bi/api/test_bi_routes.py`).
 
+For connected-key banks, capability availability additionally follows the
+[bank-held encryption BI boundary](bank_field_encryption.md#bi).
+The binding rows below do not override that boundary.
+
 Run the inventory against each target deployment immediately before the release
 that TURNS THE FLAG ON — not before the commit that mounts the routes, which
 grants nobody anything. Store the dated output with the deployment record. Do not
@@ -381,8 +385,8 @@ decisions:
 
 Do not replace these with incomplete rows, combine fields across rows, copy
 production users into code, or widen a scope to `all` to compensate for a missing
-decision. An `all`/`all` row makes every BI member in every entitled module
-queryable, obligor names included.
+decision. An `all`/`all` row satisfies the binding checks for every BI member in
+every entitled module, subject to the capability boundary above.
 
 ### Branch and region scope IS enforced; desk and currency are not
 
@@ -460,7 +464,7 @@ not yet assert the new column (owed).
 Pinned by: `tests/bi/service/test_data_scope.py`, `tests/bi/api/test_bi_data_scope.py`,
 `tests/identity/api/test_data_scope_grants.py`, the A10-01 cases in
 `tests/bi/service/test_bi_authorization.py`, `tests/bi/api/test_bi_feeds.py` and,
-for the credit blotter, `tests/api/test_credit_route_authorization.py`.
+for the credit blotter, `tests/credit/api/test_credit_route_authorization.py`.
 
 Turning BI on in production is an ordered sequence with its own hazards; it is
 recorded in [`bi_turn_on_runbook.md`](bi_turn_on_runbook.md).

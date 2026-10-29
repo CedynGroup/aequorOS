@@ -8,6 +8,7 @@ import pytest
 
 from app.domain.capital.engine import CapitalFact, RiskWeightUnavailable
 from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
+from app.live.service.fact_derivation import _position_row  # pyright: ignore[reportPrivateUsage]
 from app.models import (
     CanonicalCounterparty,
     CanonicalGlAccount,
@@ -18,12 +19,11 @@ from app.services.enterprise_stress import (
     EnterpriseStressError,
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
-from app.services.fact_derivation import _position_row  # pyright: ignore[reportPrivateUsage]
-from tests.domain.test_capital_engine import bog_capital_params
-from tests.services.test_crd_credit_exposures import (
+from tests.credit.service.test_crd_credit_exposures import (
     _credit_rwa,  # pyright: ignore[reportPrivateUsage]
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.domain.test_capital_engine import bog_capital_params
 from tests.services.test_crd_credit_stress_repairs import (
     _capital_facts,  # pyright: ignore[reportPrivateUsage]
 )

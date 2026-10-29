@@ -44,13 +44,17 @@ schema; migrations grant execution explicitly.
 The foundation provisions dormant roles; it does not authorize switching worker
 or operator credentials. The [captain-reviewed worker compatibility migration](#worker-compatibility-migration)
 supports the worker switch. The separate operator PR must add metadata views and
-receive the product owner's review before its switch. A fourth, captain-reviewed PR follows
-operator access: two narrow SECURITY DEFINER functions owned by `aqs_owner`, with
-a pinned search_path and EXECUTE granted only to `aqs_api`. One accepts a
-presented key hash and returns only its organization, bank, scopes and status;
-the other accepts a bank id and returns only that bank's key reference. That
-follow-up must prove the API still cannot SELECT either underlying table or
-enumerate other banks. Direct table grants remain absent.
+receive the product owner's review before its switch. Bank-held encryption migrations
+`202610220101` and `202610230103` grant runtime bank-key registry access for
+field/storage operations and administrator key setup. The exact privileges are
+owned by the executable [grant manifest](../../backend/tests/db/database_role_grants.json);
+the pre-tenant registry relies on explicit application scoping rather than RLS.
+The separate, captain-reviewed pre-authentication follow-up remains required for
+integration keys: a narrow SECURITY DEFINER function owned by `aqs_owner`, with a
+pinned search_path and EXECUTE granted only to `aqs_api`, accepting a presented
+key hash and returning only its organization, bank, scopes and status. That
+follow-up must prove refusal of direct `integration_keys` access and other-bank
+enumeration.
 
 ## Session timeout budgets
 
@@ -112,8 +116,10 @@ pool identities in `pg_stat_activity`. Native PostgreSQL 17 tests in
 disposable probe logins with the configured role settings and service privileges
 (PostgreSQL role settings are not inherited via membership). They also prove
 real API idle termination/lock release using a short
-transaction-local probe limit, legacy connection budgets, a 65-second worker
-statement and BI export overrides above ten seconds. Native regressions in
+transaction-local probe limit, legacy connection budgets and worker/BI completion.
+The BI export probe verifies the fresh-login default separately, then scales the
+transaction-local interactive and export budgets to prove cancellation, a successful
+override and restoration of the prior budget. Native regressions in
 `backend/tests/db/test_bi_export_transactions.py` prove through `pg_stat_activity`
 that slow BI statements and compiler probes hold no API transaction, and that
 delivery audit/query-log/job writes commit atomically. Document deletion
@@ -136,8 +142,8 @@ concurrency and role-timeout coverage is linked from the backend API guide above
    credential switches. They support both existing and least-privilege roles.
 6. Deploy the captain-reviewed API pre-authentication follow-up after the
    operator PR. **The API credential switch is blocked until that PR is live.**
-   The foundation's `aqs_api` cannot yet authenticate integration keys or look
-   up bank encryption keys.
+   `aqs_api` cannot yet authenticate integration keys; bank-key registry grants
+   follow the [current matrix and prerequisites](#target-matrix).
 
 Native development uses `backend/scripts/local_services.py` to prepare the roles
 on its owned PostgreSQL 17 cluster. Docker's `risk-migrate` runs
@@ -235,8 +241,9 @@ organization. Organization-wide ticks may have no bank. Commit, rollback and poo
 reuse cannot carry a job's context into the next job. Separately opened storage
 sessions use the worker credential and the same handler context; cached storage
 clients resolve their session factory on each operation. The worker key-reference
-function locks only the requested storage slug within that context, without
-SELECT privileges on the pre-tenant registry. A companion storage check distinguishes
+function locks only the requested storage slug within that context. Field encryption
+also has SELECT access to the key-reference registry through the runtime session;
+wrapped key envelopes remain tenant-isolated. A companion storage check distinguishes
 an authorized unconnected bank from an unknown or foreign slug, so refusal cannot
 become a plaintext fallback when optional encryption is disabled. Jobs prepare
 stable bank storage setup metadata before handler work starts, allowing separate
@@ -347,14 +354,12 @@ BYPASSRLS from the retired worker/operator roles or retires their credentials.
 Preserve any legacy role still used by API/authentication or an operator awaiting
 its cutover. No
 engineering migration alters those existing role attributes. **Do not switch the
-API credential yet:** `aqs_api` cannot authenticate integration keys or look up
-bank encryption keys. Pre-tenant authentication continues to use the API
-`DATABASE_URL` sessionmaker as described in
+API credential yet:** its switch remains subject to the
+[API pre-authentication prerequisite](#target-matrix). Verify bank-key lookup
+under the current grant manifest as well. Pre-tenant authentication continues to
+use the API `DATABASE_URL` sessionmaker as described in
 [Worker compatibility migration](#worker-compatibility-migration).
-The API switch waits for the separate captain-reviewed
-pre-authentication PR after the operator PR, followed by verification of both
-lookup paths, refusal of direct table access and refusal of other-bank
-enumeration. Keep the existing API URL secret until that gate passes.
+Keep the existing API URL secret until that gate passes.
 
 ### Break-glass and rollback
 

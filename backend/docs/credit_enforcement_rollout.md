@@ -106,8 +106,8 @@ the intended one.
 The gate is the same one the other engines use: `scoped_authorization.evaluate_bank_permission`
 per engine with `Permission.VIEW`, `Sensitivity.AGGREGATED`, evaluated against
 the resolved bank. Each surface names its gate list in one tuple
-(`_GATED_ENGINE_MODULES` in `app/services/live_view.py`, `alerts.py`,
-`window_analytics.py`); `tests/architecture/test_credit_module.py` pins that
+(`_GATED_ENGINE_MODULES` in `app/live/service/{live_view,alerts}.py` and
+`app/services/window_analytics.py`); `tests/architecture/test_credit_module.py` pins that
 `("credit", Module.CREDIT)` is in every one of them.
 
 Shared-feed whole-institution enforcement, including the Capital and rating
@@ -369,18 +369,22 @@ The reasoning, route by route:
   rates; vintages are cohort PAR30+ curves; PD is a pooled hazard. Aggregate
   figures are `aggregated`.
 - **Concentration — `restricted`, and it resolves Phase 4 open decision 1.** The
-  `single_name` dimension buckets on `cp:<counterparty name>` /
-  `group:<reference>` (`credit_concentration._group_key`) and the `breaches` list
-  carries those keys, so the payload names obligors. The platform's own member
-  rule says a single obligor is `restricted`; the older route line said
-  `aggregated`. **Decided: `restricted`** — the narrower of the two, taken because
-  the alternative (projecting `single_name` buckets and single-name breaches out
+  `single_name` dimension and `breaches` list use persisted opaque group tokens
+  (`credit_exposure_book.canonical_group_key`), with literal `pos:<reference>`
+  keys for positions without a counterparty. The route retains its `restricted`
+  permission; tokenization does not widen authority. **Decided: `restricted`**,
+  because the alternative (projecting `single_name` buckets and single-name breaches out
   for aggregated viewers) changes the numbers on a supervisory screen, which is a
   product decision and not one an authorization cutover may make silently. The
   consequence is stated plainly: **a reader holding only CREDIT/`aggregated`
-  loses the concentration monitor** and needs the blotter sentence for it. If the
-  institution wants an obligor-free aggregated monitor, that is a catalogue change
-  to design, not a sensitivity to widen.
+  loses the concentration monitor** and needs the blotter sentence for it.
+  Opening this monitor to aggregated-only readers requires a catalogue decision.
+  Named `group:` and `cp:` Board limits use the same token boundary as exposures.
+  If the bank's identity matching key is unavailable, numeric concentration still
+  loads, but those limits appear in `locked_limits` without identity values and
+  non-positional single-name buckets are `locked` and unevaluated. Literal
+  `pos:` limits remain evaluable. The live engine emits
+  `concentration_limits_locked` rather than silently treating named limits as unset.
 - **Blotter and facets — `restricted`.** The rows carry `counterparty_name`. The
   facets are the blotter's own filter counts over the same rows, so they carry the
   same sensitivity: a facet at a lower sensitivity would be a count of names.
@@ -565,7 +569,7 @@ section of this document said so; there is now.
 | Each route names its dependency and carries no scalar gate                                     | `tests/architecture/test_credit_route_authorization.py`                                                                     |
 | **Every** `/credit/` route is in the authority table (a new one cannot ship ungated)           | the same file, `test_every_credit_route_is_in_the_authority_table`                                                          |
 | `require_credit_run` is a recognized mutation gate (impersonation boundary)                    | the same file                                                                                                               |
-| The correct sentence is admitted, per route                                                    | `tests/api/test_credit_route_authorization.py`                                                                              |
+| The correct sentence is admitted, per route                                                    | `tests/credit/api/test_credit_route_authorization.py`                                                                              |
 | A scalar role alone is refused, per route, for five roles                                      | the same file, `test_a_scalar_role_alone_is_refused`                                                                        |
 | A `risk`, `liquidity` or `capital` binding is refused, per route                               | the same file                                                                                                               |
 | Every OTHER sensitivity is refused, per route; `all` admits every route                        | the same file                                                                                                               |
@@ -578,7 +582,7 @@ section of this document said so; there is now.
 | A region resolves through the register, follows it forward, and discloses an unresolved region | the same file                                                                                                               |
 | `mixed` unions branches and regions; one `all` row beside a branch row wins                    | the same file                                                                                                               |
 | Activity attribution follows D-018 and refuses a cross-system or pre-book event                | the same file                                                                                                               |
-| The blotter's pre-existing filter, date and refusal contract is unchanged                      | `tests/services/test_regulatory_credit.py`, `tests/api/test_regulatory_credit.py`                                           |
+| The blotter's pre-existing filter, date and refusal contract is unchanged                      | `tests/credit/service/test_regulatory_credit.py`, `tests/credit/api/test_regulatory_credit.py`                                           |
 | Object references under `/credit/*` are catalogued and refuse a foreign object                 | `tests/fixtures/object_reference_routes.py` (auto-discovered) + `tests/api/test_authorization_object_reference_coverage.py` |
 
 ### Deployment order and release record (Phase 4)

@@ -35,8 +35,8 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import Engine, select
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.base import Base, utc_now
@@ -74,6 +74,7 @@ from tests.fixtures.object_references import (
     seed_objects,
 )
 from tests.fixtures.reference_data import seed_global_reference_data
+from tests.support.database import managed_engine, managed_session_factory
 from tests.support.helpers import headers
 
 # The census is read from a throwaway app at import so the cases are available
@@ -250,14 +251,18 @@ def ai_drafting_on(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 @pytest.fixture(scope="module")
-def coverage(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Coverage]:
+def coverage(
+    tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
+) -> Iterator[Coverage]:
     import app.api.deps as deps_mod  # noqa: PLC0415
     import app.db.session as session_mod  # noqa: PLC0415
 
     database_path = tmp_path_factory.mktemp("object-reference-coverage") / "coverage.db"
-    engine = create_engine(f"sqlite+pysqlite:///{database_path}")
+    engine = managed_engine(request, f"sqlite+pysqlite:///{database_path}")
     Base.metadata.create_all(engine)
-    bound_sessionmaker = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    bound_sessionmaker = managed_session_factory(
+        request, engine, autoflush=False, expire_on_commit=False
+    )
 
     with Session(engine, expire_on_commit=False) as session:
         seed_global_reference_data(session)
@@ -304,6 +309,9 @@ def coverage(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Coverage]:
 
 class _FakeStorage:
     """A storage double: object-reference refusals never reach real storage."""
+
+    def for_session(self, db: Session) -> _FakeStorage:
+        return self
 
     def __getattr__(self, _name: str) -> Any:
         raise AssertionError("object-reference coverage must not reach object storage")

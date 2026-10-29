@@ -66,7 +66,7 @@ class SovereignHolding:
 
 #: The key the governed body files the grid itself under. The rest of the body
 #: (``schema``, ``tenor_buckets``, ``currency_kinds``) is the console's own
-#: declaration, which ``app/domain/policy/parameter_shapes._haircut_grid``
+#: declaration, which ``app/policy/domain/parameter_shapes._haircut_grid``
 #: validates the grid against; this parser reads the grid, not the declaration.
 BODY_GRID_KEY = "haircut_pct"
 

@@ -25,9 +25,11 @@ from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import String, and_, any_, bindparam, func, select
 from sqlalchemy.dialects.postgresql import ARRAY, insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
+from sqlalchemy.sql.elements import ColumnElement
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
 from app.api.deps import TenantContext
@@ -52,6 +54,7 @@ from app.domain.ingestion.contracts import (
     PositionData,
 )
 from app.domain.ingestion.enrichment import apply_manual_override
+from app.domain.ingestion.locations import TEMP_SCHEME, StagedIngestionLocation
 from app.domain.ingestion.optional_position_fields import normalize_positions
 from app.domain.ingestion.validation import (
     Finding,
@@ -63,6 +66,7 @@ from app.domain.ingestion.validation import (
 )
 from app.etl import EtlConfig, etl_summary, model_loading, run_etl
 from app.identity.public import Bank
+from app.live.service.data_activation import ACTIVATION_EVENT
 from app.models import (
     AuditEvent,
     CanonicalCounterparty,
@@ -85,11 +89,13 @@ from app.schemas.ingestion import (
     CanonicalPositionRead,
     IngestionBatchCreate,
     IngestionBatchListRead,
+    IngestionBatchPayload,
     IngestionBatchRead,
     IngestionBatchStartRead,
     IngestionSourceSummaryRead,
     IngestionSummaryRead,
     IngestionUploadRead,
+    InternalIngestionBatchCreate,
     LineageNodeRead,
     LineageWalkRead,
     MappingConfigCreate,
@@ -103,7 +109,6 @@ from app.schemas.ingestion import (
 )
 from app.services import job_queue
 from app.services.audit import record_event
-from app.services.data_activation import ACTIVATION_EVENT
 from app.storage.client import (
     ObjectMetadata,
     StorageClient,
@@ -248,7 +253,7 @@ def _prepare_extraction(  # noqa: PLR0913 - transaction ownership is explicit pe
     db: Session,
     ctx: TenantContext,
     bank: Bank,
-    payload: IngestionBatchCreate,
+    payload: IngestionBatchPayload,
     storage: StorageClient,
     *,
     commit: bool,
@@ -270,7 +275,7 @@ def _prepare_extraction(  # noqa: PLR0913 - transaction ownership is explicit pe
         )
 
     try:
-        source_path = _materialize_source(db, bank, payload, storage)
+        source_path = _materialize_source(db, bank, payload.location, storage)
     except StorageError as exc:
         raise fail("storage_error", str(exc)) from exc
 
@@ -290,16 +295,37 @@ def _prepare_extraction(  # noqa: PLR0913 - transaction ownership is explicit pe
     return adapter, mapping_record, mapping, source_path, extraction
 
 
-def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transaction options are explicit
+def start_uploaded_ingestion(
     db: Session,
     ctx: TenantContext,
     bank_id: str,
     payload: IngestionBatchCreate,
     storage: StorageClient,
+) -> IngestionBatchStartRead:
+    """Tenant entry point: accept only a handle in the bank's temp object store."""
+    try:
+        payload = IngestionBatchCreate.model_validate(payload)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="location must be a temp:// handle returned by an ingestion upload.",
+        ) from exc
+    return start_ingestion(db, ctx, bank_id, payload, storage)
+
+
+def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transaction options are explicit
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    payload: IngestionBatchPayload,
+    storage: StorageClient,
     *,
     commit: bool = True,
 ) -> IngestionBatchStartRead:
-    """Ingest under transaction-held locks on every position identity in the batch.
+    """Ingest a trusted internal source, including worker-built local file paths.
+
+    Tenant requests must use :func:`start_uploaded_ingestion` instead.
+    Ingest under transaction-held locks on every position identity in the batch.
 
     Reserve missing identities through natural-key uniqueness before locking in
     ID order, so concurrent first sightings also wait for the first acceptance.
@@ -307,6 +333,13 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
     Locks last until commit or rollback, including when the caller owns the
     transaction via ``commit=False``. SQLite skips reservations and row locks.
     """
+    # Revalidate at the service boundary too: model_construct / model_copy can
+    # bypass pydantic's normal construction checks in an in-process caller.
+    if isinstance(payload, InternalIngestionBatchCreate):
+        payload = InternalIngestionBatchCreate.model_validate(payload)
+    else:
+        payload = IngestionBatchCreate.model_validate(payload)
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     try:
         adapter, mapping_record, mapping, source_path, extraction = _prepare_extraction(
@@ -414,7 +447,12 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
         event_type="ml_etl.completed",
         entity_type="ingestion_batch",
         entity_id=batch.id,
-        details=batch.etl_report,
+        details={
+            "bank_id": bank.id,
+            "batch_id": str(batch.id),
+            "operation_count": len(etl_result.operations),
+            "linkage_count": len(etl_result.linkages),
+        },
     )
 
     batch.status = "translating"
@@ -564,7 +602,7 @@ def _enqueue_live_refresh(
     db: Session,
     ctx: TenantContext,
     bank: Bank,
-    payload: IngestionBatchCreate,
+    payload: IngestionBatchPayload,
     batch: IngestionBatch,
 ) -> None:
     """Trigger the automatic live pipeline for accepted batches.
@@ -595,7 +633,7 @@ def _enqueue_bi_mart_refresh(
     db: Session,
     ctx: TenantContext,
     bank: Bank,
-    payload: IngestionBatchCreate,
+    payload: IngestionBatchPayload,
     batch: IngestionBatch,
 ) -> None:
     """Ask the BI lane to rebuild this batch's ``(bank, as_of)`` mart slice.
@@ -1248,7 +1286,7 @@ def _get_batch_or_404(
 
 
 def _resolve_mapping_config(
-    db: Session, ctx: TenantContext, bank: Bank, payload: IngestionBatchCreate
+    db: Session, ctx: TenantContext, bank: Bank, payload: IngestionBatchPayload
 ) -> MappingConfigRecord:
     if payload.mapping_config_id is not None:
         record = db.scalar(
@@ -1516,7 +1554,7 @@ def _resolve_adapter(source_system: str) -> SourceAdapter:
 def _new_batch(
     ctx: TenantContext,
     bank: Bank,
-    payload: IngestionBatchCreate,
+    payload: IngestionBatchPayload,
     adapter: SourceAdapter,
     mapping_record: MappingConfigRecord,
 ) -> IngestionBatch:
@@ -1538,7 +1576,7 @@ def _find_accepted_batch(  # noqa: PLR0913 - mirrors record_event's shape
     db: Session,
     ctx: TenantContext,
     bank: Bank,
-    payload: IngestionBatchCreate,
+    payload: IngestionBatchPayload,
     content_hash: str | None,
     mapping_config_id: UUID,
 ) -> IngestionBatch | None:
@@ -1617,6 +1655,28 @@ def _known_references(
     """Current-generation canonical references already ingested for the bank."""
 
     def current(column, model) -> frozenset[str]:
+        if model is CanonicalCounterparty:
+            return frozenset(
+                row.source_reference
+                for row in db.scalars(
+                    select(CanonicalCounterparty)
+                    .options(
+                        load_only(
+                            CanonicalCounterparty.id,
+                            CanonicalCounterparty.organization_id,
+                            CanonicalCounterparty.bank_id,
+                            CanonicalCounterparty.source_reference,
+                            raiseload=True,
+                        )
+                    )
+                    .where(
+                        CanonicalCounterparty.organization_id == ctx.organization_id,
+                        CanonicalCounterparty.bank_id == bank.id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                    )
+                )
+            )
         return frozenset(
             db.scalars(
                 select(column).where(
@@ -1852,6 +1912,28 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
         return record_statuses.get((entity_type, source_reference), UNVALIDATED_STATUS)
 
     def existing_ids(key_column: Any, model: Any) -> dict[str, UUID]:
+        if model is CanonicalCounterparty:
+            return {
+                row.source_reference: row.id
+                for row in db.scalars(
+                    select(CanonicalCounterparty)
+                    .options(
+                        load_only(
+                            CanonicalCounterparty.id,
+                            CanonicalCounterparty.organization_id,
+                            CanonicalCounterparty.bank_id,
+                            CanonicalCounterparty.source_reference,
+                            raiseload=True,
+                        )
+                    )
+                    .where(
+                        CanonicalCounterparty.organization_id == ctx.organization_id,
+                        CanonicalCounterparty.bank_id == bank.id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                    )
+                )
+            }
         rows = db.execute(
             select(key_column, model.id).where(
                 model.organization_id == ctx.organization_id,
@@ -1863,6 +1945,29 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
         return {key: row_id for key, row_id in rows}
 
     def current_by_key(key_column, model, *conditions: Any) -> dict[str, Any]:
+        if model is CanonicalCounterparty:
+            return {
+                row.source_reference: row
+                for row in db.scalars(
+                    select(CanonicalCounterparty)
+                    .options(
+                        load_only(
+                            CanonicalCounterparty.id,
+                            CanonicalCounterparty.organization_id,
+                            CanonicalCounterparty.bank_id,
+                            CanonicalCounterparty.source_reference,
+                            raiseload=True,
+                        )
+                    )
+                    .where(
+                        CanonicalCounterparty.organization_id == ctx.organization_id,
+                        CanonicalCounterparty.bank_id == bank.id,
+                        CanonicalCounterparty.superseded_by.is_(None),
+                        CanonicalCounterparty.withdrawn_at.is_(None),
+                        *cast(tuple[ColumnElement[bool], ...], conditions),
+                    )
+                )
+            }
         rows = db.execute(
             select(key_column, model).where(
                 model.organization_id == ctx.organization_id,
@@ -2122,7 +2227,7 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
 def _artifact_step(
     db: Session,
     ctx: TenantContext,
-    batch_context: tuple[Bank, IngestionBatchCreate, SourceAdapter, MappingConfigRecord],
+    batch_context: tuple[Bank, IngestionBatchPayload, SourceAdapter, MappingConfigRecord],
     persist: Callable[[], None],
     *,
     commit: bool,
@@ -2145,7 +2250,6 @@ def _artifact_step(
         return _fail_batch(db, ctx, batch, payload.reason, "storage_error", str(exc))
 
 
-TEMP_SCHEME = "temp://"
 _FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -2164,13 +2268,17 @@ def upload_source(  # noqa: PLR0913 - mirrors record_event's shape
     provenance metadata. The temp tier's 30-day lifecycle cleans up staged
     files that never get ingested.
     """
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     storage.ensure_institution(slug)
 
     safe_name = _FILENAME_UNSAFE.sub("_", Path(filename or "upload").name) or "upload"
+    if safe_name in {".", ".."}:
+        safe_name = "upload"
     checksum = hashlib.sha256(content).hexdigest()
     object_path = f"uploads/{new_uuid7()}/{safe_name}"
+    staged_location = StagedIngestionLocation(f"{TEMP_SCHEME}{object_path}")
     location = StorageLocation(institution_slug=slug, tier="temp", object_path=object_path)
     storage.write(
         location,
@@ -2198,22 +2306,22 @@ def upload_source(  # noqa: PLR0913 - mirrors record_event's shape
         filename=safe_name,
         byte_size=len(content),
         checksum_sha256=checksum,
-        location=f"{TEMP_SCHEME}{object_path}",
+        location=str(staged_location),
     )
 
 
 def _materialize_source(
-    db: Session, bank: Bank, payload: IngestionBatchCreate, storage: StorageClient
+    db: Session, bank: Bank, location: StagedIngestionLocation | Path, storage: StorageClient
 ) -> str:
     """Resolve the batch source to a local file path the adapter can read.
 
     ``temp://{object_path}`` locations are fetched from the bank's temp tier
     into a scratch directory, preserving the original filename so the adapter
-    recognizes the format by suffix. Plain paths pass through unchanged.
+    recognizes the format by suffix. Only typed internal paths pass through.
     """
-    if not payload.location.startswith(TEMP_SCHEME):
-        return payload.location
-    object_path = payload.location[len(TEMP_SCHEME) :]
+    if isinstance(location, Path):
+        return str(location)
+    object_path = StagedIngestionLocation.model_validate(location).object_path
     slug = bank_slug(db, bank)
     _, stream = storage.read(
         StorageLocation(institution_slug=slug, tier="temp", object_path=object_path)

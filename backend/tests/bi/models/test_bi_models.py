@@ -54,6 +54,8 @@ from app.bi.models.marts import (
 )
 from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.core.config import get_settings
+from app.core.key_management.fields import ProtectedText
+from app.credit.domain.dpd_bands import DPD_BAND_CODES
 from app.db.base import Base
 from app.db.session import get_bi_engine, get_bi_sessionmaker, set_tenant_rls_context
 from app.domain.authority.registry import REGISTRY, AdvisoryDesignation, MetricFamily, Regime
@@ -65,18 +67,19 @@ from app.domain.capital.loan_classification import (
     BASIS_UNCLASSIFIED,
     SDI_GRADE_ORDER,
 )
-from app.domain.credit.dpd_bands import DPD_BAND_CODES
 from app.domain.ingestion import optional_position_fields
 from app.domain.ingestion.reference_schemas import performance_targets
-from app.domain.irr.engine import IRR_BUCKETS
 from app.domain.liquidity.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
-from app.domain.positions.families import (
+from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
+from app.irrbb.domain.engine import IRR_BUCKETS
+from app.live.domain.positions.families import (
     LOAN_CATEGORY_MAP,
     PAST_DUE_CATEGORY,
     UNCLASSIFIED_FAMILY,
     unclassified_category,
 )
-from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
+from app.live.models.live import LIVE_MODULES, LiveMetric
+from app.live.models.regulatory_run import RegulatoryRun
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalGlAccount,
@@ -85,9 +88,7 @@ from app.models.canonical import (
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.models.institution_type import InstitutionType
-from app.models.live import LIVE_MODULES, LiveMetric
-from app.models.regulatory_run import RegulatoryRun
+from app.policy.models.institution_type import InstitutionType
 
 MODELS: tuple[type, ...] = (
     BiFactPositionDaily,
@@ -461,7 +462,7 @@ def test_vocabularies_are_exactly_the_contract() -> None:
         # vocabulary genuinely did; that the constant, the model CHECK and the
         # MIGRATED CHECK all agree is pinned separately, here by
         # ``test_check_constraints_admit_exactly_their_vocabulary`` and against
-        # Postgres by ``tests/db/test_bi_foundation_migration.py``.
+        # Postgres by ``tests/db/test_bi_owned_tables_parity.py``.
         "nlq",
     )
     assert bi.QUERY_LOG_DECISIONS == ("allowed", "denied")
@@ -781,6 +782,14 @@ def test_string_columns_are_at_least_as_wide_as_their_vocabulary(
 def test_copied_columns_are_at_least_as_wide_as_their_source(
     table_name: str, column_name: str, source: type, source_column: str
 ) -> None:
+    source_type = _table(source).c[source_column].type
+    if isinstance(source_type, ProtectedText):
+        # Optional-key banks copy bounded input; connected banks use UUID aliases
+        # / NULL and reject identity queries (issue 595).
+        assert source is CanonicalCounterparty
+        assert source_column in {"name", "source_reference", "group_reference"}
+        assert _width(table_name, column_name) >= 255
+        return
     source_width = _width(_table(source).name, source_column)
     assert _width(table_name, column_name) >= source_width, (
         f"{table_name}.{column_name} is narrower than {_table(source).name}.{source_column} "

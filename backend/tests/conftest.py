@@ -23,7 +23,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from hypothesis import settings as hypothesis_settings
-from sqlalchemy import Engine, create_engine, event, text
+from sqlalchemy import Engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -37,17 +37,17 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import Settings, get_settings
+from app.core.key_management.settings import get_key_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
-from app.features.ingest_data import get_ingestion_storage
 from app.identity.service import authorization
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
-from app.main import create_app
 from app.models import Organization, User
 from tests.fixtures.reference_data import seed_global_reference_data
 from tests.real_data import REAL_DATA_DATABASE_URL
 from tests.support.api_factories import ApiFactories
+from tests.support.database import database_connections, managed_session_factory
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.support.inmemory_storage import InMemoryStorageClient
 
@@ -70,6 +70,7 @@ hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 #: whole suite shares: settings, the database, session and client, storage fakes
 #: and the demo tenants.
 pytest_plugins = [
+    "tests.support.database_fixtures",
     "tests.bi.fixtures",
     "tests.capital.fixtures",
     "tests.credit.fixtures",
@@ -82,8 +83,7 @@ pytest_plugins = [
 ]
 
 
-@pytest.fixture(autouse=True)
-def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def _isolate_test_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "1")
     monkeypatch.setenv("TLS_CA_BUNDLE", "")
@@ -226,11 +226,21 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # /health/ready reads that list; a developer's SIGNING_BACKEND=openbao would
     # otherwise add gaps to suites that have nothing to do with signing.
     monkeypatch.setenv("SIGNING_BACKEND", "software")
+    monkeypatch.setenv("BANK_KMS_ENDPOINT_URL", "")
+
+
+def _clear_cached_settings() -> None:
     get_settings.cache_clear()
+    get_key_settings.cache_clear()
     get_engine.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    _isolate_test_settings(monkeypatch)
+    _clear_cached_settings()
     yield
-    get_settings.cache_clear()
-    get_engine.cache_clear()
+    _clear_cached_settings()
 
 
 @pytest.fixture(autouse=True)
@@ -293,7 +303,15 @@ def hermetic_etl_models(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(create_app(), raise_server_exceptions=False)
+    return TestClient(_create_app(), raise_server_exceptions=False)
+
+
+def _create_app() -> FastAPI:
+    # The xdist controller registers fixtures but never needs the API. Defer
+    # route registration until a client or shared app actually requests it.
+    from app.main import create_app  # noqa: PLC0415
+
+    return create_app()
 
 
 class FakeStorage:
@@ -332,14 +350,6 @@ class FakeStorage:
         self.deleted.append((bucket, object_key))
 
 
-def _enable_sqlite_foreign_keys(engine: Engine) -> None:
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_connection, _connection_record) -> None:
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-
 def _postgres_schema_url(database_url: str, schema_name: str) -> str:
     url = make_url(database_url)
     return url.update_query_dict({"options": f"-csearch_path={schema_name}"}).render_as_string(
@@ -351,12 +361,11 @@ def _drop_postgres_schema(database_url: str, schema_name: str | None) -> None:
     if schema_name is None:
         return
 
-    admin_engine = create_engine(database_url, isolation_level="AUTOCOMMIT")
-    try:
-        with admin_engine.connect() as connection:
-            connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
-    finally:
-        admin_engine.dispose()
+    with (
+        database_connections(database_url, administrative=True) as admin,
+        admin.engine(isolation_level="AUTOCOMMIT").connect() as connection,
+    ):
+        connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
 
 
 def _seed_demo_tenants(engine: Engine) -> None:
@@ -421,7 +430,7 @@ class _TestDatabase:
 
 @dataclass
 class _LazyTestApp:
-    factory: Callable[[], FastAPI] = create_app
+    factory: Callable[[], FastAPI] = _create_app
     app: FastAPI | None = None
 
     def get(self) -> FastAPI:
@@ -447,14 +456,28 @@ def build_test_database(
     directory and a Postgres schema is dropped with CASCADE by its creator.
     """
     engine = get_engine(database_url)
-    if engine.dialect.name == "sqlite":
-        _enable_sqlite_foreign_keys(engine)
+    owner = database_connections(database_url)
+    _ = owner.adopt_engine(engine)
     try:
         Base.metadata.create_all(engine)
+        if engine.dialect.name == "postgresql":
+            with engine.begin() as connection:
+                schema = cast(str, connection.scalar(text("SELECT current_schema()")))
+                quoted = connection.dialect.identifier_preparer.quote_identifier(schema)
+                connection.execute(
+                    text(f"""
+                        CREATE FUNCTION aequoros_retained_operator_audit_count()
+                        RETURNS bigint LANGUAGE sql STABLE
+                        SET search_path = pg_catalog, pg_temp AS $$
+                            SELECT count(*) FROM {quoted}.operator_audit_log
+                            WHERE target_org = current_setting('app.organization_id', true)
+                        $$
+                    """)
+                )
         seed(engine)
         yield _TestDatabase(database_url=database_url, engine=engine, seed=seed)
     finally:
-        engine.dispose()
+        owner.close()
         get_settings.cache_clear()
         get_engine.cache_clear()
 
@@ -472,12 +495,11 @@ def _session_test_database(
         database_url = sqlite_database_url(tmp_path_factory, name)
     else:
         schema_name = f"risk_service_test_{uuid4().hex}"
-        admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
-        try:
-            with admin_engine.connect() as connection:
-                connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
-        finally:
-            admin_engine.dispose()
+        with (
+            database_connections(test_database_url, administrative=True) as admin,
+            admin.engine(isolation_level="AUTOCOMMIT").connect() as connection,
+        ):
+            connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
         database_url = _postgres_schema_url(test_database_url, schema_name)
 
     try:
@@ -548,8 +570,9 @@ def _rollback_sessionmaker_lifecycle(
     outer = connection.begin()
     if connection.dialect.name == "sqlite":
         connection.exec_driver_sql("BEGIN")
-    bound_sessionmaker = sessionmaker(
-        bind=connection,
+    bound_sessionmaker = managed_session_factory(
+        None,
+        connection,
         join_transaction_mode="create_savepoint",
         autoflush=False,
         expire_on_commit=False,
@@ -595,6 +618,7 @@ def _rollback_sessionmaker_lifecycle(
 
 # Shared primitives for feature-local API fixtures backed by migrated schemas.
 ApiTestDatabase = _TestDatabase
+ApiTestApp = _LazyTestApp
 seed_demo_tenants = _seed_demo_tenants
 rollback_sessionmaker_lifecycle = _rollback_sessionmaker_lifecycle
 
@@ -658,8 +682,8 @@ def _committing_test_database(
     # own engine only outlives it so the schema can be dropped at the end.
     engine = get_engine(database_url)
     monkeypatch.setattr(auth_mod, "get_sessionmaker", get_sessionmaker)
-    if engine.dialect.name == "sqlite":
-        _enable_sqlite_foreign_keys(engine)
+    owner = database_connections(database_url)
+    _ = owner.adopt_engine(engine)
     database = _TestDatabase(
         database_url=database_url, engine=engine, seed=_shared_committing_database.seed
     )
@@ -667,7 +691,7 @@ def _committing_test_database(
         _reset_test_database(database)
         yield database
     finally:
-        engine.dispose()
+        owner.close()
         get_settings.cache_clear()
         get_engine.cache_clear()
 
@@ -720,6 +744,7 @@ def _db_client_lifecycle(
     fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
+    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
 
     def object_storage_override() -> FakeStorage:
         return fake_storage
@@ -842,7 +867,9 @@ def real_client(
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
     """A TestClient wired to the ACTUAL primary, transaction-isolated."""
-    app = create_app()
+    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
+
+    app = _create_app()
     app.dependency_overrides[get_object_storage] = lambda: fake_storage
     app.dependency_overrides[get_ingestion_storage] = lambda: storage_engine
     with TestClient(app, raise_server_exceptions=False) as test_client:

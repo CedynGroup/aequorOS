@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.stress.appendix_ii import _PAID_UP, _STATUTORY
 from app.identity.public import Bank
-from app.services import regulatory_parameters
+from app.policy.public import regulatory_parameters
 from app.services.sdi_capital import latest_capital_structure_rows, signed_component_amount
 
 _ZERO = Decimal("0")

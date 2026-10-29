@@ -23,7 +23,7 @@ concurrency:
 jobs:
   changes:
     name: Detect journey changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       journeys: ${{ steps.areas.outputs.journeys }}
@@ -49,8 +49,16 @@ jobs:
         shard: [1, 2, 3, 4]
     # Each runner owns its disposable database, fixture bank and MinIO. Keep
     # Playwright's single worker; shard files without sharing mutable fixtures.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
+    services:
+      bank-kms:
+        image: nsmithuk/local-kms:3.11.7@sha256:360d7377b6f3687c89a622236791e4fa3f7316366267b437829edbdfa8a5fc60
+        env:
+          KMS_REGION: us-east-1
+          KMS_ACCOUNT_ID: "111122223333"
+        ports:
+          - 18080:8080
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v5
@@ -60,6 +68,13 @@ jobs:
           install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
+      - name: Exercise the real AWS key provider against local KMS
+        env:
+          TEST_KMS_ENDPOINT_URL: http://127.0.0.1:18080
+          PYTEST_ADDOPTS: --junitxml=/tmp/kms-contract.xml
+        run: |
+          mise -C backend exec -- uv run pytest tests/storage/test_kms_emulator.py -q
+          python3 .github/scripts/assert_pytest_ran.py /tmp/kms-contract.xml --min-executed 1 --max-skipped 0
       - name: Install workspace dependencies
         run: mise exec -- pnpm install --frozen-lockfile
       # The browser build is fixed by the exact @playwright/test pin in the
@@ -83,6 +98,7 @@ jobs:
         uses: ./.github/actions/setup-minio
       - name: Run dashboard journeys
         env:
+          BANK_KMS_ENDPOINT_URL: http://127.0.0.1:18080
           S3_ENDPOINT: http://127.0.0.1:9000
           S3_ACCESS_KEY: ciminio
           S3_SECRET_KEY: ciminio123
@@ -183,7 +199,7 @@ jobs:
 
   gate:
     name: Dashboard journeys gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     if: always()
     needs: [changes, journeys]

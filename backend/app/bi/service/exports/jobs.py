@@ -397,6 +397,7 @@ def render_job(session: Session, job: Job, *, storage: StorageClient) -> ExportJ
     render is its own read, distinct from the request that queued it — and no
     other table. The caller sets ``jobs.progress`` and records the audit event.
     """
+    storage = storage.for_session(session)
 
     settings = get_settings().bi
     request = read_request(session, job)

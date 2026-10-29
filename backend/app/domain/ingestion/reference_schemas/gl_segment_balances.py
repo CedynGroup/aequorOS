@@ -30,7 +30,7 @@ Shape and conventions
 **P&L accounts.** The figures are fiscal-year-to-date balances of INCOME and
 EXPENSE accounts, on the same trial-balance convention and with the same sign as
 the ``balance`` the bank already sends on a ``gl_account`` record
-(``app/domain/gl/pl_mapping.py``). A row naming an account the ledger does not
+(``app/live/domain/gl/pl_mapping.py``). A row naming an account the ledger does not
 carry as a P&L account at that date has nothing to reconcile against and is
 reported rather than counted (see below).
 

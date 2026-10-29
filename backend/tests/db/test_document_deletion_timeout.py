@@ -1,7 +1,7 @@
 """Committed deletion survives storage waits beyond the API's idle budget.
 
 Use migrated disposable schemas and real API/worker role rights. The accelerated
-one-second budget keeps the regression fast; storage waits for three such budgets.
+one-second budget keeps the regression fast; dedicated storage probes exceed it.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import Engine, create_engine, select, text
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -32,6 +32,7 @@ from app.services import documents, job_queue
 from tests.conftest import FakeStorage
 from tests.db import test_database_roles as role_tests
 from tests.services.factories import ServiceFactories
+from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
@@ -41,12 +42,15 @@ role_engines = role_tests.role_engines
 
 
 @pytest.fixture
-def timeout_role_engines(role_engines: dict[str, Engine]) -> Iterator[dict[str, Engine]]:
+def timeout_role_engines(
+    role_engines: dict[str, Engine], request: pytest.FixtureRequest
+) -> Iterator[dict[str, Engine]]:
     engines: dict[str, Engine] = {}
     for role in ("aqs_api", "aqs_worker"):
         url = role_engines[role].url
         options = " ".join(url.normalized_query.get("options", ()))
-        engines[role] = create_engine(
+        engines[role] = managed_engine(
+            request,
             url,
             connect_args={"options": options + " -c idle_in_transaction_session_timeout=1000"},
         )
@@ -153,7 +157,6 @@ def delete_during_upload_head(
                     )
                     is None
                 )
-            time.sleep(3)
             with Session(scenario.api_engine, expire_on_commit=False) as deleting:
                 deleting.info["organization_id"] = ORG_1
                 deleted = documents.delete_document(deleting, scenario.ctx, scenario.document_id)
@@ -228,7 +231,7 @@ def test_upload_completion_succeeds_after_head_exceeds_idle_budget(
         class SlowStorage(FakeStorage):
             def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
                 assert not api.in_transaction()
-                time.sleep(3)
+                time.sleep(1.5)
                 return StoredObjectHead(
                     content_type="application/pdf", byte_size=1234, etag='"etag"'
                 )
@@ -361,7 +364,7 @@ def test_deletion_commits_before_storage_and_retries_under_role_timeouts(
                         )
                         is None
                     )
-                time.sleep(3)
+                time.sleep(1.5)
                 if calls == 1:
                     raise TimeoutError("ambiguous storage failure")
                 super().delete_object(bucket=bucket, object_key=object_key)

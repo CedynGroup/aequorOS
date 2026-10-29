@@ -34,6 +34,9 @@ from app.core.authorization import (
 )
 from app.core.config import AuthSettings, get_settings
 from app.core.tenancy import TenantContext
+from app.credit.schemas.credit_params import CrmHaircutUpdate, EclAssumptionUpdate
+from app.credit.schemas.regulatory_credit import ConcentrationLimitUpdate, CreditThresholdUpdate
+from app.credit.service import credit_params
 from app.domain.capital.engine import CapitalParams, CapitalRatiosResult, RwaResult
 from app.icaap.schemas.workspace import (
     IcaapCycleCreate,
@@ -45,7 +48,6 @@ from app.identity.schemas.audit_log import AuditLogRead
 from app.identity.schemas.auth import MeResponse
 from app.identity.schemas.banks import BankListRead
 from app.identity.service import audit_log, authentication, authorization, grant_administration
-from app.main import create_app
 from app.models import (
     AuditEvent,
     Bank,
@@ -92,14 +94,11 @@ from app.reporting.schemas.filing_workflow import (
 )
 from app.reporting.service import workflow
 from app.reporting.service.filing_workflow import templates
-from app.schemas.credit_params import CrmHaircutUpdate, EclAssumptionUpdate
 from app.schemas.database_connection import DatabaseConnectionCreate
 from app.schemas.ingestion import PositionSnapshotOverrideCreate
 from app.schemas.liquidity_thresholds import LiquidityHaircutUpdate, LiquidityThresholdUpdate
 from app.schemas.push import PushBatchOpen, PushRecordsPage
-from app.schemas.regulatory_credit import ConcentrationLimitUpdate, CreditThresholdUpdate
 from app.services import (
-    credit_params,
     database_connections,
     ingestion,
     liquidity_thresholds,
@@ -108,11 +107,13 @@ from app.services import (
 )
 from app.services.audit import record_event
 from tests.conftest import (
+    ApiTestApp,
     ApiTestDatabase,
     rollback_sessionmaker_lifecycle,
     seed_demo_tenants,
 )
 from tests.db import test_postgres_migrations as migrations
+from tests.support.database import database_connections as managed_database_connections
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.outbound import stub_public_dns
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
@@ -146,20 +147,25 @@ def audit_database() -> Iterator[ApiTestDatabase]:
                 migrations.postgres_administrator_url(), schema.schema_name
             )
             engine: Engine = create_engine(url)
-            try:
+            with managed_database_connections(url) as owner:
+                _ = owner.adopt_engine(engine)
                 seed_demo_tenants(engine)
                 yield ApiTestDatabase(database_url=url, engine=engine, seed=seed_demo_tenants)
-            finally:
-                engine.dispose()
+
+
+@pytest.fixture(scope="module")
+def audit_app() -> ApiTestApp:
+    """Construct once, lazily under the first test's isolated settings."""
+    return ApiTestApp()
 
 
 @pytest.fixture
 def db_client(
-    audit_database: ApiTestDatabase, monkeypatch: pytest.MonkeyPatch
+    audit_database: ApiTestDatabase, audit_app: ApiTestApp, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[TestClient]:
     """Seed as administrator; execute every HTTP database dependency as aqs_api."""
     with rollback_sessionmaker_lifecycle(audit_database, monkeypatch) as maker:
-        app = create_app()
+        app = audit_app.get()
 
         def runtime_db(request: Request, ctx: deps.Tenant) -> Iterator[Session]:
             for db in deps.get_tenant_db_session(request, ctx):
@@ -173,6 +179,7 @@ def db_client(
                     db.execute(text("RESET ROLE"))
                     db.commit()
 
+        previous_override = app.dependency_overrides.get(deps.get_tenant_db_session)
         app.dependency_overrides[deps.get_tenant_db_session] = runtime_db
         token = _SESSIONS.set(maker)
         try:
@@ -180,6 +187,10 @@ def db_client(
                 yield client
         finally:
             _SESSIONS.reset(token)
+            if previous_override is None:
+                app.dependency_overrides.pop(deps.get_tenant_db_session, None)
+            else:
+                app.dependency_overrides[deps.get_tenant_db_session] = previous_override
 
 
 @pytest.fixture(autouse=True)

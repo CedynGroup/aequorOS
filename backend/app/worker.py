@@ -37,6 +37,7 @@ from app.bi.jobs import (
 )
 from app.core import audit_integrity
 from app.core.config import get_settings
+from app.core.key_management import reencryption
 from app.core.logging import configure_logging, get_request_id, reset_request_id, set_request_id
 from app.core.observability import Condition, emit
 from app.core.tls import validate_service_transports
@@ -50,6 +51,7 @@ from app.db.session import (
 from app.db.worker_access import DESK_SIGNATURE, has_worker_function
 from app.icaap.service import ai_jobs as icaap_ai_jobs
 from app.identity.public import run_session_purge
+from app.live.service import pipeline
 from app.models import (
     Bank,
     DeskCurveDefinition,
@@ -68,7 +70,6 @@ from app.services import (
     job_queue,
     market_data_jobs,
     notification_email_mirror,
-    pipeline,
     reporting_deadline_scan,
     scheduler,
     temenos_jobs,
@@ -85,6 +86,7 @@ Handler = Callable[[Session, Job], None]
 # until 2026-08-09: enqueued by every tick, absent here). The parity test in
 # tests/services/test_desk_capture_job.py enforces the invariant.
 HANDLERS: dict[str, Handler] = {
+    "bank_reencrypt": reencryption.run,
     "session_purge": run_session_purge,
     "document_delete": documents.run_document_delete,
     "pipeline_refresh": pipeline.run_refresh,

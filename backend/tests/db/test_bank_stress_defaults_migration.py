@@ -13,7 +13,7 @@ from typing import Protocol, cast
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from alembic import command
@@ -25,6 +25,7 @@ from tests.db.test_postgres_migrations import (
     clear_database_caches,
     forward_migrated_postgres_schema,
 )
+from tests.support.database import managed_engine
 
 __all__ = ["forward_migrated_postgres_schema"]
 
@@ -34,7 +35,7 @@ class _Migration(Protocol):
     def downgrade(self) -> None: ...
 
 
-def test_backfill_is_scoped_additive_and_idempotent() -> None:
+def test_backfill_is_scoped_additive_and_idempotent(request: pytest.FixtureRequest) -> None:
     spec = importlib.util.spec_from_file_location(
         "bank_stress_defaults",
         Path(__file__).parents[2] / "alembic/versions/202610240001_bank_stress_defaults.py",
@@ -42,7 +43,7 @@ def test_backfill_is_scoped_additive_and_idempotent() -> None:
     assert spec is not None and spec.loader is not None
     migration = cast(_Migration, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(cast(ModuleType, migration))
-    with create_engine("sqlite://").begin() as connection:
+    with managed_engine(request, "sqlite://").begin() as connection:
         connection.execute(
             text("CREATE TABLE institution_types (type_code TEXT, institution_class TEXT)")
         )

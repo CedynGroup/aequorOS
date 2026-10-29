@@ -4,6 +4,7 @@ export * from "./AttestationApi";
 export * from "./AuditLogApi";
 export * from "./AuthApi";
 export * from "./AuthorizationApi";
+export * from "./BankEncryptionApi";
 export * from "./BanksApi";
 export * from "./BehavioralModelsApi";
 export * from "./BiApi";

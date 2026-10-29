@@ -58,12 +58,16 @@ def test_grid_shapes_differ_by_class() -> None:
     assert SDI.institution_class == "sdi"
     assert SDI.grades == lc.SDI_GRADE_ORDER == ("standard", "substandard", "doubtful", "loss")
     assert BANK.institution_class == "bank"
-    assert BANK.grades == lc.BANK_GRADE_ORDER == (
-        "standard",
-        "olem",
-        "substandard",
-        "doubtful",
-        "loss",
+    assert (
+        BANK.grades
+        == lc.BANK_GRADE_ORDER
+        == (
+            "standard",
+            "olem",
+            "substandard",
+            "doubtful",
+            "loss",
+        )
     )
 
 

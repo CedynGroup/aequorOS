@@ -41,7 +41,7 @@ from app.models import (
     LineageRecord,
     User,
 )
-from app.services.institution_types import FALLBACK_TYPE_CODE
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, USER_1, headers
 
 GRANTEE = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")

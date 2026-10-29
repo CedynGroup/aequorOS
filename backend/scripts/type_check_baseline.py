@@ -35,7 +35,24 @@ STRICT_MODULES: tuple[str, ...] = (
     "app.live",
     "app.identity.models.bank",
     "app.models.job",
-    "app.models.parameter_register",
+    "app.policy.models.parameter_register",
+)
+
+#: Exact-file exceptions for the live layout move, retaining only the existing legacy
+#: counts at their new paths. Remove each exception when its baseline entry is retired;
+#: new files and every other module under ``app.live`` remain strict.
+TRANSITIONAL_LEGACY_MODULES = frozenset(
+    {
+        "app.live.domain.gl.pl_mapping",
+        "app.live.domain.reporting.period_windows",
+        "app.live.models.live",
+        "app.live.models.regulatory",
+        "app.live.models.regulatory_run",
+        "app.live.service.data_activation",
+        "app.live.service.fact_derivation",
+        "app.live.service.live_view",
+        "app.live.service.pipeline",
+    }
 )
 
 #: The rule name charged to a diagnostic basedpyright raises without one, such as a
@@ -118,17 +135,20 @@ def module_of(path: Path) -> str:
 
 
 def is_strict_module(module: str) -> bool:
-    return any(module == strict or module.startswith(f"{strict}.") for strict in STRICT_MODULES)
+    return module not in TRANSITIONAL_LEGACY_MODULES and any(
+        module == strict or module.startswith(f"{strict}.") for strict in STRICT_MODULES
+    )
 
 
 def baseline_module(module: str, moves: Sequence[tuple[str, str]]) -> str:
     """The name ``module``'s errors are counted under.
 
     A module in a strict path is counted where it is, so it never inherits a legacy
-    allowance. Any other module takes the name it had before its recorded moves, so a
-    codemod move keeps its baseline entries and stays a pure rename.
+    allowance. The exact transitional live exceptions also use their current names.
+    Any other module takes the name it had before its recorded moves, so a codemod
+    move keeps its baseline entries and stays a pure rename.
     """
-    if is_strict_module(module):
+    if is_strict_module(module) or module in TRANSITIONAL_LEGACY_MODULES:
         return module
     for old, new in reversed(moves):
         if module == new:

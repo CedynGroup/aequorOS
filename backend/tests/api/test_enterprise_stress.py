@@ -30,6 +30,7 @@ from app.core.authorization import (
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
+from app.live.service.fact_derivation import money as derivation_money
 from app.models import (
     AuthorizationBinding,
     BankFinancialFact,
@@ -38,7 +39,6 @@ from app.models import (
     User,
 )
 from app.services import default_macro_scenarios
-from app.services.fact_derivation import money as derivation_money
 from tests.api.test_fx_authorization import _grant
 from tests.api.test_ingestion import seed_bank
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers

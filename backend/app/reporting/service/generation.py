@@ -38,9 +38,9 @@ from app.api.deps import TenantContext
 from app.attestation.public import digests, register_state
 from app.capital.public import regulatory_capital
 from app.core import observability
+from app.core.key_management.presentation import require_disclosed
 from app.data_engine.public import withdrawal_impact
 from app.domain.authority.outcomes import NotComputable
-from app.domain.policy import Direction, direction_for
 from app.forecasting.public import regulatory_forecasting
 from app.identity.public import Bank, InstitutionProfile, User
 from app.liquidity.public import Bsd3SummaryRowRead, regulatory_liquidity
@@ -50,6 +50,7 @@ from app.live.public import (
     RegulatoryRun,
     require_fx_run_coverage,
 )
+from app.policy.domain import Direction, direction_for
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.reporting.service import family_access, family_hooks, filing_reconciliation
@@ -102,6 +103,7 @@ def snapshot_content_hash(snapshot: dict[str, Any]) -> str:
     discipline: identical content always hashes identically regardless of
     insertion order.
     """
+    require_disclosed(snapshot)
     canonical = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -442,16 +444,8 @@ def _generate_package(
         basis=payload.basis,
     )
 
-    # Attestation binding, sealed with the snapshot (docs/attestation_esignature.md
-    # §3.1). Every return gets a content_digest — snapshot_sha256 embeds
-    # metadata.generated_at and therefore seals a VERSION, not content (gap G13).
-    # Packs that bind no engine run additionally get the master-data provenance
-    # analogue, without which a signature over them would bind figures with
-    # nothing behind them (gap G16).
-    register_digest = (
-        digests.register_state_digest(register_state.register_state_rows(db, ctx, bank.id))
-        if not generated.source_runs
-        else None
+    register_digest = digests.register_state_digest(
+        register_state.project_register_state(db, ctx, bank.id)
     )
     package = RegulatoryPackage(
         organization_id=ctx.organization_id,
@@ -639,10 +633,8 @@ def generate_frozen_package(  # noqa: PLR0913 - the mint key is its named parts
         basis=basis,
         rehearsal=rehearsal,
     )
-    register_digest = (
-        digests.register_state_digest(register_state.register_state_rows(db, ctx, bank.id))
-        if not built.source_runs
-        else None
+    register_digest = digests.register_state_digest(
+        register_state.project_register_state(db, ctx, bank.id)
     )
     package = RegulatoryPackage(
         organization_id=ctx.organization_id,
@@ -946,8 +938,7 @@ def _stamp_provenance(  # noqa: PLR0913 — the full generation context is the i
     * Otherwise the authority is read off the source runs: a non-empty lineage
       means a sealed engine run owns the figures; an empty one on a generator
       that binds no run by design (the LRT corporate packs) means master data
-      owns them, sealed by ``register_state_digest`` instead. This is the same
-      branch the register-digest decision below already takes, now stated.
+      owns them. Register commitments follow docs/attestation_esignature.md §3.1.
 
     Every section is then stamped with an authority, so no field in a stored
     snapshot is left without one. Resolution order for a consumer is
@@ -1494,7 +1485,7 @@ def _generate_capital(
 # BoG GHS IRRBB calibration (plan W6.4): the IRRBB Guideline (exposure draft,
 # Feb 2026) Appendix II–III Tables 5–6 prescribe a ±450 bp parallel GHS shock
 # (short 500 / long 300). The IRR engine currently computes only the six Basel
-# scenarios (app/domain/irr/engine.py IRR_SCENARIO_CODES) and hard-coded
+# scenarios (app/irrbb/domain/engine.py IRR_SCENARIO_CODES) and hard-coded
 # ±200 bp earnings-at-risk, so these rows are emitted ONLY when a run's
 # metrics actually carry them — never fabricated. The BoG ±450 param rows
 # (module='irr', parallel_up_450 / parallel_down_450) are stored effective-
@@ -2694,7 +2685,7 @@ _GOVERNED_ROW_FIELDS = (
     "parameter_id",
 )
 
-#: The resolver's layer order (``app.domain.policy.resolution_order``): a
+#: The resolver's layer order (``app.policy.domain.resolution_order``): a
 #: licence-type row wins over the class row whatever their dates.
 _RESOLUTION_LAYER_RANK: dict[str, int] = {"institution_type": 0, "institution_class": 1}
 

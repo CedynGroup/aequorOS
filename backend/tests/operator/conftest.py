@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 import app.operator.deps as operator_deps
 import app.operator.features.auth as operator_auth_feature
 from app.core.config import get_operator_settings
+from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference
 from app.models import InstitutionType, Jurisdiction, RegulatoryParameter
@@ -29,7 +30,7 @@ from app.operator.features.provision import get_provisioning_clients
 from app.operator.main import create_operator_app
 from app.operator.services import operator_auth
 from app.operator.services.tenant_provisioning import ProvisioningClients
-from app.services.regulatory_parameters import seed_rows as _regparam_seed_rows
+from app.policy.service.regulatory_parameters import seed_rows as _regparam_seed_rows
 from app.storage.config import StorageEngineSettings
 from tests.conftest import (
     _LazyTestApp,
@@ -405,16 +406,23 @@ def operator_client(
     _operator_bound_sessionmaker: sessionmaker,
     _shared_operator_app: _LazyTestApp,
     fake_s3: FakeS3Client,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[TestClient]:
     """Operator app over the rollback-isolated database with the fake S3 injected."""
     _ = _operator_bound_sessionmaker
     app = _shared_operator_app.get()
     keys = LocalKeyProvider()
     keys.add_key(BANK_KEY)
+
+    def providers(_name: str) -> LocalKeyProvider:
+        return keys
+
+    # Field reads/writes must use the same synthetic hierarchy as provisioning.
+    monkeypatch.setattr(registry, "provider_for", providers)
     app.dependency_overrides[get_provisioning_clients] = lambda: ProvisioningClients(
         s3_client=fake_s3,
         storage_settings=fake_storage_settings(),
-        key_providers=lambda _name: keys,
+        key_providers=providers,
     )
     try:
         with TestClient(app, raise_server_exceptions=False) as client:

@@ -135,17 +135,28 @@ REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "bi/domain/**/*.py",
     "icaap/domain/**/*.py",
     "reporting/domain/**/*.py",
+    "policy/domain/**/*.py",
+    "live/domain/**/*.py",
+    "irrbb/domain/**/*.py",
+    "irrbb/service/**/*.py",
+    "irrbb/api/**/*.py",
+    "credit/domain/**/*.py",
+    "credit/service/regulatory_credit.py",
+    "credit/api/run_regulatory_credit.py",
+    "policy/service/regulatory_parameters.py",
+    "policy/service/sdi_regime.py",
     "services/regulatory_*.py",
     "reporting/service/**/*.py",
     "services/sdi_*.py",
     "attestation/service/**/*.py",
-    "services/fact_derivation.py",
-    "services/pipeline.py",
-    "services/params.py",
+    "live/service/fact_derivation.py",
+    "live/service/pipeline.py",
+    "policy/service/params.py",
     "services/capital_plan.py",
     "services/enterprise_stress*.py",
     "services/reverse_stress.py",
-    "services/live_*.py",
+    "live/service/live_*.py",
+    "live/service/regulatory_dashboard_batching.py",
     "features/run_regulatory_*.py",
     "features/run_forecasting.py",
     "features/run_reverse_stress.py",
@@ -178,22 +189,24 @@ BANK_PLANE_MODULES: frozenset[str] = frozenset(
     {
         "app.identity.models.bank",
         "app.models.canonical",
-        "app.models.parameter_register",
-        "app.models.regulatory",
-        "app.models.regulatory_run",
+        "app.policy.models.parameter_register",
+        "app.live.models.regulatory",
+        "app.live.models.regulatory_run",
         "app.reporting.models.packages",
-        "app.services.fact_derivation",
+        "app.live.service.fact_derivation",
         "app.services.regulatory_capital",
         "app.services.regulatory_liquidity",
         "app.services.regulatory_forecasting",
         "app.services.regulatory_fx",
-        "app.services.regulatory_irr",
+        "app.irrbb.service.regulatory_irr",
         "app.services.regulatory_ftp",
         "app.reporting.service",
         "app.domain.capital",
         "app.domain.liquidity",
         "app.domain.forecasting",
-        "app.domain.irr",
+        "app.irrbb.domain",
+        "app.credit.domain",
+        "app.credit.service.regulatory_credit",
         "app.domain.fx",
         "app.domain.ftp",
         "app.domain.stress",
@@ -397,6 +410,9 @@ def test_the_regulatory_plane_scan_is_not_vacuous() -> None:
     scanned = {_module_name(path) for path in _files(REGULATORY_PLANE_GLOBS)}
 
     required = {
+        "app.credit.domain.pd",
+        "app.credit.service.regulatory_credit",
+        "app.credit.api.run_regulatory_credit",
         "app.domain.capital.engine",
         "app.domain.liquidity.engine",
         "app.domain.forecasting.engine",
@@ -404,7 +420,7 @@ def test_the_regulatory_plane_scan_is_not_vacuous() -> None:
         "app.services.regulatory_liquidity",
         "app.services.regulatory_forecasting",
         "app.reporting.service.generation",
-        "app.services.fact_derivation",
+        "app.live.service.fact_derivation",
         "app.services.sdi_capital",
     }
     on_disk = {
@@ -540,10 +556,10 @@ def test_the_forward_guard_convicts_an_aliased_module_import() -> None:
 
 def test_the_reverse_guard_convicts_a_planted_import() -> None:
     """Proof the case -> regulatory rule reports."""
-    planted = "from app.models.regulatory import BankFinancialFact\n"
+    planted = "from app.live.models.regulatory import BankFinancialFact\n"
 
     assert "BankFinancialFact" in bank_plane_dependencies(planted)
-    assert "app.models.regulatory" in bank_plane_dependencies(planted)
+    assert "app.live.models.regulatory" in bank_plane_dependencies(planted)
 
 
 def test_the_forward_guard_convicts_a_relative_import() -> None:

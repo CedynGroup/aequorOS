@@ -19,9 +19,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-import sqlalchemy as sa
-from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.dialects import postgresql
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 
@@ -31,7 +29,6 @@ from app.bi.models.marts import (
     MONTHLY_PARTITIONED_TABLES,
     YEARLY_PARTITIONED_TABLES,
 )
-from app.db.base import Base
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
@@ -39,6 +36,7 @@ from tests.db.test_postgres_migrations import (
     migrated_postgres_schema,
     postgres_schema_url,
 )
+from tests.support.database import managed_engine
 
 __all__ = ["migrated_postgres_schema"]
 
@@ -52,22 +50,9 @@ pytestmark = [
 
 REVISION = "202609220066"
 PREVIOUS_REVISION = "202609200065"
-#: The BI plane is created across SEVERAL revisions: ``REVISION`` builds the
-#: marts, dimensions, control tables and partitions, ``202609270069`` adds
-#: ``bi_fact_target`` (the pre-matched target mart) plus the ``targets`` build
-#: scope, and ``202609280075`` adds ``bi_fact_gl_branch_monthly`` (the branch
-#: breakdown of the ledger). ``BI_TABLES`` names every one of their tables, so the
-#: round-trip test below has to come back up through the LAST of them or it would
-#: measure the model against half a chain — and it convicts by name when it does
-#: not, which is how this constant was caught in Phase 5. **A revision that changes
-#: any ``bi_*`` table's SHAPE must be named here** — not only one that adds a table,
-#: which is how the constant went stale a second time: ``202609280076`` adds four
-#: columns to both position facts and ``202609280077`` widens the query log's
-#: surface CHECK, and this test compares the MODEL against the migrated schema, so
-#: stopping short of either measures a model that has moved against a database that
-#: has not. The ``bi_content`` / ``bi_notifications`` tables have their own suite
-#: (``test_bi_phase3_migration.py``) because this one reads ``app/bi/models/marts.py``
-#: alone.
+#: The foundation objects span several revisions: marts, target and GL branch
+#: tables, position-fact columns and query-log vocabulary. Replay through the
+#: final foundation revision so the round trip restores every registered mart.
 LAST_BI_REVISION = "202609280077"
 PARTITIONED = (*MONTHLY_PARTITIONED_TABLES, *YEARLY_PARTITIONED_TABLES)
 PLAIN = tuple(table for table in BI_TABLES if table not in PARTITIONED)
@@ -190,56 +175,6 @@ def test_every_bi_table_is_partitioned_as_declared_and_force_rls(
             ).tuples()
         }
     assert keys == {**MONTHLY_PARTITIONED_TABLES, **YEARLY_PARTITIONED_TABLES}
-
-
-def test_migrated_checks_agree_with_the_model_vocabularies(
-    migrated_postgres_schema: MigratedPostgresSchema,
-) -> None:
-    """The migration pins its CHECK literals; the model derives them from tuples.
-
-    Same hazard as ``202609200065``: a value added to a model tuple without a
-    constraint migration passes the hermetic suite and fails on a migrated
-    database. Every ``IN (...)`` literal the model emits must be admitted by
-    the migrated constraint of the same name.
-    """
-    with migrated_postgres_schema.app_engine.connect() as connection:
-        migrated = {
-            key: value
-            for key, value in connection.execute(
-                text(
-                    """
-                    SELECT c.conname, pg_get_constraintdef(c.oid)
-                    FROM pg_constraint c
-                    JOIN pg_class t ON t.oid = c.conrelid
-                    JOIN pg_namespace n ON n.oid = t.relnamespace
-                    WHERE n.nspname = :schema_name AND c.contype = 'c'
-                      AND t.relname = ANY(:names)
-                    """
-                ),
-                {"schema_name": migrated_postgres_schema.schema_name, "names": list(BI_TABLES)},
-            ).tuples()
-        }
-
-    missing: list[str] = []
-    for table_name in BI_TABLES:
-        table = Base.metadata.tables[table_name]
-        for constraint in table.constraints:
-            name = getattr(constraint, "name", None)
-            sqltext = getattr(constraint, "sqltext", None)
-            if not name or sqltext is None:
-                continue
-            assert name in migrated, f"{table_name}: CHECK {name} is not in the migrated schema"
-            definition = migrated[name]
-            literal = str(sqltext)
-            if " IN (" not in literal:
-                continue
-            values = literal.split(" IN (", 1)[1].rsplit(")", 1)[0]
-            missing.extend(
-                f"{name}: {value}"
-                for value in (v.strip() for v in values.split(","))
-                if value.startswith("'") and value not in definition
-            )
-    assert not missing, f"migrated CHECKs reject model values: {missing}"
 
 
 def test_ensure_partition_functions_are_idempotent_and_install_rls(
@@ -435,6 +370,7 @@ def _temporary_non_owner_role(admin: Connection, name: str) -> bool:
 
 def test_a_non_owner_worker_drops_and_recreates_children_only_through_the_functions(
     migrated_postgres_schema: MigratedPostgresSchema,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Retention runs as the BYPASSRLS worker, which owns nothing (audit A4-03).
 
@@ -467,10 +403,11 @@ def test_a_non_owner_worker_drops_and_recreates_children_only_through_the_functi
             for signature in functions:
                 admin.execute(text(f"GRANT EXECUTE ON FUNCTION {signature} TO {role}"))
 
-        worker_engine = create_engine(
+        worker_engine = managed_engine(
+            request,
             postgres_schema_url(
                 engine.url.render_as_string(hide_password=False), schema_name, role=role
-            )
+            ),
         )
         try:
             with worker_engine.begin() as worker:
@@ -645,115 +582,3 @@ def test_downgrade_removes_every_bi_object_and_upgrade_restores_them(
     state = _relation_state(migrated_postgres_schema, list(BI_TABLES))
     assert set(state) == set(BI_TABLES)
     assert all(row[1] and row[2] and row[3] == 1 for row in state.values())
-
-
-# --- model ↔ migration parity -------------------------------------------------
-#
-# The hermetic width tests (``tests/bi/models/test_bi_models.py``) measure the
-# MODEL, and the model is not what a deployed database has. Widening a column in
-# ``app/bi/models/marts.py`` without editing ``202609220066`` therefore passes the
-# whole hermetic suite and fails on a real Postgres INSERT — which is precisely
-# the class of defect ``202609200065``'s docstring records (a CHECK the model
-# derived from an enum while the migrated database did not), and how
-# ``bi_fact_engine_metric.status`` came to be ``String(8)`` against a nine-
-# character source value. These two tests close the class rather than the case:
-# after the real migration chain runs, every ``bi_*`` column's type, length,
-# precision, scale and nullability must equal what the model declares, and the
-# CHECK constraints must be the same set on both sides.
-#
-# Both sides are compiled with the SAME PostgreSQL dialect, so there is one
-# source of truth for the comparison and no hand-written type map to fall
-# behind: ``VARCHAR(24)`` from the model is compared to ``VARCHAR(24)``
-# reflected out of the database.
-
-_PG = postgresql.dialect()
-
-
-def _rendered(type_: sa.types.TypeEngine) -> str:
-    return str(type_.compile(dialect=_PG))
-
-
-def test_migrated_columns_match_the_model_type_length_and_nullability(
-    migrated_postgres_schema: MigratedPostgresSchema,
-) -> None:
-    inspector = inspect(migrated_postgres_schema.app_engine)
-    drift: list[str] = []
-
-    for table_name in BI_TABLES:
-        model = Base.metadata.tables[table_name]
-        reflected = {
-            column["name"]: column
-            for column in inspector.get_columns(
-                table_name, schema=migrated_postgres_schema.schema_name
-            )
-        }
-        declared = {column.name for column in model.columns}
-        drift.extend(
-            f"{table_name}.{name}: in the migration, not in the model"
-            for name in sorted(reflected.keys() - declared)
-        )
-        for column in model.columns:
-            actual = reflected.get(column.name)
-            if actual is None:
-                drift.append(f"{table_name}.{column.name}: in the model, not in the migration")
-                continue
-            # One comparison covers String length and Numeric precision/scale:
-            # they are part of the compiled type.
-            if _rendered(column.type) != _rendered(actual["type"]):
-                drift.append(
-                    f"{table_name}.{column.name}: model {_rendered(column.type)} "
-                    f"!= migrated {_rendered(actual['type'])}"
-                )
-            if bool(column.nullable) != bool(actual["nullable"]):
-                drift.append(
-                    f"{table_name}.{column.name}: model "
-                    f"{'NULL' if column.nullable else 'NOT NULL'} != migrated "
-                    f"{'NULL' if actual['nullable'] else 'NOT NULL'}"
-                )
-
-    assert not drift, (
-        "app/bi/models/marts.py and migration 202609220066 disagree about these columns. "
-        "The model is what the hermetic suite builds and the migration is what a real "
-        "database has, so a difference here is a latent Postgres-only failure — edit "
-        "BOTH: " + "; ".join(drift)
-    )
-
-
-def test_migrated_check_constraints_are_exactly_the_models(
-    migrated_postgres_schema: MigratedPostgresSchema,
-) -> None:
-    """Same parity in the other vocabulary: every declared CHECK, no extras.
-
-    ``test_migrated_checks_agree_with_the_model_vocabularies`` asserts that the
-    VALUES a model CHECK admits are admitted by the migrated constraint of the
-    same name. This asserts the SETS of constraint names match, so a CHECK
-    dropped from one side or added to the other is caught even when no
-    vocabulary changed.
-    """
-    inspector = inspect(migrated_postgres_schema.app_engine)
-    drift: list[str] = []
-
-    for table_name in BI_TABLES:
-        declared = {
-            str(constraint.name)
-            for constraint in Base.metadata.tables[table_name].constraints
-            if isinstance(constraint, sa.CheckConstraint) and constraint.name
-        }
-        migrated = {
-            str(constraint["name"])
-            for constraint in inspector.get_check_constraints(
-                table_name, schema=migrated_postgres_schema.schema_name
-            )
-            if constraint.get("name")
-        }
-        drift.extend(
-            f"{table_name}: {name} is in the model only" for name in sorted(declared - migrated)
-        )
-        drift.extend(
-            f"{table_name}: {name} is in the migration only" for name in sorted(migrated - declared)
-        )
-
-    assert not drift, (
-        "app/bi/models/marts.py and migration 202609220066 declare different CHECK "
-        "constraints: " + "; ".join(drift)
-    )

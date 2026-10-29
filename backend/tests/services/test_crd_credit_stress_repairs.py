@@ -21,13 +21,17 @@ from app.domain.forecasting.engine import ForecastFact
 from app.domain.stress.credit_bottom_up import BottomUpCreditInputs, compute_bottom_up_credit
 from app.domain.stress.orchestrator import EnterpriseStressInputs, run_enterprise_stress
 from app.domain.stress.projection import EnterpriseProjectionInputs, project_enterprise
-from app.models import BankFinancialFact, CanonicalGlAccount, RegulatoryRun
-from app.schemas.reverse_stress import ReverseStressRunCreate
-from app.services import enterprise_stress, reverse_stress
-from app.services.fact_derivation import (
+from app.live.service.fact_derivation import (
     _derive_specs,  # pyright: ignore[reportPrivateUsage]
     _PositionRow,  # pyright: ignore[reportPrivateUsage]
     derive_facts,
+)
+from app.models import BankFinancialFact, CanonicalGlAccount, RegulatoryRun
+from app.schemas.reverse_stress import ReverseStressRunCreate
+from app.services import enterprise_stress, reverse_stress
+from tests.credit.service.test_crd_credit_exposures import (
+    _credit_rwa,  # pyright: ignore[reportPrivateUsage]
+    _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.domain.stress_fixtures import (
     BASE_ASSUMPTIONS,
@@ -40,10 +44,6 @@ from tests.domain.stress_fixtures import (
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
-from tests.services.test_crd_credit_exposures import (
-    _credit_rwa,  # pyright: ignore[reportPrivateUsage]
-    _stress_row,  # pyright: ignore[reportPrivateUsage]
-)
 from tests.services.test_derivation_fail_closed_defaults import (
     _canonical,  # pyright: ignore[reportPrivateUsage]
     _row,  # pyright: ignore[reportPrivateUsage]

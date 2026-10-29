@@ -51,7 +51,7 @@ Worked record — the primary authority for bank CAR:
 ```
 metric_id='car_pct'  family=capital  class=bank  jurisdiction='GH'  regulator='BOG'
 regime=crd  methodology_id='crd_basel_capital_run'
-policy_resolver='app.services.params:get_active_params'
+policy_resolver='app.policy.service.params:get_active_params'
 calculation_engine='app.domain.capital.engine:compute_capital_ratios'
 calculation_version='regulatory-capital-v1.0.0'
 parameter_set=('ParamRiskWeight', 'ParamCapitalThreshold')

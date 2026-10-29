@@ -35,10 +35,13 @@ from tests.storage.contract import StorageContractSuite, metadata_for
 from tests.storage.test_object_lock import LockClient
 from tests.support.key_envelopes import MemoryEnvelopeStore
 
-pytestmark = pytest.mark.skipif(
-    not StorageEngineSettings().configured,
-    reason="S3_* storage credentials are not configured.",
-)
+pytestmark = [
+    pytest.mark.requires_service("minio"),
+    pytest.mark.skipif(
+        not StorageEngineSettings().configured,
+        reason="S3_* storage credentials are not configured.",
+    ),
+]
 
 
 @pytest.mark.parametrize("mode", ["COMPLIANCE", "GOVERNANCE"])

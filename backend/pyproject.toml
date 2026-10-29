@@ -91,10 +91,12 @@ dev = [
   "pytest-xdist",
   "types-requests>=2.33.0.20261006",
   "moto[kms,s3]>=5,<6",
+  "greenlet>=3.5.1",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-p scripts.test_suites_plugin -p scripts.database_observation_plugin"
 pythonpath = ["."]
 markers = [
   "requirement(citation): behavioral regression against a cited external requirement",

@@ -23,18 +23,14 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.db.base import utc_now
 from app.domain.ingestion.constants import STUCK_DEDUP_STATUSES
 from app.identity.public import Bank
-from app.models import (
-    BankReportingPeriod,
-    IngestionBatch,
-    MappingConfigRecord,
-    ParamCapitalThreshold,
-    ParamLiquidityThreshold,
-)
+from app.live.public import BankReportingPeriod
+from app.models import IngestionBatch, MappingConfigRecord
+from app.policy.public import ParamCapitalThreshold, ParamLiquidityThreshold
 from app.schemas.operator import (
     FixConfigChangeRead,
     FixConfigRequest,
@@ -192,7 +188,18 @@ def rerun_ingestion(
     still requires re-uploading the file through the Data Engine.
     """
     batch = db.scalar(
-        select(IngestionBatch).where(
+        select(IngestionBatch)
+        .options(
+            load_only(
+                IngestionBatch.id,
+                IngestionBatch.organization_id,
+                IngestionBatch.bank_id,
+                IngestionBatch.as_of_date,
+                IngestionBatch.dedup_status,
+                raiseload=True,
+            )
+        )
+        .where(
             IngestionBatch.id == payload.batch_id,
             IngestionBatch.organization_id == organization_id,
         )
@@ -256,7 +263,18 @@ def redrive_dedup(
     no-op that reports success.
     """
     batch = db.scalar(
-        select(IngestionBatch).where(
+        select(IngestionBatch)
+        .options(
+            load_only(
+                IngestionBatch.id,
+                IngestionBatch.organization_id,
+                IngestionBatch.bank_id,
+                IngestionBatch.as_of_date,
+                IngestionBatch.dedup_status,
+                raiseload=True,
+            )
+        )
+        .where(
             IngestionBatch.id == payload.batch_id,
             IngestionBatch.organization_id == organization_id,
         )
@@ -266,7 +284,7 @@ def redrive_dedup(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ingestion batch not found for this organization.",
         )
-    dedup_status = (batch.etl_report or {}).get("dedup_status")
+    dedup_status = batch.dedup_status
     if dedup_status not in STUCK_DEDUP_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

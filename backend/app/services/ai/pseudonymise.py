@@ -27,8 +27,8 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.identity.public import Bank, User
 from app.models import Organization
-from app.models.jurisdiction import Jurisdiction
-from app.services import jurisdictions as jurisdictions_service
+from app.policy.public import Jurisdiction
+from app.policy.public import jurisdictions as jurisdictions_service
 
 #: key -> the ROLE the model is told. Values are resolved server-side and never
 #: cross the boundary. ``sub_N`` is reserved for a subsidiary register that does
@@ -147,12 +147,12 @@ def _party_names(db: Session, organization_id: str, bank: Bank) -> set[str]:
     except ImportError:  # pragma: no cover - the register always exists today
         return set()
     rows = db.scalars(
-        select(RelatedParty.full_name).where(
+        select(RelatedParty).where(
             RelatedParty.organization_id == organization_id,
             RelatedParty.bank_id == bank.id,
         )
     )
-    return {value.strip() for value in rows if value}
+    return {party.full_name.strip() for party in rows if party.full_name}
 
 
 def jurisdiction_deny_terms(db: Session) -> frozenset[str]:

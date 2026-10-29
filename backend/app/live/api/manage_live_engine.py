@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Query, status
+
+from app.api.deps import DbSession, MutationTenant, Tenant
+from app.core.authorization import Module, Permission, Sensitivity
+from app.identity import public as scoped_authorization
+from app.live.schemas.live import (
+    BankAlertsRead,
+    BankFreshnessRead,
+    JobEnqueuedRead,
+    LiveSnapshotListRead,
+    LiveSummaryRead,
+    OfficialRunRequest,
+    RefreshRequest,
+)
+from app.live.service import alerts, freshness, live_view
+
+router = APIRouter(tags=["live-engine"])
+
+
+@router.get(
+    "/banks/{bank_id}/live-summary",
+    response_model=LiveSummaryRead,
+    operation_id="getLiveSummary",
+)
+def get_live_summary(bank_id: str, db: DbSession, ctx: Tenant) -> LiveSummaryRead:
+    return live_view.get_live_summary(db, ctx, bank_id)
+
+
+@router.get(
+    "/banks/{bank_id}/freshness",
+    response_model=BankFreshnessRead,
+    operation_id="getBankFreshness",
+)
+def get_bank_freshness(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+    reporting_period_id: Annotated[UUID | None, Query()] = None,
+) -> BankFreshnessRead:
+    return freshness.get_bank_freshness(db, ctx, bank_id, reporting_period_id)
+
+
+@router.get(
+    "/banks/{bank_id}/alerts",
+    response_model=BankAlertsRead,
+    operation_id="getBankAlerts",
+)
+def get_bank_alerts(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> BankAlertsRead:
+    return alerts.get_bank_alerts(db, ctx, bank_id, limit=limit)
+
+
+@router.post(
+    "/banks/{bank_id}/refresh",
+    response_model=JobEnqueuedRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="refreshBankData",
+)
+def refresh_bank_data(
+    bank_id: str,
+    payload: RefreshRequest,
+    db: DbSession,
+    ctx: MutationTenant,
+) -> JobEnqueuedRead:
+    return live_view.refresh_bank_data(db, ctx, bank_id, payload)
+
+
+@router.post(
+    "/banks/{bank_id}/official-runs",
+    response_model=JobEnqueuedRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="mintOfficialRun",
+)
+def mint_official_run(
+    bank_id: str,
+    payload: OfficialRunRequest,
+    db: DbSession,
+    ctx: MutationTenant,
+) -> JobEnqueuedRead:
+    return live_view.mint_official_run(db, ctx, bank_id, payload)
+
+
+@router.get(
+    "/banks/{bank_id}/live-snapshots",
+    response_model=LiveSnapshotListRead,
+    operation_id="listLiveSnapshots",
+)
+def list_live_snapshots(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+    # Every module the Command Center pulse draws a sparkline for must be listed
+    # here: the pulse requests one ladder per live module, so a module missing
+    # from this pattern 422s on every dashboard load ('rating' did, then
+    # 'credit' did when the credit module shipped). Keep it in step with
+    # components/home/pulse.ts.
+    module: Annotated[
+        str,
+        Query(pattern="^(liquidity|capital|credit|irr|fx|ftp|rating|forecast)$"),
+    ],
+    days: Annotated[int, Query(ge=2, le=120)] = 45,
+) -> LiveSnapshotListRead:
+    """Plane-2 daily ladder: past days are EOD closes, today is the live edge."""
+    bank = None
+    if module in ("liquidity", "irr"):
+        bank = scoped_authorization.require_bank_permission(
+            db,
+            ctx,
+            bank_id,
+            permission=Permission.VIEW,
+            module=Module.LIQUIDITY if module == "liquidity" else Module.IRRBB,
+            sensitivity=Sensitivity.AGGREGATED,
+            surface="live_snapshots",
+        )
+    return live_view.list_live_snapshots(
+        db,
+        ctx,
+        bank_id,
+        module=module,
+        days=days,
+        resolved_bank=bank,
+    )

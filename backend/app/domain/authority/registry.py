@@ -461,7 +461,7 @@ class MetricAuthority:
         """The platform's name for :attr:`authority_reference`.
 
         ``regulatory_parameter``, ``system_of_record`` and
-        :mod:`app.domain.policy.resolver` all call a governed legal basis a
+        :mod:`app.policy.domain.resolver` all call a governed legal basis a
         ``source_citation``; the forensic re-audit uses that name too. This
         registry named the same thing ``authority_reference`` first, and it is
         a serialised key (``to_dict``) that provenance already writes, so it
@@ -1081,8 +1081,8 @@ _GH = "GH"
 #: honest epoch is better than inventing per-metric commencement dates.
 _EPOCH = date(2026, 1, 1)
 
-_PARAMS_TENANT = "app.services.params:get_active_params"
-_PARAMS_CONTROL = "app.services.regulatory_parameters:resolve"
+_PARAMS_TENANT = "app.policy.service.params:get_active_params"
+_PARAMS_CONTROL = "app.policy.service.regulatory_parameters:resolve"
 
 # Both bumped to v2.0.0 on 2026-08-22 (forensic re-audit D-5): each engine
 # changed methodology in a way that moves a filed figure over unchanged inputs.
@@ -2246,7 +2246,7 @@ REGISTRY.register_all(
         _irr("duration_gap", engine="app.domain.irr.engine:compute_duration"),
         # The two terms of the gap identity that duration_gap already stands on:
         # ``duration_gap = asset_modified - (PV_liabilities / PV_assets) *
-        # liability_modified`` (app/domain/irr/engine.py:338). One call to
+        # liability_modified`` (app/irrbb/domain/engine.py:338). One call to
         # compute_duration returns all three. An authority over the difference
         # that does not reach its own operands is not an authority over anything,
         # so these carry the SAME citation rather than a new one.

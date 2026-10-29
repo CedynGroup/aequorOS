@@ -30,6 +30,7 @@ from app.adapters.api_push import identity_mapping_config
 from app.api.deps import TenantContext
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
+from app.domain.ingestion.locations import TEMP_SCHEME, StagedIngestionLocation
 from app.identity.public import Bank
 from app.models import IngestionBatch, MappingConfigRecord
 from app.schemas.ingestion import (
@@ -46,7 +47,6 @@ from app.schemas.push import (
 )
 from app.services.audit import record_event
 from app.services.ingestion import (
-    TEMP_SCHEME,
     bank_slug,
     create_mapping_config,
     start_ingestion,
@@ -73,6 +73,7 @@ def open_push_batch(
     payload: PushBatchOpen,
     storage: StorageClient,
 ) -> PushBatchStatusRead:
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     storage.ensure_institution(slug)
@@ -136,6 +137,7 @@ def stage_push_records(  # noqa: PLR0913 - mirrors record_event's shape
     page: PushRecordsPage,
     storage: StorageClient,
 ) -> PushBatchStatusRead:
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     manifest = _get_manifest_or_404(ctx, bank, slug, push_batch_id, storage)
@@ -194,6 +196,7 @@ def commit_push_batch(
     push_batch_id: UUID,
     storage: StorageClient,
 ) -> IngestionBatchStartRead:
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     manifest = _get_manifest_or_404(ctx, bank, slug, push_batch_id, storage)
@@ -221,7 +224,7 @@ def commit_push_batch(
         IngestionBatchCreate(
             source_system="API_PUSH",
             as_of_date=date.fromisoformat(manifest["as_of_date"]),
-            location=f"{TEMP_SCHEME}{source_location.object_path}",
+            location=StagedIngestionLocation(f"{TEMP_SCHEME}{source_location.object_path}"),
             reason=manifest["reason"],
         ),
         storage,
@@ -255,6 +258,7 @@ def get_push_batch(
     push_batch_id: UUID,
     storage: StorageClient,
 ) -> PushBatchStatusRead:
+    storage = storage.for_session(db)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     return _status_read(_get_manifest_or_404(ctx, bank, slug, push_batch_id, storage))

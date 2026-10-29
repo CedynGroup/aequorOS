@@ -20,6 +20,7 @@ from app.core.authorization import (
     Sensitivity,
 )
 from app.core.config import get_settings
+from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
 from app.core.observability import authorization_denied, cross_tenant_attempt
 from app.core.tenancy import TenantContext
 from app.db.session import get_sessionmaker
@@ -451,6 +452,13 @@ def get_tenant_db_session(
     refuse_impersonated_mutation(request, ctx)
     session = get_sessionmaker()()
     session.info["organization_id"] = ctx.organization_id
+    session.info[SESSION_SUPPORT] = ctx.impersonation_context is not None
+    if request.method in {"GET", "HEAD"}:
+        presentation = getattr(request.state, SESSION_STATE, None)
+        if not isinstance(presentation, PresentationState):
+            presentation = PresentationState()
+        presentation.support = ctx.impersonation_context is not None
+        session.info[SESSION_STATE] = presentation
     try:
         if ctx.authorization_version is None:
             validate_tenant_context(session, ctx)
@@ -2632,7 +2640,7 @@ def require_module_access(module_key: str):  # noqa: ANN201 - returns a FastAPI 
     ``default_modules`` (the same data the nav is scoped from). ``bank_id`` is
     read from the path; a non-bank-scoped route in a gated router is not blocked.
     """
-    from app.services import institution_types  # noqa: PLC0415 - avoid import cycle
+    from app.policy.service import institution_types  # noqa: PLC0415 - avoid import cycle
 
     def _dependency(
         request: Request,

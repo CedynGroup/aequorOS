@@ -11,7 +11,7 @@ from typing import cast
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, func, literal, select, text
+from sqlalchemy import func, literal, select, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.bi.service.execution import run_select
 from app.db.session import database_timeout_connect_args, get_bi_engine, get_engine
 from tests.db import test_database_roles as role_tests
+from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
@@ -35,7 +36,9 @@ TIMEOUTS = {
 
 
 @pytest.fixture(scope="module")
-def timeout_logins(administrator: Engine) -> Iterator[dict[str, Engine]]:
+def timeout_logins(
+    administrator: Engine, request: pytest.FixtureRequest
+) -> Iterator[dict[str, Engine]]:
     """Probe logins retain real role privileges without changing deployed passwords.
 
     Role settings are not inherited, so copy each configured role's two budgets
@@ -84,8 +87,8 @@ def timeout_logins(administrator: Engine) -> Iterator[dict[str, Engine]]:
                         ),
                     )
                     connection.execute(text(sql))
-                engines[role] = create_engine(
-                    make_url(administrator.url).set(username=name, password=password)
+                engines[role] = managed_engine(
+                    request, make_url(administrator.url).set(username=name, password=password)
                 )
         yield engines
     finally:
@@ -129,14 +132,17 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
         for connection in (api, legacy_api):
             connection.execute(text("SET LOCAL idle_in_transaction_session_timeout = '1s'"))
         # A transaction-scoped advisory lock proves that termination releases locks.
+        # Use a distinct bind name so encryption-lock isolation leaves this probe raw.
         lock_key = int(uuid4().hex[:14], 16)
-        api.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+        api.execute(text("SELECT pg_advisory_xact_lock(:probe_key)"), {"probe_key": lock_key})
         assert (
-            worker.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key})
+            worker.scalar(
+                text("SELECT pg_try_advisory_xact_lock(:probe_key)"), {"probe_key": lock_key}
+            )
             is False
         )
-        long_job = jobs.submit(worker.scalar, text("SELECT 42 FROM pg_sleep(65)"))
-        deadline = time.monotonic() + 75
+        long_job = jobs.submit(worker.scalar, text("SELECT 42 FROM pg_sleep(2)"))
+        deadline = time.monotonic() + 10
         with administrator.connect() as observer:
             while observer.scalar(
                 text("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid=ANY(:pids))"),
@@ -146,28 +152,33 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
                 assert time.monotonic() < deadline, (
                     "API idle transaction survived the short probe budget"
                 )
-                time.sleep(1)
+                time.sleep(0.05)
         for api_connection in (api, legacy_api):
             with pytest.raises(DBAPIError) as terminated:
                 api_connection.execute(text("SELECT 1"))
             assert getattr(terminated.value.orig, "sqlstate", None) == "25P03"
-        assert long_job.result(timeout=75) == 42
+        assert long_job.result(timeout=10) == 42
         assert (
-            worker.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key}) is True
+            worker.scalar(
+                text("SELECT pg_try_advisory_xact_lock(:probe_key)"), {"probe_key": lock_key}
+            )
+            is True
         )
-        assert bi.scalar(text("SELECT 42 FROM pg_sleep(1)")) == 42
+        assert bi.scalar(text("SELECT 42 FROM pg_sleep(0.1)")) == 42
         worker.commit()
         bi.commit()
 
 
-def test_legacy_pools_keep_distinct_budgets_and_migration_options(administrator: Engine) -> None:
+def test_legacy_pools_keep_distinct_budgets_and_migration_options(
+    administrator: Engine, request: pytest.FixtureRequest
+) -> None:
     url = administrator.url.render_as_string(hide_password=False)
     engines = {
         "api": get_engine(url),
         "worker": get_engine(url, "aequoros-worker"),
         "bi": get_bi_engine(url),
-        "migrator": create_engine(
-            url, connect_args=database_timeout_connect_args(url, "aequoros-migrator")
+        "migrator": managed_engine(
+            request, url, connect_args=database_timeout_connect_args(url, "aequoros-migrator")
         ),
     }
     try:
@@ -197,13 +208,21 @@ def test_bi_export_budget_survives_the_interactive_role_default(
     timeout_logins: dict[str, Engine],
 ) -> None:
     with Session(timeout_logins["aqs_bi"]) as session:
+        assert session.scalar(text("SHOW statement_timeout")) == "10s"
+        # Keep the real login-default proof above, but scale the interactive
+        # budget for this disposable transaction and prove it is enforced.
+        session.execute(text("SET LOCAL statement_timeout = '100ms'"))
+        statement = select(literal(42)).select_from(func.pg_sleep(0.3))
+        with pytest.raises(DBAPIError) as cancelled, session.begin_nested():
+            session.execute(statement).all()
+        assert getattr(cancelled.value.orig, "sqlstate", None) == "57014"
         assert (
             run_select(
                 session,
-                select(literal(42)).select_from(func.pg_sleep(11)),
+                statement,
                 organization_id=ORG_1,
-                timeout_ms=120_000,
+                timeout_ms=2_000,
             )[0][0]
             == 42
         )
-        assert session.scalar(text("SHOW statement_timeout")) == "10s"
+        assert session.scalar(text("SHOW statement_timeout")) == "100ms"

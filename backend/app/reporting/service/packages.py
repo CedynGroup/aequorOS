@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.regulatory_instruments import instrument_status_on
+from app.policy.domain.regulatory_instruments import instrument_status_on
 from app.reporting.models.filing_workflow import PackageWorkflowStage
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import (
@@ -109,7 +109,7 @@ def list_packages(  # noqa: PLR0913
 
     return RegulatoryPackageListRead(
         bank_id=bank.id,
-        packages=[read_summary(row, stage_title=titles.get(row.id)) for row in rows],
+        packages=[read_summary(db, row, stage_title=titles.get(row.id)) for row in rows],
         total=total,
         limit=limit,
         offset=offset,

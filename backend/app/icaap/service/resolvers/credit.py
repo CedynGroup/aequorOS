@@ -17,8 +17,8 @@ from decimal import Decimal
 
 from app.attestation.public import digest_of
 from app.core.errors import ModuleDataUnavailable
+from app.credit.domain.concentration_monitor import MONITOR_DIMENSIONS
 from app.credit.public import credit_concentration
-from app.domain.credit.concentration_monitor import MONITOR_DIMENSIONS
 from app.icaap.domain.blocks import SourceProbe
 from app.icaap.service import resolvers
 from app.icaap.service.resolvers import Resolution, ResolveContext, Unavailable

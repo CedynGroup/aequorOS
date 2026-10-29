@@ -350,12 +350,12 @@ on one canonical store — the live tier for intraday awareness, the official ti
   filing. Every mint re-derives the reporting period's facts from the accepted canonical book,
   including same-date corrections. Prior runs and generated packages retain their frozen evidence;
   unchanged financial values reproduce the same `input_hash` per run (see §3). Regression:
-  `backend/tests/services/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
-- **Freshness** (`app/services/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
+  `backend/tests/live/service/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
+- **Freshness** (`app/live/service/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
   live `input_hash` to the latest official run's `input_hash`. Because the hash is value-based, a
   bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as
   stale ("data changed since last filing run — mint an official run").
-- **Alerts** (`app/services/alerts.py`, `GET /banks/{id}/alerts`): open `critical`/`high`
+- **Alerts** (`app/live/service/alerts.py`, `GET /banks/{id}/alerts`): open `critical`/`high`
   `live_findings` across modules, surfaced by the header bell (cheap, jittered polling).
 - **Scheduler** (`app/services/scheduler.py`): the worker enqueues a `scheduled_tick`; the handler
   enqueues an `official_run` per bank whose daily filing time (`OFFICIAL_RUN_HOUR`) is due. With
@@ -418,7 +418,8 @@ on one canonical store — the live tier for intraday awareness, the official ti
   capital-side FX valuation refusal is tracked in
   [the capital follow-up](https://github.com/CedynGroup/aequorOS/issues/424).
 
-The dashboard polls only cheap live-summary, freshness, alert, and notification signals, with
+Outside [protected-data recovery](backend/docs/bank_field_encryption.md#protected-presentation-reads),
+the dashboard polls only cheap live-summary, freshness, alert, and notification signals, with
 stable tenant/authority/bank jitter. Signal polls are read-only; a live generation or
 official-run change invalidates only the affected module's cached detail. Heavyweight regulatory
 dashboards and live-snapshot series do not poll on their own. Their cache keys distinguish current from explicit-period reads and
@@ -498,8 +499,11 @@ official reads must be explicit.
   twice, concurrently with itself. A handler that outgrows the fleet default
   (`WORKER_STALE_JOB_SECONDS`) gets an entry in `job_queue.STALE_AFTER_OVERRIDES_SECONDS`,
   **never a bigger global number** (the global also governs how fast a genuinely dead worker's
-  jobs come back). Setting the default asserts every unlisted type finishes inside it — the
-  config comment names them. When a job exhausts `max_attempts` nothing re-enqueues it: the
+  jobs come back). Large-object re-encryption dispatches instead extend their own claim window
+  from the persisted source size; [the migration contract](backend/docs/bank_field_encryption.md#editable-data-re-encryption)
+  owns their isolation and retry rules. Setting the default asserts every other unlisted type
+  finishes inside it — the config comment names them. When a job exhausts `max_attempts`
+  nothing re-enqueues it: the
   recovery surface is `GET /operator/v1/jobs/stuck-dedup` (fleet board, read) +
   `POST /operator/v1/tenants/{org}/fix/redrive-dedup` (session-gated, audited), and it is
   manual on purpose — stranded jobs fail for unrelated reasons that each need a look.
@@ -948,8 +952,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   `ai_commentary_drafts`. Each must appear in exactly one model module's table tuple.
   Its Postgres checks cover RLS, column types/lengths/nullability and CHECK names/values;
   `test_bi_migration_structural_parity.py` covers primary keys, foreign keys and indexes.
-  The foundation and Phase 3 migration suites iterate narrower subsets; use the derived
-  census for complete coverage. Without that parity a column too narrow
+  Without that parity a column too narrow
   for the values copied into it passes on SQLite (which ignores VARCHAR lengths) and fails a
   tenant's WHOLE nightly build on Postgres, because the model and the migration agree on the
   wrong number.
@@ -1166,6 +1169,8 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 | Target                   | Commands                                                                                                                                                                                                                                                                                                                          |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/type_check_baseline.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                                         |
+| risk-service unit        | `mise run unit` — database connections refused; explicit `-m unit` selector                                                                                                                                                                                                                                                       |
+| risk-service integration | `mise run integration` — disposable Postgres and local service prerequisites; explicit `-m integration` selector                                                                                                                                                                                                                  |
 | risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                                                                  |
 | risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                                  |
 | dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` · `e2e:contracts` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
@@ -1180,21 +1185,20 @@ All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 appeared in no workflow at all, and the dashboard workflow ran neither `lint` nor `test`, so
 the regulatory fail-open guard and the browser-runtime SSRF guard were unenforced):
 
-| Workflow                                                                               | Jobs                                                                                                                                                                                                                          |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/risk-service.yml`                                                   | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests)        |
-| [`.github/workflows/risk-service-image.yml`](.github/workflows/risk-service-image.yml) | `build` — independent production image check, outside the Risk service gate; run manually with **Run workflow** in GitHub Actions, or automatically for image-input pushes selected by the workflow's branch and path filters |
-| `.github/workflows/dashboard.yml`                                                      | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection)      |
-| `.github/workflows/web.yml`                                                            | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                                 |
-| `.github/workflows/dashboard-journeys.yml`                                             | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                                    |
+| Workflow                                                                               | Jobs                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.github/workflows/risk-service.yml`                                                   | `static` · `architecture` (Unit tests) · `backend-e2e` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (Integration tests and exact cross-owner coverage) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests) |
+| [`.github/workflows/risk-service-image.yml`](.github/workflows/risk-service-image.yml) | `build` — independent production image check, outside the Risk service gate; run manually with **Run workflow** in GitHub Actions, or automatically for image-input pushes selected by the workflow's branch and path filters                                                        |
+| `.github/workflows/dashboard.yml`                                                      | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection)                                                             |
+| `.github/workflows/web.yml`                                                            | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                                                                                        |
+| `.github/workflows/dashboard-journeys.yml`                                             | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                                                                                           |
 
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.
 
-The hermetic SQLite suite remains available to developers as `mise run risk-service:test`, but
-CI no longer exercises SQLite compatibility. Postgres suite ownership is defined in the
-task comments in [backend/mise.toml](backend/mise.toml) and pinned by
-[the CI wiring guard](backend/tests/architecture/test_ci_task_wiring.py).
+The combined SQLite compatibility run remains available as `mise run risk-service:test`.
+The [backend test guide](backend/README.md#run-tests) owns unit/integration/e2e
+classification, census regeneration, service prerequisites and CI execution ownership.
 
 ### CI enforcement
 
@@ -1202,10 +1206,10 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
   web, dashboard-journey and secret-scan workflows trigger on pull requests,
   pushes to `main`, and `merge_group` events of type `checks_requested`.
   On the queued merge result, backend preflight, architecture/CI guards,
-  migration/schema/RLS shards, the full Postgres suite and concurrency locks,
+  migration/schema/RLS shards, the full Postgres suite, storage contracts and concurrency locks,
   and dashboard journeys/browser contracts run without PR path filtering;
   [Postgres suite selection](backend/README.md#run-tests) governs shard coverage.
-  Backend lint/typecheck, storage contracts, generated-client freshness and the
+  Backend lint/typecheck, generated-client freshness and the
   conditional real-data job skip in the queue, as do the dashboard checks and
   marketing/console jobs. Secret scanning reports the required `gitleaks`
   context successfully without repeating its PR scans. The Risk service,
@@ -1223,9 +1227,8 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
   fixture setup. These gates are what enforce the dashboard's
   fail-open guard, SSRF egress guard, and browser journeys, and they cover `frontend/`
   and `console/`. Each workflow's header comment is its gate inventory — keep it
-  accurate. Which Postgres job owns which test suites is defined by the
-  `risk-service:test-postgres-*` task comments in `backend/mise.toml` and pinned by
-  `tests/architecture/test_ci_task_wiring.py`.
+  accurate. The [backend test guide](backend/README.md#run-tests) owns suite
+  classification and CI execution ownership.
 
 ---
 
@@ -1315,7 +1318,7 @@ accounts from residual RWA to avoid deducting the same provision twice; general 
 credit RWA. Official, live, forecast and enterprise-stress readers must include
 this group; a missing basis refuses fresh calculations until facts are re-derived.
 Older immutable snapshots retain their original measurement basis.
-Regression coverage: `backend/tests/services/test_crd_credit_exposures.py`.
+Regression coverage: `backend/tests/credit/service/test_crd_credit_exposures.py`.
 
 Enterprise stress compares the current accepted loan and placement source identities,
 lineage and values with the source basis recorded on `bank_reporting_periods` by
@@ -1375,7 +1378,7 @@ outcomes label their ECL basis and incremental credit-loss tax treatment.
 
 Register updates at `/api/v1/banks/{bank_id}/ecl-assumptions` accept `ALL` or a
 loan exposure category from `LOAN_EXPOSURE_CATEGORIES` in
-`backend/app/domain/positions/families.py`. Save and lookup trim segments and
+`backend/app/live/domain/positions/families.py`. Save and lookup trim segments and
 normalize them to upper case; a segment-specific row takes precedence over
 `ALL` for the same stage. Unknown segments return HTTP 422. The category
 vocabulary is owned by the loan-family map, not a separate documentation list.

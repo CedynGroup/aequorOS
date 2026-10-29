@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Generator, Iterator
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -10,13 +11,14 @@ from uuid import uuid4
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine, make_url
 
 from alembic import command
 from app.core.config import get_settings
 from app.db.session import get_engine
 from app.services.ai import observability
+from tests.support.database import database_connections, managed_engine
 from tests.support.helpers import ORG_1, ORG_2
 
 
@@ -27,17 +29,20 @@ class MigratedPostgresSchema:
     runtime_role: str | None = None
 
     def constraints(self, names: set[str]) -> set[str]:
-        placeholders = ", ".join(f"'{name}'" for name in sorted(names))
         with self.app_engine.connect() as connection:
             return set(
                 connection.execute(
                     text(
-                        f"""
-                        SELECT conname
-                        FROM pg_constraint
-                        WHERE conname IN ({placeholders})
                         """
-                    )
+                        SELECT c.conname
+                        FROM pg_constraint c
+                        JOIN pg_class t ON t.oid = c.conrelid
+                        JOIN pg_namespace n ON n.oid = t.relnamespace
+                        WHERE n.nspname = :schema_name
+                          AND c.conname = ANY(:names)
+                        """
+                    ),
+                    {"schema_name": self.schema_name, "names": sorted(names)},
                 ).scalars()
             )
 
@@ -127,6 +132,48 @@ def forward_migrated_postgres_schema(
     yield from migrate_isolated_postgres_schema(monkeypatch, downgrade=False)
 
 
+@pytest.fixture(scope="module")
+def catalog_postgres_schema() -> Iterator[MigratedPostgresSchema]:
+    """Consumers share this schema and must leave its migrated state unchanged."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv("APP_ENV", "test")
+        monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "1")
+        yield from migrate_isolated_postgres_schema(monkeypatch, downgrade=False)
+
+
+@pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
+def test_constraint_lookup_cannot_borrow_a_name_from_another_schema(
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    target = forward_migrated_postgres_schema
+    shadow = f"constraint_shadow_{uuid4().hex}"
+    with target.app_engine.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{shadow}"'))
+    try:
+        with target.app_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE TABLE constraint_lookup_probe "
+                    "(value integer CONSTRAINT ck_lookup_probe CHECK (value > 0))"
+                )
+            )
+            connection.execute(
+                text(
+                    f'CREATE TABLE "{shadow}".constraint_lookup_probe '
+                    "(value integer CONSTRAINT ck_lookup_probe CHECK (value > 0))"
+                )
+            )
+        assert target.constraints({"ck_lookup_probe"}) == {"ck_lookup_probe"}
+        with target.app_engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE constraint_lookup_probe DROP CONSTRAINT ck_lookup_probe")
+            )
+        assert target.constraints({"ck_lookup_probe"}) == set()
+    finally:
+        with target.app_engine.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA "{shadow}" CASCADE'))
+
+
 def migrate_isolated_postgres_schema(
     monkeypatch: pytest.MonkeyPatch, *, downgrade: bool, revision: str = "head"
 ) -> Generator[MigratedPostgresSchema]:
@@ -137,38 +184,46 @@ def migrate_isolated_postgres_schema(
 
     schema_name = f"risk_service_migration_{uuid4().hex}"
     alembic_config = alembic_config_for_app()
-    admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
-    migration_role = _prepare_migration_role(admin_engine)
-    database_url = postgres_schema_url(test_database_url, schema_name, role=migration_role)
-    app_engine = create_engine(database_url)
-    monkeypatch.setenv("DATABASE_URL", database_url)
-    clear_database_caches()
-
-    with admin_engine.connect() as connection:
-        authorization = f' AUTHORIZATION "{migration_role}"' if migration_role is not None else ""
-        connection.execute(text(f'CREATE SCHEMA "{schema_name}"{authorization}'))
-
-    try:
-        command.upgrade(alembic_config, revision)
-        yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
-        if downgrade:
-            command.downgrade(alembic_config, "base")
-    finally:
+    with ExitStack() as connections:
+        admin_connections = connections.enter_context(
+            database_connections(test_database_url, schema=schema_name)
+        )
+        admin_engine = admin_connections.engine(isolation_level="AUTOCOMMIT")
+        migration_role = _prepare_migration_role(admin_engine)
+        database_url = postgres_schema_url(test_database_url, schema_name, role=migration_role)
+        app_connections = connections.enter_context(database_connections(database_url))
+        app_engine = app_connections.engine()
+        app_connections.install_migration_engines(monkeypatch)
+        monkeypatch.setenv("DATABASE_URL", database_url)
         clear_database_caches()
-        app_engine.dispose()
+
         with admin_engine.connect() as connection:
-            _drop_worker_view_schema(connection, schema_name)
-            connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
-            if migration_role is not None:
-                database_name = cast(str, connection.scalar(text("SELECT current_database()")))
-                quoted_database = connection.dialect.identifier_preparer.quote_identifier(
-                    database_name
-                )
-                connection.execute(
-                    text(f'REVOKE CREATE ON DATABASE {quoted_database} FROM "{migration_role}"')
-                )
-                connection.execute(text(f'DROP ROLE "{migration_role}"'))
-        admin_engine.dispose()
+            authorization = (
+                f' AUTHORIZATION "{migration_role}"' if migration_role is not None else ""
+            )
+            connection.execute(text(f'CREATE SCHEMA "{schema_name}"{authorization}'))
+
+        try:
+            command.upgrade(alembic_config, revision)
+            yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
+            if downgrade:
+                command.downgrade(alembic_config, "base")
+        finally:
+            clear_database_caches()
+            app_engine.dispose()
+            with admin_engine.connect() as connection:
+                _drop_worker_view_schema(connection, schema_name)
+                connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
+                if migration_role is not None:
+                    database_name = cast(str, connection.scalar(text("SELECT current_database()")))
+                    quoted_database = connection.dialect.identifier_preparer.quote_identifier(
+                        database_name
+                    )
+                    connection.execute(
+                        text(f'REVOKE CREATE ON DATABASE {quoted_database} FROM "{migration_role}"')
+                    )
+                    connection.execute(text(f'DROP ROLE "{migration_role}"'))
+            admin_engine.dispose()
 
 
 def _prepare_migration_role(admin_engine: Engine) -> str | None:
@@ -283,18 +338,19 @@ def postgres_administrator_url() -> str:
     for database_url in (os.getenv("POSTGRES_ADMIN_URL"), os.getenv("TEST_DATABASE_URL")):
         if not database_url:
             continue
-        engine = create_engine(database_url)
-        try:
-            with engine.connect() as connection:
-                if (
-                    connection.scalar(
-                        text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
-                    )
-                    is True
-                ):
-                    return database_url
-        finally:
-            engine.dispose()
+        with database_connections(database_url, administrative=True) as connections:
+            engine = connections.engine()
+            try:
+                with engine.connect() as connection:
+                    if (
+                        connection.scalar(
+                            text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+                        )
+                        is True
+                    ):
+                        return database_url
+            finally:
+                engine.dispose()
     reason = "Superuser credentials are required for the administrator migration regression."
     if os.getenv("POSTGRES_PRIVILEGE_TESTS_REQUIRED"):
         pytest.fail(f"{reason} POSTGRES_PRIVILEGE_TESTS_REQUIRED is set.")
@@ -312,12 +368,13 @@ def superuser_database_url() -> str:
 )
 @pytest.mark.parametrize("downgrade", [False, True])
 @pytest.mark.parametrize("source", ["POSTGRES_ADMIN_URL", "TEST_DATABASE_URL"])
-def test_superuser_migrations_use_restricted_role(
+def test_superuser_migrations_use_restricted_role(  # noqa: PLR0913 - pytest fixture and parametrization inputs
     monkeypatch: pytest.MonkeyPatch,
     superuser_database_url: str,
     forward_migrated_postgres_schema: MigratedPostgresSchema,
     downgrade: bool,
     source: str,
+    request: pytest.FixtureRequest,
 ) -> None:
     assert forward_migrated_postgres_schema.tables({"audit_chain_heads"}) == {"audit_chain_heads"}
     monkeypatch.delenv("POSTGRES_ADMIN_URL", raising=False)
@@ -356,7 +413,7 @@ def test_superuser_migrations_use_restricted_role(
             next(schemas)
     finally:
         schemas.close()
-    admin_engine = create_engine(admin_url)
+    admin_engine = managed_engine(request, admin_url, administrative=True)
     try:
         with admin_engine.connect() as connection:
             assert (
@@ -407,35 +464,25 @@ def test_restricted_test_url_follows_privilege_policy(
     os.getenv("TEST_DATABASE_URL") is None,
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
-def test_migrations_preserve_application_warning_logs(
-    migrated_postgres_schema: MigratedPostgresSchema,
-    caplog: pytest.LogCaptureFixture,
+def test_reconciliation_migration_targets_the_regulatory_parameter_control_plane(
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    """In-process migrations must not silence an already imported application logger."""
-    caplog.set_level(logging.WARNING, logger="app.ai")
-    observability.log_cache_miss_if_cold(
-        cache_read_input_tokens=0,
-        feature="icaap_drafting",
-        prompt_version="icaap-draft-v1",
-    )
-    assert any(
-        record.name == "app.ai"
-        and record.levelno == logging.WARNING
-        and record.getMessage() == observability.EVENT_CACHE_MISS
-        for record in caplog.records
-    )
-
-
-def test_reconciliation_migration_targets_the_regulatory_parameter_control_plane() -> None:
-    """The control-plane table is singular; a plural name breaks every fresh upgrade."""
-    migration_path = (
-        Path(__file__).parents[2]
-        / "alembic"
-        / "versions"
-        / "202608220032_reconciliation_control.py"
-    )
-
-    assert '_PARAM_TABLE = "regulatory_parameter"' in migration_path.read_text()
+    with catalog_postgres_schema.app_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text(
+                    f"""
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM "{catalog_postgres_schema.schema_name}".regulatory_parameter
+                        WHERE param_code = :code
+                    )
+                    """
+                ),
+                {"code": "balance_identity_tolerance_pct"},
+            )
+            is True
+        )
 
 
 @pytest.mark.skipif(
@@ -443,9 +490,9 @@ def test_reconciliation_migration_targets_the_regulatory_parameter_control_plane
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
 def test_postgres_migrations_create_workflow_constraints_and_rls(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    assert migrated_postgres_schema.constraints(
+    assert catalog_postgres_schema.constraints(
         {
             "ck_risk_cases_status",
             "ck_risk_cases_decision",
@@ -458,7 +505,7 @@ def test_postgres_migrations_create_workflow_constraints_and_rls(
         "ck_risk_scores_score",
         "ck_risk_findings_source",
     }
-    assert migrated_postgres_schema.policies({"risk_scores", "risk_case_decisions"}) == {
+    assert catalog_postgres_schema.policies({"risk_scores", "risk_case_decisions"}) == {
         "risk_scores_tenant_isolation",
         "risk_case_decisions_tenant_isolation",
     }
@@ -469,9 +516,9 @@ def test_postgres_migrations_create_workflow_constraints_and_rls(
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
 def test_postgres_migrations_require_an_explicit_temenos_currency(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    with migrated_postgres_schema.app_engine.connect() as connection:
+    with catalog_postgres_schema.app_engine.connect() as connection:
         default = connection.scalar(
             text(
                 """
@@ -482,7 +529,7 @@ def test_postgres_migrations_require_an_explicit_temenos_currency(
                   AND column_name = 'default_currency'
                 """
             ),
-            {"schema_name": migrated_postgres_schema.schema_name},
+            {"schema_name": catalog_postgres_schema.schema_name},
         )
 
     assert default is None
@@ -493,7 +540,7 @@ def test_postgres_migrations_require_an_explicit_temenos_currency(
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
 def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     financial_tables = {
         "financial_institutions",
@@ -509,7 +556,7 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
         "financial_validation_issues",
     }
 
-    assert migrated_postgres_schema.tables(financial_tables) == financial_tables
+    assert catalog_postgres_schema.tables(financial_tables) == financial_tables
     financial_indexes = {
         "ix_financial_institutions_case_id",
         "uq_financial_institutions_dedupe_key",
@@ -533,11 +580,11 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
         "ix_financial_manual_edit_history_case_id",
         "uq_financial_validation_issues_current_natural_key",
     }
-    assert migrated_postgres_schema.indexes(financial_indexes) == financial_indexes
-    assert migrated_postgres_schema.policies(financial_tables) == {
+    assert catalog_postgres_schema.indexes(financial_indexes) == financial_indexes
+    assert catalog_postgres_schema.policies(financial_tables) == {
         f"{table}_tenant_isolation" for table in financial_tables
     }
-    assert migrated_postgres_schema.constraints(
+    assert catalog_postgres_schema.constraints(
         {
             "ck_financial_source_rows_row_index",
             "ck_financial_accounts_currency",
@@ -608,6 +655,7 @@ def test_postgres_migrations_create_financial_workspace_tables_indexes_and_rls(
 )
 def test_postgres_financial_workspace_rls_isolates_tenant_rows(
     migrated_postgres_schema: MigratedPostgresSchema,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     case_id = uuid4()
     institution_id = uuid4()
@@ -697,17 +745,31 @@ def test_postgres_financial_workspace_rls_isolates_tenant_rows(
         assert visible_to_org_one == 1
         assert visible_to_org_two == 0
 
+    # Fixture migration setup must leave application warnings observable.
+    caplog.set_level(logging.WARNING, logger="app.ai")
+    observability.log_cache_miss_if_cold(
+        cache_read_input_tokens=0,
+        feature="icaap_drafting",
+        prompt_version="icaap-draft-v1",
+    )
+    assert any(
+        record.name == "app.ai"
+        and record.levelno == logging.WARNING
+        and record.getMessage() == observability.EVENT_CACHE_MISS
+        for record in caplog.records
+    )
+
 
 @pytest.mark.skipif(
     os.getenv("TEST_DATABASE_URL") is None,
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
 def test_postgres_migrations_create_scenario_tables_indexes_and_rls(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     tables = {"risk_scenarios", "scenario_assumptions", "scenario_assumption_history"}
-    assert migrated_postgres_schema.tables(tables) == tables
-    assert migrated_postgres_schema.indexes(
+    assert catalog_postgres_schema.tables(tables) == tables
+    assert catalog_postgres_schema.indexes(
         {
             "ix_risk_scenarios_case_id",
             "uq_risk_scenarios_active_default",
@@ -722,10 +784,10 @@ def test_postgres_migrations_create_scenario_tables_indexes_and_rls(
         "uq_scenario_assumptions_key",
         "ix_scenario_assumption_history_assumption_id",
     }
-    assert migrated_postgres_schema.policies(tables) == {
+    assert catalog_postgres_schema.policies(tables) == {
         f"{table}_tenant_isolation" for table in tables
     }
-    assert migrated_postgres_schema.constraints(
+    assert catalog_postgres_schema.constraints(
         {
             "ck_risk_scenarios_type",
             "ck_scenario_assumptions_category",
@@ -745,16 +807,16 @@ def test_postgres_migrations_create_scenario_tables_indexes_and_rls(
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
 def test_postgres_migrations_create_calculation_tables_indexes_and_rls(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     tables = {"calculation_runs", "calculation_forecast_periods"}
-    assert migrated_postgres_schema.tables(tables) == tables
+    assert catalog_postgres_schema.tables(tables) == tables
     indexes = {
         "ix_calculation_runs_case_scenario",
         "ix_calculation_runs_input_hash",
     }
-    assert migrated_postgres_schema.indexes(indexes) == indexes
-    assert migrated_postgres_schema.policies(tables) == {
+    assert catalog_postgres_schema.indexes(indexes) == indexes
+    assert catalog_postgres_schema.policies(tables) == {
         "calculation_runs_tenant_isolation",
         "calculation_forecast_periods_tenant_isolation",
     }
@@ -765,7 +827,7 @@ def test_postgres_migrations_create_calculation_tables_indexes_and_rls(
         "uq_calculation_runs_id_org_case",
         "uq_calculation_forecast_run_period",
     }
-    assert migrated_postgres_schema.constraints(constraints) == constraints
+    assert catalog_postgres_schema.constraints(constraints) == constraints
 
 
 @pytest.mark.skipif(
@@ -773,19 +835,19 @@ def test_postgres_migrations_create_calculation_tables_indexes_and_rls(
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
 def test_postgres_migrations_create_capital_tables_indexes_and_rls(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     tables = {
         "capital_projections",
         "capital_indicators",
         "capital_projection_findings",
     }
-    assert migrated_postgres_schema.tables(tables) == tables
+    assert catalog_postgres_schema.tables(tables) == tables
     indexes = {
         "ix_capital_projections_case_scenario",
     }
-    assert migrated_postgres_schema.indexes(indexes) == indexes
-    assert migrated_postgres_schema.policies(tables) == {
+    assert catalog_postgres_schema.indexes(indexes) == indexes
+    assert catalog_postgres_schema.policies(tables) == {
         f"{table}_tenant_isolation" for table in tables
     }
     constraints = {
@@ -796,7 +858,7 @@ def test_postgres_migrations_create_capital_tables_indexes_and_rls(
         "uq_capital_indicator_projection_period",
         "uq_capital_projection_finding",
     }
-    assert migrated_postgres_schema.constraints(constraints) == constraints
+    assert catalog_postgres_schema.constraints(constraints) == constraints
 
 
 @pytest.mark.skipif(
@@ -939,19 +1001,19 @@ def test_postgres_capital_rls_isolates_tenant_rows(
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
 def test_postgres_migrations_create_liquidity_analysis_results_with_rls(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     tables = {"liquidity_analysis_results"}
-    assert migrated_postgres_schema.tables(tables) == tables
+    assert catalog_postgres_schema.tables(tables) == tables
     indexes = {
         "ix_liquidity_analysis_results_case_id",
         "ix_risk_findings_liquidity_calculation_run",
     }
-    assert migrated_postgres_schema.indexes(indexes) == indexes
-    assert migrated_postgres_schema.policies(tables) == {
+    assert catalog_postgres_schema.indexes(indexes) == indexes
+    assert catalog_postgres_schema.policies(tables) == {
         "liquidity_analysis_results_tenant_isolation"
     }
-    assert migrated_postgres_schema.constraints({"uq_liquidity_analysis_results_run_id"}) == {
+    assert catalog_postgres_schema.constraints({"uq_liquidity_analysis_results_run_id"}) == {
         "uq_liquidity_analysis_results_run_id"
     }
 
@@ -961,24 +1023,22 @@ def test_postgres_migrations_create_liquidity_analysis_results_with_rls(
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
 def test_postgres_migrations_create_canonical_reference_rows_with_rls(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     tables = {"canonical_reference_rows"}
-    assert migrated_postgres_schema.tables(tables) == tables
+    assert catalog_postgres_schema.tables(tables) == tables
     indexes = {
         "ix_canonical_reference_rows_org_bank_kind_as_of",
         "ix_canonical_reference_rows_org_batch",
     }
-    assert migrated_postgres_schema.indexes(indexes) == indexes
-    assert migrated_postgres_schema.policies(tables) == {
-        "canonical_reference_rows_tenant_isolation"
-    }
+    assert catalog_postgres_schema.indexes(indexes) == indexes
+    assert catalog_postgres_schema.policies(tables) == {"canonical_reference_rows_tenant_isolation"}
     constraints = {
         "ck_canonical_reference_rows_dataset_kind",
         "uq_canonical_reference_rows_batch_kind_row",
         "uq_canonical_reference_rows_id_org",
     }
-    assert migrated_postgres_schema.constraints(constraints) == constraints
+    assert catalog_postgres_schema.constraints(constraints) == constraints
 
 
 @pytest.mark.skipif(
@@ -986,12 +1046,12 @@ def test_postgres_migrations_create_canonical_reference_rows_with_rls(
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
 )
 def test_postgres_migrations_widen_position_types_for_hedges_and_swaps(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    catalog_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     """202607170003 widens the canonical position-type CHECK so FX hedge and
     interest-rate-swap positions persist; the widened constraint must admit
     exactly the model's POSITION_TYPES."""
-    with migrated_postgres_schema.app_engine.connect() as connection:
+    with catalog_postgres_schema.app_engine.connect() as connection:
         definition = connection.execute(
             text(
                 """
@@ -1002,7 +1062,7 @@ def test_postgres_migrations_widen_position_types_for_hedges_and_swaps(
                   AND pg_namespace.nspname = :schema_name
                 """
             ),
-            {"schema_name": migrated_postgres_schema.schema_name},
+            {"schema_name": catalog_postgres_schema.schema_name},
         ).scalar_one()
     for position_type in ("FX_HEDGE", "INTEREST_RATE_SWAP", "LOAN", "LC_GUARANTEE"):
         assert f"'{position_type}'" in definition
