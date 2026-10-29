@@ -1204,7 +1204,8 @@ classification, census regeneration, service prerequisites and CI execution owne
 
 The production backend build in `risk-service-image.yml` and image publisher in
 `release.yml` authenticate to `public.ecr.aws` with GitHub OIDC when the repository
-variable `AWS_ECR_PULL_ROLE_ARN` is set and the ref matches the documented IAM trust:
+variable `AWS_ECR_PULL_ROLE_ARN` is set and the ref matches the documented IAM trust
+case-sensitively:
 `main`, `release`, `release/*` branches or `v*` tags. Both AWS steps skip when the
 variable is empty, the event is a fork pull request, or a manual image build uses
 another ref, retaining anonymous pulls and their rate limits.
