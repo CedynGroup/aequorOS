@@ -29,7 +29,7 @@ from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.service import attachments, exports
 from app.reporting.service.registry import get_definition
 from app.reporting.service.templates import get_template
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
 from app.schemas.push import PushBatchOpen, PushRecordsPage
 from app.services import ingestion, push_ingestion
 from app.storage import encryption
@@ -152,10 +152,10 @@ def _exercise(
             db,
             CTX,
             BANK_A,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system="EXCEL_CSV",
                 as_of_date=AS_OF,
-                location=str(path),
+                location=path,
                 reason="Synthetic transaction test",
             ),
             storage,

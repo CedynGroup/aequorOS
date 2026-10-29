@@ -70,7 +70,7 @@ from app.models.canonical import CanonicalCounterparty, CanonicalPosition, Canon
 from app.models.canonical_withdrawal import CanonicalWithdrawal
 from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailure
 from app.reporting.models.packages import RegulatoryPackage
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
 from app.services import canonical_withdrawal, credit_concentration, credit_exposure_book, ingestion
 from app.services.behavioral_liquidity import get_behavioral_liquidity_report
 from app.services.canonical_withdrawal import WithdrawalError
@@ -758,10 +758,10 @@ def test_ingestion_and_replacement_keep_identity_reads_working(  # noqa: PLR0913
             db_session,
             CTX,
             BANK_A,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system="EXCEL_CSV",
                 as_of_date=AS_OF,
-                location=str(path),
+                location=path,
                 mapping_config_id=None,
                 reason="Synthetic encrypted ingestion",
             ),
@@ -2309,7 +2309,7 @@ def test_positional_concentration_limit_matches_without_key(
 @pytest.fixture
 def reference_ingestion_upload(
     db_session: Session, provider: LocalKeyProvider, tmp_path: Path
-) -> IngestionBatchCreate:
+) -> InternalIngestionBatchCreate:
     mapping = MappingConfig(
         field_mappings={
             "counterparty": EntityMapping(
@@ -2356,10 +2356,10 @@ def reference_ingestion_upload(
     loans.append(["replacement-loan", "LOAN", "GHS", 200, IDENTIFIER])
     path = tmp_path / "reference-lookups.xlsx"
     workbook.save(path)
-    return IngestionBatchCreate(
+    return InternalIngestionBatchCreate(
         source_system="EXCEL_CSV",
         as_of_date=AS_OF,
-        location=str(path),
+        location=path,
         mapping_config_id=None,
         reason="Synthetic reference lookup",
     )
@@ -2369,7 +2369,7 @@ def reference_ingestion_upload(
 def test_ingestion_reference_lookups_leave_unused_fields_unread(
     db_session: Session,
     provider: LocalKeyProvider,
-    reference_ingestion_upload: IngestionBatchCreate,
+    reference_ingestion_upload: InternalIngestionBatchCreate,
     connected: bool,
 ) -> None:
     if connected:
@@ -2735,10 +2735,10 @@ def test_ingested_counterparty_name_bound_preserves_bi_copy_width(
             db_session,
             CTX,
             BANK_A,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system="EXCEL_CSV",
                 as_of_date=AS_OF,
-                location=str(path),
+                location=path,
                 reason="Synthetic bounded name",
             ),
             InMemoryStorageClient(),
