@@ -194,9 +194,7 @@ def _rebuild_partial_indexes(where: str) -> None:
 
 def upgrade() -> None:
     for table in _CANONICAL_TABLES:
-        op.add_column(
-            table, sa.Column("withdrawn_at", sa.DateTime(timezone=True), nullable=True)
-        )
+        op.add_column(table, sa.Column("withdrawn_at", sa.DateTime(timezone=True), nullable=True))
         op.add_column(
             table, sa.Column("withdrawn_by_batch_id", sa.Uuid(as_uuid=True), nullable=True)
         )
@@ -344,7 +342,7 @@ def upgrade() -> None:
         # ingestion constants in the models; expressing the enum lists twice
         # invites drift, so they are declared there and applied here from the
         # same tuples.
-        from app.domain.ingestion.constants import (  # noqa: PLC0415
+        from app.data_engine.domain.ingestion.constants import (  # noqa: PLC0415
             POSITION_TYPES,
             SOURCE_SYSTEMS,
         )

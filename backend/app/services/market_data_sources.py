@@ -30,16 +30,14 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select, union_all
 
-from app.identity.public import Bank
-from app.models import (
+from app.data_engine.public import (
     CanonicalFxRate,
     CanonicalMarketIndex,
     CanonicalYieldCurve,
     CanonicalYieldCurvePoint,
-    DeskDetermination,
-    MarketDataOverlay,
-    MarketDataSourcePreference,
 )
+from app.identity.public import Bank
+from app.models import DeskDetermination, MarketDataOverlay, MarketDataSourcePreference
 from app.schemas.market_data_sources import (
     Category,
     CategoryPreferenceRead,

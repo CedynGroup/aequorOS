@@ -43,8 +43,8 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import get_settings
+from app.data_engine.api.ingest_data import get_ingestion_storage
 from app.db.session import get_sessionmaker
-from app.features.ingest_data import get_ingestion_storage
 from app.icaap.domain.frameworks import registry
 from app.icaap.models.workspace import IcaapBlockBinding, IcaapCycle, IcaapDataBlock, IcaapSection
 from app.icaap.service import parameters, readiness

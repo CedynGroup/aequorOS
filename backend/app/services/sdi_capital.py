@@ -95,6 +95,12 @@ from sqlalchemy import and_, func, literal, or_, select, union_all
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.data_engine.domain.ingestion.capital_tiers import is_excluded_component, parse_capital_tier
+from app.data_engine.public import (
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalReferenceRow,
+)
 from app.domain.authority.outcomes import (
     NotComputable,
     OutcomeDetail,
@@ -106,9 +112,7 @@ from app.domain.capital.engine import (
     RWA_CLASS_MARKET,
     RWA_CLASS_OPERATIONAL,
 )
-from app.domain.ingestion.capital_tiers import is_excluded_component, parse_capital_tier
 from app.identity.public import Bank
-from app.models import CanonicalPosition, CanonicalPositionSnapshot, CanonicalReferenceRow
 from app.policy.public import base_currency, institution_types, regulator_name
 from app.policy.public import regulatory_parameters as rp
 

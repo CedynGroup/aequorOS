@@ -42,6 +42,7 @@ from app.core.key_management import reencryption
 from app.core.logging import configure_logging, get_request_id, reset_request_id, set_request_id
 from app.core.observability import Condition, emit
 from app.core.tls import validate_service_transports
+from app.data_engine.service import database_direct_jobs, etl_dedup_jobs, ingestion, temenos_jobs
 from app.db.base import utc_now
 from app.db.session import (
     apply_worker_tenant_context,
@@ -64,15 +65,7 @@ from app.models import (
     WorkerHeartbeat,
 )
 from app.notifications.service import notification_email_mirror, reporting_deadline_scan
-from app.services import (
-    database_direct_jobs,
-    etl_dedup_jobs,
-    ingestion,
-    job_queue,
-    market_data_jobs,
-    scheduler,
-    temenos_jobs,
-)
+from app.services import job_queue, market_data_jobs, scheduler
 from app.services.market_desk import capture_job as desk_capture_job
 
 logger = logging.getLogger(__name__)

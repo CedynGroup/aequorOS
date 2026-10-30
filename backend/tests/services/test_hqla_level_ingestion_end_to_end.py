@@ -32,8 +32,8 @@ from app.liquidity.domain.engine import LiquidityFact, LiquidityParams, compute_
 from app.live.service.fact_derivation import derive_facts
 from app.models import Bank, BankFinancialFact, CanonicalPositionSnapshot
 from app.policy.service import regulatory_parameters
-from tests.api.test_ingestion import seed_bank
-from tests.api.test_push_api import commit, open_push, stage
+from tests.data_engine.api.test_ingestion import seed_bank
+from tests.data_engine.api.test_push_api import commit, open_push, stage
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.factories.reconciliation import allow_fixture_balance_gap

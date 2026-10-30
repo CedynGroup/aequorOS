@@ -37,6 +37,10 @@ from app.core.tenancy import TenantContext
 from app.credit.schemas.credit_params import CrmHaircutUpdate, EclAssumptionUpdate
 from app.credit.schemas.regulatory_credit import ConcentrationLimitUpdate, CreditThresholdUpdate
 from app.credit.service import credit_params
+from app.data_engine.schemas.database_connection import DatabaseConnectionCreate
+from app.data_engine.schemas.ingestion import PositionSnapshotOverrideCreate
+from app.data_engine.schemas.push import PushBatchOpen, PushRecordsPage
+from app.data_engine.service import database_connections, ingestion, push_ingestion
 from app.domain.capital.engine import CapitalParams, CapitalRatiosResult, RwaResult
 from app.icaap.schemas.workspace import (
     IcaapCycleCreate,
@@ -99,10 +103,7 @@ from app.reporting.schemas.filing_workflow import (
 )
 from app.reporting.service import workflow
 from app.reporting.service.filing_workflow import templates
-from app.schemas.database_connection import DatabaseConnectionCreate
-from app.schemas.ingestion import PositionSnapshotOverrideCreate
-from app.schemas.push import PushBatchOpen, PushRecordsPage
-from app.services import database_connections, ingestion, push_ingestion, regulatory_capital
+from app.services import regulatory_capital
 from app.services.audit import record_event
 from tests.conftest import (
     ApiTestApp,

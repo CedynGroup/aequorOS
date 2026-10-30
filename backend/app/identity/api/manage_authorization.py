@@ -28,8 +28,9 @@ from app.core.authorization import (
     Sensitivity,
     SensitivityScope,
 )
+from app.data_engine.domain.ingestion.reference_schemas import business_units
+from app.data_engine.models.canonical import CanonicalReferenceRow
 from app.db.base import utc_now
-from app.domain.ingestion.reference_schemas import business_units
 from app.identity.models.authorization import AuthorizationAccessRequest, AuthorizationBinding
 from app.identity.models.bank import Bank
 from app.identity.models.user import User
@@ -59,7 +60,6 @@ from app.identity.schemas.authorization import (
     SodPolicyFindingRead,
 )
 from app.identity.service import authorization, grant_administration
-from app.models.canonical import CanonicalReferenceRow
 from app.models.organization import Organization
 from app.policy.models.institution_type import InstitutionType
 from app.services.audit import record_event

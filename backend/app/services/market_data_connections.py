@@ -52,6 +52,7 @@ from app.adapters.market_data.scope_taxonomy import (
     ScopeCategory,
     category_of,
 )
+from app.data_engine.public import bank_slug
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models.market_data import MarketDataConnection, MarketDataQuotaUsage
@@ -67,7 +68,6 @@ from app.schemas.market_data_connections import (
     TestPullRead,
 )
 from app.services.audit import record_event
-from app.services.ingestion import bank_slug
 
 if TYPE_CHECKING:
     from datetime import datetime

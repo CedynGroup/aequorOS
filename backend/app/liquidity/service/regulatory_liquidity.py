@@ -27,6 +27,8 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.core.logging import get_request_id, reset_request_id, set_request_id
 from app.core.observability import Condition, emit
+from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
+from app.data_engine.service import withdrawal_impact
 from app.domain.authority.results import Computed, FigureResult, Refused
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank, BankRead, BankReportingPeriodRead
@@ -93,7 +95,6 @@ from app.live.public import (
     regulatory_dashboard_batching,
     worst_status,
 )
-from app.models import CanonicalPosition, CanonicalPositionSnapshot
 from app.policy.public import (
     ParamCapitalThreshold,
     ParamLcrRunoffRate,
@@ -110,7 +111,6 @@ from app.policy.public import (
 from app.policy.public import institution_class as _resolve_institution_class
 from app.reporting.service import filing_reconciliation
 from app.schemas.common import FigureRefusalRead, JsonObject
-from app.services import withdrawal_impact
 from app.services.audit import record_event
 from app.stress.service import enterprise_run_visibility
 

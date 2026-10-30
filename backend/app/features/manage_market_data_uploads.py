@@ -15,7 +15,7 @@ from app.adapters.market_data.manual_upload.templates import (
     template_media_type,
 )
 from app.api.deps import DbSession, MarketsTemplateView, MarketsUpload
-from app.features.ingest_data import MAX_UPLOAD_BYTES, IngestionStorage
+from app.data_engine.public import MAX_UPLOAD_BYTES, IngestionStorage
 from app.schemas.market_data_upload import MarketDataUploadRead
 
 router = APIRouter(tags=["market-data"])

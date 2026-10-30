@@ -229,9 +229,9 @@ def read_version_bytes(
     storage = storage.for_session(db)
     bank = get_bank_or_404(db, ctx, bank_id)
     version = get_version_or_404(db, ctx, bank_id, version_id)
-    # Lazy import, matching prepare_artifact_download: app.services.ingestion
+    # Lazy import, matching prepare_artifact_download: app.data_engine.service.ingestion
     # drags the whole source-adapter registry into every importer.
-    from app.services.ingestion import bank_slug  # noqa: PLC0415
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     location = StorageLocation(
         institution_slug=bank_slug(db, bank), tier="outputs", object_path=version.object_path

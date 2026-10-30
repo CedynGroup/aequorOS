@@ -36,8 +36,8 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import get_settings
+from app.data_engine.api.ingest_data import get_ingestion_storage
 from app.db.session import get_engine
-from app.features.ingest_data import get_ingestion_storage
 from app.identity.public import AuthorizationBinding
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app

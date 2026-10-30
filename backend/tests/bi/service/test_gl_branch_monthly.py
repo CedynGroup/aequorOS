@@ -36,14 +36,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.bi.service import authorization, compiler
-from app.domain.ingestion.reference_schemas import gl_segment_balances
+from app.data_engine.domain.ingestion.reference_schemas import gl_segment_balances
+from app.data_engine.models.canonical import CanonicalGlAccount
 from app.models import (
     BiDimBranch,
     BiFactGlBranchMonthly,
     BiFactGlMonthly,
     CanonicalReferenceRow,
 )
-from app.models.canonical import CanonicalGlAccount
 from tests.bi.service.test_gl_monthly import M, _seed_ledger
 from tests.bi.service.test_mart_builder import AS_OF, build, new_batch, seed_book
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID

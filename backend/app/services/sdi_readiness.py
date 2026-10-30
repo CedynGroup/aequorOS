@@ -15,8 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
 from app.identity.public import Bank
-from app.models import CanonicalPosition, CanonicalPositionSnapshot
 from app.policy.public import base_currency
 from app.services import sdi_capital, sdi_capital_checks
 

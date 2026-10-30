@@ -47,13 +47,13 @@ from app.adapters.market_data.scope_taxonomy import (
 )
 from app.api.deps import TenantContext
 from app.core.config import get_settings
+from app.data_engine.public import bank_slug
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models import Job
 from app.models.market_data import MarketDataConnection
 from app.services import job_queue
 from app.services.audit import record_event
-from app.services.ingestion import bank_slug
 
 logger = logging.getLogger(__name__)
 

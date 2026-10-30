@@ -62,7 +62,7 @@ balance_sheet
     is read as a chart, not as a pile of rows: see ``_resolve_gl_chart`` for the
     retirement-versus-sparse-reporting rule. The balance-sheet identity is then
     a FAIL-CLOSED control
-    (``app/services/reconciliation.py``; enterprise audit 2026-08-20 P0-10):
+    (``app/data_engine/service/reconciliation.py``; enterprise audit 2026-08-20 P0-10):
     a gap within the GOVERNED tolerance (control-plane
     ``balance_identity_tolerance_pct``, effective-dated) is plugged into
     ``other_assets`` (assets short) or ``term_borrowings_gt_1y`` (funding
@@ -269,16 +269,26 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.authority.outcomes import NotComputable, OutcomeDetail
-from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
-from app.domain.ingestion.capital_tiers import (
+from app.data_engine.domain.ingestion.capital_tiers import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
     is_excluded_component,
     parse_capital_tier,
 )
-from app.domain.ingestion.reference_schemas.business_units import (
+from app.data_engine.domain.ingestion.reference_schemas.business_units import (
     normalise_row as _normalise_business_unit_row,
 )
+from app.data_engine.public import (
+    CanonicalCounterparty,
+    CanonicalGlAccount,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+    CanonicalReferenceRow,
+    IngestionBatch,
+)
+from app.data_engine.service import reconciliation
+from app.domain.authority.outcomes import NotComputable, OutcomeDetail
+from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.ftp.domain.engine import CurvePoint, CurveResult, build_curve
 from app.identity.public import Bank
 from app.irrbb.domain.buckets import REPRICING_BUCKETS as _IRR_BUCKETS
@@ -300,17 +310,8 @@ from app.live.domain.positions.fx import FX_ASSET_TYPES, FX_LIABILITY_TYPES
 from app.live.models.live import CurrentFinancialFact
 from app.live.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.live.service.reporting_periods import new_snapshot_period
-from app.models import (
-    CanonicalCounterparty,
-    CanonicalGlAccount,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
-    CanonicalReferenceRow,
-    IngestionBatch,
-)
 from app.policy.public import jurisdictions
-from app.services import market_data_sources, reconciliation
+from app.services import market_data_sources
 from app.services.market_data import (
     CurveView,
     desk_projection_curve_name,

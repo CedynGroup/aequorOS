@@ -84,6 +84,31 @@ from app.case.models.risk import (
 )
 from app.case.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
+from app.data_engine.models.canonical import (
+    CanonicalCounterparty,
+    CanonicalCounterpartyRating,
+    CanonicalFxRate,
+    CanonicalGlAccount,
+    CanonicalLoanEvent,
+    CanonicalMarketIndex,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+    CanonicalReferenceRow,
+    CanonicalYieldCurve,
+    CanonicalYieldCurvePoint,
+)
+from app.data_engine.models.canonical_withdrawal import CanonicalWithdrawal
+from app.data_engine.models.database_connection import DatabaseDirectConnection
+from app.data_engine.models.ingestion import (
+    IngestionBatch,
+    LineageRecord,
+    MappingConfigRecord,
+    TranslationFailure,
+)
+from app.data_engine.models.reconciliation import ReconciliationException
+from app.data_engine.models.system_of_record import SystemOfRecordDeclaration
+from app.data_engine.models.temenos import TemenosConnection
 from app.forecasting.models import ForecastAssumptionVersion
 from app.icaap.models.ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
 from app.icaap.models.risk_capital import (
@@ -154,31 +179,9 @@ from app.live.models.regulatory_run import (
     RegulatoryValidation,
 )
 from app.models.audit_event import AuditEvent
-from app.models.canonical import (
-    CanonicalCounterparty,
-    CanonicalCounterpartyRating,
-    CanonicalFxRate,
-    CanonicalGlAccount,
-    CanonicalLoanEvent,
-    CanonicalMarketIndex,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
-    CanonicalReferenceRow,
-    CanonicalYieldCurve,
-    CanonicalYieldCurvePoint,
-)
-from app.models.canonical_withdrawal import CanonicalWithdrawal
 from app.models.capital_plan import CapitalPlan, IlaapSnapshot
-from app.models.database_connection import DatabaseDirectConnection
 from app.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
 from app.models.entitlements import MarketDataEntitlement
-from app.models.ingestion import (
-    IngestionBatch,
-    LineageRecord,
-    MappingConfigRecord,
-    TranslationFailure,
-)
 from app.models.job import Job
 from app.models.market_data import (
     MarketDataConnection,
@@ -195,9 +198,6 @@ from app.models.market_desk import (
 )
 from app.models.market_desk_curves import DeskCurveDefinition
 from app.models.organization import Organization
-from app.models.reconciliation import ReconciliationException
-from app.models.system_of_record import SystemOfRecordDeclaration
-from app.models.temenos import TemenosConnection
 from app.notifications.models import Notification
 from app.operator.models import (
     OperatorAuditLog,

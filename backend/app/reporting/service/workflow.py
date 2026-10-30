@@ -1757,9 +1757,9 @@ def prepare_artifact_download(
     """Resolve the artifact + institution storage slug and audit the download."""
     bank = get_bank_or_404(db, ctx, bank_id)
     artifact = get_artifact_or_404(db, ctx, bank_id, artifact_id)
-    # Lazy import: pulling app.services.ingestion at module import time would
+    # Lazy import: pulling app.data_engine.service.ingestion at module import time would
     # drag the whole source-adapter registry into every workflow import.
-    from app.services.ingestion import bank_slug  # noqa: PLC0415
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     slug = bank_slug(db, bank)
     record_event(

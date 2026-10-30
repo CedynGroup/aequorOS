@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from app.db.session import get_sessionmaker
 from app.models import User
-from tests.api.test_ingestion import seed_bank
+from tests.data_engine.api.test_ingestion import seed_bank
 from tests.stress.api.test_enterprise_stress import (
     _approve_scenario,
     _create_scenario,

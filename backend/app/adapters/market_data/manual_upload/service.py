@@ -20,11 +20,11 @@ from app.adapters.market_data.base import CredentialSet
 from app.adapters.market_data.errors import MarketDataError
 from app.adapters.market_data.manual_upload.adapter import VENDOR, ManualUploadAdapter
 from app.adapters.market_data.manual_upload.parser import ManualUploadParseError, parse_upload
+from app.data_engine.public import IngestionBatch
+from app.data_engine.service import ingestion
 from app.db.base import utc_now
 from app.identity.public import Bank
-from app.models import IngestionBatch
 from app.schemas.market_data_upload import MarketDataUploadRead
-from app.services import ingestion
 
 if TYPE_CHECKING:
     from datetime import date

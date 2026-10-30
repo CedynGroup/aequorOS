@@ -23,6 +23,7 @@ import app.adapters.market_data.pull_runner as pull_runner_module
 from app.adapters.market_data.base import CredentialSet, MarketDataPullResult
 from app.adapters.market_data.bloomberg import BloombergAdapter, FixtureTransport
 from app.adapters.market_data.scope_taxonomy import DataScope
+from app.data_engine.service.ingestion import bank_slug as derive_bank_slug
 from app.models import (
     Bank,
     CanonicalCounterpartyRating,
@@ -30,7 +31,6 @@ from app.models import (
     CanonicalYieldCurve,
     CanonicalYieldCurvePoint,
 )
-from app.services.ingestion import bank_slug as derive_bank_slug
 from tests.adapters.market_data.contract import VENDOR_INTERNAL_MARKER
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.inmemory_storage import InMemoryStorageClient

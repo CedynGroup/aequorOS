@@ -35,7 +35,7 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from tests.api.test_ingestion import seed_bank
+from tests.data_engine.api.test_ingestion import seed_bank
 from tests.fixtures.capital_structure import MAKER
 from tests.stress.api.test_enterprise_stress import (
     RUNS_URL,

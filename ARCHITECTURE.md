@@ -531,7 +531,7 @@ Layer-1 source adapters specialized for vendor market data, under
 by `DataScope` + as-of + institution through `app/services/market_data.py`, and vendor concepts
 (Bloomberg mnemonics, Refinitiv RICs, raw vendor errors) never cross the adapter boundary.
 
-- **Canonical entities** (`app/models/canonical.py`, full mandatory-metadata mixin + RLS +
+- **Canonical entities** (`app/data_engine/models/canonical.py`, full mandatory-metadata mixin + RLS +
   current-generation supersession): `canonical_yield_curves` (+`_points`), `canonical_fx_rates`,
   `canonical_market_indices`, `canonical_counterparty_ratings`. Rates are decimal fractions
   (0.158, never 15.8).

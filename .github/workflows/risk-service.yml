@@ -102,7 +102,7 @@ name: Risk Service CI
 #                              skipif), so it costs the full-suite run nothing.
 #   25 `requires_real_data`  — see the real-data job above.
 #     modules
-#   tests/etl/test_training_on_data.py — needs the untracked Sample Bank CSVs
+#   tests/data_engine/etl/test_training_on_data.py — needs the untracked Sample Bank CSVs
 #                              under backend/data/, deliberately not in the repo.
 #   tests/scripts/test_dr_tooling.py DR-drill cases — need DR_DRILL_CLUSTER_URL,
 #                              i.e. a disposable cluster the drill may destroy.

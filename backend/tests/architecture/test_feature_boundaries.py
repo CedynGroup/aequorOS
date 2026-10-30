@@ -129,34 +129,8 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^schemas/(common|text|health|jobs)$", KERNEL),
     (r"^features/track_jobs$", KERNEL),
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
-    # ---- data engine
+    # ---- data engine (the shared adapters namespace still holds market_data)
     (r"^adapters/__init__$", "data_engine"),
-    (r"^adapters/(api_push|database_direct|excel_csv|temenos_t24)(/|$)", "data_engine"),
-    (r"^etl(/|$)", "data_engine"),
-    (r"^domain/ingestion/", "data_engine"),
-    (
-        r"^services/(ingestion|push_ingestion|database_connections|database_direct_jobs"
-        r"|temenos_connections|temenos_jobs|system_of_record|canonical_withdrawal"
-        r"|withdrawal_impact|history_loader|etl_dedup_jobs|etl_model_training"
-        r"|document_uploads|reconciliation)$",
-        "data_engine",
-    ),
-    (
-        r"^models/(canonical|canonical_withdrawal|ingestion|database_connection|temenos"
-        r"|system_of_record|reconciliation)$",
-        "data_engine",
-    ),
-    (
-        r"^schemas/(ingestion|push|database_connection|temenos_connections|system_of_record"
-        r"|reconciliation|data_activation)$",
-        "data_engine",
-    ),
-    (r"^api/v1/database_connections$", "data_engine"),
-    (
-        r"^features/(ingest_data|push_data|manage_temenos_connections"
-        r"|manage_system_of_record|manage_reconciliation)$",
-        "data_engine",
-    ),
     # ---- market data
     (r"^adapters/market_data(/|$)", "market_data"),
     (r"^domain/curves/", "market_data"),

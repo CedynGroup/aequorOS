@@ -34,16 +34,16 @@ from app.credit.domain.concentration_monitor import (
     monitor_concentration,
 )
 from app.credit.service.credit_exposure_book import canonical_group_key
-from app.data_engine.public import counterparty_group_labels
-from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
-from app.identity.public import Bank
-from app.live.public import load_current_facts
-from app.models import (
+from app.data_engine.public import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    counterparty_group_labels,
 )
+from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
+from app.identity.public import Bank
+from app.live.public import load_current_facts
 from app.policy.public import (
     ParamConcentrationLimit,
     get_active_params,

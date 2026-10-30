@@ -57,17 +57,17 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal, Protocol
 
+from app.data_engine.domain.ingestion.capital_tiers import (
+    CAPITAL_REGISTER_REFUSED_CATEGORY,
+    TIER_AT1,
+    TIER_CET1,
+    TIER_T2,
+)
 from app.domain.authority.outcomes import (
     NotComputable,
     OutcomeDetail,
     OutcomeState,
     outcome,
-)
-from app.domain.ingestion.capital_tiers import (
-    CAPITAL_REGISTER_REFUSED_CATEGORY,
-    TIER_AT1,
-    TIER_CET1,
-    TIER_T2,
 )
 
 MONEY = Decimal("0.0001")

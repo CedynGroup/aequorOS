@@ -48,7 +48,7 @@ OFFICIAL_DERIVATION_CALLERS: frozenset[str] = frozenset(
     {
         "app/live/service/pipeline.py",
         "app/live/service/data_activation.py",
-        "app/services/history_loader.py",
+        "app/data_engine/service/history_loader.py",
     }
 )
 

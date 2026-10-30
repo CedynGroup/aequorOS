@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 from app.adapters.market_data.scope_taxonomy import DataScope, PullFrequency
-from app.domain.ingestion.adapter import SourceAdapter
+from app.data_engine.domain.ingestion.adapter import SourceAdapter
 
 
 @dataclass(frozen=True)

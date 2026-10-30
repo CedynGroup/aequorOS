@@ -31,6 +31,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
 from app.identity.public import Bank
 from app.liquidity.schemas.cashflow_window import (
     CashflowWindowCurrencyTotalRead,
@@ -38,7 +39,6 @@ from app.liquidity.schemas.cashflow_window import (
     CashflowWindowOverallRead,
     CashflowWindowRead,
 )
-from app.models import CanonicalPosition, CanonicalPositionSnapshot
 from app.policy.public import base_currency
 from app.stress.service.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
 

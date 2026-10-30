@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.credit.service import loan_classification
+from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.liquidity.schemas.liquidity_cfp import (
@@ -38,7 +39,7 @@ from app.liquidity.schemas.liquidity_cfp import (
     EwiUnit,
 )
 from app.live.public import BankReportingPeriod, LiveMetric
-from app.models import CanonicalPosition, CanonicalPositionSnapshot, LiquidityEwiIndicator
+from app.models import LiquidityEwiIndicator
 from app.policy.public import base_currency, institution_types
 from app.services.audit import record_event
 

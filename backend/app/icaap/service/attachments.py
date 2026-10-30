@@ -50,7 +50,7 @@ from app.icaap.service import guards
 from app.services.audit import record_event
 from app.storage import ObjectMetadata, StorageClient, StorageLocation
 
-# The sniffer moved to ``app/services/document_uploads.py`` when the package
+# The sniffer moved to ``app/data_engine/service/document_uploads.py`` when the package
 # attachment plane (ICAAP P3) needed the identical decision: one implementation,
 # so a format refused here cannot be smuggled in through the package upload.
 # These names stay exported for this module's existing callers and tests.
@@ -213,9 +213,7 @@ def upload_attachment(  # noqa: PLR0913 - an upload is its seven named parts
             attachment_id=str(duplicate.id),
         )
 
-    from app.services.ingestion import (  # noqa: PLC0415 - defer cyclic feature dependencies
-        bank_slug,
-    )
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     slug = bank_slug(db, access.bank)
     storage.ensure_institution(slug)
@@ -350,9 +348,7 @@ def prepare_download(
     if row is None:
         guards.not_found()
 
-    from app.services.ingestion import (  # noqa: PLC0415 - defer cyclic feature dependencies
-        bank_slug,
-    )
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     slug = bank_slug(db, access.bank)
     record_event(
