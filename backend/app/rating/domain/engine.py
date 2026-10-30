@@ -168,9 +168,7 @@ def _normal_cdf(value: float) -> float:
 def _normal_ppf(probability: float) -> float:
     """Acklam's rational approximation for the inverse standard-normal CDF."""
     if not 0.0 < probability < 1.0:
-        raise RatingComputationError(
-            "Normal probability must be strictly between 0 and 1."
-        )
+        raise RatingComputationError("Normal probability must be strictly between 0 and 1.")
     a = (
         -39.69683028665376,
         220.9460984245205,
@@ -198,12 +196,12 @@ def _normal_ppf(probability: float) -> float:
     low, high = 0.02425, 0.97575
     if probability < low:
         q = sqrt(-2.0 * log(probability))
-        numerator = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
+        numerator = ((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]
         denominator = ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q) + 1.0
         return numerator / denominator
     if probability > high:
         q = sqrt(-2.0 * log(1.0 - probability))
-        numerator = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
+        numerator = ((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]
         denominator = ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q) + 1.0
         return -numerator / denominator
     q = probability - 0.5
@@ -246,9 +244,7 @@ def adjusted_subscore(
 ) -> Decimal:
     """Bilinearly interpolate a versioned ratio-score/environment matrix."""
     _validate_unit_interval(raw_score, "Raw ratio score")
-    _validate_unit_interval(
-        operating_environment_score, "Operating-environment score"
-    )
+    _validate_unit_interval(operating_environment_score, "Operating-environment score")
     if len(matrix) != 2 or any(len(row) != 2 for row in matrix):
         raise RatingComputationError("Operating-environment matrix must be two by two.")
     low_ratio_low_environment, low_ratio_high_environment = matrix[0]
@@ -285,9 +281,7 @@ def score_components(
     component_weight_total = sum((item.weight for item in components), ZERO)
     if component_weight_total <= ZERO:
         raise RatingComputationError("Component weights must have a positive total.")
-    by_component: dict[str, list[RatioScore]] = {
-        component.code: [] for component in components
-    }
+    by_component: dict[str, list[RatioScore]] = {component.code: [] for component in components}
     for definition in definitions:
         if definition.component not in component_by_code:
             raise RatingComputationError(
@@ -301,9 +295,7 @@ def score_components(
                 definition.code,
                 ratio_values[definition.code],
                 raw,
-                adjusted_subscore(
-                    raw, operating_environment_score, operating_environment_matrix
-                ),
+                adjusted_subscore(raw, operating_environment_score, operating_environment_matrix),
                 definition.weight,
             )
         )

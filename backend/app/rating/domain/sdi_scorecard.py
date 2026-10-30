@@ -48,7 +48,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import NamedTuple
 
-from app.domain.rating.engine import ComponentDefinition, RatioDefinition
+from app.rating.domain.engine import ComponentDefinition, RatioDefinition
 
 #: The methodology code, matching ``implied_rating.SDI_METHODOLOGY_CODE`` and
 #: the dossier. One string, so the register, the refusal and the scorecard

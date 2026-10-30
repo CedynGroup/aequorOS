@@ -154,7 +154,6 @@ from app.models.financial import (
     FinancialSourceRow,
     FinancialValidationIssue,
 )
-from app.models.implied_rating import ImpliedRatingRun
 from app.models.ingestion import (
     IngestionBatch,
     LineageRecord,
@@ -230,6 +229,7 @@ from app.policy.models.parameter_register import (
     ParamStressShock,
 )
 from app.policy.models.regulatory_parameter import RegulatoryParameter
+from app.rating.models import ImpliedRatingRun
 from app.reporting.models.filing_workflow import (
     FilingWorkflowTemplate,
     PackageStageDecision,

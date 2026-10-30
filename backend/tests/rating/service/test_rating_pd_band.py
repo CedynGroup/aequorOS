@@ -7,7 +7,7 @@ key-driver explainability, and the anti-manipulation input convention.
 
 from decimal import Decimal
 
-from app.domain.rating.engine import (
+from app.rating.domain.engine import (
     ComponentDefinition,
     RatingInputs,
     RatingMethodology,
@@ -15,7 +15,7 @@ from app.domain.rating.engine import (
     compute_rating,
     vasicek_conditional_pd,
 )
-from app.services import implied_rating
+from app.rating.service import implied_rating
 
 GRADE_ORDER = ("aaa", "aa", "a", "bbb", "bb", "b", "ccc", "c")
 
@@ -114,9 +114,7 @@ def test_pit_above_ttc_under_stress_and_below_under_benign() -> None:
     pit_stressed = compute_rating(
         _inputs(basis="PIT", systematic_factor=Decimal("-2")), methodology
     )
-    pit_benign = compute_rating(
-        _inputs(basis="PIT", systematic_factor=Decimal("2")), methodology
-    )
+    pit_benign = compute_rating(_inputs(basis="PIT", systematic_factor=Decimal("2")), methodology)
 
     # Same issuer grade, so only the systematic conditioning differs.
     assert ttc.issuer_grade == pit_stressed.issuer_grade == pit_benign.issuer_grade
@@ -133,8 +131,7 @@ def test_vasicek_conditional_pd_is_monotonic_in_z() -> None:
 
     # A stronger systematic state (higher Z) strictly lowers the conditional PD.
     assert all(
-        earlier > later
-        for earlier, later in zip(conditionals, conditionals[1:], strict=False)
+        earlier > later for earlier, later in zip(conditionals, conditionals[1:], strict=False)
     )
 
 

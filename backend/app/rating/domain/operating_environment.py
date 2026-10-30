@@ -11,7 +11,7 @@ scores, a composite risk, a ``[0, 1]`` strength, and a sovereign-governor cap
 Every threshold table, weight, ``RISK_MIN/MAX`` and governor value is a
 documented **calibration placeholder** pending independent validation (spec
 Non-goals / §8.2), exactly like the PD master scale in
-``app/domain/rating/engine.py`` — the shape and provenance are load-bearing,
+``app/rating/domain/engine.py`` — the shape and provenance are load-bearing,
 the numbers are not yet.
 
 Design mirrors ``engine.py``: pure-``Decimal`` arithmetic, frozen dataclasses,
@@ -429,9 +429,7 @@ def compute_operating_environment(
         raise OperatingEnvironmentError("risk_max must be greater than risk_min.")
     pillar_total = sum((pillar.weight for pillar in parameters.pillars), ZERO)
     if pillar_total != ONE:
-        raise OperatingEnvironmentError(
-            f"Pillar weights must sum to 1 (got {pillar_total})."
-        )
+        raise OperatingEnvironmentError(f"Pillar weights must sum to 1 (got {pillar_total}).")
 
     pillars = tuple(_pillar_score(pillar, inputs, parameters) for pillar in parameters.pillars)
     composite = sum((pillar.score * pillar.weight for pillar in pillars), ZERO)
@@ -463,9 +461,7 @@ def compute_operating_environment(
 
 
 def _tt(boundaries: tuple[str, ...], scores: tuple[int, ...]) -> ThresholdTable:
-    return ThresholdTable(
-        boundaries=tuple(Decimal(b) for b in boundaries), scores=scores
-    )
+    return ThresholdTable(boundaries=tuple(Decimal(b) for b in boundaries), scores=scores)
 
 
 # Threshold tables per observable (placeholder calibration; scores 1 = lowest
@@ -531,9 +527,7 @@ DEFAULT_PARAMETERS = OperatingEnvironmentParameters(
                     code="credit_risk_economy",
                     weight=Decimal("0.35"),
                     inputs=(
-                        InputDefinition(
-                            "system_npl_pct", Decimal("0.6"), "threshold", _SYSTEM_NPL
-                        ),
+                        InputDefinition("system_npl_pct", Decimal("0.6"), "threshold", _SYSTEM_NPL),
                         InputDefinition(
                             "private_debt_to_gdp_pct",
                             Decimal("0.4"),
@@ -552,9 +546,7 @@ DEFAULT_PARAMETERS = OperatingEnvironmentParameters(
                     code="institutional_framework",
                     weight=Decimal("0.40"),
                     inputs=(
-                        InputDefinition(
-                            "regulatory_quality_score", Decimal("0.5"), "judgment"
-                        ),
+                        InputDefinition("regulatory_quality_score", Decimal("0.5"), "judgment"),
                         InputDefinition("sovereign_rating", Decimal("0.5"), "sovereign"),
                     ),
                 ),
@@ -562,9 +554,7 @@ DEFAULT_PARAMETERS = OperatingEnvironmentParameters(
                     code="competitive_dynamics",
                     weight=Decimal("0.25"),
                     inputs=(
-                        InputDefinition(
-                            "system_roa_pct", Decimal("0.6"), "threshold", _SYSTEM_ROA
-                        ),
+                        InputDefinition("system_roa_pct", Decimal("0.6"), "threshold", _SYSTEM_ROA),
                         InputDefinition(
                             "system_credit_growth_pct",
                             Decimal("0.4"),
@@ -580,9 +570,7 @@ DEFAULT_PARAMETERS = OperatingEnvironmentParameters(
                         InputDefinition(
                             "system_loan_to_deposit_pct", Decimal("0.4"), "threshold", _SYSTEM_LTD
                         ),
-                        InputDefinition(
-                            "system_car_pct", Decimal("0.4"), "threshold", _SYSTEM_CAR
-                        ),
+                        InputDefinition("system_car_pct", Decimal("0.4"), "threshold", _SYSTEM_CAR),
                         InputDefinition(
                             "external_funding_pct", Decimal("0.2"), "threshold", _EXTERNAL_FUNDING
                         ),

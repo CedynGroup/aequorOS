@@ -49,13 +49,9 @@ from app.live.service.live_types import LiveFindingSpec, LiveModuleResult
 from app.live.service.reporting_periods import new_snapshot_period
 from app.models import Job
 from app.policy.public import module_scope
+from app.rating.service import implied_rating
 from app.reporting.service import filing_reconciliation
-from app.services import (
-    implied_rating,
-    regulatory_capital,
-    regulatory_forecasting,
-    regulatory_liquidity,
-)
+from app.services import regulatory_capital, regulatory_forecasting, regulatory_liquidity
 from app.services.audit import record_event
 
 REFRESH_EVENT = "bank_data.refreshed"

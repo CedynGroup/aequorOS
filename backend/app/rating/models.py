@@ -34,12 +34,8 @@ class ImpliedRatingRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "implied_rating_runs"
     __table_args__ = (
-        CheckConstraint(
-            "status IN ('succeeded', 'failed')", name="ck_implied_rating_runs_status"
-        ),
-        ForeignKeyConstraint(
-            ["bank_id", "organization_id"], ["banks.id", "banks.organization_id"]
-        ),
+        CheckConstraint("status IN ('succeeded', 'failed')", name="ck_implied_rating_runs_status"),
+        ForeignKeyConstraint(["bank_id", "organization_id"], ["banks.id", "banks.organization_id"]),
         ForeignKeyConstraint(
             ["reporting_period_id", "organization_id", "bank_id"],
             [

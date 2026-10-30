@@ -270,7 +270,6 @@
  "private operator->market_data: app.operator.services.tenant_provisioning -> app.services.market_desk.publication",
  "private operator->market_data: app.schemas.operator -> app.schemas.market_desk",
  "private rating->capital: app.services.implied_rating -> app.services.sdi_readiness",
- "private rating->capital: app.services.sdi_rating -> app.services.sdi_capital",
  "private rating->capital: app.services.sdi_rating -> app.services.sdi_views",
  "private rating->data_engine: app.services.implied_rating -> app.models.canonical",
  "private rating->market_data: app.services.implied_rating -> app.models.market_desk",

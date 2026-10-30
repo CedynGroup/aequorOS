@@ -12,7 +12,7 @@ from math import log, sqrt
 
 import pytest
 
-from app.domain.rating.validation import (
+from app.rating.domain.validation import (
     GradedExposure,
     ValidationError,
     accuracy_ratio,

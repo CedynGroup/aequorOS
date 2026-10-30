@@ -5,12 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, status
 
 from app.api.deps import DbSession, MarketsConfidentialView, MarketsRun
-from app.schemas.implied_rating import (
+from app.rating.schemas import (
     ImpliedRatingRunCreate,
     ImpliedRatingRunListRead,
     ImpliedRatingRunRead,
 )
-from app.services import implied_rating
+from app.rating.service import implied_rating
 
 router = APIRouter(tags=["implied-rating"])
 
