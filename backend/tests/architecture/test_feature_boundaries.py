@@ -170,26 +170,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         r"^features/(manage_market_data_.*|market_data_sources|read_market_data_views)$",
         "market_data",
     ),
-    # ---- legacy case vertical
-    (
-        r"^services/(cases|case_plane|case_types|calculations|capital|liquidity|financial_.*"
-        r"|financial_mapping/.*|assessments|documents|findings|reports|scoring|scenarios"
-        r"|scenario_semantics)$",
-        "case",
-    ),
-    (r"^models/(risk|calculation|capital|financial|scenario)$", "case"),
-    (
-        r"^schemas/(cases|calculations|capital|liquidity|financial_workspace.*|assessments"
-        r"|documents|findings|taxonomy|scenarios)$",
-        "case",
-    ),
-    (
-        r"^features/(bulk_update_cases|generate_case_reports|list_case_taxonomy|list_taxonomy"
-        r"|manage_capital|manage_documents|read_financial_workspace|record_case_decisions"
-        r"|review_cases|review_findings|review_liquidity|run_assessments|run_calculations"
-        r"|manage_scenarios)$",
-        "case",
-    ),
     # ---- regulatory engines
     (
         r"^(services/(regulatory_liquidity|liquidity_cfp|liquidity_ewi|liquidity_thresholds"

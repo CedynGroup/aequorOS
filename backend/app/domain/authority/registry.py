@@ -1113,12 +1113,12 @@ _REVERSE_VERSION = "reverse-stress-v1.0.0"
 #: liquidity/capital outputs share NAMES with regulatory metrics while being
 #: mathematically different. Nothing regulatory may ever read them.
 _FORBID_CASE_PLANE: tuple[str, ...] = (
-    "app.services.calculations:calculate_forecast",
-    "app.services.liquidity:calculate_metrics",
-    "app.services.capital:_indicator",
-    "app.models.calculation:CalculationRun",
-    "app.models.calculation:CalculationForecastPeriod",
-    "app.models.capital:CapitalProjection",
+    "app.case.service.calculations:calculate_forecast",
+    "app.case.service.liquidity:calculate_metrics",
+    "app.case.service.capital:_indicator",
+    "app.case.models.calculation:CalculationRun",
+    "app.case.models.calculation:CalculationForecastPeriod",
+    "app.case.models.capital:CapitalProjection",
 )
 
 _FORBID_CLIENT = ("dashboard client-side arithmetic",)

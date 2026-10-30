@@ -35,6 +35,7 @@ from app.bi.jobs import (
     bi_retention,
     bi_subscriptions,
 )
+from app.case.service import documents
 from app.core import audit_integrity
 from app.core.config import get_settings
 from app.core.key_management import reencryption
@@ -65,7 +66,6 @@ from app.models import (
 from app.notifications.service import notification_email_mirror, reporting_deadline_scan
 from app.services import (
     database_direct_jobs,
-    documents,
     etl_dedup_jobs,
     ingestion,
     job_queue,

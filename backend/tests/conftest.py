@@ -75,6 +75,7 @@ pytest_plugins = [
     "tests.support.canonical_book",
     "tests.bi.fixtures",
     "tests.capital.fixtures",
+    "tests.case.fixtures",
     "tests.credit.fixtures",
     "tests.forecasting.fixtures",
     "tests.ftp.fixtures",

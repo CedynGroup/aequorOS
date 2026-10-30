@@ -50,6 +50,39 @@ from app.bi.models.notifications import (
     BiSubscription,
     BiSubscriptionDelivery,
 )
+from app.case.models.calculation import (
+    CalculationForecastPeriod,
+    CalculationRun,
+    LiquidityAnalysisResult,
+)
+from app.case.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
+from app.case.models.financial import (
+    FinancialAccount,
+    FinancialBalance,
+    FinancialCashFlow,
+    FinancialCovenant,
+    FinancialInstitution,
+    FinancialManualEditHistory,
+    FinancialObligation,
+    FinancialRecordSourceLink,
+    FinancialReportingPeriod,
+    FinancialSourceRow,
+    FinancialValidationIssue,
+)
+from app.case.models.risk import (
+    Document,
+    DocumentChunk,
+    DocumentExtraction,
+    RiskAssessment,
+    RiskAssessmentRun,
+    RiskCase,
+    RiskCaseDecision,
+    RiskFinding,
+    RiskFindingEvidence,
+    RiskScore,
+    StoredObject,
+)
+from app.case.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
 from app.forecasting.models import ForecastAssumptionVersion
 from app.icaap.models.ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
@@ -116,11 +149,6 @@ from app.live.models.regulatory_run import (
     RegulatoryValidation,
 )
 from app.models.audit_event import AuditEvent
-from app.models.calculation import (
-    CalculationForecastPeriod,
-    CalculationRun,
-    LiquidityAnalysisResult,
-)
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalCounterpartyRating,
@@ -136,24 +164,10 @@ from app.models.canonical import (
     CanonicalYieldCurvePoint,
 )
 from app.models.canonical_withdrawal import CanonicalWithdrawal
-from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
 from app.models.capital_plan import CapitalPlan, IlaapSnapshot
 from app.models.database_connection import DatabaseDirectConnection
 from app.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
 from app.models.entitlements import MarketDataEntitlement
-from app.models.financial import (
-    FinancialAccount,
-    FinancialBalance,
-    FinancialCashFlow,
-    FinancialCovenant,
-    FinancialInstitution,
-    FinancialManualEditHistory,
-    FinancialObligation,
-    FinancialRecordSourceLink,
-    FinancialReportingPeriod,
-    FinancialSourceRow,
-    FinancialValidationIssue,
-)
 from app.models.ingestion import (
     IngestionBatch,
     LineageRecord,
@@ -182,20 +196,6 @@ from app.models.market_desk import (
 from app.models.market_desk_curves import DeskCurveDefinition
 from app.models.organization import Organization
 from app.models.reconciliation import ReconciliationException
-from app.models.risk import (
-    Document,
-    DocumentChunk,
-    DocumentExtraction,
-    RiskAssessment,
-    RiskAssessmentRun,
-    RiskCase,
-    RiskCaseDecision,
-    RiskFinding,
-    RiskFindingEvidence,
-    RiskScore,
-    StoredObject,
-)
-from app.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
 from app.models.system_of_record import SystemOfRecordDeclaration
 from app.models.temenos import TemenosConnection
 from app.notifications.models import Notification

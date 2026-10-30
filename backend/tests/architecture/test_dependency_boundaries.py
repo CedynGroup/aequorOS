@@ -238,6 +238,14 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
                     "app.ai.models",
                     "app.ai.schemas",
                     "app.ai.public",
+                    "app.case.api",
+                    "app.case.service",
+                    "app.case.models",
+                    "app.case.schemas",
+                    "app.case.public",
+                    "app.operator.models",
+                    "app.operator.schemas",
+                    "app.operator.public",
                     "app.irrbb.api",
                     "app.irrbb.service",
                     "app.irrbb.schemas",
@@ -266,8 +274,8 @@ def test_the_boundary_scanner_catches_a_deliberate_violation(tmp_path: Path) -> 
     Mentioning CalculationRun in prose must not count.
     """
 
-from app.models.calculation import CalculationRun
-from app.services.calculations import calculate_forecast
+from app.case.models.calculation import CalculationRun
+from app.case.service.calculations import calculate_forecast
 
 
 def build() -> None:
@@ -276,8 +284,8 @@ def build() -> None:
 
     found = case_plane_dependencies(violation)
 
-    assert "app.models.calculation" in found
-    assert "app.services.calculations" in found
+    assert "app.case.models.calculation" in found
+    assert "app.case.service.calculations" in found
     assert "CalculationRun" in found
 
 
@@ -288,7 +296,7 @@ def test_naming_the_case_plane_in_order_to_forbid_it_is_not_a_dependency() -> No
     """
     registry = (APP / "domain" / "authority" / "registry.py").read_text()
 
-    assert "app.models.calculation:CalculationRun" in registry
+    assert "app.case.models.calculation:CalculationRun" in registry
     assert case_plane_dependencies(registry) == set()
 
 
@@ -303,19 +311,19 @@ def test_the_scanner_catches_the_evasions_the_2026_08_22_audit_demonstrated() ->
     evasions = {
         "relative level=1": (
             "from .calculations import calculate_forecast\n",
-            "app.services.regulatory_capital",
+            "app.case.service.foreign",
         ),
         "relative level=2": (
             "from ..models.capital import CapitalProjection\n",
-            "app.services.regulatory_liquidity",
+            "app.case.service.foreign",
         ),
         "importlib literal": (
-            'import importlib\n\nm = importlib.import_module("app.services.liquidity")\n',
+            'import importlib\n\nm = importlib.import_module("app.case.service.liquidity")\n',
             None,
         ),
-        "__import__ literal": ('m = __import__("app.models.financial")\n', None),
+        "__import__ literal": ('m = __import__("app.case.models.financial")\n', None),
         "assembled from literal parts": (
-            'import importlib\n\nm = importlib.import_module("app.models" + ".calculation")\n',
+            'import importlib\n\nm = importlib.import_module("app.case.models" + ".calculation")\n',
             None,
         ),
         "getattr reflection": (
@@ -327,11 +335,11 @@ def test_the_scanner_catches_the_evasions_the_2026_08_22_audit_demonstrated() ->
             None,
         ),
         "case-plane service the old forbidden set omitted": (
-            "from app.services.case_plane import compute_headroom\n",
+            "from app.case.service.case_plane import compute_headroom\n",
             None,
         ),
         "case-plane feature the old forbidden set omitted": (
-            "from app.services.financial_workspace import load_workspace\n",
+            "from app.case.service.financial_workspace import load_workspace\n",
             None,
         ),
     }
@@ -346,10 +354,10 @@ def test_the_scanner_catches_the_evasions_the_2026_08_22_audit_demonstrated() ->
 
     # Cached facts must remain isolated from callers and reflect every input.
     source = "from .capital import CapitalProjection\n"
-    imports = imported_modules(source, module="app.models.example")
+    imports = imported_modules(source, module="app.case.models.example")
     imports.clear()
-    assert "app.models.capital" in imported_modules(source, module="app.models.example")
-    assert "app.services.capital" in imported_modules(source, module="app.services.example")
+    assert "app.case.models.capital" in imported_modules(source, module="app.case.models.example")
+    assert "app.case.service.capital" in imported_modules(source, module="app.case.service.example")
     assert imported_modules(source) == set()
     names = referenced_names("CapitalProjection()")
     names.clear()
