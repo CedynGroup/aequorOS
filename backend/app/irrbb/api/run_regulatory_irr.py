@@ -19,7 +19,10 @@ from app.irrbb.schemas.regulatory_irr_sf import (
     IrrbbSfRunCreate,
 )
 from app.irrbb.service import regulatory_irr, regulatory_irr_sf
-from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead, RegulatoryRunRead
+from app.liquidity.public import (
+    RegulatoryRunBatchRead,
+    RegulatoryRunRead,
+)
 
 router = APIRouter(tags=["regulatory-irr"])
 

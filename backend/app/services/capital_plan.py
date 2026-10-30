@@ -28,6 +28,13 @@ from app.db.base import utc_now
 from app.forecasting.service import regulatory_forecasting
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
+from app.liquidity.service.liquidity_cfp import get_cfp
+from app.liquidity.service.liquidity_ewi import (
+    _get_bank_or_404,  # noqa: PLC2701 - shared tenant guards, one definition
+    _get_period_or_404,  # noqa: PLC2701
+    escalation_state,
+    evaluate_ewis,
+)
 from app.live.public import RegulatoryMetricResult, RegulatoryRun
 from app.models import CapitalPlan, IlaapSnapshot
 from app.policy.domain import PolicyUnresolvedError
@@ -55,13 +62,6 @@ from app.schemas.capital_plan import (
     ProjectionUnavailableRead,
 )
 from app.services.audit import record_event
-from app.services.liquidity_cfp import get_cfp
-from app.services.liquidity_ewi import (
-    _get_bank_or_404,  # noqa: PLC2701 - shared tenant guards, one definition
-    _get_period_or_404,  # noqa: PLC2701
-    escalation_state,
-    evaluate_ewis,
-)
 
 # ICAAP is an annual Board submission (BoG ICAAP Guideline ¶72).
 _APPROVAL_VALIDITY_DAYS = 365

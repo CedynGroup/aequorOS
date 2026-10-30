@@ -192,9 +192,9 @@ documented, and reported **with and without** (¶78–81).
 
 ### 2.1 Backend — 18 stress features, all top-down parameter overrides
 
-- **Liquidity:** `apply_liquidity_stress` (`app/domain/liquidity/engine.py:277`) — run-off/inflow/
+- **Liquidity:** `apply_liquidity_stress` (`app/liquidity/domain/engine.py:277`) — run-off/inflow/
   HQLA-haircut/ASF-RSF overrides; behavioural stressed ladder (`:494`); FX-depreciation currency
-  gaps (`:413`). Breach multiplier (`app/services/regulatory_liquidity.py:1619`).
+  gaps (`:413`). Breach multiplier (`app/liquidity/service/regulatory_liquidity.py:1619`).
 - **Capital:** 4-quarter stress path `run_capital_stress` (`app/domain/capital/engine.py:497`,
   `STRESS_QUARTERS=4`) — RWA growth, CET1 retention, FX multiplier; trigger/action ladder (`:564`).
   Breach multiplier (`app/services/regulatory_capital.py:1575`).

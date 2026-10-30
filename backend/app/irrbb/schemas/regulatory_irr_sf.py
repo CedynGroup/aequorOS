@@ -25,7 +25,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.regulatory_liquidity import RegulatoryRunRead
+from app.liquidity.public import (
+    RegulatoryRunRead,
+)
 
 
 class ClosedModel(BaseModel):

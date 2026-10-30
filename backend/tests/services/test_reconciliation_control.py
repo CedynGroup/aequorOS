@@ -28,6 +28,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.domain.ingestion.constants import POSITION_TYPES, SOURCE_SYSTEMS
+from app.liquidity.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
+from app.liquidity.service import regulatory_liquidity
 from app.live.service import live_view, pipeline
 from app.live.service.fact_derivation import (
     DerivationError,
@@ -53,8 +55,7 @@ from app.models import (
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import calendar, generation
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
-from app.services import job_queue, reconciliation, regulatory_capital, regulatory_liquidity
+from app.services import job_queue, reconciliation, regulatory_capital
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.factories.reconciliation import (

@@ -42,6 +42,7 @@ from app.fx import service as regulatory_fx
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank, User
 from app.irrbb.service import regulatory_irr
+from app.liquidity.service import regulatory_liquidity
 from app.live.models.live import LiveFinding, LiveMetric, LiveMetricSnapshot
 from app.live.models.regulatory import BankReportingPeriod
 from app.live.service import data_activation
@@ -52,7 +53,7 @@ from app.models import Job
 from app.policy.public import module_scope
 from app.rating.service import implied_rating
 from app.reporting.service import filing_reconciliation
-from app.services import regulatory_capital, regulatory_liquidity
+from app.services import regulatory_capital
 from app.services.audit import record_event
 
 REFRESH_EVENT = "bank_data.refreshed"

@@ -53,7 +53,9 @@ from app.credit.schemas.regulatory_credit import (
     CreditVintagesRead,
 )
 from app.credit.service import regulatory_credit
-from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
+from app.liquidity.public import (
+    RegulatoryRunBatchRead,
+)
 
 router = APIRouter(tags=["regulatory-credit"])
 

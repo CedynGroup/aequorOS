@@ -45,6 +45,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.authority.evidence import EvidenceStatus
 from app.domain.authority.outcomes import NotComputable, OutcomeState
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -55,7 +56,7 @@ from app.models import (
     RegulatoryPackage,
     RegulatoryRun,
 )
-from app.services import canonical_withdrawal, regulatory_liquidity, withdrawal_impact
+from app.services import canonical_withdrawal, withdrawal_impact
 from app.services.withdrawal_impact import WithdrawnEvidenceError
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture

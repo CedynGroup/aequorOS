@@ -22,6 +22,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.liquidity.service import liquidity_ewi as ewi
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -30,7 +31,6 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from app.services import liquidity_ewi as ewi
 from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = date(2026, 6, 30)

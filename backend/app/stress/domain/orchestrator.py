@@ -61,16 +61,6 @@ from app.domain.capital.engine import (
     has_complete_ecl_coverage,
     run_capital_stress,
 )
-from app.domain.liquidity.engine import (
-    LcrResult,
-    LiquidityFact,
-    LiquidityParams,
-    NsfrResult,
-    apply_liquidity_stress,
-    compute_currency_gaps,
-    compute_lcr,
-    compute_nsfr,
-)
 from app.fx.domain.engine import (
     FxPosition,
     NopResult,
@@ -95,6 +85,16 @@ from app.irrbb.domain.engine import (
     compute_eve,
     compute_gap,
     scenario_shifts,
+)
+from app.liquidity.domain.engine import (
+    LcrResult,
+    LiquidityFact,
+    LiquidityParams,
+    NsfrResult,
+    apply_liquidity_stress,
+    compute_currency_gaps,
+    compute_lcr,
+    compute_nsfr,
 )
 from app.stress.domain.concentration import (
     ConcentrationInputs,

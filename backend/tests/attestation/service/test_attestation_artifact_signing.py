@@ -47,6 +47,8 @@ from app.attestation.service.keys import SignerKeyService
 from app.attestation.service.signers import get_raw_signer
 from app.core.authorization import RoleBundle
 from app.core.config import get_settings
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     AttestationSignature,
     Bank,
@@ -66,8 +68,6 @@ from app.reporting.schemas.packages import (
 from app.reporting.service import artifact_versions, generation, validation
 from app.reporting.service import workflow as reporting_workflow
 from app.reporting.service.filing_workflow import chain as filing_chain
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
 from app.storage.client import StorageLocation
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,

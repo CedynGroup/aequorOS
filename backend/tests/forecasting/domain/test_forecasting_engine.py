@@ -17,8 +17,6 @@ import pytest
 
 from app.domain.capital.engine import CapitalParams, classify_capital_ratio
 from app.domain.capital.engine import MissingParameterError as CapitalMissingParameterError
-from app.domain.liquidity.engine import LiquidityParams, classify_ratio
-from app.domain.liquidity.engine import MissingParameterError as LiquidityMissingParameterError
 from app.forecasting.domain.engine import (
     WHATIF_SHOCK_CODES,
     ForecastAssumptions,
@@ -32,6 +30,8 @@ from app.forecasting.domain.engine import (
     run_optimizer,
     run_whatif,
 )
+from app.liquidity.domain.engine import LiquidityParams, classify_ratio
+from app.liquidity.domain.engine import MissingParameterError as LiquidityMissingParameterError
 
 MONEY = Decimal("0.0001")
 RATIO = Decimal("0.000001")

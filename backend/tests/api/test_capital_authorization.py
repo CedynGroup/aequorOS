@@ -26,6 +26,7 @@ from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import (
     AuthorizationBinding,
     Bank,
@@ -37,7 +38,6 @@ from app.models import (
 )
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,

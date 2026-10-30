@@ -29,9 +29,10 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.identity.service import authorization
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import BankReportingPeriod, RegulatoryRun
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_capital, regulatory_liquidity
+from app.services import regulatory_capital
 from app.stress.schemas.scenario_workbench import (
     AnalysisRunCreate,
     SavedAnalysisCreate,

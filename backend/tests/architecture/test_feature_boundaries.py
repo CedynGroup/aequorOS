@@ -172,15 +172,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     ),
     # ---- regulatory engines
     (
-        r"^(services/(regulatory_liquidity|liquidity_cfp|liquidity_ewi|liquidity_thresholds"
-        r"|behavioral_liquidity|cashflow_window|window_analytics)|domain/liquidity/.*"
-        r"|models/liquidity_cfp|schemas/(regulatory_liquidity|liquidity_cfp"
-        r"|liquidity_thresholds|cashflow_window|window_analytics)"
-        r"|features/(run_regulatory_liquidity|manage_liquidity_cfp|manage_liquidity_thresholds"
-        r"|read_liquidity_monitoring|read_cashflow_window|read_window_analytics))$",
-        "liquidity",
-    ),
-    (
         r"^(services/(regulatory_capital|sdi_capital.*|sdi_views|sdi_readiness|capital_plan)"
         r"|domain/capital/.*|models/capital_plan|schemas/(regulatory_capital|sdi|capital_plan)"
         r"|features/(run_regulatory_capital|manage_capital_plan|read_sdi_diagnostics))$",

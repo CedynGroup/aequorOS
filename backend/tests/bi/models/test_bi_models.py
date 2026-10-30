@@ -69,9 +69,9 @@ from app.domain.capital.loan_classification import (
 )
 from app.domain.ingestion import optional_position_fields
 from app.domain.ingestion.reference_schemas import performance_targets
-from app.domain.liquidity.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
 from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
 from app.irrbb.domain.engine import IRR_BUCKETS
+from app.liquidity.domain.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
 from app.live.domain.positions.families import (
     LOAN_CATEGORY_MAP,
     PAST_DUE_CATEGORY,

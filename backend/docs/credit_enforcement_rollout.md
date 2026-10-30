@@ -107,7 +107,7 @@ The gate is the same one the other engines use: `scoped_authorization.evaluate_b
 per engine with `Permission.VIEW`, `Sensitivity.AGGREGATED`, evaluated against
 the resolved bank. Each surface names its gate list in one tuple
 (`_GATED_ENGINE_MODULES` in `app/live/service/{live_view,alerts}.py` and
-`app/services/window_analytics.py`); `tests/architecture/test_credit_module.py` pins that
+`app/liquidity/service/window_analytics.py`); `tests/architecture/test_credit_module.py` pins that
 `("credit", Module.CREDIT)` is in every one of them.
 
 Shared-feed whole-institution enforcement, including the Capital and rating
@@ -569,7 +569,7 @@ section of this document said so; there is now.
 | Each route names its dependency and carries no scalar gate                                     | `tests/architecture/test_credit_route_authorization.py`                                                                     |
 | **Every** `/credit/` route is in the authority table (a new one cannot ship ungated)           | the same file, `test_every_credit_route_is_in_the_authority_table`                                                          |
 | `require_credit_run` is a recognized mutation gate (impersonation boundary)                    | the same file                                                                                                               |
-| The correct sentence is admitted, per route                                                    | `tests/credit/api/test_credit_route_authorization.py`                                                                              |
+| The correct sentence is admitted, per route                                                    | `tests/credit/api/test_credit_route_authorization.py`                                                                       |
 | A scalar role alone is refused, per route, for five roles                                      | the same file, `test_a_scalar_role_alone_is_refused`                                                                        |
 | A `risk`, `liquidity` or `capital` binding is refused, per route                               | the same file                                                                                                               |
 | Every OTHER sensitivity is refused, per route; `all` admits every route                        | the same file                                                                                                               |
@@ -582,7 +582,7 @@ section of this document said so; there is now.
 | A region resolves through the register, follows it forward, and discloses an unresolved region | the same file                                                                                                               |
 | `mixed` unions branches and regions; one `all` row beside a branch row wins                    | the same file                                                                                                               |
 | Activity attribution follows D-018 and refuses a cross-system or pre-book event                | the same file                                                                                                               |
-| The blotter's pre-existing filter, date and refusal contract is unchanged                      | `tests/credit/service/test_regulatory_credit.py`, `tests/credit/api/test_regulatory_credit.py`                                           |
+| The blotter's pre-existing filter, date and refusal contract is unchanged                      | `tests/credit/service/test_regulatory_credit.py`, `tests/credit/api/test_regulatory_credit.py`                              |
 | Object references under `/credit/*` are catalogued and refuse a foreign object                 | `tests/fixtures/object_reference_routes.py` (auto-discovered) + `tests/api/test_authorization_object_reference_coverage.py` |
 
 ### Deployment order and release record (Phase 4)

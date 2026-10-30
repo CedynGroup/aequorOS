@@ -2113,7 +2113,7 @@ def _is_public_debt_security(row: _PositionRow, sovereign_names: tuple[str, ...]
 
 
 #: The Basel HQLA levels this derivation may emit. Mirrors
-#: ``app.domain.liquidity.engine.HQLA_LEVELS``; a value outside it raises
+#: ``app.liquidity.domain.engine.HQLA_LEVELS``; a value outside it raises
 #: ``UnclassifiedHqlaError`` there rather than being counted at face value.
 _HQLA_LEVELS = ("L1", "L2A", "L2B")
 

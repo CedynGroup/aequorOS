@@ -8,8 +8,11 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.identity.public import BankRead, BankReportingPeriodRead
+from app.liquidity.public import (
+    IrrScenarioCode,
+    RegulatoryValidationSeverity,
+)
 from app.live.public import LiveModuleView
-from app.schemas.regulatory_liquidity import IrrScenarioCode, RegulatoryValidationSeverity
 
 type IrrStatus = Literal["green", "amber", "red"]
 
