@@ -53,7 +53,7 @@ router = APIRouter(prefix="/inspector", tags=["operator-inspector"])
 def start_inspector_session(
     payload: InspectorSessionCreate, db: OperatorDb, operator: Operator
 ) -> InspectorSessionRead:
-    """Open a READ-ONLY inspection window (404 if the org is unknown).
+    """Open a tracked inspection window (404 if the org is unknown).
 
     ``break_glass`` is the admin-gated emergency path; enforce the stricter role
     here rather than in the shared dependency so ``consent`` stays open to any

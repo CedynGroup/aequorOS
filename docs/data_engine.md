@@ -609,9 +609,10 @@ Every canonical record's `lineage_id` points into this graph. From any output fi
 
 ### 8.3 Snapshots and Point-in-Time Reproducibility
 
-Every canonical record belongs to an `as_of_date`. Snapshots are immutable. If yesterday's LCR was 105% and today we discover an error in yesterday's data, we do not modify yesterday's record. We create a new snapshot for the same `as_of_date` with a `restatement_reason`, and mark the old one as superseded. The original submission remains reproducible.
+Every canonical record belongs to an `as_of_date`. Corrections to accepted data create new records for the same `as_of_date` and mark the prior records as superseded, retaining their values.
 
-This means every regulatory report AequorOS produces can be regenerated years later exactly as filed, even if the underlying data has since been restated.
+Saved calculation inputs and filed-artifact integrity follow
+[the filing and input-seal contract](../backend/docs/tamper_evident_records.md#filing-and-input-seals).
 
 A position's identity is shared by its snapshots. For the same institution, source system and source reference in the current generation, re-ingestion updates `position_type`, `currency` and a supplied `origination_date` until that identity has had its first snapshot with validation status `accepted` or `warning`. A batch that is rejected does not apply corrections. An existing unsettled identity also stays unchanged if the supplied identity values cannot be stored in the canonical model; its error snapshot and validation findings still persist for a non-rejected batch.
 
@@ -624,6 +625,15 @@ After acceptance, every attempted identity-field change produces a non-configura
 Audit evidence is separate from the lineage graph. Event coverage, bank
 attribution, access and verification are governed by
 [the bank audit contract](../backend/docs/tamper_evident_records.md#bank-audit-read-api).
+The storage access recorder has a separate hash chain. Neither establishes
+complete login history, a bank SIEM feed or an approved operational retention
+period.
+
+**Planned:** login history and account audit visibility under
+[#297](https://github.com/CedynGroup/aequorOS/issues/297) and
+[#131](https://github.com/CedynGroup/aequorOS/issues/131).
+**To confirm:** the security owner must provide the log coverage, SIEM delivery
+plan and retention schedule. Tracked in [#647](https://github.com/CedynGroup/aequorOS/issues/647) and [#645](https://github.com/CedynGroup/aequorOS/issues/645).
 
 ---
 
@@ -956,49 +966,55 @@ For banks with international operations, SWIFT message feeds provide interbank p
 
 ### 14.1 Multi-Tenancy
 
-- Tenant identity, mandatory query filters and database row-level security follow
-  [the tenancy model](../ARCHITECTURE.md#2-tenancy-model).
-- Canonical metadata follows [§4.3](#43-mandatory-metadata-columns); database parent
-  ownership follows the [composite-FK contract](../CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern).
-- Cross-tenant queries impossible except through explicit, audited, aggregated-only administrative interfaces.
+[Architecture §2](../ARCHITECTURE.md#2-tenancy-model) owns the organization RLS
+boundary and bank query scope. Canonical metadata follows
+[§4.3](#43-mandatory-metadata-columns); database parent ownership follows the
+[composite-FK contract](../CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern).
+Staff access is not an aggregated-only interface; deployment confirmations and
+bank-visible access evidence are tracked in
+[#647](https://github.com/CedynGroup/aequorOS/issues/647).
 
 ### 14.2 Encryption
 
-- Bank files at rest: governed by
-  [the bank key setup guide](../backend/docs/bank_key_setup.md).
-- In transit: governed by
-  [the transport control and evidence contract](../backend/docs/transport_security.md).
-- Sensitive fields and identity indexes: governed by
-  [the bank-held field encryption contract](../backend/docs/bank_field_encryption.md).
-- PII masking in non-production environments; synthetic data only for development and testing.
+[The bank key setup guide](../backend/docs/bank_key_setup.md) owns connected
+bank-key object access and the rollout boundary.
+[The bank-held field encryption contract](../backend/docs/bank_field_encryption.md)
+owns sensitive fields and identity indexes.
+[The transport control and evidence contract](../backend/docs/transport_security.md)
+owns service transport enforcement and required deployment evidence. These
+implementations do not establish active pilot key custody, backup coverage or
+TLS 1.3 on every connection. The asset-by-asset confirmations still required
+are tracked in [#648](https://github.com/CedynGroup/aequorOS/issues/648).
+Environment isolation and masking evidence remain owner confirmations; see
+[#650](https://github.com/CedynGroup/aequorOS/issues/650).
 
 ### 14.3 Access Control
 
-- SSO integration with bank Active Directory / LDAP.
-- MFA required for all users.
-- Role-based access control with defined roles: CRO, Treasurer, ALCO member, risk analyst, IT admin, external auditor (read-only).
-- Segregation of duties: maker/checker workflow for sensitive operations (mapping changes, validation rule changes, manual overrides above threshold).
+The [SSO onboarding guide](sso-onboarding.md#security-notes-your-reviewers-will-ask-about)
+owns bank sign-in guidance, including local password fallback and IdP MFA.
+Universal MFA is not established. The
+[authorization foundation](../backend/docs/authorization_foundation.md#standing-rules-at-a-glance)
+owns scoped authority; staff access gaps and planned controls are tracked in
+[#647](https://github.com/CedynGroup/aequorOS/issues/647).
 
 ### 14.4 Data Residency
 
-- AWS Cape Town region for African customers requiring in-country residency.
-- Configurable per-institution.
-- Analytical/aggregated data may reside elsewhere if permitted; transactional data respects residency requirements.
+Ghana residency and per-bank region selection are not established. Deployment
+locations, transfer questions and planned residency work are tracked in
+[#646](https://github.com/CedynGroup/aequorOS/issues/646).
 
 ### 14.5 Compliance Certifications
 
-- SOC 2 Type II: target Year 2.
-- ISO 27001: follow SOC 2.
-- Ghana Data Protection Act compliance from day one.
-- Banking secrecy compliance: no cross-institution data visibility, no data reuse without consent.
+[README, “License & security”](../README.md#license--security) owns the public
+certification status. [#650](https://github.com/CedynGroup/aequorOS/issues/650)
+tracks planned independent assessment, privacy and counsel work and the
+outstanding registration and assurance evidence. Compliance is not asserted.
 
 ### 14.6 Business Continuity
 
-- RPO ≤ 1 hour (backup frequency).
-- RTO ≤ 4 hours (DR failover).
-- Uptime SLA: 99.9%.
-- Multi-AZ deployment with automatic failover.
-- Quarterly DR drills with documented results.
+[#649](https://github.com/CedynGroup/aequorOS/issues/649) tracks recovery evidence limits and the planned restore, backup
+and failover issues. A one-hour RPO, four-hour service RTO, 99.9% SLA, Multi-AZ failover and
+quarterly drills are not achieved guarantees.
 
 ---
 

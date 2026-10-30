@@ -16496,6 +16496,7 @@
     "tests/scripts/test_feature_moves.py::test_equivalent_current_and_historical_targets_remain_executable[True]": "unit",
     "tests/scripts/test_feature_moves.py::test_from_imports_of_a_moved_module_keep_their_local_name": "unit",
     "tests/scripts/test_feature_moves.py::test_frozen_engine_identifiers_survive_while_their_locations_move": "unit",
+    "tests/scripts/test_feature_moves.py::test_historical_evidence_pack_stays_unchanged_through_feature_moves": "unit",
     "tests/scripts/test_feature_moves.py::test_python_hosted_program_imports_remain_executable[adjacent-move]": "unit",
     "tests/scripts/test_feature_moves.py::test_python_hosted_program_imports_remain_executable[adjacent-rewrite]": "unit",
     "tests/scripts/test_feature_moves.py::test_python_hosted_program_imports_remain_executable[format-move]": "unit",

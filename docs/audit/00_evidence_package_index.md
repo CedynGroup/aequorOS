@@ -49,14 +49,11 @@ execution pass)**
 > **No certification of any kind is held or claimed** — no SOC 2, no ISO, no regulatory
 > approval.
 
-> ## ⚠ This package is UNTRACKED and does not ship with the repository
+> ## Publication and private attachments
 >
-> `.gitignore:42` is `/docs/`. Verified: `git ls-files docs/` → **0 files**. **An examiner who
-> clones this repository receives none of these documents, and every link below is dead
-> outside this checkout.** The exclusion is deliberate — the rule is "local documentation and
-> client collateral" — so it is a founder decision, recorded as `NEW-47` and restated at the
-> head of `remediation_master_register.md`. **An evidence package that does not ship is not
-> evidence.**
+> [`.gitignore`](../../.gitignore) owns the publication allow-list. This index and
+> selected evidence documents are tracked; the remaining private attachments
+> must be requested from aequorOS. A repository clone is not the complete package.
 
 ---
 
@@ -86,8 +83,11 @@ Production measurements were taken **read-only** against the primary database un
 
 - **No certification of any kind.** No SOC 2, no ISO, no regulatory approval, no
   "audit-proof", no "compliant". The strongest formulation used anywhere in this package is:
-  _all repository-verifiable controls identified by the audits have been implemented and
-  verified; the system is ready for independent regulatory/compliance assessment._
+  _the cited evidence describes selected implemented controls and their verification;
+  completeness and regulatory compliance require independent assessment._ The current
+  [BoG evidence draft](../compliance/bog-evidence-pack.md#11-public-outcomes-and-present-delivery-status)
+  owns present delivery status and links the outstanding outcome and deployment
+  trackers.
 - **No live regulatory filing.** No return has ever been submitted to the Bank of Ghana.
   Measured: 53 packages, exactly **2** certified (both `LCR-NSFR`, carrying no capital
   figures), and all 7 submission events against a simulation channel. See §06 and §15.

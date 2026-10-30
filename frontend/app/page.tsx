@@ -46,7 +46,8 @@ const engines = [
 const ledger = [
   {
     dot: "bg-live",
-    title: "LIVE TODAY",
+    title: "THE PLATFORM",
+    sourceHref: "/security#security-sources",
     rows: [
       "Data Engine with file upload and secure API push",
       "Seven calculation engines on one canonical book",
@@ -361,6 +362,14 @@ export default function HomePage() {
                   </p>
                 ))}
               </div>
+              {col.sourceHref ? (
+                <Link
+                  href={col.sourceHref}
+                  className="text-[13px] text-ink-soft underline hover:text-ink"
+                >
+                  Audit and traceability sources
+                </Link>
+              ) : null}
             </div>
           ))}
         </div>

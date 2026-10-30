@@ -508,6 +508,36 @@ def test_the_repository_uses_no_old_module_name() -> None:
     assert feature_moves.check(feature_moves.BACKEND, echo=lambda _line: None) == 0
 
 
+def test_historical_evidence_pack_stays_unchanged_through_feature_moves(repository: Path) -> None:
+    """The dated evidence pack is a persisted citation contract, not a current inventory."""
+    relative = "docs/compliance/bog-evidence-pack.md"
+    pack = repository / relative
+    pack.parent.mkdir(parents=True)
+    evidence = b"Historical baseline: `backend/app/services/regulatory_fx.py:1`.\n"
+    pack.write_bytes(evidence)
+    _git(repository, "add", relative)
+
+    _run(repository, "move")
+    assert pack.read_bytes() == evidence
+    assert _run(repository, "check") == ["exit 0"]
+    assert _run(repository, "rewrite") == ["exit 0"]
+    assert pack.read_bytes() == evidence
+    assert _python(repository, "from app.fx.service import run\nprint(run())") == "1"
+
+    # A current guide still follows the ledger, even with the same basename.
+    current = repository / "backend/docs/bog-evidence-pack.md"
+    current.parent.mkdir(parents=True)
+    current.write_bytes(evidence)
+    assert _run(repository, "check") == [
+        "old name still used: backend/docs/bog-evidence-pack.md",
+        "exit 1",
+    ]
+    _run(repository, "rewrite")
+    assert current.read_bytes() == b"Historical baseline: `backend/app/fx/service.py:1`.\n"
+    assert pack.read_bytes() == evidence
+    assert _run(repository, "check") == ["exit 0"]
+
+
 @pytest.mark.parametrize("destination", ["app.fx.schemas", "app.fx.schemas.rates"])
 def test_schema_descriptions_stay_frozen_while_imports_follow_the_move(
     repository: Path, destination: str

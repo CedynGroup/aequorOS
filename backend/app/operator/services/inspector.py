@@ -1,12 +1,9 @@
 """Tenant-inspector session tracking (staff_UI.md tenant inspector).
 
-READ-ONLY session TRACKING, not an access grant. Starting a session mints NO
-tenant token and NO act-as-user claim — the console renders tenant data through
-the operator read views, and the ``operator_inspector_sessions`` row (plus its
-``operator_audit_log`` entries and the UI banner) is the diligence control that
-records WHO viewed WHICH tenant, WHEN, WHY, and under which mode. True
-act-as-user sign-in is deliberately out of scope (separate security review), so
-``read_only`` is always true this wave.
+Starting a session only stages its tracking row; the feature layer owns audit
+and commit. Session enforcement lives in ``app.operator.inspection``. The
+operator fix and act-as-examiner contracts are owned by
+``app.operator.features.inspector_fix`` and ``app.operator.features.inspector``.
 
 Every query here runs on the operator's BYPASSRLS session and is scoped
 explicitly by ``organization_id`` where a tenant is named — the cross-tenant
@@ -60,11 +57,11 @@ def start_session(  # noqa: PLR0913 - one argument per session attribute
     support_reference: str,
     ttl_minutes: int,
 ) -> OperatorInspectorSession:
-    """Open a READ-ONLY inspection window against a tenant (404 if unknown org).
+    """Stage an inspection window against a tenant (404 if unknown org).
 
     Caller (the feature layer) owns the commit and the audit row; this only
-    stages the session. ``read_only`` is forced true — no path this wave sets
-    it otherwise."""
+    stages the session. ``read_only`` is descriptive and remains true even
+    when the operator uses session-gated fix endpoints."""
     _require_organization(db, organization_id)
     now = utc_now()
     row = OperatorInspectorSession(
