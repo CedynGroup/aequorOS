@@ -1,8 +1,8 @@
 "use client";
 
-import CfpLifecycle from "@/components/liquidity/CfpLifecycle";
 import { useSearchParams } from "next/navigation";
 import { preparationHref } from "@/lib/regulatoryInstruments";
+import CfpLifecycle from "@/components/liquidity/CfpLifecycle";
 import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
 import PageHeader from "@/components/ui/PageHeader";

@@ -15,6 +15,9 @@ import {
   RegulatoryRunReadFromJSON,
   CapitalDashboardReadFromJSON,
 } from "@aequoros/risk-service-api";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryAuthorityScopeProvider } from "@/lib/api/useQueryScope";
+import { queryAuthorityScope } from "@/lib/api/queryPolicy";
 import type { SdiLiquidityPosition } from "@/components/basel/sdiHooks";
 import SdiLiquidityMonitoringView from "@/components/liquidity/SdiLiquidityMonitoringView";
 import InstrumentsRegister from "@/components/submissions/InstrumentsRegister";
@@ -106,6 +109,10 @@ vi.mock("@/components/shell/BankContext", () => ({
   useBankContext: () => ({
     bank: { id: "BK-SYNTH001", name: "Synthetic institution" },
     period: { id: "period", periodEnd: new Date("2026-01-31") },
+    periods: [
+      { id: "period", label: "January", periodEnd: new Date("2026-01-31") },
+    ],
+    setPeriodId: vi.fn(),
     moduleScope: scope(),
     institutionCapabilities: scope().institutionCapabilities,
     authorityPending: false,
@@ -506,6 +513,13 @@ vi.mock("@/lib/api/hooks", () => ({
   useMarkAllNotificationsRead: () => ({ mutate: vi.fn() }),
   useEwiDashboard: () => query({ indicators: [], escalationState: "normal" }),
   useCfpSummary: () => query({ current: null, approved: null }),
+  useRunAllLiquidityScenarios: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useRunAllCapitalScenarios: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRunAllFxScenarios: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRunAllCreditScenarios: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useCfpLifecycle: () => ({
     mutateAsync: vi.fn(),
     isPending: false,
@@ -793,9 +807,15 @@ it("preserves liquidity context through the cockpit controls", () => {
   state.sdi = false;
   state.preparing = true;
   render(
-    <LiquidityLayout>
-      <LiquidityCockpit />
-    </LiquidityLayout>,
+    <QueryClientProvider client={new QueryClient()}>
+      <QueryAuthorityScopeProvider
+        scope={queryAuthorityScope("org", "synthetic@example.test", 1)}
+      >
+        <LiquidityLayout>
+          <LiquidityCockpit />
+        </LiquidityLayout>
+      </QueryAuthorityScopeProvider>
+    </QueryClientProvider>,
   );
   expect(
     screen.getByRole("link", { name: "Thresholds and maturity monitoring" }),
@@ -877,9 +897,15 @@ it("keeps the ordinary CFP accessible without unrelated Basel reference evidence
 it("keeps the SDI reserve cockpit accessible without bank-only evidence", () => {
   state.status = "unpublished";
   render(
-    <LiquidityLayout>
-      <LiquidityCockpit />
-    </LiquidityLayout>,
+    <QueryClientProvider client={new QueryClient()}>
+      <QueryAuthorityScopeProvider
+        scope={queryAuthorityScope("org", "synthetic@example.test", 1)}
+      >
+        <LiquidityLayout>
+          <LiquidityCockpit />
+        </LiquidityLayout>
+      </QueryAuthorityScopeProvider>
+    </QueryClientProvider>,
   );
   expect(screen.getByText("Synthetic reserve")).toBeVisible();
   expect(screen.queryByText("Reference")).toBeNull();

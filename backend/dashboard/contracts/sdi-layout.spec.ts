@@ -22,10 +22,10 @@ test("SDI liquidity cards align with the real response for an isolated instituti
       .url()
       .includes(`/banks/${storyIdentity.bankId}/sdi/liquidity-position`),
   );
-  await page.goto("/liquidity");
+  await page.goto("/liquidity?preparing=1");
   expect((await response).status()).toBe(200);
   await expect(
-    page.getByRole("heading", { name: "LMTD Table 1 prudential ratios" }),
+    page.getByRole("heading", { name: "LMTD Table 1 preparation assessment" }),
   ).toBeVisible();
   await expectAlignedHeaderAndCards(page);
 });

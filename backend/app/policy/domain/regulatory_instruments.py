@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Literal
 
-from app.domain.policy.ratios import classify_capital_ratio, classify_ratio
+from app.policy.domain.ratios import classify_capital_ratio, classify_ratio
 
 type InstrumentStatus = Literal["in_force", "final_not_in_force", "exposure_draft", "unpublished"]
 

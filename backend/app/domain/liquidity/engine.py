@@ -17,7 +17,7 @@ from typing import Literal
 
 from app.domain.authority.outcomes import OutcomeState, outcome
 from app.domain.authority.results import Computed, FigureResult, Refused
-from app.domain.policy.ratios import classify_ratio
+from app.policy.domain.ratios import classify_ratio
 
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")

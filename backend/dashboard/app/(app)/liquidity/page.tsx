@@ -1,8 +1,8 @@
 "use client";
 
-import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
 import { useSearchParams } from "next/navigation";
 import { preparationHref } from "@/lib/regulatoryInstruments";
+import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
 import PageContainer from "@/components/ui/PageContainer";
 import { ArrowUpRight } from "lucide-react";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";

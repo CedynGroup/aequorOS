@@ -20,9 +20,9 @@ from sqlalchemy.orm import Session
 
 from app import worker
 from app.api.deps import TenantContext
-from app.domain.regulatory_instruments import InstrumentStatus, instrument_status_on
 from app.identity.public import Bank
 from app.models import Notification
+from app.policy.domain.regulatory_instruments import InstrumentStatus, instrument_status_on
 from app.reporting.models.packages import RegulatoryReportingSettings
 from app.reporting.schemas.packages import ReportingSettingsPut
 from app.reporting.service.instrument_notifications import (
