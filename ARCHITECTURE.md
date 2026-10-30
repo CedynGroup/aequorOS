@@ -161,7 +161,7 @@ still on the legacy gates described above.
 ## 3. The calculation-run pattern (reuse this for every new engine)
 
 The reference implementation is the balance-sheet forecast + capital + liquidity chain. Concrete
-tables (all in `app/models/calculation.py` and `app/models/capital.py`, migrations
+tables (all in `app/case/models/calculation.py` and `app/case/models/capital.py`, migrations
 `202607130002`, `202607130003`, `202607140001`):
 
 | Table                          | Model                       | Purpose                                                                                                                                                                                                                                                                                                                                     |
@@ -173,8 +173,8 @@ tables (all in `app/models/calculation.py` and `app/models/capital.py`, migratio
 | `capital_projection_findings`  | `CapitalProjectionFinding`  | Join table linking generated `RiskFinding` rows to the projection.                                                                                                                                                                                                                                                                          |
 | `liquidity_analysis_results`   | `LiquidityAnalysisResult`   | Exactly one per successful run (`UniqueConstraint("run_id")`), versioned via `analysis_version`, metrics stored as JSON.                                                                                                                                                                                                                    |
 
-Invariants every new engine must copy (verified in `app/services/calculations.py`,
-`app/services/capital.py`, `app/services/liquidity.py`):
+Invariants every new engine must copy (verified in `app/case/service/calculations.py`,
+`app/case/service/capital.py`, `app/case/service/liquidity.py`):
 
 - **Immutability + append-only history.** Reruns create a new row (`rerun_of_run_id` link);
   failed attempts are persisted with named diagnostics and never replace prior successful output.
@@ -997,7 +997,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
 
 ## 4. Findings infrastructure
 
-Generic, reusable workflow — verified in `app/models/risk.py` and `app/services/findings.py`:
+Generic, reusable workflow — verified in `app/case/models/risk.py` and `app/case/service/findings.py`:
 
 - `risk_findings` (`RiskFinding`): tenant + case scoped; `risk_type` (allow-list in
   `app/domain/risk_constants.py::RISK_TYPES`), `severity` (`low|medium|high|critical`), `status`
@@ -1006,13 +1006,13 @@ Generic, reusable workflow — verified in `app/models/risk.py` and `app/service
 - `risk_finding_evidence` (`RiskFindingEvidence`): per-finding evidence rows with optional
   document/chunk references and a free-form `locator` JSON (source_type, label, `source_url`
   deep link, record ids, `input_hash`).
-- Service helpers in `app/services/findings.py`: `get_finding_or_404`, `list_findings`,
+- Service helpers in `app/case/service/findings.py`: `get_finding_or_404`, `list_findings`,
   `list_case_findings`, `create_case_finding`, `update_finding` / `apply_finding_update`
   (validates status transitions, requires disposition reason for dismissal, stamps
   `reviewed_by`/`reviewed_at` into `details`, emits `finding.status_changed`),
   `is_liquidity_workflow_finding`, `list_finding_evidence`.
 
-How `app/services/liquidity.py` publishes findings (the template for new engines):
+How `app/case/service/liquidity.py` publishes findings (the template for new engines):
 
 1. `calculate_metrics(periods)` — pure, deterministic; returns metrics plus a list of "concern"
    dicts (rule_id, severity, title, summary, rationale, affected periods, metric keys).
@@ -1316,15 +1316,15 @@ dashboard responses against the former per-period path.
 This is intermediate read-through batching, not the persisted trend read model. That read model
 remains architectural debt; the Command Center contract and polling policy are unchanged.
 
-| #   | Module         | Engine                                               | Key endpoints                                  |
-| --- | -------------- | ---------------------------------------------------- | ---------------------------------------------- |
-| 1   | Liquidity      | LCR / NSFR / stress                                  | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
-| 2   | Basel Capital  | RWA / CAR-Tier1-CET1-leverage / stress               | `/banks/{id}/capital/*`, `/submissions/bsd2`   |
-| 3   | Forecasting    | 5y projection / optimizer / what-if                  | `/banks/{id}/forecast/*`                       |
+| #   | Module         | Engine                                                           | Key endpoints                                  |
+| --- | -------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| 1   | Liquidity      | LCR / NSFR / stress                                              | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
+| 2   | Basel Capital  | RWA / CAR-Tier1-CET1-leverage / stress                           | `/banks/{id}/capital/*`, `/submissions/bsd2`   |
+| 3   | Forecasting    | 5y projection / optimizer / what-if                              | `/banks/{id}/forecast/*`                       |
 | 4   | Cash-flow LSTM | in-process `backend/app/forecasting/ml` (LSTM + static baseline) | `/banks/{id}/cashflow-forecast`                |
-| 5   | IRR (IRRBB)    | gap / duration / EVE (6 Basel) / EaR                 | `/banks/{id}/irr/*`                            |
-| 6   | FX             | NOP / historical-sim VaR / IFRS 9 hedges             | `/banks/{id}/fx/*`                             |
-| 7   | FTP            | matched-maturity curve / product & branch P&L / NMD  | `/banks/{id}/ftp/*`                            |
+| 5   | IRR (IRRBB)    | gap / duration / EVE (6 Basel) / EaR                             | `/banks/{id}/irr/*`                            |
+| 6   | FX             | NOP / historical-sim VaR / IFRS 9 hedges                         | `/banks/{id}/fx/*`                             |
+| 7   | FTP            | matched-maturity curve / product & branch P&L / NMD              | `/banks/{id}/ftp/*`                            |
 
 The shared migration `202607170001_irr_fx_ftp_foundation` widened the run-module, fact-group,
 and line-section CHECK constraints for IRR/FX/FTP. Bank stress-default provisioning and

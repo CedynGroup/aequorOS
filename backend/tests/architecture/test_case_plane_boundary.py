@@ -68,7 +68,7 @@ version fourteen ways; these are what survives.
    `test_a_shim_that_re_exports_the_case_plane_is_convicted_at_the_shim` pins
    this behaviour and its limit.
 2. **Dynamic imports are only partly reachable.** A literal
-   `importlib.import_module("app.services.capital")` or `__import__(...)` is
+   `importlib.import_module("app.case.service.capital")` or `__import__(...)` is
    caught, including a `+`-concatenation of literals. A module name assembled
    at runtime — from a variable, a setting, a `".".join(...)` — is not
    detectable by AST inspection at all. No amount of work on this file changes
@@ -367,7 +367,7 @@ def test_the_owner_and_forbidden_sets_are_one_set() -> None:
     `CASE_PLANE_MODULES` held 9. Thirteen modules were therefore declared to BE
     the case plane while not being forbidden to import, so
 
-        from app.services.case_plane import compute_headroom
+        from app.case.service.case_plane import compute_headroom
 
     in a regulatory module passed both this guard and ARCH-5. Two lists in two
     places, each plausible on its own, is how that happens; identity is the fix
@@ -376,7 +376,7 @@ def test_the_owner_and_forbidden_sets_are_one_set() -> None:
     assert CASE_PLANE_OWNERS is CASE_PLANE_MODULES
     assert CASE_PLANE_MODULES is CASE_PLANE_MEMBERS
 
-    for module in ("app.services.case_plane", "app.features.run_calculations"):
+    for module in ("app.case.service.case_plane", "app.case.api.run_calculations"):
         assert module in CASE_PLANE_MODULES, f"{module} is the case plane but importable"
 
 
@@ -469,15 +469,15 @@ def test_the_case_plane_scan_is_not_vacuous() -> None:
     scanned = {_module_name(path) for path in _files(CASE_PLANE_GLOBS)}
 
     required = {
-        "app.models.calculation",
-        "app.models.capital",
-        "app.models.financial",
-        "app.services.calculations",
-        "app.services.capital",
-        "app.services.liquidity",
-        "app.features.run_calculations",
-        "app.features.manage_capital",
-        "app.features.review_liquidity",
+        "app.case.models.calculation",
+        "app.case.models.capital",
+        "app.case.models.financial",
+        "app.case.service.calculations",
+        "app.case.service.capital",
+        "app.case.service.liquidity",
+        "app.case.api.run_calculations",
+        "app.case.api.manage_capital",
+        "app.case.api.review_liquidity",
     }
 
     assert required <= scanned, f"Glob missed case modules: {sorted(required - scanned)}"
@@ -549,11 +549,11 @@ def test_the_aggregator_exemptions_stay_logic_free() -> None:
 
 def test_the_forward_guard_convicts_a_planted_import() -> None:
     """Proof the regulatory -> case rule reports rather than merely existing."""
-    planted = "from app.models.calculation import CalculationRun\n"
+    planted = "from app.case.models.calculation import CalculationRun\n"
 
     assert case_plane_dependencies(planted) == {
-        "app.models.calculation",
-        "app.models.calculation.CalculationRun",
+        "app.case.models.calculation",
+        "app.case.models.calculation.CalculationRun",
         "CalculationRun",
     }
 
@@ -576,27 +576,25 @@ def test_the_reverse_guard_convicts_a_planted_import() -> None:
 def test_the_forward_guard_convicts_a_relative_import() -> None:
     """`node.level == 0` used to exclude EVERY relative import from the scan.
 
-    `app/` carries 88 relative imports today, several inside the regulatory
-    plane (`reporting/service/bog_forms/render.py`), so this was
-    not a theoretical gap: one `from ..models.calculation import ...` walked
-    past both boundary guards. Resolution is against the importing module's own
-    package, which is why the detectors take `module`.
+    Feature packages add namespace depth. Resolution is against the importing
+    module's own package, so one-, two- and three-dot imports must all identify
+    the same case-plane targets when their package depth matches.
     """
     one_dot = "from .calculations import compute\n"
     two_dots = "from ..models.calculation import CalculationRun as Run\n"
 
-    assert case_plane_dependencies(one_dot, "app.services.regulatory_capital") == {
-        "app.services.calculations",
-        "app.services.calculations.compute",
+    assert case_plane_dependencies(one_dot, "app.case.service.foreign") == {
+        "app.case.service.calculations",
+        "app.case.service.calculations.compute",
     }
-    assert "app.models.calculation" in case_plane_dependencies(
-        two_dots, "app.services.regulatory_capital"
+    assert "app.case.models.calculation" in case_plane_dependencies(
+        two_dots, "app.case.service.foreign"
     )
     # Depth is arithmetic on the importing module's package, not a fixed rule:
     # the same two dots from one level deeper resolve somewhere else entirely.
-    assert "app.models.calculation" in case_plane_dependencies(
+    assert "app.case.models.calculation" in case_plane_dependencies(
         "from ...models.calculation import CalculationRun as Run\n",
-        "app.reporting.service.generation",
+        "app.case.service.nested.foreign",
     )
 
     # ...and the old rule saw neither, which is what made this worth adding.
@@ -604,19 +602,21 @@ def test_the_forward_guard_convicts_a_relative_import() -> None:
 
 
 def test_the_forward_guard_convicts_a_literal_dynamic_import() -> None:
-    """`importlib.import_module("app.services.capital")` is an import too.
+    """`importlib.import_module("app.case.service.capital")` is an import too.
 
     Caught only for a LITERAL name — see the limits on
     `_planes.imported_modules`. A name assembled at runtime is not detectable
     by AST inspection and is documented as residual rather than papered over.
     """
-    via_importlib = 'import importlib\n\nm = importlib.import_module("app.services.capital")\n'
-    via_builtin = 'm = __import__("app.models.financial")\n'
-    via_parts = 'import importlib\n\nm = importlib.import_module("app.services" + ".liquidity")\n'
+    via_importlib = 'import importlib\n\nm = importlib.import_module("app.case.service.capital")\n'
+    via_builtin = 'm = __import__("app.case.models.financial")\n'
+    via_parts = (
+        'import importlib\n\nm = importlib.import_module("app.case.service" + ".liquidity")\n'
+    )
 
-    assert "app.services.capital" in case_plane_dependencies(via_importlib)
-    assert "app.models.financial" in case_plane_dependencies(via_builtin)
-    assert "app.services.liquidity" in case_plane_dependencies(via_parts)
+    assert "app.case.service.capital" in case_plane_dependencies(via_importlib)
+    assert "app.case.models.financial" in case_plane_dependencies(via_builtin)
+    assert "app.case.service.liquidity" in case_plane_dependencies(via_parts)
 
 
 def test_the_forward_guard_convicts_reflection_on_a_case_symbol() -> None:
@@ -666,11 +666,11 @@ def test_a_shim_that_re_exports_the_case_plane_is_convicted_at_the_shim() -> Non
     it, which is the honest limit of a per-file scan; see the transitive note in
     the module docstring.
     """
-    shim = "from app.services.case_plane import compute_headroom as headroom\n"
+    shim = "from app.case.service.case_plane import compute_headroom as headroom\n"
 
     assert case_plane_dependencies(shim, "app.services.shim") == {
-        "app.services.case_plane",
-        "app.services.case_plane.compute_headroom",
+        "app.case.service.case_plane",
+        "app.case.service.case_plane.compute_headroom",
     }
 
 
@@ -682,9 +682,9 @@ def test_the_owner_forbidden_mismatch_evasions_are_now_caught() -> None:
     before the sets were unified.
     """
     for planted in (
-        "from app.services.case_plane import compute_headroom\n",
-        "from app.features.run_calculations import compute_headroom\n",
-        "from app.services.financial_workspace import compute_headroom\n",
+        "from app.case.service.case_plane import compute_headroom\n",
+        "from app.case.api.run_calculations import compute_headroom\n",
+        "from app.case.service.financial_workspace import compute_headroom\n",
     ):
         assert case_plane_dependencies(planted), f"still evades: {planted!r}"
 
@@ -707,5 +707,5 @@ def test_naming_a_forbidden_symbol_in_a_string_is_not_a_dependency() -> None:
     """
     registry = (APP / "domain" / "authority" / "registry.py").read_text()
 
-    assert "app.models.calculation:CalculationRun" in registry
+    assert "app.case.models.calculation:CalculationRun" in registry
     assert case_plane_dependencies(registry) == set()

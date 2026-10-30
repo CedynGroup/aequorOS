@@ -134,7 +134,7 @@ recipe would silently invalidate every previously filed hash without failing CI.
 
 Distinct and easily confused: `CalculationRun` (`calculation-input-v1`, the
 case/scenario family) is **id-bearing** and its snapshot is legitimately
-rewritten once, pending → established (`app/services/calculations.py:319`).
+rewritten once, pending → established (`app/case/service/calculations.py:319`).
 Attestation binds to `RegulatoryRun` only.
 
 ### 1.3 The maker-checker workflow as it actually stands

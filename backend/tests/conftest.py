@@ -72,8 +72,10 @@ hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 pytest_plugins = [
     "tests.support.database_fixtures",
     "tests.ai.fixtures",
+    "tests.support.canonical_book",
     "tests.bi.fixtures",
     "tests.capital.fixtures",
+    "tests.case.fixtures",
     "tests.credit.fixtures",
     "tests.forecasting.fixtures",
     "tests.ftp.fixtures",
@@ -628,10 +630,14 @@ rollback_sessionmaker_lifecycle = _rollback_sessionmaker_lifecycle
 
 @pytest.fixture
 def _bound_test_sessionmaker(
+    request: pytest.FixtureRequest,
     _shared_test_database: _TestDatabase,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[sessionmaker]:
     """Bind one test to a connection whose outer transaction is never committed."""
+    if "canonical_book_baseline" in request.keywords:
+        yield cast(sessionmaker[Session], request.getfixturevalue("canonical_book_sessionmaker"))
+        return
     with _rollback_sessionmaker_lifecycle(_shared_test_database, monkeypatch) as maker:
         # SQLite needs a physical BEGIN before the first savepoint; the shared
         # lifecycle also redirects every application session to this connection.

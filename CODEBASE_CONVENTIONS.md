@@ -115,7 +115,7 @@ are described in [ARCHITECTURE.md](ARCHITECTURE.md#per-figure-results-and-calcul
     `onupdate`. Append-only tables (history, evidence, audit) skip the mixin and declare only
     `created_at` with `default=utc_now`.
 - Enum-like strings are **not** DB enums: `Mapped[str]` + `CheckConstraint`, e.g. from
-  `app/models/calculation.py`:
+  `app/case/models/calculation.py`:
   ```python
   CheckConstraint(
       "status IN ('queued', 'running', 'succeeded', 'failed')",
@@ -140,7 +140,7 @@ mapped_column("metadata", JSON, ...)` because `metadata` is reserved on the Base
 
 ### Composite-FK tenant pattern
 
-Exact pattern from `app/models/calculation.py` — every tenant-owned child denormalizes
+Exact pattern from `app/case/models/calculation.py` — every tenant-owned child denormalizes
 `organization_id` (and `case_id`) and references the parent through a composite FK against the
 parent's `(id, organization_id, ...)` unique constraint:
 
@@ -243,7 +243,7 @@ migration catalogues and regression coverage.
   read-only finding) = `409`; missing actor = `401`; invalid values = `400`.
 - Existence helpers follow `get_case_or_404(db, organization_id, id)` /
   `get_case_for_update_or_404` (adds `.with_for_update()`) / `ensure_case_is_not_archived` from
-  `app/services/cases.py`. Write the same trio for new aggregates (e.g. `get_bank_or_404`).
+  `app/case/service/cases.py`. Write the same trio for new aggregates (e.g. `get_bank_or_404`).
 - Audit: `from app.services.audit import record_event` — call it in the same transaction as the
   change with dotted `event_type` (`"capital_projection.started"`,
   `"liquidity_finding.reviewed"`), `entity_type`, `entity_id`, and a JSON-safe `details` dict
@@ -357,7 +357,7 @@ fc.assert(
       reason: "no_value",
     });
   }),
-  { numRuns: 100 }
+  { numRuns: 100 },
 );
 ```
 
@@ -396,10 +396,10 @@ run_state_machine_as_test(
   `DocumentFactory`, `AssessmentFactory` (+ `MutableFakeStorage`); factories create data through
   the real HTTP API and assert status codes.
 - **Cross-tenant isolation test pattern** — every new endpoint needs one. Canonical example:
-  `tests/api/test_liquidity.py::test_liquidity_summary_and_review_are_tenant_scoped` — create
+  `tests/case/api/test_liquidity.py::test_liquidity_summary_and_review_are_tenant_scoped` — create
   data as ORG_1, then assert the same URLs return `404` with
   `headers(org_id=ORG_2, user_id=USER_2)` for both reads and mutations. DB-level scoping checks
-  live in `tests/api/test_scoping.py`.
+  live in `tests/case/api/test_scoping.py`.
 - OpenAPI contract regression: `tests/api/test_openapi_contract.py`.
 
 ---
@@ -446,19 +446,19 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
 
 ### Backend
 
-| Helper                                                                                                                                                                                 | Where                                                        | Use for                                                                                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `DbSession`, `Tenant`, `MutationTenant`, `Storage`                                                                                                                                     | `app/api/deps.py`                                            | Every route's session/tenant/storage wiring; context type location: [§5](#5-feature-layout).           |
-| `record_event(db, ctx, *, event_type, entity_type, entity_id, details)`                                                                                                                | `app/services/audit.py`                                      | Audit trail for every meaningful mutation, same transaction.                                           |
-| `get_case_or_404` / `get_case_for_update_or_404` / `ensure_case_is_not_archived` / `ensure_status_transition_allowed`                                                                  | `app/services/cases.py`                                      | Tenant-scoped existence + state guards (template for `get_bank_or_404`).                               |
-| `get_finding_or_404`, `list_findings`, `list_case_findings`, `create_case_finding`, `update_finding`, `apply_finding_update`, `is_liquidity_workflow_finding`, `list_finding_evidence` | `app/services/findings.py`                                   | Generic finding CRUD/review; reuse for new engines' findings.                                          |
-| `calculate_metrics`, `generate_findings`, `lock_finding_publication`, `serialize_finding_publication`                                                                                  | `app/services/liquidity.py`                                  | Template for deterministic metric + finding publication with advisory-lock serialization.              |
-| `MONEY`, `RATIO`, `MAX_STORED_MONEY`, `_money`/`_ratio` quantizers, `_snapshot_hash`                                                                                                   | `app/services/calculations.py`, `capital.py`, `liquidity.py` | Money/ratio rounding constants and SHA-256 input hashing (copy the constants; keep values consistent). |
-| `RISK_TYPES`, `FindingStatus`, `Severity`, `CaseStatus`, `FindingSource`, derived sets                                                                                                 | `app/domain/risk_constants.py`                               | Shared enum values; extend here, not inline.                                                           |
-| `ObjectStorage` protocol, `get_object_storage`                                                                                                                                         | `app/integrations/storage/`                                  | All object-storage access; override in tests via dependency_overrides.                                 |
-| `Base`, `UuidV4PrimaryKeyMixin`, `UuidV7PrimaryKeyMixin`, `TimestampMixin`, `utc_now`                                                                                                  | `app/db/base.py`                                             | Model building blocks.                                                                                 |
-| `Settings` / `get_settings()`                                                                                                                                                          | `app/core/config.py`                                         | Env config; add nested `BaseSettings` groups with env aliases.                                         |
-| `ORG_1/ORG_2/USER_1/USER_2`, `headers()`, `ApiFactories`, `FakeStorage`, `db_client`                                                                                                   | `tests/`                                                     | Test tenancy, data factories, storage stubbing.                                                        |
+| Helper                                                                                                                                                                                 | Where                                                            | Use for                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `DbSession`, `Tenant`, `MutationTenant`, `Storage`                                                                                                                                     | `app/api/deps.py`                                                | Every route's session/tenant/storage wiring; context type location: [§5](#5-feature-layout).           |
+| `record_event(db, ctx, *, event_type, entity_type, entity_id, details)`                                                                                                                | `app/services/audit.py`                                          | Audit trail for every meaningful mutation, same transaction.                                           |
+| `get_case_or_404` / `get_case_for_update_or_404` / `ensure_case_is_not_archived` / `ensure_status_transition_allowed`                                                                  | `app/case/service/cases.py`                                      | Tenant-scoped existence + state guards (template for `get_bank_or_404`).                               |
+| `get_finding_or_404`, `list_findings`, `list_case_findings`, `create_case_finding`, `update_finding`, `apply_finding_update`, `is_liquidity_workflow_finding`, `list_finding_evidence` | `app/case/service/findings.py`                                   | Generic finding CRUD/review; reuse for new engines' findings.                                          |
+| `calculate_metrics`, `generate_findings`, `lock_finding_publication`, `serialize_finding_publication`                                                                                  | `app/case/service/liquidity.py`                                  | Template for deterministic metric + finding publication with advisory-lock serialization.              |
+| `MONEY`, `RATIO`, `MAX_STORED_MONEY`, `_money`/`_ratio` quantizers, `_snapshot_hash`                                                                                                   | `app/case/service/calculations.py`, `capital.py`, `liquidity.py` | Money/ratio rounding constants and SHA-256 input hashing (copy the constants; keep values consistent). |
+| `RISK_TYPES`, `FindingStatus`, `Severity`, `CaseStatus`, `FindingSource`, derived sets                                                                                                 | `app/domain/risk_constants.py`                                   | Shared enum values; extend here, not inline.                                                           |
+| `ObjectStorage` protocol, `get_object_storage`                                                                                                                                         | `app/integrations/storage/`                                      | All object-storage access; override in tests via dependency_overrides.                                 |
+| `Base`, `UuidV4PrimaryKeyMixin`, `UuidV7PrimaryKeyMixin`, `TimestampMixin`, `utc_now`                                                                                                  | `app/db/base.py`                                                 | Model building blocks.                                                                                 |
+| `Settings` / `get_settings()`                                                                                                                                                          | `app/core/config.py`                                             | Env config; add nested `BaseSettings` groups with env aliases.                                         |
+| `ORG_1/ORG_2/USER_1/USER_2`, `headers()`, `ApiFactories`, `FakeStorage`, `db_client`                                                                                                   | `tests/`                                                         | Test tenancy, data factories, storage stubbing.                                                        |
 
 ### Frontend
 
