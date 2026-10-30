@@ -1,7 +1,7 @@
 """Regulatory capital runs: Basel RWA/ratio engine orchestration, dashboard, BSD-2 preview.
 
 Follows the immutable calculation-run lifecycle established by
-``app.services.regulatory_liquidity``: runs commit ``queued`` and ``running``
+``app.liquidity.service.regulatory_liquidity``: runs commit ``queued`` and ``running``
 before executing, persist the full canonical input snapshot with a SHA-256
 ``input_hash``, and record failures as data (named error codes) rather than
 HTTP 500s. The arithmetic itself lives in the pure engine at
@@ -65,6 +65,15 @@ from app.domain.capital.engine import (
 )
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank, BankRead, BankReportingPeriodRead
+from app.liquidity.schemas.regulatory_liquidity import (
+    RegulatoryRunBatchRead,
+    RegulatoryRunCreate,
+    RegulatoryRunRead,
+)
+from app.liquidity.service.regulatory_liquidity import (
+    _read_regulatory_run_execution_result,
+    preview_note,
+)
 from app.live.domain.reporting import period_windows
 from app.live.public import (
     BankFinancialFact,
@@ -118,14 +127,8 @@ from app.schemas.regulatory_capital import (
     RwaBreakdownRead,
     RwaCompositionRead,
 )
-from app.schemas.regulatory_liquidity import (
-    RegulatoryRunBatchRead,
-    RegulatoryRunCreate,
-    RegulatoryRunRead,
-)
 from app.services import sdi_capital, sdi_capital_checks
 from app.services.audit import record_event
-from app.services.regulatory_liquidity import _read_regulatory_run_execution_result, preview_note
 
 #: Bumped 2026-08-22 (forensic re-audit D-5) from ``v1.0.0``. MAJOR, because the
 #: change moves a FILED figure over unchanged inputs: the Basel II ¶649 basic-

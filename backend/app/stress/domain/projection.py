@@ -70,7 +70,6 @@ from app.domain.capital.engine import (
     compute_rwa,
     has_complete_ecl_coverage,
 )
-from app.domain.liquidity.engine import compute_lcr, compute_nsfr
 from app.forecasting.domain.engine import (
     RETAINED_EARNINGS_CATEGORY,
     ForecastAssumptions,
@@ -86,6 +85,7 @@ from app.forecasting.domain.engine import (
     _to_liquidity_facts,
     scale_credit_exposures,
 )
+from app.liquidity.domain.engine import compute_lcr, compute_nsfr
 from app.stress.domain.credit_bottom_up import (
     CreditExposure,
     apply_credit_collateral,

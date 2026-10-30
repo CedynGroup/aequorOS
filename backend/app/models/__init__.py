@@ -133,6 +133,11 @@ from app.identity.models.integration_key import IntegrationKey
 from app.identity.models.refresh_token import RefreshToken
 from app.identity.models.sso_connection import SsoConnection
 from app.identity.models.user import User
+from app.liquidity.models.liquidity_cfp import (
+    CfpActivationEvent,
+    ContingencyFundingPlan,
+    LiquidityEwiIndicator,
+)
 from app.live.models.facts import FinancialFactRow
 from app.live.models.live import (
     CurrentFinancialFact,
@@ -175,11 +180,6 @@ from app.models.ingestion import (
     TranslationFailure,
 )
 from app.models.job import Job
-from app.models.liquidity_cfp import (
-    CfpActivationEvent,
-    ContingencyFundingPlan,
-    LiquidityEwiIndicator,
-)
 from app.models.market_data import (
     MarketDataConnection,
     MarketDataOverlay,

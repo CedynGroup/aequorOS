@@ -63,8 +63,8 @@ from app.domain.ingestion.optional_position_fields import (
     POSITION_ATTRIBUTE_TEXT_LIMITS,
     over_long_text_attributes,
 )
-from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS, ladder_bucket_index
 from app.irrbb.domain.buckets import repricing_bucket
+from app.liquidity.domain.ladder import LADDER_HORIZON_DAYS, ladder_bucket_index
 from app.live.domain.gl import pl_mapping
 from app.live.domain.positions.families import (
     LOAN_CATEGORY_MAP,

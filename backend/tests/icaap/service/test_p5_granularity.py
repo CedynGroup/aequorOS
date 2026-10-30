@@ -51,6 +51,7 @@ from app.icaap.schemas.risk_capital import (
 from app.icaap.schemas.workspace import IcaapCycleRead, IcaapDataBlockCreate
 from app.icaap.service import blocks, pillar2
 from app.icaap.service.pillar2_inputs import granularity as granularity_inputs
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import (
     BankReportingPeriod,
     CanonicalCounterparty,
@@ -62,7 +63,6 @@ from app.models import (
     RegulatoryParameter,
     User,
 )
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import APPROVAL_TIMESTAMP, SAMPLE_BANK_ID
 from tests.icaap.service.conftest import AS_OF

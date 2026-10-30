@@ -45,7 +45,6 @@ from app.domain.capital.engine import (
     compute_capital_ratios,
     compute_rwa,
 )
-from app.domain.liquidity.engine import compute_lcr, compute_nsfr
 from app.forecasting.domain import engine as forecast_engine
 from app.forecasting.domain.engine import (
     ForecastFact,
@@ -57,8 +56,9 @@ from app.forecasting.domain.engine import (
     project,
 )
 from app.forecasting.service.regulatory_forecasting import _FORECAST_FACT_GROUPS
+from app.liquidity.domain.engine import compute_lcr, compute_nsfr
+from app.liquidity.service.regulatory_liquidity import _LIQUIDITY_FACT_GROUPS
 from app.services.regulatory_capital import _CAPITAL_FACT_GROUPS
-from app.services.regulatory_liquidity import _LIQUIDITY_FACT_GROUPS
 from tests.equivalence.conftest import EXACT
 from tests.forecasting.domain.test_forecasting_engine import (
     BASE_ASSUMPTIONS,

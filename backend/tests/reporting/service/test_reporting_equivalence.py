@@ -42,6 +42,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.fx import service as regulatory_fx
 from app.fx.schemas import FxScenarioBatchCreate
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import (
     BankReportingPeriod,
     RegulatoryLineItem,
@@ -53,7 +54,6 @@ from app.reporting.service import generation
 from app.reporting.service.bog_forms.catalog import all_form_specs
 from app.reporting.service.bog_forms.spec import UNIT_DIVISOR
 from app.reporting.service.provenance import ENGINE_BACKED_RESOLVERS
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,

@@ -1,6 +1,6 @@
 """Seed the Basel HQLA haircuts + Level-2 caps into the control plane.
 
-Enterprise audit 2026-08-20 **P0-8**: ``app/domain/liquidity/engine.py`` summed
+Enterprise audit 2026-08-20 **P0-8**: ``app/liquidity/domain/engine.py`` summed
 every fact carrying an ``hqla_level`` at FACE VALUE — no 15% Level-2A haircut, no
 Level-2B haircut, no 40% Level-2 cap, no 15% Level-2B sub-cap — so the LCR was
 correct only for a book that is entirely Level 1 and overstated otherwise.

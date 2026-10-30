@@ -37,6 +37,7 @@ from app.domain.capital.engine import (
     CapitalParams,
     compute_rwa,
 )
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.live.service.fact_derivation import derive_facts
 from app.models import (
     Bank,
@@ -47,7 +48,6 @@ from app.models import (
     RegulatoryRun,
 )
 from app.reporting.service.provenance import declared_methodology_notes
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,

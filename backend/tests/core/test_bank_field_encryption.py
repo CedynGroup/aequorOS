@@ -63,6 +63,7 @@ from app.identity.schemas.institution_profile import (
     RelatedPartyUpdate,
 )
 from app.identity.service import banks, institution_profile
+from app.liquidity.service.behavioral_liquidity import get_behavioral_liquidity_report
 from app.live import position_book
 from app.live.service import fact_derivation
 from app.models import ParamConcentrationLimit
@@ -73,7 +74,6 @@ from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailu
 from app.reporting.models.packages import RegulatoryPackage
 from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
 from app.services import canonical_withdrawal, ingestion
-from app.services.behavioral_liquidity import get_behavioral_liquidity_report
 from app.services.canonical_withdrawal import WithdrawalError
 from tests.api import test_impersonation_auth as impersonation
 from tests.bi.fixtures import materialize_bi_plane

@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
-from app.domain.liquidity.engine import LiquidityFact, LiquidityParams, compute_lcr
+from app.liquidity.domain.engine import LiquidityFact, LiquidityParams, compute_lcr
 from app.live.service.fact_derivation import derive_facts
 from app.models import Bank, BankFinancialFact, CanonicalPositionSnapshot
 from app.policy.service import regulatory_parameters

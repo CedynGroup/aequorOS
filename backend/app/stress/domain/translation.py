@@ -52,7 +52,7 @@ from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 # --- Emitted shock keys (mirror the engine/service constants) ----------------
 # Kept as local literals so this module imports nothing from the service layer;
 # the alignment test proves they equal the live vocabulary.
-_NMD_RUNOFF_PREFIX = "nmd_runoff:"  # app/domain/liquidity/engine.SHOCK_NMD_RUNOFF_PREFIX
+_NMD_RUNOFF_PREFIX = "nmd_runoff:"  # app/liquidity/domain/engine.SHOCK_NMD_RUNOFF_PREFIX
 _INFLOW_MULTIPLIER = "inflow_multiplier"  # …SHOCK_INFLOW_MULTIPLIER
 _HQLA_HAIRCUT = "hqla_securities_haircut_pct"  # …SHOCK_HQLA_SECURITIES_HAIRCUT
 _FX_DEPRECIATION = "fx_depreciation_pct"  # …SHOCK_FX_DEPRECIATION

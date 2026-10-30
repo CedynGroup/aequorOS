@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from hypothesis import strategies as st
 
-from app.domain.liquidity.engine import (
+from app.liquidity.domain.engine import (
     LiquidityFact,
     LiquidityParams,
     compute_lcr,

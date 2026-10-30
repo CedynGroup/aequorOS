@@ -167,7 +167,7 @@ These are correctness rules, not style preferences. The evidence is
   titles/messages, never `${regShort()} minimum` or "regulatory minimum".
   Historical dashboard, preview and run reads correct the disclosure without
   changing stored validations, calculations or input hashes; see
-  `backend/tests/services/test_liquidity_validation_disclosures.py`.
+  `backend/tests/liquidity/service/test_liquidity_validation_disclosures.py`.
   The [research dossier](../../docs/research/bog_returns_and_templates.md#12-gap-list--what-must-be-simulatedapproximated-clearly-labelled)
   owns the instruments' publication status and calibration gaps.
 - **CET1, Tier 1 and the leverage ratio** are Bank of Ghana CRD requirements —

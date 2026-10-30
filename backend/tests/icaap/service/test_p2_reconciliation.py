@@ -31,8 +31,8 @@ from app.icaap.schemas.risk_capital import (
 )
 from app.icaap.schemas.workspace import IcaapCycleRead, IcaapDataBlockCreate
 from app.icaap.service import allocation, blocks, pillar2, reconciliation
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import BankReportingPeriod, User
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import capital_plan, regulatory_capital
 from tests.icaap.service.conftest import AS_OF
 from tests.support.helpers import ORG_1

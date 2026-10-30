@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import RoleBundle
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import BankReportingPeriod, RegulatoryPackage, User
 from app.reporting.schemas.filing_workflow import PackageStageDecisionCreate
 from app.reporting.schemas.packages import (
@@ -20,8 +22,6 @@ from app.reporting.schemas.packages import (
 )
 from app.reporting.service import calendar, generation, validation, workflow
 from app.reporting.service.filing_workflow import chain as filing_chain
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

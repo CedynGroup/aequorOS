@@ -497,7 +497,7 @@ _ENGINE_VERSION_MODULES = (
     "app.fx.service",
     "app.irrbb.service.regulatory_irr",
     "app.irrbb.service.regulatory_irr_sf",
-    "app.services.regulatory_liquidity",
+    "app.liquidity.service.regulatory_liquidity",
     "app.stress.service.reverse_stress",
 )
 

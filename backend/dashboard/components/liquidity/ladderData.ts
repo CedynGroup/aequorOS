@@ -1,7 +1,7 @@
 /**
  * Defensive readers for the per-currency ladder blobs a stored liquidity run
  * carries in its untyped `metrics` dict (written by
- * backend/app/services/regulatory_liquidity.py):
+ * backend/app/liquidity/service/regulatory_liquidity.py):
  *
  *   metrics.currency_gaps: [{ currency, assets[], liabilities[], net[],
  *     cumulative[], assets_total, liabilities_total, net_total,

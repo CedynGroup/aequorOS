@@ -8,12 +8,12 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.identity.public import BankRead, BankReportingPeriodRead
-from app.live.public import LiveModuleView
-from app.schemas.regulatory_liquidity import (
+from app.liquidity.schemas.regulatory_liquidity import (
     CapitalScenarioCode,
     RegulatoryMetricUnit,
     RegulatoryValidationSeverity,
 )
+from app.live.public import LiveModuleView
 
 type CapitalRatioStatus = Literal["green", "amber", "red"]
 

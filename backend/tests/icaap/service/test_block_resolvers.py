@@ -28,8 +28,8 @@ from app.icaap.schemas.workspace import (
     IcaapManualTablePut,
 )
 from app.icaap.service import blocks
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import BankReportingPeriod
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital
 from tests.core import test_key_unavailable_numeric as encrypted
 from tests.core.test_bank_field_encryption import KEY_A
