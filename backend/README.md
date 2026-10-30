@@ -292,8 +292,8 @@ acknowledgement leaves pending cleanup safe to retry; duplicate requests preserv
 one job and one deletion event. Existing deleted records remain unchanged.
 The queue's bounded exponential retries and stale-worker reclaim apply; exhausted
 cleanup remains pending and appears as a failed job on the operator jobs board.
-See [`documents.py`](app/services/documents.py) and the
-[deletion regression tests](tests/services/test_document_deletion.py), including
+See [`documents.py`](app/case/service/documents.py) and the
+[deletion regression tests](tests/case/service/test_document_deletion.py), including
 [PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout.py).
 
 Canonical financial data is read with
@@ -303,8 +303,8 @@ periods, balances, cash flows, obligations, and covenants. These mutations
 require an authenticated mutation-capable bearer principal; each request body
 requires a non-empty `reason`. Successful responses contain the updated `record` and the case's
 refreshed `validation` state. The request and response schemas live in
-[`app/schemas/financial_workspace.py`](app/schemas/financial_workspace.py);
-[`app/services/financial_canonical_edits.py`](app/services/financial_canonical_edits.py) owns
+[`app/case/schemas/financial_workspace.py`](app/case/schemas/financial_workspace.py);
+[`app/case/service/financial_canonical_edits.py`](app/case/service/financial_canonical_edits.py) owns
 correction-history behavior.
 
 Clients use the generated `FinancialDataApi` from `packages/risk-service-api`

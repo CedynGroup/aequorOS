@@ -104,7 +104,7 @@ The primary database's schema revision is `202608230039`, which equals the sourc
 Re-counted across `backend/app/features/`: **167** routes use an unsafe HTTP method; **1** declares the read-only context — `backend/app/stress/api/run_scenario_analysis.py:39`, whose service is documented and confirmed to write nothing (`backend/app/stress/service/analysis_workbench.py:356`). All fourteen routes the prior edition named are pinned by name in `backend/tests/api/test_impersonation_boundary.py:66-81`, and the sweep carries a degeneracy guard so it cannot silently check nothing (`:228`).
 
 **P0-3 — irreversible object-storage delete behind a read guard. CLOSED.** [V-B]
-`backend/app/features/manage_documents.py` declares the mutation context, pinned by `backend/tests/api/test_impersonation_boundary.py`. Current document-deletion consistency and cleanup behavior are owned by the [backend API guide](../README.md#legacy-case-vertical).
+`backend/app/case/api/manage_documents.py` declares the mutation context, pinned by `backend/tests/api/test_impersonation_boundary.py`. Current document-deletion consistency and cleanup behavior are owned by the [backend API guide](../README.md#legacy-case-vertical).
 
 **P0-4 — unthrottled password brute-force on the signing step-up. CLOSED.** [V-B]
 `backend/app/attestation/service/stepup.py:239-255` checks the lockout **before** the hash comparison and records the failure through the shared primitive in `backend/app/identity/service/auth_throttle.py`, which uses the same two `users` columns as sign-in, increments atomically in SQL, **commits** so a rolled-back transaction cannot erase the failure, and applies progressive backoff capped at one hour. The unknown-membership path burns an equalising hash so it is not a membership oracle. `backend/alembic/versions/202608230041_operator_login_lockout.py:42-55` gives the staff plane the same two columns.
@@ -260,7 +260,7 @@ Residual: `audit_events.organization_id` is still `ondelete="SET NULL"` (`backen
 ### 2.7 Schema and input validation
 
 - 13 of 64 schema files still declare no `extra="forbid"`, and none inherits a closed base. [V-B]
-- `backend/app/schemas/findings.py:41-42,53-56` still permits extra fields and pulls severity out of the extras with only a string check, so an invalid value surfaces as a server error. [V-B]
+- `backend/app/case/schemas/findings.py:41-42,53-56` still permits extra fields and pulls severity out of the extras with only a string check, so an invalid value surfaces as a server error. [V-B]
 - `backend/app/operator/schemas.py:676` still accepts an operator-set board threshold as an unbounded number or boolean with no discrimination by kind. [V-B]
 - `backend/app/schemas/liquidity_thresholds.py:57,93` still bind only the dictionary size, not the values. [V-B]
 - **The password-length finding is withdrawn as stated and reframed.** The one-character minimum is real (`backend/app/identity/schemas/auth.py:20`), but both occurrences are on _login_ requests; `set_password` has no callers in `backend/app/`, and every password the platform sets is machine-generated. There is no user-chosen-password path for a complexity policy to attach to. Adding one is a prerequisite for self-service credentials, not a live defect. [V-B]
