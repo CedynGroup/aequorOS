@@ -1,13 +1,14 @@
 import { Suspense } from "react";
-import { Fraunces } from "next/font/google";
+import localFont from "next/font/local";
 import Logo from "@/components/shell/Logo";
 import LoginForm from "./LoginForm";
 
 // Editorial display serif — the same family the marketing site leads with, so
 // the brand voice carries from aequoros.com into the product.
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  weight: ["500"],
+const fraunces = localFont({
+  src: "../fonts/fraunces-latin-wght-normal.woff2",
+  weight: "500",
+  adjustFontFallback: "Times New Roman",
   display: "swap",
 });
 
