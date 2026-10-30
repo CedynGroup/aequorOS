@@ -24,8 +24,9 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session, defer
+from sqlalchemy.orm import Session, defer, load_only
 
+from app.core.authorization import Permission, Sensitivity
 from app.core.key_management.fields import observe_bank_key
 from app.core.key_management.presentation import (
     SESSION_STATE,
@@ -56,7 +57,10 @@ from app.identity.schemas.institution_profile import (
     BankProductCreate,
     BankProductRead,
     BankProductUpdate,
+    InstitutionProfileAccessRead,
     InstitutionProfileFullRead,
+    InstitutionProfileGeneralRead,
+    InstitutionProfileIdentifiersRead,
     InstitutionProfilePut,
     InstitutionProfileRead,
     OutletCreate,
@@ -71,6 +75,7 @@ from app.identity.schemas.institution_profile import (
     ShareholdingRead,
     ShareholdingUpdate,
 )
+from app.identity.service import institution_profile_access
 from app.policy.models.jurisdiction import Jurisdiction
 from app.services.audit import record_event
 
@@ -109,9 +114,26 @@ def _get_party_or_404(
     return party
 
 
-def _profile_row(db: Session, ctx: TenantContext, bank_id: str) -> InstitutionProfile | None:
+def _profile_row(
+    db: Session, ctx: TenantContext, bank_id: str, *, restricted: bool = True, general: bool = True
+) -> InstitutionProfile | None:
+    query = select(InstitutionProfile)
+    if not general:
+        query = query.options(
+            load_only(
+                InstitutionProfile.tin,
+                InstitutionProfile.registration_number,
+                InstitutionProfile.orass_institution_code,
+            )
+        )
+    elif not restricted:
+        query = query.options(
+            defer(InstitutionProfile.tin),
+            defer(InstitutionProfile.registration_number),
+            defer(InstitutionProfile.orass_institution_code),
+        )
     return db.scalar(
-        select(InstitutionProfile).where(
+        query.where(
             InstitutionProfile.organization_id == ctx.organization_id,
             InstitutionProfile.bank_id == bank_id,
         )
@@ -171,8 +193,8 @@ def _profile_warnings(profile: InstitutionProfile) -> list[str]:
     return warnings
 
 
-def _profile_read(profile: InstitutionProfile) -> InstitutionProfileRead:
-    return InstitutionProfileRead(
+def _profile_general_read(profile: InstitutionProfile) -> InstitutionProfileGeneralRead:
+    return InstitutionProfileGeneralRead(
         id=profile.id,
         bank_id=profile.bank_id,
         institution_type=profile.institution_type,
@@ -180,9 +202,6 @@ def _profile_read(profile: InstitutionProfile) -> InstitutionProfileRead:
         authorisation_date=profile.authorisation_date,
         approved_capital=profile.approved_capital,
         incorporation_date=profile.incorporation_date,
-        tin=profile.tin,
-        registration_number=profile.registration_number,
-        orass_institution_code=profile.orass_institution_code,
         traded_on_exchange=profile.traded_on_exchange,
         exchange_name=profile.exchange_name,
         isin=profile.isin,
@@ -192,6 +211,23 @@ def _profile_read(profile: InstitutionProfile) -> InstitutionProfileRead:
         warnings=_profile_warnings(profile),
         created_at=profile.created_at,
         updated_at=profile.updated_at,
+    )
+
+
+def _profile_identifiers_read(profile: InstitutionProfile) -> InstitutionProfileIdentifiersRead:
+    return InstitutionProfileIdentifiersRead(
+        tin=profile.tin,
+        registration_number=profile.registration_number,
+        orass_institution_code=profile.orass_institution_code,
+    )
+
+
+def _profile_read(profile: InstitutionProfile) -> InstitutionProfileRead:
+    return InstitutionProfileRead.model_validate(
+        {
+            **_profile_general_read(profile).model_dump(),
+            **_profile_identifiers_read(profile).model_dump(),
+        }
     )
 
 
@@ -344,6 +380,7 @@ def _bank_children[T](db: Session, model: type[T], ctx: TenantContext, bank_id: 
 
 
 def get_full_profile(db: Session, ctx: TenantContext, bank_id: str) -> InstitutionProfileFullRead:
+    """Trusted regulatory source; interactive reads use the authorized projection."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     profile = _profile_row(db, ctx, bank.id)
     parties = _bank_children(db, RelatedParty, ctx, bank.id)
@@ -366,16 +403,81 @@ def get_full_profile(db: Session, ctx: TenantContext, bank_id: str) -> Instituti
     return result
 
 
+def get_authorized_profile(
+    db: Session, ctx: TenantContext, bank_id: str
+) -> InstitutionProfileAccessRead:
+    access = institution_profile_access.view_access(db, ctx, bank_id)
+    bank = access.bank
+    profile = _profile_row(db, ctx, bank.id, restricted=access.restricted, general=access.general)
+    parties: list[RelatedPartyRead] = []
+    if access.restricted:
+        rows = _bank_children(db, RelatedParty, ctx, bank.id)
+        roles, holdings = _party_children(db, [row.id for row in rows])
+        parties = [_party_read(row, roles[row.id], holdings[row.id]) for row in rows]
+        observe_bank_key(db, ctx.organization_id, bank.id)
+    return InstitutionProfileAccessRead(
+        bank_id=bank.id,
+        general_visible=access.general,
+        restricted_visible=access.restricted,
+        profile=_profile_general_read(profile) if access.general and profile is not None else None,
+        identifiers=(
+            _profile_identifiers_read(profile)
+            if access.restricted and profile is not None
+            else None
+        ),
+        related_parties=parties,
+        outlets=[_outlet_read(row) for row in _bank_children(db, Outlet, ctx, bank.id)]
+        if access.general
+        else [],
+        products=[_product_read(row) for row in _bank_children(db, BankProduct, ctx, bank.id)]
+        if access.general
+        else [],
+        licenses=[_license_read(row) for row in _bank_children(db, BankLicense, ctx, bank.id)]
+        if access.general
+        else [],
+        name_history=[
+            _name_history_read(row) for row in _bank_children(db, BankNameHistory, ctx, bank.id)
+        ]
+        if access.general
+        else [],
+    )
+
+
 # --- institution profile ----------------------------------------------------------
 
 
 def upsert_profile(
     db: Session, ctx: TenantContext, bank_id: str, payload: InstitutionProfilePut
-) -> InstitutionProfileRead:
+) -> InstitutionProfileGeneralRead:
+    # Existence selects only the stable row id, before choosing CREATE versus EDIT.
     bank = _get_bank_or_404(db, ctx, bank_id)
+    existing_id = db.scalar(
+        select(InstitutionProfile.id).where(
+            InstitutionProfile.organization_id == ctx.organization_id,
+            InstitutionProfile.bank_id == bank.id,
+        )
+    )
+    permission = Permission.CREATE if existing_id is None else Permission.EDIT
+    institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank.id,
+        permission=permission,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+    )
+    identifiers = {"tin", "registration_number", "orass_institution_code"}
+    supplied_identifiers = identifiers & payload.model_fields_set
+    if supplied_identifiers:
+        institution_profile_access.require_mutation(
+            db,
+            ctx,
+            bank.id,
+            permission=permission,
+            sensitivity=Sensitivity.RESTRICTED,
+        )
     if payload.parent_country_code is not None:
         _require_jurisdiction(db, payload.parent_country_code)
-    profile = _profile_row(db, ctx, bank.id)
+    profile = _profile_row(db, ctx, bank.id, restricted=False)
     created = profile is None
     if profile is None:
         profile = InstitutionProfile(
@@ -390,9 +492,8 @@ def upsert_profile(
     profile.authorisation_date = payload.authorisation_date
     profile.approved_capital = payload.approved_capital
     profile.incorporation_date = payload.incorporation_date
-    profile.tin = payload.tin
-    profile.registration_number = payload.registration_number
-    profile.orass_institution_code = payload.orass_institution_code
+    for name in supplied_identifiers:
+        setattr(profile, name, getattr(payload, name))
     profile.traded_on_exchange = payload.traded_on_exchange
     profile.exchange_name = payload.exchange_name
     profile.isin = payload.isin
@@ -409,11 +510,10 @@ def upsert_profile(
         details={
             "bank_id": str(bank.id),
             "reason": payload.reason,
-            "orass_institution_code": payload.orass_institution_code,
         },
     )
     db.commit()
-    return _profile_read(profile)
+    return _profile_general_read(profile)
 
 
 # --- related parties ----------------------------------------------------------------
@@ -499,7 +599,14 @@ def _replace_roles(
 def create_related_party(
     db: Session, ctx: TenantContext, bank_id: str, payload: RelatedPartyCreate
 ) -> RelatedPartyRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.CREATE,
+        sensitivity=Sensitivity.RESTRICTED,
+        hide_object=False,
+    )
     _validate_party_rules(
         db, ctx, payload.party_type, [role.role for role in payload.roles], party_id=None
     )
@@ -534,7 +641,14 @@ def create_related_party(
 def update_related_party(
     db: Session, ctx: TenantContext, bank_id: str, party_id: UUID, payload: RelatedPartyUpdate
 ) -> RelatedPartyRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.EDIT,
+        sensitivity=Sensitivity.RESTRICTED,
+        hide_object=True,
+    )
     party = _get_party_or_404(db, ctx, bank.id, party_id, defer_protected=True)
     presentation = cast(object, db.info.setdefault(SESSION_STATE, PresentationState()))
     assert isinstance(presentation, PresentationState)
@@ -616,7 +730,14 @@ def _apply_shareholding_fields(
 def add_shareholding(
     db: Session, ctx: TenantContext, bank_id: str, party_id: UUID, payload: ShareholdingCreate
 ) -> RelatedPartyRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.CREATE,
+        sensitivity=Sensitivity.RESTRICTED,
+        hide_object=True,
+    )
     party = _get_party_or_404(db, ctx, bank.id, party_id)
     if payload.ubo_party_id is not None:
         _require_individual_ubo(db, ctx, bank.id, payload.ubo_party_id)
@@ -657,7 +778,14 @@ def update_shareholding(  # noqa: PLR0913
     shareholding_id: UUID,
     payload: ShareholdingUpdate,
 ) -> RelatedPartyRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.EDIT,
+        sensitivity=Sensitivity.RESTRICTED,
+        hide_object=True,
+    )
     party = _get_party_or_404(db, ctx, bank.id, party_id)
     holding = db.scalar(
         select(Shareholding).where(
@@ -710,7 +838,14 @@ def _apply_outlet_fields(outlet: Outlet, payload: OutletCreate | OutletUpdate) -
 def create_outlet(
     db: Session, ctx: TenantContext, bank_id: str, payload: OutletCreate
 ) -> OutletRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.CREATE,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        hide_object=False,
+    )
     outlet = Outlet(
         organization_id=ctx.organization_id,
         bank_id=bank.id,
@@ -740,7 +875,14 @@ def create_outlet(
 def update_outlet(
     db: Session, ctx: TenantContext, bank_id: str, outlet_id: UUID, payload: OutletUpdate
 ) -> OutletRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.EDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        hide_object=True,
+    )
     outlet = db.scalar(
         select(Outlet).where(
             Outlet.id == outlet_id,
@@ -775,7 +917,14 @@ def update_outlet(
 def create_product(
     db: Session, ctx: TenantContext, bank_id: str, payload: BankProductCreate
 ) -> BankProductRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.CREATE,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        hide_object=False,
+    )
     product = BankProduct(
         organization_id=ctx.organization_id,
         bank_id=bank.id,
@@ -796,7 +945,14 @@ def create_product(
 def update_product(
     db: Session, ctx: TenantContext, bank_id: str, product_id: UUID, payload: BankProductUpdate
 ) -> BankProductRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.EDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        hide_object=True,
+    )
     product = db.scalar(
         select(BankProduct).where(
             BankProduct.id == product_id,
@@ -821,7 +977,14 @@ def update_product(
 def create_license(
     db: Session, ctx: TenantContext, bank_id: str, payload: BankLicenseCreate
 ) -> BankLicenseRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.CREATE,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        hide_object=False,
+    )
     license_row = BankLicense(
         organization_id=ctx.organization_id,
         bank_id=bank.id,
@@ -842,7 +1005,14 @@ def create_license(
 def update_license(
     db: Session, ctx: TenantContext, bank_id: str, license_id: UUID, payload: BankLicenseUpdate
 ) -> BankLicenseRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.EDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        hide_object=True,
+    )
     license_row = db.scalar(
         select(BankLicense).where(
             BankLicense.id == license_id,
@@ -867,7 +1037,14 @@ def update_license(
 def create_name_history_entry(
     db: Session, ctx: TenantContext, bank_id: str, payload: BankNameHistoryCreate
 ) -> BankNameHistoryRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.CREATE,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        hide_object=False,
+    )
     entry = BankNameHistory(
         organization_id=ctx.organization_id,
         bank_id=bank.id,
@@ -887,7 +1064,14 @@ def create_name_history_entry(
 def update_name_history_entry(
     db: Session, ctx: TenantContext, bank_id: str, entry_id: UUID, payload: BankNameHistoryUpdate
 ) -> BankNameHistoryRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = institution_profile_access.require_mutation(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.EDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        hide_object=True,
+    )
     entry = db.scalar(
         select(BankNameHistory).where(
             BankNameHistory.id == entry_id,

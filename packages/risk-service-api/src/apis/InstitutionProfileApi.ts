@@ -22,9 +22,9 @@ import type {
   BankProductRead,
   BankProductUpdate,
   ErrorResponse,
-  InstitutionProfileFullRead,
+  InstitutionProfileAccessRead,
+  InstitutionProfileGeneralRead,
   InstitutionProfilePut,
-  InstitutionProfileRead,
   OutletCreate,
   OutletRead,
   OutletUpdate,
@@ -55,12 +55,12 @@ import {
   BankProductUpdateToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
-  InstitutionProfileFullReadFromJSON,
-  InstitutionProfileFullReadToJSON,
+  InstitutionProfileAccessReadFromJSON,
+  InstitutionProfileAccessReadToJSON,
+  InstitutionProfileGeneralReadFromJSON,
+  InstitutionProfileGeneralReadToJSON,
   InstitutionProfilePutFromJSON,
   InstitutionProfilePutToJSON,
-  InstitutionProfileReadFromJSON,
-  InstitutionProfileReadToJSON,
   OutletCreateFromJSON,
   OutletCreateToJSON,
   OutletReadFromJSON,
@@ -589,7 +589,7 @@ export class InstitutionProfileApi extends runtime.BaseAPI {
   async getInstitutionProfileRaw(
     requestParameters: GetInstitutionProfileRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<InstitutionProfileFullRead>> {
+  ): Promise<runtime.ApiResponse<InstitutionProfileAccessRead>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -623,7 +623,7 @@ export class InstitutionProfileApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      InstitutionProfileFullReadFromJSON(jsonValue),
+      InstitutionProfileAccessReadFromJSON(jsonValue),
     );
   }
 
@@ -634,7 +634,7 @@ export class InstitutionProfileApi extends runtime.BaseAPI {
   async getInstitutionProfile(
     requestParameters: GetInstitutionProfileRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<InstitutionProfileFullRead> {
+  ): Promise<InstitutionProfileAccessRead> {
     const response = await this.getInstitutionProfileRaw(
       requestParameters,
       initOverrides,
@@ -648,7 +648,7 @@ export class InstitutionProfileApi extends runtime.BaseAPI {
   async putInstitutionProfileRaw(
     requestParameters: PutInstitutionProfileRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<InstitutionProfileRead>> {
+  ): Promise<runtime.ApiResponse<InstitutionProfileGeneralRead>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -694,7 +694,7 @@ export class InstitutionProfileApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      InstitutionProfileReadFromJSON(jsonValue),
+      InstitutionProfileGeneralReadFromJSON(jsonValue),
     );
   }
 
@@ -704,7 +704,7 @@ export class InstitutionProfileApi extends runtime.BaseAPI {
   async putInstitutionProfile(
     requestParameters: PutInstitutionProfileRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<InstitutionProfileRead> {
+  ): Promise<InstitutionProfileGeneralRead> {
     const response = await this.putInstitutionProfileRaw(
       requestParameters,
       initOverrides,
