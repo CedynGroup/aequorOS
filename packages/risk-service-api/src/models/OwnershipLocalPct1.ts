@@ -15,7 +15,7 @@
  * @export
  * @interface OwnershipLocalPct1
  */
-export type OwnershipLocalPct1 = string | null;
+export type OwnershipLocalPct1 = number | string | null;
 
 /**
  * Check if a given object implements the OwnershipLocalPct1 interface.
@@ -23,7 +23,9 @@ export type OwnershipLocalPct1 = string | null;
 export function instanceOfOwnershipLocalPct1(
   value: unknown,
 ): value is OwnershipLocalPct1 {
-  return typeof value === "string" || value === null;
+  return (
+    typeof value === "number" || typeof value === "string" || value === null
+  );
 }
 
 export function OwnershipLocalPct1FromJSON(json: any): OwnershipLocalPct1 {

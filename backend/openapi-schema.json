@@ -39606,13 +39606,27 @@
         "title": "InstitutionDirectoryRead",
         "type": "object"
       },
-      "InstitutionProfileFullRead": {
+      "InstitutionProfileAccessRead": {
         "additionalProperties": false,
-        "description": "The full corporate register for one bank \u2014 the ORASS master-data mirror.",
+        "description": "Only explicitly permitted sections of one institution's register.\n\nVisibility distinguishes a denied section from an unconfigured or empty one.\nA denied section is never loaded, counted, or decrypted.",
         "properties": {
           "bank_id": {
             "title": "Bank Id",
             "type": "string"
+          },
+          "general_visible": {
+            "title": "General Visible",
+            "type": "boolean"
+          },
+          "identifiers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InstitutionProfileIdentifiersRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "licenses": {
             "items": {
@@ -39645,7 +39659,7 @@
           "profile": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/InstitutionProfileRead"
+                "$ref": "#/components/schemas/InstitutionProfileGeneralRead"
               },
               {
                 "type": "null"
@@ -39658,18 +39672,227 @@
             },
             "title": "Related Parties",
             "type": "array"
+          },
+          "restricted_visible": {
+            "title": "Restricted Visible",
+            "type": "boolean"
           }
         },
         "required": [
           "bank_id",
+          "general_visible",
+          "restricted_visible",
           "profile",
+          "identifiers",
           "related_parties",
           "outlets",
           "products",
           "licenses",
           "name_history"
         ],
-        "title": "InstitutionProfileFullRead",
+        "title": "InstitutionProfileAccessRead",
+        "type": "object"
+      },
+      "InstitutionProfileGeneralRead": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_capital": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Capital"
+          },
+          "authorisation_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorisation Date"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "exchange_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exchange Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "incorporation_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Incorporation Date"
+          },
+          "institution_type": {
+            "title": "Institution Type",
+            "type": "string"
+          },
+          "isin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isin"
+          },
+          "legal_entity_structure": {
+            "title": "Legal Entity Structure",
+            "type": "string"
+          },
+          "ownership_foreign_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownership Foreign Pct"
+          },
+          "ownership_local_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownership Local Pct"
+          },
+          "parent_country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Country Code"
+          },
+          "traded_on_exchange": {
+            "title": "Traded On Exchange",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "institution_type",
+          "legal_entity_structure",
+          "authorisation_date",
+          "approved_capital",
+          "incorporation_date",
+          "traded_on_exchange",
+          "exchange_name",
+          "isin",
+          "ownership_local_pct",
+          "ownership_foreign_pct",
+          "parent_country_code",
+          "warnings",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "InstitutionProfileGeneralRead",
+        "type": "object"
+      },
+      "InstitutionProfileIdentifiersRead": {
+        "additionalProperties": false,
+        "description": "Restricted identifiers, independently authorized from the general profile.",
+        "properties": {
+          "orass_institution_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orass Institution Code"
+          },
+          "registration_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registration Number"
+          },
+          "tin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tin"
+          }
+        },
+        "required": [
+          "tin",
+          "registration_number",
+          "orass_institution_code"
+        ],
+        "title": "InstitutionProfileIdentifiersRead",
         "type": "object"
       },
       "InstitutionProfilePut": {
@@ -39851,198 +40074,6 @@
           "legal_entity_structure"
         ],
         "title": "InstitutionProfilePut",
-        "type": "object"
-      },
-      "InstitutionProfileRead": {
-        "additionalProperties": false,
-        "properties": {
-          "approved_capital": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Approved Capital"
-          },
-          "authorisation_date": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Authorisation Date"
-          },
-          "bank_id": {
-            "title": "Bank Id",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "exchange_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Exchange Name"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "incorporation_date": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Incorporation Date"
-          },
-          "institution_type": {
-            "title": "Institution Type",
-            "type": "string"
-          },
-          "isin": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Isin"
-          },
-          "legal_entity_structure": {
-            "title": "Legal Entity Structure",
-            "type": "string"
-          },
-          "orass_institution_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Orass Institution Code"
-          },
-          "ownership_foreign_pct": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ownership Foreign Pct"
-          },
-          "ownership_local_pct": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ownership Local Pct"
-          },
-          "parent_country_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Country Code"
-          },
-          "registration_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Registration Number"
-          },
-          "tin": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tin"
-          },
-          "traded_on_exchange": {
-            "title": "Traded On Exchange",
-            "type": "boolean"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
-          }
-        },
-        "required": [
-          "id",
-          "bank_id",
-          "institution_type",
-          "legal_entity_structure",
-          "authorisation_date",
-          "approved_capital",
-          "incorporation_date",
-          "tin",
-          "registration_number",
-          "orass_institution_code",
-          "traded_on_exchange",
-          "exchange_name",
-          "isin",
-          "ownership_local_pct",
-          "ownership_foreign_pct",
-          "parent_country_code",
-          "warnings",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "InstitutionProfileRead",
         "type": "object"
       },
       "InstitutionScope": {
@@ -95049,7 +95080,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InstitutionProfileFullRead"
+                  "$ref": "#/components/schemas/InstitutionProfileAccessRead"
                 }
               }
             },
@@ -95154,7 +95185,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InstitutionProfileRead"
+                  "$ref": "#/components/schemas/InstitutionProfileGeneralRead"
                 }
               }
             },
