@@ -304,6 +304,94 @@ def test_strings_paths_guards_and_docs_follow_the_move(repository: Path) -> None
         assert _read(repository, relative) == FILES[relative]
 
 
+def test_test_catalogue_node_ids_follow_the_move(repository: Path) -> None:
+    suites = repository / "backend/scripts/test_suites.json"
+    suites.write_text(
+        "{\n"
+        '  "cases": {\n'
+        '    "tests/test_fx.py::test_run": "unit",\n'
+        '    "tests/other/test_keep.py::test_keep": "unit",\n'
+        '    "tests/live/test_imports.py::test_composes[app.services.regulatory_fx]": "unit",\n'
+        '    "tests/live/test_imports.py::test_composes[app.services.regulatory_fx-c]": "unit"\n'
+        "  },\n"
+        '  "services": {}\n'
+        "}\n"
+    )
+    durations = repository / "backend/scripts/ci_postgres_durations.json"
+    durations.write_text(
+        "{\n"
+        '  "source_run": "run",\n'
+        '  "durations": {\n'
+        '    "tests/test_fx.py": 0.5,\n'
+        '    "tests/other/test_keep.py": 0.25\n'
+        "  }\n"
+        "}\n"
+    )
+    flush = repository / "backend/app/db/flush_order.json"
+    flush.parent.mkdir(parents=True)
+    flush.write_text('{"app.services.regulatory_fx": []}\n')
+    _git(repository, "add", ".")
+    _run(repository, "move", [MOVES[0], ("tests.test_fx", "tests.fx.api.test_fx")])
+    assert suites.read_text() == (
+        "{\n"
+        '  "cases": {\n'
+        '    "tests/fx/api/test_fx.py::test_run": "unit",\n'
+        '    "tests/other/test_keep.py::test_keep": "unit",\n'
+        '    "tests/live/test_imports.py::test_composes[app.fx.service]": "unit",\n'
+        '    "tests/live/test_imports.py::test_composes[app.fx.service-c]": "unit"\n'
+        "  },\n"
+        '  "services": {}\n'
+        "}\n"
+    )
+    assert durations.read_text() == (
+        "{\n"
+        '  "source_run": "run",\n'
+        '  "durations": {\n'
+        '    "tests/fx/api/test_fx.py": 0.5,\n'
+        '    "tests/other/test_keep.py": 0.25\n'
+        "  }\n"
+        "}\n"
+    )
+    assert flush.read_text() == '{"app.services.regulatory_fx": []}\n'
+    assert _run(repository, "rewrite") == ["exit 0"]
+    assert _run(repository, "check") == ["exit 0"]
+    assert json.loads(suites.read_text())["cases"] == {
+        "tests/fx/api/test_fx.py::test_run": "unit",
+        "tests/other/test_keep.py::test_keep": "unit",
+        "tests/live/test_imports.py::test_composes[app.fx.service]": "unit",
+        "tests/live/test_imports.py::test_composes[app.fx.service-c]": "unit",
+    }
+
+
+def test_a_wrapped_rewritten_import_keeps_its_noqa_on_the_first_line(tmp_path: Path) -> None:
+    rename = Renamer(
+        (("app.services.regulatory_liquidity", "app.liquidity.service.regulatory_liquidity"),)
+    )
+    text = (
+        "def compose() -> None:\n"
+        "    from app.services import (  # noqa: PLC0415 - engines consume live contracts\n"
+        "        regulatory_capital,\n"
+        "        regulatory_liquidity,\n"
+        "    )\n"
+    )
+    rewritten = feature_moves.rewrite_imports(text, "app.live.service", False, rename, tmp_path)
+    assert "    from app.services import regulatory_capital  # noqa" in rewritten
+    assert (
+        "    from app.liquidity.service import (  "
+        "# noqa: PLC0415 - engines consume live contracts\n"
+        "        regulatory_liquidity,\n"
+        "    )\n"
+    ) in rewritten
+    assert "regulatory_liquidity,  # noqa" not in rewritten
+
+
+def test_guard_coverage_reports_only_plausible_path_literals(repository: Path) -> None:
+    guard = repository / "backend/tests/architecture/test_guard.py"
+    guard.write_text('SEGMENT = _APP / "ai" / "domain"\nPLANE = ("services/regulatory_fx.py",)\n')
+    coverage = feature_moves.guard_coverage(repository / "backend")
+    assert coverage == {"test_guard.py": {"services/regulatory_fx.py": 1}}
+
+
 def test_frozen_engine_identifiers_survive_while_their_locations_move(
     repository: Path,
 ) -> None:
