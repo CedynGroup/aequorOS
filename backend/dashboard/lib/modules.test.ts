@@ -724,7 +724,7 @@ assert.deepEqual(hrefAccess("/liquidity", structurallyExcluded), {
   state: "hidden",
 });
 
-// Account view is projected at organization scope, never institution scope.
+// Account authority never grants access to institution source registers.
 const accountView = {
   module: "account",
   sensitivity: "restricted",
@@ -733,7 +733,7 @@ const accountView = {
   dataScope: { kind: "all", branches: [] as string[], regions: [] as string[] },
 } as const;
 for (const [capabilities, visible] of [
-  [[accountView], true],
+  [[accountView], false],
   [[], false],
   [[{ ...accountView, permission: "administer" }], false],
   [[{ ...accountView, sensitivity: "aggregated" }], false],
@@ -766,8 +766,7 @@ for (const [capabilities, visible] of [
   }
 }
 
-// Institution is grantable vocabulary ahead of its cutover: a binding on it
-// opens no module yet, because `/institution` still enforces through Account.
+// Institution view opens the selected institution through its own module.
 {
   const vocabularyOnly = {
     module: "institution",
@@ -782,7 +781,7 @@ for (const [capabilities, visible] of [
   } as const;
   assert.deepEqual(
     effectiveInstitutionModules(null, [vocabularyOnly]),
-    new Set(),
+    new Set(["institution"]),
   );
   assert.deepEqual(effectiveOrganizationModules([vocabularyOnly]), new Set());
 }
@@ -1203,7 +1202,7 @@ assert.deepEqual(
   )?.requirements.map(
     (item) => `${item.moduleScope}/${item.sensitivityScope}/${item.permission}`,
   ),
-  ["account/restricted/view"],
+  ["institution/confidential/view"],
 );
 
 // Every hidden public module route resolves to a denied page for every scope
@@ -1685,4 +1684,74 @@ for (const path of [
     state: "hidden",
   });
   assert.equal(isPathVisible(path, accountOnlyForecastingScope), false);
+}
+
+// Institution tabs use exact, independently projected section authority.
+const institutionGeneralView = {
+  ...accountView,
+  module: "institution",
+  sensitivity: "confidential",
+} as const;
+const institutionRestrictedView = {
+  ...institutionGeneralView,
+  sensitivity: "restricted",
+} as const;
+for (const [grants, general, restricted] of [
+  [[], false, false],
+  [[accountView], false, false],
+  [[institutionGeneralView], true, false],
+  [[institutionRestrictedView], false, true],
+  [[institutionGeneralView, institutionRestrictedView], true, true],
+  [
+    [{ ...institutionGeneralView, requiresContextualAuthorization: true }],
+    false,
+    false,
+  ],
+  [
+    [
+      {
+        ...institutionGeneralView,
+        dataScope: {
+          kind: "branch",
+          branches: ["A"] as string[],
+          regions: [] as string[],
+        },
+      },
+    ],
+    false,
+    false,
+  ],
+] as const) {
+  const scope = resolved(true, true, {
+    modules: effectiveInstitutionModules(null, grants),
+    institutionCapabilities: grants,
+    organizationModules: new Set(),
+    hasInstitutionAuthority: grants.length > 0,
+  });
+  assert.equal(isPathVisible("/institution", scope), general || restricted);
+  assert.equal(isHrefVisible("/institution", scope), general || restricted);
+  assert.equal(isPathVisible("/institution/parties", scope), restricted);
+  assert.equal(isHrefVisible("/institution/parties", scope), restricted);
+  for (const route of [
+    "/institution/outlets",
+    "/institution/history",
+    "/institution/products",
+  ]) {
+    assert.equal(isPathVisible(route, scope), general);
+    assert.equal(isHrefVisible(route, scope), general);
+  }
+}
+// Board Registers keep source authority; Institution grants do not stand in for it.
+for (const grants of [
+  [institutionGeneralView],
+  [{ ...creditView, sensitivity: "confidential" }],
+  [{ ...liquidityView, sensitivity: "confidential" }],
+] as const) {
+  const scope = resolved(true, true, {
+    modules: effectiveInstitutionModules(null, grants),
+    institutionCapabilities: grants,
+  });
+  const allowed = grants[0].module !== "institution";
+  assert.equal(isPathVisible("/institution/registers", scope), allowed);
+  assert.equal(isHrefVisible("/institution/registers", scope), allowed);
 }
