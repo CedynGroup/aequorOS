@@ -153,6 +153,9 @@ function lockedResponse(reason: string) {
     {
       bank_id: BANK,
       profile: null,
+      general_visible: true,
+      restricted_visible: true,
+      identifiers: null,
       related_parties: [],
       name_history: [],
       outlets: [],
@@ -170,7 +173,7 @@ function jsonWithNotice(body: unknown, reason: string) {
   });
 }
 function ProfileReader() {
-  useInstitutionProfile(BANK);
+  useInstitutionProfile(BANK, true);
   return <p>Institution screen</p>;
 }
 function ProtectedTitle() {

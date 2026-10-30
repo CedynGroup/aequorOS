@@ -350,10 +350,7 @@ const CAPABILITY_MODULES = {
   reg: ["regulatory_reporting", "reports"],
   risk: ["command_center", "risk", "alerts", "credit", "positions"],
   markets: ["markets"],
-  // Grantable vocabulary whose consuming surface (institution master data)
-  // still enforces through Account; an Institution binding opens nothing
-  // until that surface cuts over to it.
-  institution: [],
+  institution: ["institution"],
   account: [],
   audit: [],
 } as const satisfies Record<
@@ -432,9 +429,6 @@ export function effectiveOrganizationModules(
     )
   ) {
     modules.add("settings");
-  }
-  if (hasEffectiveCapability(capabilities, "account", "restricted", "view")) {
-    modules.add("institution");
   }
   return modules;
 }
@@ -701,10 +695,10 @@ const MODULE_ENTRY_REQUIREMENTS: Readonly<
   data_engine: requirement("data", "Data Engine", "restricted", "Restricted"),
   reports: REGULATORY_PUBLISHED_VIEW,
   institution: requirement(
-    "account",
-    "Account Administration",
-    "restricted",
-    "Restricted",
+    "institution",
+    "Institution",
+    "confidential",
+    "Confidential",
   ),
   regulatory_reporting: REGULATORY_PUBLISHED_VIEW,
 };
@@ -957,10 +951,47 @@ export function forecastingWorkspaceAccess(
   return hrefAccess(path, scope);
 }
 
+function institutionRequirements(
+  path: string,
+  scope: ModuleScope,
+): AccessRequirement[] {
+  const capabilities = scope.institutionCapabilities ?? [];
+  const eligible = capabilities.filter((row) => row.dataScope?.kind === "all");
+  if (path === "/institution/registers") {
+    if (
+      hasEffectiveCapability(eligible, "liq", "confidential", "view") ||
+      hasEffectiveCapability(eligible, "credit", "confidential", "view")
+    )
+      return [];
+    return [requirement("credit", "Credit", "confidential", "Confidential")];
+  }
+  if (
+    path === "/institution" &&
+    (hasEffectiveCapability(eligible, "institution", "confidential", "view") ||
+      hasEffectiveCapability(eligible, "institution", "restricted", "view"))
+  )
+    return [];
+  const restricted = path.startsWith("/institution/parties");
+  return missingRouteRequirements(
+    path,
+    [
+      requirement(
+        "institution",
+        "Institution",
+        restricted ? "restricted" : "confidential",
+        restricted ? "Restricted" : "Confidential",
+      ),
+    ],
+    capabilities,
+  );
+}
+
 function scopedModuleRequirements(
   path: string,
   scope: ModuleScope,
 ): AccessRequirement[] {
+  if (underRoute(path, ["/institution"]))
+    return institutionRequirements(path, scope);
   for (const routePolicy of SCOPED_MODULE_ROUTES) {
     if (!underRoute(path, [routePolicy.prefix])) continue;
     const confidential =
@@ -1012,8 +1043,6 @@ function bindingRequirements(
   ];
 }
 
-const ORGANIZATION_ROUTES = new Set<ModuleKey>(["institution"]);
-
 export function isAccessPath(path: string): boolean {
   return path === "/access" || path.startsWith("/access/");
 }
@@ -1037,17 +1066,11 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   if (forecastingWorkspaceAccess(path, scope)?.state === "disabled")
     return true;
   const moduleKey = moduleForPath(path);
+  if (path === "/institution/registers")
+    return institutionRequirements(path, scope).length === 0;
   if (path === "/" && isBaselineOnlyScope(scope)) {
     return true;
   }
-  if (
-    moduleKey &&
-    ORGANIZATION_ROUTES.has(moduleKey) &&
-    !scope.organizationModules.has(moduleKey)
-  ) {
-    return false;
-  }
-  if (moduleKey && ORGANIZATION_ROUTES.has(moduleKey)) return true;
   if (
     moduleKey &&
     scope.isResolved &&
@@ -1100,6 +1123,10 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   // has resolved.
   if (isAskPath(path) && scope.nlqEnabled !== true) return { state: "hidden" };
   const moduleKey = moduleForPath(path);
+  if (path === "/institution/registers") {
+    const reason = requirementsReason(institutionRequirements(path, scope));
+    return reason ? { state: "disabled", reason } : { state: "enabled" };
+  }
   if (moduleKey && moduleKey !== "access" && moduleKey !== "settings") {
     if (isBaselineOnlyScope(scope)) {
       const reason =
@@ -1109,11 +1136,6 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
           ? moduleEntryReason(moduleKey)
           : undefined);
       return reason ? { state: "disabled", reason } : { state: "hidden" };
-    }
-    if (ORGANIZATION_ROUTES.has(moduleKey)) {
-      return scope.organizationModules.has(moduleKey)
-        ? { state: "enabled" }
-        : { state: "hidden" };
     }
     if (!scope.isResolved) {
       return moduleKey === "liquidity"
@@ -1381,20 +1403,14 @@ export function accessDeniedForPath(
   if (scope.entitledModules && !scope.entitledModules.has(moduleKey))
     return null;
 
-  let requirements: AccessRequirement[];
-  if (ORGANIZATION_ROUTES.has(moduleKey)) {
-    requirements = scope.organizationModules.has(moduleKey)
-      ? []
-      : [MODULE_ENTRY_REQUIREMENTS[moduleKey]];
-  } else {
-    requirements = bindingRequirements(path, scope);
-    if (
-      requirements.length === 0 &&
-      scope.modules &&
-      !scope.modules.has(moduleKey)
-    ) {
-      requirements = [MODULE_ENTRY_REQUIREMENTS[moduleKey]];
-    }
+  let requirements = bindingRequirements(path, scope);
+  if (
+    path !== "/institution/registers" &&
+    requirements.length === 0 &&
+    scope.modules &&
+    !scope.modules.has(moduleKey)
+  ) {
+    requirements = [MODULE_ENTRY_REQUIREMENTS[moduleKey]];
   }
   if (requirements.length === 0) return null;
   return {
@@ -1436,6 +1452,16 @@ export function accessRequestRequirements(
   capabilities: readonly EffectiveCapabilityRead[],
   institutionClass: string | null,
 ): readonly AccessRequirement[] {
+  if (underRoute(normalize(pathname), ["/institution"])) {
+    return institutionRequirements(normalize(pathname), {
+      modules: new Set(),
+      organizationModules: new Set(),
+      hasInstitutionAuthority: false,
+      institutionCapabilities: capabilities,
+      institutionClass,
+      isResolved: true,
+    });
+  }
   const denied = accessDeniedForPath(pathname, {
     modules: new Set(),
     organizationModules: new Set(),

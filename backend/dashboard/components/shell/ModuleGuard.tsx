@@ -8,8 +8,8 @@
  * entitled to, so a savings-&-loans tenant that types `/fx` or `/basel/rwa`
  * gets not-found, not a bank-only screen. Unscoped tenants (banks) and the
  * pre-load window (module set not yet resolved) normally pass through unchanged.
- * Forecasting waits for resolution and renders permission-denied workspaces
- * without mounting their data consumers; its rollout contract owns that boundary.
+ * Forecasting and Institution wait for resolution and render permission-denied
+ * workspaces without mounting their data consumers.
  *
  * Hub redirects and the baseline-only public-route allow-list are owned by
  * docs/rbac.md §8.2 and lib/modules.ts. Unknown, structurally excluded, and
@@ -38,7 +38,11 @@ export default function ModuleGuard({
   const pathname = usePathname();
   const moduleScope = useModuleScope();
   const forecastingAccess = forecastingWorkspaceAccess(pathname, moduleScope);
-  if (forecastingAccess && !moduleScope.isResolved) return null;
+  if (
+    (forecastingAccess || pathname.startsWith("/institution")) &&
+    !moduleScope.isResolved
+  )
+    return null;
   if (forecastingAccess?.state === "disabled") {
     return (
       <>

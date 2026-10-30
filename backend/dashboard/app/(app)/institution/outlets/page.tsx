@@ -20,6 +20,11 @@ import {
   OutletStatus as OutletStatusValues,
   OutletType as OutletTypeValues,
 } from "@aequoros/risk-service-api";
+import {
+  InstitutionAction,
+  useInstitutionAuthority,
+  institutionActionReason,
+} from "@/components/institution/authority";
 import PageHeader from "@/components/ui/PageHeader";
 import PageContainer from "@/components/ui/PageContainer";
 import DataTable, { type Column } from "@/components/ui/DataTable";
@@ -104,7 +109,8 @@ export default function OutletsPage() {
   const bankId = bank?.id;
   const queryClient = useQueryClient();
 
-  const query = useInstitutionProfile(bankId);
+  const authority = useInstitutionAuthority();
+  const query = useInstitutionProfile(bankId, authority.generalView);
   const createOutlet = useCreateOutlet(bankId);
   const outlets = useMemo(() => query.data?.outlets ?? [], [query.data]);
 
@@ -170,7 +176,9 @@ export default function OutletsPage() {
       header: "",
       align: "right",
       render: (outlet) => (
-        <button
+        <InstitutionAction
+          sensitivity="confidential"
+          permission="edit"
           type="button"
           onClick={() => {
             setAdding(false);
@@ -180,7 +188,7 @@ export default function OutletsPage() {
         >
           <Pencil size={11} aria-hidden />
           Edit
-        </button>
+        </InstitutionAction>
       ),
     },
   ];
@@ -191,7 +199,9 @@ export default function OutletsPage() {
         eyebrow="Institution Profile"
         title="Outlets"
         action={
-          <button
+          <InstitutionAction
+            sensitivity="confidential"
+            permission="create"
             type="button"
             onClick={() => {
               setEditor(null);
@@ -201,7 +211,7 @@ export default function OutletsPage() {
           >
             <Plus size={13} aria-hidden />
             Add outlet
-          </button>
+          </InstitutionAction>
         }
       />
 
@@ -209,7 +219,12 @@ export default function OutletsPage() {
         <CsvImport<OutletCsvPayload>
           entityLabel="outlets"
           template={OUTLETS_TEMPLATE}
-          disabled={!bankId}
+          disabled={!bankId || !authority.allows("confidential", "create")}
+          disabledReason={
+            authority.allows("confidential", "create")
+              ? undefined
+              : institutionActionReason("confidential", "create")
+          }
           parseRow={parseOutletCsvRow}
           importRow={(payload, reason) =>
             createOutlet.mutateAsync({ ...payload, reason })

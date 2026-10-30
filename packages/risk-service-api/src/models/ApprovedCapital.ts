@@ -15,7 +15,7 @@
  * @export
  * @interface ApprovedCapital
  */
-export type ApprovedCapital = number | string | null;
+export type ApprovedCapital = string | null;
 
 /**
  * Check if a given object implements the ApprovedCapital interface.
@@ -23,9 +23,7 @@ export type ApprovedCapital = number | string | null;
 export function instanceOfApprovedCapital(
   value: unknown,
 ): value is ApprovedCapital {
-  return (
-    typeof value === "number" || typeof value === "string" || value === null
-  );
+  return typeof value === "string" || value === null;
 }
 
 export function ApprovedCapitalFromJSON(json: any): ApprovedCapital {

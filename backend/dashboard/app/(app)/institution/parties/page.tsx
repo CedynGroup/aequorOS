@@ -34,6 +34,11 @@ import {
   PartyType as PartyTypeValues,
   RelatedPartyRoleCode as RoleCodeValues,
 } from "@aequoros/risk-service-api";
+import {
+  InstitutionAction,
+  useInstitutionAuthority,
+  institutionActionReason,
+} from "@/components/institution/authority";
 import PageHeader from "@/components/ui/PageHeader";
 import PageContainer from "@/components/ui/PageContainer";
 import DataTable, { type Column } from "@/components/ui/DataTable";
@@ -147,7 +152,8 @@ export default function RelatedPartiesPage() {
   const bankId = bank?.id;
   const queryClient = useQueryClient();
 
-  const query = useInstitutionProfile(bankId);
+  const authority = useInstitutionAuthority();
+  const query = useInstitutionProfile(bankId, authority.restrictedView);
   const createParty = useCreateRelatedParty(bankId);
   const parties = useMemo(() => query.data?.relatedParties ?? [], [query.data]);
 
@@ -227,7 +233,9 @@ export default function RelatedPartiesPage() {
         eyebrow="Institution Profile"
         title="Related parties"
         action={
-          <button
+          <InstitutionAction
+            sensitivity="restricted"
+            permission="create"
             type="button"
             onClick={() => {
               setAdding(true);
@@ -237,7 +245,7 @@ export default function RelatedPartiesPage() {
           >
             <Plus size={13} aria-hidden />
             Add related party
-          </button>
+          </InstitutionAction>
         }
       />
 
@@ -245,7 +253,12 @@ export default function RelatedPartiesPage() {
         <CsvImport<PartyCsvPayload>
           entityLabel="related parties"
           template={RELATED_PARTIES_TEMPLATE}
-          disabled={!bankId}
+          disabled={!bankId || !authority.allows("restricted", "create")}
+          disabledReason={
+            authority.allows("restricted", "create")
+              ? undefined
+              : institutionActionReason("restricted", "create")
+          }
           parseRow={parsePartyCsvRow}
           importRow={(payload, reason) =>
             createParty.mutateAsync({ ...payload, reason })
@@ -396,22 +409,26 @@ function PartyDetail({
             }`}
             actions={
               <>
-                <button
+                <InstitutionAction
+                  sensitivity="restricted"
+                  permission="create"
                   type="button"
                   onClick={() => setHoldingFormFor({ holding: null })}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
                 >
                   <Plus size={13} aria-hidden />
                   Add shareholding
-                </button>
-                <button
+                </InstitutionAction>
+                <InstitutionAction
+                  sensitivity="restricted"
+                  permission="edit"
                   type="button"
                   onClick={() => setEditing(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
                 >
                   <Pencil size={13} aria-hidden />
                   Edit
-                </button>
+                </InstitutionAction>
               </>
             }
           >
@@ -512,14 +529,16 @@ function PartyDetail({
                               ? "Voting"
                               : "Non-voting"}
                           </span>
-                          <button
+                          <InstitutionAction
+                            sensitivity="restricted"
+                            permission="edit"
                             type="button"
                             onClick={() => setHoldingFormFor({ holding })}
                             className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
                           >
                             <Pencil size={11} aria-hidden />
                             Edit
-                          </button>
+                          </InstitutionAction>
                         </div>
                         <div className="mt-1 flex items-center gap-4 flex-wrap font-mono text-caption text-navy/85 tnum">
                           <span>

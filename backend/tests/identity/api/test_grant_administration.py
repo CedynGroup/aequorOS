@@ -34,6 +34,7 @@ from app.identity.schemas.authorization import (
     AccessRequestReject,
     BindingCreateResponse,
     BindingPreviewRead,
+    EffectiveAuthorityRead,
     SodDecisionRead,
 )
 from app.identity.service import authentication, authorization, grant_administration
@@ -1524,43 +1525,57 @@ def test_active_member_route_access_request_is_deduplicated_audited_and_approved
         assert approval_audit is not None and approval_audit.details["bank_id"] == BANK_A
 
 
-def test_organization_scoped_access_request_carries_expiry_into_the_grant(
+@pytest.mark.parametrize(
+    ("route", "module", "sensitivity"),
+    [
+        ("/institution", "institution", "confidential"),
+        ("/institution/history", "institution", "confidential"),
+        ("/institution/outlets", "institution", "confidential"),
+        ("/institution/products", "institution", "confidential"),
+        ("/institution/parties", "institution", "restricted"),
+        ("/institution/registers", "credit", "confidential"),
+    ],
+)
+def test_institution_route_access_request_carries_expiry_into_the_grant(
     grant_client: TestClient,
+    route: str,
+    module: str,
+    sensitivity: str,
 ) -> None:
-    """Account Administration routes are evaluated organization-wide, so the
-    request names no institution and approval must preserve that scope; a
-    temporary cover request carries its own expiry through to the binding."""
+    """Approval preserves the route's exact grant, institution and temporary expiry."""
 
     expiry = datetime.now(UTC) + timedelta(days=30)
     member_headers = headers(user_id=GRANTEE, roles=("viewer",), authorization_version=1)
     payload = {
-        "route": "/institution",
-        "module_scope": "account",
-        "sensitivity_scope": "restricted",
+        "route": route,
+        "institution_id": BANK_A,
+        "module_scope": module,
+        "sensitivity_scope": sensitivity,
         "permission": "view",
         "reason_category": "temporary_cover",
         "reason_detail": "Covering the registers desk during leave",
         "valid_until": expiry.isoformat(),
     }
 
-    institution_named = grant_client.post(
+    missing_institution = grant_client.post(
         "/api/v1/authorization/access-requests",
         headers=member_headers,
-        json=payload | {"institution_id": BANK_A},
+        json={key: value for key, value in payload.items() if key != "institution_id"},
     )
-    assert institution_named.status_code == 422
+    assert missing_institution.status_code == 422
     missing_expiry = grant_client.post(
         "/api/v1/authorization/access-requests",
         headers=member_headers,
         json={key: value for key, value in payload.items() if key != "valid_until"},
     )
     assert missing_expiry.status_code == 422
-    institution_route_without_target = grant_client.post(
+    legacy_account_requirement = grant_client.post(
         "/api/v1/authorization/access-requests",
         headers=member_headers,
-        json=payload | {"route": "/fx", "module_scope": "fx", "sensitivity_scope": "aggregated"},
+        json={key: value for key, value in payload.items() if key != "institution_id"}
+        | {"module_scope": "account", "sensitivity_scope": "restricted"},
     )
-    assert institution_route_without_target.status_code == 422
+    assert legacy_account_requirement.status_code == 404
 
     created = grant_client.post(
         "/api/v1/authorization/access-requests",
@@ -1569,9 +1584,9 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
     )
     assert created.status_code == 201, created.text
     body = created.json()
-    assert body["institution_scope"] == "organization"
-    assert body["institution_id"] is None
-    assert body["institution_name"] is None
+    assert body["institution_scope"] == "institution"
+    assert body["institution_id"] == BANK_A
+    assert body["institution_name"]
     request_expiry = datetime.fromisoformat(body["valid_until"])
     if request_expiry.tzinfo is None:
         request_expiry = request_expiry.replace(tzinfo=UTC)
@@ -1586,9 +1601,10 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
 
     grant_payload = {
         "role_bundle": "viewer",
-        "institution_scope": "organization",
-        "module_scope": "account",
-        "sensitivity_scope": "restricted",
+        "institution_scope": "institution",
+        "institution_id": BANK_A,
+        "module_scope": module,
+        "sensitivity_scope": sensitivity,
         "reason_category": "temporary_cover",
         "reason_detail": body["reason_detail"],
         "valid_until": body["valid_until"],
@@ -1600,17 +1616,16 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
     )
     assert preview.status_code == 200, preview.text
     sentence = preview.json()["authority_sentence"]
-    narrowed = grant_client.post(
+    wrong_institution = grant_client.post(
         f"/api/v1/authorization/access-requests/{body['id']}/approve",
         headers=_owner_headers(),
         json=grant_payload
         | {
-            "institution_scope": "institution",
-            "institution_id": BANK_A,
+            "institution_id": BANK_B,
             "expected_authority_sentence": sentence,
         },
     )
-    assert narrowed.status_code == 409
+    assert wrong_institution.status_code == 409
     approved = grant_client.post(
         f"/api/v1/authorization/access-requests/{body['id']}/approve",
         headers=_owner_headers(),
@@ -1618,10 +1633,10 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
     )
     assert approved.status_code == 200, approved.text
     binding = approved.json()["binding"]
-    assert binding["institution_scope"] == "organization"
-    assert binding["institution_id"] is None
-    assert binding["module_scope"] == "account"
-    assert binding["sensitivity_scope"] == "restricted"
+    assert binding["institution_scope"] == "institution"
+    assert binding["institution_id"] == BANK_A
+    assert binding["module_scope"] == module
+    assert binding["sensitivity_scope"] == sensitivity
     binding_expiry = datetime.fromisoformat(binding["valid_until"])
     if binding_expiry.tzinfo is None:
         binding_expiry = binding_expiry.replace(tzinfo=UTC)
@@ -1636,13 +1651,18 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
         headers={"Authorization": f"Bearer {issued.access_token}"},
     )
     assert me.status_code == 200, me.text
+    authority = EffectiveAuthorityRead.model_validate(
+        TypeAdapter[JsonObject](JsonObject).validate_json(me.content)["effective_authority"]
+    )
     assert {
-        "module": "account",
-        "sensitivity": "restricted",
+        "module": module,
+        "sensitivity": sensitivity,
         "permission": "view",
     } in [
-        {key: capability[key] for key in ("module", "sensitivity", "permission")}
-        for capability in me.json()["effective_authority"]["organization_capabilities"]
+        capability.model_dump(include={"module", "sensitivity", "permission"})
+        for institution in authority.institution_capabilities
+        if institution.institution_id == BANK_A
+        for capability in institution.capabilities
     ]
 
 

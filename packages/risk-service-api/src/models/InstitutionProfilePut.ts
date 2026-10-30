@@ -11,48 +11,55 @@
  */
 
 import { mapValues } from "../runtime";
-import type { ParentCountryCode } from "./ParentCountryCode";
+import type { RegistrationNumber1 } from "./RegistrationNumber1";
 import {
-  ParentCountryCodeFromJSON,
-  ParentCountryCodeFromJSONTyped,
-  ParentCountryCodeToJSON,
-  ParentCountryCodeToJSONTyped,
-} from "./ParentCountryCode";
-import type { OwnershipLocalPct } from "./OwnershipLocalPct";
+  RegistrationNumber1FromJSON,
+  RegistrationNumber1FromJSONTyped,
+  RegistrationNumber1ToJSON,
+  RegistrationNumber1ToJSONTyped,
+} from "./RegistrationNumber1";
+import type { OwnershipForeignPct1 } from "./OwnershipForeignPct1";
 import {
-  OwnershipLocalPctFromJSON,
-  OwnershipLocalPctFromJSONTyped,
-  OwnershipLocalPctToJSON,
-  OwnershipLocalPctToJSONTyped,
-} from "./OwnershipLocalPct";
-import type { OrassInstitutionCode } from "./OrassInstitutionCode";
+  OwnershipForeignPct1FromJSON,
+  OwnershipForeignPct1FromJSONTyped,
+  OwnershipForeignPct1ToJSON,
+  OwnershipForeignPct1ToJSONTyped,
+} from "./OwnershipForeignPct1";
+import type { OwnershipLocalPct1 } from "./OwnershipLocalPct1";
 import {
-  OrassInstitutionCodeFromJSON,
-  OrassInstitutionCodeFromJSONTyped,
-  OrassInstitutionCodeToJSON,
-  OrassInstitutionCodeToJSONTyped,
-} from "./OrassInstitutionCode";
-import type { Tin } from "./Tin";
+  OwnershipLocalPct1FromJSON,
+  OwnershipLocalPct1FromJSONTyped,
+  OwnershipLocalPct1ToJSON,
+  OwnershipLocalPct1ToJSONTyped,
+} from "./OwnershipLocalPct1";
+import type { ExchangeName1 } from "./ExchangeName1";
 import {
-  TinFromJSON,
-  TinFromJSONTyped,
-  TinToJSON,
-  TinToJSONTyped,
-} from "./Tin";
-import type { ApprovedCapital } from "./ApprovedCapital";
+  ExchangeName1FromJSON,
+  ExchangeName1FromJSONTyped,
+  ExchangeName1ToJSON,
+  ExchangeName1ToJSONTyped,
+} from "./ExchangeName1";
+import type { ApprovedCapital1 } from "./ApprovedCapital1";
 import {
-  ApprovedCapitalFromJSON,
-  ApprovedCapitalFromJSONTyped,
-  ApprovedCapitalToJSON,
-  ApprovedCapitalToJSONTyped,
-} from "./ApprovedCapital";
-import type { RegistrationNumber } from "./RegistrationNumber";
+  ApprovedCapital1FromJSON,
+  ApprovedCapital1FromJSONTyped,
+  ApprovedCapital1ToJSON,
+  ApprovedCapital1ToJSONTyped,
+} from "./ApprovedCapital1";
+import type { Isin1 } from "./Isin1";
 import {
-  RegistrationNumberFromJSON,
-  RegistrationNumberFromJSONTyped,
-  RegistrationNumberToJSON,
-  RegistrationNumberToJSONTyped,
-} from "./RegistrationNumber";
+  Isin1FromJSON,
+  Isin1FromJSONTyped,
+  Isin1ToJSON,
+  Isin1ToJSONTyped,
+} from "./Isin1";
+import type { ParentCountryCode1 } from "./ParentCountryCode1";
+import {
+  ParentCountryCode1FromJSON,
+  ParentCountryCode1FromJSONTyped,
+  ParentCountryCode1ToJSON,
+  ParentCountryCode1ToJSONTyped,
+} from "./ParentCountryCode1";
 import type { AuthorisationDate } from "./AuthorisationDate";
 import {
   AuthorisationDateFromJSON,
@@ -60,27 +67,6 @@ import {
   AuthorisationDateToJSON,
   AuthorisationDateToJSONTyped,
 } from "./AuthorisationDate";
-import type { Isin } from "./Isin";
-import {
-  IsinFromJSON,
-  IsinFromJSONTyped,
-  IsinToJSON,
-  IsinToJSONTyped,
-} from "./Isin";
-import type { ExchangeName } from "./ExchangeName";
-import {
-  ExchangeNameFromJSON,
-  ExchangeNameFromJSONTyped,
-  ExchangeNameToJSON,
-  ExchangeNameToJSONTyped,
-} from "./ExchangeName";
-import type { OwnershipForeignPct } from "./OwnershipForeignPct";
-import {
-  OwnershipForeignPctFromJSON,
-  OwnershipForeignPctFromJSONTyped,
-  OwnershipForeignPctToJSON,
-  OwnershipForeignPctToJSONTyped,
-} from "./OwnershipForeignPct";
 import type { IncorporationDate } from "./IncorporationDate";
 import {
   IncorporationDateFromJSON,
@@ -88,6 +74,20 @@ import {
   IncorporationDateToJSON,
   IncorporationDateToJSONTyped,
 } from "./IncorporationDate";
+import type { OrassInstitutionCode1 } from "./OrassInstitutionCode1";
+import {
+  OrassInstitutionCode1FromJSON,
+  OrassInstitutionCode1FromJSONTyped,
+  OrassInstitutionCode1ToJSON,
+  OrassInstitutionCode1ToJSONTyped,
+} from "./OrassInstitutionCode1";
+import type { Tin1 } from "./Tin1";
+import {
+  Tin1FromJSON,
+  Tin1FromJSONTyped,
+  Tin1ToJSON,
+  Tin1ToJSONTyped,
+} from "./Tin1";
 
 /**
  *
@@ -97,10 +97,10 @@ import {
 export interface InstitutionProfilePut {
   /**
    *
-   * @type {ApprovedCapital}
+   * @type {ApprovedCapital1}
    * @memberof InstitutionProfilePut
    */
-  approvedCapital?: ApprovedCapital;
+  approvedCapital?: ApprovedCapital1;
   /**
    *
    * @type {AuthorisationDate}
@@ -109,10 +109,10 @@ export interface InstitutionProfilePut {
   authorisationDate?: AuthorisationDate;
   /**
    *
-   * @type {ExchangeName}
+   * @type {ExchangeName1}
    * @memberof InstitutionProfilePut
    */
-  exchangeName?: ExchangeName;
+  exchangeName?: ExchangeName1;
   /**
    *
    * @type {IncorporationDate}
@@ -127,10 +127,10 @@ export interface InstitutionProfilePut {
   institutionType: string;
   /**
    *
-   * @type {Isin}
+   * @type {Isin1}
    * @memberof InstitutionProfilePut
    */
-  isin?: Isin;
+  isin?: Isin1;
   /**
    *
    * @type {string}
@@ -139,28 +139,28 @@ export interface InstitutionProfilePut {
   legalEntityStructure: string;
   /**
    *
-   * @type {OrassInstitutionCode}
+   * @type {OrassInstitutionCode1}
    * @memberof InstitutionProfilePut
    */
-  orassInstitutionCode?: OrassInstitutionCode;
+  orassInstitutionCode?: OrassInstitutionCode1;
   /**
    *
-   * @type {OwnershipForeignPct}
+   * @type {OwnershipForeignPct1}
    * @memberof InstitutionProfilePut
    */
-  ownershipForeignPct?: OwnershipForeignPct;
+  ownershipForeignPct?: OwnershipForeignPct1;
   /**
    *
-   * @type {OwnershipLocalPct}
+   * @type {OwnershipLocalPct1}
    * @memberof InstitutionProfilePut
    */
-  ownershipLocalPct?: OwnershipLocalPct;
+  ownershipLocalPct?: OwnershipLocalPct1;
   /**
    *
-   * @type {ParentCountryCode}
+   * @type {ParentCountryCode1}
    * @memberof InstitutionProfilePut
    */
-  parentCountryCode?: ParentCountryCode;
+  parentCountryCode?: ParentCountryCode1;
   /**
    *
    * @type {string}
@@ -169,16 +169,16 @@ export interface InstitutionProfilePut {
   reason: string;
   /**
    *
-   * @type {RegistrationNumber}
+   * @type {RegistrationNumber1}
    * @memberof InstitutionProfilePut
    */
-  registrationNumber?: RegistrationNumber;
+  registrationNumber?: RegistrationNumber1;
   /**
    *
-   * @type {Tin}
+   * @type {Tin1}
    * @memberof InstitutionProfilePut
    */
-  tin?: Tin;
+  tin?: Tin1;
   /**
    *
    * @type {boolean}
@@ -222,7 +222,7 @@ export function InstitutionProfilePutFromJSONTyped(
     approvedCapital:
       json["approved_capital"] == null
         ? undefined
-        : ApprovedCapitalFromJSON(json["approved_capital"]),
+        : ApprovedCapital1FromJSON(json["approved_capital"]),
     authorisationDate:
       json["authorisation_date"] == null
         ? undefined
@@ -230,36 +230,36 @@ export function InstitutionProfilePutFromJSONTyped(
     exchangeName:
       json["exchange_name"] == null
         ? undefined
-        : ExchangeNameFromJSON(json["exchange_name"]),
+        : ExchangeName1FromJSON(json["exchange_name"]),
     incorporationDate:
       json["incorporation_date"] == null
         ? undefined
         : IncorporationDateFromJSON(json["incorporation_date"]),
     institutionType: json["institution_type"],
-    isin: json["isin"] == null ? undefined : IsinFromJSON(json["isin"]),
+    isin: json["isin"] == null ? undefined : Isin1FromJSON(json["isin"]),
     legalEntityStructure: json["legal_entity_structure"],
     orassInstitutionCode:
       json["orass_institution_code"] == null
         ? undefined
-        : OrassInstitutionCodeFromJSON(json["orass_institution_code"]),
+        : OrassInstitutionCode1FromJSON(json["orass_institution_code"]),
     ownershipForeignPct:
       json["ownership_foreign_pct"] == null
         ? undefined
-        : OwnershipForeignPctFromJSON(json["ownership_foreign_pct"]),
+        : OwnershipForeignPct1FromJSON(json["ownership_foreign_pct"]),
     ownershipLocalPct:
       json["ownership_local_pct"] == null
         ? undefined
-        : OwnershipLocalPctFromJSON(json["ownership_local_pct"]),
+        : OwnershipLocalPct1FromJSON(json["ownership_local_pct"]),
     parentCountryCode:
       json["parent_country_code"] == null
         ? undefined
-        : ParentCountryCodeFromJSON(json["parent_country_code"]),
+        : ParentCountryCode1FromJSON(json["parent_country_code"]),
     reason: json["reason"],
     registrationNumber:
       json["registration_number"] == null
         ? undefined
-        : RegistrationNumberFromJSON(json["registration_number"]),
-    tin: json["tin"] == null ? undefined : TinFromJSON(json["tin"]),
+        : RegistrationNumber1FromJSON(json["registration_number"]),
+    tin: json["tin"] == null ? undefined : Tin1FromJSON(json["tin"]),
     tradedOnExchange:
       json["traded_on_exchange"] == null
         ? undefined
@@ -280,24 +280,24 @@ export function InstitutionProfilePutToJSONTyped(
   }
 
   return {
-    approved_capital: ApprovedCapitalToJSON(value["approvedCapital"]),
+    approved_capital: ApprovedCapital1ToJSON(value["approvedCapital"]),
     authorisation_date: AuthorisationDateToJSON(value["authorisationDate"]),
-    exchange_name: ExchangeNameToJSON(value["exchangeName"]),
+    exchange_name: ExchangeName1ToJSON(value["exchangeName"]),
     incorporation_date: IncorporationDateToJSON(value["incorporationDate"]),
     institution_type: value["institutionType"],
-    isin: IsinToJSON(value["isin"]),
+    isin: Isin1ToJSON(value["isin"]),
     legal_entity_structure: value["legalEntityStructure"],
-    orass_institution_code: OrassInstitutionCodeToJSON(
+    orass_institution_code: OrassInstitutionCode1ToJSON(
       value["orassInstitutionCode"],
     ),
-    ownership_foreign_pct: OwnershipForeignPctToJSON(
+    ownership_foreign_pct: OwnershipForeignPct1ToJSON(
       value["ownershipForeignPct"],
     ),
-    ownership_local_pct: OwnershipLocalPctToJSON(value["ownershipLocalPct"]),
-    parent_country_code: ParentCountryCodeToJSON(value["parentCountryCode"]),
+    ownership_local_pct: OwnershipLocalPct1ToJSON(value["ownershipLocalPct"]),
+    parent_country_code: ParentCountryCode1ToJSON(value["parentCountryCode"]),
     reason: value["reason"],
-    registration_number: RegistrationNumberToJSON(value["registrationNumber"]),
-    tin: TinToJSON(value["tin"]),
+    registration_number: RegistrationNumber1ToJSON(value["registrationNumber"]),
+    tin: Tin1ToJSON(value["tin"]),
     traded_on_exchange: value["tradedOnExchange"],
   };
 }
