@@ -261,7 +261,7 @@ Residual: `audit_events.organization_id` is still `ondelete="SET NULL"` (`backen
 
 - 13 of 64 schema files still declare no `extra="forbid"`, and none inherits a closed base. [V-B]
 - `backend/app/schemas/findings.py:41-42,53-56` still permits extra fields and pulls severity out of the extras with only a string check, so an invalid value surfaces as a server error. [V-B]
-- `backend/app/schemas/operator.py:676` still accepts an operator-set board threshold as an unbounded number or boolean with no discrimination by kind. [V-B]
+- `backend/app/operator/schemas.py:676` still accepts an operator-set board threshold as an unbounded number or boolean with no discrimination by kind. [V-B]
 - `backend/app/schemas/liquidity_thresholds.py:57,93` still bind only the dictionary size, not the values. [V-B]
 - **The password-length finding is withdrawn as stated and reframed.** The one-character minimum is real (`backend/app/identity/schemas/auth.py:20`), but both occurrences are on _login_ requests; `set_password` has no callers in `backend/app/`, and every password the platform sets is machine-generated. There is no user-chosen-password path for a complexity policy to attach to. Adding one is a prerequisite for self-service credentials, not a live defect. [V-B]
 

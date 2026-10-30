@@ -19,8 +19,8 @@ from fastapi import APIRouter
 
 from app.operator.deps import Operator, OperatorDb, record_operator_action
 from app.operator.inspection import require_active_inspection
+from app.operator.schemas import BiBackfillRead, BiBackfillRequest
 from app.operator.services import bi_backfill
-from app.schemas.operator import BiBackfillRead, BiBackfillRequest
 from app.services.public_ids import normalize_public_id
 
 router = APIRouter(prefix="/tenants", tags=["operator-bi"])

@@ -36,13 +36,13 @@ from app.models import (
     RegulatoryParameter,
     RegulatoryRun,
 )
+from app.operator.schemas import RegulatoryParameterProposeRequest
 from app.operator.services import regulatory_parameters as console
 from app.policy.service import regulatory_parameters
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation
 from app.reporting.service.exports import export_package
 from app.reporting.service.templates import report_notes
-from app.schemas.operator import RegulatoryParameterProposeRequest
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import capital_plan, regulatory_capital
 from app.stress.domain.appendix_ii import build_appendix_ii

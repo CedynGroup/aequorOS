@@ -20,8 +20,7 @@ from sqlalchemy.orm import Session
 from app.identity.public import Bank, IntegrationKey, SsoConnection
 from app.live.public import LiveFinding, LiveMetric, RegulatoryRun
 from app.models import IngestionBatch, MappingConfigRecord, Organization, TranslationFailure
-from app.policy.public import ParamCapitalThreshold, ParamLiquidityThreshold
-from app.schemas.operator import (
+from app.operator.schemas import (
     TenantCapitalThresholdRead,
     TenantConfigBankRead,
     TenantConfigRead,
@@ -40,6 +39,7 @@ from app.schemas.operator import (
     TenantThresholdRegisterRead,
     TenantTranslationFailureRead,
 )
+from app.policy.public import ParamCapitalThreshold, ParamLiquidityThreshold
 
 #: Live-finding severity ordering for the active-alert sort (highest first).
 _SEVERITY_RANK: dict[str, int] = {"critical": 3, "high": 2, "medium": 1, "low": 0}

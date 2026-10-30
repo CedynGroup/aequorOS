@@ -9,7 +9,7 @@ hardcoded).
 
 GLOBAL, not tenant-scoped, NO RLS — mirrors the ``institution_types`` registry and
 ``operator_audit_log`` (both global; ``app/policy/models/institution_type.py``,
-``app/models/operator.py``). Mutations happen only through the operator API and are
+``app/operator/models.py``). Mutations happen only through the operator API and are
 recorded append-only in ``operator_audit_log``. The per-tenant board registers
 (``ParamCapitalThreshold``/``ParamLiquidityThreshold`` …) layer ON TOP as tenant
 overrides — a tenant may only *tighten* a requirement — so every current engine

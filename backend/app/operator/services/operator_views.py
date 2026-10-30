@@ -50,9 +50,7 @@ from app.models import (
     TemenosConnection,
     TenantStorage,
 )
-from app.reporting.public import RegulatoryPackage
-from app.schemas.market_desk import DeskEntitlementRead
-from app.schemas.operator import (
+from app.operator.schemas import (
     ActivityItemRead,
     DataEngineConnectionRead,
     DataEnginesRead,
@@ -81,6 +79,8 @@ from app.schemas.operator import (
     WorkerHealthRead,
     WorkerHeartbeatRead,
 )
+from app.reporting.public import RegulatoryPackage
+from app.schemas.market_desk import DeskEntitlementRead
 from app.services import job_queue
 from app.services.market_desk import entitlements as entitlements_service
 

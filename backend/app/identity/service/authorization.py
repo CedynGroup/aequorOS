@@ -57,7 +57,7 @@ from app.identity.schemas.authorization import (
 )
 from app.identity.service import authentication
 from app.models.audit_event import AuditEvent
-from app.models.operator import OperatorUser
+from app.operator.models import OperatorUser
 
 
 class AuthorizationInvariantError(ValueError):

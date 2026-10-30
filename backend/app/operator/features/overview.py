@@ -11,8 +11,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.operator.deps import Operator, OperatorDb
+from app.operator.schemas import FleetOverviewRead
 from app.operator.services import operator_views
-from app.schemas.operator import FleetOverviewRead
 
 router = APIRouter(tags=["operator-overview"])
 

@@ -23,9 +23,9 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
+from app.operator.schemas import RegulatoryParameterProposeRequest
 from app.policy.domain import parameter_shapes
 from app.policy.public import RegulatoryParameter
-from app.schemas.operator import RegulatoryParameterProposeRequest
 
 
 def _check_shape(row_or_payload: RegulatoryParameter | RegulatoryParameterProposeRequest) -> None:

@@ -129,8 +129,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^schemas/(common|text|health|jobs)$", KERNEL),
     (r"^features/track_jobs$", KERNEL),
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
-    # ---- staff operator console
-    (r"^(models|schemas)/operator$", "operator"),
     # ---- data engine
     (r"^adapters/__init__$", "data_engine"),
     (r"^adapters/(api_push|database_direct|excel_csv|temenos_t24)(/|$)", "data_engine"),
@@ -208,7 +206,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         r"|features/(run_regulatory_capital|manage_capital_plan|read_sdi_diagnostics))$",
         "capital",
     ),
-    # ---- stress, attestation, filing, ICAAP, BI, AI
 )
 _COMPILED_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     (re.compile(pattern), feature) for pattern, feature in FEATURE_RULES

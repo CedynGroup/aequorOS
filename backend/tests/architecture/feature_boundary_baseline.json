@@ -233,7 +233,6 @@
  "private market_data->data_engine: app.services.market_desk.operating_environment -> app.models.canonical",
  "private market_data->data_engine: app.services.market_desk.operating_environment -> app.services.ingestion",
  "private market_data->data_engine: app.services.market_desk.publication -> app.services.ingestion",
- "private operator->data_engine: app.operator.services.bi_backfill -> app.models.canonical",
  "private operator->data_engine: app.operator.services.inspector_fix -> app.models.ingestion",
  "private operator->data_engine: app.operator.services.inspector_reads -> app.models.ingestion",
  "private operator->data_engine: app.operator.services.operator_views -> app.models.database_connection",
