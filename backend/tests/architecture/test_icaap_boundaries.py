@@ -68,16 +68,16 @@ SCANNED = (
     "app/icaap/service",
     "app/icaap/api",
     "app/attestation/api",
-    "app/domain/ai",
-    "app/services/ai",
+    "app/ai/api",
+    "app/ai/domain",
+    "app/ai/service",
 )
-#: Route modules live beside unrelated features, so they are named rather than
-#: swept by directory.
+#: Any remaining layered ICAAP routes are named rather than swept by directory.
 SCANNED_FILES = tuple(
     sorted(
         str(path.relative_to(BACKEND))
         for path in (BACKEND / "app/features").glob("*.py")
-        if "icaap" in path.name or path.name == "manage_ai_settings.py"
+        if "icaap" in path.name
     )
 )
 

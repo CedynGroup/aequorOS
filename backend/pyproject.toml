@@ -7,8 +7,8 @@ license = { file = "../LICENSE" }
 requires-python = ">=3.13,<3.14"
 dependencies = [
   "alembic",
-  # Governed AI drafting (app/services/ai). Imported LAZILY and in exactly one
-  # module (app/services/ai/client.py), so the API, the core worker and the
+  # Governed AI drafting (app/ai/service). Imported LAZILY and in exactly one
+  # module (app/ai/service/client.py), so the API, the core worker and the
   # operator app never load it; tests/architecture pins that.
   "anthropic",
   "argon2-cffi",

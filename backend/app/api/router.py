@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from app.ai.api.manage_ai_settings import router as ai_settings_router
 from app.api.deps import BANK_ROUTE_DEPENDENCIES, require_module_access
 from app.api.health import router as health_router
 from app.api.v1.database_connections import router as database_direct_connections_router
@@ -22,7 +23,6 @@ from app.features.generate_case_reports import router as case_reports_router
 from app.features.ingest_data import router as ingestion_router
 from app.features.list_case_taxonomy import router as case_taxonomy_router
 from app.features.list_taxonomy import router as taxonomy_router
-from app.features.manage_ai_settings import router as ai_settings_router
 from app.features.manage_capital import router as capital_router
 from app.features.manage_capital_plan import router as capital_plan_router
 from app.features.manage_documents import router as documents_router

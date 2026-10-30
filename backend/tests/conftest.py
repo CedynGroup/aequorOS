@@ -71,6 +71,7 @@ hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 #: and the demo tenants.
 pytest_plugins = [
     "tests.support.database_fixtures",
+    "tests.ai.fixtures",
     "tests.bi.fixtures",
     "tests.capital.fixtures",
     "tests.credit.fixtures",
@@ -254,13 +255,13 @@ def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     machine is running it. Tests that need a model use ``use_model(...)``, which
     is checked before the backend is ever resolved.
     """
-    from app.services.ai import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
-    from app.services.ai import google_model, openai_model  # noqa: PLC0415 - same boundary
+    from app.ai.service import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
+    from app.ai.service import google_model, openai_model  # noqa: PLC0415 - same boundary
 
     def _refuse(self: object, *args: object, **kwargs: object) -> None:
         message = (
             f"A real {type(self).__name__} was constructed in a test. Use the "
-            "recorded_model fixture or app.services.ai.client.use_model(...)."
+            "recorded_model fixture or app.ai.service.client.use_model(...)."
         )
         raise ai_client.RealModelForbiddenError(message)
 

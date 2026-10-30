@@ -34,7 +34,7 @@
 #
 # Nothing here can act on its own: AI_COMMENTARY_ENABLED defaults off, a
 # deployed environment additionally needs AI_PRODUCTION_APPROVAL_REF and a
-# matching entry in app/services/ai/approved_configurations.json, and each
+# matching entry in app/ai/service/approved_configurations.json, and each
 # tenant's Organisation Owner must accept the current consent version. A
 # worker started without those simply cancels the requests it claims.
 #

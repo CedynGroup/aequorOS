@@ -29,12 +29,12 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
+from app.ai.domain import placeholders
 from app.ai.public import pseudonymise
 from app.bi.models.commentary import AiCommentaryDraft
 from app.bi.service.commentary.fallback import FALLBACK_SOURCE
 from app.bi.service.commentary.payload import FigureBinding, bindings_from_dict
 from app.core.config import get_settings
-from app.domain.ai import placeholders
 from app.identity.public import Bank
 
 __all__ = [

@@ -1396,7 +1396,7 @@ def require_icaap_ai_draft(request: Request, db: DbSession, ctx: Tenant) -> Icaa
     differently depending on who asks. The tenant gates answer 403 with their
     code, because a tenant CAN act on "your Owner has not switched this on".
     """
-    from app.services.ai import gates as ai_gates  # noqa: PLC0415 - avoid deps/service cycle
+    from app.ai.service import gates as ai_gates  # noqa: PLC0415 - avoid deps/service cycle
 
     if not ai_gates.deployment_gate().allowed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
