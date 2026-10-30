@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.bi.service.enqueue import banks_due_for_rebuild, enqueue_mart_refresh
-from app.bi.public import BUILDER_VERSION
+from app.bi.service.versions import BUILDER_VERSION
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import Settings, get_settings
 from app.core.observability import authorization_denied

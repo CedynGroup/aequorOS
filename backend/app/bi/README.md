@@ -5,6 +5,10 @@ Other features use `app.bi.public` for `BUILDER_VERSION` and
 `app.bi.domain` for pure calculation contracts. The public version is the same
 value stamped onto BI job payloads by the enqueue seam.
 
+The composition-root scheduler uses the narrower `app.bi.service.versions` and
+`app.bi.service.enqueue` seam. The BI-plane guard pins that import surface so
+scheduling cannot load builder code through a broader interface.
+
 ## Remaining violations
 
 BI has no private cross-feature import violations in the boundary baseline and
