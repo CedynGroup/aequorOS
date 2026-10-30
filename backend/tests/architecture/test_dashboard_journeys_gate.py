@@ -100,7 +100,7 @@ def test_required_check_refuses_missing_or_malformed_results(results: str) -> No
         (".github/workflows/web.yml", "true"),
         (".github/actions/new-action/action.yml", "true"),
         (".github/scripts/new-script.sh", "true"),
-        ("backend/app/services/ai/consent/ai-consent-2026-09-v1.md", "true"),
+        ("backend/app/ai/service/consent/ai-consent-2026-09-v1.md", "true"),
         ("backend/dashboard/public/branding/aequoros-mark.png", "true"),
         (".github/workflows/dashboard-journeys.yml", "true"),
         (".github/actions/setup-minio/action.yml", "true"),

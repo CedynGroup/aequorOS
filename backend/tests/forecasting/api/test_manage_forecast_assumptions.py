@@ -55,7 +55,7 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
+from tests.forecasting.assumption_fixtures import FORECAST_PRESETS
 from tests.support.helpers import ORG_1, USER_1, headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/forecast"

@@ -20,11 +20,12 @@ Fixture-only: nothing in ``app/`` imports this.
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
-from app.bi.service import mart_builder
-from app.bi.service.mart_builder import BuildOutcome
+if TYPE_CHECKING:
+    from app.bi.service.mart_builder import BuildOutcome
 
 
 def materialize_bi_plane(
@@ -36,6 +37,8 @@ def materialize_bi_plane(
     current-generation position snapshots at all (there is nothing to build,
     and saying so beats a fabricated empty build). The caller commits.
     """
+    from app.bi.service import mart_builder  # noqa: PLC0415
+
     if as_of is None:
         dates = mart_builder.snapshot_dates(session, organization_id, bank_id)
         if not dates:

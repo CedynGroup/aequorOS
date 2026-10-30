@@ -59,6 +59,7 @@ from tests.bi.api.test_bi_routes import (
     grant_only,
     seed_bi_mart,
 )
+from tests.conftest import ApiTestApp
 from tests.support.helpers import ORG_1, USER_1, headers
 
 SUMMARY_QUERY: dict[str, Any] = {
@@ -631,6 +632,50 @@ def test_an_export_that_does_not_exist_is_404(
     assert response.status_code == 404, response.text
 
 
+@pytest.fixture(scope="module")
+def cors_export_app_holder() -> ApiTestApp:
+    """Build only after the requesting test has installed its fixed settings."""
+    return ApiTestApp()
+
+
+@pytest.fixture
+def cors_export_app(
+    cors_export_app_holder: ApiTestApp,
+    db_client: TestClient,
+    bi_on: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[FastAPI]:
+    monkeypatch.setenv("CORS_ORIGINS", "https://dashboard.test")
+    get_settings.cache_clear()
+    app = cors_export_app_holder.get()
+    assert app.dependency_overrides == {}
+    overrides = cast(FastAPI, db_client.app).dependency_overrides
+    app.dependency_overrides.update(overrides)
+    assert all(app.dependency_overrides[key] is value for key, value in overrides.items())
+    try:
+        yield app
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("case", ["first", "following"])
+def test_cors_export_app_keeps_clients_and_overrides_isolated(
+    cors_export_app: FastAPI, case: str
+) -> None:
+    """Both cases dirty the reusable app and their disposable client."""
+    assert test_cors_export_app_keeps_clients_and_overrides_isolated not in (
+        cors_export_app.dependency_overrides
+    )
+    with TestClient(cors_export_app) as client:
+        assert "fixture-sentinel" not in client.cookies
+        assert "x-fixture-sentinel" not in client.headers
+        client.cookies.set("fixture-sentinel", case)
+        client.headers["x-fixture-sentinel"] = case
+        cors_export_app.dependency_overrides[
+            test_cors_export_app_keeps_clients_and_overrides_isolated
+        ] = lambda: case
+
+
 @pytest.mark.parametrize("fmt", ["csv", "xlsx", "pdf"])
 @pytest.mark.parametrize("record_level", [False, True])
 def test_a_browser_can_read_the_export_headers_it_needs(  # noqa: PLR0913
@@ -639,19 +684,13 @@ def test_a_browser_can_read_the_export_headers_it_needs(  # noqa: PLR0913
     mart: Bank,
     bi_on: None,
     user_email: str,
-    monkeypatch: pytest.MonkeyPatch,
+    cors_export_app: FastAPI,
     fmt: str,
     record_level: bool,
 ) -> None:
-    from app.main import create_app  # noqa: PLC0415
-
     origin = "https://dashboard.test"
-    monkeypatch.setenv("CORS_ORIGINS", origin)
-    get_settings.cache_clear()
-    app = create_app()
-    app.dependency_overrides.update(cast(FastAPI, db_client.app).dependency_overrides)
     authv = grant_only(db_session, RECORD_EXPORTER if record_level else AGGREGATE_ONLY)
-    with TestClient(app) as client:
+    with TestClient(cors_export_app) as client:
         response = client.post(
             f"{BASE}/export",
             json={"query": RECORD_QUERY if record_level else SUMMARY_QUERY, "format": fmt},

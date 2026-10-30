@@ -13,6 +13,7 @@ from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity.public import Bank
 from app.models import CanonicalPositionSnapshot
 from app.models.canonical import is_current_generation
+from app.policy.public import institution_types
 from app.schemas.sdi import (
     LiquidityMonitoringRead,
     ModuleReadinessRead,
@@ -21,7 +22,7 @@ from app.schemas.sdi import (
     SdiFundingProviderRead,
     SdiMaturityBucketRead,
 )
-from app.services import institution_types, sdi_readiness, sdi_views
+from app.services import sdi_readiness, sdi_views
 
 router = APIRouter(tags=["liquidity-monitoring"])
 

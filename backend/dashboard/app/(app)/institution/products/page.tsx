@@ -17,6 +17,10 @@ import type {
   LicenseStatus,
   ProductStatus,
 } from "@aequoros/risk-service-api";
+import {
+  InstitutionAction,
+  useInstitutionAuthority,
+} from "@/components/institution/authority";
 import PageHeader from "@/components/ui/PageHeader";
 import PageContainer from "@/components/ui/PageContainer";
 import DataTable, { type Column } from "@/components/ui/DataTable";
@@ -49,7 +53,8 @@ export default function ProductsLicencesPage() {
   const { bank } = useBankContext();
   const bankId = bank?.id;
 
-  const query = useInstitutionProfile(bankId);
+  const authority = useInstitutionAuthority();
+  const query = useInstitutionProfile(bankId, authority.generalView);
   const products = useMemo(() => query.data?.products ?? [], [query.data]);
   const licenses = useMemo(() => query.data?.licenses ?? [], [query.data]);
 
@@ -127,7 +132,9 @@ function ProductsCard({
       header: "",
       align: "right",
       render: (product) => (
-        <button
+        <InstitutionAction
+          sensitivity="confidential"
+          permission="edit"
           type="button"
           onClick={() => {
             setAdding(false);
@@ -137,7 +144,7 @@ function ProductsCard({
         >
           <Pencil size={11} aria-hidden />
           Edit
-        </button>
+        </InstitutionAction>
       ),
     },
   ];
@@ -147,7 +154,9 @@ function ProductsCard({
       title="Products"
       subtitle="Product proposals and approvals with the regulator reference"
       actions={
-        <button
+        <InstitutionAction
+          sensitivity="confidential"
+          permission="create"
           type="button"
           onClick={() => {
             setEditing(null);
@@ -157,7 +166,7 @@ function ProductsCard({
         >
           <Plus size={13} aria-hidden />
           Add product
-        </button>
+        </InstitutionAction>
       }
       noPadding
     >
@@ -359,7 +368,9 @@ function LicencesCard({
       header: "",
       align: "right",
       render: (license) => (
-        <button
+        <InstitutionAction
+          sensitivity="confidential"
+          permission="edit"
           type="button"
           onClick={() => {
             setAdding(false);
@@ -369,7 +380,7 @@ function LicencesCard({
         >
           <Pencil size={11} aria-hidden />
           Edit
-        </button>
+        </InstitutionAction>
       ),
     },
   ];
@@ -379,7 +390,9 @@ function LicencesCard({
       title="Licences"
       subtitle="Operating licences with class, issue date, and standing"
       actions={
-        <button
+        <InstitutionAction
+          sensitivity="confidential"
+          permission="create"
           type="button"
           onClick={() => {
             setEditing(null);
@@ -389,7 +402,7 @@ function LicencesCard({
         >
           <Plus size={13} aria-hidden />
           Add licence
-        </button>
+        </InstitutionAction>
       }
       noPadding
     >

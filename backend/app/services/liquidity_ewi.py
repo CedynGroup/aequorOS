@@ -26,15 +26,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.credit.service import loan_classification
 from app.db.base import utc_now
 from app.identity.public import Bank
-from app.models import (
-    BankReportingPeriod,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    LiquidityEwiIndicator,
-    LiveMetric,
-)
+from app.live.public import BankReportingPeriod, LiveMetric
+from app.models import CanonicalPosition, CanonicalPositionSnapshot, LiquidityEwiIndicator
+from app.policy.public import base_currency, institution_types
 from app.schemas.liquidity_cfp import (
     EscalationState,
     EwiDirection,
@@ -43,9 +40,7 @@ from app.schemas.liquidity_cfp import (
     EwiStatus,
     EwiUnit,
 )
-from app.services import institution_types, loan_classification
 from app.services.audit import record_event
-from app.services.jurisdictions import base_currency
 
 _ASSET_TYPES = ("LOAN", "SECURITY_HOLDING", "CASH", "INTERBANK_PLACEMENT", "OTHER_ASSET")
 _LIABILITY_TYPES = ("DEPOSIT", "INTERBANK_BORROWING", "OTHER_LIABILITY")

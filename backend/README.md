@@ -62,7 +62,7 @@ publication and required migration-role preparation are in
 - Regulatory reporting: BoG BSD returns generated from the official workbook
   templates, with the templates' own formulas evaluated; PDF/XLSX artifacts
 - Attestation: maker-checker plus PDF e-signature with step-up re-authentication
-- Cash-flow LSTM (`app/ml`) and per-tenant behavioral GBMs; everything else is
+- Cash-flow LSTM (`app/forecasting/ml`) and per-tenant behavioral GBMs; everything else is
   deterministic
 - Audit events, per-field manual edit history, and source-record traceability
 
@@ -116,10 +116,9 @@ mise run risk-service:hooks
 ```
 
 The service runs against the **shared remote Postgres** (`<postgres-host>:<port>/<database>`) —
-`DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape). The
-default test run needs no database at all (isolated SQLite); Postgres-gated tests opt in via
-`TEST_DATABASE_URL`; use a dedicated test database as described under
-[Run Tests](#run-tests). The bundled Docker Compose remains available for fully-local/offline work.
+`DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape).
+Test commands and database prerequisites are documented under [Run Tests](#run-tests).
+The bundled Docker Compose remains available for fully-local/offline work.
 
 ## Run The API
 
@@ -163,6 +162,17 @@ App-session API requests use an access token issued by password or SSO login:
 ```http
 Authorization: Bearer <app-access-token>
 ```
+
+### Data Engine file ingestion
+
+With an authorized app session, first upload the source file as multipart field
+`file` to `POST /api/v1/banks/{bank_id}/ingestion-uploads`. Pass the returned
+`location` unchanged to `POST /api/v1/banks/{bank_id}/ingestion-batches`, together
+with the source system, reporting date and reason required by the API schema.
+The location is an opaque `temp://` handle resolved only within that bank's temp
+storage tier. Server filesystem paths and other URL schemes return HTTP 422;
+malformed handles are rejected before a batch is created. Upload to the same bank
+that will ingest the file, even when two banks share an organization.
 
 ### API transactions and external waits
 
@@ -282,8 +292,8 @@ acknowledgement leaves pending cleanup safe to retry; duplicate requests preserv
 one job and one deletion event. Existing deleted records remain unchanged.
 The queue's bounded exponential retries and stale-worker reclaim apply; exhausted
 cleanup remains pending and appears as a failed job on the operator jobs board.
-See [`documents.py`](app/services/documents.py) and the
-[deletion regression tests](tests/services/test_document_deletion.py), including
+See [`documents.py`](app/case/service/documents.py) and the
+[deletion regression tests](tests/case/service/test_document_deletion.py), including
 [PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout.py).
 
 Canonical financial data is read with
@@ -293,8 +303,8 @@ periods, balances, cash flows, obligations, and covenants. These mutations
 require an authenticated mutation-capable bearer principal; each request body
 requires a non-empty `reason`. Successful responses contain the updated `record` and the case's
 refreshed `validation` state. The request and response schemas live in
-[`app/schemas/financial_workspace.py`](app/schemas/financial_workspace.py);
-[`app/services/financial_canonical_edits.py`](app/services/financial_canonical_edits.py) owns
+[`app/case/schemas/financial_workspace.py`](app/case/schemas/financial_workspace.py);
+[`app/case/service/financial_canonical_edits.py`](app/case/service/financial_canonical_edits.py) owns
 correction-history behavior.
 
 Clients use the generated `FinancialDataApi` from `packages/risk-service-api`
@@ -439,6 +449,127 @@ The [workflow inventory and stateful-test guide](docs/state_machine_testing.md)
 records transition guards, coverage boundaries, and bounded Hypothesis profiles.
 
 ```bash
+mise run unit         # database-free tests; any database connection fails
+mise run integration  # database/external-service tests on disposable Postgres
+mise run risk-service:test-e2e  # backend Playwright contracts
+```
+
+These commands work at the repository root or in `backend/`. Their explicit
+pytest selectors are `-m unit`, `-m integration` and `-m e2e`; unit and integration
+also have `risk-service:test-unit` and `risk-service:test-integration` aliases.
+Install dashboard dependencies with `pnpm install --frozen-lockfile` at the repository
+root before running the e2e suite or the full census.
+
+Feature-local paths stay in place, preserving imports and fixture/data paths.
+[`scripts/test_suites.json`](scripts/test_suites.json) is generated from observed
+database and external-service requirements for every exact parametrized test ID.
+There are no module defaults or manual function overrides. Collection rejects new/unclassified IDs,
+duplicate collection and conflicting suite markers before marker deselection.
+SQLite counts as a database. Optional primary-data tests retain their explicit
+opt-in; the census never supplies primary-bank data.
+
+Refresh ownership after adding tests or changing database or service requirements,
+including tests brought in by merging main. The merge queue executes the combined
+tree, so a catalogue checked only against an older PR head is insufficient:
+
+```bash
+mise run risk-service:refresh-test-suites /absolute/path/to/empty/census-evidence
+```
+
+This runs the entire test tree serially with disposable native PostgreSQL 17 and
+MinIO plus its own loopback OpenBao, clearing ambient database and primary-data URLs.
+Install OpenBao or set `AQS_OPENBAO_BIN` to its verified binary. See the local-services
+guide below for installing the native binaries. To use disposable Docker instead,
+run `uv run python -m scripts.test_suite_census refresh <evidence-dir> --mode docker`
+from `backend/`. Keep the evidence directory outside the repository. The full run
+can take substantially longer than the unit suite; retain its log and let fixture
+teardown and child processes finish before generation. Commit the regenerated
+catalogue. For a service-gated case requiring another applicable profile, work from
+`backend/` and collect that profile with `CI_DATABASE_CENSUS=1` and `CI_DATABASE_OBSERVATIONS=<separate-dir>`,
+then run `uv run python -m scripts.test_suite_census generate <full-dir> --supplement <profile-dir>`.
+The supplement must contain only identities from the full census, and conflicting
+proven ownership across profiles is rejected. A failing run returns nonzero and reports its inconclusive cases;
+fix failures before claiming full validation.
+For newly merged tests, `--extend <complete-new-test-profile>` adds disjoint
+identities with the same execution evidence requirements; overlapping identities
+are rejected. Existing ownership still comes from the retained full census.
+
+The observer records driver connection attempts and SQLAlchemy pooled checkouts
+across setup, call, teardown, shared fixtures and inherited Python subprocesses.
+Shared-fixture evidence applies to every consumer, including failed setup and
+cached setup failures; nested fixtures and registered finalizers retain attribution.
+An attempted acquisition counts as database use even when it fails or is caught:
+the unit guard must not replace a driver's expected refusal. A fully passing case
+with no observed database or external-service use and no unconfirmed children is
+unit-owned. Positive database acquisition evidence rules out unit ownership even
+when execution fails or a child does not confirm instrumentation; neither profile
+may replace it with proven unit ownership. Without a database or service requirement,
+skipped/failed cases and unconfirmed children retain conservative integration
+ownership and appear in `inconclusive.json`. A skipped case is not
+proof that an integration test could be moved; run its applicable profile to obtain
+evidence. This preserves explicit ownership without changing product assertions.
+
+The unit owner has no PostgreSQL, MinIO, OpenBao or dashboard dependency setup.
+Observed MinIO/OpenBao connections and native service processes are integration
+requirements; Playwright launches are e2e requirements. A declared
+`requires_service` marker covers contracts whose assertions consume state from
+earlier service-using cases and service-gated contracts such as the local KMS.
+The generated catalogue also records these service requirements so the aggregate
+rejects skipped service contracts. To enrich an
+older database-only census, pass `--services <complete-service-profile>` to
+`generate`; only positive service requirements can change ownership. MinIO runs
+in storage/schema jobs and the shard containing native service contracts;
+OpenBao runs in its integration shard. Backend Playwright contracts have one
+explicit e2e job beside dashboard journeys. Every test has one of three owners:
+unit, integration or e2e.
+
+Every CI owner emits the same observations alongside its JUnit report. The final
+integration gate invokes `scripts/test_suite_census.py check` on those existing
+executions: observed unit database/service use and fully executed integration/e2e cases without
+their observed dependency both fail with the exact IDs to refresh. The independent partition
+guard proves the observed selection has exactly one execution owner, including
+conservative affected-module CI runs. Original database-free files remain in
+place; classification never changes test imports or fixtures.
+
+The unit guard supplies a loopback port-1 `TEST_DATABASE_URL` sentinel before
+collection. This enables model-only checks inside mixed migration modules whose
+module-wide skip condition requires that setting. No PostgreSQL service is
+provisioned, and any attempted use of the sentinel fails the connection guard.
+
+A dedicated unit run selects only generated unit-bearing modules before imports,
+then prunes known non-unit functions before parametrization. Unknown test functions
+and parameter identities fail collection. With CI evidence enabled, missing cases
+also fail collection and the filesystem inventory must match the catalogue.
+Aggregate execution reports prove the other owners'
+exact coverage; a second full-tree collection is unnecessary. Integration-only
+modules are never imported by this selector. Mixed modules still share their
+module imports, while their known integration/e2e functions are not collected.
+Numeric libraries use one thread per worker to avoid nested OpenMP/BLAS pools
+when several ML cases fit concurrently. The run uses the runner's detected CPU
+count (`-n auto`) and per-case load scheduling, retaining
+the in-memory storage audit sequence on one worker because it shares mutable
+class state. The immutable OpenAPI schema and generated shard reports also stay
+on one worker each, avoiding repeated expensive module-fixture setup. `--durations=20` reports setup/call/teardown outliers. Database
+connections are refused before collection. Each process records attempts separately;
+the controller requires identical worker classifications and exact combined JUnit
+coverage. Combined local runs also refuse connections for each unit test, before
+fixture setup. Finalization follows fixture ownership: integration-only fixture
+cleanup remains permitted when the last test is unit-owned, while fixtures consumed
+by a unit test retain refusal during their finalizers.
+SQLAlchemy, psycopg (including async), SQLite and installed database-direct driver
+entry points are guarded, including Python subprocesses with fresh environments.
+Ordinary Python children start with stdlib-only instrumentation; a loader wraps
+database drivers before their imports return instead of eagerly importing every
+SDK into tiny subprocess probes. SQLite also has a process-wide audit guard.
+Grandchildren retain refusal and observation even with a fresh environment.
+Attempts fail the run even when caught. The unit CI owner compares the complete
+classified collection with JUnit identities and permits no dropped, duplicated,
+skipped, failed or errored unit case. It uploads `unit-tests` classification,
+connection-attempt and execution evidence. Module inventory and exact case coverage remain enforced in that same collection.
+
+`mise run risk-service:test` remains the combined compatibility run:
+
+```bash
 mise run risk-service:test
 ```
 
@@ -482,7 +613,7 @@ PostgreSQL 17. If a migration adds an extension dependency, install its PostgreS
 17 package in that action and verify availability before running migrations.
 
 Run the storage contract suite with `mise run risk-service:test-storage`. Its
-wrapper supplies disposable PostgreSQL for key-rotation concurrency and MinIO
+wrapper supplies disposable PostgreSQL for storage integration cases and MinIO
 for the object-store contract unless `TEST_DATABASE_URL` and `S3_*` settings
 already supply those services. The dedicated CI storage job supplies both and
 rejects any skipped test.
@@ -493,23 +624,35 @@ the schema aggregate continues to reject every skip.
 
 CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official
-release binaries and verify pinned SHA256 digests before execution. MinIO runs
-only for the storage contract, schema document cleanup coverage and
-[dashboard journeys](dashboard/README.md#end-to-end-playwright), with a disposable
-built-in KMS key named `aequoros-key`. OpenBao runs only in the suite shard owning its
-live signing tests. Both listen on loopback and stop at job cleanup. Other API,
+release binaries and verify pinned SHA256 digests before execution. MinIO uses a
+disposable built-in KMS key named `aequoros-key`; it also serves
+[dashboard journeys](dashboard/README.md#end-to-end-playwright).
+The integration shard owning live signing cases also starts OpenBao. Both
+services listen on loopback
+and stop at job cleanup. Other API,
 health and operator provisioning tests retain their in-process storage fakes;
 credential-vault encryption tests need no vault server. The live storage and
 OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
 
+The integration aggregate also joins the lock and storage execution reports with
+unit, e2e and Postgres shard evidence. Their selected union must match the classified
+collection exactly once. Storage integration cases run only in the storage job,
+except key-rotation concurrency, which belongs to locks. The storage job also
+runs for merge groups. A conservative affected-module run excludes only the
+explicitly unselected suite cases from this cross-owner comparison.
+
+The **Unit tests** job runs `risk-service:test-unit`, including database-free
+architecture guards. Database-using architecture cases run in the integration
+shards.
+
 CI runs the remaining PostgreSQL suite in four duration-balanced module shards,
 and the schema/RLS suite in two hash-based shards; lock tests retain their own job.
 Longest-first packing uses the committed `scripts/ci_postgres_durations.json`
-baseline. Each file stays together, including OpenBao's shared AppRole fixtures.
+baseline, excluding files with a non-Postgres owner. Each file stays together, including OpenBao's shared AppRole fixtures.
 New modules use stable hashing until the baseline is refreshed. The
-existing **Full suite on Postgres**, **Postgres schema, RLS and locks**, and
-**Risk service gate** check names stay stable. Shards upload their complete
+**Integration tests** aggregate joins the suite shards; **Postgres schema, RLS and locks**
+and the always-reported **Risk service gate** remain enforced. Shards upload their complete
 collection manifests and JUnit reports; the aggregates verify that their union
 contains every expected test exactly once, preserve the full-suite execution
 floor, and reject any skipped schema/RLS or live OpenBao test.
@@ -519,11 +662,11 @@ exists, retained for seven days.
 
 Main pushes and queued merge results always run the full suite. On pull requests,
 only changes confined to the
-bodies of existing, unreferenced `tests/domain/test_*.py` tests (including nested
-domain directories), or comments and formatting in those modules, select their
-affected modules. Changes to fixtures, decorators, production code, new/deleted
+bodies of existing, unreferenced `tests/domain/test_*.py` tests owned by the
+Postgres suite (including nested domain directories), or comments and formatting
+in those modules, select their affected modules. Changes to fixtures, decorators, production code, new/deleted
 tests, configuration or an uncertain diff select the full suite. Schema/RLS,
-locks, architecture and storage gates keep their coverage. The stdlib planner/coverage verifier is
+locks, unit and storage gates keep their coverage. The stdlib planner/coverage verifier is
 [`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via
 [`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py). Default local test
 tasks continue to run their complete suites; `risk-service:test-fast` uses the
@@ -553,8 +696,9 @@ floor and live OpenBao execution before replacing the baseline. JUnit case times
 include setup, call and teardown. Review and commit the resulting baseline; CI
 never writes it automatically. Refresh after substantial fixture or test layout
 changes, and compare actual job timings rather than treating summed test durations
-as wall time. The initial baseline came from the successful two-shard main run
-linked in its `source_run` field, verified with that run's two-shard verifier.
+as wall time. The baseline's `source_run` links the complete successful hosted run used for its
+weights. On an ownership change, verify the source artifacts against the old
+assignment before removing transferred modules from the refreshed weights.
 
 ### Test databases and the primary database
 
@@ -584,11 +728,19 @@ linked in its `source_run` field, verified with that run's two-shard verifier.
   [dashboard end-to-end guide](dashboard/README.md#end-to-end-playwright); for SSO, see its
   [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).
   **Default shared test databases are built once per pytest process**
-  (`backend/tests/conftest.py`): tenant API rollback-isolated tests share one
+  (`backend/tests/conftest.py`): default tenant API rollback-isolated tests share one
   schema through a savepoint-bound sessionmaker, and `@pytest.mark.committing_db`
   tests share a second schema that is TRUNCATEd and reseeded before each test.
-  Both default tenant fixture families reuse one application per process. Bank audit
-  API tests reuse a module-scoped migrated schema and lazily constructed application
+  Opt-in [prepared canonical books](tests/support/DATABASE.md#prepared-canonical-books)
+  use a separate baseline with per-test rollback.
+  Both default tenant fixture families reuse one application per process.
+  BI export header cases (`tests/bi/api/test_bi_exports.py`) reuse a separate
+  module-scoped app, built lazily after hermetic settings, BI flags and the fixed
+  CORS origin are installed. Each case installs its current dependency overrides,
+  opens a fresh client and clears overrides in `finally`; sessions and storage
+  fakes remain function-scoped. Settings-sensitive CORS/TLS tests must build their
+  own app.
+  Bank audit API tests reuse a module-scoped migrated schema and lazily constructed application
   (`tests/identity/api/test_audit_log.py`), with fresh clients, per-test rollback and
   `aqs_api` authority for HTTP database dependencies; the dependency override is
   restored at teardown. Operator tests reuse a separate application and SQLite database,

@@ -69,10 +69,10 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
+from app.ai.service import approvals, tiered
+from app.ai.service.vendors import VendorUnavailable
 from app.core.config import get_settings, is_undeployed_environment
 from app.core.outbound import OutboundTargetBlocked, check_url, redirect_guard
-from app.services.ai import approvals, tiered
-from app.services.ai.vendors import VendorUnavailable
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Mapping, Sequence

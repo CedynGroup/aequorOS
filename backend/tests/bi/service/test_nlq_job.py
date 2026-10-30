@@ -26,6 +26,9 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.orm import Session
 
+from app.ai.models import AiCommentarySettings
+from app.ai.service import client as ai_client
+from app.ai.service import features, gates, quota
 from app.bi.domain.catalogue import CATALOGUE_VERSION, catalogue
 from app.bi.jobs import bi_nlq
 from app.bi.service import nlq
@@ -34,9 +37,6 @@ from app.bi.service.nlq.schema import NlqDraft, NlqQueryDraft, NlqTimeDraft
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models import Bank, Job, Organization, User
-from app.models.ai import AiCommentarySettings
-from app.services.ai import client as ai_client
-from app.services.ai import features, gates, quota
 from tests.support.helpers import ORG_1
 
 BANK_ID = "BK-NLQJOB01"

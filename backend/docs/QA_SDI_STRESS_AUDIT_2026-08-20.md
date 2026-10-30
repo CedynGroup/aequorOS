@@ -22,7 +22,7 @@ The local database is also one migration behind source head, so the new regulato
 
 ### P0 — SDI enterprise stress measures the wrong liquidity regime
 
-**Evidence:** [backend/app/services/enterprise_stress.py](backend/app/services/enterprise_stress.py) always invokes the common enterprise orchestrator. [backend/app/domain/stress/orchestrator.py](backend/app/domain/stress/orchestrator.py) always computes `LcrResult` and `NsfrResult`, and the response model requires `stressed_lcr_pct`/`baseline_lcr_pct` in [backend/app/schemas/enterprise_stress.py](backend/app/schemas/enterprise_stress.py). The workbench renders LCR and its floor as a leading KPI and chart in [backend/dashboard/components/stress/EnterpriseStressWorkbench.tsx](backend/dashboard/components/stress/EnterpriseStressWorkbench.tsx).
+**Evidence:** [backend/app/stress/service/enterprise_stress.py](backend/app/stress/service/enterprise_stress.py) always invokes the common enterprise orchestrator. [backend/app/stress/domain/orchestrator.py](backend/app/stress/domain/orchestrator.py) always computes `LcrResult` and `NsfrResult`, and the response model requires `stressed_lcr_pct`/`baseline_lcr_pct` in [backend/app/stress/schemas/enterprise_stress.py](backend/app/stress/schemas/enterprise_stress.py). The workbench renders LCR and its floor as a leading KPI and chart in [backend/dashboard/components/stress/EnterpriseStressWorkbench.tsx](backend/dashboard/components/stress/EnterpriseStressWorkbench.tsx).
 
 The current SDI handling only suppresses LCR/NSFR in the forward projection and omits Basel Table 2; it does not replace the live enterprise-stress liquidity outcome with Table-1 ratios, primary/secondary reserve checks, maturity mismatch, funding concentration, counterbalancing capacity, or survival horizon.
 
@@ -32,7 +32,7 @@ The current SDI handling only suppresses LCR/NSFR in the forward projection and 
 
 ### P0 — Enterprise stress bypasses the paid-up-capital regulatory parameter
 
-**Evidence:** [backend/app/services/enterprise_stress.py](backend/app/services/enterprise_stress.py) resolves `paid_up_min` from the request payload or tenant `ParamCapitalThreshold`; otherwise it returns zero. It does not call [backend/app/services/regulatory_parameters.py](backend/app/services/regulatory_parameters.py), which is the documented source for licence-specific `paid_up_min`. In contrast, [backend/app/services/sdi_capital_checks.py](backend/app/services/sdi_capital_checks.py) correctly resolves it through that control plane.
+**Evidence:** [backend/app/stress/service/enterprise_stress.py](backend/app/stress/service/enterprise_stress.py) resolves `paid_up_min` from the request payload or tenant `ParamCapitalThreshold`; otherwise it returns zero. It does not call [backend/app/policy/service/regulatory_parameters.py](backend/app/policy/service/regulatory_parameters.py), which is the documented source for licence-specific `paid_up_min`. In contrast, [backend/app/services/sdi_capital_checks.py](backend/app/services/sdi_capital_checks.py) correctly resolves it through that control plane.
 
 **Impact:** A savings-and-loans enterprise stress run can omit the GH¢15m paid-up-capital minimum unless a tenant-specific board threshold is separately configured. This makes the Appendix II minima/gap and management-action sizing non-compliant with the intended SDI control plane.
 
@@ -40,13 +40,13 @@ The current SDI handling only suppresses LCR/NSFR in the forward projection and 
 
 ### P0 — Macro scenario approval permits incomplete, non-compliant scenarios
 
-**Evidence:** [backend/app/schemas/stress.py](backend/app/schemas/stress.py) allows `horizon_years >= 1` and requires only one path. The service approval flow in [backend/app/services/macro_scenarios.py](backend/app/services/macro_scenarios.py) approves without checking a three-year horizon, full yearly coverage, required Table-6 drivers, adverse severity, or applicability. Direct schema validation during this audit accepted:
+**Evidence:** [backend/app/stress/schemas/stress.py](backend/app/stress/schemas/stress.py) allows `horizon_years >= 1` and requires only one path. The service approval flow in [backend/app/stress/service/macro_scenarios.py](backend/app/stress/service/macro_scenarios.py) approves without checking a three-year horizon, full yearly coverage, required Table-6 drivers, adverse severity, or applicability. Direct schema validation during this audit accepted:
 
 ```text
 horizon_years=1, paths=[gdp_growth for year 1]
 ```
 
-`EnterpriseStressRunCreate` requires a three-year projection, but [backend/app/services/enterprise_stress.py](backend/app/services/enterprise_stress.py) does not verify that the approved scenario covers every requested projection year. Missing macro points degrade to neutral translation values.
+`EnterpriseStressRunCreate` requires a three-year projection, but [backend/app/stress/service/enterprise_stress.py](backend/app/stress/service/enterprise_stress.py) does not verify that the approved scenario covers every requested projection year. Missing macro points degrade to neutral translation values.
 
 **Impact:** An officially persisted enterprise-stress run can appear to satisfy the 3-year framework while year 2/3 and required macro drivers are unstressed or absent.
 
@@ -62,7 +62,7 @@ horizon_years=1, paths=[gdp_growth for year 1]
 
 ### P1 — Tenant overrides are not constrained to tighten a regulatory requirement
 
-**Evidence:** [backend/app/services/regulatory_parameters.py](backend/app/services/regulatory_parameters.py) documents that a hard clamp is “not yet” enforced. [backend/app/services/regulatory_capital.py](backend/app/services/regulatory_capital.py) accepts a tenant `car_min` whenever present, before the control-plane fallback.
+**Evidence:** [backend/app/policy/service/regulatory_parameters.py](backend/app/policy/service/regulatory_parameters.py) documents that a hard clamp is “not yet” enforced. [backend/app/services/regulatory_capital.py](backend/app/services/regulatory_capital.py) accepts a tenant `car_min` whenever present, before the control-plane fallback.
 
 **Impact:** A tenant board register can weaken a global regulatory floor, contrary to the documented “tenant may only tighten” rule.
 

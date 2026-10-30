@@ -42,10 +42,10 @@ from app.bi.domain.catalogue.members import (
     VALUE_TYPES,
 )
 from app.bi.domain.extract import MATURITY_BUCKETS, PRODUCT_FAMILY_LABELS
+from app.credit.domain.dpd_bands import DPD_BANDS
 from app.domain.authority.registry import REGISTRY
-from app.domain.credit.dpd_bands import DPD_BANDS
 from app.domain.ingestion.constants import POSITION_TYPES
-from app.domain.irr.buckets import REPRICING_BUCKETS
+from app.irrbb.domain.buckets import REPRICING_BUCKETS
 
 RAW_TOKEN = re.compile(r"^[A-Z0-9_]+$|_[a-z]")
 

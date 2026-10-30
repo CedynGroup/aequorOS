@@ -46,8 +46,8 @@ APP = Path(__file__).resolve().parents[2] / "app"
 #: serves a dashboard, it belongs on the live tier instead.
 OFFICIAL_DERIVATION_CALLERS: frozenset[str] = frozenset(
     {
-        "app/services/pipeline.py",
-        "app/services/data_activation.py",
+        "app/live/service/pipeline.py",
+        "app/live/service/data_activation.py",
         "app/services/history_loader.py",
     }
 )
@@ -55,7 +55,7 @@ OFFICIAL_DERIVATION_CALLERS: frozenset[str] = frozenset(
 #: The function that refuses, and the module that defines it (which is allowed
 #: to name it).
 OFFICIAL_DERIVATION = "derive_facts"
-DERIVATION_MODULE = "app/services/fact_derivation.py"
+DERIVATION_MODULE = "app/live/service/fact_derivation.py"
 
 
 def _calls_named(path: Path, name: str) -> bool:
@@ -121,7 +121,7 @@ def test_the_live_plane_is_reachable_and_distinct() -> None:
     derivation were ever aliased to the official one, every dashboard would
     start refusing on a ragged book and this guard would still pass.
     """
-    from app.services import fact_derivation  # noqa: PLC0415
+    from app.live.service import fact_derivation  # noqa: PLC0415
 
     assert callable(fact_derivation.derive_facts)
     assert callable(fact_derivation.derive_current_facts)

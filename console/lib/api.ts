@@ -6,7 +6,7 @@
  * types, and one typed function per endpoint. If the backend contract drifts,
  * this is the only file to fix.
  *
- * Wire types mirror backend/app/schemas/operator.py (TenantRead,
+ * Wire types mirror backend/app/operator/schemas.py (TenantRead,
  * ProvisioningResultRead, TenantActivityRead, DataEngineConnectionRead) and
  * backend/app/schemas/market_desk.py (the Desk* models) — verified against
  * those files on 2026-08-09.
@@ -128,7 +128,7 @@ export function toApiError(err: unknown): ApiError {
 }
 
 // --------------------------------------------------------------------------
-// Wire types (snake_case, mirroring backend/app/schemas/operator.py)
+// Wire types (snake_case, mirroring backend/app/operator/schemas.py)
 // --------------------------------------------------------------------------
 
 export interface TenantFreshnessSummary {
@@ -1828,7 +1828,7 @@ export function reactivateOperator(email: string): Promise<OperatorUser> {
 // changes are four-eyes (propose → approve by a DIFFERENT operator). Decimal
 // values arrive as JSON STRINGS — keep them strings end to end (precision), the
 // same convention as DeskObservation.value. Verified against
-// backend/app/schemas/operator.py on 2026-08-20.
+// backend/app/operator/schemas.py on 2026-08-20.
 // --------------------------------------------------------------------------
 
 const REGULATORY_PARAMETERS = "/operator/v1/regulatory-parameters";
@@ -1895,7 +1895,7 @@ export interface RegulatoryParameterProposeRequest {
    * the FX shock table, the operational severity map, the sovereign haircut
    * grid, the materiality score bands. Its form is checked against
    * `lib/parameter-shapes.ts` here and against
-   * `app/domain/policy/parameter_shapes.py` at BOTH propose and approve.
+   * `app/policy/domain/parameter_shapes.py` at BOTH propose and approve.
    */
   value_json?: Record<string, unknown> | null;
   unit: string;
@@ -2125,7 +2125,7 @@ export function getTenantStorage(
 // Every endpoint below is a diagnostic look INSIDE one tenant and 403s with
 // `{ code: "inspection_required" }` unless the caller holds an ACTIVE inspector
 // session for the org (backend/app/operator/features/inspector_reads.py). The
-// wire shapes mirror the new Read models in backend/app/schemas/operator.py
+// wire shapes mirror the new Read models in backend/app/operator/schemas.py
 // (Tenant*Metric/Finding/Ingestion/Config), verified on 2026-08-15. No secret,
 // credential, or vault material is ever returned by any of these.
 // --------------------------------------------------------------------------
@@ -2477,7 +2477,7 @@ export function grantDeskEntitlementDataset(body: {
 // session. Each is a single, confirmed, audited operation.
 //
 // NOTE (2026-08-15): these routes are being built in the backend in parallel —
-// the TenantFix* Read models are NOT yet in backend/app/schemas/operator.py.
+// the TenantFix* Read models are NOT yet in backend/app/operator/schemas.py.
 // The shapes below are typed from the agreed contract; reconcile once they land.
 // --------------------------------------------------------------------------
 

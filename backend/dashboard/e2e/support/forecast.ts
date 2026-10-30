@@ -8,7 +8,7 @@
  * `_OPERATIONAL_INCOME_M`, `_CAPITAL_COMPONENTS_M`), carried forward unchanged
  * to the latest month end. Every preset is the fixture's approved `forecast`
  * stress-shock register. The projection below is the documented yearly
- * recurrence of `app/domain/forecasting/engine.py` (growth, the NII/fee/opex/
+ * recurrence of `app/forecasting/domain/engine.py` (growth, the NII/fee/opex/
  * credit-loss/tax/dividend chain, the funding plug, retained earnings into
  * CET1), and CAR is the Basel build-up the Basel journey derives: credit RWA at
  * standardised weights on the bootstrap's net CRD source book, with aggregate

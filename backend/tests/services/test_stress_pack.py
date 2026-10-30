@@ -35,8 +35,9 @@ from app.reporting.service.exports import export_package
 from app.reporting.service.provenance import compliance_verdict_authority
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.schemas.reverse_stress import ReverseStressRunCreate
-from app.services import regulatory_capital, regulatory_liquidity, reverse_stress
+from app.services import regulatory_capital, regulatory_liquidity
+from app.stress.schemas.reverse_stress import ReverseStressRunCreate
+from app.stress.service import reverse_stress
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

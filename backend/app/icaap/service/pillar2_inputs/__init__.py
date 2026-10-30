@@ -39,7 +39,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess
 from app.credit.public import credit_concentration
-from app.domain.stress.appendix_ii import thousands
 from app.icaap.domain.pillar2 import concentration as concentration_domain
 from app.icaap.domain.pillar2 import fx as fx_domain
 from app.icaap.domain.pillar2 import irrbb as irrbb_domain
@@ -53,6 +52,7 @@ from app.icaap.schemas.risk_capital import IcaapPillar2ManualInputs
 from app.icaap.service import blocks as blocks_service
 from app.icaap.service import digests, floors
 from app.icaap.service.pillar2_inputs import granularity as granularity_inputs
+from app.stress.domain.appendix_ii import thousands
 
 #: The inverse of the Appendix II reporting scale. Derived from the scale
 #: itself rather than written out, so the two can never disagree: the attested

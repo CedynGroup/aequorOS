@@ -60,8 +60,8 @@ from app.identity.schemas.authorization import (
 )
 from app.identity.service import authorization, grant_administration
 from app.models.canonical import CanonicalReferenceRow
-from app.models.institution_type import InstitutionType
 from app.models.organization import Organization
+from app.policy.models.institution_type import InstitutionType
 from app.services.audit import record_event
 
 router = APIRouter(tags=["authorization"])
@@ -169,6 +169,8 @@ _RouteRequirement = tuple[ModuleScope, Sensitivity, Permission]
 
 #: Routes whose requirements differ from their root's, matched exactly first.
 _EXACT_ROUTE_REQUIREMENTS: dict[str, tuple[_RouteRequirement, ...]] = {
+    "/institution/parties": ((ModuleScope.INSTITUTION, Sensitivity.RESTRICTED, Permission.VIEW),),
+    "/institution/registers": ((ModuleScope.CREDIT, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
     "/liquidity": (
         (ModuleScope.LIQUIDITY, Sensitivity.AGGREGATED, Permission.VIEW),
         (ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),
@@ -222,7 +224,7 @@ _ROOT_REQUIREMENTS: dict[str, _RouteRequirement] = {
     "forecasting": (ModuleScope.FORECASTING, Sensitivity.AGGREGATED, Permission.VIEW),
     "ftp": (ModuleScope.FTP, Sensitivity.AGGREGATED, Permission.VIEW),
     "fx": (ModuleScope.FX, Sensitivity.AGGREGATED, Permission.VIEW),
-    "institution": (ModuleScope.ACCOUNT, Sensitivity.RESTRICTED, Permission.VIEW),
+    "institution": (ModuleScope.INSTITUTION, Sensitivity.CONFIDENTIAL, Permission.VIEW),
     "irr": (ModuleScope.IRRBB, Sensitivity.AGGREGATED, Permission.VIEW),
     "liquidity": (ModuleScope.LIQUIDITY, Sensitivity.AGGREGATED, Permission.VIEW),
     "markets": (ModuleScope.MARKETS, Sensitivity.PUBLISHED, Permission.VIEW),

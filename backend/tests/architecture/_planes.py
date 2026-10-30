@@ -13,9 +13,9 @@ and the two had drifted apart:
 Thirteen of the sixteen owners were absent from the forbidden sets, so an
 **ordinary absolute import** walked straight through both guards::
 
-    from app.services.case_plane import compute_headroom
-    from app.features.run_calculations import compute_headroom
-    from app.services.financial_workspace import compute_headroom
+    from app.case.service.case_plane import compute_headroom
+    from app.case.api.run_calculations import compute_headroom
+    from app.case.service.financial_workspace import compute_headroom
 
 The mismatch was not an oversight anyone could see: two lists in two files,
 each individually plausible. So the lists are gone. Membership is now DERIVED,
@@ -51,23 +51,23 @@ APP = Path(__file__).parents[2] / "app"
 #: Where the case plane lives on disk. THE source of truth for plane
 #: membership — every other case-plane set in the guards is derived from it.
 CASE_PLANE_GLOBS: tuple[str, ...] = (
-    "models/calculation.py",
-    "models/capital.py",
-    "models/financial.py",
-    "schemas/calculations.py",
-    "schemas/capital.py",
-    "schemas/liquidity.py",
-    "schemas/financial_workspace*.py",
-    "services/calculations.py",
-    "services/capital.py",
-    "services/case_plane.py",
-    "services/liquidity.py",
-    "services/financial_*.py",
-    "services/financial_mapping/**/*.py",
-    "features/manage_capital.py",
-    "features/read_financial_workspace.py",
-    "features/review_liquidity.py",
-    "features/run_calculations.py",
+    "case/models/calculation.py",
+    "case/models/capital.py",
+    "case/models/financial.py",
+    "case/schemas/calculations.py",
+    "case/schemas/capital.py",
+    "case/schemas/liquidity.py",
+    "case/schemas/financial_workspace*.py",
+    "case/service/calculations.py",
+    "case/service/capital.py",
+    "case/service/case_plane.py",
+    "case/service/liquidity.py",
+    "case/service/financial_*.py",
+    "case/service/financial_mapping/**/*.py",
+    "case/api/manage_capital.py",
+    "case/api/read_financial_workspace.py",
+    "case/api/review_liquidity.py",
+    "case/api/run_calculations.py",
 )
 
 #: The union of the three hand-maintained lists this module replaced, frozen as
@@ -78,30 +78,30 @@ CASE_PLANE_GLOBS: tuple[str, ...] = (
 PINNED_CASE_PLANE_MODULES: frozenset[str] = frozenset(
     {
         # test_dependency_boundaries.CASE_PLANE_MODULES (6)
-        "app.models.calculation",
-        "app.models.capital",
-        "app.models.financial",
-        "app.services.calculations",
-        "app.services.capital",
-        "app.services.liquidity",
+        "app.case.models.calculation",
+        "app.case.models.capital",
+        "app.case.models.financial",
+        "app.case.service.calculations",
+        "app.case.service.capital",
+        "app.case.service.liquidity",
         # ...plus test_case_plane_boundary.CASE_PLANE_MODULES (3 more)
-        "app.schemas.calculations",
-        "app.schemas.capital",
-        "app.schemas.liquidity",
+        "app.case.schemas.calculations",
+        "app.case.schemas.capital",
+        "app.case.schemas.liquidity",
         # ...plus test_case_plane_boundary.CASE_PLANE_OWNERS (13 more)
-        "app.features.manage_capital",
-        "app.features.review_liquidity",
-        "app.features.run_calculations",
-        "app.services.case_plane",
-        "app.services.financial_canonical_edits",
-        "app.services.financial_cash_flows",
-        "app.services.financial_covenants",
-        "app.services.financial_mapping.links",
-        "app.services.financial_mapping.row_mapper",
-        "app.services.financial_mapping.upserts",
-        "app.services.financial_validation",
-        "app.services.financial_validation_rules",
-        "app.services.financial_workspace",
+        "app.case.api.manage_capital",
+        "app.case.api.review_liquidity",
+        "app.case.api.run_calculations",
+        "app.case.service.case_plane",
+        "app.case.service.financial_canonical_edits",
+        "app.case.service.financial_cash_flows",
+        "app.case.service.financial_covenants",
+        "app.case.service.financial_mapping.links",
+        "app.case.service.financial_mapping.row_mapper",
+        "app.case.service.financial_mapping.upserts",
+        "app.case.service.financial_validation",
+        "app.case.service.financial_validation_rules",
+        "app.case.service.financial_workspace",
     }
 )
 
@@ -134,16 +134,16 @@ CASE_PLANE_SYMBOLS: frozenset[str] = frozenset(
 #: names the raw-SQL check looks for, so a new model is covered on the day it
 #: is written rather than when someone remembers to extend a list.
 _CASE_MODEL_FILES: tuple[str, ...] = (
-    "models/calculation.py",
-    "models/capital.py",
-    "models/financial.py",
+    "case/models/calculation.py",
+    "case/models/capital.py",
+    "case/models/financial.py",
 )
 _BANK_MODEL_FILES: tuple[str, ...] = (
     "identity/models/bank.py",
     "models/canonical.py",
-    "models/parameter_register.py",
-    "models/regulatory.py",
-    "models/regulatory_run.py",
+    "policy/models/parameter_register.py",
+    "live/models/regulatory.py",
+    "live/models/regulatory_run.py",
     "reporting/models/packages.py",
 )
 

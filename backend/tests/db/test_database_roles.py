@@ -18,6 +18,7 @@ from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from app.case.service import assessments, documents
 from app.core.config import get_settings
 from app.core.key_management import reencryption, registry
 from app.core.key_management.local import LocalKeyProvider
@@ -30,14 +31,14 @@ from app.identity.models.institution_profile import RelatedParty
 from app.identity.schemas.bank_encryption import BankKeyScheduleConfirm
 from app.identity.service import bank_encryption
 from app.models import Bank, Job, OperatorAuditLog
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import assessments, documents, ingestion, job_queue
+from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
+from app.services import ingestion, job_queue
 from tests.adapters.excel_csv import fixtures as workbooks
 from tests.api.test_ingestion import FULL_MAPPING
+from tests.case.factories import ServiceFactories
 from tests.conftest import FakeStorage
 from tests.core.test_bank_reencryption import EmptyStorage
 from tests.db import test_postgres_migrations as migrations
-from tests.services.factories import ServiceFactories
 from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1, ORG_2
 from tests.support.inmemory_storage import InMemoryStorageClient
@@ -688,10 +689,10 @@ def test_api_coalesces_two_accepted_uploads_before_pickup(
             api_session,
             ctx,
             bank_id,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system="EXCEL_CSV",
                 as_of_date=workbooks.AS_OF,
-                location=str(path),
+                location=path,
                 reason="Test upload compatibility",
             ),
             storage,

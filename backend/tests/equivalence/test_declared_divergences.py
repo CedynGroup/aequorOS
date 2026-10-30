@@ -36,7 +36,7 @@ from app.domain.liquidity.engine import (
     compute_lcr_result,
 )
 from app.reporting.service.le_generation import _LCR_INFLOW_CAP
-from tests.domain.test_forecasting_engine import bog_liquidity_params
+from tests.forecasting.domain.test_forecasting_engine import bog_liquidity_params
 
 #: ``(metric_id, methodology_id, reporting mapping)`` — one claim.
 Claim = tuple[str, str, str]
@@ -80,7 +80,7 @@ _TABLE1 = "lmtd_table1_ratio"
 _GRADES = "bog_five_grade_classification"
 _GRADES4 = "nbfi_four_grade_classification"
 _NPL_MONTHLY_TEST = (
-    "tests/services/test_regulatory_credit.py::"
+    "tests/credit/service/test_regulatory_credit.py::"
     "test_npl_monthly_return_generates_from_the_sealed_run"
 )
 

@@ -1,0 +1,41 @@
+from __future__ import annotations
+
+import math
+
+from app.core.config import CashflowSettings
+from app.forecasting.ml.config import TrainingConfig
+from app.forecasting.ml.model import forecast_net_flows, load_artifacts, train_and_save
+from app.forecasting.ml.synthetic import generate_daily_series
+
+
+def test_training_beats_static_baseline_and_saves_artifacts(tmp_path):
+    settings = CashflowSettings()
+    assert settings.fast_test, "tests must run with CASHFLOW_FAST_TEST=1"
+    config = TrainingConfig.from_settings(settings)
+
+    metrics = train_and_save(config=config, artifacts_dir=tmp_path)
+
+    assert float(metrics["lstm_mape"]) < float(metrics["static_mape"])
+    assert float(metrics["improvement_pct"]) > 0
+    # Pinned deliberately: a version bump must be a conscious edit here, not a
+    # silent drift. `app/forecasting/ml/config.py::MODEL_VERSION` moved to v1.1.0 in f33e869
+    # and this literal was not updated with it, so the assertion had been failing
+    # on the stale side while every substantive check above passed.
+    assert metrics["model_version"] == "lstm-v1.1.0"
+    for name in ("model.pt", "scaler.json", "metrics.json"):
+        assert (tmp_path / name).exists()
+
+    loaded = load_artifacts(tmp_path)
+    assert loaded is not None
+    model, scaler, saved_metrics = loaded
+    assert saved_metrics["lstm_mape"] == metrics["lstm_mape"]
+    assert int(scaler["window"]) == config.window
+
+    series = generate_daily_series(days=config.total_days)
+    forecast = forecast_net_flows(model, scaler, series, horizon=30)
+    assert len(forecast) == 30
+    assert all(math.isfinite(value) for value in forecast)
+
+
+def test_load_artifacts_returns_none_when_missing(tmp_path):
+    assert load_artifacts(tmp_path / "does-not-exist") is None

@@ -1,6 +1,6 @@
 """The bank's exposure book, in the shape the granularity adjustment consumes.
 
-The pure derivation in ``app/domain/credit/granularity.py`` takes a list of
+The pure derivation in ``app/credit/domain/granularity.py`` takes a list of
 obligor exposures, each already carrying a PD, an ELGD and a correlation
 segment. Nothing in a bank's canonical book arrives in that shape. This module
 is the translation, and it is the only place a figure the adjustment uses is
@@ -55,15 +55,15 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess
-from app.credit.public import credit_exposure_book
-from app.domain.capital.engine import ZERO_RISK_WEIGHT_CODE
-from app.domain.credit.granularity import (
+from app.credit.domain.granularity import (
     SEGMENT_CORPORATE,
     SEGMENT_EXCLUDED,
     SEGMENT_RETAIL_OTHER,
     GaExposure,
     Segment,
 )
+from app.credit.public import credit_exposure_book
+from app.domain.capital.engine import ZERO_RISK_WEIGHT_CODE
 from app.icaap.domain.pillar2.granularity_method import (
     KEY_SCHEMA,
     PARAM_COUNTERPARTY_SEGMENT_MAP,

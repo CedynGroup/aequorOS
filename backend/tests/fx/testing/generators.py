@@ -5,8 +5,8 @@ from decimal import Decimal
 
 from hypothesis import strategies as st
 
-from app.domain.fx.engine import FxPosition, money
-from app.services.parameter_register import BANK_FX_THRESHOLDS
+from app.fx.domain.engine import FxPosition, money
+from app.policy.service.parameter_register import BANK_FX_THRESHOLDS
 
 
 @dataclass(frozen=True)
@@ -23,7 +23,7 @@ def fx_books(draw: st.DrawFn) -> FxBook:
     """Limits: parameter_register.BANK_FX_THRESHOLDS; precision: fx/engine.py.
 
     Synthetic GHS rates use bands around the hand-constructed USD/EUR/GBP rates
-    in tests/domain/test_fx_engine.py (not current quotes). Two same-direction
+    in tests/fx/domain/test_fx_engine.py (not current quotes). Two same-direction
     currencies hit aggregate-limit neighbors; each also hits single-limit
     neighbors. A third opposite-direction leg tests netting. Currency amounts
     and GHS equivalents have four-decimal HALF_UP precision.

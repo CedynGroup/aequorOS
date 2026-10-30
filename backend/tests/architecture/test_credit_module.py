@@ -21,7 +21,8 @@ from app.identity.service.grant_administration import (
     _MODULE_LABELS,  # noqa: PLC2701 - sentence oracle
     compose_authority_sentence,
 )
-from app.services import alerts, live_view, window_analytics
+from app.live.service import alerts, live_view
+from app.services import window_analytics
 from scripts.authorization_access_impact import INSTITUTION_MODULES
 
 _CREDIT_GATE = ("credit", Module.CREDIT)

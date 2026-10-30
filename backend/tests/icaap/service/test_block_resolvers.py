@@ -274,9 +274,9 @@ def test_one_block_of_each_kind_per_cycle(
 
 
 _LIVE_PLANE_SEAMS = (
-    ("app.services.live_block", "live_block"),
-    ("app.services.live_state", "current_fact_period_or_409"),
-    ("app.services.fact_derivation", "derive_current_facts"),
+    ("app.live.service.live_block", "live_block"),
+    ("app.live.service.live_state", "current_fact_period_or_409"),
+    ("app.live.service.fact_derivation", "derive_current_facts"),
 )
 
 
@@ -309,6 +309,7 @@ def test_no_resolver_reaches_for_the_live_plane(
 
 
 @pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+@pytest.mark.usefixtures("institution_profile_authority")
 def test_profile_resolver_works_with_protected_register_and_no_key(
     canonical_book: Session,
     access: IcaapAccess,

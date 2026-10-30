@@ -35,9 +35,10 @@ from app.core.audit_attribution import (
 from app.db.base import utc_now
 from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, STUCK_DEDUP_STATUSES
 from app.identity.public import Bank, SsoConnection, User
+from app.live.public import BankReportingPeriod, RegulatoryRun, WorkerHeartbeat
+from app.live.public import freshness as freshness_service
 from app.models import (
     AuditEvent,
-    BankReportingPeriod,
     DatabaseDirectConnection,
     DeskDetermination,
     DeskOperatingEnvironmentAssessment,
@@ -46,14 +47,10 @@ from app.models import (
     MarketDataConnection,
     OperatorAuditLog,
     Organization,
-    RegulatoryRun,
     TemenosConnection,
     TenantStorage,
-    WorkerHeartbeat,
 )
-from app.reporting.public import RegulatoryPackage
-from app.schemas.market_desk import DeskEntitlementRead
-from app.schemas.operator import (
+from app.operator.schemas import (
     ActivityItemRead,
     DataEngineConnectionRead,
     DataEnginesRead,
@@ -82,7 +79,8 @@ from app.schemas.operator import (
     WorkerHealthRead,
     WorkerHeartbeatRead,
 )
-from app.services import freshness as freshness_service
+from app.reporting.public import RegulatoryPackage
+from app.schemas.market_desk import DeskEntitlementRead
 from app.services import job_queue
 from app.services.market_desk import entitlements as entitlements_service
 

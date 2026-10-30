@@ -15,9 +15,9 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine, make_url
 
 from alembic import command
+from app.ai.service import observability
 from app.core.config import get_settings
 from app.db.session import get_engine
-from app.services.ai import observability
 from tests.support.database import database_connections, managed_engine
 from tests.support.helpers import ORG_1, ORG_2
 

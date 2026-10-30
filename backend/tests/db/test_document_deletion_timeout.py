@@ -23,15 +23,16 @@ from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.case.service import documents
 from app.core.config import Settings, get_settings
 from app.db.base import utc_now
 from app.integrations.storage.base import StoredObjectHead
 from app.integrations.storage.s3 import S3ObjectStorage
 from app.models import AuditEvent, Document, Job, StoredObject
-from app.services import documents, job_queue
+from app.services import job_queue
+from tests.case.factories import ServiceFactories
 from tests.conftest import FakeStorage
 from tests.db import test_database_roles as role_tests
-from tests.services.factories import ServiceFactories
 from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1
 

@@ -61,14 +61,14 @@ sections of ProseMirror text, data blocks bound to computed evidence, a
 requirement checklist, a stage/decision chain, attachments.
 
 **The Pillar 2 engines** (`app/icaap/domain/pillar2/`, plus
-`app/domain/credit/`, `app/domain/irr/standardised*.py`) are pure. They take
+`app/credit/domain/`, `app/irrbb/domain/standardised*.py`) are pure. They take
 governed parameters and a book, and return typed results or typed refusals.
 
 **The filing plane** is the existing regulatory-reporting plane, unchanged in
 kind: one package table, one submission gate, one validation pipeline, one
 exporter, one attestation chain.
 
-**The AI lane** (`app/domain/ai/`, `app/services/ai/`) drafts section text. It
+**The AI lane** (`app/ai/domain/`, `app/ai/service/`) drafts section text. It
 is a suggestion engine that a human accepts or rejects; it never computes a
 figure and never writes to the filing plane.
 
@@ -160,7 +160,7 @@ Founder directive (D-024), and the single most invasive rule in this build.
 1. Every regulatory or methodological number — floors, buffers, caps, shocks,
    buckets, bands, coefficients, tolerances, deadlines, NMD caps, granularity
    parameters, materiality thresholds — is resolved at runtime through
-   `app/services/regulatory_parameters.py`. Never a literal in engine, service,
+   `app/policy/service/regulatory_parameters.py`. Never a literal in engine, service,
    template or frontend code.
 2. Numbers appear only in the seed catalogue and the migrations that pin it, as
    the initial approved rows. After that the database, edited in the operator
@@ -177,7 +177,7 @@ Founder directive (D-024), and the single most invasive rule in this build.
 
 Guards: `tests/architecture/test_icaap_governed_literals.py`,
 `test_icaap_no_regulatory_literals.py`, and — for the values a bank actually
-files — `tests/services/test_regulatory_parameters_p5.py`, which holds the
+files — `tests/policy/service/test_regulatory_parameters_p5.py`, which holds the
 shock magnitudes as a deliberateness gate: a change to a number a bank files
 has to be made in a test that says so.
 
@@ -185,7 +185,7 @@ has to be made in a test that says so.
 in the service catalogue, in the migration and in the domain test fixture. An
 assertion that compares one of them with a constant in its own file proves
 nothing. Compare copies against each other
-(`tests/domain/irr/test_sf_fixtures.py::test_the_fixture_reproduces_the_seed_table`
+(`tests/irrbb/domain/test_sf_fixtures.py::test_the_fixture_reproduces_the_seed_table`
 compares the fixture to the seeded catalogue row by row; it caught a unit drift
 the day it was written).
 
@@ -436,7 +436,7 @@ which ships empty. Descriptors-only is the default mode — amounts and dates ar
 never sent as values — and users cannot add free-text instructions. Decisions
 are append-only.
 
-`app/domain/ai/` and `app/services/ai/` are a shared foundation, not an ICAAP
+`app/ai/domain/` and `app/ai/service/` are a shared foundation, not an ICAAP
 component, so BI commentary can reuse them.
 
 ---

@@ -14,6 +14,7 @@ from sqlalchemy import delete
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
+from app.case.models.risk import StoredObject
 from app.core.key_management import reencryption, registry, sdk
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
@@ -22,7 +23,6 @@ from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models.job import Job
-from app.models.risk import StoredObject
 from app.services import job_queue
 from app.storage import reencryption as objects
 from app.storage.client import (

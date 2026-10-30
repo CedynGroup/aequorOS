@@ -105,7 +105,7 @@ from app.models import (
     TemenosConnection,
     User,
 )
-from tests.fixtures.forecast_assumptions import FORECAST_PRESETS
+from tests.forecasting.assumption_fixtures import FORECAST_PRESETS
 
 AS_OF: Final = date(2026, 9, 18)
 PERIOD_START: Final = date(2026, 9, 1)

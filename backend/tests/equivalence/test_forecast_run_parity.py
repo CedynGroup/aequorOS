@@ -24,13 +24,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.capital.engine import compute_capital_ratios, compute_rwa
-from app.domain.forecasting.engine import (
+from app.forecasting.domain.engine import (
     _parse_facts,
     _state_facts,
     _to_capital_facts,
 )
+from app.forecasting.service import regulatory_forecasting
 from app.models import Bank, BankReportingPeriod
-from app.services import regulatory_forecasting
 from tests.equivalence.conftest import EXACT
 from tests.real_data import (
     REAL_BANK_ID,

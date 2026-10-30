@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # The signing vocabulary is owned by the attestation contract; reusing the alias
 # keeps one enum on the wire rather than two that could drift apart.
 from app.attestation.public import SigningRole
-from app.domain.regulatory_instruments import InstrumentStatus
+from app.policy.domain.regulatory_instruments import InstrumentStatus
 
 type ReturnFamily = Literal[
     "liquidity",

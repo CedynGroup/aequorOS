@@ -17,7 +17,7 @@ closed and every source is a ``Literal``); the other half is here:
   spanning two modules is all-or-nothing for a partially entitled reader and
   is listed here with its reason;
 * jurisdiction neutrality, on the FILE and on the display text. The repository
-  guard at ``tests/services/test_jurisdiction_neutrality.py`` scans pack JSON
+  guard at ``tests/policy/service/test_jurisdiction_neutrality.py`` scans pack JSON
   for currency codes, but its regulator alternation lives in a ``.py``-only
   guard — so a pack naming a national regulator passes it today. That
   alternation is asserted here as well.

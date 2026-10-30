@@ -34,8 +34,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.live.service.pipeline import recompute_modules
 from app.models import Bank, BankFinancialFact, BankReportingPeriod, CurrentFinancialFact
-from app.services.pipeline import recompute_modules
 
 #: Copied verbatim from the period fact onto its live twin.
 _MIRRORED_COLUMNS = (

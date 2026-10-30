@@ -5,14 +5,14 @@ from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.core.key_management import registry
 from app.db.session import get_sessionmaker
 from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.s3 import get_object_storage
-from app.models import Organization, RiskCase
+from app.models import Bank, Organization, RiskCase
 from tests.conftest import (
     FakeStorage,
     _db_client_lifecycle,
@@ -32,6 +32,10 @@ _COMMITTED_ORGANIZATION_ID = "OR-TXCOMM01"
 
 # This contract test must expose the real engine and independent connections.
 requires_committing_db = pytest.mark.committing_db
+
+
+def test_ordinary_application_baseline_is_bank_free(db_session: Session) -> None:
+    assert not db_session.scalars(select(Bank)).all()
 
 
 def test_committed_write_is_rolled_back_between_fixture_lifecycles(

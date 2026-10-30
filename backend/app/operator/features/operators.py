@@ -25,9 +25,9 @@ from sqlalchemy import select
 
 from app.core import security
 from app.models import OperatorUser
-from app.models.operator import OPERATOR_ROLE_RANK
 from app.operator.deps import OperatorAdmin, OperatorDb, record_operator_action
-from app.schemas.operator import (
+from app.operator.models import OPERATOR_ROLE_RANK
+from app.operator.schemas import (
     OperatorPasswordResetRead,
     OperatorUserCreate,
     OperatorUserCreatedRead,

@@ -29,11 +29,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.credit.service.credit_exposure_book import load_credit_book, require_credit_source_basis
 from app.models import Bank, BankFinancialFact, BankReportingPeriod
 from app.reporting.service import calendar
 from app.reporting.service.anchors import anchor_dates, anchor_window
 from app.reporting.service.registry import get_definition
-from app.services.credit_exposure_book import load_credit_book, require_credit_source_basis
 from scripts.e2e_bootstrap import (
     E2E_USERS,
     _seed_canonical_positions,  # pyright: ignore[reportPrivateUsage]

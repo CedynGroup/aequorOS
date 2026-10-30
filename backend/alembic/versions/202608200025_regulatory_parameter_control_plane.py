@@ -4,7 +4,7 @@ Creates the GLOBAL, non-RLS ``regulatory_parameter`` table — the operator-mana
 effective-dated, confirmation-status-aware store of class/type-keyed regulatory
 numbers (docs/sdi.md §7 Phase C) — and seeds the authoritative §2.2/§4 catalogue.
 
-The seed rows come from ``app.services.regulatory_parameters.seed_rows()`` — the
+The seed rows come from ``app.policy.service.regulatory_parameters.seed_rows()`` — the
 SINGLE catalogue the resolver and the hermetic-test seed also use, so the three
 never drift. Regulatory changes AFTER this migration happen through the operator
 console (new effective-dated generations), never by editing this file.
@@ -88,7 +88,7 @@ def upgrade() -> None:
     )
 
     # Deferred import: the single seed catalogue lives with the resolver.
-    from app.services.regulatory_parameters import seed_rows  # noqa: PLC0415
+    from app.policy.service.regulatory_parameters import seed_rows  # noqa: PLC0415
 
     now = datetime.now(UTC)
     seed_table = sa.table(
