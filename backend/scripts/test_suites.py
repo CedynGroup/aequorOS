@@ -12,9 +12,15 @@ import json
 import os
 import xml.etree.ElementTree as ET
 from collections import Counter
+from collections.abc import Mapping
 from functools import cache
 from pathlib import Path
 from typing import Literal, cast
+
+if __package__:
+    from scripts.database_contracts import check_classification, verify_execution
+else:
+    from database_contracts import check_classification, verify_execution
 
 Suite = Literal["unit", "integration", "e2e"]
 CATALOGUE = Path(__file__).with_name("test_suites.json")
@@ -110,7 +116,7 @@ def _verify_service_execution(reports: list[Path]) -> None:
         raise ValueError("External service contract skipped across CI owners")
 
 
-def verify_partition(directory: Path) -> None:
+def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = None) -> None:
     """Join unit, e2e, schema, suite, lock and storage reports against full collection."""
     classified = cast(
         dict[str, str], json.loads((directory / "unit-tests" / "collection.json").read_text())
@@ -121,6 +127,7 @@ def verify_partition(directory: Path) -> None:
         "e2e",
     }:
         raise ValueError("Missing unit/integration/e2e classification evidence")
+    check_classification(classified, protected=protected)
     files = cast(list[str], json.loads(os.getenv("CI_POSTGRES_FILES", "[]")))
     indices = set(range(1, 5))
     if files:
@@ -165,6 +172,12 @@ def verify_partition(directory: Path) -> None:
     expected = Counter(case_key(nodeid) for nodeid in classified if nodeid not in omitted)
     if actual != expected:
         raise ValueError("CI owners dropped or duplicated classified tests")
+    verify_execution(
+        reports,
+        set(classified) - omitted,
+        case_key,
+        protected=protected,
+    )
     bao_keys = {
         case_key(nodeid)
         for nodeid in classified

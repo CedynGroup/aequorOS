@@ -4040,12 +4040,10 @@
   "reportUnknownVariableType": 1
  },
  "tests.services.icaap.test_p3_hooks_and_rules": {
-  "reportAny": 6,
   "reportMissingParameterType": 2,
   "reportPrivateUsage": 2,
   "reportUnknownArgumentType": 2,
-  "reportUnknownParameterType": 2,
-  "reportUnknownVariableType": 1
+  "reportUnknownParameterType": 2
  },
  "tests.services.icaap.test_p3_stage_chain": {
   "reportMissingParameterType": 14,
