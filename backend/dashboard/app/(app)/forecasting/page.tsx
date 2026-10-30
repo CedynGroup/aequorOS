@@ -279,19 +279,26 @@ function BalanceSheetWorkspace() {
           )}
 
           {!activeRunId ? (
-            liveForecast && liveForecast.status !== "na" ? (
-              <LiveForecastBaseline
-                forecast={liveForecast}
-                bankId={bankId}
-                asOf={period?.periodEnd}
-              />
-            ) : (
-              <EmptyState
-                Icon={PlayCircle}
-                title="Live forecast is not available yet"
-                description="Ingest current financial data and reviewed base assumptions. The live pipeline will calculate the baseline automatically; saved and official forecasts remain optional evidence snapshots."
-              />
-            )
+            <QueryBoundary
+              contained
+              isLoading={liveSummary.isLoading}
+              error={liveSummary.error}
+              onRetry={() => void liveSummary.refetch()}
+            >
+              {liveForecast && liveForecast.status !== "na" ? (
+                <LiveForecastBaseline
+                  forecast={liveForecast}
+                  bankId={bankId}
+                  asOf={period?.periodEnd}
+                />
+              ) : (
+                <EmptyState
+                  Icon={PlayCircle}
+                  title="Live forecast is not available yet"
+                  description="Ingest current financial data and reviewed base assumptions. The live pipeline will calculate the baseline automatically; saved and official forecasts remain optional evidence snapshots."
+                />
+              )}
+            </QueryBoundary>
           ) : !canViewRuns ? (
             <EmptyState
               Icon={PlayCircle}

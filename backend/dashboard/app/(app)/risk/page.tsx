@@ -24,7 +24,10 @@ import SubTabs from "@/components/ui/SubTabs";
 import ValidationList from "@/components/ui/ValidationList";
 import SectionCard from "@/components/ui/SectionCard";
 import EmptyState from "@/components/ui/EmptyState";
-import { ErrorPanel, PageSkeleton } from "@/components/ui/QueryBoundary";
+import QueryBoundary, {
+  ErrorPanel,
+  PageSkeleton,
+} from "@/components/ui/QueryBoundary";
 import { LandingInsightStrip } from "@/components/bi/InsightStrip";
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
 import {
@@ -265,7 +268,7 @@ export default function RiskLimitMonitorPage() {
       ) : rules.error ? (
         <ErrorPanel
           error={rules.error}
-          onRetry={() => void rules.query.refetch()}
+          onRetry={() => void liveSummary.refetch()}
         />
       ) : (
         <PageContainer className="py-6 space-y-6">
@@ -312,26 +315,33 @@ export default function RiskLimitMonitorPage() {
           </div>
 
           {/* Live module status strip */}
-          {liveModules.length > 0 && (
-            <div className="card px-4 py-3 flex items-center gap-4 flex-wrap">
-              <span className="text-micro font-medium text-slate uppercase tracking-wider">
-                Live module status
-              </span>
-              {liveModules.map((module) => (
-                <span
-                  key={module.module}
-                  className="inline-flex items-center gap-1.5"
-                >
-                  <StatusPill tone={statusTone(module.status)}>
-                    {module.module}
-                  </StatusPill>
-                  <span className="text-caption text-slate-light whitespace-nowrap">
-                    {fmtRelative(module.computedAt)}
-                  </span>
+          <QueryBoundary
+            contained
+            isLoading={liveSummary.isLoading}
+            error={liveSummary.error}
+            onRetry={() => void liveSummary.refetch()}
+          >
+            {liveModules.length > 0 && (
+              <div className="card px-4 py-3 flex items-center gap-4 flex-wrap">
+                <span className="text-micro font-medium text-slate uppercase tracking-wider">
+                  Live module status
                 </span>
-              ))}
-            </div>
-          )}
+                {liveModules.map((module) => (
+                  <span
+                    key={module.module}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <StatusPill tone={statusTone(module.status)}>
+                      {module.module}
+                    </StatusPill>
+                    <span className="text-caption text-slate-light whitespace-nowrap">
+                      {fmtRelative(module.computedAt)}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </QueryBoundary>
 
           <SubTabs
             items={[

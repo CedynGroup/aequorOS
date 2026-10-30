@@ -54,9 +54,13 @@ export default function LiveStatusCard() {
           </span>
         }
         subtitle={
-          computedAt
-            ? `Auto-recomputed on ingestion · updated ${fmtRelative(computedAt)}`
-            : "Auto-recomputed on ingestion — upload data to populate"
+          summary.error
+            ? "Live metrics unavailable"
+            : summary.isLoading
+              ? "Loading live metrics…"
+              : computedAt
+                ? `Auto-recomputed on ingestion · updated ${fmtRelative(computedAt)}`
+                : "Auto-recomputed on ingestion — upload data to populate"
         }
         action={
           alerts.isLoading ? (
@@ -75,13 +79,20 @@ export default function LiveStatusCard() {
       <CardBody>
         <QueryBoundary
           contained
-          isLoading={rules.isLoading}
-          error={rules.error}
-          onRetry={() => void rules.query.refetch()}
+          isLoading={summary.isLoading}
+          error={summary.error}
+          onRetry={() => void summary.refetch()}
+          skeleton={
+            <p
+              className="text-body text-slate"
+              aria-busy="true"
+              aria-label="Loading live metrics"
+            >
+              Loading live metrics…
+            </p>
+          }
         >
-          {summary.isLoading ? (
-            <p className="text-body text-slate">Loading live metrics…</p>
-          ) : modules.length === 0 ? (
+          {modules.length === 0 ? (
             <p className="text-body text-slate leading-relaxed">
               No live metrics yet. Upload data in the Data Engine — the pipeline
               derives and computes every module automatically.
