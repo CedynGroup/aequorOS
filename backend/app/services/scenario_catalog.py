@@ -37,6 +37,14 @@ from app.domain.liquidity.engine import (
     SHOCK_RSF_SECURITIES_OVERRIDE,
     SHOCK_RUNOFF_PREFIX,
 )
+from app.ftp.public import (
+    FTP_RUN_SCENARIO_CODES,
+    SHOCK_CURVE_SHIFT_BP,
+    SHOCK_FUNDING_ADD_BP,
+    SHOCK_MIN_MARGIN_PCT,
+    SHOCK_NMD_CORE_MAX_PCT,
+    SHOCK_NMD_CORE_MIN_PCT,
+)
 from app.fx.public import FX_RUN_SCENARIO_CODES, SHOCK_DEPRECIATION
 from app.identity.public import Bank
 from app.irrbb.domain.engine import (
@@ -50,14 +58,6 @@ from app.policy.public import ParamStressShock, get_active_params
 from app.services.regulatory_capital import (
     CAPITAL_SCENARIO_CODES,
     ECL_CONDITIONING_KEYS,
-)
-from app.services.regulatory_ftp import (
-    FTP_RUN_SCENARIO_CODES,
-    SHOCK_CURVE_SHIFT_BP,
-    SHOCK_FUNDING_ADD_BP,
-    SHOCK_MIN_MARGIN_PCT,
-    SHOCK_NMD_CORE_MAX_PCT,
-    SHOCK_NMD_CORE_MIN_PCT,
 )
 from app.services.regulatory_liquidity import LIQUIDITY_SCENARIO_CODES
 

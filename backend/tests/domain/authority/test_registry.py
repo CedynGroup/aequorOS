@@ -493,7 +493,7 @@ _ENGINE_VERSION_MODULES = (
     "app.services.regulatory_capital",
     "app.credit.service.regulatory_credit",
     "app.services.regulatory_forecasting",
-    "app.services.regulatory_ftp",
+    "app.ftp.service",
     "app.fx.service",
     "app.irrbb.service.regulatory_irr",
     "app.irrbb.service.regulatory_irr_sf",

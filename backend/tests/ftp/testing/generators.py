@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from hypothesis import strategies as st
 
-from app.domain.ftp.engine import CurvePoint, FtpCategory, FtpNmd, FtpProduct, build_curve
+from app.ftp.domain.engine import CurvePoint, FtpCategory, FtpNmd, FtpProduct, build_curve
 from app.policy.service.parameter_register import BANK_FTP_THRESHOLDS
 
 
@@ -27,7 +27,7 @@ def ftp_books(draw: st.DrawFn) -> FtpBook:
 
     Source: domain/ftp/engine.py CurvePoint, build_curve, validate_product_alignment;
     MONEY=4dp and RATIO_PCT=6dp, HALF_UP. Tenors and 20–30% synthetic yields
-    surround tests/domain/test_ftp_engine.py's hand-built curve, not live quotes.
+    surround tests/ftp/domain/test_ftp_engine.py's hand-built curve, not live quotes.
     The engine permits inverted curves; they remain covered by golden tests.
     NMD shares favour BANK_FTP_THRESHOLDS band endpoints and their 1ppm neighbours.
     """

@@ -22,11 +22,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.ftp import service as regulatory_ftp
 from app.fx import service as regulatory_fx
 from app.irrbb.service import regulatory_irr
 from app.live.service.fact_derivation import derive_facts
 from app.models import Bank, BankFinancialFact, BankReportingPeriod
-from app.services import regulatory_capital, regulatory_ftp, regulatory_liquidity
+from app.services import regulatory_capital, regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1

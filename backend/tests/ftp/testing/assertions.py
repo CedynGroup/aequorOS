@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.domain.ftp.engine import MONEY, RATIO_PCT, NmdResult, ProductResult
+from app.ftp.domain.engine import MONEY, RATIO_PCT, NmdResult, ProductResult
 from tests.support.assertions import TolerancePolicy
 
 

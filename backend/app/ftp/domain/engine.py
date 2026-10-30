@@ -620,11 +620,7 @@ def contingent_liquidity_charges(
             expected_draw_pct=facility.expected_draw_pct,
             buffer_cost_pct=carry,
             annual_charge=money(
-                facility.undrawn_amount
-                * facility.expected_draw_pct
-                / _HUNDRED
-                * carry
-                / _HUNDRED
+                facility.undrawn_amount * facility.expected_draw_pct / _HUNDRED * carry / _HUNDRED
             ),
         )
         for facility in sorted(facilities, key=lambda entry: entry.line_code)

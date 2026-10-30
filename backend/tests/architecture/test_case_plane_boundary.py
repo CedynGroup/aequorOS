@@ -142,6 +142,9 @@ REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "irrbb/api/**/*.py",
     "credit/domain/**/*.py",
     "fx/domain/**/*.py",
+    "ftp/domain/**/*.py",
+    "ftp/service.py",
+    "ftp/api/**/*.py",
     "fx/service.py",
     "fx/api/**/*.py",
     "credit/service/regulatory_credit.py",
@@ -202,7 +205,7 @@ BANK_PLANE_MODULES: frozenset[str] = frozenset(
         "app.services.regulatory_forecasting",
         "app.fx.service",
         "app.irrbb.service.regulatory_irr",
-        "app.services.regulatory_ftp",
+        "app.ftp.service",
         "app.reporting.service",
         "app.domain.capital",
         "app.domain.liquidity",
@@ -211,7 +214,7 @@ BANK_PLANE_MODULES: frozenset[str] = frozenset(
         "app.credit.domain",
         "app.credit.service.regulatory_credit",
         "app.fx.domain",
-        "app.domain.ftp",
+        "app.ftp.domain",
         "app.domain.stress",
     }
 )

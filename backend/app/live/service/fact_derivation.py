@@ -271,7 +271,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail
 from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
-from app.domain.ftp.engine import CurvePoint, CurveResult, build_curve
 from app.domain.ingestion.capital_tiers import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
     is_excluded_component,
@@ -280,6 +279,7 @@ from app.domain.ingestion.capital_tiers import (
 from app.domain.ingestion.reference_schemas.business_units import (
     normalise_row as _normalise_business_unit_row,
 )
+from app.ftp.domain.engine import CurvePoint, CurveResult, build_curve
 from app.identity.public import Bank
 from app.irrbb.domain.buckets import REPRICING_BUCKETS as _IRR_BUCKETS
 from app.irrbb.domain.buckets import bucket_for_days as _bucket_for_days

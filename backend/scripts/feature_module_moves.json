@@ -800,5 +800,14 @@
   ["tests.services.test_regulatory_fx_fail_closed", "tests.fx.service.test_regulatory_fx_fail_closed"],
   ["tests.services.test_fx_var_calendar", "tests.fx.service.test_fx_var_calendar"],
   ["tests.api.test_regulatory_fx", "tests.fx.api.test_regulatory_fx"],
-  ["tests.api.test_fx_authorization", "tests.fx.api.test_fx_authorization"]
+  ["tests.api.test_fx_authorization", "tests.fx.api.test_fx_authorization"],
+  ["app.domain.ftp", "app.ftp.domain"],
+  ["app.domain.ftp.engine", "app.ftp.domain.engine"],
+  ["app.services.regulatory_ftp", "app.ftp.service"],
+  ["app.schemas.regulatory_ftp", "app.ftp.schemas"],
+  ["app.features.run_regulatory_ftp", "app.ftp.api.run_regulatory_ftp"],
+  ["tests.domain.test_ftp_engine", "tests.ftp.domain.test_ftp_engine"],
+  ["tests.api.test_ftp_recompute", "tests.ftp.api.test_ftp_recompute"],
+  ["tests.api.test_ftp_authorization", "tests.ftp.api.test_ftp_authorization"],
+  ["tests.api.test_regulatory_ftp", "tests.ftp.api.test_regulatory_ftp"]
 ]
