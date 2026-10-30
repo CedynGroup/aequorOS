@@ -305,6 +305,8 @@ def test_strings_paths_guards_and_docs_follow_the_move(repository: Path) -> None
 
 
 def test_test_catalogue_node_ids_follow_the_move(repository: Path) -> None:
+    quoted = 'tests/live/test_imports.py::test_composes["app.services.regulatory_fx"]'
+    renamed_quoted = 'tests/live/test_imports.py::test_composes["app.fx.service"]'
     suites = repository / "backend/scripts/test_suites.json"
     suites.write_text(
         "{\n"
@@ -312,7 +314,8 @@ def test_test_catalogue_node_ids_follow_the_move(repository: Path) -> None:
         '    "tests/test_fx.py::test_run": "unit",\n'
         '    "tests/other/test_keep.py::test_keep": "unit",\n'
         '    "tests/live/test_imports.py::test_composes[app.services.regulatory_fx]": "unit",\n'
-        '    "tests/live/test_imports.py::test_composes[app.services.regulatory_fx-c]": "unit"\n'
+        '    "tests/live/test_imports.py::test_composes[app.services.regulatory_fx-c]": "unit",\n'
+        f'    {json.dumps(quoted)}: "unit"\n'
         "  },\n"
         '  "services": {}\n'
         "}\n"
@@ -338,7 +341,8 @@ def test_test_catalogue_node_ids_follow_the_move(repository: Path) -> None:
         '    "tests/fx/api/test_fx.py::test_run": "unit",\n'
         '    "tests/other/test_keep.py::test_keep": "unit",\n'
         '    "tests/live/test_imports.py::test_composes[app.fx.service]": "unit",\n'
-        '    "tests/live/test_imports.py::test_composes[app.fx.service-c]": "unit"\n'
+        '    "tests/live/test_imports.py::test_composes[app.fx.service-c]": "unit",\n'
+        f'    {json.dumps(renamed_quoted)}: "unit"\n'
         "  },\n"
         '  "services": {}\n'
         "}\n"
@@ -360,6 +364,7 @@ def test_test_catalogue_node_ids_follow_the_move(repository: Path) -> None:
         "tests/other/test_keep.py::test_keep": "unit",
         "tests/live/test_imports.py::test_composes[app.fx.service]": "unit",
         "tests/live/test_imports.py::test_composes[app.fx.service-c]": "unit",
+        renamed_quoted: "unit",
     }
 
 

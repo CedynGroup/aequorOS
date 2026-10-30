@@ -705,11 +705,22 @@ def _renamed_node_id(node_id: str, rename: Renamer) -> str:
 
 def _renamed_catalogue(text: str, renames: dict[str, str]) -> str:
     """Rename catalogue keys in place, preserving the file's formatting exactly."""
+    decoder = json.JSONDecoder()
     lines: list[str] = []
     for line in text.splitlines(keepends=True):
         stripped = line.lstrip()
-        key = stripped[1:].split('"', 1)[0] if stripped.startswith('"') else ""
-        lines.append(line.replace(f'"{key}"', f'"{renames[key]}"', 1) if key in renames else line)
+        if not stripped.startswith('"'):
+            lines.append(line)
+            continue
+        # Decode the key the way the file stores it: a parametrized id may embed
+        # quotation marks, which JSON escapes inside the key's source span.
+        key, end = cast("tuple[str, int]", decoder.raw_decode(stripped))
+        if key not in renames:
+            lines.append(line)
+            continue
+        quote = len(line) - len(stripped)
+        span = quote + end
+        lines.append(f"{line[:quote]}{json.dumps(renames[key])}{line[span:]}")
     return "".join(lines)
 
 
