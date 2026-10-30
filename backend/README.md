@@ -474,12 +474,14 @@ reviewed catalogue are deliberate contract changes, not a way to lower a CI coun
 floor. A moved or renamed case must retain its integration guarantee and update
 its protected identity in the same review.
 
-The suite plugin rejects unit ownership of protected cases, direct or indirect
-requests for the standard `current_annex_repository` fake fixture, and database
-resource fixtures in unit tests. The fake is also forbidden under database,
-storage, API and identity test paths. Full unit CI collection rejects stale
-protected identities. Selected protected cases require PostgreSQL in CI (or with
-`CI_REQUIRE_DATABASE_CONTRACTS=1`), and skipping one fails its execution.
+The suite plugin rejects unit ownership of protected cases and their direct or
+indirect requests for the standard `current_annex_repository` fake fixture. It
+also rejects database resource fixtures in unit tests. The fake is forbidden under
+database, storage, API and identity test paths; the
+[ICAAP test-input guide](tests/icaap/testing/README.md) owns its permitted use.
+Unit and e2e CI collection reject stale protected identities. Selected protected
+cases require PostgreSQL in CI (or with `CI_REQUIRE_DATABASE_CONTRACTS=1`), and
+skipping one fails its execution.
 
 The catalogue explicitly identifies the existing primary-data opt-in cases.
 Their integration ownership and fake prohibition always apply; execution remains
