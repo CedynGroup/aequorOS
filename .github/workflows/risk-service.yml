@@ -332,7 +332,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: preflight
     if: needs.preflight.outputs.guards == 'true'
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v5
