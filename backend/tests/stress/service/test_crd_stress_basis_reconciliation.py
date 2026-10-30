@@ -18,7 +18,7 @@ from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.credit.service import credit_exposure_book
 from app.domain.authority.outcomes import NotComputable, OutcomeState
-from app.domain.forecasting.engine import ForecastFact
+from app.forecasting.domain.engine import ForecastFact
 from app.live.service.fact_derivation import (
     _derive_specs,  # pyright: ignore[reportPrivateUsage]
     _load_canonical,  # pyright: ignore[reportPrivateUsage]

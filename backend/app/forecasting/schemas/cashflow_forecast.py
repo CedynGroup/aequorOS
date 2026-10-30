@@ -2,7 +2,7 @@
 
 These models serialize with camelCase JSON (via ``to_camel`` aliases) — the
 wire shape originally defined by the cashflow-ml sidecar and preserved
-verbatim when the ML code moved in-process (``app/ml``), so the generated
+verbatim when the ML code moved in-process (``app/forecasting/ml``), so the generated
 OpenAPI client needed no regeneration.
 """
 

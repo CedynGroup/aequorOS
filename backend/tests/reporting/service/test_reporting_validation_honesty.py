@@ -25,10 +25,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.forecasting.engine import ProjectionYear
+from app.forecasting.domain.engine import ProjectionYear
+from app.forecasting.service.regulatory_forecasting import _balance_ties_row
 from app.models import Bank, RegulatoryPackage
 from app.reporting.service import validation
-from app.services.regulatory_forecasting import _balance_ties_row
 from tests.support.helpers import ORG_1, USER_1
 
 

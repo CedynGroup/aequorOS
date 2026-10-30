@@ -76,7 +76,7 @@ jobs use `official:{bank_id}:{as_of_date}`. Coalescing remains within each sourc
 scheduler tick cannot replace an interactive job's actor or attribution.
 Behavioral coverage lives in `tests/services/test_scheduler.py` and
 `tests/fx/api/test_fx_authorization.py`, `tests/ftp/api/test_ftp_authorization.py`, and
-`tests/api/test_forecasting_authorization.py`.
+`tests/forecasting/api/test_forecasting_authorization.py`.
 
 ## Dashboard access
 

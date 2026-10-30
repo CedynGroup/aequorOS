@@ -3,9 +3,9 @@ from __future__ import annotations
 import datetime
 import math
 
-from app.ml.baseline import StaticBaseline, forecast_static
-from app.ml.features import is_month_end_window
-from app.ml.synthetic import generate_daily_series
+from app.forecasting.ml.baseline import StaticBaseline, forecast_static
+from app.forecasting.ml.features import is_month_end_window
+from app.forecasting.ml.synthetic import generate_daily_series
 
 
 def test_forecast_static_shape():

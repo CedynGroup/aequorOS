@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 
 from app.core.config import CashflowSettings
-from app.ml.config import TrainingConfig
-from app.ml.model import forecast_net_flows, load_artifacts, train_and_save
-from app.ml.synthetic import generate_daily_series
+from app.forecasting.ml.config import TrainingConfig
+from app.forecasting.ml.model import forecast_net_flows, load_artifacts, train_and_save
+from app.forecasting.ml.synthetic import generate_daily_series
 
 
 def test_training_beats_static_baseline_and_saves_artifacts(tmp_path):
@@ -18,7 +18,7 @@ def test_training_beats_static_baseline_and_saves_artifacts(tmp_path):
     assert float(metrics["lstm_mape"]) < float(metrics["static_mape"])
     assert float(metrics["improvement_pct"]) > 0
     # Pinned deliberately: a version bump must be a conscious edit here, not a
-    # silent drift. `app/ml/config.py::MODEL_VERSION` moved to v1.1.0 in f33e869
+    # silent drift. `app/forecasting/ml/config.py::MODEL_VERSION` moved to v1.1.0 in f33e869
     # and this literal was not updated with it, so the assertion had been failing
     # on the stale side while every substantive check above passed.
     assert metrics["model_version"] == "lstm-v1.1.0"

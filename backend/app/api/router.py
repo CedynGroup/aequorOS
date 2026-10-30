@@ -37,7 +37,6 @@ from app.features.manage_system_of_record import router as system_of_record_rout
 from app.features.manage_temenos_connections import router as temenos_connections_router
 from app.features.market_data_sources import router as market_data_sources_router
 from app.features.push_data import router as push_router
-from app.features.read_cashflow_forecast import router as cashflow_forecast_router
 from app.features.read_cashflow_window import router as cashflow_window_router
 from app.features.read_financial_workspace import router as financial_workspace_router
 from app.features.read_liquidity_monitoring import router as liquidity_monitoring_router
@@ -50,13 +49,14 @@ from app.features.review_findings import router as findings_router
 from app.features.review_liquidity import router as liquidity_router
 from app.features.run_assessments import router as assessments_router
 from app.features.run_calculations import router as calculations_router
-from app.features.run_forecasting import router as forecasting_router
 from app.features.run_regulatory_capital import router as regulatory_capital_router
 from app.features.run_regulatory_liquidity import router as regulatory_liquidity_router
 from app.features.track_jobs import router as jobs_router
 from app.forecasting.api.manage_forecast_assumptions import (
     router as forecast_assumptions_router,
 )
+from app.forecasting.api.read_cashflow_forecast import router as cashflow_forecast_router
+from app.forecasting.api.run_forecasting import router as forecasting_router
 from app.ftp.api.run_regulatory_ftp import router as regulatory_ftp_router
 from app.fx.api.run_regulatory_fx import router as regulatory_fx_router
 from app.icaap.api.export_icaap_drafts import router as icaap_draft_exports_router

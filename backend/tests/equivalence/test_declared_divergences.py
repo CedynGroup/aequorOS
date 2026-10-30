@@ -36,7 +36,7 @@ from app.domain.liquidity.engine import (
     compute_lcr_result,
 )
 from app.reporting.service.le_generation import _LCR_INFLOW_CAP
-from tests.domain.test_forecasting_engine import bog_liquidity_params
+from tests.forecasting.domain.test_forecasting_engine import bog_liquidity_params
 
 #: ``(metric_id, methodology_id, reporting mapping)`` — one claim.
 Claim = tuple[str, str, str]

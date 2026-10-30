@@ -32,14 +32,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import CashflowSettings, get_settings
-from app.identity.public import Bank
-from app.ml.baseline import forecast_static
-from app.ml.cashflow_history import load_bank_daily_series
-from app.ml.config import MODEL_VERSION, TrainingConfig
-from app.ml.real_series import load_real_daily_series
-from app.ml.synthetic import DailyFlow, generate_daily_series
-from app.models import CanonicalPosition, CanonicalPositionSnapshot
-from app.schemas.cashflow_forecast import (
+from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
+from app.forecasting.ml.baseline import forecast_static
+from app.forecasting.ml.cashflow_history import load_bank_daily_series
+from app.forecasting.ml.config import MODEL_VERSION, TrainingConfig
+from app.forecasting.ml.real_series import load_real_daily_series
+from app.forecasting.ml.synthetic import DailyFlow, generate_daily_series
+from app.forecasting.schemas.cashflow_forecast import (
     CashflowForecastAccuracyRead,
     CashflowForecastMode,
     CashflowForecastModelScope,
@@ -49,11 +48,12 @@ from app.schemas.cashflow_forecast import (
     CashflowHistoryPointRead,
     CashflowHistoryRead,
 )
+from app.identity.public import Bank
 
 if TYPE_CHECKING:
     from types import ModuleType
 
-    from app.ml.model import CashFlowLSTM
+    from app.forecasting.ml.model import CashFlowLSTM
 
 ML_UNAVAILABLE_DETAIL = "Cash flow forecasting service is unavailable."
 
@@ -105,7 +105,7 @@ def get_history(db: Session, ctx: TenantContext, bank_id: str, *, days: int) -> 
 
 def _import_ml_model() -> ModuleType:
     """Deferred import of the torch-backed model module (see module docstring)."""
-    from app.ml import model  # noqa: PLC0415 - deliberate lazy torch import
+    from app.forecasting.ml import model  # noqa: PLC0415 - deliberate lazy torch import
 
     return model
 

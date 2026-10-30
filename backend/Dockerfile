@@ -30,7 +30,7 @@ WORKDIR /app
 
 RUN groupadd --system risk \
     && useradd --system --gid risk --home-dir /app --shell /usr/sbin/nologin risk \
-    # Writable home for the lazily trained cash-flow model artifacts (app/ml).
+    # Writable home for the lazily trained cash-flow model artifacts (app/forecasting/ml).
     && mkdir -p /app/artifacts/cashflow \
     && chown -R risk:risk /app/artifacts
 

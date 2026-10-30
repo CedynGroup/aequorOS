@@ -417,7 +417,7 @@ class LoggingSettings(BaseSettings):
 
 
 class CashflowSettings(BaseSettings):
-    """In-process cash-flow ML module (``app/ml``) settings.
+    """In-process cash-flow ML module (``app/forecasting/ml``) settings.
 
     ``CASHFLOW_FAST_TEST=1`` selects the reduced training config used by tests;
     ``CASHFLOW_ARTIFACTS_DIR`` relocates the saved model artifacts.
