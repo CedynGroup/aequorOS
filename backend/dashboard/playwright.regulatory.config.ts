@@ -1,5 +1,6 @@
-import base from "./playwright.config";
+import base, { E2E_TMP } from "./playwright.config";
 import { defineConfig } from "@playwright/test";
+import path from "node:path";
 
 export default defineConfig({
   ...base,
@@ -25,6 +26,7 @@ export default defineConfig({
             ),
             env: {
               ...server.env,
+              E2E_REGULATORY_CLOCK: path.join(E2E_TMP, "regulatory-clock.json"),
               LOG_LEVEL: "ERROR",
               ICAAP_FRAMEWORKS_ENABLED:
                 "bog_icaap,test_icaap,cbk_icaap_gn,cbn_srp_icaap",

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import path from "node:path";
-import { mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import {
@@ -538,7 +538,7 @@ test("a mounted calendar acquires the newly commenced obligation on metadata pol
       );
     }
   } finally {
-    rmSync(clockFile, { force: true });
+    writeFileSync(clockFile, JSON.stringify({ today: "2026-12-31" }));
   }
 });
 

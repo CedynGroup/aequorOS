@@ -5,6 +5,7 @@ and eligibility are the product's. No responses are intercepted or replaced.
 """
 
 import json
+import os
 from datetime import date
 from pathlib import Path
 
@@ -13,17 +14,14 @@ from app.reporting.service import calendar, packages
 
 __all__ = ["app"]
 
-CLOCK = Path(__file__).parents[1] / ".tmp" / "regulatory-clock.json"
+CLOCK = Path(os.environ["E2E_REGULATORY_CLOCK"])
+CLOCK.write_text(json.dumps({"today": "2026-12-31"}))
 
 
 class ReportingDate(date):
     @classmethod
     def today(cls):
-        return (
-            date.fromisoformat(json.loads(CLOCK.read_text())["today"])
-            if CLOCK.exists()
-            else date.today()
-        )
+        return date.fromisoformat(json.loads(CLOCK.read_text())["today"])
 
 
 calendar.date = ReportingDate
