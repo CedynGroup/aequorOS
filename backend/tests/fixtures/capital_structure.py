@@ -21,8 +21,8 @@ from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    materialize_canonical_test_book,
 )
+from tests.support.canonical_book import canonical_test_book
 from tests.support.factories.canonical import seed_canonical_fixture
 
 MAKER = TenantContext(
@@ -72,7 +72,7 @@ def push_register(db: Session, *rows: tuple[str, str, str]) -> None:
 
 
 def seed_book(db: Session) -> None:
-    materialize_canonical_test_book(db)
+    canonical_test_book(db)
     seed_canonical_fixture(
         db, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID, as_of=REPORTING_DATE
     )

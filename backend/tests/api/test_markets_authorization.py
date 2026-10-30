@@ -56,7 +56,8 @@ from tests.adapters.market_data.manual_upload.fixtures import (
     FIXTURE_AS_OF,
     build_full_coverage_workbook,
 )
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.support.canonical_book import canonical_test_book
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
@@ -65,6 +66,9 @@ SIBLING_BANK_ID = "BK-MKT00002"
 FOREIGN_BANK_ID = "BK-MKT00003"
 CURVE = "GHS_SOVEREIGN"
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+pytestmark = pytest.mark.canonical_book_baseline
 
 
 class MarketsRoute(NamedTuple):
@@ -257,7 +261,7 @@ def upload_storage(
 def _seed_book() -> UUID:
     session = get_sessionmaker()()
     try:
-        materialize_canonical_test_book(session)
+        canonical_test_book(session)
         period_id = session.scalar(
             select(BankReportingPeriod.id)
             .where(
