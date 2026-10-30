@@ -90,10 +90,6 @@ test("conflicting AUTH_URL warns once across runtime bundles", async ({}, testIn
         ...process.env,
         NEXT_DIST_DIR: distDir,
         NEXT_PUBLIC_RISK_API_BASE_URL: `${E2E_API_ORIGIN}/api/v1`,
-        NEXT_FONT_GOOGLE_MOCKED_RESPONSES: path.join(
-          dashboardDir,
-          "e2e/support/google-font-responses.cjs",
-        ),
         APP_ENV: "test",
         AUTH_URL: "http://localhost:3001",
         AUTH_SECRET: E2E_AUTH_SECRET,
