@@ -85,9 +85,9 @@ Production measurements were taken **read-only** against the primary database un
   "audit-proof", no "compliant". The strongest formulation used anywhere in this package is:
   _the cited evidence describes selected implemented controls and their verification;
   completeness and regulatory compliance require independent assessment._ The current
-  [BoG evidence draft](../compliance/bog-evidence-pack.md) describes built controls;
-  planned work and deployment facts awaiting owner confirmation are tracked in
-  [#645](https://github.com/CedynGroup/aequorOS/issues/645) to [#651](https://github.com/CedynGroup/aequorOS/issues/651).
+  [BoG evidence draft](../compliance/bog-evidence-pack.md#11-public-outcomes-and-present-delivery-status)
+  owns present delivery status and links the outstanding outcome and deployment
+  trackers.
 - **No live regulatory filing.** No return has ever been submitted to the Bank of Ghana.
   Measured: 53 packages, exactly **2** certified (both `LCR-NSFR`, carrying no capital
   figures), and all 7 submission events against a simulation channel. See §06 and §15.
