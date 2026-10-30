@@ -5043,6 +5043,7 @@
     "tests/architecture/test_public_module_imports.py::test_public_module_imports_in_isolation[app.live.public]": "unit",
     "tests/architecture/test_public_module_imports.py::test_public_module_imports_in_isolation[app.market_data.public]": "unit",
     "tests/architecture/test_public_module_imports.py::test_public_module_imports_in_isolation[app.notifications.public]": "unit",
+    "tests/architecture/test_public_module_imports.py::test_public_module_imports_in_isolation[app.operator.public]": "unit",
     "tests/architecture/test_public_module_imports.py::test_public_module_imports_in_isolation[app.policy.public]": "unit",
     "tests/architecture/test_public_module_imports.py::test_public_module_imports_in_isolation[app.rating.public]": "unit",
     "tests/architecture/test_public_module_imports.py::test_public_module_imports_in_isolation[app.reporting.public]": "unit",

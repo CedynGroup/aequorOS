@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import OperatorAuditLog, OperatorInspectorSession
-from app.schemas.operator import InspectorSessionRead
+from app.operator.schemas import InspectorSessionRead
 from tests.operator.conftest import operator_headers, provision_payload
 from tests.operator.test_operator_auth import PASSWORD, bearer, login, make_operator
 

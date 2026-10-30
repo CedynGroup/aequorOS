@@ -958,5 +958,7 @@
   ["tests.services.ai.test_vendor_adapters", "tests.ai.service.test_vendor_adapters"],
   ["tests.services.ai.test_vendor_grounding", "tests.ai.service.test_vendor_grounding"],
   ["tests.api.test_ai_settings_routes", "tests.ai.api.test_ai_settings_routes"],
-  ["tests.ai.service.conftest", "tests.ai.fixtures"]
+  ["tests.ai.service.conftest", "tests.ai.fixtures"],
+  ["app.models.operator", "app.operator.models"],
+  ["app.schemas.operator", "app.operator.schemas"]
 ]

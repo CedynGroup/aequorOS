@@ -180,12 +180,6 @@ from app.models.market_desk import (
     DeskSourceCapture,
 )
 from app.models.market_desk_curves import DeskCurveDefinition
-from app.models.operator import (
-    OperatorAuditLog,
-    OperatorInspectorSession,
-    OperatorUser,
-    TenantStorage,
-)
 from app.models.organization import Organization
 from app.models.reconciliation import ReconciliationException
 from app.models.risk import (
@@ -205,6 +199,12 @@ from app.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssump
 from app.models.system_of_record import SystemOfRecordDeclaration
 from app.models.temenos import TemenosConnection
 from app.notifications.models import Notification
+from app.operator.models import (
+    OperatorAuditLog,
+    OperatorInspectorSession,
+    OperatorUser,
+    TenantStorage,
+)
 from app.policy.models.institution_type import InstitutionType
 from app.policy.models.jurisdiction import Jurisdiction
 from app.policy.models.parameter_register import (

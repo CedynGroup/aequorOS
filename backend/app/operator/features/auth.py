@@ -35,12 +35,12 @@ from app.core.config import get_operator_settings
 from app.db.base import utc_now
 from app.models import OperatorUser
 from app.operator.deps import get_operator_sessionmaker
-from app.operator.services import operator_auth
-from app.schemas.operator import (
+from app.operator.schemas import (
     OperatorIdentityRead,
     OperatorLoginRead,
     OperatorLoginRequest,
 )
+from app.operator.services import operator_auth
 
 router = APIRouter(prefix="/operator/auth", tags=["operator-auth"])
 
