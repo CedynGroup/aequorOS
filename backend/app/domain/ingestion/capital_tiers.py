@@ -46,7 +46,7 @@ DOCUMENTED_TIERS: tuple[str, ...] = (
 #: BoG Credit Risk Reserve is "EXCLUDED from the adjusted capital base for CAR
 #: (Guide for Financial Publication BSD/2017 §2.2.1(ii)-(iv) p.10, §2.5 item 5
 #: p.44; CRD June 2018 ¶32 omits it from CET1)" — as cited at
-#: ``app/domain/stress/appendix_ii.py``.
+#: ``app/stress/domain/appendix_ii.py``.
 EXCLUDED_CAPITAL_COMPONENTS: frozenset[str] = frozenset({"credit_risk_reserve"})
 
 

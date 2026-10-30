@@ -25,11 +25,10 @@ from sqlalchemy.orm import Session
 
 from app.bi.public import BUILDER_VERSION
 from app.core.config import get_settings
+from app.data_engine.public import CanonicalPositionSnapshot, is_current_generation
 from app.db.base import utc_now
 from app.identity.public import Bank
-from app.models import CanonicalPositionSnapshot
-from app.models.canonical import is_current_generation
-from app.schemas.operator import BiBackfillRead, BiBackfillRequest
+from app.operator.schemas import BiBackfillRead, BiBackfillRequest
 from app.services import job_queue
 from app.services.public_ids import normalize_public_id
 

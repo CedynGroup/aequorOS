@@ -1686,7 +1686,10 @@ REGISTRY.register(
             ),
             resolution_status=UNRESOLVED_AUDIT_FINDING,
             equality_assertion_forbidden=False,
-            evidence=("backend/tests/api/test_forecasting.py - divergence asserted in a comment",),
+            evidence=(
+                "backend/tests/forecasting/api/test_forecasting.py - "
+                "divergence asserted in a comment",
+            ),
         ),
         notes=(
             "Value lives at RegulatoryRun(forecast).metrics['path'][n]['car_pct'], not as a "
@@ -2225,7 +2228,7 @@ REGISTRY.register_all(
                 "an EXPOSURE DRAFT (February 2026, effective 1 January 2027 at P9), which "
                 "is why the methodology's citation still carries the sentinel. Persisted "
                 "only when the active parameter set carries the parallel_up_450 shock; "
-                "app/services/scenario_catalog.py labels the scenario 'informational', "
+                "app/stress/service/scenario_catalog.py labels the scenario 'informational', "
                 "which is correct while the guideline is not in force and becomes wrong "
                 "on the day it is."
             ),
@@ -2298,7 +2301,7 @@ REGISTRY.register_all(
         # regulator requires them.
         #
         # Also NOT bound here: fx_var:diversification_benefit. That line is no
-        # longer written at all (app/domain/fx/engine.py::compute_var); the
+        # longer written at all (app/fx/domain/engine.py::compute_var); the
         # residual of two value-at-risk figures cannot have a firmer basis than
         # the figures themselves, and it was reaching a sealed run on both planes
         # — as an fx_var line item and as the diversification_benefit_ghs metric
@@ -2696,7 +2699,7 @@ REGISTRY.register(
 
 # --- CREDIT: implied bank rating and PD (advisory only) -------------------
 
-#: The scorecard's own parameter register version. ``app.services.implied_rating``
+#: The scorecard's own parameter register version. ``app.rating.service.implied_rating``
 #: is already one of the engine modules the registry test suite imports, so this
 #: string cannot drift from the constant it copies.
 _RATING_VERSION = "rating-scorecard/1.0"
@@ -2716,7 +2719,7 @@ _RATING_NO_AUTHORITY = (
 )
 
 _RATING_NOTES = (
-    "Published to the live plane only (app/services/implied_rating.py::compute_live) and "
+    "Published to the live plane only (app/rating/service/implied_rating.py::compute_live) and "
     "sealed into ImpliedRatingRun, never into a RegulatoryRun. The module feeds no return: "
     "nothing under app/reporting/service/ reads it. ADVISORY_ONLY is therefore "
     "the operative constraint as well as the honest label - these figures must not reach a "
@@ -2754,7 +2757,7 @@ def _rating(metric_id: str, *, engine: str, notes: str = "") -> MetricAuthority:
             "reference:sovereign_counterparty_rating",
             "param:desk_methodology.AEQ-GHS-BANK-PD",
         ),
-        policy_resolver="app.services.implied_rating:ensure_default_methodology",
+        policy_resolver="app.rating.service.implied_rating:ensure_default_methodology",
         calculation_engine=engine,
         calculation_version=_RATING_VERSION,
         parameter_set=("DeskMethodology.AEQ-GHS-BANK-PD",),

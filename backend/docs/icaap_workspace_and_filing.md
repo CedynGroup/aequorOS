@@ -68,7 +68,7 @@ governed parameters and a book, and return typed results or typed refusals.
 kind: one package table, one submission gate, one validation pipeline, one
 exporter, one attestation chain.
 
-**The AI lane** (`app/domain/ai/`, `app/services/ai/`) drafts section text. It
+**The AI lane** (`app/ai/domain/`, `app/ai/service/`) drafts section text. It
 is a suggestion engine that a human accepts or rejects; it never computes a
 figure and never writes to the filing plane.
 
@@ -436,7 +436,7 @@ which ships empty. Descriptors-only is the default mode — amounts and dates ar
 never sent as values — and users cannot add free-text instructions. Decisions
 are append-only.
 
-`app/domain/ai/` and `app/services/ai/` are a shared foundation, not an ICAAP
+`app/ai/domain/` and `app/ai/service/` are a shared foundation, not an ICAAP
 component, so BI commentary can reuse them.
 
 ---

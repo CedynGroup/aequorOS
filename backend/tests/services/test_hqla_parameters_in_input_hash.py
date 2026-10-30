@@ -18,9 +18,10 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from app.forecasting.service import regulatory_forecasting
 from app.models import CurrentFinancialFact
 from app.policy.service import regulatory_parameters
-from app.services import regulatory_forecasting, regulatory_liquidity
+from app.services import regulatory_liquidity
 
 _HAIRCUTS = {"L1": Decimal("0"), "L2A": Decimal("15"), "L2B": Decimal("50")}
 

@@ -113,9 +113,9 @@ def test_profile_upsert_roundtrip_and_audit(real_client: TestClient, real_sessio
         f"{BASE}/institution-profile", headers=real_headers(), json=PROFILE_PAYLOAD
     )
     assert created.status_code == 200, created.text
-    profile = created.json()
+    profile: dict[str, Any] = created.json()
     assert profile["institution_type"] == "Universal Bank"
-    assert profile["orass_institution_code"] == "GH-UB-0042"
+    assert {"tin", "registration_number", "orass_institution_code"}.isdisjoint(profile)
     assert profile["traded_on_exchange"] is True
     assert profile["parent_country_code"] == "GH"
     assert profile["warnings"] == []  # 60 + 40 = 100
@@ -123,7 +123,8 @@ def test_profile_upsert_roundtrip_and_audit(real_client: TestClient, real_sessio
     events = _audit_events(real_session, profile["id"], "institution_profile.created")
     assert len(events) == 1
     assert events[0].details["reason"] == "Initial corporate profile capture"
-    assert events[0].details["orass_institution_code"] == "GH-UB-0042"
+    assert events[0].details["bank_id"] == REAL_BANK_ID
+    assert {"tin", "registration_number", "orass_institution_code"}.isdisjoint(events[0].details)
 
     # Second PUT updates the same 1:1 row and surfaces the ownership warning.
     updated = real_client.put(
@@ -142,6 +143,13 @@ def test_profile_upsert_roundtrip_and_audit(real_client: TestClient, real_sessio
 
     composed = real_client.get(f"{BASE}/institution-profile", headers=real_headers()).json()
     assert composed["profile"]["id"] == profile["id"]
+    assert composed["general_visible"] is True
+    assert composed["restricted_visible"] is True
+    assert composed["identifiers"] == {
+        "tin": "C0001234567",
+        "registration_number": "CS-2004-11-0042",
+        "orass_institution_code": "GH-UB-0042",
+    }
 
 
 def test_profile_rejects_unknown_parent_jurisdiction(real_client: TestClient) -> None:

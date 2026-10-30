@@ -4,7 +4,7 @@ Four properties that cannot be left to code review, because a violation looks
 harmless at the diff level and is expensive in production:
 
 1. **Per vendor**, the transport is imported in exactly ONE module inside
-   ``app/services/ai``, and only inside a function, so no ordinary process loads
+   ``app/ai/service``, and only inside a function, so no ordinary process loads
    an SDK, an HTTP client or a credential. D-053 made this a per-vendor rule
    rather than a rule about ``anthropic``: the tier has three adapters now, and a
    module-level import in any one of them puts that vendor's transport in the API
@@ -28,11 +28,11 @@ _APP = _BACKEND / "app"
 
 #: The one module allowed to import the Anthropic SDK. Also the module whose
 #: request shape the Opus-5 parameter scan below reads.
-_SDK_MODULE = _APP / "services" / "ai" / "client.py"
+_SDK_MODULE = _APP / "ai" / "service" / "client.py"
 
-_AI_PACKAGE = _APP / "services" / "ai"
+_AI_PACKAGE = _APP / "ai" / "service"
 
-#: vendor transport -> the ONE module inside ``app/services/ai`` allowed to import
+#: vendor transport -> the ONE module inside ``app/ai/service`` allowed to import
 #: it. ``httpx`` is imported at module scope in several other services (the ORASS
 #: channel, the market desk, OpenBao), so the rule is scoped to the AI package:
 #: inside it, each vendor's transport belongs to that vendor's adapter alone.
@@ -49,8 +49,8 @@ _HTTP_ADAPTERS = (_AI_PACKAGE / "openai_model.py", _AI_PACKAGE / "google_model.p
 #: settings module is deliberately NOT here, because that is where the numbers
 #: are supposed to live.
 _TUNABLE_SCAN = (
-    *sorted((_APP / "domain" / "ai").glob("*.py")),
-    *sorted((_APP / "services" / "ai").glob("*.py")),
+    *sorted((_APP / "ai" / "domain").glob("*.py")),
+    *sorted((_APP / "ai" / "service").glob("*.py")),
     _APP / "icaap" / "domain" / "ai_facts.py",
     _APP / "icaap" / "domain" / "ai_convert.py",
     _APP / "icaap" / "service" / "ai_fact_sheet.py",
@@ -215,7 +215,7 @@ def test_the_model_id_default_lives_only_in_settings() -> None:
 
 
 def test_the_pure_ai_domain_touches_no_infrastructure() -> None:
-    """``app/domain/ai`` must stay importable without a database or a network."""
+    """``app/ai/domain`` must stay importable without a database or a network."""
     forbidden = (
         "sqlalchemy",
         "fastapi",
@@ -228,7 +228,7 @@ def test_the_pure_ai_domain_touches_no_infrastructure() -> None:
         "app.identity.service",
         "app.identity.public",
     )
-    for path in sorted((_APP / "domain" / "ai").glob("*.py")):
+    for path in sorted((_APP / "ai" / "domain").glob("*.py")):
         source = path.read_text(encoding="utf-8")
         for token in forbidden:
             assert f"import {token}" not in source, f"{path.name} imports {token}"
@@ -243,7 +243,7 @@ def test_failover_is_decided_on_codes_not_on_vendor_messages() -> None:
     so a vendor cannot talk the platform into a second attempt, and a content
     outcome cannot be mistaken for an outage.
     """
-    from app.services.ai import vendors  # noqa: PLC0415 - an architecture assertion
+    from app.ai.service import vendors  # noqa: PLC0415 - an architecture assertion
 
     assert not vendors.AVAILABILITY_FAILURE_CODES & vendors.CONFIGURATION_FAILURE_CODES
     assert not vendors.CONTENT_OUTCOMES & vendors.AVAILABILITY_FAILURE_CODES
@@ -259,8 +259,8 @@ def test_every_tier_vendor_has_an_adapter_module() -> None:
     """``AI_PROVIDER_TIER`` validates against ``AI_VENDORS``; this pins that every
     accepted name actually resolves to code, so a permitted value can never be a
     silent no-op."""
+    from app.ai.service.tiered import ADAPTER_MODULES  # noqa: PLC0415
     from app.core.config import AI_VENDORS  # noqa: PLC0415 - an architecture assertion
-    from app.services.ai.tiered import ADAPTER_MODULES  # noqa: PLC0415
 
     assert sorted(ADAPTER_MODULES) == sorted(AI_VENDORS)
     for module in ADAPTER_MODULES.values():
@@ -273,7 +273,7 @@ def test_the_approved_configurations_file_ships_empty() -> None:
     import json  # noqa: PLC0415
 
     raw = json.loads(
-        (_APP / "services" / "ai" / "approved_configurations.json").read_text(encoding="utf-8")
+        (_APP / "ai" / "service" / "approved_configurations.json").read_text(encoding="utf-8")
     )
     assert raw["configurations"] == [], (
         "An approved configuration has been committed. That is the LAST step of "

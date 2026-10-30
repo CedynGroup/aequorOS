@@ -90,7 +90,7 @@ poll ONE `jobs` table: a job enqueued for a lane nobody runs strands in `queued`
 10. **NOT NOW: `BI_NLQ_ENABLED`.** It needs, in order: `risk-worker-ai` deployed
     (`docker-compose.ai.prod.yml`, `lane:ai` = `icaap_ai_draft`, `bi_commentary`,
     `bi_nlq_translate`), `AI_COMMENTARY_ENABLED=1`, an entry for `bi_nlq` in
-    `app/services/ai/approved_configurations.json` (**still empty** — this is the
+    `app/ai/service/approved_configurations.json` (**still empty** — this is the
     remaining blocker), then the tenant Owner's consent in the AI settings.
     The consent step is DONE: the text was amended to `ai-consent-2026-09-v2` on
     2026-09-29 and `bi_nlq` added to `CONSENT_COVERED_FEATURES`. Note that raising

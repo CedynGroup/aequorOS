@@ -141,7 +141,7 @@ including axes that breached before reaching that limit.
   divide what the API returns; it may not decide a number the engines own. See
   "Client-side arithmetic" below for the line between the two.
 - **No ML the backend does not have.** The only machine-learning surfaces are
-  the cash-flow LSTM (`backend/app/ml`) and the per-tenant behavioral GBMs.
+  the cash-flow LSTM (`backend/app/forecasting/ml`) and the per-tenant behavioral GBMs.
   There is no reinforcement-learning optimizer and no gradient-boosting FX
   ensemble; the forecasting optimizer is a deterministic grid search and the
   balance-sheet forecast is deterministic arithmetic.
@@ -292,7 +292,7 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
 - TanStack Query over the generated OpenAPI client
 - Recharts for visualization
 - NextAuth for password and OIDC SSO sign-in
-- Inter (UI) + IBM Plex Mono (numerical data) via `next/font/google`
+- Inter (UI) + IBM Plex Mono (numerical data) via `next/font/local`
 
 ### Next.js 16 runtime conventions
 
@@ -554,12 +554,10 @@ normal development cache. Both browser suites use the worktree's disposable
 database and session files, so a worktree-local lock rejects concurrent E2E runs.
 The stack never touches the primary database.
 
-The disposable Next.js server uses `NEXT_FONT_GOOGLE_MOCKED_RESPONSES` with
-fixed CSS for all layout and login font families. Journeys and the visual tour
-render with Next's generated fallback fonts and never fetch Google CSS or font files.
-This avoids the extensionless font URL compiler bug
-([Next.js #99114](https://github.com/vercel/next.js/issues/99114)); production
-builds retain the real Google fonts.
+The layout and login fonts are bundled as Latin-only WOFF2 files in
+`app/fonts` (sources and OFL licenses live alongside them). Production builds,
+journeys and the visual tour use the same local fonts without fetching Google
+CSS or font files.
 
 The attestation workspace journey checks every offered typed face in both the
 adoption panel and the placed signature preview. It verifies the fonts Chromium

@@ -38,6 +38,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
+from app.ai.models import AiCommentarySettings
 from app.core.config import get_settings
 from app.db.base import Base, utc_now
 from app.features.ingest_data import get_ingestion_storage
@@ -46,7 +47,6 @@ from app.icaap.api.manage_icaap_supervisory_addons import get_icaap_storage as g
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import Organization, User
-from app.models.ai import AiCommentarySettings
 from tests.fixtures.object_reference_routes import (
     KNOWN_DEFECTS,
     LAYOUTS,

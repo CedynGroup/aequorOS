@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
+from app.ai.models import AiCommentarySettings
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
@@ -29,7 +30,6 @@ from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.models import AuthorizationBinding, BankReportingPeriod, User
-from app.models.ai import AiCommentarySettings
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (

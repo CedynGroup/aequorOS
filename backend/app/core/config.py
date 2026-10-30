@@ -417,7 +417,7 @@ class LoggingSettings(BaseSettings):
 
 
 class CashflowSettings(BaseSettings):
-    """In-process cash-flow ML module (``app/ml``) settings.
+    """In-process cash-flow ML module (``app/forecasting/ml``) settings.
 
     ``CASHFLOW_FAST_TEST=1`` selects the reduced training config used by tests;
     ``CASHFLOW_ARTIFACTS_DIR`` relocates the saved model artifacts.
@@ -594,7 +594,7 @@ class IcaapSettings(BaseSettings):
 
 #: Every model vendor the platform can call, and the ONLY names
 #: ``AI_PROVIDER_TIER`` accepts. Adding one means adding an adapter module under
-#: ``app/services/ai/`` and an ``approved_configurations.json`` entry per feature.
+#: ``app/ai/service/`` and an ``approved_configurations.json`` entry per feature.
 AiVendor = Literal["anthropic", "openai", "google"]
 AI_VENDORS: Final[tuple[AiVendor, ...]] = get_args(AiVendor)
 
@@ -632,7 +632,7 @@ def parse_ai_feature_models(value: str) -> dict[tuple[str, str], str]:
     Validates the GRAMMAR and the VENDOR here, where it is cheap and where the
     settings object is built, so a malformed value cannot boot. The feature name
     and the per-feature pinning policy are checked in
-    ``app.services.ai.model_selection``, which owns both — this module must not import
+    ``app.ai.service.model_selection``, which owns both — this module must not import
     from the services layer.
     """
     resolved: dict[tuple[str, str], str] = {}
@@ -694,7 +694,7 @@ def parse_ai_provider_tier(value: str) -> tuple[str, ...]:
 
 
 class AiSettings(BaseSettings):
-    """Governed AI drafting and commentary (app/services/ai).
+    """Governed AI drafting and commentary (app/ai/service).
 
     This is the ONLY part of the platform that sends tenant data to an external
     service, so the switches here are egress gates, not feature flags — they are
@@ -708,7 +708,7 @@ class AiSettings(BaseSettings):
     stops model calls.
 
     ``AI_PRODUCTION_APPROVAL_REF`` plus the committed
-    ``app/services/ai/approved_configurations.json`` are what make "not yet
+    ``app/ai/service/approved_configurations.json`` are what make "not yet
     approved for production" enforceable in code rather than by memory: in any
     DEPLOYED environment a request is refused unless the ref is set AND the exact
     (feature, prompt version, model, effort, environment) tuple has been reviewed
@@ -716,8 +716,8 @@ class AiSettings(BaseSettings):
     out of approval, which is the intended behaviour.
 
     Every number the AI path uses lives here (D-024). Logic reads
-    ``get_settings().ai.*``; no module under ``app/domain/ai`` or
-    ``app/services/ai`` may contain a numeric tunable.
+    ``get_settings().ai.*``; no module under ``app/ai/domain`` or
+    ``app/ai/service`` may contain a numeric tunable.
 
     ``AI_PROVIDER_TIER`` is the failover order (D-053). Losing credit on one
     vendor must not stop AI features, so the tier is walked until one vendor
@@ -729,7 +729,7 @@ class AiSettings(BaseSettings):
     FILED regulatory document and must pin an exact snapshot, while BI commentary
     is advisory and regenerable and may track a vendor's floating alias. The
     per-feature pinning policy lives with the resolution in
-    ``app.services.ai.model_selection``; only the operator's value lives here.
+    ``app.ai.service.model_selection``; only the operator's value lives here.
 
     The API KEYS are deliberately NOT here — see the credential class local to
     each adapter module (``client.AiCredentialSettings``,
@@ -755,7 +755,7 @@ class AiSettings(BaseSettings):
     #: Empty by default, so a deployment that has only ever set the three
     #: vendor-level ids above keeps behaving exactly as it did. Resolution is
     #: ``feature override -> vendor default -> unset`` in
-    #: ``app.services.ai.model_selection.resolve``, and the RESOLVED id is what the
+    #: ``app.ai.service.model_selection.resolve``, and the RESOLVED id is what the
     #: approved-configuration key is looked up with — an override cannot route
     #: around a review.
     feature_models: str = Field(default="", alias="AI_FEATURE_MODELS")
@@ -998,7 +998,7 @@ class BiSettings(BaseSettings):
     #: be able to run every other BI surface without that. Three further gates sit
     #: behind it and all ship shut: ``AI_COMMENTARY_ENABLED`` (the deployment AI
     #: kill-switch), an approved configuration for ``bi_nlq`` in
-    #: ``app/services/ai/approved_configurations.json`` (empty), and the tenant's own
+    #: ``app/ai/service/approved_configurations.json`` (empty), and the tenant's own
     #: consented ``enabled_features``. It also needs the ``ai``-lane worker
     #: (``docker-compose.ai.prod.yml``) DEPLOYED before it is flipped, for the
     #: shared-``jobs``-table reason stated at the top of this class.

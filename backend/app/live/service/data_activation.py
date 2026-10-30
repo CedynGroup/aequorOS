@@ -30,6 +30,12 @@ from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.credit.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.credit.service import regulatory_credit
+from app.forecasting.schemas.forecasting import ForecastRunCreate
+from app.forecasting.service import regulatory_forecasting
+from app.ftp import service as regulatory_ftp
+from app.ftp.schemas import FtpScenarioBatchCreate
+from app.fx import service as regulatory_fx
+from app.fx.schemas import FxScenarioBatchCreate
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
@@ -37,6 +43,7 @@ from app.irrbb.service import regulatory_irr
 from app.live.service.fact_derivation import DerivationError, DerivationResult, derive_facts
 from app.models import AuditEvent
 from app.policy.public import module_scope
+from app.rating.service import implied_rating
 from app.schemas.data_activation import (
     ActivationGroupRead,
     ActivationRunRead,
@@ -45,19 +52,9 @@ from app.schemas.data_activation import (
     DataActivationRead,
     DataActivationSummaryRead,
 )
-from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.schemas.regulatory_ftp import FtpScenarioBatchCreate
-from app.schemas.regulatory_fx import FxScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
-from app.services import (
-    implied_rating,
-    regulatory_capital,
-    regulatory_forecasting,
-    regulatory_ftp,
-    regulatory_fx,
-    regulatory_liquidity,
-)
+from app.services import regulatory_capital, regulatory_liquidity
 from app.services.audit import record_event
 
 ACTIVATION_EVENT = "bank_data.activated"

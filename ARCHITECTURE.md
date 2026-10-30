@@ -1139,18 +1139,18 @@ Verified in `backend/mise.toml`, root `mise.toml`, and `.pre-commit-config.yaml`
 
 ---
 
-## 7. Cash-flow ML module (`backend/app/ml`)
+## 7. Cash-flow ML module (`backend/app/forecasting/ml`)
 
-**Status: built and folded into the backend (originally a standalone `backend/app/ml`
+**Status: built and folded into the backend (originally a standalone `backend/app/forecasting/ml`
 sidecar; merged 2026-07 so all seven capability modules live in one deployable).**
 
-- `backend/app/ml`: PyTorch LSTM + static-baseline cash-flow forecasting as an internal
+- `backend/app/forecasting/ml`: PyTorch LSTM + static-baseline cash-flow forecasting as an internal
   package of the risk service — `synthetic.py` (deterministic demo series), `features.py`
   (calendar features), `baseline.py`, `model.py` (train/persist/forecast), `config.py`
   (`TrainingConfig`, model version).
 - Endpoints (`/banks/{id}/cashflow-forecast`, `/banks/{id}/cashflow-history`) enforce tenant
   scoping (verified bearer credential → `TenantContext` → bank ownership) in
-  `app/services/cashflow_forecast.py`, which lazy-trains on first forecast (or loads saved
+  `app/forecasting/service/cashflow_forecast.py`, which lazy-trains on first forecast (or loads saved
   artifacts) via an in-process `ForecastService` singleton. The ML package itself is
   tenant-unaware compute; the service layer owns authorization and response shaping.
 - Settings live in `app/core/config.py` (`CashflowSettings`): `CASHFLOW_ARTIFACTS_DIR`
@@ -1200,6 +1200,48 @@ The combined SQLite compatibility run remains available as `mise run risk-servic
 The [backend test guide](backend/README.md#run-tests) owns unit/integration/e2e
 classification, census regeneration, service prerequisites and CI execution ownership.
 
+### Public ECR pulls in CI
+
+The production backend build in `risk-service-image.yml` and image publisher in
+`release.yml` authenticate to `public.ecr.aws` with GitHub OIDC when the repository
+variable `AWS_ECR_PULL_ROLE_ARN` is set and the ref matches the documented IAM trust
+case-sensitively:
+`main`, `release`, `release/*` branches or `v*` tags. Both AWS steps skip when the
+variable is empty, the event is a fork pull request, or a manual image build uses
+another ref, retaining anonymous pulls and their rate limits.
+The image workflow retains its image-input push filters and manual trigger;
+the lint and typecheck job in `risk-service.yml` does not build an image.
+An invalid configured role fails the job; clear the variable to disable login.
+
+To enable authentication (requires AWS IAM administration permissions):
+
+1. In AWS IAM, add an OpenID Connect identity provider with URL
+   `https://token.actions.githubusercontent.com` and audience `sts.amazonaws.com`,
+   or reuse the existing provider.
+2. Create a role for that web identity provider, with trust action
+   `sts:AssumeRoleWithWebIdentity`. Require `StringEquals` on
+   `token.actions.githubusercontent.com:aud` = `sts.amazonaws.com` and
+   `StringLike` on `token.actions.githubusercontent.com:sub` matching only
+   `repo:CedynGroup/aequorOS:ref:refs/heads/main`,
+   `repo:CedynGroup/aequorOS:ref:refs/heads/release`,
+   `repo:CedynGroup/aequorOS:ref:refs/heads/release/*`, and
+   `repo:CedynGroup/aequorOS:ref:refs/tags/v*` (an array of allowed subjects).
+3. Attach AWS managed policy `AmazonElasticContainerRegistryPublicReadOnly`.
+   It includes `ecr-public:GetAuthorizationToken` and `sts:GetServiceBearerToken`;
+   no push permissions or long-lived access keys are needed.
+4. Copy the role ARN into **Settings → Secrets and variables → Actions → Variables**
+   as repository variable `AWS_ECR_PULL_ROLE_ARN`. No further code change is needed.
+   Check the AWS configuration and ECR login steps on the next main/release push
+   or version-tag build; public ECR authentication uses `us-east-1`.
+
+There are currently no public ECR job service containers. GitHub pulls
+`jobs.<id>.services` images before steps, so step-based login cannot authenticate
+those pulls if service containers are added later.
+
+References: [GitHub OIDC trust setup](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws),
+[AWS read-only policy](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonElasticContainerRegistryPublicReadOnly.html),
+and [public ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/public/public-registry-auth.html).
+
 ### CI enforcement
 
 - **Merge-queue checks focus on integration risk.** The backend, dashboard,
@@ -1237,8 +1279,8 @@ classification, census regeneration, service prerequisites and CI execution owne
 A directive proposed relocating the Python backend into `dashboard` and deleting
 `frontend` / `aequoros-web`. This was **declined** as based on a misread of the layout:
 the backend was already cleanly consolidated in `backend` (FastAPI) and
-`backend/app/ml` (LSTM) — since flattened into a single `backend/` service with the LSTM
-as the in-process `app/ml` module. Moving a Python/uv/alembic service inside a Next.js/pnpm package
+`backend/app/forecasting/ml` (LSTM) — since flattened into a single `backend/` service with the LSTM
+as the in-process `app/forecasting/ml` module. Moving a Python/uv/alembic service inside a Next.js/pnpm package
 would break the workspace, migrations, RLS, the OpenAPI client-gen pipeline, and the test
 suite. The monorepo was kept intact; nothing was moved or deleted.
 
@@ -1279,7 +1321,7 @@ remains architectural debt; the Command Center contract and polling policy are u
 | 1   | Liquidity      | LCR / NSFR / stress                                  | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
 | 2   | Basel Capital  | RWA / CAR-Tier1-CET1-leverage / stress               | `/banks/{id}/capital/*`, `/submissions/bsd2`   |
 | 3   | Forecasting    | 5y projection / optimizer / what-if                  | `/banks/{id}/forecast/*`                       |
-| 4   | Cash-flow LSTM | in-process `backend/app/ml` (LSTM + static baseline) | `/banks/{id}/cashflow-forecast`                |
+| 4   | Cash-flow LSTM | in-process `backend/app/forecasting/ml` (LSTM + static baseline) | `/banks/{id}/cashflow-forecast`                |
 | 5   | IRR (IRRBB)    | gap / duration / EVE (6 Basel) / EaR                 | `/banks/{id}/irr/*`                            |
 | 6   | FX             | NOP / historical-sim VaR / IFRS 9 hedges             | `/banks/{id}/fx/*`                             |
 | 7   | FTP            | matched-maturity curve / product & branch P&L / NMD  | `/banks/{id}/ftp/*`                            |
@@ -1327,7 +1369,7 @@ of its final snapshot, or a missing recorded source basis requires official
 re-derivation before stress; the refusal is HTTP 409 and creates no run. An empty
 book with a matching recorded basis remains valid. This source
 provenance stays outside financial facts, calculation input snapshots and hashes.
-Regression coverage: `backend/tests/services/test_crd_stress_basis_reconciliation.py`.
+Regression coverage: `backend/tests/stress/service/test_crd_stress_basis_reconciliation.py`.
 
 The bottom-up migration and FX overlay covers loans and interbank placements.
 It applies exposure-level RWA deltas to each year's grown net credit buckets after
@@ -1406,7 +1448,7 @@ Current calculation versions are owned by the
 `ENGINE_VERSION` constants. New versions append runs; stored inputs, hashes and
 results of historical runs remain unchanged. Regression evidence lives in
 `backend/tests/services/test_ecl_and_crm.py` and
-`backend/tests/domain/test_stress_orchestrator.py`.
+`backend/tests/stress/domain/test_stress_orchestrator.py`.
 
 ### Governed forecast assumptions
 

@@ -39,9 +39,9 @@ from app.models import (
     User,
 )
 from app.operator.features.provision import get_provisioning_clients
+from app.operator.schemas import ProvisioningResultRead
 from app.operator.services.tenant_provisioning import ProvisioningClients
 from app.policy.service import institution_types, parameter_register
-from app.schemas.operator import ProvisioningResultRead
 from tests.operator.conftest import (
     BANK_KEY,
     FakeS3Client,

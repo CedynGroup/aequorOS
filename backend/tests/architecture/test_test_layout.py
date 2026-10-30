@@ -52,7 +52,6 @@ LAYERED_DIRECTORIES = frozenset(
         "domain",
         "etl",
         "features",
-        "ml",
         "models",
         "schemas",
         "services",

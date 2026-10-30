@@ -62,6 +62,7 @@ from app.models import (
     Job,
     WorkerHeartbeat,
 )
+from app.notifications.service import notification_email_mirror, reporting_deadline_scan
 from app.services import (
     database_direct_jobs,
     documents,
@@ -69,8 +70,6 @@ from app.services import (
     ingestion,
     job_queue,
     market_data_jobs,
-    notification_email_mirror,
-    reporting_deadline_scan,
     scheduler,
     temenos_jobs,
 )
@@ -456,7 +455,7 @@ def _warn_if_ai_unconfigured(settings) -> None:  # pragma: no cover - process en
     e-signature lesson, where a boot refusal locked out the person who could fix
     it. A log line is enough: its jobs simply cancel at the run gate.
     """
-    from app.services.ai import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
+    from app.ai.service import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
 
     if not settings.ai.commentary_enabled:
         logger.warning("AI worker started with AI_COMMENTARY_ENABLED off; requests will cancel.")

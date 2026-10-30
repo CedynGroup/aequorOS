@@ -12,7 +12,7 @@ official workbook templates.
 ```
 aequorOS/
 ├── backend/                  # ── THE PRODUCT ──
-│   ├── app/                  #   FastAPI tenant API: the six engines, app/ml (LSTM),
+│   ├── app/                  #   FastAPI tenant API: the six engines, app/forecasting/ml (LSTM),
 │   │                         #   Data Engine, BoG return generation, attestation,
 │   │                         #   Postgres + row-level-security tenancy
 │   ├── app/operator/         #   staff control plane — a SEPARATE ASGI app (:8100),

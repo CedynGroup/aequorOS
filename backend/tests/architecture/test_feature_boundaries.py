@@ -129,17 +129,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^schemas/(common|text|health|jobs)$", KERNEL),
     (r"^features/track_jobs$", KERNEL),
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
-    # ---- staff operator console
-    (r"^(models|schemas)/operator$", "operator"),
-    # ---- notifications
-    (
-        r"^services/(notifications|notification_email_mirror|reporting_deadline_scan)$",
-        "notifications",
-    ),
-    (
-        r"^(models/notification|schemas/notifications|features/manage_notifications)$",
-        "notifications",
-    ),
     # ---- data engine
     (r"^adapters/__init__$", "data_engine"),
     (r"^adapters/(api_push|database_direct|excel_csv|temenos_t24)(/|$)", "data_engine"),
@@ -212,45 +201,11 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "liquidity",
     ),
     (
-        r"^(services/regulatory_fx|domain/fx/.*|schemas/regulatory_fx"
-        r"|features/run_regulatory_fx)$",
-        "fx",
-    ),
-    (
-        r"^(services/regulatory_ftp|domain/ftp/.*|schemas/regulatory_ftp"
-        r"|features/run_regulatory_ftp)$",
-        "ftp",
-    ),
-    (
         r"^(services/(regulatory_capital|sdi_capital.*|sdi_views|sdi_readiness|capital_plan)"
         r"|domain/capital/.*|models/capital_plan|schemas/(regulatory_capital|sdi|capital_plan)"
         r"|features/(run_regulatory_capital|manage_capital_plan|read_sdi_diagnostics))$",
         "capital",
     ),
-    (
-        r"^(services/(implied_rating|sdi_rating)|domain/rating/.*|models/implied_rating"
-        r"|schemas/implied_rating|features/run_implied_rating)$",
-        "rating",
-    ),
-    (
-        r"^(services/(regulatory_forecasting|cashflow_forecast)|domain/forecasting/.*"
-        r"|schemas/(forecasting|cashflow_forecast)"
-        r"|features/(run_forecasting|read_cashflow_forecast)|ml/.*)$",
-        "forecasting",
-    ),
-    # ---- stress, attestation, filing, ICAAP, BI, AI
-    (
-        r"^(services/(stress_scenarios|macro_scenarios|default_macro_scenarios"
-        r"|enterprise_stress.*|enterprise_run_visibility|reverse_stress"
-        r"|management_action_plans|analysis_workbench|scenario_catalog"
-        r"|scenario_workbench_authorization)|domain/(stress|scenarios)/.*"
-        r"|models/(stress|scenario_workbench)|schemas/(stress|enterprise_stress.*"
-        r"|reverse_stress|management_actions|scenario_workbench)"
-        r"|features/(manage_stress_scenarios|manage_macro_scenarios|manage_enterprise_stress.*"
-        r"|run_reverse_stress|manage_management_actions|run_scenario_analysis))$",
-        "stress",
-    ),
-    (r"^(services/ai/.*|domain/ai/.*|models/ai|schemas/ai|features/manage_ai_settings)$", "ai"),
 )
 _COMPILED_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     (re.compile(pattern), feature) for pattern, feature in FEATURE_RULES
@@ -462,11 +417,9 @@ def test_the_scanner_charges_each_rule() -> None:
     assert _violation("identity", "live", "app.live.public") == "layer"
     assert _violation("liquidity", "fx", "app.fx.public") == "layer"
     assert _violation(KERNEL, "icaap", "app.icaap.public") == "layer"
-    assert _violation("stress", "fx", "app.services.regulatory_fx") == "private"
     assert _violation("stress", "fx", "app.fx.service") == "private"
     assert _violation("stress", "fx", "app.fx.public") is None
     assert _violation("stress", "fx", "app.fx.domain.engine") is None
-    assert _violation("stress", "fx", "app.domain.fx.engine") is None
     assert _violation("fx", "liquidity", "app.liquidity.public") is None
     assert _violation(COMPOSITION, "icaap", "app.icaap.service.workspace") is None
     assert _violation("icaap", KERNEL, "app.services.audit") is None
@@ -475,7 +428,7 @@ def test_the_scanner_charges_each_rule() -> None:
 @pytest.mark.parametrize(
     "layout",
     [
-        ("app.live.models.regulatory", "live", "app.services.regulatory_fx"),
+        ("app.live.models.regulatory", "live", "app.fx.service"),
         ("app.identity.models", "identity", "app.fx.service"),
     ],
 )
@@ -572,7 +525,7 @@ class _ModelSplitScenario:
     def check_source_move(self, path: Path, target: str, moves: list[list[str]]) -> Path:
         moved_source = {
             "app.api.deps": "app.core.dependency",
-            "app.services.ai.grounding": "app.ai.service",
+            "app.ai.service.grounding": "app.ai.service",
             "app.live.service.fact_derivation": "app.live.service",
         }[self.source]
         path.unlink()
@@ -679,7 +632,7 @@ class _ModelSplitScenario:
 @pytest.mark.parametrize("import_style", ["direct", "registry", "relative", "dynamic"])
 @pytest.mark.parametrize(
     "source",
-    ["app.api.deps", "app.services.ai.grounding", "app.live.service.fact_derivation"],
+    ["app.api.deps", "app.ai.service.grounding", "app.live.service.fact_derivation"],
 )
 def test_model_splits_preserve_historical_boundary_identities(
     tmp_path: Path,

@@ -292,20 +292,15 @@ test.describe("Bank-held encryption: rotation and support", () => {
           "AequorOS staff is inspecting this account — read-only.",
         ),
       ).toBeVisible();
-      // Institution administration is outside the examiner's navigation scope.
-      // Its read API still proves field-level non-disclosure, and the Data
-      // Engine's allowed batch view renders the same protected-data placeholder.
+      // Institution authority is absent during staff inspection. The profile
+      // API refuses access, while the allowed Data Engine batch view keeps
+      // proving field-level protection.
       const profile = await support.request.get(
         `${E2E_API_ORIGIN}/api/v1/banks/${storyIdentity("rotation").bank}/institution-profile`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      expect(profile.ok()).toBe(true);
+      expect(profile.status()).toBe(403);
       const profileBody = await profile.json();
-      expect(
-        profileBody.related_parties.map(
-          (party: { full_name: string }) => party.full_name,
-        ),
-      ).toEqual([LOCKED, LOCKED]);
       expect(JSON.stringify(profileBody)).not.toContain(NAME);
       expect(JSON.stringify(profileBody)).not.toContain(
         "Synthetic New Key Director",

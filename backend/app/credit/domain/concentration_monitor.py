@@ -15,7 +15,7 @@ This engine consumes the SAME ``ConcentrationExposure`` rows the stress
 engine reads and computes, per dimension: the full bucket distribution, HHI
 (0–10,000 basis), top-N shares of book and of the capital base, coverage
 (how much of the book states the dimension at all), and Board-limit
-utilisation. It differs from ``app.domain.stress.concentration`` on purpose:
+utilisation. It differs from ``app.stress.domain.concentration`` on purpose:
 that engine prices tail LOSSES for the stress overlay (Pillar-2 charge);
 this one is the measurement-and-limits MIS the Guidelines' §F reporting asks
 for. Limits arrive as data (the Board register) — the Guidelines prescribe no
@@ -28,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.domain.stress.concentration import (
+from app.stress.domain.concentration import (
     DIM_COLLATERAL,
     DIM_EMPLOYER,
     DIM_GEOGRAPHY,

@@ -27,6 +27,7 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.db.base import utc_now
+from app.fx import service as regulatory_fx
 from app.identity.service import authorization
 from app.live.schemas.live import OfficialRunRequest
 from app.live.service import live_view, pipeline
@@ -40,7 +41,7 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.services import job_queue, regulatory_fx, scheduler
+from app.services import job_queue, scheduler
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, ORG_2, USER_1

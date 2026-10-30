@@ -29,6 +29,8 @@ from app.api.deps import TenantContext
 from app.domain.authority.outcomes import OutcomeDetail, OutcomeState
 from app.domain.authority.registry import REGISTRY, InstitutionClass, MetricFamily
 from app.domain.capital.engine import CapitalFact, compute_rwa
+from app.forecasting.schemas.forecasting import ForecastRunCreate
+from app.forecasting.service import regulatory_forecasting
 from app.live.service import pipeline
 from app.models import (
     Bank,
@@ -41,19 +43,17 @@ from app.models import (
     RegulatoryRun,
 )
 from app.policy.service import sdi_regime
-from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.liquidity_thresholds import LiquidityThresholdUpdate
 from app.services import (
-    enterprise_stress,
     liquidity_thresholds,
     regulatory_capital,
-    regulatory_forecasting,
     sdi_capital,
     sdi_capital_assurance,
     sdi_capital_checks,
     sdi_readiness,
     sdi_views,
 )
+from app.stress.service import enterprise_stress
 from tests.support.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)

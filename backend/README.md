@@ -62,7 +62,7 @@ publication and required migration-role preparation are in
 - Regulatory reporting: BoG BSD returns generated from the official workbook
   templates, with the templates' own formulas evaluated; PDF/XLSX artifacts
 - Attestation: maker-checker plus PDF e-signature with step-up re-authentication
-- Cash-flow LSTM (`app/ml`) and per-tenant behavioral GBMs; everything else is
+- Cash-flow LSTM (`app/forecasting/ml`) and per-tenant behavioral GBMs; everything else is
   deterministic
 - Audit events, per-field manual edit history, and source-record traceability
 

@@ -36,7 +36,6 @@ from app.credit.domain.concentration_monitor import (
 from app.credit.service.credit_exposure_book import canonical_group_key
 from app.data_engine.public import counterparty_group_labels
 from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
-from app.domain.stress.concentration import DIM_SINGLE_NAME, ConcentrationExposure
 from app.identity.public import Bank
 from app.live.public import load_current_facts
 from app.models import (
@@ -52,6 +51,7 @@ from app.policy.public import (
     jurisdictions,
 )
 from app.services import sdi_capital
+from app.stress.domain.concentration import DIM_SINGLE_NAME, ConcentrationExposure
 
 _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 _CONCENTRATION_POSITION_TYPES = ("LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDING")

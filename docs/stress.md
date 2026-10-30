@@ -198,11 +198,11 @@ documented, and reported **with and without** (¶78–81).
 - **Capital:** 4-quarter stress path `run_capital_stress` (`app/domain/capital/engine.py:497`,
   `STRESS_QUARTERS=4`) — RWA growth, CET1 retention, FX multiplier; trigger/action ladder (`:564`).
   Breach multiplier (`app/services/regulatory_capital.py:1575`).
-- **Reverse stress:** `run_reverse_stress` (`app/services/reverse_stress.py:72`) — bisection for
+- **Reverse stress:** `run_reverse_stress` (`app/stress/service/reverse_stress.py:72`) — bisection for
   the severity _k_ breaching a floor, two **independent** axes (liquidity=LCR, capital=CET1);
   immutable `RegulatoryRun`.
 - **IRRBB:** 6 Basel ΔEVE scenarios + EaR (`app/irrbb/domain/engine.py:384,470`). **FX:** depreciation
-  scenarios + stressed VaR (`app/domain/fx/engine.py:479,373`). **FTP:** curve/funding stress.
+  scenarios + stressed VaR (`app/fx/domain/engine.py:479,373`). **FTP:** curve/funding stress.
 - **Forecasting:** what-if (4 hardcoded macro-flavoured shocks, `forecasting/engine.py:141`);
   adverse scenarios (base/adverse/severely_adverse, 5-yr); strategic optimizer.
 - **Returns:** STRESS-PACK (`generation.py:1305`, event-driven, own format) and ICAAP-STRESS
@@ -216,7 +216,7 @@ documented, and reported **with and without** (¶78–81).
   constructed only in the fixture + migrations; **magnitudes are frozen at deploy, not editable/
   versionable through the product.** A shock is always a **direct parameter override, never a
   macro variable.**
-- **Custom scenarios:** `StressScenario` (`app/models/scenario_workbench.py:41`), full CRUD,
+- **Custom scenarios:** `StressScenario` (`app/stress/models/scenario_workbench.py:41`), full CRUD,
   **"never consumed by official runs"** — sandbox only, results write nothing unless manually
   saved (`SavedScenarioAnalysis`, never a `RegulatoryRun`).
 
@@ -262,7 +262,7 @@ quarantined `StressScenario` split with one library):
 #### 3.1.1 Code-defined default set and calibration
 
 The platform ships immutable, code-defined defaults from
-`backend/app/services/default_macro_scenarios.py`. They are resolved at read/run time, not seeded
+`backend/app/stress/service/default_macro_scenarios.py`. They are resolved at read/run time, not seeded
 as tenant rows, so the e2e bootstrap, local sandbox and every new organization see the same
 versioned set without a provisioning step. Their UUIDv5 identifiers are stable per code and
 definition version; a new definition version has a new ID. They appear as
@@ -364,7 +364,7 @@ The stress leg's ΔEVE loss, `max(-delta_eve, 0)` in thousands, feeds the
 
 When IRRBB is included, the stress input snapshot includes the loaded IRR
 position and swap facts and the base curve; changing them changes the new run's input hash. The
-[enterprise stress service](../backend/app/services/enterprise_stress.py) owns
+[enterprise stress service](../backend/app/stress/service/enterprise_stress.py) owns
 the engine, input-schema and output-schema version declarations.
 
 Previously recorded runs retain their original inputs, versions and results.

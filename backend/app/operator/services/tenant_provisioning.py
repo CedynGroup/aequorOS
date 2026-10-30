@@ -49,12 +49,12 @@ from app.identity.public import Bank, SsoConnection, User
 from app.live.public import BankReportingPeriod
 from app.models import Organization, TenantStorage
 from app.operator.deps import OperatorContext, record_operator_action
-from app.policy.public import InstitutionType, Jurisdiction, institution_types, parameter_register
-from app.schemas.operator import (
+from app.operator.schemas import (
     ProvisioningResultRead,
     ProvisioningStepRead,
     TenantProvisionCreate,
 )
+from app.policy.public import InstitutionType, Jurisdiction, institution_types, parameter_register
 from app.services import job_queue
 from app.services.market_desk import publication as desk_publication
 from app.storage.client import StorageLocation

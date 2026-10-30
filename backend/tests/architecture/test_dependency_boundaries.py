@@ -63,22 +63,28 @@ REGULATORY_PLANE: tuple[str, ...] = (
     "live/domain",
     "irrbb/domain",
     "credit/domain",
+    "fx/domain",
+    "ftp/domain",
+    "rating/domain",
+    "stress/domain",
+    "forecasting/domain",
+    "ai/domain",
     "credit/service/regulatory_credit.py",
     "reporting/service",
     "services/regulatory_capital.py",
     "services/regulatory_liquidity.py",
     "irrbb/service/regulatory_irr.py",
-    "services/regulatory_fx.py",
-    "services/regulatory_ftp.py",
-    "services/regulatory_forecasting.py",
+    "fx/service.py",
+    "ftp/service.py",
+    "forecasting/service/regulatory_forecasting.py",
     "policy/service/regulatory_parameters.py",
     "services/sdi_capital.py",
     "services/sdi_capital_assurance.py",
     "services/sdi_capital_checks.py",
     "live/service/fact_derivation.py",
     "live/service/pipeline.py",
-    "services/enterprise_stress.py",
-    "services/reverse_stress.py",
+    "stress/service/enterprise_stress.py",
+    "stress/service/reverse_stress.py",
     # The ICAAP workspace seals a Board-approved filing from the same runs.
     "icaap/service",
 )
@@ -162,6 +168,12 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
         + _python_files("live/domain")
         + _python_files("irrbb/domain")
         + _python_files("credit/domain")
+        + _python_files("fx/domain")
+        + _python_files("ftp/domain")
+        + _python_files("rating/domain")
+        + _python_files("stress/domain")
+        + _python_files("forecasting/domain")
+        + _python_files("ai/domain")
     ):
         module = _module_name(path)
         # Module-aware: `app/domain/**` carries relative imports, and a purity
@@ -197,6 +209,35 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
                     "app.credit.service",
                     "app.credit.schemas",
                     "app.credit.public",
+                    "app.fx.api",
+                    "app.fx.service",
+                    "app.fx.schemas",
+                    "app.fx.public",
+                    "app.ftp.api",
+                    "app.ftp.service",
+                    "app.ftp.schemas",
+                    "app.ftp.public",
+                    "app.rating.api",
+                    "app.rating.models",
+                    "app.rating.service",
+                    "app.rating.schemas",
+                    "app.rating.public",
+                    "app.stress.api",
+                    "app.stress.service",
+                    "app.stress.models",
+                    "app.stress.schemas",
+                    "app.stress.public",
+                    "app.forecasting.api",
+                    "app.forecasting.service",
+                    "app.forecasting.models",
+                    "app.forecasting.schemas",
+                    "app.forecasting.ml",
+                    "app.forecasting.public",
+                    "app.ai.api",
+                    "app.ai.service",
+                    "app.ai.models",
+                    "app.ai.schemas",
+                    "app.ai.public",
                     "app.irrbb.api",
                     "app.irrbb.service",
                     "app.irrbb.schemas",

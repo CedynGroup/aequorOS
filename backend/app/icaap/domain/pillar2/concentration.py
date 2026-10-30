@@ -33,7 +33,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.domain.stress.concentration import ConcentrationExposure
 from app.icaap.domain.pillar2 import concentration_metrics as metrics_lib
 from app.icaap.domain.pillar2.bands import BandTable, lookup
 from app.icaap.domain.pillar2.types import (
@@ -45,6 +44,7 @@ from app.icaap.domain.pillar2.types import (
     text,
 )
 from app.icaap.domain.units import HUNDRED, ZERO, Basis, Denominators, amount, ratio, to_amount
+from app.stress.domain.concentration import ConcentrationExposure
 
 DIMENSION_SINGLE_NAME = "single_name"
 DIMENSION_SECTOR = "sector"

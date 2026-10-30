@@ -5,7 +5,7 @@ this file is about the extraction being faithful rather than about new behaviour
 the relay is opened once, STARTTLS and login happen only when configured and in
 that order, and a transport exception travels INTACT — the mirror records
 ``type(exc).__name__`` in its job progress, so wrapping it would silently rename
-every historical failure. ``tests/services/test_notification_email_mirror.py`` is
+every historical failure. ``tests/notifications/service/test_notification_email_mirror.py`` is
 the other half: it exercises the original caller, unchanged, over the new
 transport.
 

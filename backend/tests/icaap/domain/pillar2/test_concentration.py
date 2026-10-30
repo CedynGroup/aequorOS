@@ -9,7 +9,6 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from app.domain.stress.concentration import ConcentrationExposure
 from app.icaap.domain.pillar2.bands import BandTable, parse_band_table
 from app.icaap.domain.pillar2.concentration import (
     DIMENSION_SECTOR,
@@ -25,6 +24,7 @@ from app.icaap.domain.pillar2.concentration import (
 )
 from app.icaap.domain.pillar2.types import MethodStatus, MissingParameter
 from app.icaap.domain.units import Basis, Denominators
+from app.stress.domain.concentration import ConcentrationExposure
 from tests.icaap.domain.pillar2.conftest import (
     CR_N,
     METRIC_SET,
