@@ -21,7 +21,7 @@ import type {
  * Shared bits for the desk Curve Construction workspace (FC-4, spec §4.1).
  *
  * The option vocabularies below MIRROR the backend's governed resolvers
- * (app/services/market_desk/curve_construction.py + app/domain/curves/*): the
+ * (app/market_data/service/market_desk/curve_construction.py + app/market_data/domain/curves/*): the
  * seeded holiday calendars, the four interpolators, the DayCount enum, the
  * BusinessDayConvention enum, and the two extrapolation rules. A value the
  * backend cannot resolve is a 422 on save, so we constrain the pickers to

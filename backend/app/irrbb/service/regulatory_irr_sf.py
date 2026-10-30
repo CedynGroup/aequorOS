@@ -93,9 +93,9 @@ from app.live.public import (
     RegulatoryRun,
     RegulatoryValidation,
 )
+from app.market_data.public import market_data, market_data_sources
 from app.policy.public import jurisdictions, regulatory_parameters
 from app.reporting.service import filing_reconciliation
-from app.services import market_data, market_data_sources
 from app.services.audit import record_event
 
 ENGINE_VERSION = "regulatory-irr-sf-v1.0.0"

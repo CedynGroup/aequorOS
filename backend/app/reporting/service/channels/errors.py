@@ -1,7 +1,7 @@
 """Typed submission-channel errors (docs/regulatory_reporting.md §5).
 
 Mirrors the market-data adapter's ``MarketDataError`` discipline
-(``app/adapters/market_data/errors.py``): ``operator_message`` is the only
+(``app/market_data/adapters/errors.py``): ``operator_message`` is the only
 part that may reach an operator-facing surface; ``internal_detail`` carries
 diagnostic context for AequorOS engineering logs and is never rendered to a
 bank. ``str(error)`` deliberately renders only the operator message so an

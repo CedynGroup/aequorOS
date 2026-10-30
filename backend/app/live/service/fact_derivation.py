@@ -310,13 +310,13 @@ from app.live.domain.positions.fx import FX_ASSET_TYPES, FX_LIABILITY_TYPES
 from app.live.models.live import CurrentFinancialFact
 from app.live.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.live.service.reporting_periods import new_snapshot_period
-from app.policy.public import jurisdictions
-from app.services import market_data_sources
-from app.services.market_data import (
+from app.market_data.public import (
     CurveView,
     desk_projection_curve_name,
     list_fx_base_currencies,
+    market_data_sources,
 )
+from app.policy.public import jurisdictions
 
 MONEY = Decimal("0.0001")
 RATE = Decimal("0.0001")
@@ -683,7 +683,7 @@ class _Canonical:
     # (registry-driven, never a country literal) — the GL cash classifier's
     # central-bank test. See ``_CentralBankNames``.
     central_bank_names: _CentralBankNames = field(default_factory=_CentralBankNames)
-    # Canonical market data (vendor-blind, via app.services.market_data).
+    # Canonical market data (vendor-blind, via app.market_data.service.market_data).
     # When present it wins over the legacy reference-row datasets; the
     # reference rows remain the fallback so uploads without market data
     # connections keep deriving exactly as before.

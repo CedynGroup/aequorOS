@@ -451,7 +451,7 @@ class MarketDataSettings(BaseSettings):
 
     ``CREDENTIAL_VAULT_MASTER_KEY`` is the application-layer AES-256-GCM
     master key material for the MVP encrypted-DB credential vault
-    (app/adapters/market_data/credential_manager.py); unset means the vault
+    (app/market_data/adapters/credential_manager.py); unset means the vault
     refuses to operate. ``MARKET_DATA_PULL_ENABLED`` gates live vendor pulls
     (off by default — MVP ships fixture-tested adapters without production
     pulls, per market_data_adapter.md §14.1).
@@ -871,7 +871,7 @@ class AiSettings(BaseSettings):
 
 
 class DeskSettings(BaseSettings):
-    """Market research desk scheduling settings (app/services/market_desk).
+    """Market research desk scheduling settings (app/market_data/service/market_desk).
 
     ``DESK_CAPTURE_ENABLED`` gates the nightly scheduled capture job that
     scrapes the desk's Tier-1 Ghana sources (BoG/GFIM/GSS) after publication

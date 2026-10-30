@@ -42,7 +42,6 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 
-from app.adapters.market_data.credential_manager import derive_status
 from app.core.outbound import OutboundTargetBlocked, check_host_port
 from app.data_engine.adapters.database_direct.adapter import DatabaseDirectAdapter
 from app.data_engine.adapters.database_direct.config import (
@@ -85,6 +84,7 @@ from app.data_engine.schemas.database_connection import (
 )
 from app.db.base import utc_now
 from app.identity.public import Bank
+from app.market_data.public import derive_status
 from app.services.audit import record_event
 
 if TYPE_CHECKING:

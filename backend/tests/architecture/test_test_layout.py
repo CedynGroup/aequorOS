@@ -47,7 +47,6 @@ SHARED_DIRECTORIES = frozenset(
 #: moves have emptied it; never add one.
 LAYERED_DIRECTORIES = frozenset(
     {
-        "adapters",
         "api",
         "domain",
         "features",

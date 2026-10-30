@@ -22,7 +22,7 @@ dependencies = [
   "openpyxl",
   "oracledb",
   "pandas",
-  # Market-desk PDF sources (app/services/market_desk/sources): pypdf-style
+  # Market-desk PDF sources (app/market_data/service/market_desk/sources): pypdf-style
   # extraction emits BoG auction tables column-major (row association lost) and
   # the APR-of-banks PDF positions glyphs individually on three of its nine
   # table pages — parsing needs character geometry (pdfplumber.page.chars),
@@ -48,7 +48,7 @@ dependencies = [
   "reportlab>=4.0,<5.1",  # pinned: deterministic bytes rely on invariant=1 (G12)
   "scikit-learn",
   # Direct import, not a scikit-learn leftover: the curve library
-  # (app/domain/curves) uses scipy.interpolate.PchipInterpolator and
+  # (app/market_data/domain/curves) uses scipy.interpolate.PchipInterpolator and
   # scipy.optimize.least_squares. Listed explicitly so the guarantee does not
   # rest on another package's dependency tree.
   "scipy",

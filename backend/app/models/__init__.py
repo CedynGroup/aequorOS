@@ -178,25 +178,25 @@ from app.live.models.regulatory_run import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.models.audit_event import AuditEvent
-from app.models.capital_plan import CapitalPlan, IlaapSnapshot
-from app.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
-from app.models.entitlements import MarketDataEntitlement
-from app.models.job import Job
-from app.models.market_data import (
+from app.market_data.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
+from app.market_data.models.entitlements import MarketDataEntitlement
+from app.market_data.models.market_data import (
     MarketDataConnection,
     MarketDataOverlay,
     MarketDataQuotaUsage,
 )
-from app.models.market_data_sources import MarketDataSourcePreference
-from app.models.market_desk import (
+from app.market_data.models.market_data_sources import MarketDataSourcePreference
+from app.market_data.models.market_desk import (
     DeskDetermination,
     DeskMethodology,
     DeskObservation,
     DeskPublication,
     DeskSourceCapture,
 )
-from app.models.market_desk_curves import DeskCurveDefinition
+from app.market_data.models.market_desk_curves import DeskCurveDefinition
+from app.models.audit_event import AuditEvent
+from app.models.capital_plan import CapitalPlan, IlaapSnapshot
+from app.models.job import Job
 from app.models.organization import Organization
 from app.notifications.models import Notification
 from app.operator.models import (

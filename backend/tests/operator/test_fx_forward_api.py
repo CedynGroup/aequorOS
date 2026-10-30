@@ -2,7 +2,7 @@
 
 Preview only — the endpoint writes no curve state, just a staff audit row. The CIP
 maths + leg resolution are proven at the domain/service layers
-(``tests/domain/curves/test_fx_forward.py``, ``tests/services/test_fx_forward.py``);
+(``tests/domain/curves/test_fx_forward.py``, ``tests/market_data/service/test_fx_forward.py``);
 here the focus is the operator wiring, auth, and the request/response contract.
 """
 
@@ -54,9 +54,7 @@ def test_requires_operator_context(operator_client: TestClient) -> None:
 
 
 def test_construct_fx_forward(operator_client: TestClient, operator_db: Session) -> None:
-    response = operator_client.post(
-        f"{BASE}/construct", headers=operator_headers(), json=_body()
-    )
+    response = operator_client.post(f"{BASE}/construct", headers=operator_headers(), json=_body())
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["pair"] == "USDGHS"

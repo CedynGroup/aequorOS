@@ -107,6 +107,8 @@ from app.live.public import (
     load_current_facts,
     regulatory_dashboard_batching,
 )
+from app.market_data.public import CurveView
+from app.market_data.service import market_data_sources
 from app.policy.public import (
     ParamCapitalThreshold,
     ParamStressShock,
@@ -118,9 +120,8 @@ from app.policy.public import (
     regulatory_parameters,
 )
 from app.reporting.service import filing_reconciliation
-from app.services import market_data_sources, sdi_capital
+from app.services import sdi_capital
 from app.services.audit import record_event
-from app.services.market_data import CurveView
 
 ENGINE_VERSION = "regulatory-irr-v1.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
@@ -1529,7 +1530,7 @@ def discount_curve_midpoints_pct(points: Sequence[tuple[int, Decimal]]) -> dict[
     """Published curve nodes → the nine-midpoint percent dict the engine uses.
 
     ``points`` are ``(tenor_months, zero rate as a decimal fraction)`` pairs as
-    served by :class:`app.services.market_data.CurveView`. Tenors convert to
+    served by :class:`app.market_data.service.market_data.CurveView`. Tenors convert to
     years (``months / 12``); zero rates interpolate LINEARLY between published
     nodes and extrapolate FLAT past both ends; fractions convert to percent and
     quantize deterministically to 6 dp (``ROUND_HALF_UP``), so a node sitting

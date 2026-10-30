@@ -38,11 +38,6 @@ from app.data_engine.api.manage_system_of_record import router as system_of_reco
 from app.data_engine.api.manage_temenos_connections import router as temenos_connections_router
 from app.data_engine.api.push_data import router as push_router
 from app.features.manage_capital_plan import router as capital_plan_router
-from app.features.manage_market_data_connections import router as market_data_connections_router
-from app.features.manage_market_data_overlays import router as market_data_overlays_router
-from app.features.manage_market_data_uploads import router as market_data_uploads_router
-from app.features.market_data_sources import router as market_data_sources_router
-from app.features.read_market_data_views import router as market_data_views_router
 from app.features.read_sdi_diagnostics import router as sdi_diagnostics_router
 from app.features.run_regulatory_capital import router as regulatory_capital_router
 from app.features.track_jobs import router as jobs_router
@@ -90,6 +85,13 @@ from app.liquidity.api.read_liquidity_monitoring import router as liquidity_moni
 from app.liquidity.api.read_window_analytics import router as window_analytics_router
 from app.liquidity.api.run_regulatory_liquidity import router as regulatory_liquidity_router
 from app.live.api.manage_live_engine import router as live_engine_router
+from app.market_data.api.manage_market_data_connections import (
+    router as market_data_connections_router,
+)
+from app.market_data.api.manage_market_data_overlays import router as market_data_overlays_router
+from app.market_data.api.manage_market_data_uploads import router as market_data_uploads_router
+from app.market_data.api.market_data_sources import router as market_data_sources_router
+from app.market_data.api.read_market_data_views import router as market_data_views_router
 from app.notifications.api.manage_notifications import router as notifications_router
 from app.rating.api.run_implied_rating import router as implied_rating_router
 from app.reporting.api.examiner_surfaces import router as examiner_router

@@ -24,7 +24,7 @@ import { CaptureViewer } from "@/components/deskdata/CaptureViewer";
  * /desk/sources — capture history per source plus the source registry.
  *
  * Captures come from GET /operator/v1/desk/captures. The registry cards are a
- * STATIC mirror of backend/app/services/market_desk/sources/__init__.py
+ * STATIC mirror of backend/app/market_data/service/market_desk/sources/__init__.py
  * SOURCE_REGISTRY (identity/cadence metadata, not data) — if a source is
  * added there, add its card here. Fetch-trigger buttons belong to the
  * scheduler phase and are deliberately absent: this page never pretends a

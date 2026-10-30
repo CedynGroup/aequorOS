@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from app.domain.curves.cointegration import (
+from app.market_data.domain.curves.cointegration import (
     ADF_CRITICAL_VALUES,
     CointegrationError,
     engle_granger,

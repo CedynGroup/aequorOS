@@ -38,16 +38,14 @@ from app.db.base import utc_now
 from app.identity.public import Bank, SsoConnection, User
 from app.live.public import BankReportingPeriod, RegulatoryRun, WorkerHeartbeat
 from app.live.public import freshness as freshness_service
-from app.models import (
-    AuditEvent,
+from app.market_data.public import (
     DeskDetermination,
+    DeskEntitlementRead,
     DeskOperatingEnvironmentAssessment,
-    Job,
     MarketDataConnection,
-    OperatorAuditLog,
-    Organization,
-    TenantStorage,
 )
+from app.market_data.public import entitlements as entitlements_service
+from app.models import AuditEvent, Job, OperatorAuditLog, Organization, TenantStorage
 from app.operator.schemas import (
     ActivityItemRead,
     DataEngineConnectionRead,
@@ -78,9 +76,7 @@ from app.operator.schemas import (
     WorkerHeartbeatRead,
 )
 from app.reporting.public import RegulatoryPackage
-from app.schemas.market_desk import DeskEntitlementRead
 from app.services import job_queue
-from app.services.market_desk import entitlements as entitlements_service
 
 # Connection status → fleet health bucket (all three connection tables share the
 # same status vocabulary, app/data_engine/domain/ingestion/constants.py). Terminal/off states

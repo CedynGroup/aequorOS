@@ -30,7 +30,6 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.adapters.market_data.credential_manager import derive_status
 from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.core.outbound import OutboundTargetBlocked
@@ -57,6 +56,7 @@ from app.data_engine.service import temenos_connections
 from app.data_engine.service.ingestion import create_mapping_config
 from app.db.base import utc_now
 from app.identity.public import Bank
+from app.market_data.public import derive_status
 from app.models import Job, MappingConfigRecord
 from app.services import job_queue
 from app.services.audit import record_event

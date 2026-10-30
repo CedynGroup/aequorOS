@@ -17,15 +17,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.market_data.credential_manager import (
+from app.core.config import get_settings
+from app.data_engine.adapters.temenos_t24.auth import TemenosCredentials
+from app.market_data.public import (
     CredentialVaultError,
     credential_fingerprint,
     decrypt_credential_envelope,
     derive_master_key,
     encrypt_credential_envelope,
 )
-from app.core.config import get_settings
-from app.data_engine.adapters.temenos_t24.auth import TemenosCredentials
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
