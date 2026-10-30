@@ -46,7 +46,7 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
 
-pytestmark = pytest.mark.usefixtures("return_generation_authority")
+pytestmark = pytest.mark.usefixtures("return_generation_authority", "institution_profile_authority")
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
