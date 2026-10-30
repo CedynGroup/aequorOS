@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.fx import service as regulatory_fx
 from app.fx.domain.engine import FxPosition, compute_stressed_var, compute_var
+from app.liquidity.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
+from app.liquidity.service.regulatory_liquidity import run_all_liquidity_scenarios
 from app.live.service.fact_derivation import (
     DerivationError,
     DerivationResult,
@@ -40,9 +42,7 @@ from app.models import (
     LineageRecord,
 )
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
 from app.services.regulatory_capital import run_all_capital_scenarios
-from app.services.regulatory_liquidity import run_all_liquidity_scenarios
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import (
     EXPECTED_CAPITAL_TOTAL,

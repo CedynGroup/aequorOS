@@ -32,9 +32,6 @@ from app.domain.capital.engine import (
 from app.domain.capital.engine import (
     UnsupportedShockError as CapitalUnsupportedShock,
 )
-from app.domain.liquidity.engine import (
-    UnsupportedShockError as LiquidityUnsupportedShock,
-)
 from app.ftp.domain.engine import (
     FtpComputationError,
     classify_core_band,
@@ -61,6 +58,9 @@ from app.irrbb.domain.engine import (
     UnsupportedShockError as IrrUnsupportedShock,
 )
 from app.irrbb.public import regulatory_irr
+from app.liquidity.domain.engine import (
+    UnsupportedShockError as LiquidityUnsupportedShock,
+)
 from app.liquidity.public import regulatory_liquidity
 from app.live.public import BankReportingPeriod
 from app.models import SavedScenarioAnalysis, StressScenario

@@ -224,7 +224,7 @@ hash. Validated positions may appear in operator logs; the optional `OutcomeDeta
 remains bank-facing data and never enters operator logs.
 Unexpected bugs and infrastructure failures still raise.
 
-`app/domain/liquidity/engine.py::compute_liquidity` is the first migrated boundary:
+`app/liquidity/domain/engine.py::compute_liquidity` is the first migrated boundary:
 LCR and NSFR are evaluated independently, including missing threshold parameters.
 Existing single-ratio entry points keep their exception contracts. The service
 adapter preserves both outcomes for inline dashboard reads, trends, live metrics

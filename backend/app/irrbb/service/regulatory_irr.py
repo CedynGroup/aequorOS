@@ -84,6 +84,12 @@ from app.irrbb.schemas.regulatory_irr import (
     IrrTrendPointRead,
     IrrValidationRead,
 )
+from app.liquidity.public import (
+    RegulatoryRunBatchRead,
+    RegulatoryRunCreate,
+    RegulatoryRunRead,
+    read_regulatory_run_execution_result,
+)
 from app.live.domain.reporting import period_windows
 from app.live.public import (
     BankFinancialFact,
@@ -112,17 +118,9 @@ from app.policy.public import (
     regulatory_parameters,
 )
 from app.reporting.service import filing_reconciliation
-from app.schemas.regulatory_liquidity import (
-    RegulatoryRunBatchRead,
-    RegulatoryRunCreate,
-    RegulatoryRunRead,
-)
 from app.services import market_data_sources, sdi_capital
 from app.services.audit import record_event
 from app.services.market_data import CurveView
-from app.services.regulatory_liquidity import (  # noqa: PLC2701 - engine completion read
-    _read_regulatory_run_execution_result,
-)
 
 ENGINE_VERSION = "regulatory-irr-v1.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
@@ -393,7 +391,7 @@ def _create_and_execute(
             ),
         )
     db.expire_all()
-    return _read_regulatory_run_execution_result(db, ctx, bank, run_id)
+    return read_regulatory_run_execution_result(db, ctx, bank, run_id)
 
 
 def _run_analysis(  # noqa: PLR0913

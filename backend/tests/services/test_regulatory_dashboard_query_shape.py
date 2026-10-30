@@ -14,10 +14,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
 from app.domain.authority.results import Computed, FigureResult
-from app.domain.liquidity.engine import LcrResult, NsfrResult
 from app.ftp import service as regulatory_ftp
 from app.fx import service as regulatory_fx
 from app.irrbb.service import regulatory_irr
+from app.liquidity.domain.engine import LcrResult, NsfrResult
+from app.liquidity.service import regulatory_liquidity
 from app.live.domain.reporting import period_windows
 from app.models import (
     Bank,
@@ -26,7 +27,7 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from app.services import regulatory_capital, regulatory_liquidity
+from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

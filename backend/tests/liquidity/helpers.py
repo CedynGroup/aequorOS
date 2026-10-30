@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.domain.liquidity.engine import LiquidityFact, LiquidityParams
+from app.liquidity.domain.engine import LiquidityFact, LiquidityParams
 
 
 def inputs() -> tuple[tuple[LiquidityFact, ...], LiquidityParams[Decimal | None]]:

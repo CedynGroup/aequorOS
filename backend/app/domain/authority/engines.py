@@ -45,13 +45,13 @@ ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
     "app.domain.irr.engine:run_irr_scenarios": ("app.irrbb.domain.engine", "run_irr_scenarios"),
     "app.domain.irr.standardised:run": ("app.irrbb.domain.standardised", "run"),
     "app.domain.liquidity.engine:compute_currency_gaps": (
-        "app.domain.liquidity.engine",
+        "app.liquidity.domain.engine",
         "compute_currency_gaps",
     ),
-    "app.domain.liquidity.engine:compute_lcr": ("app.domain.liquidity.engine", "compute_lcr"),
-    "app.domain.liquidity.engine:compute_nsfr": ("app.domain.liquidity.engine", "compute_nsfr"),
+    "app.domain.liquidity.engine:compute_lcr": ("app.liquidity.domain.engine", "compute_lcr"),
+    "app.domain.liquidity.engine:compute_nsfr": ("app.liquidity.domain.engine", "compute_nsfr"),
     "app.domain.liquidity.engine:compute_stressed_ladder": (
-        "app.domain.liquidity.engine",
+        "app.liquidity.domain.engine",
         "compute_stressed_ladder",
     ),
     "app.domain.rating.engine:compute_rating": ("app.rating.domain.engine", "compute_rating"),
@@ -65,7 +65,7 @@ ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
         "capital_breach_multiplier",
     ),
     "app.services.regulatory_liquidity:liquidity_breach_multiplier": (
-        "app.services.regulatory_liquidity",
+        "app.liquidity.service.regulatory_liquidity",
         "liquidity_breach_multiplier",
     ),
     "app.services.regulatory_reporting.bog_forms.engine:compute_form": (

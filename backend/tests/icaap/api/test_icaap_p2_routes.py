@@ -26,8 +26,8 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import AuthorizationBinding, BankReportingPeriod, RegulatoryParameter, User
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,

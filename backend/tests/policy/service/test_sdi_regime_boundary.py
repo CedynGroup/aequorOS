@@ -31,6 +31,8 @@ from app.domain.authority.registry import REGISTRY, InstitutionClass, MetricFami
 from app.domain.capital.engine import CapitalFact, compute_rwa
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
+from app.liquidity.schemas.liquidity_thresholds import LiquidityThresholdUpdate
+from app.liquidity.service import liquidity_thresholds
 from app.live.service import pipeline
 from app.models import (
     Bank,
@@ -43,9 +45,7 @@ from app.models import (
     RegulatoryRun,
 )
 from app.policy.service import sdi_regime
-from app.schemas.liquidity_thresholds import LiquidityThresholdUpdate
 from app.services import (
-    liquidity_thresholds,
     regulatory_capital,
     sdi_capital,
     sdi_capital_assurance,

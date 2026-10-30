@@ -1726,7 +1726,6 @@
  "app.services.regulatory_credit": {
   "reportAny": 59,
   "reportMissingTypeArgument": 1,
-  "reportPrivateUsage": 1,
   "reportUnknownArgumentType": 6,
   "reportUnknownMemberType": 15,
   "reportUnknownParameterType": 1,
@@ -1742,12 +1741,10 @@
  },
  "app.services.regulatory_irr": {
   "reportAny": 27,
-  "reportPrivateUsage": 1,
   "reportUnusedFunction": 1
  },
  "app.services.regulatory_irr_sf": {
   "reportAny": 87,
-  "reportPrivateUsage": 1,
   "reportUnknownArgumentType": 47,
   "reportUnknownMemberType": 80,
   "reportUnknownVariableType": 29,
@@ -1757,8 +1754,7 @@
   "reportAny": 29,
   "reportUnknownArgumentType": 1,
   "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 3,
-  "reportUnusedFunction": 1
+  "reportUnknownVariableType": 3
  },
  "app.services.regulatory_parameters": {
   "reportMissingTypeArgument": 1,

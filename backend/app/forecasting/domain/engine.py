@@ -10,7 +10,7 @@ Cross-module consistency is the headline feature: the projected regulatory
 ratios are NOT re-implemented here. Each projected year builds a full bank
 fact set (the same ``fact_group``/``category`` structure the other engines
 consume) and calls ``compute_lcr``/``compute_nsfr`` from
-``app.domain.liquidity.engine`` and ``compute_rwa``/``compute_capital_ratios``
+``app.liquidity.domain.engine`` and ``compute_rwa``/``compute_capital_ratios``
 from ``app.domain.capital.engine`` on it, with the unshocked baseline
 parameters. Year 0 of every projection is the as-of fact set itself, so a
 projection's year-0 ratios equal the standalone engines' baseline outputs.
@@ -107,7 +107,7 @@ from app.domain.capital.engine import (
     compute_capital_ratios,
     compute_rwa,
 )
-from app.domain.liquidity.engine import (
+from app.liquidity.domain.engine import (
     LiquidityFact,
     LiquidityParams,
     compute_lcr,

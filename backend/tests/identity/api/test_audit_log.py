@@ -48,6 +48,11 @@ from app.identity.schemas.audit_log import AuditLogRead
 from app.identity.schemas.auth import MeResponse
 from app.identity.schemas.banks import BankListRead
 from app.identity.service import audit_log, authentication, authorization, grant_administration
+from app.liquidity.schemas.liquidity_thresholds import (
+    LiquidityHaircutUpdate,
+    LiquidityThresholdUpdate,
+)
+from app.liquidity.service import liquidity_thresholds
 from app.models import (
     AuditEvent,
     Bank,
@@ -96,15 +101,8 @@ from app.reporting.service import workflow
 from app.reporting.service.filing_workflow import templates
 from app.schemas.database_connection import DatabaseConnectionCreate
 from app.schemas.ingestion import PositionSnapshotOverrideCreate
-from app.schemas.liquidity_thresholds import LiquidityHaircutUpdate, LiquidityThresholdUpdate
 from app.schemas.push import PushBatchOpen, PushRecordsPage
-from app.services import (
-    database_connections,
-    ingestion,
-    liquidity_thresholds,
-    push_ingestion,
-    regulatory_capital,
-)
+from app.services import database_connections, ingestion, push_ingestion, regulatory_capital
 from app.services.audit import record_event
 from tests.conftest import (
     ApiTestApp,

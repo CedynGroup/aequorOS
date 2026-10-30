@@ -23,6 +23,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -41,8 +43,7 @@ from app.schemas.capital_plan import (
     ManagementAction,
     Pillar2AddOnInput,
 )
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import capital_plan, regulatory_liquidity
+from app.services import capital_plan
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

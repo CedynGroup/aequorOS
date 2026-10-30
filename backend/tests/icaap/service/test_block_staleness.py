@@ -21,8 +21,8 @@ from app.icaap.schemas.workspace import (
     IcaapSectionWorkingSave,
 )
 from app.icaap.service import blocks, resolvers, sections
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import AuditEvent, BankReportingPeriod
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import regulatory_capital
 from tests.icaap.service.conftest import AS_OF
 
