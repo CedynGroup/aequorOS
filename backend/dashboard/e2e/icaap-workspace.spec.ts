@@ -85,7 +85,7 @@ test.describe("ICAAP workspace", () => {
     page,
     fixtureFiscalYear,
   }) => {
-    await page.goto("/icaap");
+    await page.goto("/icaap?preparing=1");
     await expect(
       page.getByRole("heading", {
         name: /Internal Capital Adequacy Assessment/i,
@@ -106,14 +106,14 @@ test.describe("ICAAP workspace", () => {
       .fill("P1 acceptance walk-through");
     await dialog.getByRole("button", { name: "Create cycle" }).click();
 
-    await expect(page).toHaveURL(/\/icaap\/[0-9a-f-]+\/overview$/);
+    await expect(page).toHaveURL(/\/icaap\/[0-9a-f-]+\/overview\?preparing=1$/);
     await expect(page.getByText(/Rehearsal cycle/i).first()).toBeVisible();
 
     // Sections: open the first one and write in it.
     await page.getByRole("link", { name: "Sections", exact: true }).click();
-    await expect(page).toHaveURL(/\/icaap\/[0-9a-f-]+\/sections$/);
+    await expect(page).toHaveURL(/\/icaap\/[0-9a-f-]+\/sections\?preparing=1$/);
     await page.getByRole("link").filter({ hasText: /\(a\)/ }).first().click();
-    await expect(page).toHaveURL(/\/sections\/[a-z0-9_]+$/);
+    await expect(page).toHaveURL(/\/sections\/[a-z0-9_]+\?preparing=1$/);
 
     const editor = page.getByLabel("Section narrative");
     await expect(editor).toBeVisible({ timeout: 30_000 });
@@ -161,7 +161,7 @@ test.describe("ICAAP workspace", () => {
     page,
     cycleId,
   }) => {
-    await page.goto(`/icaap/${cycleId}/overview`);
+    await page.goto(`/icaap/${cycleId}/overview?preparing=1`);
     await expect(page).toHaveURL(/\/icaap\/[0-9a-f-]+\//);
 
     for (const [label, extension] of [
@@ -180,9 +180,9 @@ test.describe("ICAAP workspace", () => {
     // never succeed, so refuse immediately rather than burning the timeout.
     requireObjectStorage();
 
-    await page.goto(`/icaap/${cycleId}/overview`);
+    await page.goto(`/icaap/${cycleId}/overview?preparing=1`);
     await page.getByRole("link", { name: "Attachments", exact: true }).click();
-    await expect(page).toHaveURL(/\/attachments$/);
+    await expect(page).toHaveURL(/\/attachments\?preparing=1$/);
 
     await page.getByRole("button", { name: "Attach" }).click();
     const dialog = page.getByRole("dialog", { name: "Attach a document" });
@@ -220,7 +220,7 @@ test.describe("a user without Capital confidential authority", () => {
     await page.goto("/");
     await expect(page.getByRole("link", { name: "ICAAP" })).toHaveCount(0);
 
-    await page.goto("/icaap");
+    await page.goto("/icaap?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();

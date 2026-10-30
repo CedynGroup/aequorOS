@@ -5,7 +5,7 @@
  * pack from a selected immutable enterprise-stress run: cover + provenance,
  * executive summary, the projection charts, driver attribution, the N-way
  * comparison, management-action with/without, analyst/CRO narrative (composer-
- * local capture, item 7), and the full Appendix II Tables 1–6 — printable to PDF
+ * local capture, item 7), and the full Appendix II Tables 1–6: printable to PDF
  * via the app's print-optimised board-pack path (design system §5).
  *
  * FAIL CLOSED (NEW-10). Every floor on this page comes from the run payload —
@@ -17,8 +17,11 @@
  * amber tile and a caption that names the reason.
  */
 
+import { useBankRules } from "@/lib/api/regulatoryRules";
+import SdiLiquidityBoardDisclosure from "@/components/reports/SdiLiquidityBoardDisclosure";
 import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
+import { instrumentDisclosure } from "@/lib/regulatoryInstruments";
 import { Printer } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import SectionCard from "@/components/ui/SectionCard";
@@ -58,6 +61,7 @@ export default function StressBoardPack() {
   const bankId = bank?.id;
   const periodId = period?.id;
   const isSdi = moduleScope.institutionClass === "sdi";
+  const rules = useBankRules(bankId);
   const sdiLiquidity = useSdiLiquidityPosition(
     isSdi && moduleScope.liquidityConfidentialView ? bankId : undefined,
   );
@@ -108,27 +112,70 @@ export default function StressBoardPack() {
       ? `No ${what} floor configured`
       : `Floor ${fmtFloorPct(floor)}`;
 
+  const packCodes = isSdi
+    ? ["SDI-STRESS-ANNUAL"]
+    : ["ICAAP-STRESS", "STRESS-PACK"];
+  if (sections.appendix && !isSdi) packCodes.push("ICAAP-STRESS-APPENDIX2");
+  const packWarnings = [
+    ...new Set(
+      packCodes.flatMap((code) => {
+        const instrument = rules.query.error
+          ? undefined
+          : rules.instrument(code);
+        return instrument?.instrumentStatus === "in_force"
+          ? []
+          : [
+              instrumentDisclosure(
+                instrument?.instrumentStatus,
+                instrument?.effectiveFrom,
+                instrument?.regulator,
+              ).tooltip,
+            ];
+      }),
+    ),
+  ];
+
   return (
     <>
       <PageHeader
         eyebrow="Reports"
         title="Stress Board-Pack Composer"
         action={
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            disabled={!run}
-            onClick={() => window.print()}
-          >
-            <Printer size={14} /> Print / export PDF
-          </button>
+          <div className="max-w-xl space-y-2">
+            {packWarnings.length > 0 && (
+              <p role="note" className="text-caption text-warning">
+                {packWarnings.join(" ")} This pack is for preparation or
+                monitoring. It does not establish compliance or readiness for
+                live filing.
+              </p>
+            )}
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+              disabled={
+                !run ||
+                !rules.isReady ||
+                packCodes.some(
+                  (code) => !rules.instrument(code)?.instrumentStatus,
+                )
+              }
+              onClick={() => window.print()}
+            >
+              <Printer size={14} /> Print / export PDF
+            </button>
+          </div>
         }
       />
 
       <QueryBoundary
-        isLoading={registry.isLoading || approved.isLoading}
-        error={registry.error ?? approved.error}
-        onRetry={() => registry.refetch()}
+        isLoading={
+          registry.isLoading || approved.isLoading || (isSdi && rules.isLoading)
+        }
+        error={registry.error ?? approved.error ?? (isSdi ? rules.error : null)}
+        onRetry={() => {
+          void registry.refetch();
+          void rules.query.refetch();
+        }}
       >
         {/* `print:pt-12` keeps the printed report where it sat before Tailwind 4,
             whose `space-y` no longer leaves a gap after the print-hidden controls. */}
@@ -219,13 +266,13 @@ export default function StressBoardPack() {
             <EmptyState
               Icon={Printer}
               title="No stress run to compose"
-              description="Run an approved macro scenario from the enterprise stress workbench first — the immutable run becomes the source for this board pack."
+              description="Run an approved macro scenario from the enterprise stress workbench first. The immutable run becomes the source for this board pack."
             />
           ) : (
             <div className="space-y-6">
               {/* Cover */}
               <SectionCard
-                title={`${isSdi ? "SDI Stress Test" : "ICAAP Stress Test"} — ${run.scenario_code}`}
+                title={`${isSdi ? "SDI Stress Test" : "ICAAP Stress Test"}: ${run.scenario_code}`}
                 subtitle={`${bank?.name ?? ""} · reporting period ${period ? fmtDateUTC(new Date(period.periodEnd)) : ""}`}
                 actions={
                   <StatusPill
@@ -282,7 +329,7 @@ export default function StressBoardPack() {
                   {(() => {
                     // A null capital gap is NOT a gap of zero. `num()` mapped it
                     // to 0, which printed "GHS'000 0" with an "ok" status on a
-                    // BOARD PACK — a board told there is no shortfall when the
+                    // BOARD PACK: a board told there is no shortfall when the
                     // figure was never computed (audit A360-6, the DriverWaterfall
                     // class). An uncomputed figure says so and carries no status.
                     const gap = numOrNull(run.summary.capital_gap);
@@ -299,7 +346,7 @@ export default function StressBoardPack() {
                         }
                         hint={
                           gap === null
-                            ? "This run reported no capital gap figure. Nothing is shown in its place — an uncomputed figure is not a zero."
+                            ? "This run reported no capital gap figure. Nothing is shown in its place: an uncomputed figure is not a zero."
                             : undefined
                         }
                       />
@@ -343,10 +390,10 @@ export default function StressBoardPack() {
               {sections.charts && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <ChartFrame
-                    title="CAR — base vs stress"
+                    title="CAR: base vs stress"
                     subtitle={
                       carFloor === null
-                        ? "No CAR floor configured — no floor line drawn"
+                        ? "No CAR floor configured: no floor line drawn"
                         : `Against the ${fmtFloorPct(carFloor)} floor on this run`
                     }
                     height={240}
@@ -360,7 +407,7 @@ export default function StressBoardPack() {
                   </ChartFrame>
                   {run.summary.stressed_lcr_pct === null ? (
                     <ChartFrame
-                      title="Liquidity — SDI (LMTD)"
+                      title="SDI liquidity monitoring"
                       subtitle="Basel LCR/NSFR excluded (§4.6)"
                       height={240}
                     >
@@ -380,10 +427,10 @@ export default function StressBoardPack() {
                     </ChartFrame>
                   ) : (
                     <ChartFrame
-                      title="LCR — base vs stress"
+                      title="LCR: base vs stress"
                       subtitle={
                         lcrFloor === null
-                          ? "No LCR floor configured — no floor line drawn"
+                          ? "No LCR floor configured: no floor line drawn"
                           : `Against the ${fmtFloorPct(lcrFloor)} floor on this run`
                       }
                       height={240}
@@ -421,30 +468,5 @@ export default function StressBoardPack() {
         </PageContainer>
       </QueryBoundary>
     </>
-  );
-}
-
-function SdiLiquidityBoardDisclosure({
-  asOf,
-  table1Breaches,
-  reserveBreaches,
-}: {
-  asOf: string | undefined;
-  table1Breaches: number | undefined;
-  reserveBreaches: number | undefined;
-}) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center px-6 text-center text-caption text-slate">
-      <p>
-        SDI liquidity stress is not assessed because no BoG SDI liquidity-stress
-        methodology is configured. Basel LCR/NSFR are not substituted.
-      </p>
-      {asOf && (
-        <p className="mt-3 text-navy">
-          Baseline LMTD evidence as of {asOf}: {table1Breaches ?? 0} Table 1
-          breach(es), {reserveBreaches ?? 0} reserve breach(es).
-        </p>
-      )}
-    </div>
   );
 }

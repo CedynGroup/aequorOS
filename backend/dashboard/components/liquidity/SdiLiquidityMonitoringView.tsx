@@ -1,5 +1,7 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import { useModuleScope } from "@/components/shell/BankContext";
@@ -135,6 +137,10 @@ export default function SdiLiquidityMonitoringView({
   institutionClass: string | null;
 }) {
   const isSdi = institutionClass === "sdi";
+  const rules = useBankRules(bankId);
+  const preparing = useSearchParams().get("preparing") === "1";
+  const showRatios = preparing || rules.isInForce("SDI-LMT-MONTHLY");
+  const showBasel = preparing || rules.isInForce("LCR-NSFR");
   const scope = useModuleScope();
   const monitoring = useLiquidityMonitoring(bankId);
   const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bankId : undefined);
@@ -143,7 +149,8 @@ export default function SdiLiquidityMonitoringView({
   );
   const data = monitoring.data;
   const sdiData = sdiLiquidity.data;
-  const baselData = baselLiquidity.data;
+  const baselData = showBasel ? baselLiquidity.data : undefined;
+  const ratios = showRatios ? (sdiData?.ratios ?? []) : [];
   const concentration = data?.funding_concentration;
   const capacity = data?.counterbalancing_capacity;
   // A provider whose share of deposits is not computable is left OUT of the
@@ -158,7 +165,7 @@ export default function SdiLiquidityMonitoringView({
       provider.share !== null,
   );
   const providersWithoutShare = providerShares.length - providerChart.length;
-  const ratioBuffers = (sdiData?.ratios ?? [])
+  const ratioBuffers = ratios
     .filter((ratio) => ratio.value_pct !== null)
     .map((ratio) => ({
       ...ratio,
@@ -199,7 +206,9 @@ export default function SdiLiquidityMonitoringView({
     cumulative: numOrNull(bucket.cumulative_mismatch_ghs),
   }));
   const readinessExceptions = (data?.readiness ?? []).filter(
-    (item) => item.status !== "ready",
+    (item) =>
+      item.status !== "ready" &&
+      (showRatios || item.module !== "liquidity_table1"),
   );
 
   return (
@@ -207,12 +216,19 @@ export default function SdiLiquidityMonitoringView({
       <PageHeader eyebrow="Liquidity" title="Liquidity Monitoring Tools" />
       <QueryBoundary
         isLoading={
+          rules.isLoading ||
           monitoring.isLoading ||
           sdiLiquidity.isLoading ||
           baselLiquidity.isLoading
         }
-        error={monitoring.error ?? sdiLiquidity.error ?? baselLiquidity.error}
+        error={
+          rules.error ??
+          monitoring.error ??
+          sdiLiquidity.error ??
+          baselLiquidity.error
+        }
         onRetry={() => {
+          void rules.query.refetch();
           void monitoring.refetch();
           void sdiLiquidity.refetch();
           void baselLiquidity.refetch();
@@ -224,16 +240,18 @@ export default function SdiLiquidityMonitoringView({
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
                 {isSdi ? (
                   <>
-                    <KpiStat
-                      label="Worst LMTD ratio buffer"
-                      value={
-                        worstRatio
-                          ? `${worstRatio.buffer >= 0 ? "+" : ""}${worstRatio.buffer.toFixed(1)} pp`
-                          : "—"
-                      }
-                      status={metricStatus(worstRatio?.buffer ?? null)}
-                      hint={worstRatio?.label ?? "No computable LMTD ratios"}
-                    />
+                    {showRatios && (
+                      <KpiStat
+                        label="Worst LMTD ratio buffer"
+                        value={
+                          worstRatio
+                            ? `${worstRatio.buffer >= 0 ? "+" : ""}${worstRatio.buffer.toFixed(1)} pp`
+                            : "—"
+                        }
+                        status={metricStatus(worstRatio?.buffer ?? null)}
+                        hint={worstRatio?.label ?? "No computable LMTD ratios"}
+                      />
+                    )}
                     <KpiStat
                       label="Primary reserve buffer"
                       value={
@@ -353,22 +371,24 @@ export default function SdiLiquidityMonitoringView({
                   <MaturityLadderChart data={ladderChart} />
                 </SectionCard>
                 {isSdi ? (
-                  <SectionCard
-                    title="LMTD compliance"
-                    subtitle="Table 1 liquidity ratios and buffers for this SDI, against the Liquidity Monitoring Tools Directive exposure draft (not yet in force)."
-                    noPadding
-                  >
-                    <DataTable
-                      columns={ratioColumns}
-                      rows={sdiData?.ratios ?? []}
-                      density="compact"
-                      maxHeight={300}
-                      stickyHeader
-                    />
-                  </SectionCard>
+                  showRatios && (
+                    <SectionCard
+                      title="LMTD preparation assessment"
+                      subtitle="Table 1 liquidity ratios and buffers for this institution."
+                      noPadding
+                    >
+                      <DataTable
+                        columns={ratioColumns}
+                        rows={ratios}
+                        density="compact"
+                        maxHeight={300}
+                        stickyHeader
+                      />
+                    </SectionCard>
+                  )
                 ) : (
                   <SectionCard
-                    title="Basel liquidity compliance"
+                    title="Basel liquidity monitoring assessment"
                     subtitle="LCR/NSFR inputs and named validation exceptions from the active Basel calculation."
                   >
                     <dl className="grid grid-cols-2 gap-x-5 gap-y-4 text-caption">

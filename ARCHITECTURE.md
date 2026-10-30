@@ -315,6 +315,11 @@ semantics follow the plane, never the other way round:
    Missing-source handling follows the
    [official BSD engine rules](docs/bog_returns/00_full_return_registry.md#6-as-built-engine-rules).
 
+The [reporting-date contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)
+also owns instrument applicability, commencement notifications and sealed export
+disclosures. For register navigation and deliberate preparation, see the
+[dashboard guide](backend/dashboard/README.md#regulatory-instruments-and-preparation).
+
 Growth path: denser ingestion (daily/streaming) makes plane 2 denser and the
 live edge fresher without any architectural change — QRM-cadence to
 MORS-cadence on the same model.
@@ -1316,15 +1321,15 @@ dashboard responses against the former per-period path.
 This is intermediate read-through batching, not the persisted trend read model. That read model
 remains architectural debt; the Command Center contract and polling policy are unchanged.
 
-| #   | Module         | Engine                                               | Key endpoints                                  |
-| --- | -------------- | ---------------------------------------------------- | ---------------------------------------------- |
-| 1   | Liquidity      | LCR / NSFR / stress                                  | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
-| 2   | Basel Capital  | RWA / CAR-Tier1-CET1-leverage / stress               | `/banks/{id}/capital/*`, `/submissions/bsd2`   |
-| 3   | Forecasting    | 5y projection / optimizer / what-if                  | `/banks/{id}/forecast/*`                       |
+| #   | Module         | Engine                                                           | Key endpoints                                  |
+| --- | -------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| 1   | Liquidity      | LCR / NSFR / stress                                              | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
+| 2   | Basel Capital  | RWA / CAR-Tier1-CET1-leverage / stress                           | `/banks/{id}/capital/*`, `/submissions/bsd2`   |
+| 3   | Forecasting    | 5y projection / optimizer / what-if                              | `/banks/{id}/forecast/*`                       |
 | 4   | Cash-flow LSTM | in-process `backend/app/forecasting/ml` (LSTM + static baseline) | `/banks/{id}/cashflow-forecast`                |
-| 5   | IRR (IRRBB)    | gap / duration / EVE (6 Basel) / EaR                 | `/banks/{id}/irr/*`                            |
-| 6   | FX             | NOP / historical-sim VaR / IFRS 9 hedges             | `/banks/{id}/fx/*`                             |
-| 7   | FTP            | matched-maturity curve / product & branch P&L / NMD  | `/banks/{id}/ftp/*`                            |
+| 5   | IRR (IRRBB)    | gap / duration / EVE (6 Basel) / EaR                             | `/banks/{id}/irr/*`                            |
+| 6   | FX             | NOP / historical-sim VaR / IFRS 9 hedges                         | `/banks/{id}/fx/*`                             |
+| 7   | FTP            | matched-maturity curve / product & branch P&L / NMD              | `/banks/{id}/ftp/*`                            |
 
 The shared migration `202607170001_irr_fx_ftp_foundation` widened the run-module, fact-group,
 and line-section CHECK constraints for IRR/FX/FTP. Bank stress-default provisioning and

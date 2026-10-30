@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.identity.public import Bank
-from app.policy.public import regulatory_parameters
+from app.policy.public import regulatory_parameters, rule_in_force
 from app.reporting.service.le_generation import (
     _BUCKET_CODES,
     _LE_POSITION_TYPES,
@@ -121,6 +121,7 @@ class Exposure:
     pct_net_own_funds: Decimal | None
     single_obligor_limit_pct: Decimal
     large_exposure_limit_pct: Decimal
+    applicable_limit_pct: Decimal
     status: str
     exempt: bool
 
@@ -349,6 +350,11 @@ def get_sdi_large_exposures(
     large_exposure = regulatory_parameters.resolve(
         db, bank, "large_exposure_limit_pct", as_of=as_of
     )
+    directive_in_force = rule_in_force(db, ctx, bank, "SDI-LE-MONTHLY", as_of=as_of)
+    applicable_limits = (
+        (single_obligor, large_exposure) if directive_in_force else (single_obligor,)
+    )
+    applicable_limit = min(parameter.decimal for parameter in applicable_limits)
     rows = _load_canonical_rows(db, ctx, bank, as_of, _LE_POSITION_TYPES)
     entities, unattributed_ghs, unattributed_count = _aggregate_entities(rows)
     exposures: list[Exposure] = []
@@ -359,7 +365,7 @@ def get_sdi_large_exposures(
             "not_computable"
             if pct is None
             else "above_limit"
-            if not entity.exempt and (pct > single_obligor.decimal or pct > large_exposure.decimal)
+            if not entity.exempt and pct > applicable_limit
             else "ok"
         )
         exposures.append(
@@ -370,6 +376,7 @@ def get_sdi_large_exposures(
                 pct_net_own_funds=pct,
                 single_obligor_limit_pct=single_obligor.decimal,
                 large_exposure_limit_pct=large_exposure.decimal,
+                applicable_limit_pct=applicable_limit,
                 status=status,
                 exempt=entity.exempt,
             )
@@ -385,7 +392,7 @@ def get_sdi_large_exposures(
     # confirmation status, so re-statusing it in the control plane is enough.
     unconfirmed = sorted(
         parameter.param_code
-        for parameter in (single_obligor, large_exposure)
+        for parameter in applicable_limits
         if parameter.confirmation_status != "confirmed"
     )
     if unconfirmed:

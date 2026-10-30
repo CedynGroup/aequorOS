@@ -1051,6 +1051,12 @@ export function isPersonalSettingsPath(path: string): boolean {
   return path === "/settings" || path.startsWith("/settings/");
 }
 
+function isInstrumentRegister(path: string): boolean {
+  return (
+    path === "/submissions/instruments" || path === "/submissions/upcoming"
+  );
+}
+
 /**
  * Is a route path visible under this scope? Used by the ROUTE GUARD, which 404s a
  * hidden path — so it stays permissive until the scope resolves (no 404 flash on
@@ -1063,6 +1069,7 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   if (!scope.isResolved) return true;
   if (isAccessPath(path)) return true;
   if (isPersonalSettingsPath(path)) return true;
+  if (isInstrumentRegister(path)) return true;
   if (forecastingWorkspaceAccess(path, scope)?.state === "disabled")
     return true;
   const moduleKey = moduleForPath(path);
@@ -1108,6 +1115,7 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (subrouteHidden(path, scope)) return { state: "hidden" };
   if (isAccessPath(path)) return { state: "enabled" };
   if (isPersonalSettingsPath(path)) return { state: "enabled" };
+  if (isInstrumentRegister(path)) return { state: "enabled" };
   // Keep ICAAP navigation hidden without CAP/confidential view. Its public
   // hub can still explain the requirement through the shared denied-page rules.
   if (isIcaapPath(path) && bindingControlledSubrouteHidden(path, scope)) {

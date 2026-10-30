@@ -30,6 +30,11 @@ import { setAccessToken } from "../lib/api/token";
 const context = vi.hoisted(() => ({
   permissions: ["view", "run", "create"],
   hasPeriod: true,
+  preparing: false,
+}));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () =>
+    new URLSearchParams(context.preparing ? "preparing=1" : ""),
 }));
 vi.mock("@/components/shell/BankContext", () => ({
   useBankContext: () => ({
@@ -59,7 +64,8 @@ vi.mock("@/components/shell/BankContext", () => ({
     ),
     moduleScope: {
       isResolved: true,
-      modules: new Set(["irr", "ftp", "fx", "liquidity", "basel"]),
+      hasInstitutionAuthority: true,
+      modules: new Set(["irrbb", "ftp", "fx", "liquidity", "capital"]),
       organizationModules: new Set(),
       irrbbConfidentialView: true,
     },
@@ -657,3 +663,15 @@ it.each(["definitions", "runs", "saved analyses", "saved detail"])(
     }
   },
 );
+
+it("preserves preparation context when opening enterprise stress", async () => {
+  context.preparing = true;
+  try {
+    mount("irr");
+    expect(
+      screen.getByRole("link", { name: "Open enterprise stress workbench" }),
+    ).toHaveAttribute("href", "/irr/enterprise-stress?preparing=1");
+  } finally {
+    context.preparing = false;
+  }
+});

@@ -1,5 +1,7 @@
 "use client";
 
+import { useBankRules, useInForceAlerts } from "@/lib/api/regulatoryRules";
+
 /**
  * Alert Center — every open limit-breach finding across the live modules,
  * grouped by module or severity. The live-findings API exposes only open
@@ -19,7 +21,6 @@ import SectionCard from "@/components/ui/SectionCard";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import EmptyState from "@/components/ui/EmptyState";
 import { useBankContext } from "@/components/shell/BankContext";
-import { useBankAlerts } from "@/lib/api/hooks";
 import {
   useSdiCapitalChecks,
   useSdiCapitalSummary,
@@ -34,7 +35,7 @@ const ALERTS_LIMIT = 200; // backend maximum per read
 
 export default function AlertCenterPage() {
   const { bank, moduleScope } = useBankContext();
-  const alerts = useBankAlerts(bank?.id, ALERTS_LIMIT);
+  const alerts = useInForceAlerts(bank?.id, ALERTS_LIMIT);
   const isSdi = moduleScope.institutionClass === "sdi";
   const sdiLiquidity = useSdiLiquidityPosition(
     isSdi && moduleScope.liquidityConfidentialView ? bank?.id : undefined,
@@ -48,13 +49,17 @@ export default function AlertCenterPage() {
   const sdiExposures = useSdiLargeExposures(isSdi ? bank?.id : undefined);
   const [groupBy, setGroupBy] = useState<AlertGroupBy>("module");
 
+  const rules = useBankRules(bank?.id);
   const data = alerts.data;
   const critical = data?.bySeverity?.critical ?? 0;
   const high = data?.bySeverity?.high ?? 0;
   const modulesAffected = Object.keys(data?.byModule ?? {}).length;
   const sdiSignals = isSdi
     ? [
-        ...(sdiLiquidity.data?.ratios ?? [])
+        ...(rules.isInForce("SDI-LMT-MONTHLY")
+          ? (sdiLiquidity.data?.ratios ?? [])
+          : []
+        )
           .filter((row) => row.status === "below_minimum")
           .map((row) => ({
             label: row.label,
@@ -186,7 +191,7 @@ export default function AlertCenterPage() {
               <EmptyState
                 Icon={BellRing}
                 title="No open alerts"
-                description="Every live module is inside its limits for the current period. New breaches appear here automatically as the pipeline recomputes on ingestion."
+                description="No in-force breach alerts in this feed."
                 action={
                   <Link
                     href="/risk"

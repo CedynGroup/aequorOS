@@ -16,7 +16,7 @@ test.describe("default macro scenarios", () => {
   test("shows system defaults and runs one on a fresh scenario library", async ({
     page,
   }) => {
-    await page.goto("/irr/enterprise-stress");
+    await page.goto("/irr/enterprise-stress?preparing=1");
 
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
@@ -80,7 +80,7 @@ test.describe("default macro scenarios", () => {
     test("read-only grants refuse execution and explain the missing authority in IRRBB, FTP and FX", async ({
       page,
     }) => {
-      await page.goto("/irr/enterprise-stress");
+      await page.goto("/irr/enterprise-stress?preparing=1");
       const scenario = page.getByLabel("Approved scenario");
       await expect(scenario).not.toHaveValue("");
       await expectBankStatus("/enterprise-stress/runs", 403, {

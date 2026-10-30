@@ -1,5 +1,6 @@
 """Policy's interface for other features: re-exports only, no logic."""
 
+from app.policy.applicability import forecast_legacy_thresholds, forecast_view_status, rule_in_force
 from app.policy.models.institution_type import InstitutionType
 from app.policy.models.jurisdiction import Jurisdiction
 from app.policy.models.parameter_register import (
@@ -45,6 +46,9 @@ from app.policy.service.params import (
 )
 
 __all__ = [
+    "forecast_legacy_thresholds",
+    "forecast_view_status",
+    "rule_in_force",
     "IRRBB_SHOCKS",
     "InstitutionType",
     "InstitutionTypeUnresolved",

@@ -38,6 +38,8 @@ import {
   IRRBB_CONFIDENTIAL_RUN_REASON,
 } from "@/lib/modules";
 import { currencyCode, fmtInt } from "@/lib/format";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
   type SdiLiquidityPosition,
@@ -618,7 +620,7 @@ function ResultsView({
         {isSdiTenant ? (
           <KpiStat
             label="Liquidity regime"
-            value="LMTD"
+            value="Reserve monitoring"
             hint="Basel LCR/NSFR not assessed for SDIs (§4.6)"
           />
         ) : liquidityAssessed ? (
@@ -650,7 +652,7 @@ function ResultsView({
           status={s.stress_stays_above_all_minima ? "ok" : "crit"}
           hint={
             s.binding_minima.length
-              ? `Binding: ${s.binding_minima.join(", ")}`
+              ? `Scenario thresholds: ${s.binding_minima.join(", ")}`
               : "All minima held"
           }
         />
@@ -661,7 +663,9 @@ function ResultsView({
               ? "Not computed"
               : `${currencyCode()}'000 ${fmtInt(capitalGap)}`
           }
-          status={capitalGap === null ? undefined : capitalGap > 0 ? "warn" : "ok"}
+          status={
+            capitalGap === null ? undefined : capitalGap > 0 ? "warn" : "ok"
+          }
           hint={
             capitalGap === null
               ? "This run reported no capital gap figure."
@@ -842,11 +846,14 @@ function NotAssessed({ lines }: { lines: string[] }) {
   );
 }
 
-function SdiLiquidityNotAssessed({
+export function SdiLiquidityNotAssessed({
   position,
 }: {
   position: SdiLiquidityPosition | undefined;
 }) {
+  const { bank } = useBankContext();
+  const rules = useBankRules(bank?.id);
+  const lmtdInForce = rules.isInForce("SDI-LMT-MONTHLY");
   const breached =
     position?.ratios.filter((ratio) => ratio.status === "below_minimum")
       .length ?? 0;
@@ -854,19 +861,29 @@ function SdiLiquidityNotAssessed({
     position?.reserves.filter((reserve) => reserve.status === "below_minimum")
       .length ?? 0;
   return (
-    <div className="flex h-full flex-col justify-center px-6 text-center text-caption text-slate">
-      <p>
-        Liquidity stress is not assessed because no BoG SDI liquidity-stress
-        methodology is configured. Basel LCR/NSFR and a synthetic
-        survival-horizon result are intentionally not substituted.
-      </p>
-      {position && (
-        <p className="mt-3 text-navy">
-          Baseline LMTD evidence as of {position.as_of}: {breached} Table 1
-          breach(es) and {reserveBreaches} reserve breach(es).
+    <QueryBoundary
+      contained
+      isLoading={rules.isLoading}
+      error={rules.error}
+      onRetry={() => void rules.query.refetch()}
+    >
+      <div className="flex h-full flex-col justify-center px-6 text-center text-caption text-slate">
+        <p>
+          Liquidity stress is not assessed because no BoG SDI liquidity-stress
+          methodology is configured. Basel LCR/NSFR and a synthetic
+          survival-horizon result are intentionally not substituted.
         </p>
-      )}
-    </div>
+        {position && (
+          <p className="mt-3 text-navy">
+            Reserve evidence as of {position.as_of}: {reserveBreaches} reserve
+            breach(es).
+            {lmtdInForce && (
+              <> LMTD Table 1 assessment: {breached} below-floor ratio(s).</>
+            )}
+          </p>
+        )}
+      </div>
+    </QueryBoundary>
   );
 }
 

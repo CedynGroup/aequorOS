@@ -1,5 +1,7 @@
 "use client";
 
+import { useInForceLiveSummary } from "@/lib/api/regulatoryRules";
+
 /**
  * Shared pulse-card model for the Command Center: one headline card per
  * regulatory module, built from current module dashboards and the live
@@ -29,9 +31,9 @@ import {
   useFxDashboard,
   useIrrDashboard,
   useLiquidityDashboard,
-  useLiveSummary,
 } from "@/lib/api/hooks";
 import { num, numOrNull, formatFigure, fmtPctOrNull } from "@/lib/api/values";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { isHrefVisible } from "@/lib/modules";
 
@@ -141,9 +143,11 @@ function trendSpark<T extends TrendPoint>(
 // --- hook --------------------------------------------------------------------
 
 export type PulseCards = {
+  modules: LiveModule[];
   cards: Record<LiveModule, PulseCardModel>;
   /** True while any module card is still fetching. */
   isLoading: boolean;
+  error: unknown;
 };
 
 export function usePulseCards(
@@ -158,17 +162,21 @@ export function usePulseCards(
   //     redden the console for an expected pre-ingestion state. The Command
   //     Center's "No computed data yet" panel explains it instead.
   const scope = useModuleScope();
+  const rules = useBankRules(bankId);
   const scoped = (module: LiveModule) =>
-    isHrefVisible(LIVE_MODULE_HREFS[module], scope);
+    isHrefVisible(LIVE_MODULE_HREFS[module], scope) &&
+    rules.isModuleInForce(module);
   const dataBankId = hasData ? bankId : undefined;
   const liq = useLiquidityDashboard(
-    scope.liquidityAggregatedView ? dataBankId : undefined,
+    scope.liquidityAggregatedView && scoped("liquidity")
+      ? dataBankId
+      : undefined,
   );
   const cap = useCapitalDashboard(scoped("capital") ? dataBankId : undefined);
   const irr = useIrrDashboard(scoped("irr") ? dataBankId : undefined);
   const fx = useFxDashboard(scoped("fx") ? dataBankId : undefined);
   const ftp = useFtpDashboard(scoped("ftp") ? dataBankId : undefined);
-  const liveSummary = useLiveSummary(bankId);
+  const liveSummary = useInForceLiveSummary(bankId);
   const creditLive = liveSummary.data?.modules.find(
     (module) => module.module === "credit",
   );
@@ -395,12 +403,15 @@ export function usePulseCards(
       forecastLive,
       liveSummary.isLoading,
       liveSummary.error,
+      rules.isModuleInForce("liquidity") === true,
     ),
   };
 
   const cards = Object.fromEntries(
     DEFAULT_MODULE_ORDER.map((module) => {
       const card = baseCards[module];
+      if (!scoped(module))
+        return [module, { module, isLoading: false, status: "na" }];
       const overlay = ladderOverlay(ladders[module].data?.snapshots, module);
       return [
         module,
@@ -418,7 +429,14 @@ export function usePulseCards(
 
   return {
     cards,
-    isLoading: DEFAULT_MODULE_ORDER.some((m) => cards[m].isLoading),
+    modules: DEFAULT_MODULE_ORDER.filter(
+      (module) =>
+        isHrefVisible(LIVE_MODULE_HREFS[module], scope) &&
+        rules.isModuleInForce(module) !== false,
+    ),
+    isLoading:
+      rules.isLoading || DEFAULT_MODULE_ORDER.some((m) => cards[m].isLoading),
+    error: rules.error,
   };
 }
 
@@ -428,6 +446,7 @@ function buildForecastCard(
     | undefined,
   isLoading: boolean,
   error: unknown,
+  liquidityInForce: boolean,
 ): PulseCardModel {
   const base: PulseCardModel = {
     module: "forecast",
@@ -450,7 +469,9 @@ function buildForecastCard(
     value: fixed(num(metric("year5_car_pct")), 2),
     unit: "%",
     status: forecast.status,
-    hint: `Current base assumptions · minimum LCR ${fixed(num(metric("min_lcr_pct")), 2)}%`,
+    hint: liquidityInForce
+      ? `Current base assumptions · minimum LCR ${fixed(num(metric("min_lcr_pct")), 2)}%`
+      : "Current base assumptions · in-force capital assessment",
     computedAt: forecast.computedAt,
     basisNote: "current live forecast baseline",
   };

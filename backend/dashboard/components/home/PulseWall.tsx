@@ -12,6 +12,8 @@
  */
 
 import Link from "next/link";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import type { LiveModule } from "@aequoros/risk-service-api";
 import StatusPill from "@/components/ui/StatusPill";
 import { SemanticDelta } from "@/components/ui/DeltaBadge";
@@ -24,8 +26,6 @@ import {
   LIVE_MODULE_LABELS,
   liveMetricChangeText,
 } from "@/components/live/moduleDisplay";
-import { useModuleScope } from "@/components/shell/BankContext";
-import { isHrefVisible } from "@/lib/modules";
 import type { ModuleOrder } from "./RoleLens";
 import {
   DEFAULT_MODULE_ORDER,
@@ -59,29 +59,36 @@ export default function PulseWall({
    * per-module fetches that would 409 on a fresh, un-ingested tenant. */
   hasData?: boolean;
 }) {
-  const { cards } = usePulseCards(bankId, hasData);
-  const scope = useModuleScope();
+  const { cards, modules } = usePulseCards(bankId, hasData);
+  const rules = useBankRules(bankId);
   // Scope the pulse wall to the tenant's module set (docs/sdi.md §3.2): an SDI
   // drops the FX / FTP engines it does not run, so no irrelevant tile appears.
   const order = resolveOrder(moduleOrder, cards).filter((module) =>
-    isHrefVisible(LIVE_MODULE_HREFS[module], scope),
+    modules.includes(module),
   );
 
   return (
-    <div>
-      <div className="flex items-baseline justify-between gap-3 mb-3">
-        <h2 className="text-h3 text-navy">Module pulse</h2>
-        <p className="text-caption text-slate">
-          {order.length} regulatory {order.length === 1 ? "engine" : "engines"}{" "}
-          · live positions
-        </p>
+    <QueryBoundary
+      contained
+      isLoading={rules.isLoading}
+      error={rules.error}
+      onRetry={() => void rules.query.refetch()}
+    >
+      <div>
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <h2 className="text-h3 text-navy">Module pulse</h2>
+          <p className="text-caption text-slate">
+            {order.length} regulatory{" "}
+            {order.length === 1 ? "engine" : "engines"} · live positions
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {order.map((module) => (
+            <PulseCard key={module} card={cards[module]} />
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        {order.map((module) => (
-          <PulseCard key={module} card={cards[module]} />
-        ))}
-      </div>
-    </div>
+    </QueryBoundary>
   );
 }
 

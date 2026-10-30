@@ -61,7 +61,10 @@ def _workflow_tasks(path: Path) -> set[str]:
         first = next(lexer, "")
         if shlex.split(first) != ["mise"]:
             continue
-        tokens = [first, *lexer]
+        second = next(lexer, "")
+        if shlex.split(second) != ["run"]:
+            continue
+        tokens = [first, second, *lexer]
         commands: list[list[str]] = [[]]
         for token in tokens:
             if token == "&&":

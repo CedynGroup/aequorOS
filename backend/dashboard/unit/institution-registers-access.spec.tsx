@@ -76,6 +76,16 @@ beforeEach(() => {
         return Response.json({ institutions: [] });
       if (path === "/api/v1/authorization/access-requests/mine")
         return Response.json({ requests: [] });
+      if (path === "/api/v1/regulatory-reporting/templates")
+        return Response.json({
+          templates: [
+            {
+              code: "LMT",
+              title: "Liquidity monitoring tools",
+              instrument_status: "exposure_draft",
+            },
+          ],
+        });
       const register = path.replace("/api/v1/banks/BK-SAMP0001/", "");
       switch (register) {
         case "liquidity-thresholds":
@@ -207,10 +217,19 @@ it.each([
     );
     if (paths.includes("ecl-assumptions"))
       expect(await screen.findByText("No assumptions adopted")).toBeVisible();
+    const expectedRequests = paths.map(
+      (path) => `/api/v1/banks/BK-SAMP0001/${path}`,
+    );
+    if (paths.includes("liquidity-thresholds")) {
+      expect(
+        await screen.findByText("Draft", { selector: "summary" }),
+      ).toBeVisible();
+      expectedRequests.push("/api/v1/regulatory-reporting/templates");
+    } else {
+      expect(screen.queryByText("Draft", { selector: "summary" })).toBeNull();
+    }
     await waitFor(() =>
-      expect(requests.sort()).toEqual(
-        paths.map((path) => `/api/v1/banks/BK-SAMP0001/${path}`).sort(),
-      ),
+      expect(requests.sort()).toEqual(expectedRequests.sort()),
     );
   },
 );

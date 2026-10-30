@@ -111,7 +111,12 @@ jobs:
           PLAYWRIGHT_QUARANTINE_REPORT: ${{ runner.temp }}/journeys.json
           PLAYWRIGHT_CRITICAL_OUTCOMES_REPORT: ${{ runner.temp }}/critical-journeys.json
           E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
-        run: mise exec -- pnpm --filter @aequoros/dashboard e2e --shard=${{ matrix.shard }}/4 --output=${{ runner.temp }}/journey-results
+        run: |
+          mise exec -- pnpm --filter @aequoros/dashboard e2e --shard=${{ matrix.shard }}/4 --output=${{ runner.temp }}/journey-results
+          if [ "${{ matrix.shard }}" = "4" ]; then
+            PLAYWRIGHT_QUARANTINE_REPORT="$RUNNER_TEMP/regulatory-journeys.json" \
+              mise exec -- pnpm --filter @aequoros/dashboard e2e --config=playwright.regulatory.config.ts --output="$RUNNER_TEMP/regulatory-results"
+          fi
       - name: Run dashboard browser contracts
         if: matrix.shard == 1
         env:

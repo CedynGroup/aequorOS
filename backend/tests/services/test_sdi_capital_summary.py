@@ -15,125 +15,26 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import (
-    Bank,
     CanonicalGlAccount,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
     CanonicalReferenceRow,
-    IngestionBatch,
-    LineageRecord,
 )
 from app.services import sdi_capital, sdi_capital_assurance
+from tests.fixtures.sdi_capital import (
+    SDI_AS_OF,
+    create_sdi_bank,
+    create_sdi_batch_lineage,
+    seed_sdi_capital,
+    seed_sdi_positions,
+)
 from tests.support.helpers import ORG_1, USER_1
 
-_AS_OF = date(2026, 6, 30)
 _CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
 
 
-def _bank(db: Session, *, institution_type: str = "savings_and_loans") -> Bank:
-    bank = Bank(
-        organization_id=ORG_1,
-        name="s29 tenant",
-        short_name="S29",
-        currency="GHS",
-        jurisdiction_code="GH",
-        license_type="x",
-        institution_type=institution_type,
-    )
-    db.add(bank)
-    db.flush()
-    return bank
-
-
-def _batch_lineage(
-    db: Session, bank: Bank, ref: str, *, as_of: date = _AS_OF
-) -> tuple[IngestionBatch, LineageRecord]:
-    batch = IngestionBatch(
-        organization_id=ORG_1,
-        bank_id=bank.id,
-        source_system="EXCEL_CSV",
-        adapter_version="1.0",
-        extraction_mode="full",
-        status="accepted",
-        as_of_date=as_of,
-    )
-    db.add(batch)
-    db.flush()
-    lineage = LineageRecord(
-        organization_id=ORG_1,
-        bank_id=batch.bank_id,
-        ingestion_batch_id=batch.id,
-        operation_type="ADAPTER_TRANSLATE",
-        operation_ref=ref,
-        input_lineage_ids=[],
-    )
-    db.add(lineage)
-    db.flush()
-    return batch, lineage
-
-
-def _seed_capital(
-    db: Session,
-    bank: Bank,
-    rows: list[tuple[str, str, str]],
-    *,
-    as_of: date = _AS_OF,
-) -> None:
-    """rows: (component, amount_ghs, tier)."""
-    batch, lineage = _batch_lineage(db, bank, "s29-capital", as_of=as_of)
-    for i, (component, amount, tier) in enumerate(rows):
-        db.add(
-            CanonicalReferenceRow(
-                organization_id=ORG_1,
-                bank_id=bank.id,
-                ingestion_batch_id=batch.id,
-                lineage_id=lineage.id,
-                dataset_kind="capital_structure",
-                as_of_date=as_of,
-                row_index=i,
-                source_reference=f"CS/{i}",
-                payload={"capital_component": component, "amount_ghs": amount, "tier": tier},
-            )
-        )
-    db.flush()
-
-
-def _seed_positions(
-    db: Session, bank: Bank, rows: list[tuple[str, str, str]], *, status: str = "accepted"
-) -> None:
-    """rows: (source_reference, position_type, balance_ghs)."""
-    batch, lineage = _batch_lineage(db, bank, "s29-positions")
-    common = {
-        "organization_id": ORG_1,
-        "bank_id": bank.id,
-        "as_of_date": _AS_OF,
-        "source_system": "EXCEL_CSV",
-        "ingestion_batch_id": batch.id,
-        "lineage_id": lineage.id,
-    }
-    for ref, ptype, balance in rows:
-        position = CanonicalPosition(
-            **common, source_reference=ref, position_type=ptype, currency="GHS"
-        )
-        db.add(position)
-        db.flush()
-        db.add(
-            CanonicalPositionSnapshot(
-                **common,
-                validation_status=status,
-                source_reference=ref,
-                position_id=position.id,
-                balance=Decimal(balance),
-                attributes={"balance_ghs": balance},
-            )
-        )
-    db.flush()
-
-
 def test_car_is_nof_over_rwa_with_control_plane_weights(db_session: Session) -> None:
-    sdi = _bank(db_session)
+    sdi = create_sdi_bank(db_session)
     # NOF = 20 + 25 + 10 - 1 = 54m
-    _seed_capital(
+    seed_sdi_capital(
         db_session,
         sdi,
         [
@@ -146,7 +47,7 @@ def test_car_is_nof_over_rwa_with_control_plane_weights(db_session: Session) -> 
     # RWA: cash 0% + sovereign 0% + interbank 20% (→4m) + loans 100% (→400m)
     #      + other_assets 100% (→10m) = 414m. Liabilities (deposits, borrowings)
     #      are NEVER risk-weighted — they must not inflate RWA.
-    _seed_positions(
+    seed_sdi_positions(
         db_session,
         sdi,
         [
@@ -160,7 +61,7 @@ def test_car_is_nof_over_rwa_with_control_plane_weights(db_session: Session) -> 
         ],
     )
 
-    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, _AS_OF)
+    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, SDI_AS_OF)
 
     assert summary.net_own_funds_ghs == Decimal("54000000")
     assert summary.total_rwa_ghs == Decimal("414000000")
@@ -187,8 +88,8 @@ def test_car_is_nof_over_rwa_with_control_plane_weights(db_session: Session) -> 
 
 
 def test_deduction_tier_subtracts_from_net_own_funds(db_session: Session) -> None:
-    sdi = _bank(db_session)
-    _seed_capital(
+    sdi = create_sdi_bank(db_session)
+    seed_sdi_capital(
         db_session,
         sdi,
         [
@@ -196,34 +97,34 @@ def test_deduction_tier_subtracts_from_net_own_funds(db_session: Session) -> Non
             ("goodwill", "5000000", "CET1_DEDUCTION"),
         ],
     )
-    _seed_positions(db_session, sdi, [("LN/1", "LOAN", "100000000")])
+    seed_sdi_positions(db_session, sdi, [("LN/1", "LOAN", "100000000")])
 
-    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, _AS_OF)
+    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, SDI_AS_OF)
     assert summary.net_own_funds_ghs == Decimal("15000000")  # 20 - 5
 
 
 def test_prefetched_net_own_funds_matches_latest_generation_arithmetic(
     db_session: Session,
 ) -> None:
-    sdi = _bank(db_session)
+    sdi = create_sdi_bank(db_session)
     may_end = date(2026, 5, 31)
-    _seed_capital(
+    seed_sdi_capital(
         db_session,
         sdi,
         [("paid_up_capital", "10000000", "cet1"), ("goodwill", "2000000", "cet1_deduction")],
         as_of=may_end,
     )
-    _seed_capital(
+    seed_sdi_capital(
         db_session,
         sdi,
         [("paid_up_capital", "20000000", "cet1")],
     )
-    _seed_capital(
+    seed_sdi_capital(
         db_session,
         sdi,
         [("paid_up_capital", "30000000", "cet1"), ("goodwill", "5000000", "cet1_deduction")],
     )
-    dates = [may_end, date(2026, 6, 15), _AS_OF, date(2026, 7, 31)]
+    dates = [may_end, date(2026, 6, 15), SDI_AS_OF, date(2026, 7, 31)]
 
     prefetched = sdi_capital.prefetch_net_own_funds(db_session, _CTX, sdi, dates)
 
@@ -233,17 +134,17 @@ def test_prefetched_net_own_funds_matches_latest_generation_arithmetic(
     assert prefetched == {
         may_end: Decimal("8000000"),
         date(2026, 6, 15): Decimal("8000000"),
-        _AS_OF: Decimal("25000000"),
+        SDI_AS_OF: Decimal("25000000"),
         date(2026, 7, 31): Decimal("25000000"),
     }
 
 
 def test_below_floor_flags_red(db_session: Session) -> None:
-    sdi = _bank(db_session)
-    _seed_capital(db_session, sdi, [("paid_up_capital", "5000000", "CET1")])
-    _seed_positions(db_session, sdi, [("LN/1", "LOAN", "100000000")])  # 100m RWA
+    sdi = create_sdi_bank(db_session)
+    seed_sdi_capital(db_session, sdi, [("paid_up_capital", "5000000", "CET1")])
+    seed_sdi_positions(db_session, sdi, [("LN/1", "LOAN", "100000000")])  # 100m RWA
 
-    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, _AS_OF)
+    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, SDI_AS_OF)
     assert summary.car_pct == Decimal("5.00")  # 5/100
     assert summary.status == "red"  # 5 < 10
 
@@ -251,20 +152,20 @@ def test_below_floor_flags_red(db_session: Session) -> None:
 def test_accepted_with_warning_positions_are_included_in_rwa(db_session: Session) -> None:
     # Regression: "warning" (accepted-with-warnings) is usable book data, exactly
     # like the loan/fact loaders — dropping it silently understates RWA.
-    sdi = _bank(db_session)
-    _seed_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
-    _seed_positions(db_session, sdi, [("LN/1", "LOAN", "300000000")], status="warning")
+    sdi = create_sdi_bank(db_session)
+    seed_sdi_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
+    seed_sdi_positions(db_session, sdi, [("LN/1", "LOAN", "300000000")], status="warning")
 
-    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, _AS_OF)
+    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, SDI_AS_OF)
     assert summary.total_rwa_ghs == Decimal("300000000")  # the warning loan counts
 
 
 def test_no_positions_is_not_computable_not_a_false_green(db_session: Session) -> None:
-    sdi = _bank(db_session)
-    _seed_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
+    sdi = create_sdi_bank(db_session)
+    seed_sdi_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
     # no positions → RWA 0 → CAR undefined, never a false green
 
-    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, _AS_OF)
+    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, SDI_AS_OF)
     assert summary.total_rwa_ghs == Decimal("0")
     assert summary.car_pct is None
     assert summary.status == "na"
@@ -272,11 +173,11 @@ def test_no_positions_is_not_computable_not_a_false_green(db_session: Session) -
 
 
 def test_capital_assurance_marks_unconfirmed_inputs_as_provisional(db_session: Session) -> None:
-    sdi = _bank(db_session)
-    _seed_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
-    _seed_positions(db_session, sdi, [("LN/1", "LOAN", "100000000")])
+    sdi = create_sdi_bank(db_session)
+    seed_sdi_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
+    seed_sdi_positions(db_session, sdi, [("LN/1", "LOAN", "100000000")])
 
-    assurance = sdi_capital_assurance.get_sdi_capital_assurance(db_session, _CTX, sdi, _AS_OF)
+    assurance = sdi_capital_assurance.get_sdi_capital_assurance(db_session, _CTX, sdi, SDI_AS_OF)
 
     assert assurance.current.car_pct == Decimal("20.00")
     assert assurance.current.assessment_status == "provisional"
@@ -290,8 +191,8 @@ def test_capital_assurance_marks_unconfirmed_inputs_as_provisional(db_session: S
 def test_capital_assurance_reconciles_explicitly_mapped_gl_components(
     db_session: Session,
 ) -> None:
-    sdi = _bank(db_session)
-    _seed_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
+    sdi = create_sdi_bank(db_session)
+    seed_sdi_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
     capital_row = db_session.scalar(
         select(CanonicalReferenceRow).where(
             CanonicalReferenceRow.organization_id == ORG_1,
@@ -301,12 +202,12 @@ def test_capital_assurance_reconciles_explicitly_mapped_gl_components(
     )
     assert capital_row is not None
     capital_row.payload = {**capital_row.payload, "gl_account_code": "GL-3100"}
-    batch, lineage = _batch_lineage(db_session, sdi, "s29-gl")
+    batch, lineage = create_sdi_batch_lineage(db_session, sdi, "s29-gl")
     db_session.add(
         CanonicalGlAccount(
             organization_id=ORG_1,
             bank_id=sdi.id,
-            as_of_date=_AS_OF,
+            as_of_date=SDI_AS_OF,
             source_system="EXCEL_CSV",
             source_reference="GL/3100",
             ingestion_batch_id=batch.id,
@@ -319,10 +220,10 @@ def test_capital_assurance_reconciles_explicitly_mapped_gl_components(
             balance=Decimal("20000000"),
         )
     )
-    _seed_positions(db_session, sdi, [("LN/1", "LOAN", "100000000")])
+    seed_sdi_positions(db_session, sdi, [("LN/1", "LOAN", "100000000")])
     db_session.flush()
 
-    assurance = sdi_capital_assurance.get_sdi_capital_assurance(db_session, _CTX, sdi, _AS_OF)
+    assurance = sdi_capital_assurance.get_sdi_capital_assurance(db_session, _CTX, sdi, SDI_AS_OF)
 
     assert assurance.mapped_gl_capital_ghs == Decimal("20000000")
     assert assurance.capital_to_gl_difference_ghs == Decimal("0")

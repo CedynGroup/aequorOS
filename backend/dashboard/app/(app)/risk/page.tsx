@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  useBankRules,
+  useInForceAlerts,
+  useInForceLiveSummary,
+} from "@/lib/api/regulatoryRules";
+
 /**
  * Risk & Limit Monitor — the cross-module limit wall. Pulls every module
  * dashboard, extracts each limit whose numeric threshold exists in the
@@ -18,7 +24,10 @@ import SubTabs from "@/components/ui/SubTabs";
 import ValidationList from "@/components/ui/ValidationList";
 import SectionCard from "@/components/ui/SectionCard";
 import EmptyState from "@/components/ui/EmptyState";
-import { PageSkeleton } from "@/components/ui/QueryBoundary";
+import QueryBoundary, {
+  ErrorPanel,
+  PageSkeleton,
+} from "@/components/ui/QueryBoundary";
 import { LandingInsightStrip } from "@/components/bi/InsightStrip";
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
 import {
@@ -29,13 +38,11 @@ import {
 } from "@/components/basel/sdiHooks";
 import { isHrefVisible } from "@/lib/modules";
 import {
-  useBankAlerts,
   useCapitalDashboard,
   useFtpDashboard,
   useFxDashboard,
   useIrrDashboard,
   useLiquidityDashboard,
-  useLiveSummary,
   useRegulatoryRun,
 } from "@/lib/api/hooks";
 import { fmtRelative, statusTone } from "@/lib/api/values";
@@ -66,14 +73,18 @@ export default function RiskLimitMonitorPage() {
   // every institution's set.
   const scope = useModuleScope();
   const isSdi = scope.institutionClass === "sdi";
-  const irrScoped = isHrefVisible("/irr/limits", scope);
+  const rules = useBankRules(bankId);
+  const lmtdInForce = rules.isInForce("SDI-LMT-MONTHLY");
+  const liquidityInForce = rules.isModuleInForce("liquidity");
+  const irrInForce = rules.isModuleInForce("irr");
+  const irrScoped = isHrefVisible("/irr/limits", scope) && irrInForce;
   const fxScoped = isHrefVisible("/fx/limits", scope);
   const ftpScoped = isHrefVisible("/ftp/products", scope);
   const liquidityAggregated = scope.liquidityAggregatedView === true;
   const liquidityConfidential = scope.liquidityConfidentialView === true;
 
   const liquidity = useLiquidityDashboard(
-    !isSdi && liquidityAggregated ? bankId : undefined,
+    !isSdi && liquidityAggregated && liquidityInForce ? bankId : undefined,
   );
   const capital = useCapitalDashboard(
     !isSdi && scope.capitalAggregatedView ? bankId : undefined,
@@ -81,8 +92,8 @@ export default function RiskLimitMonitorPage() {
   const irr = useIrrDashboard(irrScoped ? bankId : undefined);
   const fx = useFxDashboard(fxScoped ? bankId : undefined);
   const ftp = useFtpDashboard(ftpScoped ? bankId : undefined);
-  const liveSummary = useLiveSummary(bankId);
-  const alerts = useBankAlerts(bankId, 200);
+  const liveSummary = useInForceLiveSummary(bankId);
+  const alerts = useInForceAlerts(bankId, 200);
   const liquidityRun = useRegulatoryRun(
     liquidityConfidential ? bankId : undefined,
     liquidity.data?.latestRunId ?? undefined,
@@ -102,9 +113,9 @@ export default function RiskLimitMonitorPage() {
   const [tab, setTab] = useState("wall");
 
   const moduleQueries = [
-    ["liquidity", liquidity],
+    ...(liquidityInForce ? [["liquidity", liquidity] as const] : []),
     ["capital", capital],
-    ["irr", irr],
+    ...(irrInForce ? [["irr", irr] as const] : []),
     ["fx", fx],
     ["ftp", ftp],
   ] as const;
@@ -118,7 +129,9 @@ export default function RiskLimitMonitorPage() {
             ? "warn"
             : "ok";
       const result: LimitRow[] = [];
-      for (const ratio of sdiLiquidity.data?.ratios ?? []) {
+      for (const ratio of lmtdInForce
+        ? (sdiLiquidity.data?.ratios ?? [])
+        : []) {
         if (ratio.value_pct !== null) {
           result.push({
             module: "liquidity",
@@ -187,7 +200,7 @@ export default function RiskLimitMonitorPage() {
             module: "exposures",
             limit: exposure.counterparty_name,
             value: Number(exposure.pct_net_own_funds),
-            threshold: Number(exposure.large_exposure_limit_pct),
+            threshold: Number(exposure.applicable_limit_pct),
             direction: "below",
             status: status(exposure.status),
             unit: "%",
@@ -203,12 +216,16 @@ export default function RiskLimitMonitorPage() {
     return extractAllLimits({
       liquidity: liquidity.data,
       liquidityRun: liquidityRun.data,
+      liquidityRule: rules.instrument("LCR-NSFR"),
+      irrRule: rules.instrument("IRRBB-PILOT", "SDI-IRRBB-QUARTERLY"),
       capital: capital.data,
       irr: irr.data,
       fx: fx.data,
       ftp: ftp.data,
     });
   }, [
+    lmtdInForce,
+    rules,
     capital.data,
     ftp.data,
     fx.data,
@@ -246,8 +263,13 @@ export default function RiskLimitMonitorPage() {
     <>
       <PageHeader eyebrow="Risk & Limits" title="Risk & Limit Monitor" />
 
-      {isLoading ? (
+      {rules.isLoading || isLoading ? (
         <PageSkeleton />
+      ) : rules.error ? (
+        <ErrorPanel
+          error={rules.error}
+          onRetry={() => void liveSummary.refetch()}
+        />
       ) : (
         <PageContainer className="py-6 space-y-6">
           <LandingInsightStrip bankId={bankId} asOf={period?.periodEnd} />
@@ -277,7 +299,13 @@ export default function RiskLimitMonitorPage() {
             <KpiStat
               label="Open alerts"
               value={alerts.data?.total ?? "—"}
-              status={(alerts.data?.total ?? 0) > 0 ? "crit" : "ok"}
+              status={
+                alerts.data
+                  ? alerts.data.total > 0
+                    ? "crit"
+                    : "ok"
+                  : undefined
+              }
               hint={
                 <Link href="/alerts" className="text-action hover:underline">
                   Open the Alert Center →
@@ -287,26 +315,33 @@ export default function RiskLimitMonitorPage() {
           </div>
 
           {/* Live module status strip */}
-          {liveModules.length > 0 && (
-            <div className="card px-4 py-3 flex items-center gap-4 flex-wrap">
-              <span className="text-micro font-medium text-slate uppercase tracking-wider">
-                Live module status
-              </span>
-              {liveModules.map((module) => (
-                <span
-                  key={module.module}
-                  className="inline-flex items-center gap-1.5"
-                >
-                  <StatusPill tone={statusTone(module.status)}>
-                    {module.module}
-                  </StatusPill>
-                  <span className="text-caption text-slate-light whitespace-nowrap">
-                    {fmtRelative(module.computedAt)}
-                  </span>
+          <QueryBoundary
+            contained
+            isLoading={liveSummary.isLoading}
+            error={liveSummary.error}
+            onRetry={() => void liveSummary.refetch()}
+          >
+            {liveModules.length > 0 && (
+              <div className="card px-4 py-3 flex items-center gap-4 flex-wrap">
+                <span className="text-micro font-medium text-slate uppercase tracking-wider">
+                  Live module status
                 </span>
-              ))}
-            </div>
-          )}
+                {liveModules.map((module) => (
+                  <span
+                    key={module.module}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <StatusPill tone={statusTone(module.status)}>
+                      {module.module}
+                    </StatusPill>
+                    <span className="text-caption text-slate-light whitespace-nowrap">
+                      {fmtRelative(module.computedAt)}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </QueryBoundary>
 
           <SubTabs
             items={[
@@ -375,13 +410,14 @@ export default function RiskLimitMonitorPage() {
             <div className="space-y-6">
               <SectionCard
                 title="SDI control coverage"
-                subtitle="The limit wall uses the binding SDI measures available from the current canonical book."
+                subtitle="In-force SDI controls available from the current canonical book."
               >
                 <p className="text-body text-navy/85 leading-relaxed">
-                  Liquidity controls cover LMTD Table 1 and reserve ratios.
-                  Capital controls cover Section 29 CAR, paid-up capital,
-                  statutory reserve fund, and connected-group exposures. Open
-                  pipeline findings continue to appear in the Alert Center.
+                  Liquidity controls cover reserve ratios
+                  {lmtdInForce ? " and LMTD Table 1 ratios" : ""}. Capital
+                  controls cover Section 29 CAR, paid-up capital, statutory
+                  reserve fund, and connected-group exposures. Open pipeline
+                  findings continue to appear in the Alert Center.
                 </p>
               </SectionCard>
             </div>

@@ -36,6 +36,9 @@ const context = vi.hoisted(() => ({
   actor: "maker",
   permissions: ["create", "edit", "approve"],
 }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("@/components/shell/BankContext", () => ({
   useBankContext: () => ({
     bank: { id: "BK-SAMP0001" },

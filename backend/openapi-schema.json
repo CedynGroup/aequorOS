@@ -54120,12 +54120,65 @@
       "ReturnTemplateRead": {
         "additionalProperties": false,
         "properties": {
+          "calculations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Calculations",
+            "type": "array"
+          },
           "code": {
             "title": "Code",
             "type": "string"
           },
+          "commencement_approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commencement Approved At"
+          },
+          "commencement_approved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commencement Approved By"
+          },
+          "commencement_parameter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commencement Parameter"
+          },
           "default_channel": {
             "$ref": "#/components/schemas/ChannelCode"
+          },
+          "default_effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Effective From"
           },
           "directive_citation": {
             "title": "Directive Citation",
@@ -54163,6 +54216,17 @@
           "regulator": {
             "title": "Regulator",
             "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
           },
           "supports_working_copy": {
             "title": "Supports Working Copy",
@@ -56167,6 +56231,11 @@
       "SdiExposureRead": {
         "additionalProperties": false,
         "properties": {
+          "applicable_limit_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Applicable Limit Pct",
+            "type": "string"
+          },
           "connection": {
             "title": "Connection",
             "type": "string"
@@ -56218,6 +56287,7 @@
           "pct_net_own_funds",
           "single_obligor_limit_pct",
           "large_exposure_limit_pct",
+          "applicable_limit_pct",
           "status",
           "exempt"
         ],

@@ -1,19 +1,20 @@
-import ModuleTabs from '@/components/shell/ModuleTabs';
+import ModuleTabs from "@/components/shell/ModuleTabs";
 
 // Governance → Regulatory Reporting hub (docs/regulatory_reporting.md §7).
 // All official reporting lives here; module sub-navs link out to /returns.
 // Tab order per Eric (2026-07-24): working surfaces first, Calendar as the
-// planning view just before Settings. /submissions itself still lands on the
-// Calendar (it is the hub index route); only the tab position changed.
+// planning view just before Settings. The hub index redirects to Returns.
 const tabs = [
-  { href: '/submissions/returns', label: 'Returns' },
-  { href: '/submissions/signatures', label: 'Signatures' },
-  { href: '/submissions/approvals', label: 'Approvals' },
-  { href: '/submissions/compare', label: 'Compare' },
-  { href: '/submissions/history', label: 'History' },
-  { href: '/submissions/templates', label: 'Templates' },
-  { href: '/submissions/calendar', label: 'Calendar' },
-  { href: '/submissions/settings', label: 'Settings' },
+  { href: "/submissions/returns", label: "Returns" },
+  { href: "/submissions/signatures", label: "Signatures" },
+  { href: "/submissions/approvals", label: "Approvals" },
+  { href: "/submissions/compare", label: "Compare" },
+  { href: "/submissions/history", label: "History" },
+  { href: "/submissions/instruments", label: "Instruments" },
+  { href: "/submissions/upcoming", label: "Upcoming rules" },
+  { href: "/submissions/templates", label: "Templates" },
+  { href: "/submissions/calendar", label: "Calendar" },
+  { href: "/submissions/settings", label: "Settings" },
 ];
 
 export default function SubmissionsLayout({

@@ -734,6 +734,11 @@ def test_the_calendar_never_shows_an_obligation_before_a_return_is_in_force(
         db_session, MAKER, SAMPLE_BANK_ID, 12, lookback_months=6, as_of=date(2026, 9, 19)
     )
     icaap_rows = [row for row in listing.obligations if row.return_family == "icaap"]
+    assert not icaap_rows, "future rules belong in the preparation register until commencement"
+    listing = calendar.list_obligations(
+        db_session, MAKER, SAMPLE_BANK_ID, 12, lookback_months=6, as_of=date(2026, 12, 31)
+    )
+    icaap_rows = [row for row in listing.obligations if row.return_family == "icaap"]
     assert icaap_rows, "the ICAAP obligation must appear once the return is in force"
     assert all(row.reporting_date >= date(2026, 12, 31) for row in icaap_rows)
     assert all(row.rag != "overdue" for row in icaap_rows)

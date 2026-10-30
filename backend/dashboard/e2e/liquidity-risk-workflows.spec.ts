@@ -127,7 +127,7 @@ test.describe("Liquidity coverage, funding and stress outcomes", () => {
 
   test.describe.configure({ timeout: 120_000 });
   test.beforeEach(async ({ page }) => {
-    await page.goto("/liquidity");
+    await page.goto("/liquidity?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Liquidity Cockpit" }),
     ).toBeVisible();

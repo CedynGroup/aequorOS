@@ -279,6 +279,7 @@ class SdiExposureRead(ClosedModel):
     pct_net_own_funds: Decimal | None
     single_obligor_limit_pct: Decimal
     large_exposure_limit_pct: Decimal
+    applicable_limit_pct: Decimal
     status: str
     exempt: bool
 

@@ -1999,9 +1999,6 @@
  "app.services.regulatory_reporting.provenance": {
   "reportAny": 16
  },
- "app.services.regulatory_reporting.registry": {
-  "reportUnusedFunction": 1
- },
  "app.services.regulatory_reporting.reporting_settings": {
   "reportAny": 2
  },
