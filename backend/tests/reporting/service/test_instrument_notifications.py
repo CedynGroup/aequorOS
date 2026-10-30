@@ -132,6 +132,39 @@ def test_scan_emits_once_and_detects_finalisation(
     assert len(changes) == 2
     assert any("in force" in change.body for change in changes)
 
+    bank.name = "N" * 255
+    settings = db_session.scalar(
+        select(RegulatoryReportingSettings).where(
+            RegulatoryReportingSettings.organization_id == ctx.organization_id,
+            RegulatoryReportingSettings.bank_id == bank.id,
+        )
+    )
+    assert settings is not None
+    settings.instrument_observations = {}
+    monkeypatch.setitem(
+        REGISTRY, "LE-MONTHLY", replace(definition, instrument_status="exposure_draft")
+    )
+    scan_instrument_statuses(db_session, ctx, bank, TODAY)
+    monkeypatch.setitem(REGISTRY, "LE-MONTHLY", definition)
+    scan_instrument_statuses(db_session, ctx, bank, TODAY)
+    bounded = list(
+        db_session.scalars(
+            select(Notification).where(
+                Notification.organization_id == DEMO_ORG_ID,
+                Notification.type.contains(":LE-MONTHLY:"),
+                Notification.body.startswith(f"{bank.name}:"),
+            )
+        )
+    )
+    assert {row.type.split(":")[0] for row in bounded} == {
+        "reporting.instrument.changed",
+        "reporting.instrument.commencement_30",
+    }
+    assert len(bounded) == 2
+    assert all(len(row.title) <= 200 for row in bounded)
+    assert all(bank.name in row.body and definition.title in row.body for row in bounded)
+    assert scan_instrument_statuses(db_session, ctx, bank, TODAY) == 0
+
 
 def test_worker_wires_status_observer_into_scheduled_scan(monkeypatch: pytest.MonkeyPatch) -> None:
     handler = Mock()

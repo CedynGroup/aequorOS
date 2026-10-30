@@ -67,8 +67,10 @@ def scan_instrument_statuses(db: Session, ctx: TenantContext, bank: Bank, today:
                 ctx,
                 type=f"reporting.instrument.{event}:{definition.code}:",
                 severity="info" if status in ("exposure_draft", "unpublished") else "warning",
-                title=f"{bank.name} · {definition.title}: "
-                + ("rule status changed" if event == "changed" else "commencement approaching"),
+                title=(
+                    f"{bank.name} · {definition.title}: "
+                    + ("rule status changed" if event == "changed" else "commencement approaching")
+                )[:200],
                 body=(
                     f"{bank.name}: {definition.title}. "
                     f"Legal status: {status.replace('_', ' ')}. "
