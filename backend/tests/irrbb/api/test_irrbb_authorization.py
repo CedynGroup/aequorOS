@@ -44,7 +44,8 @@ from app.models import (
 from app.policy.service import module_scope
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import analysis_workbench, regulatory_capital
+from app.services import regulatory_capital
+from app.stress.service import analysis_workbench
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 

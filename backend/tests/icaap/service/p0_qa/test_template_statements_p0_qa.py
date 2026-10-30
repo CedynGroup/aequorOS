@@ -11,9 +11,6 @@ from __future__ import annotations
 import re
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.domain.stress import appendix_ii
-from app.domain.stress.management_actions import RecognitionCaps
-from app.domain.stress.projection import EnterpriseProjectionInputs, project_enterprise
 from app.irrbb.domain.engine import (
     IRR_BUCKETS,
     IRR_OPTIONAL_SCENARIO_CODES,
@@ -23,7 +20,10 @@ from app.irrbb.domain.engine import (
 )
 from app.reporting.service.registry import REGISTRY
 from app.reporting.service.templates import TEMPLATES, get_template
-from tests.domain.stress_fixtures import (
+from app.stress.domain import appendix_ii
+from app.stress.domain.management_actions import RecognitionCaps
+from app.stress.domain.projection import EnterpriseProjectionInputs, project_enterprise
+from tests.stress.domain.stress_fixtures import (
     BASE_ASSUMPTIONS,
     bog_forecast_params,
     sample_bank_latest_facts,
@@ -155,7 +155,7 @@ def test_the_allocation_the_citation_describes_is_what_the_engine_does() -> None
     about how a filed number was produced, so it is checked against the numbers.
 
     Until 2026-09-20 the second half of this test read
-    ``app/domain/stress/appendix_ii.py`` and asserted that the string
+    ``app/stress/domain/appendix_ii.py`` and asserted that the string
     "Allocate the adverse impairment across CRD classes by credit-RWA share"
     appeared in it — which it does, as the FIRST LINE OF A DOCSTRING. Replacing
     the allocator's body with zeros left the test green: the claim the registry

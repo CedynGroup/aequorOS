@@ -15,8 +15,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.stress.appendix_ii import thousands
 from app.icaap.domain.pillar2 import register, table5
+from app.stress.domain.appendix_ii import thousands
 
 ROWS = ("credit_concentration", "irrbb", "sovereign", "country_and_fx", "reputational", "others")
 LABELS = {key: key.replace("_", " ").title() for key in ROWS}

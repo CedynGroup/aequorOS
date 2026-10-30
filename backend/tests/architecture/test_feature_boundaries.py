@@ -215,17 +215,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
         "forecasting",
     ),
     # ---- stress, attestation, filing, ICAAP, BI, AI
-    (
-        r"^(services/(stress_scenarios|macro_scenarios|default_macro_scenarios"
-        r"|enterprise_stress.*|enterprise_run_visibility|reverse_stress"
-        r"|management_action_plans|analysis_workbench|scenario_catalog"
-        r"|scenario_workbench_authorization)|domain/(stress|scenarios)/.*"
-        r"|models/(stress|scenario_workbench)|schemas/(stress|enterprise_stress.*"
-        r"|reverse_stress|management_actions|scenario_workbench)"
-        r"|features/(manage_stress_scenarios|manage_macro_scenarios|manage_enterprise_stress.*"
-        r"|run_reverse_stress|manage_management_actions|run_scenario_analysis))$",
-        "stress",
-    ),
     (r"^(services/ai/.*|domain/ai/.*|models/ai|schemas/ai|features/manage_ai_settings)$", "ai"),
 )
 _COMPILED_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(

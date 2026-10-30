@@ -44,7 +44,6 @@ from app.policy.service import sdi_regime
 from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.liquidity_thresholds import LiquidityThresholdUpdate
 from app.services import (
-    enterprise_stress,
     liquidity_thresholds,
     regulatory_capital,
     regulatory_forecasting,
@@ -54,6 +53,7 @@ from app.services import (
     sdi_readiness,
     sdi_views,
 )
+from app.stress.service import enterprise_stress
 from tests.support.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)

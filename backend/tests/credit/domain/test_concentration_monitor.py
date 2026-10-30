@@ -24,7 +24,7 @@ from app.credit.domain.concentration_monitor import (
     ConcentrationLimit,
     monitor_concentration,
 )
-from app.domain.stress.concentration import DIM_EMPLOYER, DIM_SINGLE_NAME, ConcentrationExposure
+from app.stress.domain.concentration import DIM_EMPLOYER, DIM_SINGLE_NAME, ConcentrationExposure
 
 
 def _book() -> list[ConcentrationExposure]:

@@ -110,8 +110,9 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryValidationRead,
     RunEvidenceRead,
 )
-from app.services import enterprise_run_visibility, withdrawal_impact
+from app.services import withdrawal_impact
 from app.services.audit import record_event
+from app.stress.service import enterprise_run_visibility
 
 #: Bumped 2026-08-22 (forensic re-audit D-5) from ``v1.0.0``. MAJOR under the
 #: rule stated on ``regulatory_capital.ENGINE_VERSION``: the Basel HQLA control

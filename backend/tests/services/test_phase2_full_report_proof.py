@@ -37,8 +37,8 @@ from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation
 from app.reporting.service.exports import export_package
 from app.reporting.service.registry import REGISTRY
-from app.schemas.reverse_stress import ReverseStressRunCreate
-from app.services import reverse_stress
+from app.stress.schemas.reverse_stress import ReverseStressRunCreate
+from app.stress.service import reverse_stress
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

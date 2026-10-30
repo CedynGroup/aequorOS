@@ -13,9 +13,6 @@ from app.domain.capital.engine import (
     RiskWeightUnavailable,
     _credit_line_items,  # pyright: ignore[reportPrivateUsage]
 )
-from app.domain.stress.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
-from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
-from app.domain.stress.translation import MacroPathPoint
 from app.live.service.fact_derivation import (
     DerivationError,
     _derive_specs,  # pyright: ignore[reportPrivateUsage]
@@ -23,13 +20,16 @@ from app.live.service.fact_derivation import (
     _split_securities,  # pyright: ignore[reportPrivateUsage]
 )
 from app.models import CanonicalGlAccount
-from app.services import enterprise_stress
-from tests.domain.stress_fixtures import base_paths
+from app.stress.domain.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
+from app.stress.domain.credit_bottom_up import compute_bottom_up_credit
+from app.stress.domain.translation import MacroPathPoint
+from app.stress.service import enterprise_stress
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.services.test_derivation_fail_closed_defaults import (
     _canonical,  # pyright: ignore[reportPrivateUsage]
     _row,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.stress.domain.stress_fixtures import base_paths
 
 pytestmark = pytest.mark.requirement("BoG CRD (June 2018) Part 2")
 

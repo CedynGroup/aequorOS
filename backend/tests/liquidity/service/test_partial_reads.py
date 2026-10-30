@@ -35,8 +35,9 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
     RegulatoryScenarioCode,
 )
-from app.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn
-from app.services import analysis_workbench, regulatory_liquidity, window_analytics
+from app.services import regulatory_liquidity, window_analytics
+from app.stress.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn
+from app.stress.service import analysis_workbench
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
