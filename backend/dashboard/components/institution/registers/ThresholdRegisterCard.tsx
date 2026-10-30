@@ -125,22 +125,20 @@ export default function ThresholdRegisterCard({ bankId }: { bankId: string }) {
 
   return (
     <SectionCard
-      title={
-        <span className="flex flex-wrap items-center gap-2">
-          Board threshold register{" "}
-          <RegulatoryRuleStatus code="LMT" sdiCode="SDI-LMT-MONTHLY" />
-        </span>
-      }
+      title="Board threshold register"
       subtitle="Board-adopted liquidity thresholds and their approval evidence."
       noPadding
       actions={
-        query.data && (
-          <EditRegisterAction
-            isApprover={isApprover}
-            editing={editing}
-            onEdit={() => setEditing(true)}
-          />
-        )
+        <>
+          <RegulatoryRuleStatus code="LMT" sdiCode="SDI-LMT-MONTHLY" />
+          {query.data && (
+            <EditRegisterAction
+              isApprover={isApprover}
+              editing={editing}
+              onEdit={() => setEditing(true)}
+            />
+          )}
+        </>
       }
       footer={
         <span>

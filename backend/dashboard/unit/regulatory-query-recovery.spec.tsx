@@ -181,36 +181,52 @@ it.each(surfaces)(
   },
 );
 
-it("shows the threshold register's recorded legal status beside its title", async () => {
-  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  setAccessToken("synthetic-token");
-  server.use(
-    http.get(`${apiBaseUrl}/*`, ({ request }) =>
-      new URL(request.url).pathname.endsWith("/templates")
-        ? HttpResponse.json({
-            templates: [
-              {
-                code: "LMT",
-                instrument_status: "exposure_draft",
-                regulator: "Recorded issuer",
-              },
-            ],
-          })
-        : HttpResponse.json({
-            bank_id: "BK-SYNTH001",
-            thresholds: [],
-            history: [],
-          }),
-    ),
-  );
-  render(view(<ThresholdRegisterCard bankId="BK-SYNTH001" />));
-  const title = screen.getByRole("heading", {
-    name: /Board threshold register/,
-  });
-  expect(await screen.findByText("Draft")).toBeVisible();
-  expect(title).toHaveTextContent("Draft");
-  expect(screen.getByText("Draft")).toHaveAttribute(
-    "title",
-    expect.stringContaining("Proposed by Recorded issuer"),
-  );
-});
+it.each([
+  ["exposure_draft", "Draft"],
+  ["final_not_in_force", "Not yet in force"],
+  ["in_force", "In force"],
+  ["unpublished", "Reference"],
+  [undefined, "Status unavailable"],
+] as const)(
+  "keeps the threshold register heading stable with %s status",
+  async (status, label) => {
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    setAccessToken("synthetic-token");
+    server.use(
+      http.get(`${apiBaseUrl}/*`, ({ request }) =>
+        new URL(request.url).pathname.endsWith("/templates")
+          ? HttpResponse.json({
+              templates: [
+                {
+                  code: "LMT",
+                  instrument_status: status,
+                  regulator: "Recorded issuer",
+                },
+              ],
+            })
+          : HttpResponse.json({
+              bank_id: "BK-SYNTH001",
+              thresholds: [],
+              history: [],
+            }),
+      ),
+    );
+    render(view(<ThresholdRegisterCard bankId="BK-SYNTH001" />));
+    const title = screen.getByRole("heading", {
+      name: "Board threshold register",
+    });
+    const badge = await screen.findByText(label);
+    expect(badge).toBeVisible();
+    expect(title).toHaveAccessibleName("Board threshold register");
+    fireEvent.click(badge);
+    expect(screen.getByRole("tooltip")).toBeVisible();
+    expect(
+      screen.getByRole("link", {
+        name: "Source details in the instruments register",
+      }),
+    ).toHaveAttribute("href", "/submissions/instruments#LMT");
+    expect(title).toHaveAccessibleName("Board threshold register");
+    fireEvent.click(badge);
+    expect(title).toHaveAccessibleName("Board threshold register");
+  },
+);
