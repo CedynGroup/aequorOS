@@ -23,14 +23,18 @@ export function hasAccountDirectoryAuthority(
   );
 }
 
-/**
- * Where `/access` lands: administrators on the Members table they came to
- * work in, everyone else on their own access summary (docs/rbac.md §8.3).
- */
+/** Members and grant administration require an evaluated Organization Owner. */
+export function hasGrantAdministrationAuthority(
+  authority: EffectiveAuthorityRead | undefined,
+): boolean {
+  return authority?.canAdministerGrants === true;
+}
+
+/** Owners land on Members; everyone else starts with their own access. */
 export function accessIndexDestination(
   authority: EffectiveAuthorityRead | undefined,
 ): "/access/members" | "/access/my-access" {
-  return hasAccountAdministrationAuthority(authority)
+  return hasGrantAdministrationAuthority(authority)
     ? "/access/members"
     : "/access/my-access";
 }

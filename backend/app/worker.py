@@ -35,6 +35,7 @@ from app.bi.jobs import (
     bi_retention,
     bi_subscriptions,
 )
+from app.case.service import documents
 from app.core import audit_integrity
 from app.core.config import get_settings
 from app.core.key_management import reencryption
@@ -51,6 +52,7 @@ from app.db.session import (
 from app.db.worker_access import DESK_SIGNATURE, has_worker_function
 from app.icaap.service import ai_jobs as icaap_ai_jobs
 from app.identity.public import run_session_purge
+from app.live.service import pipeline
 from app.models import (
     Bank,
     DeskCurveDefinition,
@@ -61,16 +63,13 @@ from app.models import (
     Job,
     WorkerHeartbeat,
 )
+from app.notifications.service import notification_email_mirror, reporting_deadline_scan
 from app.services import (
     database_direct_jobs,
-    documents,
     etl_dedup_jobs,
     ingestion,
     job_queue,
     market_data_jobs,
-    notification_email_mirror,
-    pipeline,
-    reporting_deadline_scan,
     scheduler,
     temenos_jobs,
 )
@@ -456,7 +455,7 @@ def _warn_if_ai_unconfigured(settings) -> None:  # pragma: no cover - process en
     e-signature lesson, where a boot refusal locked out the person who could fix
     it. A log line is enough: its jobs simply cancel at the run gate.
     """
-    from app.services.ai import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
+    from app.ai.service import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
 
     if not settings.ai.commentary_enabled:
         logger.warning("AI worker started with AI_COMMENTARY_ENABLED off; requests will cancel.")

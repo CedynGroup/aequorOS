@@ -23,6 +23,7 @@ from app.bi.domain.catalogue.members import (
     ValueType,
 )
 from app.bi.domain.extract import MATURITY_BUCKETS, PRODUCT_FAMILY_LABELS
+from app.credit.domain.dpd_bands import DPD_BANDS
 from app.domain.capital.loan_classification import (
     BANK_GRADE_ORDER,
     BASIS_DAYS_PAST_DUE,
@@ -30,7 +31,6 @@ from app.domain.capital.loan_classification import (
     BASIS_STAGE_PROXY,
     BASIS_UNCLASSIFIED,
 )
-from app.domain.credit.dpd_bands import DPD_BANDS
 from app.domain.ingestion.constants import (
     COUNTERPARTY_TYPES,
     DEPOSIT_ACCOUNT_TYPES,
@@ -39,7 +39,7 @@ from app.domain.ingestion.constants import (
     RATE_TYPES,
 )
 from app.domain.ingestion.optional_position_fields import ACCOUNT_STATUSES, CHANNELS
-from app.domain.irr.buckets import REPRICING_BUCKETS
+from app.irrbb.domain.buckets import REPRICING_BUCKETS
 
 POSITION_TABLE = "bi_fact_position_daily"
 EVENT_TABLE = "bi_fact_loan_event"

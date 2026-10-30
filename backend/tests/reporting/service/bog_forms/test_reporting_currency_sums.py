@@ -50,8 +50,8 @@ from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
-    materialize_canonical_test_book,
 )
+from tests.support.canonical_book import canonical_test_book
 
 #: Isolates this file's positions from the rest of the canonical book.
 _TAG = {"fixture": "ias21"}
@@ -62,7 +62,10 @@ _BSD1_DAILY: dict[str, object] = {
     "attribute_eq": _TAG,
 }
 
-pytestmark = pytest.mark.usefixtures("return_generation_authority")
+pytestmark = [
+    pytest.mark.canonical_book_baseline,
+    pytest.mark.usefixtures("return_generation_authority"),
+]
 
 
 class _ExposureRow(Protocol):
@@ -75,7 +78,7 @@ class _ExposureRow(Protocol):
 
 class _Book:
     def __init__(self, db: Session) -> None:
-        materialize_canonical_test_book(db)
+        canonical_test_book(db)
         bank = db.get(Bank, SAMPLE_BANK_ID)
         period = db.scalar(
             select(BankReportingPeriod)

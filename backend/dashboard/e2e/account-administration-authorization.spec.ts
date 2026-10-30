@@ -15,6 +15,42 @@ test.describe("explicit Account administrator", () => {
     storyConfig: { roles: ["account_admin"] },
   });
 
+  test("keeps delegated administrators out of Members without forbidden requests", async ({
+    page,
+  }) => {
+    const ownerRequests: string[] = [];
+    page.on("request", (request) => {
+      if (
+        /\/organization\/(members|institutions)|\/authorization\/access-requests/.test(
+          request.url(),
+        )
+      ) {
+        ownerRequests.push(request.url());
+      }
+    });
+
+    await page.goto("/access");
+    await expect(page).toHaveURL(/\/access\/my-access$/);
+    const members = page.getByRole("link", { name: "Members", exact: true });
+    await expect(members).toHaveAttribute("aria-disabled", "true");
+    await members.focus();
+    await expect(page.getByRole("tooltip")).toContainText(
+      "Requires Organization Owner authority.",
+    );
+    await expect(
+      page.getByRole("link", { name: "Authentication", exact: true }),
+    ).toHaveAttribute("href", "/access/authentication");
+    await expect(
+      page.getByRole("link", { name: "Integration keys", exact: true }),
+    ).toHaveAttribute("href", "/access/integration-keys");
+
+    await page.goto("/access/members");
+    await expect(
+      page.getByText("Only organization owners can manage members and grants."),
+    ).toBeVisible();
+    expect(ownerRequests).toEqual([]);
+  });
+
   test("can manage authentication without gaining operational modules", async ({
     page,
   }) => {
@@ -201,6 +237,11 @@ test.describe("Organization Owner", () => {
   });
 
   test("can administer integration keys from Access", async ({ page }) => {
+    await page.goto("/access");
+    await expect(page).toHaveURL(/\/access\/members$/);
+    await expect(
+      page.getByRole("link", { name: "Members", exact: true }),
+    ).toHaveAttribute("href", "/access/members");
     await page.goto("/access/integration-keys");
     await expect(
       page.getByRole("heading", { name: "Integration keys" }),

@@ -1,6 +1,6 @@
 import fc from "fast-check";
 
-/** Source: tests/domain/irr/test_sf_fixtures.py governed shock calibration;
+/** Source: tests/irrbb/domain/test_sf_fixtures.py governed shock calibration;
  * standardised.py loss-positive convention and six-place reporting quantum.
  * These are synthetic stored single-currency observations, not a second SF engine.
  * Threshold source: 202609190056_icaap_pillar2_parameters.py, pending exposure draft.

@@ -1,7 +1,7 @@
 """Credit's interface for other features: re-exports only, no logic."""
 
-from app.services import credit_concentration, credit_exposure_book, loan_classification
-from app.services.regulatory_credit import (
+from app.credit.service import credit_concentration, credit_exposure_book, loan_classification
+from app.credit.service.regulatory_credit import (
     MODULE_CREDIT,
     classified_loan_rows,
     event_amount_ghs,

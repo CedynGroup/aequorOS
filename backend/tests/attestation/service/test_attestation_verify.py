@@ -500,6 +500,7 @@ def test_locked_snapshot_refuses_detached_verification_and_bundle(
 
 
 @pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+@pytest.mark.usefixtures("institution_profile_authority")
 def test_engine_attestation_preserves_register_binding_offline_without_key(
     db_session: Session, pki: _Pki, monkeypatch: pytest.MonkeyPatch, status: KeyStatus
 ) -> None:

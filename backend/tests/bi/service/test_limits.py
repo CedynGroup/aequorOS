@@ -39,7 +39,7 @@ from app.bi.service.limits import (
     measure_limit,
 )
 from app.models import Bank, ParamCapitalThreshold
-from app.services import parameter_register, regulatory_parameters
+from app.policy.service import parameter_register, regulatory_parameters
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,

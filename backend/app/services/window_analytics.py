@@ -28,7 +28,7 @@ from app.domain.capital.engine import CapitalComputationError
 from app.domain.capital.engine import MissingParameterError as CapitalMissingParameter
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
-from app.models import BankReportingPeriod, LiveMetricSnapshot
+from app.live.public import BankReportingPeriod, LiveMetricSnapshot
 from app.schemas.window_analytics import (
     WindowAnalyticsRead,
     WindowDailyStatRead,
@@ -61,7 +61,7 @@ from app.services.regulatory_liquidity import (
 from app.services.regulatory_liquidity import (
     _scalar_metrics as _liquidity_run_metrics,  # noqa: PLC2701 - dashboard-trend parity
 )
-from app.services.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
+from app.stress.service.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
 
 _MAX_WINDOW_MONTHS = 36
 # Averages quantize to the run metrics' own 6-dp precision, so a one-point

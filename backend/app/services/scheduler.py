@@ -45,7 +45,8 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.services import job_queue, module_scope
+from app.policy.service import module_scope
+from app.services import job_queue
 from app.services.job_queue import enqueue_platform_daily
 
 SCHEDULED_TICK = "scheduled_tick"
@@ -156,11 +157,13 @@ def run_tick(session: Session, job: Job) -> None:
     # Daily reporting-deadline scan (submission_pipeline_plan.md §W3): the scan
     # date rides the coalesce key, so each org gets at most one scan per day.
     # Lazy import: the scan pulls in the regulatory reporting module tree.
-    from app.services.reporting_deadline_scan import enqueue_due_deadline_scan  # noqa: PLC0415
+    from app.notifications.service.reporting_deadline_scan import (  # noqa: PLC0415
+        enqueue_due_deadline_scan,
+    )
 
     deadline_scan_enqueued = enqueue_due_deadline_scan(session, org_id, now=now)
 
-    from app.services.notification_email_mirror import (  # noqa: PLC0415
+    from app.notifications.service.notification_email_mirror import (  # noqa: PLC0415
         enqueue_due_notification_mirror,
         mirror_enabled,
     )

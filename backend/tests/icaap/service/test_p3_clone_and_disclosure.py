@@ -31,6 +31,8 @@ from tests.icaap.service.test_p3_freeze import _build
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1
 
+pytestmark = pytest.mark.canonical_book_baseline
+
 
 def _disclosure_checker(db: Session, *, email: str) -> IcaapAccess:
     user_id = make_user(db, email=email, name="Pub")

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.domain.fx.engine import MONEY, RATIO_PCT, NopResult
+from app.fx.domain.engine import MONEY, RATIO_PCT, NopResult
 from tests.support.assertions import TolerancePolicy
 
 

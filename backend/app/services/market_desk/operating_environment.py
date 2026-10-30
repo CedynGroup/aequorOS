@@ -7,7 +7,7 @@ Spec: ``docs/internal/operating_environment_score.md``. This service:
      MPR / policy rate (the ``GHS.MPR`` reference index) — and accepts the
      desk-entered macro + banking-system aggregates and the one judgment
      sub-score;
-  2. computes the pure BICRA score (``app.domain.rating.operating_environment``);
+  2. computes the pure BICRA score (``app.rating.domain.operating_environment``);
   3. persists a GLOBAL governed assessment with maker-checker
      (``draft → pending_review → approved → published``); and
   4. on publish, fans ``GHANA_OPERATING_ENVIRONMENT_SCORE`` (value in ``[0,1]``)
@@ -44,7 +44,16 @@ from app.adapters.market_data.pull_runner import (
 )
 from app.adapters.market_data.scope_taxonomy import DataScope
 from app.db.base import utc_now
-from app.domain.rating.operating_environment import (
+from app.identity.public import Bank
+from app.models import (
+    CanonicalCounterpartyRating,
+    CanonicalMarketIndex,
+    DeskObservation,
+    DeskOperatingEnvironmentAssessment,
+    Organization,
+)
+from app.policy.public import Jurisdiction
+from app.rating.domain.operating_environment import (
     DEFAULT_PARAMETERS,
     JUDGMENT_INPUT_CODES,
     THRESHOLD_INPUT_CODES,
@@ -53,15 +62,6 @@ from app.domain.rating.operating_environment import (
     OperatingEnvironmentResult,
     compute_operating_environment,
     normalize_sovereign_category,
-)
-from app.identity.public import Bank
-from app.models import (
-    CanonicalCounterpartyRating,
-    CanonicalMarketIndex,
-    DeskObservation,
-    DeskOperatingEnvironmentAssessment,
-    Jurisdiction,
-    Organization,
 )
 from app.services.ingestion import bank_slug
 

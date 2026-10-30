@@ -294,7 +294,7 @@ the calendar still never lists event-driven packs as obligations.
   computed snapshots (`anchors.computed_snapshot_dates`, labelled
   `reporting_date_source='computed_snapshot'`) — rule in §5a above.
 - **Publication status and commencement are separate.**
-  `domain/regulatory_instruments.py` resolves a final instrument against the reporting
+  `app/policy/domain/regulatory_instruments.py` resolves a final instrument against the reporting
   date; an `exposure_draft` or `unpublished` instrument never becomes in force merely
   because a proposed date arrives. `eligibility.py` resolves literal or bank-governed
   commencement. The calendar omits drafts, unpublished instruments and reporting dates
@@ -326,7 +326,7 @@ scope. The same filter governs lists, totals, unread badges, individual mark-rea
 responses (404 when hidden), mark-all-read and each email-mirror recipient. An
 org-wide notification or an administrator email destination confers no return
 access. The HTTP contract is pinned by
-`backend/tests/api/test_notification_authorization.py`; calendar and anchor
+`backend/tests/notifications/api/test_notification_authorization.py`; calendar and anchor
 redaction by `backend/tests/reporting/api/test_narrowed_institution_figures.py`.
 
 ## 6. API (`app/reporting/api/manage_regulatory_reporting.py`)

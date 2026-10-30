@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.behavioral.public import BehavioralTrainingConfig, history
 from app.core.config import get_settings
 from app.data_engine.public import (
     CanonicalPosition,
@@ -25,8 +26,6 @@ from app.data_engine.public import (
     counterparty_group_labels,
 )
 from app.identity.public import Bank
-from app.ml.behavioral import history
-from app.ml.behavioral.config import BehavioralTrainingConfig
 from app.models import ContingencyFundingPlan
 
 _DIMENSIONS = ("product", "customer_segment", "concentration_group", "branch")

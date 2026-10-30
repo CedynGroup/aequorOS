@@ -46,7 +46,7 @@ owns the live and official fact stores and their materialisation. Fact row
 identities are not stable evidence (see §1.2).
 
 **Stage 2 — the engine run** _(Class A/C only)_. `POST /banks/{bank_id}/regulatory-runs`
-(per module) creates a `RegulatoryRun` (`app/models/regulatory_run.py:28`) — the
+(per module) creates a `RegulatoryRun` (`app/live/models/regulatory_run.py:28`) — the
 immutable unit, and the thing a signature can bind to. The module varies by
 return (verified against the generators): `liquidity` for BSD3
 (`generation.py:607`), `capital` for BSD2 (`:737`), `irr` for IRRBB-PILOT
@@ -117,7 +117,7 @@ return hashlib.sha256(payload.encode()).hexdigest()
 by each entry's own canonical JSON, so neither row identity nor DB return order
 can influence the hash. This is deliberate and executably enforced:
 `test_official_input_hash_survives_fact_rederivation`
-(`backend/tests/services/test_pipeline.py`) remints official runs with fresh
+(`backend/tests/live/service/test_pipeline.py`) remints official runs with fresh
 fact rows and asserts the per-module baseline hash set is unchanged.
 
 **Immutability in practice.** After a run reaches `succeeded` or `failed`,
@@ -134,7 +134,7 @@ recipe would silently invalidate every previously filed hash without failing CI.
 
 Distinct and easily confused: `CalculationRun` (`calculation-input-v1`, the
 case/scenario family) is **id-bearing** and its snapshot is legitimately
-rewritten once, pending → established (`app/services/calculations.py:319`).
+rewritten once, pending → established (`app/case/service/calculations.py:319`).
 Attestation binds to `RegulatoryRun` only.
 
 ### 1.3 The maker-checker workflow as it actually stands

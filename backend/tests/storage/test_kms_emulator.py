@@ -19,6 +19,8 @@ from app.core.key_management.types import (
     KeyUnavailableError,
 )
 
+pytestmark = pytest.mark.requires_service("kms")
+
 
 class _Key(BaseModel):
     model_config = ConfigDict(extra="ignore")

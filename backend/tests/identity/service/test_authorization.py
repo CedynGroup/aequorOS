@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 import jwt
@@ -30,7 +30,7 @@ from app.core.authorization import (
 from app.db.base import utc_now
 from app.identity.service import authentication, authorization
 from app.models import AuthorizationBinding, Bank, RefreshToken, User
-from app.services.institution_types import FALLBACK_TYPE_CODE
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1
 
 BANK_1 = "BK-AUTH0001"
@@ -320,7 +320,7 @@ def test_org_owner_projects_account_authority_without_institution_coverage(
             grant_reason="project owner account authority",
             granted_at=utc_now(),
             status=BindingStatus.ACTIVE.value,
-            valid_from=utc_now(),
+            valid_from=utc_now() - timedelta(days=1),
         )
     )
     db_session.commit()
@@ -341,6 +341,66 @@ def test_org_owner_projects_account_authority_without_institution_coverage(
         for cap in projection.organization_capabilities
     ] == [(Module.ACCOUNT, Sensitivity.RESTRICTED, Permission.ADMINISTER)]
     assert projection.institution_capabilities == []
+    assert projection.can_administer_grants
+
+    binding = db_session.scalar(
+        select(AuthorizationBinding).where(AuthorizationBinding.principal_user_id == user.id)
+    )
+    assert binding is not None
+    binding.role_bundle = RoleBundle.ACCOUNT_ADMIN.value
+    db_session.flush()
+    delegated = authorization.project_effective_authority(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=user.id,
+            authorization_version=user.authorization_version,
+        ),
+        [bank],
+        failure_surface="test_delegated_projection",
+    )
+    assert delegated.organization_capabilities == projection.organization_capabilities
+    assert not delegated.can_administer_grants
+
+    authorization.create_role_binding(
+        db_session,
+        organization_id=ORG_1,
+        principal_user_id=user.id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.ACCOUNT_ADMIN,
+        scope=authorization.BindingScope(
+            InstitutionScope.ORGANIZATION, None, ModuleScope.ACCOUNT, SensitivityScope.RESTRICTED
+        ),
+        grantor=authorization.GrantorRef(authorization.GrantorType.SYSTEM, "test-suite"),
+        reason="Account administration cannot complete a partial owner grant",
+    )
+    # Even alongside a complete Account Admin row, partial owner rows cannot combine.
+    binding.role_bundle = RoleBundle.ORG_OWNER.value
+    for field, denied_value, previous in (
+        ("status", BindingStatus.SUSPENDED.value, BindingStatus.ACTIVE.value),
+        (
+            "sensitivity_scope",
+            SensitivityScope.CONFIDENTIAL.value,
+            SensitivityScope.RESTRICTED.value,
+        ),
+        ("module_scope", ModuleScope.INSTITUTION.value, ModuleScope.ACCOUNT.value),
+        ("valid_until", utc_now() - timedelta(seconds=1), None),
+    ):
+        setattr(binding, field, denied_value)
+        db_session.flush()
+        denied = authorization.project_effective_authority(
+            db_session,
+            TenantContext(
+                organization_id=ORG_1,
+                actor_user_id=user.id,
+                authorization_version=user.authorization_version,
+            ),
+            [bank],
+            failure_surface="test_owner_scope_projection",
+        )
+        assert projection.organization_capabilities[0] in denied.organization_capabilities
+        assert not denied.can_administer_grants, field
+        setattr(binding, field, previous)
 
 
 def test_token_issuance_refreshes_authorization_version_after_owner_lock(

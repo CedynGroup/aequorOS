@@ -10,15 +10,15 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.tenancy import TenantContext
 from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
-from app.domain.positions.fx import (
+from app.identity.public import Bank
+from app.live.domain.positions.fx import (
     FX_POSITION_TYPES,
     position_currencies,
     require_currency_coverage,
 )
-from app.identity.public import Bank
+from app.live.models.regulatory import BankFinancialFact, BankReportingPeriod
+from app.live.models.regulatory_run import RegulatoryRun
 from app.live.position_book import INCLUDED_VALIDATION_STATUSES
-from app.models.regulatory import BankFinancialFact, BankReportingPeriod
-from app.models.regulatory_run import RegulatoryRun
 from app.policy.public import base_currency
 
 

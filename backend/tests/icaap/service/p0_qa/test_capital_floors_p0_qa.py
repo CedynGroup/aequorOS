@@ -25,7 +25,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.policy.resolver import PARAMETER_DIRECTION
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -34,9 +33,11 @@ from app.models import (
     RegulatoryParameter,
     RegulatoryRun,
 )
+from app.policy.domain.resolver import PARAMETER_DIRECTION
+from app.policy.service import regulatory_parameters
+from app.policy.service.parameter_register import BANK_CAPITAL_THRESHOLDS
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_capital, regulatory_parameters
-from app.services.parameter_register import BANK_CAPITAL_THRESHOLDS
+from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

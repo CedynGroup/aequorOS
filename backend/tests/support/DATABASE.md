@@ -136,11 +136,20 @@ pass a production database URL.
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
 sync facades. Encryption advisory locks receive the owning schema's namespace
-on every PostgreSQL engine, including adopted application engines and async
-engines' sync facades. Extra pools and role/tenant variants in one schema retain
-the same lock identity; independently owned schemas cannot block each other.
+on every managed PostgreSQL engine, including adopted application engines and async
+engines' sync facades, and their native cursors. The transformation runs at native
+cursor execution so raw SQL and ORM work use the same lock identity exactly once.
+Extra pools and role/tenant variants in one schema retain the same lock identity;
+these bank locks do not contend across independently owned schemas.
 The hook is installed before checkout and does not depend on a schema prefix
 or URL option ordering.
+
+Namespacing matches only the exact native statements
+`SELECT pg_advisory_xact_lock(%(key)s)` and
+`SELECT pg_advisory_xact_lock_shared(%(key)s)`, including their compiled ORM
+equivalents. Use another bind name, such as `probe_key`, for generic contention
+probes that must retain the original lock identity. Other advisory-lock SQL is
+unchanged.
 
 Run the constructor guard with `uv run python scripts/test_database_guard.py`.
 `--strict` rejects all legacy constructors. The temporary allowlist matches
@@ -150,3 +159,35 @@ mode; other support files are checked. It covers imported and assigned aliases
 with lexical scoping and reassignment, SQLAlchemy sync/async factories and
 psycopg sync/async connections. It does not attempt to interpret runtime-generated
 imports or reflective calls.
+
+## Prepared canonical books
+
+The `canonical_book_baseline` marker opts a module into a separate synthetic
+canonical-book database. It does not add a bank to `isolated_db`, the ordinary
+shared application baseline, or any provisioning path. The seven measured
+Markets, credit, ICAAP P2, ICAAP freeze/clone, capital-refusal and reporting-currency
+modules select it explicitly.
+
+`canonical_book_database` owns the ORM-created schema and an immutable book
+summary for one pytest worker/session. Each case opens a fresh managed context,
+connection, outer transaction and `create_savepoint` session factory. The API,
+authentication and application session lookups all bind to that transaction;
+clients, storage fakes and ORM objects stay function scoped. Every case rolls
+back the outer transaction, closes its managed resources and compares row counts
+and sorted row-value digests across every model table with the committed baseline.
+The owner also checks the final case before dropping the schema.
+
+Preparation helpers use `canonical_test_book(session)`: only the first request
+in an opted-in test returns the saved summary (and reapplies the original tenant
+context). Later requests rebuild through the real materializer. Calls outside
+this fixture family also materialize normally. Tests of destructive reseeding can
+always call `materialize_canonical_test_book` directly. `committing_db` continues
+to select the existing real-commit fixture family; this marker never changes its
+semantics or adds migration-installed RLS to an ORM-created schema.
+
+`tests/support/test_canonical_book.py` exercises committed mutations followed by
+an unchanged baseline, new connections and ORM objects, application-session
+binding, real repeated materialization and value-based fresh-build equivalence.
+Run the full affected modules in normal and reversed order and with
+`-n 4 --dist loadfile`; keep the ordinary fixture-isolation, migrated RLS and
+concurrency suites as their own gates.

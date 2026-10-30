@@ -1,0 +1,879 @@
+"""3-year enterprise stress projection (docs/stress.md §3.4, Phase 2 item 2).
+
+The directive's core Part IV deliverable (¶68, ¶75, ¶77): project the balance
+sheet, P&L, regulatory capital (CET1/AT1/Tier2 with the CRD caps + deductions)
+and RWA (Pillar-1 credit/operational/market + Pillar-2) forward at least three
+years under a BASE and an ADVERSE macro scenario, and assess whether the bank
+remains above ALL minima — CAR 13%, CET1, Tier1, leverage, paid-up (¶77).
+
+This is a PURE, deterministic engine. It does **not** reinvent the capital
+tiering or the balance-sheet roll-forward: it reuses the validated forecasting
+engine's roll-forward primitives (``app.forecasting.domain.engine``) so the
+projected book is byte-identical in structure to the production 5-year forecast,
+and it drives the pure capital/liquidity engines (``compute_rwa``,
+``compute_capital_ratios``, ``compute_lcr``, ``compute_nsfr``) for every
+projected year — the same engines the standalone official runs use. Where the
+forecasting engine hides its per-year fact set behind aggregate rows, this engine
+re-derives the full ``RwaResult``/``CapitalRatiosResult`` per year so the
+Appendix II builders (``app.stress.domain.appendix_ii``) have the granular
+capital build and RWA-by-type they need.
+
+**Base vs stress legs.** The base leg runs the bank's approved business plan
+(``ForecastAssumptions``) held constant across the horizon. The stress leg
+perturbs the plan, per year, by the scenario's stress-vs-base macro deltas
+through a documented elasticity register (GDP → loan/deposit growth; interest
+rate → NIM; inflation → cost/income; PD/LGD multipliers → cost of risk). Because
+every perturbation is a stress-MINUS-base DELTA, a base scenario (stress == base
+everywhere) leaves the two legs identical — a zero stress impact, which is
+correct.
+
+**IFRS 9 ECL under stress (¶48–49, AppI¶5–6).** The per-year impairment is the
+plan cost of risk plus that year's incremental macro PD/LGD charge. On staged
+books with complete coverage and an effective ECL assumptions register, only
+stage 1+2 EAD contributes to the increment; stage 3 keeps the plan loss rate.
+Partial staging or a missing register refuses the projection. Without staging,
+the plan cost-of-risk proxy covers the loan book.
+The incremental charge is gross: no tax shield applied pending a governed
+tax-rate parameter and supported deferred-tax recognition. This wires the
+two directive modes into the projection: **Perfect Foresight** — each of the ≥3
+projected years knows its own macro from day one (the multipliers are computed
+per year off the full authored path); **Single Scenario** — the stress path
+carries 100% weight, with no probability blend across scenarios.
+
+**Pre-management-action.** This engine produces the "results WITHOUT management
+actions" the directive requires as a distinct output (¶67(f), AppII Table 1):
+dividends follow the ordinary plan policy (a dividend cut is a management action),
+paid-up capital stays constant (an issuance is a management action), and no RWA
+relief or asset sale is modelled. The Phase 3 overlay layers management actions
+on top of this projection.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
+from decimal import ROUND_HALF_UP, Decimal
+
+from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
+from app.domain.capital.ecl import EclAssumption
+from app.domain.capital.engine import (
+    GENERAL_PROVISIONS_CATEGORY,
+    TIER_AT1,
+    TIER_CET1,
+    TIER_T2,
+    CapitalFact,
+    CapitalLineItem,
+    CapitalParams,
+    CapitalRatiosResult,
+    RwaResult,
+    compute_capital_ratios,
+    compute_rwa,
+    has_complete_ecl_coverage,
+)
+from app.domain.liquidity.engine import compute_lcr, compute_nsfr
+from app.forecasting.domain.engine import (
+    RETAINED_EARNINGS_CATEGORY,
+    ForecastAssumptions,
+    ForecastFact,
+    ForecastParams,
+    _apply_funding_plug,
+    _Meta,
+    _parse_facts,
+    _scale_in_place,
+    _State,
+    _state_facts,
+    _to_capital_facts,
+    _to_liquidity_facts,
+    scale_credit_exposures,
+)
+from app.stress.domain.credit_bottom_up import (
+    CreditExposure,
+    apply_credit_collateral,
+    result_for_year,
+)
+from app.stress.domain.translation import (
+    MacroPathPoint,
+    ShockMapping,
+    require_macro_variables,
+    translate,
+)
+
+MONEY = Decimal("0.0001")
+RATIO_PCT = Decimal("0.000001")
+_HUNDRED = Decimal("100")
+_ZERO = Decimal("0")
+_ONE = Decimal("1")
+_TWO = Decimal("2")
+
+HORIZON_DEFAULT = 3
+MIN_HORIZON = 3  # ¶75 mandates a ≥3-year horizon.
+
+# --- macro → business-plan-assumption elasticities (stress leg) --------------
+# Every coefficient multiplies a stress-MINUS-base macro delta, so a base
+# scenario yields a zero perturbation (base leg == stress leg). See §3.2/§3.4.
+
+#: Loan growth (pp) per unit of GDP-growth delta (fraction). 100 ⇒ a −5pp GDP
+#: shock (delta −0.05) cuts loan growth 5pp.
+LOAN_GROWTH_PER_GDP = Decimal("100")
+#: Deposit growth (pp) per unit of GDP-growth delta. Deposits track nominal
+#: activity slightly less than credit.
+DEPOSIT_GROWTH_PER_GDP = Decimal("80")
+#: NIM (pp) per unit of interest-rate delta. −10 ⇒ a +5pp rate rise (delta
+#: +0.05) compresses the margin 0.5pp (liabilities reprice faster short-term).
+NIM_PER_RATE = Decimal("-10")
+#: Cost-to-income (pp) per unit of inflation delta. 20 ⇒ a +5pp inflation shock
+#: lifts the cost ratio 1pp.
+CTI_PER_INFLATION = Decimal("20")
+
+#: Minimum growth the elasticities may drive an assumption to (a severe stress
+#: deleverages the book but never to an implausible collapse).
+_MIN_GROWTH_PCT = Decimal("-40")
+
+
+def money(value: Decimal) -> Decimal:
+    return value.quantize(MONEY, rounding=ROUND_HALF_UP)
+
+
+def ratio_pct(value: Decimal) -> Decimal:
+    return value.quantize(RATIO_PCT, rounding=ROUND_HALF_UP)
+
+
+class ProjectionInputError(Exception):
+    """The projection request is structurally invalid."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+@dataclass(frozen=True)
+class EnterpriseProjectionInputs:
+    """The full domain input set for one base+stress 3-year projection."""
+
+    scenario_code: str
+    scenario_paths: Sequence[MacroPathPoint]
+    facts: Sequence[ForecastFact]
+    params: ForecastParams
+    plan: ForecastAssumptions
+    horizon_years: int = HORIZON_DEFAULT
+    paid_up_min: Decimal = _ZERO
+    overrides: Mapping[str, Sequence[ShockMapping]] | None = None
+    credit_exposures: Sequence[CreditExposure] = ()
+    # Whether Basel LCR/NSFR apply to the liquidity leg. True for a bank; False
+    # under the SDI regime (docs/sdi.md §4.6), where LCR/NSFR are excluded — the
+    # SDI liquidity stress is assessed via the standalone LMTD Table-1 + behavioural
+    # stressed ladder on the position book, not the aggregate solvency projection.
+    # Default True keeps the bank projection byte-identical.
+    basel_liquidity: bool = True
+    ecl_assumptions: Sequence[EclAssumption] = ()
+
+
+PAID_UP_CATEGORIES: frozenset[str] = frozenset(
+    {"paid_up_capital", "stated_capital", "ordinary_shares", "common_equity", "share_capital"}
+)
+
+
+@dataclass(frozen=True)
+class Pnl:
+    nii: Decimal
+    fees: Decimal
+    total_income: Decimal
+    opex: Decimal
+    credit_losses: Decimal
+    pre_tax: Decimal
+    tax: Decimal
+    net_income: Decimal
+    dividends: Decimal
+    retained: Decimal
+    incremental_credit_losses: Decimal = _ZERO
+
+
+@dataclass(frozen=True)
+class BalanceSheet:
+    cash: Decimal
+    short_term_investments: Decimal
+    loans: Decimal
+    other_assets: Decimal
+    total_assets: Decimal
+    demand_deposits: Decimal
+    savings_deposits: Decimal
+    time_deposits: Decimal
+    other_deposits: Decimal
+    borrowings: Decimal
+    total_liabilities: Decimal
+    capital: Decimal
+
+
+@dataclass(frozen=True)
+class MinimaCheck:
+    car_pct: Decimal
+    car_min_pct: Decimal
+    car_ok: bool
+    cet1_pct: Decimal
+    cet1_min_pct: Decimal
+    cet1_ok: bool
+    tier1_pct: Decimal
+    tier1_min_pct: Decimal
+    tier1_ok: bool
+    leverage_pct: Decimal
+    leverage_min_pct: Decimal
+    leverage_ok: bool
+    paid_up: Decimal
+    paid_up_min: Decimal
+    paid_up_ok: bool
+    # Whether the Basel sub-tier / leverage minima apply. True for a bank (CRD);
+    # False under the SDI simplified s.29 regime, where CET1/Tier1/leverage are
+    # structurally excluded and must not count as breaches (docs/sdi.md §4.6).
+    # Default True keeps the bank projection byte-identical.
+    basel_applicable: bool = True
+
+    @property
+    def all_ok(self) -> bool:
+        basel_ok = (not self.basel_applicable) or (
+            self.cet1_ok and self.tier1_ok and self.leverage_ok
+        )
+        return self.car_ok and basel_ok and self.paid_up_ok
+
+    @property
+    def binding(self) -> tuple[str, ...]:
+        breaches: list[str] = []
+        if not self.car_ok:
+            breaches.append("car")
+        if self.basel_applicable:
+            if not self.cet1_ok:
+                breaches.append("cet1")
+            if not self.tier1_ok:
+                breaches.append("tier1")
+            if not self.leverage_ok:
+                breaches.append("leverage")
+        if not self.paid_up_ok:
+            breaches.append("paid_up")
+        return tuple(breaches)
+
+
+@dataclass(frozen=True)
+class ProjectedYear:
+    year: int
+    leg: str  # "current" | "base" | "stress"
+    pnl: Pnl
+    balance_sheet: BalanceSheet
+    rwa: RwaResult
+    ratios: CapitalRatiosResult
+    paid_up: Decimal
+    #: Basel LCR/NSFR — None under the SDI regime (Basel liquidity excluded).
+    lcr_pct: Decimal | None
+    nsfr_pct: Decimal | None
+    minima: MinimaCheck
+    # The per-year macro PD/LGD multipliers that drove the stress cost of risk
+    # (both 1.0 on the base leg). Perfect-foresight evidence for the audit trail.
+    pd_multiplier: Decimal
+    lgd_multiplier: Decimal
+
+
+@dataclass(frozen=True)
+class EnterpriseProjection:
+    scenario_code: str
+    horizon_years: int
+    current: ProjectedYear
+    base: tuple[ProjectedYear, ...]
+    stress: tuple[ProjectedYear, ...]
+    stress_stays_above_all_minima: bool
+    first_breach_year: int | None
+    binding_minima: tuple[str, ...]
+
+
+def _paths_at_year(paths: Sequence[MacroPathPoint], year_index: int) -> list[MacroPathPoint]:
+    return [point for point in paths if point.year_index == year_index]
+
+
+def _year_multipliers(
+    paths: Sequence[MacroPathPoint],
+    year_index: int,
+    overrides: Mapping[str, Sequence[ShockMapping]] | None,
+) -> tuple[Decimal, Decimal]:
+    """Perfect-foresight PD/LGD multipliers for one projected year.
+
+    ``translate`` on the single year's macro points yields the multipliers that
+    year's macro implies — so each projected year knows its own macro (¶48–49).
+    """
+    year_paths = _paths_at_year(paths, year_index)
+    # No ``if year_paths else {}`` guard (enterprise audit P0-9): a projected year
+    # with no macro points is a scenario that does not cover the horizon it is
+    # being run over, and neutralising it mints an "official" stress whose tail
+    # years are unstressed. ``translate`` fails closed on both the empty and the
+    # incomplete case.
+    shocks = translate(year_paths, "capital", overrides)
+    return shocks.get("ecl_pd_multiplier", _ONE), shocks.get("ecl_lgd_multiplier", _ONE)
+
+
+#: The macro drivers the stress leg's plan perturbation reads DIRECTLY, per
+#: projected year. ``translate("capital")`` validates only the ``capital``
+#: elasticity register's own drivers (GDP / unemployment / equity index), so
+#: ``interest_rate`` and ``inflation`` were read through :func:`_delta`, which
+#: answers ``0`` for an absent variable — a scenario whose rate path stopped at
+#: year 1 projected years 2 and 3 with the plan's own NIM and cost-to-income, an
+#: unstressed tail inside an official three-year stress (audit 2026-08-22 D-8).
+STRESS_LEG_MACRO_VARIABLES: tuple[str, ...] = (
+    "gdp_growth",
+    "inflation",
+    "interest_rate",
+)
+
+#: The FX driver the year-1 revaluation reads directly, with the same problem.
+FX_MACRO_VARIABLE = "fx_usd_ghs"
+
+
+def _delta(paths: Sequence[MacroPathPoint], variable: str, year_index: int) -> Decimal:
+    """Stress-vs-base delta for one variable at one year.
+
+    The caller must have established that the year carries the variable (see
+    :func:`_require_year_drivers`); ``_ZERO`` here is only reachable for a
+    variable/year pair the guard already accepted.
+    """
+    for point in paths:
+        if point.variable == variable and point.year_index == year_index:
+            return point.stress_value - point.base_value
+    return _ZERO
+
+
+def _require_year_drivers(
+    paths: Sequence[MacroPathPoint], variables: Sequence[str], year_index: int
+) -> None:
+    """Refuse unless every named driver is authored at ``year_index``."""
+    require_macro_variables(
+        [point for point in paths if point.year_index == year_index],
+        variables,
+        metric_id=f"stress_projection_year:{year_index}",
+        context={"year_index": year_index},
+    )
+
+
+def _frac_delta_fx(paths: Sequence[MacroPathPoint], year_index: int) -> Decimal:
+    """Stress-vs-base fractional cedi depreciation at one year (0 if base==stress).
+
+    Refuses when the year carries no FX path, or carries one with a zero base:
+    both used to read as "no depreciation", so a scenario that omitted the FX
+    driver silently ran the stress leg with the plan's own FX assumption only
+    (audit 2026-08-22 D-8).
+    """
+    _require_year_drivers(paths, (FX_MACRO_VARIABLE,), year_index)
+    for point in paths:
+        if point.variable == FX_MACRO_VARIABLE and point.year_index == year_index:
+            if point.base_value == _ZERO:
+                raise NotComputable(
+                    outcome(
+                        OutcomeState.DATA_QUALITY_BLOCK,
+                        metric_id=f"stress_projection_year:{year_index}",
+                        reason=(
+                            "The exchange-rate path is authored with a zero base value, "
+                            "so the fractional depreciation the year-1 revaluation "
+                            "applies is undefined. A zero base used to read as no "
+                            "depreciation at all."
+                        ),
+                        items=(f"macro:{FX_MACRO_VARIABLE}@y{year_index}",),
+                        context={"year_index": year_index},
+                    )
+                )
+            return (point.stress_value - point.base_value) / point.base_value
+    return _ZERO  # pragma: no cover - _require_year_drivers already refused
+
+
+def _stress_assumptions_for_year(
+    inputs: EnterpriseProjectionInputs, year_index: int
+) -> tuple[ForecastAssumptions, Decimal, Decimal]:
+    """Plan perturbed by the stress-vs-base macro deltas at ``year_index``.
+
+    Returns (assumptions, pd_multiplier, lgd_multiplier). Under a base scenario
+    every delta is zero, so the result equals the plan and the multipliers are
+    1.0 — the stress leg collapses onto the base leg.
+    """
+    plan = inputs.plan
+    paths = inputs.scenario_paths
+    _require_year_drivers(paths, STRESS_LEG_MACRO_VARIABLES, year_index)
+    gdp_delta = _delta(paths, "gdp_growth", year_index)
+    rate_delta = _delta(paths, "interest_rate", year_index)
+    infl_delta = _delta(paths, "inflation", year_index)
+    pd_mult, lgd_mult = _year_multipliers(paths, year_index, inputs.overrides)
+
+    loan_growth = max(plan.loan_growth_pct + LOAN_GROWTH_PER_GDP * gdp_delta, _MIN_GROWTH_PCT)
+    deposit_growth = max(
+        plan.deposit_growth_pct + DEPOSIT_GROWTH_PER_GDP * gdp_delta, _MIN_GROWTH_PCT
+    )
+    nim = plan.nim_pct + NIM_PER_RATE * rate_delta
+    cost_to_income = plan.cost_to_income_pct + CTI_PER_INFLATION * infl_delta
+    assumptions = replace(
+        plan,
+        loan_growth_pct=loan_growth,
+        deposit_growth_pct=deposit_growth,
+        nim_pct=nim,
+        cost_to_income_pct=cost_to_income,
+    )
+    return assumptions, pd_mult, lgd_mult
+
+
+def project_enterprise(inputs: EnterpriseProjectionInputs) -> EnterpriseProjection:
+    """Run the base and stress 3-year projections and assess the minima (¶77)."""
+    if inputs.horizon_years < MIN_HORIZON:
+        raise ProjectionInputError(
+            "horizon_too_short",
+            f"The stress projection horizon must be at least {MIN_HORIZON} years "
+            f"(got {inputs.horizon_years}).",
+        )
+
+    # Year 0 (as-of) is identical for both legs — compute it once.
+    zero_state, zero_meta = _parse_facts(inputs.facts)
+    if zero_state.ecl_exposures and (
+        not inputs.ecl_assumptions
+        or not has_complete_ecl_coverage(_to_capital_facts(inputs.facts))
+        or abs(sum(zero_state.ecl_exposures.values(), _ZERO) - zero_state.loans_total())
+        > len(zero_state.ecl_exposures) * MONEY
+    ):
+        raise ProjectionInputError(
+            "ecl_coverage_incomplete",
+            "Stage-restricted stress losses require complete loan coverage "
+            "and an effective ECL assumptions register.",
+        )
+    current = _snapshot_year(inputs, zero_state, zero_meta, 0, "current", _ONE, _ONE)
+
+    base_years = _run_leg(inputs, "base")
+    stress_years = _run_leg(inputs, "stress")
+
+    first_breach = next((year.year for year in stress_years if not year.minima.all_ok), None)
+    binding: set[str] = set()
+    for year in stress_years:
+        binding.update(year.minima.binding)
+    return EnterpriseProjection(
+        scenario_code=inputs.scenario_code,
+        horizon_years=inputs.horizon_years,
+        current=current,
+        base=tuple(base_years),
+        stress=tuple(stress_years),
+        stress_stays_above_all_minima=first_breach is None,
+        first_breach_year=first_breach,
+        binding_minima=tuple(sorted(binding)),
+    )
+
+
+def _run_leg(inputs: EnterpriseProjectionInputs, leg: str) -> list[ProjectedYear]:
+    state, meta = _parse_facts(inputs.facts)
+    earning_prev = state.loans_total() + state.securities_total()
+    assets_prev = state.assets_total()
+    equity_prev = state.equity
+    rows: list[ProjectedYear] = []
+    for year in range(1, inputs.horizon_years + 1):
+        if leg == "base":
+            assumptions = inputs.plan
+            pd_mult = lgd_mult = _ONE
+            fx_pct = inputs.plan.fx_depreciation_pct if year == 1 else _ZERO
+            mtm_pct = _ZERO
+        else:
+            assumptions, pd_mult, lgd_mult = _stress_assumptions_for_year(inputs, year)
+            fx_pct = _stress_fx_year1(inputs) if year == 1 else _ZERO
+            mtm_pct = _stress_mtm_year1(inputs) if year == 1 else _ZERO
+        earning_prev, assets_prev, equity_prev, row = _project_one_year(
+            inputs,
+            state,
+            meta,
+            year,
+            leg,
+            assumptions,
+            fx_pct,
+            mtm_pct,
+            pd_mult,
+            lgd_mult,
+            earning_prev,
+            assets_prev,
+            equity_prev,
+        )
+        rows.append(row)
+    return rows
+
+
+def _stress_fx_year1(inputs: EnterpriseProjectionInputs) -> Decimal:
+    """One-off cedi-depreciation revaluation for the stress leg (plan + stress).
+
+    The stress delta is the peak stress-vs-base fractional depreciation across
+    the horizon, added to the plan's own FX assumption. Zero under a base
+    scenario, so the stress leg's year-1 FX equals the base leg's.
+    """
+    # Peak over the DEPRECIATING years only (enterprise audit P0-9). Selecting
+    # the largest-magnitude move and then flooring it at zero meant a scenario
+    # with +30% depreciation in year 1 and a larger appreciation in year 3
+    # applied no FX stress at all.
+    peak = _ZERO
+    for year in range(1, inputs.horizon_years + 1):
+        candidate = _frac_delta_fx(inputs.scenario_paths, year)
+        peak = max(peak, candidate)
+    return inputs.plan.fx_depreciation_pct + peak * _HUNDRED
+
+
+def _apply_credit_stress(
+    inputs: EnterpriseProjectionInputs, rwa: RwaResult, facts: Sequence[CapitalFact], year: int
+) -> RwaResult:
+    """BoG CRD (June 2018) ¶98, ¶139: stress only each year's affected net claims."""
+    if not inputs.credit_exposures:
+        return rwa
+    original: dict[str, Decimal] = {}
+    for exposure in inputs.credit_exposures:
+        category = exposure.credit_category
+        if category is None:
+            raise ProjectionInputError(
+                "credit_category_missing", "Stress exposures need a capital bucket."
+            )
+        amount = exposure.ead if exposure.credit_amount is None else exposure.credit_amount
+        original[category] = original.get(category, _ZERO) + amount
+    projected = {
+        fact.category: fact.amount for fact in facts if fact.fact_group == "credit_exposure"
+    }
+    grown: list[CreditExposure] = []
+    for exposure in inputs.credit_exposures:
+        category = exposure.credit_category
+        if category is None or category not in projected:
+            raise NotComputable(
+                outcome(
+                    OutcomeState.MISSING_REQUIRED_INPUT,
+                    metric_id="stressed_credit_rwa",
+                    reason="A stress exposure has no corresponding projected capital bucket.",
+                    items=(f"fact:credit_exposure:{category}",),
+                )
+            )
+        amount = exposure.ead if exposure.credit_amount is None else exposure.credit_amount
+        factor = projected[category] / original[category] if original[category] > _ZERO else _ONE
+        grown.append(
+            replace(
+                exposure, ead=money(exposure.ead * factor), credit_amount=money(amount * factor)
+            )
+        )
+    grown = list(apply_credit_collateral(grown, facts, inputs.params.capital))
+    result = result_for_year(grown, inputs.scenario_paths, year, overrides=inputs.overrides)
+    deltas = result.rwa_delta_by_category
+    items: list[CapitalLineItem] = []
+    for item in rwa.line_items:
+        if item.section != "credit_rwa" or item.line_code not in deltas:
+            items.append(item)
+            continue
+        weighted = money(item.weighted_amount + deltas[item.line_code])
+        amount = result.stressed_amount_by_category[item.line_code]
+        weight = ratio_pct(weighted / amount * _HUNDRED) if amount > _ZERO else item.rate_pct
+        items.append(
+            replace(item, exposure_amount=amount, rate_pct=weight, weighted_amount=weighted)
+        )
+    credit = money(rwa.credit_rwa + sum(deltas.values(), _ZERO))
+    return replace(
+        rwa,
+        credit_rwa=credit,
+        total_rwa=money(credit + rwa.market_rwa + rwa.operational_rwa),
+        line_items=tuple(items),
+    )
+
+
+def _stress_mtm_year1(inputs: EnterpriseProjectionInputs) -> Decimal:
+    """One-off marketable-securities mark-down for the stress leg (rate shock).
+
+    Reuses the macro-derived HQLA haircut (duration × Δyield) the liquidity
+    translation emits, applied once to the securities book. Zero under base.
+    """
+    shocks = translate(inputs.scenario_paths, "liquidity", inputs.overrides)
+    return shocks.get("hqla_securities_haircut_pct", _ZERO)
+
+
+def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full scope
+    inputs: EnterpriseProjectionInputs,
+    state: _State,
+    meta: _Meta,
+    year: int,
+    leg: str,
+    assumptions: ForecastAssumptions,
+    fx_pct: Decimal,
+    mtm_pct: Decimal,
+    pd_mult: Decimal,
+    lgd_mult: Decimal,
+    earning_prev: Decimal,
+    assets_prev: Decimal,
+    equity_prev: Decimal,
+) -> tuple[Decimal, Decimal, Decimal, ProjectedYear]:
+    """Roll forward the book, charging only general EAD for incremental macro losses.
+
+    Conservative: tax applies to income after baseline plan losses, before the
+    incremental charge; a request or platform tax rate cannot shield that charge.
+    """
+    loan_factor = _ONE + assumptions.loan_growth_pct / _HUNDRED
+    deposit_factor = _ONE + assumptions.deposit_growth_pct / _HUNDRED
+    securities_factor = (
+        _ONE + (assumptions.deposit_growth_pct + assumptions.securities_shift_pp) / _HUNDRED
+    )
+    scale_credit_exposures(
+        state,
+        loan_factor,
+        deposit_factor,
+        securities_factor * ((_HUNDRED - mtm_pct) / _HUNDRED if year == 1 else _ONE),
+    )
+    _scale_in_place(state.loans, loan_factor)
+    _scale_in_place(state.ecl_exposures, loan_factor)
+    _scale_in_place(state.off_balance, loan_factor)
+    _scale_in_place(state.inflows, loan_factor)
+    _scale_in_place(state.deposits, deposit_factor)
+    _scale_in_place(state.securities, securities_factor)
+    _scale_in_place(state.cash, deposit_factor)
+    for category in state.securities_group:
+        factor = (
+            deposit_factor
+            if meta.securities_group_cash_derived.get(category, False)
+            else securities_factor
+        )
+        state.securities_group[category] = money(state.securities_group[category] * factor)
+
+    # One-off year-1 shocks (mark-down of marketable securities, FX revaluation).
+    if year == 1:
+        if mtm_pct != _ZERO:
+            haircut_factor = (_HUNDRED - mtm_pct) / _HUNDRED
+            _scale_in_place(state.securities, haircut_factor)
+            for category in state.securities_group:
+                if not meta.securities_group_cash_derived.get(category, False):
+                    state.securities_group[category] = money(
+                        state.securities_group[category] * haircut_factor
+                    )
+        if fx_pct != _ZERO:
+            _scale_in_place(state.market, _ONE + fx_pct / _HUNDRED)
+
+    earning_assets = state.loans_total() + state.securities_total()
+    nii = money(assumptions.nim_pct / _HUNDRED * (earning_prev + earning_assets) / _TWO)
+    assets_pre_plug = state.assets_total()
+    fees = money(
+        assumptions.fee_income_pct_assets / _HUNDRED * (assets_prev + assets_pre_plug) / _TWO
+    )
+    total_income = nii + fees
+    opex = money(assumptions.cost_to_income_pct / _HUNDRED * total_income)
+    baseline_credit_losses = money(
+        assumptions.credit_loss_rate_pct / _HUNDRED * state.loans_total()
+    )
+    general_ead = (
+        sum(
+            (
+                amount
+                for category, amount in state.ecl_exposures.items()
+                if category.endswith((":stage1", ":stage2"))
+            ),
+            _ZERO,
+        )
+        if state.ecl_exposures
+        else state.loans_total()
+    )
+    incremental_credit_losses = money(
+        assumptions.credit_loss_rate_pct
+        / _HUNDRED
+        * general_ead
+        * max(pd_mult * lgd_mult - _ONE, _ZERO)
+    )
+    credit_losses = baseline_credit_losses + incremental_credit_losses
+    pre_tax = total_income - opex - credit_losses
+    tax = money(
+        assumptions.tax_rate_pct / _HUNDRED * max(pre_tax + incremental_credit_losses, _ZERO)
+    )
+    net_income = pre_tax - tax
+    dividends = money(assumptions.dividend_payout_pct / _HUNDRED * max(net_income, _ZERO))
+    retained = net_income - dividends
+
+    state.equity = state.equity + retained
+    state.components[RETAINED_EARNINGS_CATEGORY] = (
+        state.components.get(RETAINED_EARNINGS_CATEGORY, _ZERO) + retained
+    )
+    _apply_funding_plug(state)
+    # ``gi_history`` rows are ``(income_year, category, amount)`` — the shape the
+    # shared forecasting ``_State`` carries so the operational-income facts it
+    # emits are indistinguishable from the as-of ones.
+    next_income_year = state.gi_history[-1][0] + 1
+    state.gi_history.append((next_income_year, f"gross_income_{next_income_year}", total_income))
+
+    pnl = Pnl(
+        nii=nii,
+        fees=fees,
+        total_income=total_income,
+        opex=opex,
+        credit_losses=credit_losses,
+        pre_tax=pre_tax,
+        tax=tax,
+        net_income=net_income,
+        dividends=dividends,
+        retained=retained,
+        incremental_credit_losses=incremental_credit_losses,
+    )
+    row = _snapshot_year(
+        inputs,
+        state,
+        meta,
+        year,
+        leg,
+        pd_mult,
+        lgd_mult,
+        pnl=pnl,
+    )
+    return earning_assets, state.assets_total(), state.equity, row
+
+
+def _snapshot_year(  # noqa: PLR0913 - the snapshot names its full scope
+    inputs: EnterpriseProjectionInputs,
+    state: _State,
+    meta: _Meta,
+    year: int,
+    leg: str,
+    pd_mult: Decimal,
+    lgd_mult: Decimal,
+    *,
+    pnl: Pnl | None = None,
+) -> ProjectedYear:
+    rows = _state_facts(state, meta)
+    capital_facts = _to_capital_facts(rows)
+    liquidity_facts = _to_liquidity_facts(rows)
+    rwa = compute_rwa(capital_facts, inputs.params.capital)
+    if leg == "stress":
+        rwa = _apply_credit_stress(inputs, rwa, capital_facts, year)
+    ratios = compute_capital_ratios(capital_facts, rwa, inputs.params.capital)
+    # Basel LCR/NSFR apply to banks only; under the SDI regime they are excluded
+    # (docs/sdi.md §4.6) — the SDI liquidity stress is the LMTD Table-1 + stressed
+    # ladder on the position book, not this aggregate solvency projection.
+    if inputs.basel_liquidity:
+        lcr_pct: Decimal | None = compute_lcr(liquidity_facts, inputs.params.liquidity).lcr_pct
+        nsfr_pct: Decimal | None = compute_nsfr(liquidity_facts, inputs.params.liquidity).nsfr_pct
+    else:
+        lcr_pct = None
+        nsfr_pct = None
+    paid_up = _paid_up_capital(ratios)
+    minima = _minima(ratios, paid_up, inputs.params.capital, inputs.paid_up_min)
+    return ProjectedYear(
+        year=year,
+        leg=leg,
+        pnl=pnl if pnl is not None else _zero_pnl(),
+        balance_sheet=_balance_sheet(state),
+        rwa=rwa,
+        ratios=ratios,
+        paid_up=paid_up,
+        lcr_pct=lcr_pct,
+        nsfr_pct=nsfr_pct,
+        minima=minima,
+        pd_multiplier=pd_mult,
+        lgd_multiplier=lgd_mult,
+    )
+
+
+def _zero_pnl() -> Pnl:
+    return Pnl(_ZERO, _ZERO, _ZERO, _ZERO, _ZERO, _ZERO, _ZERO, _ZERO, _ZERO, _ZERO)
+
+
+def _paid_up_capital(ratios: CapitalRatiosResult) -> Decimal:
+    """Sum the CET1 paid-up / stated-capital components (¶77 paid-up floor)."""
+    total = _ZERO
+    for item in ratios.line_items:
+        if item.section != "capital_component":
+            continue
+        tier, _, category = item.line_code.partition(":")
+        if tier == TIER_CET1.lower() and category in PAID_UP_CATEGORIES:
+            total += item.weighted_amount
+    return money(total)
+
+
+def _minima(
+    ratios: CapitalRatiosResult, paid_up: Decimal, params: CapitalParams, paid_up_min: Decimal
+) -> MinimaCheck:
+    return MinimaCheck(
+        car_pct=ratios.car_pct,
+        car_min_pct=params.car_min_pct,
+        car_ok=ratios.car_pct >= params.car_min_pct,
+        cet1_pct=ratios.cet1_ratio_pct,
+        cet1_min_pct=params.cet1_min_pct,
+        cet1_ok=ratios.cet1_ratio_pct >= params.cet1_min_pct,
+        tier1_pct=ratios.tier1_ratio_pct,
+        tier1_min_pct=params.tier1_min_pct,
+        tier1_ok=ratios.tier1_ratio_pct >= params.tier1_min_pct,
+        leverage_pct=ratios.leverage_ratio_pct,
+        leverage_min_pct=params.leverage_min_pct,
+        leverage_ok=ratios.leverage_ratio_pct >= params.leverage_min_pct,
+        paid_up=paid_up,
+        paid_up_min=paid_up_min,
+        paid_up_ok=paid_up >= paid_up_min,
+        basel_applicable=params.basel_applicable,
+    )
+
+
+_DEMAND_TOKENS = ("demand", "current", "call", "checking")
+_SAVINGS_TOKENS = ("saving",)
+_TIME_TOKENS = ("time", "term", "fixed")
+
+
+def _balance_sheet(state: _State) -> BalanceSheet:
+    demand = savings = time = other = _ZERO
+    for category, amount in state.deposits.items():
+        lowered = category.lower()
+        if any(token in lowered for token in _DEMAND_TOKENS):
+            demand += amount
+        elif any(token in lowered for token in _SAVINGS_TOKENS):
+            savings += amount
+        elif any(token in lowered for token in _TIME_TOKENS):
+            time += amount
+        else:
+            other += amount
+    borrowings = state.borrowings + sum(state.constant_liabilities.values(), _ZERO)
+    cash = state.cash_total()
+    short_term_investments = state.securities_total()
+    loans = state.loans_total()
+    other_assets = sum(state.constant_assets.values(), _ZERO)
+    total_assets = state.assets_total()
+    capital = state.equity + sum(state.constant_equity.values(), _ZERO)
+    total_liabilities = money(demand + savings + time + other + borrowings)
+    return BalanceSheet(
+        cash=money(cash),
+        short_term_investments=money(short_term_investments),
+        loans=money(loans),
+        other_assets=money(other_assets),
+        total_assets=money(total_assets),
+        demand_deposits=money(demand),
+        savings_deposits=money(savings),
+        time_deposits=money(time),
+        other_deposits=money(other),
+        borrowings=money(borrowings),
+        total_liabilities=total_liabilities,
+        capital=money(capital),
+    )
+
+
+# --- Capital-component extraction for Appendix II Table 2 --------------------
+
+
+def component_breakdown(ratios: CapitalRatiosResult) -> dict[str, dict[str, Decimal]]:
+    """CET1/AT1/T2 component amounts (recognized/weighted) keyed by category.
+
+    Reads the capital engine's ``capital_component`` line items — the
+    authoritative tier build (deductions negative, GP already Tier-2-capped) —
+    so the Appendix II Table 2 builder never re-derives the tiering.
+    """
+    tiers: dict[str, dict[str, Decimal]] = {
+        TIER_CET1: {},
+        TIER_AT1: {},
+        TIER_T2: {},
+    }
+    tier_by_prefix = {
+        TIER_CET1.lower(): TIER_CET1,
+        TIER_AT1.lower(): TIER_AT1,
+        TIER_T2.lower(): TIER_T2,
+    }
+    for item in ratios.line_items:
+        if item.section != "capital_component":
+            continue
+        prefix, _, category = item.line_code.partition(":")
+        tier = tier_by_prefix.get(prefix)
+        if tier is None:
+            continue
+        tiers[tier][category] = tiers[tier].get(category, _ZERO) + item.weighted_amount
+    return tiers
+
+
+def general_provisions_amount(ratios: CapitalRatiosResult) -> Decimal:
+    """The Tier-2 recognized general-provisions (credit risk reserve) amount."""
+    for item in ratios.line_items:
+        if item.section != "capital_component":
+            continue
+        prefix, _, category = item.line_code.partition(":")
+        if prefix == TIER_T2.lower() and category == GENERAL_PROVISIONS_CATEGORY:
+            return item.weighted_amount
+    return _ZERO

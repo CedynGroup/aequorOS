@@ -6,7 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from app.domain.ftp.engine import (
+from app.ftp.domain.engine import (
     build_curve,
     nmd_split,
     product_profitability,

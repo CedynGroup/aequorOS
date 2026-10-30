@@ -35,11 +35,11 @@ from collections.abc import Mapping
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from app.domain.irr import standardised as sf
-from app.domain.irr import standardised_params as sfp
 from app.icaap.domain.blocks import SourceProbe
 from app.icaap.service import resolvers
 from app.icaap.service.resolvers import Resolution, ResolveContext, Unavailable
+from app.irrbb.domain import standardised as sf
+from app.irrbb.domain import standardised_params as sfp
 from app.irrbb.public import regulatory_irr_sf
 from app.live.public import RegulatoryRun
 

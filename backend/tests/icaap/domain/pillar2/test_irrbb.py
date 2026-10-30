@@ -7,9 +7,9 @@ from decimal import Decimal
 import pytest
 from hypothesis import given, settings
 
-from app.domain.irr.standardised import SfInputs
 from app.icaap.domain.pillar2.irrbb import ScenarioDelta, interim_delta_eve
 from app.icaap.domain.pillar2.types import MethodStatus, MissingParameter
+from app.irrbb.domain.standardised import SfInputs
 from tests.icaap.domain.pillar2.conftest import OUTLIER_THRESHOLD_PCT
 from tests.irrbb.testing.assertions import assert_interim_not_increased
 from tests.irrbb.testing.generators import interim_deltas, irrbb_books

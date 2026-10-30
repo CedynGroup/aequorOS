@@ -1,7 +1,7 @@
 """The full granularity adjustment, from a bank's canonical book to a figure.
 
 The pure derivation and its P2 adapter were built first and are covered by
-``tests/domain/credit`` and ``tests/icaap/domain/pillar2``. What is pinned here
+``tests/credit/domain`` and ``tests/icaap/domain/pillar2``. What is pinned here
 is the half that makes them reachable: the exposure book this service assembles
 from the canonical position snapshots, the order it resolves a PD and an ELGD
 in, the rows it excludes and counts, and the refusals it returns instead of a

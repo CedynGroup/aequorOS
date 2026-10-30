@@ -15,7 +15,7 @@ WORKFLOWS = Path(__file__).resolve().parents[3] / ".github" / "workflows"
     ("workflow", "checks"),
     [
         ("secret-scan.yml", {"gitleaks"}),
-        ("risk-service.yml", {"Preflight", "Architecture and CI guards", "Risk service gate"}),
+        ("risk-service.yml", {"Preflight", "Unit tests", "Risk service gate"}),
         ("dashboard.yml", {"Dashboard gate"}),
         ("web.yml", {"Web gate"}),
         ("dashboard-journeys.yml", {"Dashboard journeys gate"}),

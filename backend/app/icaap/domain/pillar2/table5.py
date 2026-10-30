@@ -27,8 +27,8 @@ from decimal import Decimal
 from types import MappingProxyType
 from typing import Literal
 
-from app.domain.stress.appendix_ii import thousands
 from app.icaap.domain.pillar2.register import RegisterTotals, RowTotal
+from app.stress.domain.appendix_ii import thousands
 
 Basis = Literal["baseline", "stressed"]
 

@@ -46,19 +46,23 @@ from app.reporting.service.templates import (
     build_rendered_return,
     get_template,
 )
-from app.schemas.enterprise_stress import EnterpriseStressRunCreate
-from app.schemas.enterprise_stress_signoff import (
+from app.stress.schemas.enterprise_stress import EnterpriseStressRunCreate
+from app.stress.schemas.enterprise_stress_signoff import (
     StressSignoffAttestation,
     StressSignoffCreate,
     StressSignoffTransition,
 )
-from app.schemas.management_actions import (
+from app.stress.schemas.management_actions import (
     ManagementActionPlanApproval,
     ManagementActionPlanCreate,
     ManagementActionPlanTransition,
 )
-from app.schemas.stress import MacroScenarioApproval, MacroScenarioCreate, MacroScenarioTransition
-from app.services import (
+from app.stress.schemas.stress import (
+    MacroScenarioApproval,
+    MacroScenarioCreate,
+    MacroScenarioTransition,
+)
+from app.stress.service import (
     enterprise_stress,
     enterprise_stress_signoff,
     macro_scenarios,

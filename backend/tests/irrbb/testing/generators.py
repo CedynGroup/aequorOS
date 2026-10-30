@@ -6,10 +6,10 @@ from decimal import Decimal
 
 from hypothesis import strategies as st
 
-from app.domain.irr.standardised import CurrencyInputs, Ladder, LadderKind, SfInputs
-from app.domain.irr.standardised import run as sf_run
 from app.icaap.domain.pillar2.irrbb import ScenarioDelta
-from tests.domain.irr.test_sf_fixtures import running_outstanding, sf_parameters
+from app.irrbb.domain.standardised import CurrencyInputs, Ladder, LadderKind, SfInputs
+from app.irrbb.domain.standardised import run as sf_run
+from tests.irrbb.domain.test_sf_fixtures import running_outstanding, sf_parameters
 
 PARAMS = sf_parameters()
 AS_OF = date(2026, 12, 31)
@@ -27,7 +27,7 @@ adversarial_amounts = st.lists(
 def repricing_amounts(draw: st.DrawFn) -> list[Decimal]:
     """Signed zero-coupon asset/funding portfolios with consistent outstanding.
 
-    Source: domain/irr/standardised.py Ladder: assets positive, funding negative;
+    Source: app/irrbb/domain/standardised.py Ladder: assets positive, funding negative;
     six-place HALF_UP results. Bucket/shock calibration comes from the existing
     test_sf_fixtures.py governed parser fixture (IRRBB exposure draft, pending).
     Synthetic 100k–5m bullet cash flows favour the first five years; a zero book

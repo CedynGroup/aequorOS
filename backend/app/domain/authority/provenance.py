@@ -2,7 +2,7 @@
 
 This module does **not** introduce a second provenance store. The repository
 already has one and only one authoritative record of "how was this number
-produced": :class:`app.models.regulatory_run.RegulatoryRun`. What was missing
+produced": :class:`app.live.models.regulatory_run.RegulatoryRun`. What was missing
 was a *formal interface* over it — a typed, dependency-free view that pure
 domain code, reporting generators, exports and tests can all agree on, and a
 single place that says which fields together constitute complete provenance.

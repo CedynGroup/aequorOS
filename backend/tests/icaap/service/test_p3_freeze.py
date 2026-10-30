@@ -51,6 +51,8 @@ from tests.icaap.service.p3_support import (
     write_every_section,
 )
 
+pytestmark = pytest.mark.canonical_book_baseline
+
 
 class _OrderedAttachment(TypedDict):
     kind: str
@@ -639,6 +641,7 @@ class TestTheCycleIsSealedAfterwards:
 
 
 @pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+@pytest.mark.usefixtures("institution_profile_authority")
 def test_snapshot_commits_protected_register_without_key_access(
     canonical_book: Session,
     extra_frameworks: None,
@@ -691,6 +694,7 @@ def test_snapshot_commits_protected_register_without_key_access(
     assert profile["register_state_digest"]
 
 
+@pytest.mark.usefixtures("institution_profile_authority")
 def test_frozen_engine_package_requires_regeneration_after_key_rotation(
     canonical_book: Session, extra_frameworks: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:

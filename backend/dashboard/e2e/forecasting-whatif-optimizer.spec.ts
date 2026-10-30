@@ -9,7 +9,7 @@
  * The expectations are the FIXTURE's, not the screen's: `support/forecast.ts`
  * projects the canonical book under the approved base preset, applies each
  * shock's fixed adjustment (`WHATIF_SHOCKS` in
- * `app/domain/forecasting/engine.py`) and each optimizer decision itself, and
+ * `app/forecasting/domain/engine.py`) and each optimizer decision itself, and
  * derives net income, ROE and CAR from them. The optimizer's feasibility is
  * the derived CAR path against the governed 13% floor; LCR and NSFR never bind
  * on this book, and their paths are pinned as engine output.

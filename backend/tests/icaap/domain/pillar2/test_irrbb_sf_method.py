@@ -1,7 +1,7 @@
 """The IRRBB standardised framework Pillar 2 method (P5-DESIGN §1.6 item 2).
 
 The arithmetic is not under test here — the eight golden vectors in
-``tests/domain/irr/`` pin every number the engine produces, and this method
+``tests/irrbb/domain/`` pin every number the engine produces, and this method
 re-derives none of it. What is under test is the part that decides what a
 report is allowed to SAY:
 

@@ -161,7 +161,7 @@ still on the legacy gates described above.
 ## 3. The calculation-run pattern (reuse this for every new engine)
 
 The reference implementation is the balance-sheet forecast + capital + liquidity chain. Concrete
-tables (all in `app/models/calculation.py` and `app/models/capital.py`, migrations
+tables (all in `app/case/models/calculation.py` and `app/case/models/capital.py`, migrations
 `202607130002`, `202607130003`, `202607140001`):
 
 | Table                          | Model                       | Purpose                                                                                                                                                                                                                                                                                                                                     |
@@ -173,8 +173,8 @@ tables (all in `app/models/calculation.py` and `app/models/capital.py`, migratio
 | `capital_projection_findings`  | `CapitalProjectionFinding`  | Join table linking generated `RiskFinding` rows to the projection.                                                                                                                                                                                                                                                                          |
 | `liquidity_analysis_results`   | `LiquidityAnalysisResult`   | Exactly one per successful run (`UniqueConstraint("run_id")`), versioned via `analysis_version`, metrics stored as JSON.                                                                                                                                                                                                                    |
 
-Invariants every new engine must copy (verified in `app/services/calculations.py`,
-`app/services/capital.py`, `app/services/liquidity.py`):
+Invariants every new engine must copy (verified in `app/case/service/calculations.py`,
+`app/case/service/capital.py`, `app/case/service/liquidity.py`):
 
 - **Immutability + append-only history.** Reruns create a new row (`rerun_of_run_id` link);
   failed attempts are persisted with named diagnostics and never replace prior successful output.
@@ -350,12 +350,12 @@ on one canonical store — the live tier for intraday awareness, the official ti
   filing. Every mint re-derives the reporting period's facts from the accepted canonical book,
   including same-date corrections. Prior runs and generated packages retain their frozen evidence;
   unchanged financial values reproduce the same `input_hash` per run (see §3). Regression:
-  `backend/tests/services/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
-- **Freshness** (`app/services/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
+  `backend/tests/live/service/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
+- **Freshness** (`app/live/service/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
   live `input_hash` to the latest official run's `input_hash`. Because the hash is value-based, a
   bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as
   stale ("data changed since last filing run — mint an official run").
-- **Alerts** (`app/services/alerts.py`, `GET /banks/{id}/alerts`): open `critical`/`high`
+- **Alerts** (`app/live/service/alerts.py`, `GET /banks/{id}/alerts`): open `critical`/`high`
   `live_findings` across modules, surfaced by the header bell (cheap, jittered polling).
 - **Scheduler** (`app/services/scheduler.py`): the worker enqueues a `scheduled_tick`; the handler
   enqueues an `official_run` per bank whose daily filing time (`OFFICIAL_RUN_HOUR`) is due. With
@@ -997,7 +997,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
 
 ## 4. Findings infrastructure
 
-Generic, reusable workflow — verified in `app/models/risk.py` and `app/services/findings.py`:
+Generic, reusable workflow — verified in `app/case/models/risk.py` and `app/case/service/findings.py`:
 
 - `risk_findings` (`RiskFinding`): tenant + case scoped; `risk_type` (allow-list in
   `app/domain/risk_constants.py::RISK_TYPES`), `severity` (`low|medium|high|critical`), `status`
@@ -1006,13 +1006,13 @@ Generic, reusable workflow — verified in `app/models/risk.py` and `app/service
 - `risk_finding_evidence` (`RiskFindingEvidence`): per-finding evidence rows with optional
   document/chunk references and a free-form `locator` JSON (source_type, label, `source_url`
   deep link, record ids, `input_hash`).
-- Service helpers in `app/services/findings.py`: `get_finding_or_404`, `list_findings`,
+- Service helpers in `app/case/service/findings.py`: `get_finding_or_404`, `list_findings`,
   `list_case_findings`, `create_case_finding`, `update_finding` / `apply_finding_update`
   (validates status transitions, requires disposition reason for dismissal, stamps
   `reviewed_by`/`reviewed_at` into `details`, emits `finding.status_changed`),
   `is_liquidity_workflow_finding`, `list_finding_evidence`.
 
-How `app/services/liquidity.py` publishes findings (the template for new engines):
+How `app/case/service/liquidity.py` publishes findings (the template for new engines):
 
 1. `calculate_metrics(periods)` — pure, deterministic; returns metrics plus a list of "concern"
    dicts (rule_id, severity, title, summary, rationale, affected periods, metric keys).
@@ -1139,18 +1139,18 @@ Verified in `backend/mise.toml`, root `mise.toml`, and `.pre-commit-config.yaml`
 
 ---
 
-## 7. Cash-flow ML module (`backend/app/ml`)
+## 7. Cash-flow ML module (`backend/app/forecasting/ml`)
 
-**Status: built and folded into the backend (originally a standalone `backend/app/ml`
+**Status: built and folded into the backend (originally a standalone `backend/app/forecasting/ml`
 sidecar; merged 2026-07 so all seven capability modules live in one deployable).**
 
-- `backend/app/ml`: PyTorch LSTM + static-baseline cash-flow forecasting as an internal
+- `backend/app/forecasting/ml`: PyTorch LSTM + static-baseline cash-flow forecasting as an internal
   package of the risk service — `synthetic.py` (deterministic demo series), `features.py`
   (calendar features), `baseline.py`, `model.py` (train/persist/forecast), `config.py`
   (`TrainingConfig`, model version).
 - Endpoints (`/banks/{id}/cashflow-forecast`, `/banks/{id}/cashflow-history`) enforce tenant
   scoping (verified bearer credential → `TenantContext` → bank ownership) in
-  `app/services/cashflow_forecast.py`, which lazy-trains on first forecast (or loads saved
+  `app/forecasting/service/cashflow_forecast.py`, which lazy-trains on first forecast (or loads saved
   artifacts) via an in-process `ForecastService` singleton. The ML package itself is
   tenant-unaware compute; the service layer owns authorization and response shaping.
 - Settings live in `app/core/config.py` (`CashflowSettings`): `CASHFLOW_ARTIFACTS_DIR`
@@ -1169,6 +1169,8 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 | Target                   | Commands                                                                                                                                                                                                                                                                                                                          |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/type_check_baseline.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                                         |
+| risk-service unit        | `mise run unit` — database connections refused; explicit `-m unit` selector                                                                                                                                                                                                                                                       |
+| risk-service integration | `mise run integration` — disposable Postgres and local service prerequisites; explicit `-m integration` selector                                                                                                                                                                                                                  |
 | risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                                                                  |
 | risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                                  |
 | dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` · `e2e:contracts` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
@@ -1183,21 +1185,62 @@ All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 appeared in no workflow at all, and the dashboard workflow ran neither `lint` nor `test`, so
 the regulatory fail-open guard and the browser-runtime SSRF guard were unenforced):
 
-| Workflow                                                                               | Jobs                                                                                                                                                                                                                          |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/risk-service.yml`                                                   | `static` · `architecture` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (suite aggregate) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests)        |
-| [`.github/workflows/risk-service-image.yml`](.github/workflows/risk-service-image.yml) | `build` — independent production image check, outside the Risk service gate; run manually with **Run workflow** in GitHub Actions, or automatically for image-input pushes selected by the workflow's branch and path filters |
-| `.github/workflows/dashboard.yml`                                                      | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection)      |
-| `.github/workflows/web.yml`                                                            | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                                 |
-| `.github/workflows/dashboard-journeys.yml`                                             | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                                    |
+| Workflow                                                                               | Jobs                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.github/workflows/risk-service.yml`                                                   | `static` · `architecture` (Unit tests) · `backend-e2e` · `postgres` (schema/RLS + lock aggregate) · `postgres-suite` (Integration tests and exact cross-owner coverage) · `storage` · `api-fresh` · `real-data` (conditional); [sharding and selection](backend/README.md#run-tests) |
+| [`.github/workflows/risk-service-image.yml`](.github/workflows/risk-service-image.yml) | `build` — independent production image check, outside the Risk service gate; run manually with **Run workflow** in GitHub Actions, or automatically for image-input pushes selected by the workflow's branch and path filters                                                        |
+| `.github/workflows/dashboard.yml`                                                      | `dashboard` — client typecheck, dashboard typecheck, lint, `test:coverage`, production build + Command Center entry-graph guard; [unit collection and coverage policy](backend/dashboard/README.md#unit-test-collection)                                                             |
+| `.github/workflows/web.yml`                                                            | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                                                                                        |
+| `.github/workflows/dashboard-journeys.yml`                                             | `journeys` · `gate`; [selection, isolation and required-check guidance](backend/dashboard/README.md#end-to-end-playwright)                                                                                                                                                           |
 
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.
 
-The hermetic SQLite suite remains available to developers as `mise run risk-service:test`, but
-CI no longer exercises SQLite compatibility. Postgres suite ownership is defined in the
-task comments in [backend/mise.toml](backend/mise.toml) and pinned by
-[the CI wiring guard](backend/tests/architecture/test_ci_task_wiring.py).
+The combined SQLite compatibility run remains available as `mise run risk-service:test`.
+The [backend test guide](backend/README.md#run-tests) owns unit/integration/e2e
+classification, census regeneration, service prerequisites and CI execution ownership.
+
+### Public ECR pulls in CI
+
+The production backend build in `risk-service-image.yml` and image publisher in
+`release.yml` authenticate to `public.ecr.aws` with GitHub OIDC when the repository
+variable `AWS_ECR_PULL_ROLE_ARN` is set and the ref matches the documented IAM trust
+case-sensitively:
+`main`, `release`, `release/*` branches or `v*` tags. Both AWS steps skip when the
+variable is empty, the event is a fork pull request, or a manual image build uses
+another ref, retaining anonymous pulls and their rate limits.
+The image workflow retains its image-input push filters and manual trigger;
+the lint and typecheck job in `risk-service.yml` does not build an image.
+An invalid configured role fails the job; clear the variable to disable login.
+
+To enable authentication (requires AWS IAM administration permissions):
+
+1. In AWS IAM, add an OpenID Connect identity provider with URL
+   `https://token.actions.githubusercontent.com` and audience `sts.amazonaws.com`,
+   or reuse the existing provider.
+2. Create a role for that web identity provider, with trust action
+   `sts:AssumeRoleWithWebIdentity`. Require `StringEquals` on
+   `token.actions.githubusercontent.com:aud` = `sts.amazonaws.com` and
+   `StringLike` on `token.actions.githubusercontent.com:sub` matching only
+   `repo:CedynGroup/aequorOS:ref:refs/heads/main`,
+   `repo:CedynGroup/aequorOS:ref:refs/heads/release`,
+   `repo:CedynGroup/aequorOS:ref:refs/heads/release/*`, and
+   `repo:CedynGroup/aequorOS:ref:refs/tags/v*` (an array of allowed subjects).
+3. Attach AWS managed policy `AmazonElasticContainerRegistryPublicReadOnly`.
+   It includes `ecr-public:GetAuthorizationToken` and `sts:GetServiceBearerToken`;
+   no push permissions or long-lived access keys are needed.
+4. Copy the role ARN into **Settings → Secrets and variables → Actions → Variables**
+   as repository variable `AWS_ECR_PULL_ROLE_ARN`. No further code change is needed.
+   Check the AWS configuration and ECR login steps on the next main/release push
+   or version-tag build; public ECR authentication uses `us-east-1`.
+
+There are currently no public ECR job service containers. GitHub pulls
+`jobs.<id>.services` images before steps, so step-based login cannot authenticate
+those pulls if service containers are added later.
+
+References: [GitHub OIDC trust setup](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws),
+[AWS read-only policy](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonElasticContainerRegistryPublicReadOnly.html),
+and [public ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/public/public-registry-auth.html).
 
 ### CI enforcement
 
@@ -1205,10 +1248,10 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
   web, dashboard-journey and secret-scan workflows trigger on pull requests,
   pushes to `main`, and `merge_group` events of type `checks_requested`.
   On the queued merge result, backend preflight, architecture/CI guards,
-  migration/schema/RLS shards, the full Postgres suite and concurrency locks,
+  migration/schema/RLS shards, the full Postgres suite, storage contracts and concurrency locks,
   and dashboard journeys/browser contracts run without PR path filtering;
   [Postgres suite selection](backend/README.md#run-tests) governs shard coverage.
-  Backend lint/typecheck, storage contracts, generated-client freshness and the
+  Backend lint/typecheck, generated-client freshness and the
   conditional real-data job skip in the queue, as do the dashboard checks and
   marketing/console jobs. Secret scanning reports the required `gitleaks`
   context successfully without repeating its PR scans. The Risk service,
@@ -1226,9 +1269,8 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
   fixture setup. These gates are what enforce the dashboard's
   fail-open guard, SSRF egress guard, and browser journeys, and they cover `frontend/`
   and `console/`. Each workflow's header comment is its gate inventory — keep it
-  accurate. Which Postgres job owns which test suites is defined by the
-  `risk-service:test-postgres-*` task comments in `backend/mise.toml` and pinned by
-  `tests/architecture/test_ci_task_wiring.py`.
+  accurate. The [backend test guide](backend/README.md#run-tests) owns suite
+  classification and CI execution ownership.
 
 ---
 
@@ -1237,8 +1279,8 @@ task comments in [backend/mise.toml](backend/mise.toml) and pinned by
 A directive proposed relocating the Python backend into `dashboard` and deleting
 `frontend` / `aequoros-web`. This was **declined** as based on a misread of the layout:
 the backend was already cleanly consolidated in `backend` (FastAPI) and
-`backend/app/ml` (LSTM) — since flattened into a single `backend/` service with the LSTM
-as the in-process `app/ml` module. Moving a Python/uv/alembic service inside a Next.js/pnpm package
+`backend/app/forecasting/ml` (LSTM) — since flattened into a single `backend/` service with the LSTM
+as the in-process `app/forecasting/ml` module. Moving a Python/uv/alembic service inside a Next.js/pnpm package
 would break the workspace, migrations, RLS, the OpenAPI client-gen pipeline, and the test
 suite. The monorepo was kept intact; nothing was moved or deleted.
 
@@ -1274,15 +1316,15 @@ dashboard responses against the former per-period path.
 This is intermediate read-through batching, not the persisted trend read model. That read model
 remains architectural debt; the Command Center contract and polling policy are unchanged.
 
-| #   | Module         | Engine                                               | Key endpoints                                  |
-| --- | -------------- | ---------------------------------------------------- | ---------------------------------------------- |
-| 1   | Liquidity      | LCR / NSFR / stress                                  | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
-| 2   | Basel Capital  | RWA / CAR-Tier1-CET1-leverage / stress               | `/banks/{id}/capital/*`, `/submissions/bsd2`   |
-| 3   | Forecasting    | 5y projection / optimizer / what-if                  | `/banks/{id}/forecast/*`                       |
-| 4   | Cash-flow LSTM | in-process `backend/app/ml` (LSTM + static baseline) | `/banks/{id}/cashflow-forecast`                |
-| 5   | IRR (IRRBB)    | gap / duration / EVE (6 Basel) / EaR                 | `/banks/{id}/irr/*`                            |
-| 6   | FX             | NOP / historical-sim VaR / IFRS 9 hedges             | `/banks/{id}/fx/*`                             |
-| 7   | FTP            | matched-maturity curve / product & branch P&L / NMD  | `/banks/{id}/ftp/*`                            |
+| #   | Module         | Engine                                                           | Key endpoints                                  |
+| --- | -------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| 1   | Liquidity      | LCR / NSFR / stress                                              | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
+| 2   | Basel Capital  | RWA / CAR-Tier1-CET1-leverage / stress                           | `/banks/{id}/capital/*`, `/submissions/bsd2`   |
+| 3   | Forecasting    | 5y projection / optimizer / what-if                              | `/banks/{id}/forecast/*`                       |
+| 4   | Cash-flow LSTM | in-process `backend/app/forecasting/ml` (LSTM + static baseline) | `/banks/{id}/cashflow-forecast`                |
+| 5   | IRR (IRRBB)    | gap / duration / EVE (6 Basel) / EaR                             | `/banks/{id}/irr/*`                            |
+| 6   | FX             | NOP / historical-sim VaR / IFRS 9 hedges                         | `/banks/{id}/fx/*`                             |
+| 7   | FTP            | matched-maturity curve / product & branch P&L / NMD              | `/banks/{id}/ftp/*`                            |
 
 The shared migration `202607170001_irr_fx_ftp_foundation` widened the run-module, fact-group,
 and line-section CHECK constraints for IRR/FX/FTP. Bank stress-default provisioning and
@@ -1318,7 +1360,7 @@ accounts from residual RWA to avoid deducting the same provision twice; general 
 credit RWA. Official, live, forecast and enterprise-stress readers must include
 this group; a missing basis refuses fresh calculations until facts are re-derived.
 Older immutable snapshots retain their original measurement basis.
-Regression coverage: `backend/tests/services/test_crd_credit_exposures.py`.
+Regression coverage: `backend/tests/credit/service/test_crd_credit_exposures.py`.
 
 Enterprise stress compares the current accepted loan and placement source identities,
 lineage and values with the source basis recorded on `bank_reporting_periods` by
@@ -1327,7 +1369,7 @@ of its final snapshot, or a missing recorded source basis requires official
 re-derivation before stress; the refusal is HTTP 409 and creates no run. An empty
 book with a matching recorded basis remains valid. This source
 provenance stays outside financial facts, calculation input snapshots and hashes.
-Regression coverage: `backend/tests/services/test_crd_stress_basis_reconciliation.py`.
+Regression coverage: `backend/tests/stress/service/test_crd_stress_basis_reconciliation.py`.
 
 The bottom-up migration and FX overlay covers loans and interbank placements.
 It applies exposure-level RWA deltas to each year's grown net credit buckets after
@@ -1378,7 +1420,7 @@ outcomes label their ECL basis and incremental credit-loss tax treatment.
 
 Register updates at `/api/v1/banks/{bank_id}/ecl-assumptions` accept `ALL` or a
 loan exposure category from `LOAN_EXPOSURE_CATEGORIES` in
-`backend/app/domain/positions/families.py`. Save and lookup trim segments and
+`backend/app/live/domain/positions/families.py`. Save and lookup trim segments and
 normalize them to upper case; a segment-specific row takes precedence over
 `ALL` for the same stage. Unknown segments return HTTP 422. The category
 vocabulary is owned by the loan-family map, not a separate documentation list.
@@ -1406,7 +1448,7 @@ Current calculation versions are owned by the
 `ENGINE_VERSION` constants. New versions append runs; stored inputs, hashes and
 results of historical runs remain unchanged. Regression evidence lives in
 `backend/tests/services/test_ecl_and_crm.py` and
-`backend/tests/domain/test_stress_orchestrator.py`.
+`backend/tests/stress/domain/test_stress_orchestrator.py`.
 
 ### Governed forecast assumptions
 

@@ -28,6 +28,8 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.orm import Session
 
+from app.ai.models import AiCommentarySettings
+from app.ai.service import client as ai_client
 from app.api.deps import TenantContext
 from app.bi.jobs import bi_commentary
 from app.bi.models.commentary import AiCommentaryDraft
@@ -38,9 +40,7 @@ from app.bi.service.insights.assemble import AssembledInsights
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models import Bank, Job
-from app.models.ai import AiCommentarySettings
 from app.services import job_queue
-from app.services.ai import client as ai_client
 from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = date(2026, 6, 30)
@@ -310,7 +310,7 @@ def test_the_request_counts_against_the_tenants_one_ai_budget(
     db_session: Session, bank: Bank, consented: AiCommentarySettings
 ) -> None:
     """One budget across every AI surface, so a commentary request is spend."""
-    from app.services.ai import quota  # noqa: PLC0415 - the registry under test
+    from app.ai.service import quota  # noqa: PLC0415 - the registry under test
 
     _ = consented
     _request(db_session, bank)
