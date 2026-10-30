@@ -46,13 +46,13 @@ const engines = [
 const ledger = [
   {
     dot: "bg-live",
-    title: "LIVE TODAY",
+    title: "THE PLATFORM",
     sourceHref: "/security#security-sources",
     rows: [
       "Data Engine with file upload and secure API push",
       "Seven calculation engines on one canonical book",
       "Bank of Ghana BSD returns, generated and export-ready",
-      "Audit records for key actions, traceable data, and saved calculation runs",
+      "Full audit trail, lineage, and reproducible runs",
     ],
   },
   {
