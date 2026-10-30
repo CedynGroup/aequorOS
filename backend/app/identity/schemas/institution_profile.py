@@ -66,7 +66,7 @@ class InstitutionProfilePut(ClosedModel):
     parent_country_code: str | None = Field(default=None, max_length=8)
 
 
-class InstitutionProfileRead(ClosedModel):
+class InstitutionProfileGeneralRead(ClosedModel):
     id: UUID
     bank_id: str
     institution_type: str
@@ -74,9 +74,6 @@ class InstitutionProfileRead(ClosedModel):
     authorisation_date: date | None
     approved_capital: Decimal | None
     incorporation_date: date | None
-    tin: str | None
-    registration_number: str | None
-    orass_institution_code: str | None
     traded_on_exchange: bool
     exchange_name: str | None
     isin: str | None
@@ -88,6 +85,18 @@ class InstitutionProfileRead(ClosedModel):
     warnings: list[str]
     created_at: datetime
     updated_at: datetime
+
+
+class InstitutionProfileIdentifiersRead(ClosedModel):
+    """Restricted identifiers, independently authorized from the general profile."""
+
+    tin: str | None
+    registration_number: str | None
+    orass_institution_code: str | None
+
+
+class InstitutionProfileRead(InstitutionProfileGeneralRead, InstitutionProfileIdentifiersRead):
+    """Complete internal profile for server-side regulatory generation."""
 
 
 # --- related parties ----------------------------------------------------------
@@ -331,6 +340,25 @@ class InstitutionProfileFullRead(ClosedModel):
 
     bank_id: str
     profile: InstitutionProfileRead | None
+    related_parties: list[RelatedPartyRead]
+    outlets: list[OutletRead]
+    products: list[BankProductRead]
+    licenses: list[BankLicenseRead]
+    name_history: list[BankNameHistoryRead]
+
+
+class InstitutionProfileAccessRead(ClosedModel):
+    """Only explicitly permitted sections of one institution's register.
+
+    Visibility distinguishes a denied section from an unconfigured or empty one.
+    A denied section is never loaded, counted, or decrypted.
+    """
+
+    bank_id: str
+    general_visible: bool
+    restricted_visible: bool
+    profile: InstitutionProfileGeneralRead | None
+    identifiers: InstitutionProfileIdentifiersRead | None
     related_parties: list[RelatedPartyRead]
     outlets: list[OutletRead]
     products: list[BankProductRead]

@@ -3,17 +3,26 @@
 /**
  * Institution Profile — the corporate profile card of the register: legal
  * identity, authorisation, capital, listing, and ownership split, with the
- * backend's advisory warnings surfaced as amber notes. Editing PUTs the full
- * profile with a required audit reason; the register is the data source for
- * the LRT return family (deep link to the Returns workspace, opened on the
- * institution's latest computed position so the pack is ready to generate).
+ * backend's advisory warnings surfaced as amber notes. Saves require an audit
+ * reason and omit identifiers outside the editor's authority to preserve them.
+ * The register feeds the LRT return family (deep link to the Returns workspace,
+ * opened on the institution's latest computed position so the pack is ready
+ * to generate).
  */
 
 import { useState } from "react";
-import Link from "next/link";
+import { PermissionLink } from "@/components/ui/DisabledWithReason";
+import {
+  InstitutionAction,
+  useInstitutionAuthority,
+  institutionActionReason,
+} from "@/components/institution/authority";
+import { wholeInstitutionCapabilities } from "@/lib/api/dataScope";
+import { hasEffectiveCapability } from "@/lib/modules";
 import { AlertTriangle, ArrowUpRight, Building2, Pencil } from "lucide-react";
 import type {
-  InstitutionProfileFullReadProfile,
+  InstitutionProfileGeneralRead,
+  InstitutionProfileIdentifiersRead,
   InstitutionProfilePut,
 } from "@aequoros/risk-service-api";
 import PageHeader from "@/components/ui/PageHeader";
@@ -23,7 +32,6 @@ import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
 import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { useBankContext } from "@/components/shell/BankContext";
-import { isApiError } from "@/lib/api/client";
 import {
   useInstitutionProfile,
   useReturnAnchors,
@@ -47,28 +55,43 @@ import {
 } from "@/components/institution/shared";
 
 export default function InstitutionProfilePage() {
-  const { bank } = useBankContext();
+  const { bank, institutionCapabilities } = useBankContext();
+  const authority = useInstitutionAuthority();
+  const canReadReturns = hasEffectiveCapability(
+    wholeInstitutionCapabilities(institutionCapabilities),
+    "reg",
+    "restricted",
+    "view",
+  );
   const bankId = bank?.id;
 
-  const query = useInstitutionProfile(bankId);
+  const query = useInstitutionProfile(
+    bankId,
+    authority.generalView || authority.restrictedView,
+  );
   const [editor, setEditor] = useState<{
     bankId: string | undefined;
-    profile: InstitutionProfileFullReadProfile | null;
+    profile: InstitutionProfileGeneralRead | null;
   } | null>(null);
   const editing = editor?.bankId === bankId ? editor : null;
   // An LRT pack is event-driven, so its as-of dates are the bank's computed
   // positions (newest first) rather than a regulator calendar. Carrying the
   // newest one on the link opens the workspace ready to generate.
-  const lrtAnchors = useReturnAnchors(bankId, "LRT-PROFILE");
+  const lrtAnchors = useReturnAnchors(
+    canReadReturns ? bankId : undefined,
+    "LRT-PROFILE",
+  );
   const latestPosition = lrtAnchors.data?.anchors[0]?.reportingDate;
   const lrtHref = latestPosition
     ? `/submissions/returns?code=LRT-PROFILE&date=${isoDate(latestPosition)}`
     : "/submissions/returns?code=LRT-PROFILE";
 
-  // The composed read returns profile: null until first configured; treat a
-  // 404 (register endpoint unavailable for the bank) the same way.
-  const notFound = isApiError(query.error) && query.error.status === 404;
+  // A permitted, unconfigured section is distinct from a refused or failed read.
   const profile = query.data?.profile ?? null;
+  const generalVisible =
+    authority.generalView && query.data?.generalVisible !== false;
+  const restrictedVisible =
+    authority.restrictedView && query.data?.restrictedVisible !== false;
 
   return (
     <>
@@ -76,13 +99,18 @@ export default function InstitutionProfilePage() {
         eyebrow="Institution Profile"
         title="Institution Profile"
         action={
-          <Link
+          <PermissionLink
             href={lrtHref}
+            reason={
+              canReadReturns
+                ? undefined
+                : "Requires Regulatory Reporting · Restricted · View for this return family."
+            }
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
           >
             Generate LRT packs
             <ArrowUpRight size={13} aria-hidden />
-          </Link>
+          </PermissionLink>
         }
       />
 
@@ -91,30 +119,45 @@ export default function InstitutionProfilePage() {
           <ProfileForm
             bankId={bankId!}
             profile={editing.profile}
+            identifiers={query.data?.identifiers ?? null}
+            canEditIdentifiers={
+              restrictedVisible &&
+              authority.allows(
+                "restricted",
+                editing.profile ? "edit" : "create",
+              )
+            }
             onClose={() => setEditor(null)}
           />
         ) : (
           <QueryBoundary
             contained
             isLoading={query.isLoading}
-            error={notFound ? null : query.error}
+            error={query.error}
             onRetry={() => query.refetch()}
             skeleton={<SkeletonCard />}
           >
-            {!profile ? (
+            {!generalVisible ? (
+              <SectionCard title="General profile">
+                <p className="text-body text-slate">
+                  {institutionActionReason("confidential", "view")}
+                </p>
+              </SectionCard>
+            ) : !profile ? (
               <EmptyState
                 Icon={Building2}
                 title="Profile not configured yet"
                 description="Record the institution's legal identity, authorisation, approved capital, listing, and ownership split. The register feeds the corporate (LRT) returns."
                 action={
-                  <button
+                  <InstitutionAction
+                    permission="create"
                     type="button"
                     onClick={() => setEditor({ bankId, profile })}
                     className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
                   >
                     <Pencil size={13} aria-hidden />
                     Set up profile
-                  </button>
+                  </InstitutionAction>
                 }
               />
             ) : (
@@ -125,6 +168,36 @@ export default function InstitutionProfilePage() {
             )}
           </QueryBoundary>
         )}
+        {!editing && !query.isLoading && !query.error && (
+          <SectionCard
+            title="Tax and regulatory identifiers"
+            subtitle="Restricted institution data"
+          >
+            {restrictedVisible ? (
+              <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-body">
+                <ProfileItem
+                  label="TIN"
+                  value={dash(query.data?.identifiers?.tin)}
+                  mono
+                />
+                <ProfileItem
+                  label="Registration number"
+                  value={dash(query.data?.identifiers?.registrationNumber)}
+                  mono
+                />
+                <ProfileItem
+                  label={`${submissionPortal() ?? "Regulator portal"} institution code`}
+                  value={dash(query.data?.identifiers?.orassInstitutionCode)}
+                  mono
+                />
+              </dl>
+            ) : (
+              <p className="text-body text-slate">
+                {institutionActionReason("restricted", "view")}
+              </p>
+            )}
+          </SectionCard>
+        )}
       </PageContainer>
     </>
   );
@@ -134,7 +207,7 @@ function ProfileView({
   profile,
   onEdit,
 }: {
-  profile: InstitutionProfileFullReadProfile;
+  profile: InstitutionProfileGeneralRead;
   onEdit: () => void;
 }) {
   return (
@@ -142,14 +215,15 @@ function ProfileView({
       title="Corporate profile"
       subtitle="Legal identity, authorisation, capital, listing, and ownership"
       actions={
-        <button
+        <InstitutionAction
+          permission="edit"
           type="button"
           onClick={onEdit}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
         >
           <Pencil size={13} aria-hidden />
           Edit profile
-        </button>
+        </InstitutionAction>
       }
       footer={
         <span>
@@ -205,17 +279,6 @@ function ProfileView({
                 ? fmtCurrencyFull(num(profile.approvedCapital))
                 : "—"
             }
-            mono
-          />
-          <ProfileItem label="TIN" value={dash(profile.tin)} mono />
-          <ProfileItem
-            label="Registration number"
-            value={dash(profile.registrationNumber)}
-            mono
-          />
-          <ProfileItem
-            label={`${submissionPortal() ?? "Regulator portal"} institution code`}
-            value={dash(profile.orassInstitutionCode)}
             mono
           />
           <ProfileItem
@@ -281,10 +344,14 @@ function ProfileItem({
 function ProfileForm({
   bankId,
   profile,
+  identifiers,
+  canEditIdentifiers,
   onClose,
 }: {
   bankId: string;
-  profile: InstitutionProfileFullReadProfile | null;
+  profile: InstitutionProfileGeneralRead | null;
+  identifiers: InstitutionProfileIdentifiersRead | null;
+  canEditIdentifiers: boolean;
   onClose: () => void;
 }) {
   const save = useSaveInstitutionProfile(bankId);
@@ -304,12 +371,12 @@ function ProfileForm({
   const [approvedCapital, setApprovedCapital] = useState(
     profile?.approvedCapital ?? "",
   );
-  const [tin, setTin] = useState(profile?.tin ?? "");
+  const [tin, setTin] = useState(identifiers?.tin ?? "");
   const [registrationNumber, setRegistrationNumber] = useState(
-    profile?.registrationNumber ?? "",
+    identifiers?.registrationNumber ?? "",
   );
   const [orassInstitutionCode, setOrassInstitutionCode] = useState(
-    profile?.orassInstitutionCode ?? "",
+    identifiers?.orassInstitutionCode ?? "",
   );
   const [tradedOnExchange, setTradedOnExchange] = useState(
     profile?.tradedOnExchange ?? false,
@@ -342,9 +409,13 @@ function ProfileForm({
       authorisationDate: textOrNull(authorisationDate),
       incorporationDate: textOrNull(incorporationDate),
       approvedCapital: textOrNull(approvedCapital),
-      tin: textOrNull(tin),
-      registrationNumber: textOrNull(registrationNumber),
-      orassInstitutionCode: textOrNull(orassInstitutionCode),
+      ...(canEditIdentifiers
+        ? {
+            tin: textOrNull(tin),
+            registrationNumber: textOrNull(registrationNumber),
+            orassInstitutionCode: textOrNull(orassInstitutionCode),
+          }
+        : {}),
       tradedOnExchange,
       exchangeName: tradedOnExchange ? textOrNull(exchangeName) : null,
       isin: tradedOnExchange ? textOrNull(isin) : null,
@@ -358,7 +429,7 @@ function ProfileForm({
   return (
     <SectionCard
       title={profile ? "Edit corporate profile" : "Set up corporate profile"}
-      subtitle="Full replacement — every save records the audit reason below"
+      subtitle="Every save records the audit reason; identifiers outside your edit authority are preserved"
     >
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -412,33 +483,37 @@ function ProfileForm({
               className={inputCls}
             />
           </Field>
-          <Field label="TIN" htmlFor="ip-tin">
-            <input
-              id="ip-tin"
-              value={tin}
-              onChange={(e) => setTin(e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Registration number" htmlFor="ip-reg">
-            <input
-              id="ip-reg"
-              value={registrationNumber}
-              onChange={(e) => setRegistrationNumber(e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-          <Field
-            label={`${submissionPortal() ?? "Regulator portal"} institution code`}
-            htmlFor="ip-orass"
-          >
-            <input
-              id="ip-orass"
-              value={orassInstitutionCode}
-              onChange={(e) => setOrassInstitutionCode(e.target.value)}
-              className={inputCls}
-            />
-          </Field>
+          {canEditIdentifiers && (
+            <>
+              <Field label="TIN" htmlFor="ip-tin">
+                <input
+                  id="ip-tin"
+                  value={tin}
+                  onChange={(e) => setTin(e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+              <Field label="Registration number" htmlFor="ip-reg">
+                <input
+                  id="ip-reg"
+                  value={registrationNumber}
+                  onChange={(e) => setRegistrationNumber(e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+              <Field
+                label={`${submissionPortal() ?? "Regulator portal"} institution code`}
+                htmlFor="ip-orass"
+              >
+                <input
+                  id="ip-orass"
+                  value={orassInstitutionCode}
+                  onChange={(e) => setOrassInstitutionCode(e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+            </>
+          )}
           <Field
             label="Parent country code"
             htmlFor="ip-parent"

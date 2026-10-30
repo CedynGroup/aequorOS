@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Bulk CSV import for the Institution Profile registers (related parties,
@@ -15,16 +15,16 @@
  * convenience layered over the canonical endpoints, not a new write path.
  */
 
-import { useRef, useState } from 'react';
-import { Download, FileUp, Loader2, Upload, X } from 'lucide-react';
-import SectionCard from '@/components/ui/SectionCard';
-import { downloadTextFile } from '@/lib/download';
-import { templateCsv, type RegisterTemplate } from '@/lib/templates';
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
+import { useRef, useState } from "react";
+import { Download, FileUp, Loader2, Upload, X } from "lucide-react";
+import SectionCard from "@/components/ui/SectionCard";
+import { downloadTextFile } from "@/lib/download";
+import { templateCsv, type RegisterTemplate } from "@/lib/templates";
 
 /** Row verdict from the page-supplied validator. */
 export type CsvRowResult<TPayload> =
-  | { ok: true; payload: TPayload }
-  | { ok: false; errors: string[] };
+  { ok: true; payload: TPayload } | { ok: false; errors: string[] };
 
 type RowError = { line: number; errors: string[] };
 type RowFailure = { line: number; message: string };
@@ -53,7 +53,7 @@ function parseCsvLines(text: string): { line: number; cells: string[] }[] {
     .filter(({ raw }) => raw.length > 0)
     .map(({ line, raw }) => ({
       line,
-      cells: raw.split(',').map((cell) => cell.trim()),
+      cells: raw.split(",").map((cell) => cell.trim()),
     }));
 }
 
@@ -61,6 +61,7 @@ export default function CsvImport<TPayload>({
   entityLabel,
   template,
   disabled = false,
+  disabledReason,
   parseRow,
   importRow,
   onFinished,
@@ -69,6 +70,7 @@ export default function CsvImport<TPayload>({
   entityLabel: string;
   template: RegisterTemplate;
   disabled?: boolean;
+  disabledReason?: string;
   /** Validate one padded data row (cells match template.columns order). */
   parseRow: (cells: string[]) => CsvRowResult<TPayload>;
   /** One reasoned single-row write (the existing create mutation). */
@@ -102,23 +104,23 @@ export default function CsvImport<TPayload>({
     setFilename(file.name);
     const parsed = parseCsvLines(await file.text());
     if (parsed.length === 0) {
-      setHeaderError('The file is empty.');
+      setHeaderError("The file is empty.");
       return;
     }
     const [header, ...data] = parsed;
     if (
-      header.cells.map((cell) => cell.toLowerCase()).join(',') !==
-      template.columns.join(',')
+      header.cells.map((cell) => cell.toLowerCase()).join(",") !==
+      template.columns.join(",")
     ) {
       setHeaderError(
-        `The header row must be exactly "${template.columns.join(',')}" ` +
-          `(got "${header.cells.join(',')}"). Download the template to start ` +
-          'from the expected layout.'
+        `The header row must be exactly "${template.columns.join(",")}" ` +
+          `(got "${header.cells.join(",")}"). Download the template to start ` +
+          "from the expected layout.",
       );
       return;
     }
     if (data.length === 0) {
-      setHeaderError('No data rows found below the header.');
+      setHeaderError("No data rows found below the header.");
       return;
     }
     const errors: RowError[] = [];
@@ -129,13 +131,13 @@ export default function CsvImport<TPayload>({
           line,
           errors: [
             `expected ${template.columns.length} columns, found ${cells.length} ` +
-              '(cells containing commas are not supported by the bulk import)',
+              "(cells containing commas are not supported by the bulk import)",
           ],
         });
         continue;
       }
       const padded = cells.concat(
-        Array<string>(template.columns.length - cells.length).fill('')
+        Array<string>(template.columns.length - cells.length).fill(""),
       );
       const result = parseRow(padded);
       if (result.ok) {
@@ -165,7 +167,7 @@ export default function CsvImport<TPayload>({
       } catch (error) {
         collected.push({
           line,
-          message: error instanceof Error ? error.message : 'Request failed.',
+          message: error instanceof Error ? error.message : "Request failed.",
         });
         setFailures([...collected]);
       }
@@ -177,7 +179,19 @@ export default function CsvImport<TPayload>({
 
   const invalid = headerError !== null || rowErrors.length > 0;
   const smallBtn =
-    'inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface disabled:opacity-60';
+    "inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface disabled:opacity-60";
+
+  const importButton = (
+    <button
+      type="button"
+      disabled={disabled || importing}
+      onClick={() => inputRef.current?.click()}
+      className={smallBtn}
+    >
+      <Upload size={13} aria-hidden />
+      Import CSV
+    </button>
+  );
 
   return (
     <div className="space-y-4">
@@ -192,26 +206,24 @@ export default function CsvImport<TPayload>({
           onChange={(e) => {
             const file = e.target.files?.[0];
             // Allow re-selecting the same file after a fix.
-            e.target.value = '';
+            e.target.value = "";
             if (file) void handleFile(file);
           }}
         />
-        <button
-          type="button"
-          disabled={disabled || importing}
-          onClick={() => inputRef.current?.click()}
-          className={smallBtn}
-        >
-          <Upload size={13} aria-hidden />
-          Import CSV
-        </button>
+        {disabledReason ? (
+          <DisabledWithReason reason={disabledReason}>
+            {importButton}
+          </DisabledWithReason>
+        ) : (
+          importButton
+        )}
         <button
           type="button"
           onClick={() =>
             downloadTextFile(
               template.filename,
               templateCsv(template),
-              'text/csv;charset=utf-8'
+              "text/csv;charset=utf-8",
             )
           }
           className="inline-flex items-center gap-1 text-caption font-medium text-action hover:underline"
@@ -247,12 +259,13 @@ export default function CsvImport<TPayload>({
                   key={entry.line}
                   className="text-caption text-critical leading-relaxed"
                 >
-                  Line {entry.line}: {entry.errors.join('; ')}
+                  Line {entry.line}: {entry.errors.join("; ")}
                 </li>
               ))}
               {rowErrors.length > MAX_LISTED_ERRORS && (
                 <li className="text-caption text-slate">
-                  … and {rowErrors.length - MAX_LISTED_ERRORS} more invalid rows.
+                  … and {rowErrors.length - MAX_LISTED_ERRORS} more invalid
+                  rows.
                 </li>
               )}
             </ul>
@@ -265,7 +278,7 @@ export default function CsvImport<TPayload>({
           title={
             importing
               ? `Importing ${entityLabel} — imported ${imported} of ${rows.length}`
-              : `Ready to import ${rows.length} row${rows.length === 1 ? '' : 's'} of ${entityLabel} from ${filename}`
+              : `Ready to import ${rows.length} row${rows.length === 1 ? "" : "s"} of ${entityLabel} from ${filename}`
           }
           subtitle={`Each row calls the audited single-row endpoint with reason "Bulk CSV import: ${filename}"`}
         >
@@ -283,7 +296,7 @@ export default function CsvImport<TPayload>({
               )}
               {importing
                 ? `Imported ${imported} of ${rows.length}…`
-                : `Import ${rows.length} row${rows.length === 1 ? '' : 's'}`}
+                : `Import ${rows.length} row${rows.length === 1 ? "" : "s"}`}
             </button>
             {!importing && (
               <button type="button" onClick={reset} className={smallBtn}>
@@ -311,8 +324,8 @@ export default function CsvImport<TPayload>({
           title={`Imported ${imported} of ${rows.length} rows from ${filename}`}
           subtitle={
             failures.length === 0
-              ? 'All rows written through the audited register endpoints.'
-              : `${failures.length} row${failures.length === 1 ? '' : 's'} failed — fix and re-import just those rows.`
+              ? "All rows written through the audited register endpoints."
+              : `${failures.length} row${failures.length === 1 ? "" : "s"} failed — fix and re-import just those rows.`
           }
           actions={
             <button type="button" onClick={reset} className={smallBtn}>

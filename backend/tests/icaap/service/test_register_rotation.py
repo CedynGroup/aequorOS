@@ -93,7 +93,7 @@ def _change_key(engine: Engine, started: Queue[int], action: Literal["connect", 
 
 @pytest.mark.parametrize("kind", ["ordinary", "icaap"])
 @pytest.mark.parametrize("action", ["connect", "rotate"])
-@pytest.mark.usefixtures("extra_frameworks")
+@pytest.mark.usefixtures("extra_frameworks", "institution_profile_authority")
 def test_register_projection_pins_rotation_through_package_mint(
     canonical_book: Session,
     postgres: Engine,

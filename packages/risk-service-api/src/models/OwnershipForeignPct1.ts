@@ -15,7 +15,7 @@
  * @export
  * @interface OwnershipForeignPct1
  */
-export type OwnershipForeignPct1 = string | null;
+export type OwnershipForeignPct1 = number | string | null;
 
 /**
  * Check if a given object implements the OwnershipForeignPct1 interface.
@@ -23,7 +23,9 @@ export type OwnershipForeignPct1 = string | null;
 export function instanceOfOwnershipForeignPct1(
   value: unknown,
 ): value is OwnershipForeignPct1 {
-  return typeof value === "string" || value === null;
+  return (
+    typeof value === "number" || typeof value === "string" || value === null
+  );
 }
 
 export function OwnershipForeignPct1FromJSON(json: any): OwnershipForeignPct1 {

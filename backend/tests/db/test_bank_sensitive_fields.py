@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from alembic import command
 from app.bi.models.notifications import BiAlert, BiAlertEvent, BiSubscription
 from app.bi.service.identity_policy import IDENTITY_REASON
+from app.core.authorization import ModuleScope, SensitivityScope
 from app.core.key_management import fields, registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
@@ -38,6 +39,7 @@ from tests.core.test_bank_field_encryption import (
 )
 from tests.core.test_bank_field_readers import GroupAxis, assert_long_concentration_tokens
 from tests.db import test_postgres_migrations as migrations
+from tests.support.authority import grant_organization_analyst
 from tests.support.helpers import ORG_1, USER_1
 
 forward_migrated_postgres_schema = migrations.forward_migrated_postgres_schema
@@ -205,6 +207,14 @@ def test_unicode_name_indexes_fit_postgres_columns(
     sensitive_db: tuple[Session, LocalKeyProvider, KeyReference], connected: bool
 ) -> None:
     db, provider, key = sensitive_db
+
+    grant_organization_analyst(
+        db,
+        ModuleScope.INSTITUTION,
+        SensitivityScope.ALL,
+        grantor="unicode-register-fixture",
+        reason="Authorize synthetic Unicode register construction",
+    )
 
     def providers(_name: str) -> LocalKeyProvider:
         return provider

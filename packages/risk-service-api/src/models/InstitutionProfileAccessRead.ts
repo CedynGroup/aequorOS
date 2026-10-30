@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { InstitutionProfileAccessReadProfile } from "./InstitutionProfileAccessReadProfile";
+import {
+  InstitutionProfileAccessReadProfileFromJSON,
+  InstitutionProfileAccessReadProfileFromJSONTyped,
+  InstitutionProfileAccessReadProfileToJSON,
+  InstitutionProfileAccessReadProfileToJSONTyped,
+} from "./InstitutionProfileAccessReadProfile";
 import type { BankLicenseRead } from "./BankLicenseRead";
 import {
   BankLicenseReadFromJSON,
@@ -32,13 +39,13 @@ import {
   RelatedPartyReadToJSON,
   RelatedPartyReadToJSONTyped,
 } from "./RelatedPartyRead";
-import type { InstitutionProfileFullReadProfile } from "./InstitutionProfileFullReadProfile";
+import type { InstitutionProfileAccessReadIdentifiers } from "./InstitutionProfileAccessReadIdentifiers";
 import {
-  InstitutionProfileFullReadProfileFromJSON,
-  InstitutionProfileFullReadProfileFromJSONTyped,
-  InstitutionProfileFullReadProfileToJSON,
-  InstitutionProfileFullReadProfileToJSONTyped,
-} from "./InstitutionProfileFullReadProfile";
+  InstitutionProfileAccessReadIdentifiersFromJSON,
+  InstitutionProfileAccessReadIdentifiersFromJSONTyped,
+  InstitutionProfileAccessReadIdentifiersToJSON,
+  InstitutionProfileAccessReadIdentifiersToJSONTyped,
+} from "./InstitutionProfileAccessReadIdentifiers";
 import type { BankProductRead } from "./BankProductRead";
 import {
   BankProductReadFromJSON,
@@ -55,62 +62,87 @@ import {
 } from "./OutletRead";
 
 /**
- * The full corporate register for one bank — the ORASS master-data mirror.
+ * Only explicitly permitted sections of one institution's register.
+ *
+ * Visibility distinguishes a denied section from an unconfigured or empty one.
+ * A denied section is never loaded, counted, or decrypted.
  * @export
- * @interface InstitutionProfileFullRead
+ * @interface InstitutionProfileAccessRead
  */
-export interface InstitutionProfileFullRead {
+export interface InstitutionProfileAccessRead {
   /**
    *
    * @type {string}
-   * @memberof InstitutionProfileFullRead
+   * @memberof InstitutionProfileAccessRead
    */
   bankId: string;
   /**
    *
+   * @type {boolean}
+   * @memberof InstitutionProfileAccessRead
+   */
+  generalVisible: boolean;
+  /**
+   *
+   * @type {InstitutionProfileAccessReadIdentifiers}
+   * @memberof InstitutionProfileAccessRead
+   */
+  identifiers: InstitutionProfileAccessReadIdentifiers;
+  /**
+   *
    * @type {Array<BankLicenseRead>}
-   * @memberof InstitutionProfileFullRead
+   * @memberof InstitutionProfileAccessRead
    */
   licenses: Array<BankLicenseRead>;
   /**
    *
    * @type {Array<BankNameHistoryRead>}
-   * @memberof InstitutionProfileFullRead
+   * @memberof InstitutionProfileAccessRead
    */
   nameHistory: Array<BankNameHistoryRead>;
   /**
    *
    * @type {Array<OutletRead>}
-   * @memberof InstitutionProfileFullRead
+   * @memberof InstitutionProfileAccessRead
    */
   outlets: Array<OutletRead>;
   /**
    *
    * @type {Array<BankProductRead>}
-   * @memberof InstitutionProfileFullRead
+   * @memberof InstitutionProfileAccessRead
    */
   products: Array<BankProductRead>;
   /**
    *
-   * @type {InstitutionProfileFullReadProfile}
-   * @memberof InstitutionProfileFullRead
+   * @type {InstitutionProfileAccessReadProfile}
+   * @memberof InstitutionProfileAccessRead
    */
-  profile: InstitutionProfileFullReadProfile;
+  profile: InstitutionProfileAccessReadProfile;
   /**
    *
    * @type {Array<RelatedPartyRead>}
-   * @memberof InstitutionProfileFullRead
+   * @memberof InstitutionProfileAccessRead
    */
   relatedParties: Array<RelatedPartyRead>;
+  /**
+   *
+   * @type {boolean}
+   * @memberof InstitutionProfileAccessRead
+   */
+  restrictedVisible: boolean;
 }
 
 /**
- * Check if a given object implements the InstitutionProfileFullRead interface.
+ * Check if a given object implements the InstitutionProfileAccessRead interface.
  */
-export function instanceOfInstitutionProfileFullRead(
+export function instanceOfInstitutionProfileAccessRead(
   value: object,
-): value is InstitutionProfileFullRead {
+): value is InstitutionProfileAccessRead {
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
+  if (!("generalVisible" in value) || value["generalVisible"] === undefined)
+    return false;
+  if (!("identifiers" in value) || value["identifiers"] === undefined)
+    return false;
   if (!("licenses" in value) || value["licenses"] === undefined) return false;
   if (!("nameHistory" in value) || value["nameHistory"] === undefined)
     return false;
@@ -119,46 +151,56 @@ export function instanceOfInstitutionProfileFullRead(
   if (!("profile" in value) || value["profile"] === undefined) return false;
   if (!("relatedParties" in value) || value["relatedParties"] === undefined)
     return false;
+  if (
+    !("restrictedVisible" in value) ||
+    value["restrictedVisible"] === undefined
+  )
+    return false;
   return true;
 }
 
-export function InstitutionProfileFullReadFromJSON(
+export function InstitutionProfileAccessReadFromJSON(
   json: any,
-): InstitutionProfileFullRead {
-  return InstitutionProfileFullReadFromJSONTyped(json, false);
+): InstitutionProfileAccessRead {
+  return InstitutionProfileAccessReadFromJSONTyped(json, false);
 }
 
-export function InstitutionProfileFullReadFromJSONTyped(
+export function InstitutionProfileAccessReadFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): InstitutionProfileFullRead {
+): InstitutionProfileAccessRead {
   if (json == null) {
     return json;
   }
   return {
     ...json,
     bankId: json["bank_id"],
+    generalVisible: json["general_visible"],
+    identifiers: InstitutionProfileAccessReadIdentifiersFromJSON(
+      json["identifiers"],
+    ),
     licenses: (json["licenses"] as Array<any>).map(BankLicenseReadFromJSON),
     nameHistory: (json["name_history"] as Array<any>).map(
       BankNameHistoryReadFromJSON,
     ),
     outlets: (json["outlets"] as Array<any>).map(OutletReadFromJSON),
     products: (json["products"] as Array<any>).map(BankProductReadFromJSON),
-    profile: InstitutionProfileFullReadProfileFromJSON(json["profile"]),
+    profile: InstitutionProfileAccessReadProfileFromJSON(json["profile"]),
     relatedParties: (json["related_parties"] as Array<any>).map(
       RelatedPartyReadFromJSON,
     ),
+    restrictedVisible: json["restricted_visible"],
   };
 }
 
-export function InstitutionProfileFullReadToJSON(
+export function InstitutionProfileAccessReadToJSON(
   json: any,
-): InstitutionProfileFullRead {
-  return InstitutionProfileFullReadToJSONTyped(json, false);
+): InstitutionProfileAccessRead {
+  return InstitutionProfileAccessReadToJSONTyped(json, false);
 }
 
-export function InstitutionProfileFullReadToJSONTyped(
-  value?: InstitutionProfileFullRead | null,
+export function InstitutionProfileAccessReadToJSONTyped(
+  value?: InstitutionProfileAccessRead | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   if (value == null) {
@@ -167,15 +209,20 @@ export function InstitutionProfileFullReadToJSONTyped(
 
   return {
     bank_id: value["bankId"],
+    general_visible: value["generalVisible"],
+    identifiers: InstitutionProfileAccessReadIdentifiersToJSON(
+      value["identifiers"],
+    ),
     licenses: (value["licenses"] as Array<any>).map(BankLicenseReadToJSON),
     name_history: (value["nameHistory"] as Array<any>).map(
       BankNameHistoryReadToJSON,
     ),
     outlets: (value["outlets"] as Array<any>).map(OutletReadToJSON),
     products: (value["products"] as Array<any>).map(BankProductReadToJSON),
-    profile: InstitutionProfileFullReadProfileToJSON(value["profile"]),
+    profile: InstitutionProfileAccessReadProfileToJSON(value["profile"]),
     related_parties: (value["relatedParties"] as Array<any>).map(
       RelatedPartyReadToJSON,
     ),
+    restricted_visible: value["restrictedVisible"],
   };
 }
