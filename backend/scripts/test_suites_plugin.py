@@ -17,6 +17,7 @@ from _pytest.fixtures import FixtureDef, SubRequest
 from _pytest.python import PyCollector
 from _pytest.terminal import TerminalReporter
 
+from scripts import database_contracts
 from scripts.ci_database_children import python_path
 from scripts.ci_no_database import install
 from scripts.test_suites import (
@@ -149,6 +150,7 @@ def pytest_load_initial_conftests(early_config: pytest.Config, args: list[str]) 
 
 
 def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line("markers", "database_contract: a protected PostgreSQL guarantee")
     config.addinivalue_line("markers", "unit: database-free test; database connections are refused")
     config.addinivalue_line("markers", "integration: test requiring a database or external service")
     config.addinivalue_line("markers", "e2e: backend contract requiring Playwright")
@@ -208,6 +210,13 @@ def pytest_pycollect_makeitem(
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if os.getenv("CI_DATABASE_CENSUS") == "1":
+        for item in items:
+            database_contracts.check_collection(
+                item.nodeid,
+                None,
+                item.fixturenames if isinstance(item, pytest.Function) else [],
+                marked=item.get_closest_marker("database_contract") is not None,
+            )
         return
     nodeids = [item.nodeid for item in items]
     if len(set(nodeids)) != len(nodeids):
@@ -225,6 +234,15 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             raise pytest.UsageError(f"Double-classified or conflicting suite: {item.nodeid}")
         if not markers:
             item.add_marker(suite)
+        try:
+            database_contracts.check_collection(
+                item.nodeid,
+                suite,
+                item.fixturenames if isinstance(item, pytest.Function) else [],
+                marked=item.get_closest_marker("database_contract") is not None,
+            )
+        except ValueError as error:
+            raise pytest.UsageError(str(error)) from error
         classified[item.nodeid] = suite
     if (os.getenv("CI_UNIT_REPORT_DIR") or os.getenv("CI_E2E_REPORT_DIR")) and not config.getoption(
         "collectonly"
@@ -243,6 +261,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             raise pytest.UsageError("Stale or incomplete generated test suite catalogue")
         paths = cast(list[str], config.getini("testpaths")) or ["."]
         try:
+            database_contracts.check_classification(overrides)
             verify_module_inventory(
                 config.rootpath, paths, cast(list[str], config.getini("python_files"))
             )
@@ -305,6 +324,16 @@ def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
 def pytest_runtest_makereport(
     item: pytest.Item, call: pytest.CallInfo[None]
 ) -> pytest.TestReport | None:
+    if database_contracts.postgres_required() and database_contracts.must_execute(
+        item.nodeid, marked=item.get_closest_marker("database_contract") is not None
+    ):
+        report = pytest.TestReport.from_item_and_call(item, call)
+        if report.skipped:
+            report.outcome = "failed"
+            report.longrepr = (
+                "Protected database contract skipped its required PostgreSQL execution"
+            )
+            return report
     # Emit a failed report so caught attempts also reach an xdist controller.
     if call.when != "teardown" or _ATTEMPTS not in item.config.stash:
         return None
@@ -316,6 +345,14 @@ def pytest_runtest_makereport(
     report.outcome = "failed"
     report.longrepr = "Unit database connection guard failed: " + attempts
     return report
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    database_contracts.check_backend(
+        item.nodeid,
+        os.getenv("TEST_DATABASE_URL"),
+        marked=item.get_closest_marker("database_contract") is not None,
+    )
 
 
 def _verify_execution(config: pytest.Config, directory: Path) -> None:
