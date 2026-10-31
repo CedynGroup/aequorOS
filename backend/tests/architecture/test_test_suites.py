@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -338,3 +339,24 @@ def test_mixed_module_overrides_assign_one_suite_at_node_boundaries(
         test_suites.owner("tests/test_new.py::test_new")
     with pytest.raises(ValueError, match="Unclassified"):
         test_suites.owner("tests/test_mixed.py::test_db[new-parameter]")
+
+
+def test_every_catalogue_key_resolves_to_a_test_file() -> None:
+    """A catalogue key whose file no longer exists is stale: the codemod renames keys
+    on a move, so anything left over points at a path that should still be there."""
+    suites = cast(
+        "dict[str, object]",
+        json.loads((BACKEND / "scripts" / "test_suites.json").read_text(encoding="utf-8")),
+    )
+    durations_path = BACKEND / "scripts" / "ci_postgres_durations.json"
+    durations = cast(
+        "dict[str, object]",
+        json.loads(durations_path.read_text(encoding="utf-8")),
+    )
+    sections = cast(
+        "tuple[dict[str, str], dict[str, str], dict[str, str]]",
+        (suites["cases"], suites["services"], durations["durations"]),
+    )
+    paths = {node_id.split("::", 1)[0] for section in sections for node_id in section}
+    missing = sorted(path for path in paths if not (BACKEND / path).is_file())
+    assert missing == []
