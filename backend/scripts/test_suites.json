@@ -17086,6 +17086,7 @@
     "tests/test_database_fixture_isolation.py::test_committing_schema_reset_removes_committed_rows_and_restores_the_seed": "integration",
     "tests/test_database_fixture_isolation.py::test_isolated_session_exposes_a_real_engine": "integration",
     "tests/test_database_fixture_isolation.py::test_ordinary_application_baseline_is_bank_free": "integration",
+    "tests/test_database_fixture_isolation.py::test_real_data_fixture_keeps_commits_inside_outer_rollback_on_synthetic_database": "integration",
     "tests/test_database_fixture_isolation.py::test_reused_app_receives_fresh_client_and_storage_state": "integration",
     "tests/test_e2e_story_identities.py::test_failed_story_retires_fresh_actors_and_real_refresh_families": "integration",
     "tests/test_e2e_story_identities.py::test_owner_stories_have_distinct_tenants_and_no_financial_fixture_writes": "integration",
