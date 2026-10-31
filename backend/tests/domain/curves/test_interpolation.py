@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from app.domain.curves.interpolation import (
+from app.market_data.domain.curves.interpolation import (
     InterpolationError,
     LinearZero,
     LogLinearDF,
@@ -57,8 +57,7 @@ class TestSharedProperties:
         step = 1e-6
         for t in (1.5, 2.5, 3.7, 4.5, 5.5):
             numeric = (
-                (t + step) * interpolator.zero(t + step)
-                - (t - step) * interpolator.zero(t - step)
+                (t + step) * interpolator.zero(t + step) - (t - step) * interpolator.zero(t - step)
             ) / (2.0 * step)
             assert interpolator.instantaneous_forward(t) == pytest.approx(numeric, abs=1e-6)
 

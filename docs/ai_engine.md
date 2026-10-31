@@ -39,7 +39,7 @@ The AI Engine is architected to be the second-most-strategic engineering artifac
 | M-FX-01 (FX prediction) | XGBoost + LSTM ensemble | Deterministic FX engine (hist-sim VaR/NOP/hedge) — no forecast. | ⬜ No ML |
 | M-IRRBB-01 (hedge opt.) | Deep RL + LSTM | Deterministic IRRBB engine; hedge ratio is an input, not optimized. | ⬜ No ML |
 
-**Plus three per-tenant behavioral GBMs** (`app/ml/behavioral/`) not separately listed in §3 but central to the product: **NMD duration** (= M-FTP-01), **prepayment** (feeds Liquidity/LCR inflows), **deposit stability** (feeds the LCR stable/less-stable split + NMD core share). All are `HistGradientBoostingRegressor` with a data-sufficiency gate (≥24 samples / 18 months) that degrades to empirical mean → generic prior; outputs are written back as an accepted `behavioral_assumptions` canonical batch consumed by `fact_derivation` (LCR, FTP, IRR). Retrain = `POST /banks/{id}/behavioral/{model}/train`. This applied-as-assumptions seam is the most complete AI→module integration in the codebase.
+**Plus three per-tenant behavioral GBMs** (`app/behavioral/ml/`) not separately listed in §3 but central to the product: **NMD duration** (= M-FTP-01), **prepayment** (feeds Liquidity/LCR inflows), **deposit stability** (feeds the LCR stable/less-stable split + NMD core share). All are `HistGradientBoostingRegressor` with a data-sufficiency gate (≥24 samples / 18 months) that degrades to empirical mean → generic prior; outputs are written back as an accepted `behavioral_assumptions` canonical batch consumed by `fact_derivation` (LCR, FTP, IRR). Retrain = `POST /banks/{id}/behavioral/{model}/train`. This applied-as-assumptions seam is the most complete AI→module integration in the codebase.
 
 ### Data-Engine intelligence models (§3.2 / §3.3)
 
@@ -47,11 +47,11 @@ The AI Engine is architected to be the second-most-strategic engineering artifac
 |---|---|---|---|
 | D-DEDUP-01 | Fuzzy + phonetic + supervised classifier | Fuzzy (rapidfuzz) + phonetic (soundex/metaphone/double-metaphone) + char-n-gram TF-IDF cosine run **live on every batch**. The RandomForest classifier is coded + trainable but **not trained, not persisted, not loaded** (`artifacts/etl_models/` does not exist) → the live path runs a deterministic weighted blend, stamping `model_id=None`. | 🟡 Partial (classifier dormant) |
 | D-ANOM-01 | Isolation forest + SPC | IsolationForest (**fit per-batch**, unsupervised, ≥8 rows) + modified-MAD SPC z-score, both live. No pre-trained/persisted model. | 🟡 Partial (unsupervised, not trained) |
-| D-MAP-01 | Embedding similarity + classifier | Deterministic reverse-alias index (`app/etl/resolve.py`, `financial_mapping/row_mapper.py`). No embeddings/classifier. | ⬜ No ML (deterministic aliasing) |
+| D-MAP-01 | Embedding similarity + classifier | Deterministic reverse-alias index (`app/data_engine/etl/resolve.py`, `financial_mapping/row_mapper.py`). No embeddings/classifier. | ⬜ No ML (deterministic aliasing) |
 | D-RECON-01 | Rule-based + classifier | Deterministic lineage rules (position dedup) + GL/subledger reconciliation validation. No supervised classifier. | ⬜ No ML (rules only) |
 | S-BEHAV-01 / S-CREDIT-01 | Stress models (Phase 3) | Not built. | ⬜ Not built (Phase 3) |
 
-> The ETL **preprocessing** layer (ISO-4217/3166/8601 normalization, type coercion, reference resolution, and the flag-not-modify guard on regulatory-critical fields per §15.3) is fully built and live — but it is deterministic rule-based data cleaning, not one of the ML models above. Both ETL models carry a real MRM scaffold (`app/etl/models/_mrm.py`: `ModelCard` feature contract + `HumanOverride`/`OverrideRegistry` + joblib persistence), but that scaffold governs only these two models.
+> The ETL **preprocessing** layer (ISO-4217/3166/8601 normalization, type coercion, reference resolution, and the flag-not-modify guard on regulatory-critical fields per §15.3) is fully built and live — but it is deterministic rule-based data cleaning, not one of the ML models above. Both ETL models carry a real MRM scaffold (`app/data_engine/etl/models/_mrm.py`: `ModelCard` feature contract + `HumanOverride`/`OverrideRegistry` + joblib persistence), but that scaffold governs only these two models.
 
 ### AI-Engine layers (§4–§10)
 
@@ -64,7 +64,7 @@ The AI Engine is architected to be the second-most-strategic engineering artifac
 | 5 Monitoring | ⬜ Not built | No drift (KS/PSI/JS), performance, or bias monitoring. Metrics exist only at training time. |
 | 6 Governance / MRM | 🟡 Partial | `_mrm.py` model cards + auditable human-override registry for the **two ETL models only**. No tiers, approval routing/gates, examiner mode, SHAP/explainability, or model-lifecycle audit table. The cash-flow LSTM and behavioral GBMs sit outside `_mrm`. |
 
-**Supporting infrastructure that IS built:** the 10-year synthetic **history simulator** (`data/simulator/` → parquet panels under `data/history/panels/`) and its LSTM retrain seam (`app/ml/real_series.py`, gated by `CASHFLOW_USE_REAL_SERIES`, 8y-train / 2y-val) — matching §12.2's bootstrap-training intent.
+**Supporting infrastructure that IS built:** the 10-year synthetic **history simulator** (`data/simulator/` → parquet panels under `data/history/panels/`) and its LSTM retrain seam (`app/forecasting/ml/real_series.py`, gated by `CASHFLOW_USE_REAL_SERIES`, 8y-train / 2y-val) — matching §12.2's bootstrap-training intent.
 
 ---
 
@@ -173,7 +173,7 @@ Each calculation module talks to Layer 4 (Serving) via a standardized inference 
 
 ## 5. Layer 1: Feature Store
 
-> **As-built status (§1A): ⬜ Not built.** No shared feature store, `@feature` decorator, or domain-organized feature definitions exist. Feature engineering is ad-hoc and embedded per model (`app/ml/features.py`, `app/ml/behavioral/features.py`, `app/etl/…/fingerprint.py`). The nearest thing to a feature contract is the per-artifact `feature_names` tuple on `ModelCard`. The section below is the target design.
+> **As-built status (§1A): ⬜ Not built.** No shared feature store, `@feature` decorator, or domain-organized feature definitions exist. Feature engineering is ad-hoc and embedded per model (`app/forecasting/ml/features.py`, `app/behavioral/ml/features.py`, `app/data_engine/etl/…/fingerprint.py`). The nearest thing to a feature contract is the per-artifact `feature_names` tuple on `ModelCard`. The section below is the target design.
 
 Purpose: define, compute, and serve canonical features that both training and inference consume, ensuring train-serve consistency.
 
@@ -231,7 +231,7 @@ Phase 3: adopt a managed Feature Store (Feast per Product Documentation, or Vert
 
 ## 6. Layer 2: Training
 
-> **As-built status (§1A): 🟡 Partial.** Real, reproducible, seeded per-model training exists — cash-flow LSTM with holdout eval (`app/ml/model.py`), behavioral GBMs with expanding-window time-series CV (`app/ml/behavioral/estimator.py`), and the two ETL models with train-and-validate on injected corruptions (`app/etl/models/*/training.py`). But there is no unified DAG, no scheduled or drift-triggered retrain (triggers are manual: `POST …/behavioral/{model}/train` or `python -m …training`), and no cross-model backtesting harness. The section below is the target design.
+> **As-built status (§1A): 🟡 Partial.** Real, reproducible, seeded per-model training exists — cash-flow LSTM with holdout eval (`app/forecasting/ml/model.py`), behavioral GBMs with expanding-window time-series CV (`app/behavioral/ml/estimator.py`), and the two ETL models with train-and-validate on injected corruptions (`app/data_engine/etl/models/*/training.py`). But there is no unified DAG, no scheduled or drift-triggered retrain (triggers are manual: `POST …/behavioral/{model}/train` or `python -m …training`), and no cross-model backtesting harness. The section below is the target design.
 
 Purpose: reproducibly train models from feature data, validate them, and produce artifacts ready for the Registry.
 
@@ -510,7 +510,7 @@ Phase 3: Automated retraining triggered by monitoring alerts, subject to MRM app
 
 ## 10. Layer 6: Governance and Audit
 
-> **As-built status (§1A): 🟡 Partial.** `app/etl/models/_mrm.py` implements a real but lightweight MRM scaffold — `ModelCard` (feature-contract + validation metrics + training-data ref) and an auditable `HumanOverride`/`OverrideRegistry` — but it governs **only the two ETL models**; the cash-flow LSTM and behavioral GBMs sit outside it. There are no model tiers, approval routing / validation gates, examiner mode, SHAP/explainability (zero SHAP in the tree), or model-lifecycle audit table. The section below is the target design.
+> **As-built status (§1A): 🟡 Partial.** `app/data_engine/etl/models/_mrm.py` implements a real but lightweight MRM scaffold — `ModelCard` (feature-contract + validation metrics + training-data ref) and an auditable `HumanOverride`/`OverrideRegistry` — but it governs **only the two ETL models**; the cash-flow LSTM and behavioral GBMs sit outside it. There are no model tiers, approval routing / validation gates, examiner mode, SHAP/explainability (zero SHAP in the tree), or model-lifecycle audit table. The section below is the target design.
 
 Purpose: enforce MRM discipline, produce audit-ready records, and enable regulator examination.
 

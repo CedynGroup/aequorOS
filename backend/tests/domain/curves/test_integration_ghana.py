@@ -25,21 +25,21 @@ from datetime import date
 
 import pytest
 
-from app.domain.curves.bootstrap import (
+from app.market_data.domain.curves.bootstrap import (
     BillQuote,
     BondQuote,
     ZeroCurve,
     bootstrap_zero_curve,
 )
-from app.domain.curves.conventions import DayCount, bond_cashflows, discount_to_yield
-from app.domain.curves.forwards import ForwardQaResult, qa_forwards
-from app.domain.curves.nss import NssFit, fit_nss, nss_zero
-from app.domain.curves.objects import (
+from app.market_data.domain.curves.conventions import DayCount, bond_cashflows, discount_to_yield
+from app.market_data.domain.curves.forwards import ForwardQaResult, qa_forwards
+from app.market_data.domain.curves.nss import NssFit, fit_nss, nss_zero
+from app.market_data.domain.curves.objects import (
     CurveBuildResult,
     CurveDefinition,
     CurveNodes,
 )
-from app.domain.curves.ois_step import MeetingDateStepCurve
+from app.market_data.domain.curves.ois_step import MeetingDateStepCurve
 
 SETTLEMENT = date(2026, 8, 3)
 
@@ -82,7 +82,10 @@ def _bills() -> list[BillQuote]:
 def _bonds() -> list[BondQuote]:
     return [
         BondQuote(
-            settlement=SETTLEMENT, maturity=maturity, coupon_rate=coupon, frequency=2,
+            settlement=SETTLEMENT,
+            maturity=maturity,
+            coupon_rate=coupon,
+            frequency=2,
             price=price,
         )
         for maturity, coupon, price in BOND_QUOTES
@@ -137,12 +140,13 @@ class TestBootstrapGhana:
             assert curve.df(t) == pytest.approx(bill.discount_factor(), abs=1e-10)
         for bond in _bonds():
             flows = bond_cashflows(
-                bond.settlement, bond.maturity, bond.coupon_rate, bond.frequency,
+                bond.settlement,
+                bond.maturity,
+                bond.coupon_rate,
+                bond.frequency,
                 bond.day_count,
             )
-            model = sum(
-                flow.amount * curve.df(curve.time_of(flow.payment_date)) for flow in flows
-            )
+            model = sum(flow.amount * curve.df(curve.time_of(flow.payment_date)) for flow in flows)
             assert model == pytest.approx(bond.dirty_price(), abs=1e-8)
 
     def test_short_end_matches_published_bog_yields(self) -> None:
@@ -157,12 +161,8 @@ class TestBootstrapGhana:
             t = days / 364.0
             assert curve.df(t) == pytest.approx(1.0 - discount_rate * t, abs=1e-12)
             simple_yield = (1.0 / curve.df(t) - 1.0) / t
-            assert round(simple_yield * 100.0, 4) == pytest.approx(
-                published_interest, abs=5e-5
-            )
-            assert simple_yield == pytest.approx(
-                discount_to_yield(discount_rate, days), abs=1e-12
-            )
+            assert round(simple_yield * 100.0, 4) == pytest.approx(published_interest, abs=5e-5)
+            assert simple_yield == pytest.approx(discount_to_yield(discount_rate, days), abs=1e-12)
 
     def test_curve_shape_is_sane(self) -> None:
         curve, _, _, _ = _build_pipeline()

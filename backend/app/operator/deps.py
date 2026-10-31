@@ -54,7 +54,7 @@ from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT,
 from app.db.session import RlsBlindError, get_cross_tenant_engine
 from app.identity.public import Bank
 from app.models import OperatorAuditLog, OperatorInspectorSession, OperatorUser
-from app.models.operator import OPERATOR_ROLE_RANK
+from app.operator.models import OPERATOR_ROLE_RANK
 from app.operator.services import operator_auth
 from app.policy.public import InstitutionType
 

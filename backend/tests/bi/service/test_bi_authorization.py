@@ -76,7 +76,7 @@ from app.core.authorization import (
 from app.identity import public as scoped_authorization
 from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, Job, User
-from app.services import institution_types
+from app.policy.service import institution_types
 from tests.support.helpers import ORG_1, USER_1
 
 BACKEND = Path(__file__).parents[3]

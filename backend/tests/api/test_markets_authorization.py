@@ -35,6 +35,7 @@ from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
+from app.market_data.service import market_data_overlays
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -49,13 +50,14 @@ from app.models import (
     MarketDataSourcePreference,
     User,
 )
-from app.services import implied_rating, market_data_overlays
-from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.adapters.market_data.manual_upload.fixtures import (
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
+from app.rating.service import implied_rating
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.market_data.adapters.manual_upload.fixtures import (
     FIXTURE_AS_OF,
     build_full_coverage_workbook,
 )
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.canonical_book import canonical_test_book
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
@@ -64,6 +66,9 @@ SIBLING_BANK_ID = "BK-MKT00002"
 FOREIGN_BANK_ID = "BK-MKT00003"
 CURVE = "GHS_SOVEREIGN"
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+pytestmark = pytest.mark.canonical_book_baseline
 
 
 class MarketsRoute(NamedTuple):
@@ -171,7 +176,7 @@ def forbidden_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(market_data_overlays, "create_overlay", forbidden)
     monkeypatch.setattr(market_data_overlays, "end_overlay", forbidden)
     monkeypatch.setattr(
-        "app.adapters.market_data.manual_upload.service.upload_market_data", forbidden
+        "app.market_data.adapters.manual_upload.service.upload_market_data", forbidden
     )
 
 
@@ -245,9 +250,9 @@ def upload_storage(
 ) -> InMemoryStorageClient:
     """Point the pull runner, cache, and adapter at the client the app serves."""
     for target in (
-        "app.adapters.market_data.pull_runner.get_storage_client",
-        "app.adapters.market_data.cache.get_storage_client",
-        "app.adapters.market_data.manual_upload.adapter.get_storage_client",
+        "app.market_data.adapters.pull_runner.get_storage_client",
+        "app.market_data.adapters.cache.get_storage_client",
+        "app.market_data.adapters.manual_upload.adapter.get_storage_client",
     ):
         monkeypatch.setattr(target, lambda: storage_engine)
     return storage_engine
@@ -256,7 +261,7 @@ def upload_storage(
 def _seed_book() -> UUID:
     session = get_sessionmaker()()
     try:
-        materialize_canonical_test_book(session)
+        canonical_test_book(session)
         period_id = session.scalar(
             select(BankReportingPeriod.id)
             .where(

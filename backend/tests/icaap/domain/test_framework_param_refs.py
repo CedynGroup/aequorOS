@@ -30,15 +30,15 @@ import re
 import pytest
 
 from app.core.config import IcaapSettings
-from app.domain.policy import parameter_shapes
 from app.icaap.domain.frameworks import registry
 from app.icaap.domain.frameworks.schema import Framework
 from app.icaap.service.parameters import (
     jurisdiction_seed_rows as workspace_jurisdiction_seed_rows,
 )
 from app.icaap.service.parameters import seed_rows as workspace_seed_rows
-from app.services.regulatory_parameters import filing_seed_rows, p2_seed_rows, p5_seed_rows
-from app.services.regulatory_parameters import seed_rows as core_seed_rows
+from app.policy.domain import parameter_shapes
+from app.policy.service.regulatory_parameters import filing_seed_rows, p2_seed_rows, p5_seed_rows
+from app.policy.service.regulatory_parameters import seed_rows as core_seed_rows
 
 PUBLISHED = list(registry.load_all())
 IDS = [f"{framework.code} {framework.version}" for framework in PUBLISHED]

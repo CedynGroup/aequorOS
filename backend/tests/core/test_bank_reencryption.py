@@ -24,15 +24,16 @@ from app.core.key_management.presentation import LOCKED_JSON, SESSION_STATE, Pre
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
+from app.data_engine.models.canonical import CanonicalCounterparty, CanonicalPositionSnapshot
+from app.data_engine.service import canonical_withdrawal
+from app.data_engine.service.canonical_withdrawal import WithdrawalError
 from app.db.base import utc_now
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
 from app.identity.public import Bank
 from app.models.audit_event import AuditEvent
-from app.models.canonical import CanonicalCounterparty, CanonicalPositionSnapshot
 from app.models.job import Job
 from app.reporting.models.packages import RegulatoryPackage
-from app.services import canonical_withdrawal, job_queue
-from app.services.canonical_withdrawal import WithdrawalError
+from app.services import job_queue
 from app.storage.client import (
     EncryptionCursor,
     EncryptionInventoryItem,

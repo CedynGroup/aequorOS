@@ -107,7 +107,7 @@ def upgrade() -> None:
 def _seed_tolerance_parameter() -> None:
     """Insert the governed tolerance rows, skipping any that already exist."""
     # Deferred import: the single seed catalogue lives with the resolver.
-    from app.services.regulatory_parameters import (  # noqa: PLC0415
+    from app.policy.service.regulatory_parameters import (  # noqa: PLC0415
         SEED_EFFECTIVE_FROM,
         seed_rows,
     )

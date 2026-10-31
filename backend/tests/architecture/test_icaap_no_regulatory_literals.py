@@ -33,7 +33,7 @@ from app.icaap.service.parameters import (
     ICAAP_PARAM_CODES,
     ICAAP_SEED_PARAMETERS,
 )
-from app.services.regulatory_parameters import (
+from app.policy.service.regulatory_parameters import (
     FILING_PARAMETER_CODES,
     P2_PARAMETER_CODES,
     P5_PARAMETER_CODES,
@@ -259,7 +259,7 @@ def test_every_parameter_the_framework_quotes_is_seeded() -> None:
     ``202609200063``) seeds Nigeria and Kenya. It introduces no new CODE — it
     repeats these under a different jurisdiction — so this union is complete
     without it, and a test in
-    ``tests/services/test_regulatory_parameters_icaap_jurisdictions.py`` fails
+    ``tests/policy/service/test_regulatory_parameters_icaap_jurisdictions.py`` fails
     if that ever stops being true. Whether a code is seeded for the right
     JURISDICTION is a different question, asked by
     ``tests/icaap/domain/test_framework_param_refs.py``.

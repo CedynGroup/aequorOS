@@ -40,6 +40,12 @@ export interface EffectiveAuthorityRead {
   authv: number;
   /**
    *
+   * @type {boolean}
+   * @memberof EffectiveAuthorityRead
+   */
+  canAdministerGrants?: boolean;
+  /**
+   *
    * @type {Array<InstitutionCapabilitiesRead>}
    * @memberof EffectiveAuthorityRead
    */
@@ -88,6 +94,10 @@ export function EffectiveAuthorityReadFromJSONTyped(
   return {
     ...json,
     authv: json["authv"],
+    canAdministerGrants:
+      json["can_administer_grants"] == null
+        ? undefined
+        : json["can_administer_grants"],
     institutionCapabilities: (
       json["institution_capabilities"] as Array<any>
     ).map(InstitutionCapabilitiesReadFromJSON),
@@ -113,6 +123,7 @@ export function EffectiveAuthorityReadToJSONTyped(
 
   return {
     authv: value["authv"],
+    can_administer_grants: value["canAdministerGrants"],
     institution_capabilities: (
       value["institutionCapabilities"] as Array<any>
     ).map(InstitutionCapabilitiesReadToJSON),

@@ -43,15 +43,15 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import get_settings
+from app.data_engine.api.ingest_data import get_ingestion_storage
 from app.db.session import get_sessionmaker
-from app.features.ingest_data import get_ingestion_storage
 from app.icaap.domain.frameworks import registry
 from app.icaap.models.workspace import IcaapBlockBinding, IcaapCycle, IcaapDataBlock, IcaapSection
 from app.icaap.service import parameters, readiness
 from app.identity.service import authorization
 from app.integrations.storage.s3 import get_object_storage
 from app.models import AuditEvent, AuthorizationBinding, Bank, User
-from app.services.institution_types import FALLBACK_TYPE_CODE
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 BANK_ID = "BK-ICAAP001"

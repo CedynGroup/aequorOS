@@ -27,7 +27,7 @@ from app.icaap.domain.pillar2.concentration import (
     METRIC_HHI,
 )
 from app.icaap.domain.units import Basis, Denominators
-from app.services.regulatory_parameters import ICAAP_P2_SEED_PARAMETERS
+from app.policy.service.regulatory_parameters import ICAAP_P2_SEED_PARAMETERS
 
 
 def seed_body(param_code: str) -> dict[str, Any]:

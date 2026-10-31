@@ -141,7 +141,7 @@ including axes that breached before reaching that limit.
   divide what the API returns; it may not decide a number the engines own. See
   "Client-side arithmetic" below for the line between the two.
 - **No ML the backend does not have.** The only machine-learning surfaces are
-  the cash-flow LSTM (`backend/app/ml`) and the per-tenant behavioral GBMs.
+  the cash-flow LSTM (`backend/app/forecasting/ml`) and the per-tenant behavioral GBMs.
   There is no reinforcement-learning optimizer and no gradient-boosting FX
   ensemble; the forecasting optimizer is a deterministic grid search and the
   balance-sheet forecast is deterministic arithmetic.
@@ -167,7 +167,7 @@ These are correctness rules, not style preferences. The evidence is
   titles/messages, never `${regShort()} minimum` or "regulatory minimum".
   Historical dashboard, preview and run reads correct the disclosure without
   changing stored validations, calculations or input hashes; see
-  `backend/tests/services/test_liquidity_validation_disclosures.py`.
+  `backend/tests/liquidity/service/test_liquidity_validation_disclosures.py`.
   The [research dossier](../../docs/research/bog_returns_and_templates.md#12-gap-list--what-must-be-simulatedapproximated-clearly-labelled)
   owns the instruments' publication status and calibration gaps.
 - **CET1, Tier 1 and the leverage ratio** are Bank of Ghana CRD requirements —
@@ -292,7 +292,7 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
 - TanStack Query over the generated OpenAPI client
 - Recharts for visualization
 - NextAuth for password and OIDC SSO sign-in
-- Inter (UI) + IBM Plex Mono (numerical data) via `next/font/google`
+- Inter (UI) + IBM Plex Mono (numerical data) via `next/font/local`
 
 ### Next.js 16 runtime conventions
 
@@ -554,12 +554,10 @@ normal development cache. Both browser suites use the worktree's disposable
 database and session files, so a worktree-local lock rejects concurrent E2E runs.
 The stack never touches the primary database.
 
-The disposable Next.js server uses `NEXT_FONT_GOOGLE_MOCKED_RESPONSES` with
-fixed CSS for all layout and login font families. Journeys and the visual tour
-render with Next's generated fallback fonts and never fetch Google CSS or font files.
-This avoids the extensionless font URL compiler bug
-([Next.js #99114](https://github.com/vercel/next.js/issues/99114)); production
-builds retain the real Google fonts.
+The layout and login fonts are bundled as Latin-only WOFF2 files in
+`app/fonts` (sources and OFL licenses live alongside them). Production builds,
+journeys and the visual tour use the same local fonts without fetching Google
+CSS or font files.
 
 The attestation workspace journey checks every offered typed face in both the
 adoption panel and the placed signature preview. It verifies the fonts Chromium
@@ -680,6 +678,16 @@ the aggregate spine's initial empty source basis cannot authorize stress of a
 subsequently added position book. Other fact groups and historical periods
 retain the canonical spine's figures. Capital and stress expectations for the
 latest period therefore use the position book's net CRD credit basis.
+
+`playwright.config.ts` freezes `E2E_TODAY` once per run, defaulting to the local
+calendar date, and shares it with the bootstrap and journey workers. Set
+`E2E_TODAY=YYYY-MM-DD` to select the last month end on or before that date;
+the anchor remains calendar-derived. For example, `2026-10-30` selects
+September 30, while `2026-10-31` selects October 31. This keeps the bootstrap
+and journey expectations aligned when a run crosses midnight. The liquidity
+journey derives the weighted-average-liability-maturity early-warning value
+from that anchor and the fixture's fixed maturities, because day counts can
+change as the anchor advances.
 
 ```bash
 pnpm --filter @aequoros/dashboard e2e            # functional journeys

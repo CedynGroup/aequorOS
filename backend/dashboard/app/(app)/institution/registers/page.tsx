@@ -10,6 +10,8 @@
  * reason; the Edit actions mirror that gate client-side.
  */
 
+import { wholeInstitutionCapabilities } from "@/lib/api/dataScope";
+import { hasEffectiveCapability } from "@/lib/modules";
 import PageHeader from "@/components/ui/PageHeader";
 import PageContainer from "@/components/ui/PageContainer";
 import { useBankContext } from "@/components/shell/BankContext";
@@ -21,7 +23,20 @@ import CrmHaircutCard from "@/components/institution/registers/CrmHaircutCard";
 import EclAssumptionCard from "@/components/institution/registers/EclAssumptionCard";
 
 export default function BoardRegistersPage() {
-  const { bank, period, moduleScope } = useBankContext();
+  const { bank, period, institutionCapabilities } = useBankContext();
+  const eligible = wholeInstitutionCapabilities(institutionCapabilities);
+  const liquidityView = hasEffectiveCapability(
+    eligible,
+    "liq",
+    "confidential",
+    "view",
+  );
+  const creditView = hasEffectiveCapability(
+    eligible,
+    "credit",
+    "confidential",
+    "view",
+  );
   const bankId = bank?.id;
   const periodId = period?.id;
 
@@ -41,15 +56,19 @@ export default function BoardRegistersPage() {
           </p>
         ) : (
           <>
-            {moduleScope.liquidityConfidentialView && (
+            {liquidityView && (
               <>
                 <ThresholdRegisterCard bankId={bankId} />
                 <EwiRegisterCard bankId={bankId} periodId={periodId} />
               </>
             )}
-            <CreditThresholdCard bankId={bankId} />
-            <CrmHaircutCard bankId={bankId} />
-            <EclAssumptionCard bankId={bankId} />
+            {creditView && (
+              <>
+                <CreditThresholdCard bankId={bankId} />
+                <CrmHaircutCard bankId={bankId} />
+                <EclAssumptionCard bankId={bankId} />
+              </>
+            )}
           </>
         )}
       </PageContainer>

@@ -1396,7 +1396,7 @@ def require_icaap_ai_draft(request: Request, db: DbSession, ctx: Tenant) -> Icaa
     differently depending on who asks. The tenant gates answer 403 with their
     code, because a tenant CAN act on "your Owner has not switched this on".
     """
-    from app.services.ai import gates as ai_gates  # noqa: PLC0415 - avoid deps/service cycle
+    from app.ai.service import gates as ai_gates  # noqa: PLC0415 - avoid deps/service cycle
 
     if not ai_gates.deployment_gate().allowed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
@@ -1558,7 +1558,7 @@ def require_icaap_capital_plan_propose(request: Request, db: DbSession, ctx: Ten
     EDIT for an existing draft. Without this an ICAAP editor could author a
     capital plan they are not entitled to author.
     """
-    from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
+    from app.capital.service import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
 
     access = _require_icaap_access(
         request, db, ctx, permission=Permission.EDIT, surface="icaap_capital_plan_propose"
@@ -1876,7 +1876,7 @@ def require_capital_plan_write(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
+    from app.capital.service import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
 
     if bank is None:  # pragma: no cover - capital plan routes always carry bank_id
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
@@ -1898,7 +1898,7 @@ def require_capital_plan_approve(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
+    from app.capital.service import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
 
     if bank is None:  # pragma: no cover - capital plan routes always carry bank_id
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
@@ -2640,7 +2640,7 @@ def require_module_access(module_key: str):  # noqa: ANN201 - returns a FastAPI 
     ``default_modules`` (the same data the nav is scoped from). ``bank_id`` is
     read from the path; a non-bank-scoped route in a gated router is not blocked.
     """
-    from app.services import institution_types  # noqa: PLC0415 - avoid import cycle
+    from app.policy.service import institution_types  # noqa: PLC0415 - avoid import cycle
 
     def _dependency(
         request: Request,

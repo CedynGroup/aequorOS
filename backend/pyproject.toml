@@ -7,8 +7,8 @@ license = { file = "../LICENSE" }
 requires-python = ">=3.13,<3.14"
 dependencies = [
   "alembic",
-  # Governed AI drafting (app/services/ai). Imported LAZILY and in exactly one
-  # module (app/services/ai/client.py), so the API, the core worker and the
+  # Governed AI drafting (app/ai/service). Imported LAZILY and in exactly one
+  # module (app/ai/service/client.py), so the API, the core worker and the
   # operator app never load it; tests/architecture pins that.
   "anthropic",
   "argon2-cffi",
@@ -22,7 +22,7 @@ dependencies = [
   "openpyxl",
   "oracledb",
   "pandas",
-  # Market-desk PDF sources (app/services/market_desk/sources): pypdf-style
+  # Market-desk PDF sources (app/market_data/service/market_desk/sources): pypdf-style
   # extraction emits BoG auction tables column-major (row association lost) and
   # the APR-of-banks PDF positions glyphs individually on three of its nine
   # table pages — parsing needs character geometry (pdfplumber.page.chars),
@@ -45,10 +45,10 @@ dependencies = [
   "python-docx",
   "pyyaml",
   "rapidfuzz",
-  "reportlab>=4.0,<5.1",  # pinned: deterministic bytes rely on invariant=1 (G12)
+  "reportlab>=4.0,<5.2",  # pinned: deterministic bytes rely on invariant=1 (G12)
   "scikit-learn",
   # Direct import, not a scikit-learn leftover: the curve library
-  # (app/domain/curves) uses scipy.interpolate.PchipInterpolator and
+  # (app/market_data/domain/curves) uses scipy.interpolate.PchipInterpolator and
   # scipy.optimize.least_squares. Listed explicitly so the guarantee does not
   # rest on another package's dependency tree.
   "scipy",
@@ -59,7 +59,7 @@ dependencies = [
 ]
 
 # Driver-heavy database-direct backends. Lazily imported by
-# app/adapters/database_direct, so the default environment stays installable and
+# app/data_engine/adapters/database_direct, so the default environment stays installable and
 # fixture tests run without them. Install when wiring a live source database:
 #   uv sync --extra db-direct
 [project.optional-dependencies]
@@ -96,8 +96,11 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-p scripts.test_suites_plugin -p scripts.database_observation_plugin"
 pythonpath = ["."]
 markers = [
+  "database_contract: SQL, isolation, migration, locking, role or encryption guarantee requiring Postgres",
+  "canonical_book_baseline: opt into a prepared canonical book with per-test transaction rollback",
   "requirement(citation): behavioral regression against a cited external requirement",
   "committing_db: use real commits and independent connections in a shared schema reset before each test",
 ]

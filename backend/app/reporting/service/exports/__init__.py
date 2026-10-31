@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.attestation.public import AttestationSignature, RegulatoryArtifactVersion
+from app.data_engine.public import bank_slug
 from app.identity.public import Bank
 from app.reporting.models.packages import RegulatoryPackage, RegulatoryPackageArtifact
 from app.reporting.service.bog_forms.catalog import form_spec
@@ -57,7 +58,6 @@ from app.reporting.service.templates import (
     build_rendered_return,
     get_template,
 )
-from app.services.ingestion import bank_slug
 from app.storage.client import ObjectMetadata, StorageLocation
 from app.storage.factory import get_storage_client
 

@@ -79,7 +79,7 @@ export const adversarialFtpParameters = fc.array(
   fc.integer({ min: -100_000, max: 100_000 }),
   { minLength: 8, maxLength: 8 },
 );
-/** Source: BANK_FTP_THRESHOLDS plus tests/domain/test_ftp_engine.py stress 200bp.
+/** Source: BANK_FTP_THRESHOLDS plus tests/ftp/domain/test_ftp_engine.py stress 200bp.
  * Core band endpoints ±1ppm and premium caps ±1bp are valid policy test inputs.
  */
 export const ftpParameters = fc.tuple(

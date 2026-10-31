@@ -25,6 +25,7 @@ from app.attestation.service import workflow as attestation
 from app.attestation.service.digests import content_digest
 from app.core.key_management import registry
 from app.core.key_management.types import KeyStatus
+from app.data_engine.service import reconciliation
 from app.icaap.models.workspace import IcaapCycle, IcaapStageDecision
 from app.icaap.schemas.workspace import IcaapFreezeCreate
 from app.icaap.service import cycles, freeze, guards, post_freeze, snapshot, workflow
@@ -32,7 +33,6 @@ from app.models import BankFinancialFact, BankReportingPeriod, RegulatoryPackage
 from app.reporting.service.filing_workflow import chain
 from app.reporting.service.generation import GeneratedReturn, snapshot_content_hash
 from app.reporting.service.registry import ReturnDefinition
-from app.services import reconciliation
 from tests.core import test_key_unavailable_numeric as encrypted
 from tests.core.test_bank_field_encryption import KEY_A, NEXT
 from tests.icaap.service.p3_support import (
@@ -50,6 +50,8 @@ from tests.icaap.service.p3_support import (
     submit,
     write_every_section,
 )
+
+pytestmark = pytest.mark.canonical_book_baseline
 
 
 class _OrderedAttachment(TypedDict):
@@ -639,6 +641,7 @@ class TestTheCycleIsSealedAfterwards:
 
 
 @pytest.mark.parametrize("status", [KeyStatus.DISABLED, KeyStatus.UNAVAILABLE])
+@pytest.mark.usefixtures("institution_profile_authority")
 def test_snapshot_commits_protected_register_without_key_access(
     canonical_book: Session,
     extra_frameworks: None,
@@ -691,6 +694,7 @@ def test_snapshot_commits_protected_register_without_key_access(
     assert profile["register_state_digest"]
 
 
+@pytest.mark.usefixtures("institution_profile_authority")
 def test_frozen_engine_package_requires_regeneration_after_key_rotation(
     canonical_book: Session, extra_frameworks: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:

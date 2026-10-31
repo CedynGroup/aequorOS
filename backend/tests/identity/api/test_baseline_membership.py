@@ -56,6 +56,7 @@ def test_baseline_member_can_use_only_own_self_service(
     me = db_client.get("/api/v1/auth/me", headers=auth)
     assert me.status_code == 200, me.text
     assert me.json()["effective_authority"] == {
+        "can_administer_grants": False,
         "authv": version,
         "organization_capabilities": [],
         "institution_capabilities": [],

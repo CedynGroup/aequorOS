@@ -4,6 +4,7 @@ import {
   accessIndexDestination,
   hasAccountAdministrationAuthority,
   hasAccountDirectoryAuthority,
+  hasGrantAdministrationAuthority,
 } from "./accountAdministration";
 
 const authority = (
@@ -38,10 +39,15 @@ assert.equal(hasAccountDirectoryAuthority(authority("view")), true);
 assert.equal(hasAccountDirectoryAuthority(authority("administer")), false);
 assert.equal(
   accessIndexDestination(authority("administer")),
-  "/access/members",
+  "/access/my-access",
 );
 assert.equal(accessIndexDestination(authority("view")), "/access/my-access");
 assert.equal(accessIndexDestination(undefined), "/access/my-access");
+assert.equal(hasGrantAdministrationAuthority(authority("administer")), false);
+assert.equal(hasGrantAdministrationAuthority(undefined), false);
+const owner = { ...authority("administer"), canAdministerGrants: true };
+assert.equal(hasGrantAdministrationAuthority(owner), true);
+assert.equal(accessIndexDestination(owner), "/access/members");
 
 console.log(
   "accountAdministration.test.ts: scoped account-plane authority checks passed.",

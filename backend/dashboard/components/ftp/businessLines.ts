@@ -2,7 +2,7 @@
  * Client-side business-line VIEW over the FTP product rows.
  *
  * PRESENTATIONAL ONLY — this module is not an alternate authority for any FTP
- * figure. The FTP engine (`backend/app/domain/ftp/engine.py`, surfaced as
+ * figure. The FTP engine (`backend/app/ftp/domain/engine.py`, surfaced as
  * `FtpProductRead` / `FtpBranchRead`) prices PRODUCTS and reports BRANCHES; it
  * has no business-line dimension and publishes no line-level margin. There is
  * therefore no backend figure this view can be reconciled against, which is

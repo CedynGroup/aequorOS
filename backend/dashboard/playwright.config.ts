@@ -44,6 +44,18 @@ const E2E_VAULT_KEY = Buffer.from(
 
 const BACKEND_DIR = path.join(__dirname, "..");
 const E2E_DB = path.join(E2E_TMP, "e2e.db");
+
+// Freeze before spawning the bootstrap and journey workers so a midnight
+// crossing cannot give them different anchors (H-015, scripts/e2e_bootstrap.py).
+// Override usage is documented in README.md#end-to-end-playwright.
+if (process.env.E2E_TODAY === undefined) {
+  const today = new Date();
+  process.env.E2E_TODAY = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+}
 export const E2E_KMS_UPSTREAM = process.env.BANK_KMS_ENDPOINT_URL ?? "";
 export const E2E_KMS_STATE = path.join(E2E_TMP, "kms-service-state");
 const kmsProxy = `http://127.0.0.1:${runtimePorts.kms}`;
@@ -217,13 +229,6 @@ export default defineConfig({
         // `.next` (NEXT_PUBLIC_* is compile-time-inlined; next dev shares one
         // cache per directory). Paired with distDir in next.config.js.
         NEXT_DIST_DIR: ".next-e2e",
-        // Google can return extensionless font URLs that Next 16.4 cannot
-        // compile (vercel/next.js#99114). Only this disposable server uses
-        // fixed CSS responses; production keeps its real Google fonts.
-        NEXT_FONT_GOOGLE_MOCKED_RESPONSES: path.join(
-          __dirname,
-          "e2e/support/google-font-responses.cjs",
-        ),
         AUTH_SECRET: E2E_AUTH_SECRET,
         AUTH_TRUST_HOST: "true",
         SSO_INTERNAL_KEY: E2E_SSO_INTERNAL_KEY,

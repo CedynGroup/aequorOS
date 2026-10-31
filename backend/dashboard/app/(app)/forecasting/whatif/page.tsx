@@ -66,7 +66,7 @@ import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from "@/lib/format";
 // ---------------------------------------------------------------------------
 // Shock library — the four shock codes the what-if endpoint accepts. Each is a
 // stylized, fixed adjustment to the base assumptions (`WHATIF_SHOCKS` in
-// `app/domain/forecasting/engine.py`), not a calibrated macro model, so each
+// `app/forecasting/domain/engine.py`), not a calibrated macro model, so each
 // description states exactly what the engine moves.
 // ---------------------------------------------------------------------------
 

@@ -18,12 +18,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.models import DeskCurveDefinition, DeskDetermination
-from app.operator.deps import Operator, OperatorDb, record_operator_action
-from app.schemas.market_desk import DeskDeterminationRead, DeskPublicationRead
-from app.schemas.market_desk_curves import (
+from app.market_data.public import (
     DeskCurveConstructRequest,
     DeskCurveConstructResponse,
+    DeskCurveDefinition,
     DeskCurveDefinitionApprove,
     DeskCurveDefinitionCreate,
     DeskCurveDefinitionListRead,
@@ -33,8 +31,12 @@ from app.schemas.market_desk_curves import (
     DeskCurvePillarView,
     DeskCurveQaView,
     DeskCurveStageRequest,
+    DeskDetermination,
+    DeskDeterminationRead,
+    DeskPublicationRead,
+    curve_construction,
 )
-from app.services.market_desk import curve_construction
+from app.operator.deps import Operator, OperatorDb, record_operator_action
 
 router = APIRouter(prefix="/curves", tags=["operator-curves"])
 

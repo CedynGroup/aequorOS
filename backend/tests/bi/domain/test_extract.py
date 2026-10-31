@@ -32,9 +32,9 @@ from app.bi.domain.extract import (
     official_run_rows,
     position_row,
 )
+from app.data_engine.domain.ingestion.optional_position_fields import POSITION_ATTRIBUTE_TEXT_LIMITS
 from app.domain.capital.loan_classification import ClassifiedLoan
-from app.domain.ingestion.optional_position_fields import POSITION_ATTRIBUTE_TEXT_LIMITS
-from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS
+from app.liquidity.domain.ladder import LADDER_HORIZON_DAYS
 
 BASE = "XRC"  # the tenant's reporting currency (fictional)
 FOREIGN = "XFC"  # a foreign currency with no ingested conversion (fictional)

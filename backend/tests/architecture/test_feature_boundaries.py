@@ -129,161 +129,15 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^schemas/(common|text|health|jobs)$", KERNEL),
     (r"^features/track_jobs$", KERNEL),
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
-    # ---- staff operator console
-    (r"^(models|schemas)/operator$", "operator"),
-    # ---- policy: jurisdiction, regime, parameter registers
-    (
-        r"^services/(regulatory_parameters|jurisdictions|institution_types|module_scope"
-        r"|parameter_register|params|sdi_regime)$",
-        "policy",
-    ),
-    (r"^models/(regulatory_parameter|parameter_register|jurisdiction|institution_type)$", "policy"),
-    (r"^domain/(policy/|regulatory_instruments$)", "policy"),
-    # ---- notifications
-    (
-        r"^services/(notifications|notification_email_mirror|reporting_deadline_scan)$",
-        "notifications",
-    ),
-    (
-        r"^(models/notification|schemas/notifications|features/manage_notifications)$",
-        "notifications",
-    ),
-    # ---- live engine and the facts spine
-    (
-        r"^services/(fact_derivation|pipeline|live_.*|freshness|alerts|reporting_periods"
-        r"|regulatory_dashboard_batching|data_activation)$",
-        "live",
-    ),
-    (r"^models/(facts|live|regulatory|regulatory_run)$", "live"),
-    (r"^(schemas/live|features/manage_live_engine)$", "live"),
-    (r"^domain/(positions|reporting|gl)/", "live"),
-    # ---- data engine
+    # ---- data engine (the shared adapters namespace is data-engine-owned)
     (r"^adapters/__init__$", "data_engine"),
-    (r"^adapters/(api_push|database_direct|excel_csv|temenos_t24)(/|$)", "data_engine"),
-    (r"^etl(/|$)", "data_engine"),
-    (r"^domain/ingestion/", "data_engine"),
-    (
-        r"^services/(ingestion|push_ingestion|database_connections|database_direct_jobs"
-        r"|temenos_connections|temenos_jobs|system_of_record|canonical_withdrawal"
-        r"|withdrawal_impact|history_loader|etl_dedup_jobs|etl_model_training"
-        r"|document_uploads|reconciliation)$",
-        "data_engine",
-    ),
-    (
-        r"^models/(canonical|canonical_withdrawal|ingestion|database_connection|temenos"
-        r"|system_of_record|reconciliation)$",
-        "data_engine",
-    ),
-    (
-        r"^schemas/(ingestion|push|database_connection|temenos_connections|system_of_record"
-        r"|reconciliation|data_activation)$",
-        "data_engine",
-    ),
-    (r"^api/v1/database_connections$", "data_engine"),
-    (
-        r"^features/(ingest_data|push_data|manage_temenos_connections"
-        r"|manage_system_of_record|manage_reconciliation)$",
-        "data_engine",
-    ),
-    # ---- market data
-    (r"^adapters/market_data(/|$)", "market_data"),
-    (r"^domain/curves/", "market_data"),
-    (r"^services/(market_data.*|market_desk(/.*)?)$", "market_data"),
-    (
-        r"^models/(market_data.*|market_desk.*|desk_operating_environment|entitlements)$",
-        "market_data",
-    ),
-    (r"^schemas/(market_data.*|market_desk.*|fx_forward)$", "market_data"),
-    (
-        r"^features/(manage_market_data_.*|market_data_sources|read_market_data_views)$",
-        "market_data",
-    ),
-    # ---- legacy case vertical
-    (
-        r"^services/(cases|case_plane|case_types|calculations|capital|liquidity|financial_.*"
-        r"|financial_mapping/.*|assessments|documents|findings|reports|scoring|scenarios"
-        r"|scenario_semantics)$",
-        "case",
-    ),
-    (r"^models/(risk|calculation|capital|financial|scenario)$", "case"),
-    (
-        r"^schemas/(cases|calculations|capital|liquidity|financial_workspace.*|assessments"
-        r"|documents|findings|taxonomy|scenarios)$",
-        "case",
-    ),
-    (
-        r"^features/(bulk_update_cases|generate_case_reports|list_case_taxonomy|list_taxonomy"
-        r"|manage_capital|manage_documents|read_financial_workspace|record_case_decisions"
-        r"|review_cases|review_findings|review_liquidity|run_assessments|run_calculations"
-        r"|manage_scenarios)$",
-        "case",
-    ),
     # ---- regulatory engines
     (
-        r"^(services/(regulatory_liquidity|liquidity_cfp|liquidity_ewi|liquidity_thresholds"
-        r"|behavioral_liquidity|cashflow_window|window_analytics)|domain/liquidity/.*"
-        r"|models/liquidity_cfp|schemas/(regulatory_liquidity|liquidity_cfp"
-        r"|liquidity_thresholds|cashflow_window|window_analytics)"
-        r"|features/(run_regulatory_liquidity|manage_liquidity_cfp|manage_liquidity_thresholds"
-        r"|read_liquidity_monitoring|read_cashflow_window|read_window_analytics))$",
-        "liquidity",
-    ),
-    (
-        r"^(services/regulatory_irr(_sf)?|domain/irr/.*|schemas/regulatory_irr(_sf)?"
-        r"|features/run_regulatory_irr)$",
-        "irrbb",
-    ),
-    (
-        r"^(services/regulatory_fx|domain/fx/.*|schemas/regulatory_fx"
-        r"|features/run_regulatory_fx)$",
-        "fx",
-    ),
-    (
-        r"^(services/regulatory_ftp|domain/ftp/.*|schemas/regulatory_ftp"
-        r"|features/run_regulatory_ftp)$",
-        "ftp",
-    ),
-    (
         r"^(services/(regulatory_capital|sdi_capital.*|sdi_views|sdi_readiness|capital_plan)"
-        r"|domain/capital/.*|models/capital_plan|schemas/(regulatory_capital|sdi|capital_plan)"
+        r"|domain/capital/.*|capital/models/capital_plan|schemas/(regulatory_capital|sdi|capital_plan)"
         r"|features/(run_regulatory_capital|manage_capital_plan|read_sdi_diagnostics))$",
         "capital",
     ),
-    (
-        r"^(services/(regulatory_credit|credit_.*|loan_classification)|domain/credit/.*"
-        r"|schemas/(regulatory_credit|credit_params)"
-        r"|features/(run_regulatory_credit|manage_credit_params))$",
-        "credit",
-    ),
-    (
-        r"^(services/(implied_rating|sdi_rating)|domain/rating/.*|models/implied_rating"
-        r"|schemas/implied_rating|features/run_implied_rating)$",
-        "rating",
-    ),
-    (
-        r"^(services/behavioral_models|ml/behavioral/.*|schemas/behavioral_models"
-        r"|features/read_behavioral_models)$",
-        "behavioral",
-    ),
-    (
-        r"^(services/(regulatory_forecasting|cashflow_forecast)|domain/forecasting/.*"
-        r"|schemas/(forecasting|cashflow_forecast)"
-        r"|features/(run_forecasting|read_cashflow_forecast)|ml/.*)$",
-        "forecasting",
-    ),
-    # ---- stress, attestation, filing, ICAAP, BI, AI
-    (
-        r"^(services/(stress_scenarios|macro_scenarios|default_macro_scenarios"
-        r"|enterprise_stress.*|enterprise_run_visibility|reverse_stress"
-        r"|management_action_plans|analysis_workbench|scenario_catalog"
-        r"|scenario_workbench_authorization)|domain/(stress|scenarios)/.*"
-        r"|models/(stress|scenario_workbench)|schemas/(stress|enterprise_stress.*"
-        r"|reverse_stress|management_actions|scenario_workbench)"
-        r"|features/(manage_stress_scenarios|manage_macro_scenarios|manage_enterprise_stress.*"
-        r"|run_reverse_stress|manage_management_actions|run_scenario_analysis))$",
-        "stress",
-    ),
-    (r"^(services/ai/.*|domain/ai/.*|models/ai|schemas/ai|features/manage_ai_settings)$", "ai"),
 )
 _COMPILED_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     (re.compile(pattern), feature) for pattern, feature in FEATURE_RULES
@@ -495,11 +349,9 @@ def test_the_scanner_charges_each_rule() -> None:
     assert _violation("identity", "live", "app.live.public") == "layer"
     assert _violation("liquidity", "fx", "app.fx.public") == "layer"
     assert _violation(KERNEL, "icaap", "app.icaap.public") == "layer"
-    assert _violation("stress", "fx", "app.services.regulatory_fx") == "private"
     assert _violation("stress", "fx", "app.fx.service") == "private"
     assert _violation("stress", "fx", "app.fx.public") is None
     assert _violation("stress", "fx", "app.fx.domain.engine") is None
-    assert _violation("stress", "fx", "app.domain.fx.engine") is None
     assert _violation("fx", "liquidity", "app.liquidity.public") is None
     assert _violation(COMPOSITION, "icaap", "app.icaap.service.workspace") is None
     assert _violation("icaap", KERNEL, "app.services.audit") is None
@@ -508,7 +360,7 @@ def test_the_scanner_charges_each_rule() -> None:
 @pytest.mark.parametrize(
     "layout",
     [
-        ("app.models.regulatory", "live", "app.services.regulatory_fx"),
+        ("app.live.models.regulatory", "live", "app.fx.service"),
         ("app.identity.models", "identity", "app.fx.service"),
     ],
 )
@@ -605,8 +457,8 @@ class _ModelSplitScenario:
     def check_source_move(self, path: Path, target: str, moves: list[list[str]]) -> Path:
         moved_source = {
             "app.api.deps": "app.core.dependency",
-            "app.services.ai.grounding": "app.ai.service",
-            "app.services.fact_derivation": "app.live.service",
+            "app.ai.service.grounding": "app.ai.service",
+            "app.live.service.fact_derivation": "app.live.service",
         }[self.source]
         path.unlink()
         moved_path = _write_synthetic_module(
@@ -629,7 +481,7 @@ class _ModelSplitScenario:
     def check_new_sibling(self, path: Path, target: str, split: str) -> None:
         sibling = "parameter_register" if split == "bank" else "bank"
         sibling_target = (
-            "app.identity.models.bank" if sibling == "bank" else f"app.models.{sibling}"
+            "app.identity.models.bank" if sibling == "bank" else f"app.policy.models.{sibling}"
         )
         sibling_path = _write_synthetic_module(self.app, sibling_target, "class Authority: pass\n")
         path.write_text(
@@ -652,7 +504,7 @@ class _ModelSplitScenario:
             json.dumps(
                 {
                     target: {
-                        "module": "app.models.regulatory",
+                        "module": "app.live.models.regulatory",
                         "feature": "live",
                         "importers": [self.source],
                     }
@@ -712,7 +564,7 @@ class _ModelSplitScenario:
 @pytest.mark.parametrize("import_style", ["direct", "registry", "relative", "dynamic"])
 @pytest.mark.parametrize(
     "source",
-    ["app.api.deps", "app.services.ai.grounding", "app.services.fact_derivation"],
+    ["app.api.deps", "app.ai.service.grounding", "app.live.service.fact_derivation"],
 )
 def test_model_splits_preserve_historical_boundary_identities(
     tmp_path: Path,
@@ -734,11 +586,11 @@ def test_model_splits_preserve_historical_boundary_identities(
 
     try:
         _write_synthetic_module(app, "app.models.__init__")
-        _write_synthetic_module(app, "app.models.regulatory", "class Authority: pass\n")
+        _write_synthetic_module(app, "app.live.models.regulatory", "class Authority: pass\n")
         source_path = _write_synthetic_module(
             app,
             source,
-            _synthetic_import_content(app, source, "app.models.regulatory", import_style),
+            _synthetic_import_content(app, source, "app.live.models.regulatory", import_style),
         )
         original = _scan_synthetic_boundaries()
         write_baseline()
@@ -763,11 +615,19 @@ def test_model_splits_preserve_historical_boundary_identities(
     "edge",
     [
         ("app.live.service", "app.identity.models.bank", "private live->identity"),
-        ("app.live.service", "app.models.parameter_register", "private live->policy"),
-        ("app.identity.models.bank", "app.models.parameter_register", "layer identity->policy"),
-        ("app.models.parameter_register", "app.identity.models.bank", "private policy->identity"),
+        ("app.live.service", "app.policy.models.parameter_register", "private live->policy"),
+        (
+            "app.identity.models.bank",
+            "app.policy.models.parameter_register",
+            "layer identity->policy",
+        ),
+        (
+            "app.policy.models.parameter_register",
+            "app.identity.models.bank",
+            "private policy->identity",
+        ),
         ("app.identity.models.bank", "app.live.service", "layer identity->live"),
-        ("app.models.parameter_register", "app.live.service", "layer policy->live"),
+        ("app.policy.models.parameter_register", "app.live.service", "layer policy->live"),
     ],
 )
 def test_new_split_dependencies_use_current_ownership(

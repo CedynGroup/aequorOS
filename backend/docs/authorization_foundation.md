@@ -96,7 +96,7 @@ aggregation are live. Subsequent product cutovers are tracked in the
   `backend/docs/filing_submit_authority_rollout.md`; design + remaining steps:
   `backend/docs/filing_workflow_redesign.md`.
 - **Every new `RoleBundle` or `ModuleScope` value needs a CHECK-widening migration** —
-  see the [migration contract and Postgres regression guard](#institution-vocabulary-built-2026-09-20).
+  see the [migration contract and Postgres regression guard](#institution-register-enforcement).
 
 ## Authority model
 
@@ -456,6 +456,13 @@ authority sentence. Both advance the grantee's authorization version and revoke
 their refresh families in the same transaction; unrelated binding rows remain
 active. Baseline membership ends only through [deactivation](#baseline-membership).
 
+The dashboard's effective-authority response projects `can_administer_grants`
+from the same complete Org Owner decision. `/access` lands on Members only
+when that flag is true; delegated Account administrators land on My access.
+The Members tab and deep-link boundary use that flag before mounting owner-only
+requests. Authentication and Integration keys keep their Account administration
+gate. Missing projection data denies Members access.
+
 The Members response is tenant-filtered and aggregates identity, lifecycle,
 SSO-access-request state, last activity, authentication method, active grant
 count, and complete binding summaries. Access → Members renders a grant count
@@ -655,7 +662,7 @@ only — is fixed: by-id lookups under `/banks/{bank_id}`
 (`system_of_record.get_declaration`, `canonical_withdrawal.get_withdrawal`, and
 a withdrawal's cited `declaration_id`) are bank-scoped at the query and return
 the route's ordinary 404 for a sibling bank's row before any state check, with
-no side effects. `tests/api/test_system_of_record_bank_scope.py` is the
+no side effects. `tests/data_engine/api/test_system_of_record_bank_scope.py` is the
 hermetic regression.
 
 `tests/db/test_authorization_object_reference_properties.py` is the generative
@@ -711,24 +718,19 @@ time is still the stage engine's later work. The authoritative contract is
 [filing_submit_authority_rollout.md](filing_submit_authority_rollout.md); the
 design it implements is [filing_workflow_redesign.md](filing_workflow_redesign.md).
 
-## Institution vocabulary (built 2026-09-20)
+## Institution register enforcement
 
-`Module.INSTITUTION` (`institution`) is a grantable, institution-scoped module
-dimension with no consuming surface yet. Institution master data still
-enforces through Account until its own cutover lands (enforcement matrix PR
-21), so an Institution binding does not authorize that surface today. The
-evaluator projects it per institution like every other product module, the
-Members composer offers it, the authority sentence names it ("Institution
-Profile"), and the dashboard maps it to no navigation. No bundle changed and no
-binding was created. Migration `202609300081` widens
-`ck_authorization_bindings_module_scope`; like `202609200065` for the Validator
-bundle and `202609220067` for Credit, it exists because the hermetic schema
-derives that constraint from the enum while a migrated database keeps the
-literal list it was created with — `tests/db/test_bindings_constraint_migrations.py`
-pins both vocabularies against a migrated schema. When the cutover lands, the
-exact grants its surface requires belong in its own rollout contract, not here.
-Credit is its own module with its own cutover; see
-[credit_enforcement_rollout.md](credit_enforcement_rollout.md).
+The [Institution rollout contract](institution_enforcement_rollout.md) owns the
+register's route and sensitivity matrix, dashboard access, trusted internal
+readers and deployment grant requirements.
+
+Migration `202609300081` introduced the grantable vocabulary and widened
+`ck_authorization_bindings_module_scope`; this enforcement cutover adds no bundle,
+migration or automatic grant. A migrated database retains its literal CHECK
+list, while the hermetic schema derives it from the enum;
+`tests/db/test_bindings_constraint_migrations.py` pins both vocabularies against
+a migrated schema. Credit retains its own module and
+[rollout contract](credit_enforcement_rollout.md).
 
 ## Product rollout boundary
 
@@ -758,7 +760,9 @@ the `credit` module, its `risk`-to-`credit` mirror migration, the credit rows
 of the shared live summary / alerts / window / snapshot surfaces, the direct
 `/credit/*` route cutover, and the first surfaces to apply a binding's
 branch/region `data_scope` to the rows AND to every count — is
-owned by the [credit rollout contract](credit_enforcement_rollout.md). The bank
+owned by the [credit rollout contract](credit_enforcement_rollout.md). Institution
+register surfaces are owned by the
+[Institution rollout contract](institution_enforcement_rollout.md). The bank
 audit-route cutover is owned by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,

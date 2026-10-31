@@ -98,12 +98,12 @@ LOAN_EVENT_ATTRIBUTION_BASES: tuple[str, ...] = (
 ENGINE_METRIC_TIERS: tuple[str, ...] = ("live", "official")
 
 #: ``bi_fact_gl_monthly.balance_basis`` — BSD7's own vocabulary, carried
-#: through ``app/domain/gl/pl_mapping.py`` (D-021).
+#: through ``app/live/domain/gl/pl_mapping.py`` (D-021).
 GL_BALANCE_BASES: tuple[str, ...] = ("ytd", "period")
 
 #: ``bi_fact_target`` vocabularies, mirroring
-#: ``app/domain/ingestion/reference_schemas/performance_targets.py`` without
-#: importing it (``app.models`` stays free of ``app.domain.ingestion``);
+#: ``app/data_engine/domain/ingestion/reference_schemas/performance_targets.py`` without
+#: importing it (``app.models`` stays free of ``app.data_engine.domain.ingestion``);
 #: ``tests/bi/models/test_bi_models.py`` asserts the parity in both
 #: directions, so a grain or version added to the register cannot be stored
 #: under a CHECK that does not know it.
@@ -485,7 +485,7 @@ class BiFactGlMonthly(_BuilderStamp, Base):
     """Monthly GL balances and movements mapped to neutral P&L lines.
 
     Movement is YTD minus the prior month's YTD through BSD7's own logic in
-    ``app/domain/gl/pl_mapping.py`` (D-021); a missing prior month gives NULL
+    ``app/live/domain/gl/pl_mapping.py`` (D-021); a missing prior month gives NULL
     and ``missing_prior``. ``currency`` is ``''`` for the base currency so it
     can sit in the primary key.
     """
@@ -522,7 +522,7 @@ class BiFactGlBranchMonthly(_BuilderStamp, Base):
     """The same monthly P&L figures as :class:`BiFactGlMonthly`, by BRANCH.
 
     Fed by the bank's own ``gl_segment_balances`` register
-    (``app/domain/ingestion/reference_schemas/gl_segment_balances.py``), which is
+    (``app/data_engine/domain/ingestion/reference_schemas/gl_segment_balances.py``), which is
     a dataset rather than a wider ``gl_account`` record because GL-by-branch is a
     different grain from the chart of accounts and
     ``uq_canonical_gl_accounts_current`` forbids the second key there.

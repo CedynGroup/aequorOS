@@ -22,7 +22,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from app.domain.ai import placeholders
+from app.ai.domain import placeholders
 
 
 @dataclass(frozen=True)

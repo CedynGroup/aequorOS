@@ -10,8 +10,8 @@ import pytest
 from sqlalchemy import Table
 from sqlalchemy.sql.elements import ClauseElement
 
+from app.data_engine.models.canonical_withdrawal import WITHDRAWABLE_ENTITIES
 from app.db.base import Base
-from app.models.canonical_withdrawal import WITHDRAWABLE_ENTITIES
 from tests.support.database import isolated_database
 
 import_module("app.models")

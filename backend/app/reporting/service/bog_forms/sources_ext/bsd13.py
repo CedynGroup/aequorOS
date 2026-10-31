@@ -61,14 +61,14 @@ from typing import Any, cast
 from sqlalchemy import func, select
 from sqlalchemy.orm import Load
 
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.data_engine.public import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
 )
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState, outcome
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.domain.positions.fx import fx_position_refusal, spot_or_none
+from app.live.domain.positions.fx import fx_position_refusal, spot_or_none
 from app.live.public import (
     BankFinancialFact,
     RegulatoryRun,

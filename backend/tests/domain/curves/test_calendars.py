@@ -10,7 +10,7 @@ from datetime import date
 
 import pytest
 
-from app.domain.curves.calendars import (
+from app.market_data.domain.curves.calendars import (
     GHANA,
     KENYA,
     NIGERIA,
@@ -31,7 +31,11 @@ from app.domain.curves.calendars import (
     third_wednesday,
     us_federal_holidays,
 )
-from app.domain.curves.conventions import DayCount, simple_rate_from_discounts, year_fraction
+from app.market_data.domain.curves.conventions import (
+    DayCount,
+    simple_rate_from_discounts,
+    year_fraction,
+)
 
 F = BusinessDayConvention.FOLLOWING
 MF = BusinessDayConvention.MODIFIED_FOLLOWING

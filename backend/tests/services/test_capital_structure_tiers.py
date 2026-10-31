@@ -20,21 +20,26 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.capital.service import sdi_capital, sdi_capital_checks
+from app.capital.service.sdi_capital import net_own_funds
+from app.data_engine.domain.ingestion.capital_tiers import parse_capital_tier
+from app.data_engine.domain.ingestion.constants import SourceSystem
+from app.data_engine.domain.ingestion.contracts import (
+    MappingConfig,
+    ReferenceMapping,
+    ReferenceRowData,
+)
+from app.data_engine.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
+from app.data_engine.service import ingestion
 from app.domain.authority.outcomes import OutcomeState
 from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
-from app.domain.ingestion.capital_tiers import parse_capital_tier
-from app.domain.ingestion.constants import SourceSystem
-from app.domain.ingestion.contracts import MappingConfig, ReferenceMapping, ReferenceRowData
+from app.live.service.fact_derivation import derive_facts
 from app.models import (
     Bank,
     BankFinancialFact,
     IngestionBatch,
     TranslationFailure,
 )
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import ingestion, sdi_capital, sdi_capital_checks
-from app.services.fact_derivation import derive_facts
-from app.services.sdi_capital import net_own_funds
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,
@@ -245,10 +250,10 @@ def test_refused_capital_row_rejects_the_batch_without_publishing_a_partial_regi
             db_session,
             MAKER,
             SAMPLE_BANK_ID,
-            IngestionBatchCreate(
+            InternalIngestionBatchCreate(
                 source_system=source_system,
                 as_of_date=REPORTING_DATE,
-                location=str(source),
+                location=source,
                 reason="Test register replacement.",
             ),
             storage,
