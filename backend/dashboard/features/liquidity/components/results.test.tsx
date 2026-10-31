@@ -75,12 +75,12 @@ loader._load = (request, parent, isMain) => {
       }),
       useModuleScope: () => scope,
     };
-  if (request === "@/components/bi/InsightStrip")
+  if (request === "@/features/bi/components/InsightStrip")
     return {
       LandingInsightStrip: () => null,
       useKpiExplain: () => ({ explainFor: () => undefined, drawer: null }),
     };
-  if (request === "@/components/bi/EChart")
+  if (request === "@/features/bi/components/EChart")
     return {
       __esModule: true,
       default: ({ option }: { option: typeof chartOption }) => {
@@ -88,6 +88,26 @@ loader._load = (request, parent, isMain) => {
         return <div />;
       },
     };
+  // The feature interface aggregates BI modules. Theme helpers are pure and
+  // load for real; the strip and chart stay mocked exactly as above.
+  if (request === "@/features/bi/public") {
+    const theme = originalLoad(
+      path.resolve(__dirname, "../../..", "features/bi/components/echartsTheme"),
+      parent,
+      isMain,
+    ) as typeof import("../../../features/bi/components/echartsTheme");
+    return {
+      __esModule: true,
+      EChart: ({ option }: { option: typeof chartOption }) => {
+        chartOption = option;
+        return <div />;
+      },
+      LandingInsightStrip: () => null,
+      useKpiExplain: () => ({ explainFor: () => undefined, drawer: null }),
+      seriesColor: theme.seriesColor,
+      useChartTokens: theme.useChartTokens,
+    };
+  }
   if (request.startsWith("@/"))
     return originalLoad(
       // Compiled to .test-out/features/liquidity/components: three levels up

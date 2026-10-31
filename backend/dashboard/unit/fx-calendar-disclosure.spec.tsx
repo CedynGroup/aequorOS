@@ -25,8 +25,9 @@ function render(ui: React.ReactNode) {
 
 const evidence = vi.hoisted(() => ({ missingFebruary: false }));
 
-vi.mock("../components/bi/EChart", () => ({
-  default: ({
+vi.mock("@/features/bi/public", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/bi/public")>()),
+  EChart: ({
     ariaLabel,
     option,
   }: {

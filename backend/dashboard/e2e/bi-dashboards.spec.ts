@@ -65,7 +65,7 @@ test.describe("the Dashboards page", () => {
     // Every pack the route serves is on screen, by the title the pack file
     // carries, each labelled with the standing that stands behind its figures.
     // Nothing here can be produced by a client-side list: `dashboards.ts` names
-    // no pack (pinned by `components/bi/disclosure.test.ts`).
+    // no pack (pinned by `features/bi/components/disclosure.test.ts`).
     for (const pack of CERTIFIED_PACKS) {
       const tile = page
         .locator("li")

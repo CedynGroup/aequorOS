@@ -1,7 +1,7 @@
 "use client";
 
-import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
-import { useChartTokens } from "@/components/bi/echartsTheme";
+import { EChart, type BiEChartsOption } from "@/features/bi/public";
+import { useChartTokens } from "@/features/bi/public";
 import {
   BAR_SERIES_BASE,
   itemTooltip,

@@ -73,7 +73,7 @@ import type {
   Cadence,
   DeliveryStatus,
   ThresholdBasis,
-} from "@/components/bi/notifications";
+} from "@/features/bi/components/notifications";
 import {
   BI_ALERT_EVENTS_PREFIX,
   BI_DELIVERIES_PREFIX,
@@ -104,8 +104,8 @@ import {
   isoDay,
   utcDay,
 } from "./biKeys";
-import { expressionDigest } from "@/components/bi/expressionDigest";
-import { isGrantDenial, refusalSentence } from "@/components/bi/refusal";
+import { expressionDigest } from "@/features/bi/components/expressionDigest";
+import { isGrantDenial, refusalSentence } from "@/features/bi/components/refusal";
 
 const biApi = new BiApi(configuration);
 const featureFlagsApi = new FeatureFlagsApi(configuration);
@@ -115,7 +115,7 @@ const featureFlagsApi = new FeatureFlagsApi(configuration);
  *
  * There is no partial answer: one denied member denies the whole query, and the
  * response carries no rows. The 403 body names the members, and the UI
- * deliberately does not show them — see `components/bi/RestrictedWidget.tsx`.
+ * deliberately does not show them — see `features/bi/components/RestrictedWidget.tsx`.
  *
  * Keyed on the GRANT-DENIAL codes, not on the status: a 403 is any refusal the
  * server makes, and an impersonated staff session, an unsupported data scope or
@@ -130,8 +130,8 @@ export function isBiAccessDenied(error: unknown): boolean {
 
 /**
  * The server's own sentence for a 403 that is NOT a grant denial, or `null`.
- * See `components/bi/refusal.ts` for the two kinds and why only one is
- * paraphrased. Rendered verbatim by `components/bi/RefusedWidget.tsx`.
+ * See `features/bi/components/refusal.ts` for the two kinds and why only one is
+ * paraphrased. Rendered verbatim by `features/bi/components/RefusedWidget.tsx`.
  */
 export function biRefusalSentence(error: unknown): string | null {
   if (!isApiError(error)) return null;
@@ -632,7 +632,7 @@ export {
  * dashboard edit of an alert's threshold silently deleted every user recipient an
  * Org Owner had added through the API, and answered 200. A generated serializer
  * would have made those fields part of the shape the compiler checks. Both are
- * now stated by hand, and `components/bi/notifications.test.ts` pins the field
+ * now stated by hand, and `features/bi/components/notifications.test.ts` pins the field
  * lists against the generated serializers so the next omission fails there —
  * but the honest fix is the swap, not the pin.
  *
@@ -1691,7 +1691,7 @@ export function useUpdateBiMeasure(bankId: string | undefined) {
  * included. Certifying a formula takes two identities and deleting it takes one —
  * the maker — and the row's `approved_expression` IS the record of what was
  * certified, so the delete destroys the evidence with it and anything naming the
- * measure loses its definition. `components/bi/measures.ts::measureControls`
+ * measure loses its definition. `features/bi/components/measures.ts::measureControls`
  * withholds the control above `personal` and says why. Retiring a certified
  * measure through its own review is the act that belongs there.
  */
