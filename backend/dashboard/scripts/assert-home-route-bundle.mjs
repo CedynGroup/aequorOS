@@ -147,70 +147,75 @@ if (offendingBiChunks.length > 0) {
  * The Command Center's ratio chart, and the two things that must be true of it.
  *
  * It is the ONLY chart on the home route, and it is reached through
- * `features/home/components/DeferredRatioTrendChart.tsx`, so the route must have exactly
- * one deferred entry. That entry's chunk then has to satisfy BOTH halves of a
- * rule, which is why reading it is not optional:
+ * `features/home/components/DeferredRatioTrendChart.tsx`. Since this move the
+ * page is a one-line shim over `features/home/routes/command-center`
+ * (FEATURE_LAYOUT.md), and under that client-reference indirection Turbopack
+ * surfaces BOTH deferred stages of the chart in the route's loadable manifest:
+ * the `RatioTrendChart` module itself, and the inner `EChartCanvas` entry with
+ * the ECharts runtime that stage defers. Both stages must stay out of the
+ * initial entry graph — the negative assertions above still enforce that — so
+ * the manifest must show exactly the two chart stages and nothing else, and
+ * each stage keeps half of the old per-entry rule:
  *
- * - it must contain `EChart`'s loading label, proving the chart really is in the
- *   deferred chunk rather than having quietly moved into the initial bundle (the
- *   negative assertions above only say what is ABSENT from the entry graph, and
- *   would pass just as happily if the chart were deleted); and
- * - it must NOT contain a charting runtime. `features/bi/components/EChart.tsx` defers the
- *   canvas a SECOND time, inside the already-deferred chart, so the Command
- *   Center pays for an 8 KB component and pays for ECharts only when it draws.
- *   Under Recharts this chunk carried the whole library.
- *
- * Together with the `/explore` assertion further down — which proves the ECharts
- * runtime does exist in a deferred chunk of a route that draws one — neither half
- * can pass vacuously.
+ * - the body entry (identified by the chart frame's title, which only the
+ *   chart module writes) must NOT carry a charting runtime: the body stays an
+ *   8 KB component the route pays for only when the panel approaches;
+ * - the canvas entry must carry the runtime, proving ECharts really is bundled
+ *   in a deferred stage rather than quietly hoisted into the initial bundle
+ *   (where the negative assertions alone would pass a vacuous build).
  */
-const CHART_BOUNDARY_MARKER = "Drawing the chart";
+const CHART_BODY_MARKER = "Ratio trend";
 
 const loadableManifestPath = resolve(routeDir, "react-loadable-manifest.json");
 const loadableManifest = JSON.parse(readFileSync(loadableManifestPath, "utf8"));
-const ratioChartEntries = Object.values(loadableManifest);
+const routeEntries = Object.values(loadableManifest);
 
-if (ratioChartEntries.length !== 1) {
+const entryChunks = (entry) => entry.files.filter((file) => file.endsWith(".js"));
+const entryTexts = (entry) =>
+  entryChunks(entry).map((chunk) => ({
+    chunk,
+    text: readFileSync(resolve(distDir, chunk), "utf8"),
+  }));
+
+if (routeEntries.length !== 2) {
   throw new Error(
-    `Expected one deferred RatioTrendChart entry in ${loadableManifestPath}; found ${ratioChartEntries.length}`,
+    `Expected the two deferred RatioTrendChart stages in ${loadableManifestPath}; found ${routeEntries.length}`,
   );
 }
 
-const deferredChartChunks = ratioChartEntries[0].files.filter((file) =>
-  file.endsWith(".js"),
+const chartBodyEntries = routeEntries.filter((entry) =>
+  entryTexts(entry).some(({ text }) => text.includes(CHART_BODY_MARKER)),
 );
-const deferredChartSources = deferredChartChunks.map((chunk) => ({
-  chunk,
-  text: readFileSync(resolve(distDir, chunk), "utf8"),
-}));
+const canvasEntries = routeEntries.filter((entry) =>
+  entryTexts(entry).some(({ text }) => text.includes("_echarts_instance_")),
+);
 
-if (
-  !deferredChartSources.some(({ text }) => text.includes(CHART_BOUNDARY_MARKER))
-) {
+if (chartBodyEntries.length !== 1 || canvasEntries.length !== 1) {
   throw new Error(
-    "The Command Center's deferred chart chunks no longer contain the EChart " +
-      `loading label ${JSON.stringify(CHART_BOUNDARY_MARKER)}: ` +
-      `${deferredChartChunks.join(", ")}. Either the label was reworded (update ` +
-      "CHART_BOUNDARY_MARKER after checking the new build output), or the ratio " +
-      "chart no longer reaches the canvas through features/bi/components/EChart.tsx.",
+    `Expected one RatioTrendChart body entry and one EChartCanvas runtime entry in ${loadableManifestPath}; ` +
+      `found ${chartBodyEntries.length} body and ${canvasEntries.length} canvas. ` +
+      "The home page's deferred chart stages moved — re-read the manifest and update this guard.",
   );
 }
 
-const chartChunksCarryingRuntime = deferredChartSources.flatMap(
-  ({ chunk, text }) =>
+const chartBodyCarryingRuntime = chartBodyEntries.flatMap((entry) =>
+  entryTexts(entry).flatMap(({ chunk, text }) =>
     BI_RUNTIME_MARKERS.filter(([, marker]) => text.includes(marker)).map(
       ([library]) => `${chunk} (${library})`,
     ),
+  ),
 );
 
-if (chartChunksCarryingRuntime.length > 0) {
+if (chartBodyCarryingRuntime.length > 0) {
   throw new Error(
-    "The Command Center's deferred chart chunk carries a charting runtime: " +
-      `${chartChunksCarryingRuntime.join(", ")}. features/bi/components/EChart.tsx must ` +
+    "The Command Center's deferred chart body carries a charting runtime: " +
+      `${chartBodyCarryingRuntime.join(", ")}. features/bi/components/EChart.tsx must ` +
       "load the canvas with dynamic(..., { ssr: false }) so the home route pays " +
       "for the runtime only when it draws.",
   );
 }
+
+const deferredChartChunks = chartBodyEntries.flatMap(entryChunks);
 
 // The positive half of the editor rule: prove the deferred chunk EXISTS and
 // carries the runtime, so the negative check above cannot pass vacuously (for
