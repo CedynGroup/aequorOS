@@ -138,6 +138,37 @@ def _schema_privilege_snapshot(connection: Connection) -> dict[str, object]:
     }
 
 
+def role_attribute_snapshot(connection: Connection) -> dict[str, dict[str, bool]]:
+    """Cluster-level role attributes, ratcheted like grants.
+
+    Grants alone cannot see a returned BYPASSRLS, a new superuser attribute or a
+    re-enabled login: those live in pg_roles, not in the ACLs, so the manifest
+    pins them per role and any drift fails the same matrix test."""
+    rows = cast(
+        list[tuple[str, bool, bool, bool, bool, bool, bool, bool]],
+        connection.execute(
+            text(
+                "SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, "
+                "rolreplication, rolbypassrls, rolinherit FROM pg_roles "
+                "WHERE rolname=ANY(:roles) ORDER BY rolname"
+            ),
+            {"roles": [*ROLES, "aqs_owner", "aqs_migrator"]},
+        ).all(),
+    )
+    return {
+        name: {
+            "rolbypassrls": bypassrls,
+            "rolcanlogin": canlogin,
+            "rolcreatedb": createdb,
+            "rolcreaterole": createrole,
+            "rolinherit": inherit,
+            "rolreplication": replication,
+            "rolsuper": superuser,
+        }
+        for name, canlogin, superuser, createdb, createrole, replication, bypassrls, inherit in rows
+    }
+
+
 def privilege_snapshot(connection: Connection) -> dict[str, object]:
     """Include the isolated worker view namespace in the same grant ratchet."""
     result = _schema_privilege_snapshot(connection)
@@ -153,6 +184,7 @@ def privilege_snapshot(connection: Connection) -> dict[str, object]:
         connection.execute(
             text("SELECT set_config('search_path', :path, true)"), {"path": previous}
         )
+    result["role_attributes"] = role_attribute_snapshot(connection)
     return result
 
 
@@ -450,6 +482,49 @@ def test_matrix_normalizes_column_rights_already_granted_on_the_table(
         else:
             assert after == before
         connection.rollback()
+
+
+@pytest.mark.parametrize("role", ["aqs_operator", "aqs_worker"])
+def test_matrix_detects_a_returning_bypassrls_attribute(administrator: Engine, role: str) -> None:
+    with administrator.connect() as connection, connection.begin():
+        before = privilege_snapshot(connection)
+        connection.execute(text(f"ALTER ROLE {role} BYPASSRLS"))
+        after = privilege_snapshot(connection)
+        attributes = cast(dict[str, dict[str, bool]], after["role_attributes"])
+        assert after != before
+        assert after["tables"] == before["tables"]
+        assert attributes[role]["rolbypassrls"] is True
+        connection.rollback()
+
+
+#: Tenant financial, personal and operational tables the staff console must
+#: reach only through governed surfaces — never by direct ``aqs_operator`` SELECT.
+OPERATOR_FORBIDDEN_READS = (
+    "audit_events",
+    "banks",
+    "financial_balances",
+    "jobs",
+    "live_metrics",
+    "organizations",
+    "related_parties",
+    "regulatory_packages",
+    "users",
+)
+
+
+def test_operator_cannot_read_financial_or_personal_tables_directly(
+    role_engines: dict[str, Engine],
+) -> None:
+    """The operator credential holds no tenant-table grants at all: its future
+    cross-bank reach comes from the metadata-view stage, so a direct read is a
+    permission error, not an RLS-filtered empty result."""
+    for table in OPERATOR_FORBIDDEN_READS:
+        # One connection per read: a refused statement aborts its transaction,
+        # so reusing the connection would report 25P02 instead of the cause.
+        with role_engines["aqs_operator"].connect() as connection:
+            with pytest.raises(DBAPIError) as error:
+                connection.execute(text(f"SELECT * FROM {table} LIMIT 1"))
+            assert getattr(error.value.orig, "sqlstate", None) == "42501"
 
 
 def test_runtime_attributes_ownership_membership_and_grant_options(administrator: Engine) -> None:
