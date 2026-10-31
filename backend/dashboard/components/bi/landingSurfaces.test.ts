@@ -64,6 +64,7 @@ const ROOT = dashboardRoot();
  */
 const ROUTE_SOURCE: Record<string, string> = {
   fx: "features/fx/routes/exposure.tsx",
+  liquidity: "features/liquidity/routes/overview.tsx",
 };
 
 /** A file's source with its comments removed. */
@@ -84,7 +85,7 @@ function code(relativePath: string): string {
 const LANDING_PAGES = [
   "app/(app)/page.tsx",
   "app/(app)/basel/page.tsx",
-  "app/(app)/liquidity/page.tsx",
+  "features/liquidity/routes/overview.tsx",
   "app/(app)/credit/page.tsx",
   "app/(app)/forecasting/page.tsx",
   "features/fx/routes/exposure.tsx",

@@ -4,8 +4,8 @@ import path from "node:path";
 import React from "react";
 import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { QueryAuthorityScopeProvider } from "../../lib/api/useQueryScope";
-import { queryAuthorityScope } from "../../lib/api/queryPolicy";
+import { QueryAuthorityScopeProvider } from "../../../lib/api/useQueryScope";
+import { queryAuthorityScope } from "../../../lib/api/queryPolicy";
 const queryClient = new QueryClient();
 function renderToStaticMarkup(node: React.ReactNode): string {
   return renderMarkup(
@@ -22,11 +22,11 @@ import type {
   LiquidityDashboardRead,
   RegulatoryRunRead,
 } from "@aequoros/risk-service-api";
-import { formatFigure } from "../../lib/api/values";
-import RatioGauge from "../ui/RatioGauge";
-import LimitBar from "../ui/LimitBar";
-import Sparkline from "../ui/Sparkline";
-import type { ModuleScope } from "../../lib/modules";
+import { formatFigure } from "../../../lib/api/values";
+import RatioGauge from "../../../components/ui/RatioGauge";
+import LimitBar from "../../../components/ui/LimitBar";
+import Sparkline from "../../../components/ui/Sparkline";
+import type { ModuleScope } from "../../../lib/modules";
 
 const loader = NodeModule as typeof NodeModule & {
   _load: (request: string, parent: unknown, isMain: boolean) => unknown;
@@ -90,23 +90,25 @@ loader._load = (request, parent, isMain) => {
     };
   if (request.startsWith("@/"))
     return originalLoad(
-      path.resolve(__dirname, "../..", request.slice(2)),
+      // Compiled to .test-out/features/liquidity/components: three levels up
+      // is the compile root the `@/` alias denotes.
+      path.resolve(__dirname, "../../..", request.slice(2)),
       parent,
       isMain,
     );
   return originalLoad(request, parent, isMain);
 };
 
-const Page = require("../../app/(app)/liquidity/nsfr/page")
-  .default as typeof import("../../app/(app)/liquidity/nsfr/page").default;
+const Page = require("../../../app/(app)/liquidity/nsfr/page")
+  .default as typeof import("../../../app/(app)/liquidity/nsfr/page").default;
 const Trend = require("./charts/RatioTrendChart").default;
 const Outflow = require("./charts/NetOutflowChart").default;
-const LimitWall = require("../risk/LimitWall")
-  .default as typeof import("../risk/LimitWall").default;
+const LimitWall = require("../../../components/risk/LimitWall")
+  .default as typeof import("../../../components/risk/LimitWall").default;
 const { liquidityLimits } =
-  require("../risk/limits") as typeof import("../risk/limits");
+  require("../../../components/risk/limits") as typeof import("../../../components/risk/limits");
 const { usePulseCards } =
-  require("../home/pulse") as typeof import("../home/pulse");
+  require("../../../components/home/pulse") as typeof import("../../../components/home/pulse");
 
 function readLiquidityPulse() {
   let pulse: ReturnType<typeof usePulseCards>["cards"]["liquidity"] | undefined;
@@ -119,14 +121,14 @@ function readLiquidityPulse() {
   return pulse;
 }
 
-const PulseWall = require("../home/PulseWall")
-  .default as typeof import("../home/PulseWall").default;
-const BreachBanner = require("../home/BreachBanner")
-  .default as typeof import("../home/BreachBanner").default;
-const Buffer = require("../../app/(app)/liquidity/buffer/page")
-  .default as typeof import("../../app/(app)/liquidity/buffer/page").default;
-const Overview = require("../../app/(app)/liquidity/page")
-  .default as typeof import("../../app/(app)/liquidity/page").default;
+const PulseWall = require("../../../components/home/PulseWall")
+  .default as typeof import("../../../components/home/PulseWall").default;
+const BreachBanner = require("../../../components/home/BreachBanner")
+  .default as typeof import("../../../components/home/BreachBanner").default;
+const Buffer = require("../../../app/(app)/liquidity/buffer/page")
+  .default as typeof import("../../../app/(app)/liquidity/buffer/page").default;
+const Overview = require("../../../app/(app)/liquidity/page")
+  .default as typeof import("../../../app/(app)/liquidity/page").default;
 const fixture = (value: string | null) =>
   ({
     metrics: {

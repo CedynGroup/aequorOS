@@ -18,7 +18,7 @@ import type {
   LiquidityDashboardRead,
 } from "@aequoros/risk-service-api";
 import { labelize, num, numOrNull } from "@/lib/api/values";
-import { runThresholds } from "@/components/liquidity/runData";
+import { runThresholds } from "@/features/liquidity/public";
 import { fmtCurrencySigned } from "@/lib/format";
 
 export type LimitModule =
