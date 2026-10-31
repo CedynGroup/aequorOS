@@ -7,7 +7,7 @@
  * presentational.
  */
 
-import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
+import RunModuleScenarios from "@/features/workbench/components/RunModuleScenarios";
 import PageContainer from "@/components/ui/PageContainer";
 import type { ReactNode } from "react";
 import type {

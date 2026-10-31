@@ -1,6 +1,6 @@
 "use client";
 
-import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
+import RunModuleScenarios from "@/features/workbench/components/RunModuleScenarios";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import KpiStat, { type KpiStatus } from "@/components/ui/KpiStat";
