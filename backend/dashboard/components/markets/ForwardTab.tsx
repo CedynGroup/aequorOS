@@ -36,8 +36,8 @@ import { isApiError } from "@/lib/api/client";
 import { useForwardGrid } from "@/lib/api/hooks";
 import { fmtDateUTC, num } from "@/lib/api/values";
 import { fmtPct } from "@/lib/format";
-import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
-import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
+import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
+import { seriesColor, useChartTokens } from "@/features/bi/components/echartsTheme";
 import {
   gapAwareData,
   itemTooltip,

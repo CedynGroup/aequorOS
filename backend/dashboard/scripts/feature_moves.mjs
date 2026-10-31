@@ -2,6 +2,7 @@
 // Move-and-reroute codemod for the dashboard feature layout (FEATURE_LAYOUT.md).
 //
 //   node scripts/feature_moves.mjs move [--shim] OLD NEW [OLD NEW ...]
+//   node scripts/feature_moves.mjs rewrite
 //   node scripts/feature_moves.mjs check
 //
 // `move` git-mv's each path, records the pair in feature_module_moves.json
@@ -63,8 +64,8 @@ export function parseArgs(argv) {
   if (options.command === "move") {
     if (positional.length === 0 || positional.length % 2 !== 0) die("move requires OLD NEW pairs");
     for (let i = 0; i < positional.length; i += 2) options.pairs.push([positional[i], positional[i + 1]]);
-  } else if (options.command !== "check") {
-    die("usage: feature_moves.mjs move [--shim] OLD NEW [...] | check");
+  } else if (options.command !== "check" && options.command !== "rewrite") {
+    die("usage: feature_moves.mjs move [--shim] OLD NEW [...] | rewrite | check");
   }
   return options;
 }
@@ -120,33 +121,44 @@ function gitLsFiles(root) {
 
 // Replace every occurrence of `needle` where the preceding character is not
 // part of a longer path/identifier and the following character ends the token
-// or extends it as a subpath.
-export function replaceBounded(content, needle, replacement) {
-  let index = content.indexOf(needle);
+// or extends it as a subpath. `escaped` handles regex-literal references
+// (`@\/components\/fx`): the needle's slashes become `\/`, a preceding `\/`
+// is a path start rather than a longer path, and a following `\/` is a
+// subpath separator.
+export function replaceBounded(content, needle, replacement, escaped = false) {
+  const rawNeedle = escaped ? needle.split("/").join("\\/") : needle;
+  const rawReplacement = escaped ? replacement.split("/").join("\\/") : replacement;
+  let index = content.indexOf(rawNeedle);
   if (index === -1) return content;
   let result = "";
   let cursor = 0;
   while (index !== -1) {
-    const after = index + needle.length;
+    const after = index + rawNeedle.length;
     const prev = index > 0 ? content[index - 1] : "";
     const next = content[after] ?? "";
-    const prevOk = prev === "" || !/[A-Za-z0-9_.@\-/]/.test(prev);
-    const nextOk = next === "" || FOLLOW_OK.has(next);
+    const prevOk =
+      prev === "" ||
+      !/[A-Za-z0-9_.@\-/]/.test(prev) ||
+      (escaped && prev === "/" && index >= 2 && content[index - 2] === "\\");
+    const nextOk =
+      next === "" ||
+      FOLLOW_OK.has(next) ||
+      (escaped && next === "\\" && content[after + 1] === "/");
     if (prevOk && nextOk) {
-      result += content.slice(cursor, index) + replacement;
+      result += content.slice(cursor, index) + rawReplacement;
       cursor = after;
     }
-    index = content.indexOf(needle, index + 1);
+    index = content.indexOf(rawNeedle, index + 1);
   }
   result += content.slice(cursor);
   return result;
 }
 
 // `@/`-prefixed references: the preceding character may be any quote or text,
-// so only the trailing boundary matters.
-export function replaceAlias(content, oldPath, newPath) {
-  const needle = `@/${oldPath}`;
-  const replacement = `@/${newPath}`;
+// so only the trailing boundary matters. `escaped` handles regex literals.
+export function replaceAlias(content, oldPath, newPath, escaped = false) {
+  const needle = escaped ? `@/${oldPath}`.split("/").join("\\/") : `@/${oldPath}`;
+  const replacement = escaped ? `@/${newPath}`.split("/").join("\\/") : `@/${newPath}`;
   let index = content.indexOf(needle);
   if (index === -1) return content;
   let result = "";
@@ -154,7 +166,11 @@ export function replaceAlias(content, oldPath, newPath) {
   while (index !== -1) {
     const after = index + needle.length;
     const next = content[after] ?? "";
-    if (next === "" || FOLLOW_OK.has(next)) {
+    const nextOk =
+      next === "" ||
+      FOLLOW_OK.has(next) ||
+      (escaped && next === "\\" && content[after + 1] === "/");
+    if (nextOk) {
       result += content.slice(cursor, index) + replacement;
       cursor = after;
     }
@@ -174,6 +190,7 @@ export function rewriteRelativeImports(content, relFile, oldPath, newPath) {
   const oldRel = relFile === newPath || relFile.startsWith(`${newPath}/`) ? oldPath + relFile.slice(newPath.length) : relFile;
   const dirNow = path.posix.dirname(relFile);
   const dirOld = path.posix.dirname(oldRel);
+  const moved = dirNow !== dirOld;
   let changed = content;
   for (const match of [...content.matchAll(RELATIVE_SPEC)]) {
     const specifier = match[1];
@@ -182,6 +199,15 @@ export function rewriteRelativeImports(content, relFile, oldPath, newPath) {
     const target = absOld === oldPath || absOld.startsWith(`${oldPath}/`)
       ? path.posix.normalize(newPath + absOld.slice(oldPath.length))
       : absOld;
+    // Idempotence: a file inside the moved tree may already carry the
+    // post-move depth. If resolving the specifier against the CURRENT
+    // directory reaches the same target, the text is already correct;
+    // re-deriving from the stale pre-move depth would climb one "../"
+    // further on every pass.
+    if (moved) {
+      const absNow = path.posix.normalize(path.posix.join(dirNow, withoutExt));
+      if (absNow === target) continue;
+    }
     let relative = path.posix.relative(dirNow, target);
     if (!relative.startsWith(".")) relative = `./${relative}`;
     const next = relative + specifier.slice(withoutExt.length);
@@ -223,18 +249,47 @@ function moveCommand(options) {
   );
   for (const [oldPath, newPath] of options.pairs) {
     for (const relFile of rewriteable) {
-      const full = path.posix.join(root, relFile);
-      const before = readFileSync(full, "utf8");
-      let content = replaceAlias(before, oldPath, newPath);
-      content = replaceBounded(content, oldPath, newPath);
-      content = rewriteRelativeImports(content, relFile, oldPath, newPath);
-      if (content !== before) writeFileSync(full, content);
+      rewriteFile(root, relFile, oldPath, newPath);
     }
   }
   writeLedger(root, ledger);
   for (const [oldPath, newPath] of options.pairs) {
     process.stdout.write(`moved ${oldPath} -> ${newPath}\n`);
   }
+}
+
+function rewriteFile(root, relFile, oldPath, newPath) {
+  const full = path.posix.join(root, relFile);
+  const before = readFileSync(full, "utf8");
+  let content = replaceAlias(before, oldPath, newPath);
+  content = replaceAlias(content, oldPath, newPath, true);
+  content = replaceBounded(content, oldPath, newPath);
+  content = replaceBounded(content, oldPath, newPath, true);
+  content = rewriteRelativeImports(content, relFile, oldPath, newPath);
+  if (content !== before) writeFileSync(full, content);
+}
+
+function rewriteCommand(options) {
+  const root = options.root ?? path.resolve(import.meta.dirname, "..");
+  const ledger = readLedger(root);
+  if (ledger.length === 0) {
+    process.stdout.write("Move ledger is empty; nothing to rewrite.\n");
+    return;
+  }
+  const files = gitLsFiles(root) ?? listFiles(root, []);
+  const rewriteable = files.filter(
+    (file) =>
+      file !== LEDGER_NAME &&
+      !REWRITE_EXCLUDED.has(file) &&
+      REWRITE_EXTS.has(path.posix.extname(file)) &&
+      existsSync(path.posix.join(root, file)),
+  );
+  for (const [oldPath, newPath] of ledger) {
+    for (const relFile of rewriteable) {
+      rewriteFile(root, relFile, oldPath, newPath);
+    }
+  }
+  process.stdout.write(`Rewrote references for ${ledger.length} recorded ${ledger.length === 1 ? "move" : "moves"}.\n`);
 }
 
 function checkCommand(options) {
@@ -256,6 +311,8 @@ function checkCommand(options) {
 const options = parseArgs(process.argv.slice(2));
 if (options.command === "move") {
   moveCommand(options);
+} else if (options.command === "rewrite") {
+  rewriteCommand(options);
 } else {
   checkCommand(options);
 }

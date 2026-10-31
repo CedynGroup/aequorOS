@@ -19,7 +19,7 @@ import ValidationList from "@/components/ui/ValidationList";
 import SectionCard from "@/components/ui/SectionCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { PageSkeleton } from "@/components/ui/QueryBoundary";
-import { LandingInsightStrip } from "@/components/bi/InsightStrip";
+import { LandingInsightStrip } from "@/features/bi/components/InsightStrip";
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
 import {
   useSdiCapitalChecks,

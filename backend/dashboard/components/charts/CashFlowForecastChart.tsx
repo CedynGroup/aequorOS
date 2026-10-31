@@ -12,8 +12,8 @@
  * than a zero-height one at the base line.
  */
 
-import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
-import { useChartTokens } from "@/components/bi/echartsTheme";
+import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
+import { useChartTokens } from "@/features/bi/components/echartsTheme";
 import {
   axisTooltip,
   gapAwareData,

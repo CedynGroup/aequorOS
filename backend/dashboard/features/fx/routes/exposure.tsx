@@ -9,7 +9,7 @@ import SectionCard from '@/components/ui/SectionCard';
 import ChartFrame from '@/components/ui/ChartFrame';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import FxModuleFrame, { type FxFrameContext } from '@/features/fx/components/FxModuleFrame';
-import { LandingInsightStrip, useKpiExplain } from '@/components/bi/InsightStrip';
+import { LandingInsightStrip, useKpiExplain } from '@/features/bi/public';
 import ExposureBars from '@/features/fx/components/charts/ExposureBars';
 import ScenarioStrip from '@/features/fx/components/ScenarioStrip';
 import { fxPositionSplits, type FxPositionSplit } from '@/features/fx/components/params';

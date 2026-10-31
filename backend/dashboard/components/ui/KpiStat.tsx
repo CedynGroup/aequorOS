@@ -41,7 +41,7 @@ function isPhraseValue(value: string | number): boolean {
 
 /**
  * What a module KPI opens when a reader asks where it came from: one catalogue
- * measure, read in one query. `components/bi/InsightStrip.tsx::useKpiExplain`
+ * measure, read in one query. `features/bi/components/InsightStrip.tsx::useKpiExplain`
  * composes these two from the live catalogue and hands the resulting click
  * handler to `KpiStat`'s `explain` prop.
  */

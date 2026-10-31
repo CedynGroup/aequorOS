@@ -16,7 +16,7 @@
 import type { Column } from '@/components/ui/DataTable';
 import type { CreditValidationRead, LoanGradeBucketRead } from '@aequoros/risk-service-api';
 import CreditWorkspace, { type CreditTabContext } from '@/components/credit/CreditWorkspace';
-import { LandingInsightStrip, useKpiExplain } from '@/components/bi/InsightStrip';
+import { LandingInsightStrip, useKpiExplain } from '@/features/bi/components/InsightStrip';
 import DataTable from '@/components/ui/DataTable';
 import KpiStat from '@/components/ui/KpiStat';
 import LimitBar from '@/components/ui/LimitBar';

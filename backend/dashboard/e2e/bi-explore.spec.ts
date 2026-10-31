@@ -30,7 +30,7 @@ import { E2E_TMP } from "../playwright.config";
 // property under test is that a destination is offered only when it can
 // reproduce the figure's slice exactly, and a hand-written URL would test this
 // spec instead of the product.
-import { drillDestinations } from "../components/bi/drill";
+import { drillDestinations } from "../features/bi/components/drill";
 import {
   biApi,
   FIXTURE_FIGURES,
