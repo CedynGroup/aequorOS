@@ -940,9 +940,9 @@
       "reason": "Queries and real request refusals must distinguish sibling banks and organizations.",
       "cases": [
         "tests/api/test_cross_tenant_bank_routes.py::test_every_bank_route_hides_sibling_tenant_bank",
-        "tests/api/test_system_of_record_bank_scope.py::test_a_sibling_banks_declaration_cannot_be_approved_or_revoked_under_this_bank",
-        "tests/api/test_system_of_record_bank_scope.py::test_a_sibling_banks_withdrawal_cannot_be_approved_or_reversed_under_this_bank",
-        "tests/api/test_system_of_record_bank_scope.py::test_a_withdrawal_cannot_cite_a_sibling_banks_declaration"
+        "tests/data_engine/api/test_system_of_record_bank_scope.py::test_a_sibling_banks_declaration_cannot_be_approved_or_revoked_under_this_bank",
+        "tests/data_engine/api/test_system_of_record_bank_scope.py::test_a_sibling_banks_withdrawal_cannot_be_approved_or_reversed_under_this_bank",
+        "tests/data_engine/api/test_system_of_record_bank_scope.py::test_a_withdrawal_cannot_cite_a_sibling_banks_declaration"
       ]
     },
     {
@@ -1442,11 +1442,11 @@
         "tests/case/api/test_scenarios.py::test_duplicate_assumption_returns_conflict_and_rolls_back",
         "tests/case/api/test_scenarios.py::test_scenario_contracts_are_closed_and_initialization_is_idempotent",
         "tests/case/api/test_scenarios.py::test_scenario_endpoints_enforce_tenant_isolation",
-        "tests/services/test_ingestion_position_locks.py::test_identity_reservation_preserves_conflicts_and_follows_savepoint_outcome[False]",
-        "tests/services/test_ingestion_position_locks.py::test_identity_reservation_preserves_conflicts_and_follows_savepoint_outcome[True]",
-        "tests/services/test_ingestion_position_locks.py::test_reservations_skip_unrepresentable_identities_without_changing_input_records[unrepresentable0]",
-        "tests/services/test_ingestion_position_locks.py::test_reservations_skip_unrepresentable_identities_without_changing_input_records[unrepresentable1]",
-        "tests/services/test_ingestion_position_locks.py::test_reservations_skip_unrepresentable_identities_without_changing_input_records[unrepresentable2]"
+        "tests/data_engine/service/test_ingestion_position_locks.py::test_identity_reservation_preserves_conflicts_and_follows_savepoint_outcome[False]",
+        "tests/data_engine/service/test_ingestion_position_locks.py::test_identity_reservation_preserves_conflicts_and_follows_savepoint_outcome[True]",
+        "tests/data_engine/service/test_ingestion_position_locks.py::test_reservations_skip_unrepresentable_identities_without_changing_input_records[unrepresentable0]",
+        "tests/data_engine/service/test_ingestion_position_locks.py::test_reservations_skip_unrepresentable_identities_without_changing_input_records[unrepresentable1]",
+        "tests/data_engine/service/test_ingestion_position_locks.py::test_reservations_skip_unrepresentable_identities_without_changing_input_records[unrepresentable2]"
       ]
     },
     {
