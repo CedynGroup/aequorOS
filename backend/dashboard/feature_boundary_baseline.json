@@ -22,6 +22,7 @@
     "features/liquidity/components/results.test.tsx -> components/home/pulse",
     "features/liquidity/components/results.test.tsx -> components/risk/LimitWall",
     "features/liquidity/components/results.test.tsx -> components/risk/limits",
+    "features/liquidity/components/results.test.tsx -> features/bi/components/echartsTheme",
     "features/liquidity/routes/overview.tsx -> components/live/LiveEngineNote",
     "features/liquidity/routes/overview.tsx -> components/workbench/RunModuleScenarios",
     "features/liquidity/routes/stress.tsx -> components/workbench/ScenarioWorkbench"
