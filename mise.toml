@@ -1,6 +1,8 @@
 [tools]
 node = "24"
 pnpm = "11.2.2"
+python = "3.13"
+uv = "0.11.18"
 
 # ---------------------------------------------------------------------------
 # THE DELEGATION CONTRACT, and the outage that made it worth writing down.
@@ -36,6 +38,13 @@ pnpm = "11.2.2"
 #     of the proxies that recurses. A guard that can only run when the thing it
 #     guards is healthy is not a guard.
 # ---------------------------------------------------------------------------
+
+[tasks.setup]
+description = "Install all workspace dependencies (JS and backend Python)"
+run = [
+  "pnpm install",
+  "cd backend && uv sync",
+]
 
 [tasks."risk-service:sync"]
 description = "Install risk service dependencies with uv"
