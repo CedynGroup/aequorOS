@@ -17,15 +17,15 @@ credential switch also remains blocked on its later pre-authentication follow-up
 
 ## Target matrix
 
-| Role                 | Connection purpose       | Allowed access                                                                                                                                            | Forbidden access                                                                                  |
-| -------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `aqs_owner`          | NOLOGIN object owner     | DDL and explicit migration work through SET ROLE                                                                                                          | Application connections                                                                           |
-| `aqs_migrator`       | Deployment only          | SET ROLE `aqs_owner`; no automatic inheritance                                                                                                            | Runtime use, elevated attributes                                                                  |
-| `aqs_api`            | Tenant API               | Tenant SELECT/INSERT/UPDATE/DELETE under forced RLS, audit append, filing lifecycle columns, enqueue/coalesce jobs and parse/assessment lifecycle updates | Schema DDL, ownership, audit or immutable evidence changes, job DELETE or worker-only job columns |
-| `aqs_worker`         | Background jobs          | API tenant rights, job-scoped organization/bank context, heartbeat metadata, and classified platform functions/views                                      | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes                          |
-| `aqs_bi`             | Interactive BI           | SELECT on BI marts/dimensions and public jurisdiction/parameter reference tables under RLS; 10-second statement timeout                                   | Writes, operational queue or identity-table access                                                |
+| Role                 | Connection purpose         | Allowed access                                                                                                                                            | Forbidden access                                                                                  |
+| -------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `aqs_owner`          | NOLOGIN object owner       | DDL and explicit migration work through SET ROLE                                                                                                          | Application connections                                                                           |
+| `aqs_migrator`       | Deployment only            | SET ROLE `aqs_owner`; no automatic inheritance                                                                                                            | Runtime use, elevated attributes                                                                  |
+| `aqs_api`            | Tenant API                 | Tenant SELECT/INSERT/UPDATE/DELETE under forced RLS, audit append, filing lifecycle columns, enqueue/coalesce jobs and parse/assessment lifecycle updates | Schema DDL, ownership, audit or immutable evidence changes, job DELETE or worker-only job columns |
+| `aqs_worker`         | Background jobs            | API tenant rights, job-scoped organization/bank context, heartbeat metadata, and classified platform functions/views                                      | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes                          |
+| `aqs_bi`             | Interactive BI             | SELECT on BI marts/dimensions and public jurisdiction/parameter reference tables under RLS; 10-second statement timeout                                   | Writes, operational queue or identity-table access                                                |
 | `aqs_operator`       | Staff operations (dormant) | Dedicated cross-bank metadata views (next captain-reviewed stage of #520)                                                                                 | Direct tenant-table access; financial inspection outside the governed #351 flow                   |
-| `aqs_audit_verifier` | Independent audit checks | SELECT audit sources, chain entries and heads, including cross-bank verification                                                                          | Other tenant tables, writes or chain ownership                                                    |
+| `aqs_audit_verifier` | Independent audit checks   | SELECT audit sources, chain entries and heads, including cross-bank verification                                                                          | Other tenant tables, writes or chain ownership                                                    |
 
 No `aqs_*` application role owns objects or holds SUPERUSER, CREATEDB, CREATEROLE,
 REPLICATION or BYPASSRLS. There is no standing break-glass role. The historical
@@ -118,8 +118,7 @@ has no timeout configuration and retains its shared engine behavior.
 After configuration or credential changes, drain/reconnect the affected pools;
 role defaults apply to new logins. The deployment operator owns the switch.
 Record `rolconfig` before applying the script so rollback can restore the exact
-prior
-values through administrator tooling; restoring URL secrets alone does not
+prior values through administrator tooling; restoring URL secrets alone does not
 change new-role defaults. Do not change or reset legacy role defaults.
 
 Validate fresh API, worker, BI and migration logins with `SHOW
@@ -291,7 +290,8 @@ Partition wrappers allow
 creation only for the builder's classified mart parents and the append-only BI query log in this schema. Retention
 can drop completed months only from the two daily position marts; month-end,
 loan-event and query-log drops remain forbidden. Existing partition integrity
-checks stay authoritative. Role timeout budgets remain the separate #518 work.
+checks stay authoritative. Role timeout budgets follow
+[Session timeout budgets](#session-timeout-budgets).
 
 | Queue source            | Command                               | Scope/guard                       | Destination and effect                            |
 | ----------------------- | ------------------------------------- | --------------------------------- | ------------------------------------------------- |
@@ -306,8 +306,12 @@ checks stay authoritative. Role timeout budgets remain the separate #518 work.
 
 Native real-login tests cover the transition model, cross-tenant refusal,
 concurrent claims, key isolation, desk governance, audit verification and partition
-allow-lists. The grant ratchet includes both the application schema and worker-view
-namespace.
+allow-lists. The [privilege-drift ratchet](../../backend/tests/db/test_database_roles.py)
+checks the application schema, worker-view namespace and cluster-level role
+attributes against the [reviewed manifest](../../backend/tests/db/database_role_grants.json).
+Its attribute checks cover the runtime roles, `aqs_owner` and `aqs_migrator`;
+regressions prove that restoring BYPASSRLS to `aqs_worker` or `aqs_operator`
+changes the snapshot even when table grants are unchanged.
 
 ## Deployment runbook (captain-managed droplet)
 
