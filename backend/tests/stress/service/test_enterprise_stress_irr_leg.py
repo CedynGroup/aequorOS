@@ -18,7 +18,7 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from sqlalchemy import select
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.irrbb.domain.engine import IRR_BUCKETS, IrrPosition, compute_nii
@@ -91,7 +91,7 @@ def _run_parallel_up(db: Session, monkeypatch: pytest.MonkeyPatch) -> _StressRun
 def _irr_facts(db: Session) -> list[BankFinancialFact]:
     return list(
         db.scalars(
-            select(BankFinancialFact).where(
+            sa.select(BankFinancialFact).where(
                 BankFinancialFact.bank_id == SAMPLE_BANK_ID,
                 BankFinancialFact.reporting_period_id == _period_id(db),
                 BankFinancialFact.fact_group.in_(("irr_position", "irr_swap")),

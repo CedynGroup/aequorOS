@@ -46,7 +46,10 @@ from tests.support.helpers import ORG_1, ORG_2
 from tests.support.inmemory_storage import InMemoryStorageClient
 from tests.support.reencryption import drain
 
-pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
+pytestmark = [
+    pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required"),
+    pytest.mark.usefixtures("managed_application_engines"),
+]
 ROLES = ("aqs_api", "aqs_worker", "aqs_bi", "aqs_operator", "aqs_audit_verifier")
 MATRIX = Path(__file__).with_name("database_role_grants.json")
 
