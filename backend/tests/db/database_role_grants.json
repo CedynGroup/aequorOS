@@ -1,12 +1,68 @@
 {
   "role_attributes": {
-    "aqs_api": {"rolbypassrls": false, "rolcanlogin": true, "rolcreatedb": false, "rolcreaterole": false, "rolinherit": false, "rolreplication": false, "rolsuper": false},
-    "aqs_audit_verifier": {"rolbypassrls": false, "rolcanlogin": true, "rolcreatedb": false, "rolcreaterole": false, "rolinherit": false, "rolreplication": false, "rolsuper": false},
-    "aqs_bi": {"rolbypassrls": false, "rolcanlogin": true, "rolcreatedb": false, "rolcreaterole": false, "rolinherit": false, "rolreplication": false, "rolsuper": false},
-    "aqs_migrator": {"rolbypassrls": false, "rolcanlogin": true, "rolcreatedb": false, "rolcreaterole": false, "rolinherit": false, "rolreplication": false, "rolsuper": false},
-    "aqs_operator": {"rolbypassrls": false, "rolcanlogin": true, "rolcreatedb": false, "rolcreaterole": false, "rolinherit": false, "rolreplication": false, "rolsuper": false},
-    "aqs_owner": {"rolbypassrls": false, "rolcanlogin": false, "rolcreatedb": false, "rolcreaterole": false, "rolinherit": false, "rolreplication": false, "rolsuper": false},
-    "aqs_worker": {"rolbypassrls": false, "rolcanlogin": true, "rolcreatedb": false, "rolcreaterole": false, "rolinherit": false, "rolreplication": false, "rolsuper": false}
+    "aqs_api": {
+      "rolbypassrls": false,
+      "rolcanlogin": true,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolinherit": false,
+      "rolreplication": false,
+      "rolsuper": false
+    },
+    "aqs_audit_verifier": {
+      "rolbypassrls": false,
+      "rolcanlogin": true,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolinherit": false,
+      "rolreplication": false,
+      "rolsuper": false
+    },
+    "aqs_bi": {
+      "rolbypassrls": false,
+      "rolcanlogin": true,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolinherit": false,
+      "rolreplication": false,
+      "rolsuper": false
+    },
+    "aqs_migrator": {
+      "rolbypassrls": false,
+      "rolcanlogin": true,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolinherit": false,
+      "rolreplication": false,
+      "rolsuper": false
+    },
+    "aqs_operator": {
+      "rolbypassrls": false,
+      "rolcanlogin": true,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolinherit": false,
+      "rolreplication": false,
+      "rolsuper": false
+    },
+    "aqs_owner": {
+      "rolbypassrls": false,
+      "rolcanlogin": false,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolinherit": false,
+      "rolreplication": false,
+      "rolsuper": false
+    },
+    "aqs_worker": {
+      "rolbypassrls": false,
+      "rolcanlogin": true,
+      "rolcreatedb": false,
+      "rolcreaterole": false,
+      "rolinherit": false,
+      "rolreplication": false,
+      "rolsuper": false
+    }
   },
   "columns": [
     [
