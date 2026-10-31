@@ -1,9 +1,12 @@
-# Database roles and deployment handoff
+# Database roles and deployment runbook
 
 Engineering supplies the role foundation in migration `202610120096`, following
-`202610110097`. Eric owns the deployment and credential changes. **Non-breaking;
-deployment switch is a separate step.** Applying the foundation does not change
-existing application URLs, ownership, credentials or BYPASSRLS roles.
+`202610110097`. **Non-breaking; deployment switch is a separate step.** Applying
+the foundation does not change existing application URLs, ownership, credentials
+or BYPASSRLS roles. The deployment runbook below addresses the captain-managed
+droplet deployment; Eric's scope is the separate AWS Coolify instance
+(`deploy/`), which applies the same role foundation and runbook steps when it
+hosts workloads.
 
 ## Target matrix
 
@@ -14,7 +17,7 @@ existing application URLs, ownership, credentials or BYPASSRLS roles.
 | `aqs_api`            | Tenant API               | Tenant SELECT/INSERT/UPDATE/DELETE under forced RLS, audit append, filing lifecycle columns, enqueue/coalesce jobs and parse/assessment lifecycle updates | Schema DDL, ownership, audit or immutable evidence changes, job DELETE or worker-only job columns |
 | `aqs_worker`         | Background jobs          | API tenant rights, job-scoped organization/bank context, heartbeat metadata, and classified platform functions/views                                      | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes                          |
 | `aqs_bi`             | Interactive BI           | SELECT on BI marts/dimensions and public jurisdiction/parameter reference tables under RLS; 10-second statement timeout                                   | Writes, operational queue or identity-table access                                                |
-| `aqs_operator`       | Staff operations         | Dedicated cross-bank metadata views, introduced in the operator PR                                                                                        | Direct tenant-table access; financial inspection outside the governed #351 flow                   |
+| `aqs_operator`       | Staff operations         | Dedicated cross-bank metadata views (planned metadata-view stage, captain-reviewed)                                                                       | Direct tenant-table access; financial inspection outside the governed #351 flow                   |
 | `aqs_audit_verifier` | Independent audit checks | SELECT audit sources, chain entries and heads, including cross-bank verification                                                                          | Other tenant tables, writes or chain ownership                                                    |
 
 No application role owns objects or holds SUPERUSER, CREATEDB, CREATEROLE,
@@ -43,8 +46,9 @@ schema; migrations grant execution explicitly.
 
 The foundation provisions dormant roles; it does not authorize switching worker
 or operator credentials. The [captain-reviewed worker compatibility migration](#worker-compatibility-migration)
-supports the worker switch. The separate operator PR must add metadata views and
-receive the product owner's review before its switch. Bank-held encryption migrations
+supports the worker switch. The operator credential switch stays blocked until
+the operator metadata-view conversion ships as its own captain-reviewed stage;
+the operator console still requires its existing cross-tenant credential. Bank-held encryption migrations
 `202610220101` and `202610230103` grant runtime bank-key registry access for
 field/storage operations and administrator key setup. The exact privileges are
 owned by the executable [grant manifest](../../backend/tests/db/database_role_grants.json);
@@ -104,8 +108,9 @@ runtime login, and retains its explicit `SET ROLE aqs_owner` handoff. SQLite
 has no timeout configuration and retains its shared engine behavior.
 
 After configuration or credential changes, drain/reconnect the affected pools;
-role defaults apply to new logins. Eric owns the deployment switch. Record
-`rolconfig` before applying the script so rollback can restore the exact prior
+role defaults apply to new logins. The deployment operator owns the switch.
+Record `rolconfig` before applying the script so rollback can restore the exact
+prior
 values through administrator tooling; restoring URL secrets alone does not
 change new-role defaults. Do not change or reset legacy role defaults.
 
@@ -133,7 +138,7 @@ concurrency and role-timeout coverage is linked from the backend API guide above
    in `aqs_owner` and `aequoros_audit_owner`, and grant `aqs_owner` CREATE/USAGE on
    the application schema. This administrative preparation is distinct from
    `aqs_migrator`'s SET-only membership. On an existing database, preserve legacy
-   ownership until Eric's planned handoff.
+   ownership until the deployment's planned ownership handoff.
 3. Apply the chain through `202610120096` using the existing deployment actor.
    Subsequent deployment connections as `aqs_migrator` explicitly SET ROLE
    `aqs_owner` in Alembic, so newly created objects belong to the NOLOGIN owner.
@@ -141,7 +146,8 @@ concurrency and role-timeout coverage is linked from the backend API guide above
 5. Deploy the worker and operator compatibility changes before their respective
    credential switches. They support both existing and least-privilege roles.
 6. Deploy the captain-reviewed API pre-authentication follow-up after the
-   operator PR. **The API credential switch is blocked until that PR is live.**
+   operator metadata-view stage. **The API credential switch is blocked until
+   that PR is live.**
    `aqs_api` cannot yet authenticate integration keys; bank-key registry grants
    follow the [current matrix and prerequisites](#target-matrix).
 
@@ -179,8 +185,9 @@ worker cutover: **non-breaking; works on current and new worker role; deployment
 not change the attributes or credentials of an existing deployment role. The
 effective migration actor needs CREATE on the target database to create the
 worker-view namespace. When `aqs_migrator` connects, Alembic uses SET ROLE
-`aqs_owner`, so Eric grants this database permission to `aqs_owner`, not only to
-the login. Local bootstrap prepares the NOLOGIN owner's CREATE grant automatically.
+`aqs_owner`, so the deployment operator grants this database permission to
+`aqs_owner`, not only to the login. Local bootstrap prepares the NOLOGIN
+owner's CREATE grant automatically.
 
 `aqs_worker` still cannot read tenant jobs or financial rows without organization
 context. `aqs_worker_claim_job` locks and transitions one due job across tenants;
@@ -206,7 +213,8 @@ CLI resolve `OPERATOR_DATABASE_URL`, then `DATABASE_URL`; neither falls back to
 credentials with a configuration error. Its pool identifies as `aequoros-operator`.
 No role, grant or BYPASSRLS attribute is added for authentication or operator access.
 
-Eric owns this handoff; this PR applies no production configuration:
+The deployment operator owns this handoff; the PR applies no production
+configuration:
 
 1. Deploy the compatibility code and migration `202610260001` while retaining the
    legacy worker credential. Restart long-lived API, operator and worker processes.
@@ -216,8 +224,9 @@ Eric owns this handoff; this PR applies no production configuration:
    or change their grants.
 3. Verify password login, refresh, logout revocation, SSO lookup and expected
    cross-bank operator visibility.
-4. Only after product-owner review and those checks may Eric switch
-   `WORKER_DATABASE_URL` to the prepared `aqs_worker` secret and restart the workers.
+4. Only after product-owner review and those checks may the deployment operator
+   switch `WORKER_DATABASE_URL` to the prepared `aqs_worker` secret and restart
+   the workers.
    This separate deployment step requires this compatibility PR. Repeat
    identity/operator checks and prove tenant job context and worker refusals.
 
@@ -289,7 +298,12 @@ concurrent claims, key isolation, desk governance, audit verification and partit
 allow-lists. The grant ratchet includes both the application schema and worker-view
 namespace.
 
-## Eric's deployment runbook
+## Deployment runbook (captain-managed droplet)
+
+The steps below are written for the captain-managed droplet deployment. Eric
+runs the separate AWS Coolify instance (`deploy/`): the same preparation,
+verification and cutover order applies there when it hosts workloads, executed
+through Coolify's own secret and service management.
 
 ### Preparation and verification
 
@@ -336,11 +350,11 @@ secret version. Schedule password rotation with the supported overlap/reconnect
 mechanism; a pooled session may survive a password change. IAM tokens also do
 not replace pool reconnection and workload-identity rotation.
 
-### Worker and operator activation
+### Worker activation and the blocked operator switch
 
-After the reviewed compatibility PRs are deployed, switch their respective URL
-secrets to `aqs_worker` and `aqs_operator`. Verify job completion in two tenants,
-platform jobs, console metadata and refusal of direct financial access. Check:
+After the reviewed worker compatibility PR is deployed, switch the worker URL
+secret to `aqs_worker`. Verify job completion in two tenants, platform jobs,
+console metadata and refusal of direct financial access. Check:
 
 ```sql
 SELECT application_name, usename, count(*) FROM pg_stat_activity
@@ -349,15 +363,19 @@ SELECT rolname, rolbypassrls FROM pg_roles
 WHERE rolname IN ('aqs_worker', 'aqs_operator');
 ```
 
-After the new connections are healthy and old pools drained, Eric removes
-BYPASSRLS from the retired worker/operator roles or retires their credentials.
-Preserve any legacy role still used by API/authentication or an operator awaiting
-its cutover. No
-engineering migration alters those existing role attributes. **Do not switch the
-API credential yet:** its switch remains subject to the
-[API pre-authentication prerequisite](#target-matrix). Verify bank-key lookup
-under the current grant manifest as well. Pre-tenant authentication continues to
-use the API `DATABASE_URL` sessionmaker as described in
+After the new worker connections are healthy and old pools drained, the
+deployment operator removes BYPASSRLS from the retired worker role or retires
+its credentials. **Do not switch the operator credential yet:** the operator
+console still requires its existing cross-tenant credential, and
+`aqs_operator` holds no tenant-table grants until the operator metadata-view
+conversion ships as its own captain-reviewed stage (dedicated cross-bank
+metadata views, then the credential switch, then BYPASSRLS removal from the
+retired operator role). **Do not switch the API credential either:** its switch
+remains subject to the [API pre-authentication prerequisite](#target-matrix).
+Preserve any legacy role still used by API/authentication or the operator. No
+engineering migration alters those existing role attributes. Verify bank-key
+lookup under the current grant manifest as well. Pre-tenant authentication
+continues to use the API `DATABASE_URL` sessionmaker as described in
 [Worker compatibility migration](#worker-compatibility-migration).
 Keep the existing API URL secret until that gate passes.
 
@@ -367,8 +385,9 @@ Break-glass is issued just in time with two independent approvers, an incident
 identifier, a narrowly scoped purpose and a short expiration. Record both
 approvals and every privileged operation in the incident/audit system. Prefer
 explicit grants for the incident's objects; any RLS exception requires that
-same approval and documented scope. Eric creates the temporary login through
-secure tooling, limits network access, sets expiry and timeouts, then terminates
+same approval and documented scope. The deployment operator creates the
+temporary login through secure tooling, limits network access, sets expiry and
+timeouts, then terminates
 its sessions and drops it at incident closure. Never install a standing
 break-glass account or embed its credentials in application configuration.
 
@@ -379,7 +398,21 @@ Restore recorded ACLs/owners only under the maintenance plan; do not relax audit
 or filing integrity guards. The foundation downgrade revokes its own runtime
 schema/table grants and verifier policies, but never drops cluster-wide roles,
 changes existing deployed credentials or restores BYPASSRLS. Disabling a new
-credential is Eric's separate administrator action. The worker downgrade removes
+credential is the deployment operator's separate administrator action. The
+worker downgrade removes
 its views, functions and delegated rights while preserving privileges on tables
 and partition functions already owned by `aqs_owner`. Coordinate later migrations
 before downgrading so their grants are not accidentally removed.
+
+## Next stage: the operator metadata-view conversion
+
+The operator credential switch is the remaining #520 stage and is deliberately
+out of scope here. It is new design surface: the console's cross-bank reads
+(today disciplined by explicit per-query organization scoping on a BYPASSRLS
+session) move onto dedicated, captain-reviewed metadata views, and the governed
+provisioning and #351 inspector write paths get their own delegated mechanism.
+The project docs reserve that exposure set for product-owner review, so the
+conversion ships as a separate PR that the captain personally reviews before
+any operator credential changes. Until then the drift ratchet on this page
+pins `aqs_operator` to zero tenant-table grants, so the operator credential
+cannot silently widen.

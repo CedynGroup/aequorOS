@@ -370,7 +370,7 @@ before deploying this migration in production or staging:
   [role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order)
   before running Alembic.
 - Keep runtime identities separate from the migrator and follow
-  [the role activation runbook](../../docs/ops/database-roles.md#worker-and-operator-activation).
+  [the role activation runbook](../../docs/ops/database-roles.md#worker-activation-and-the-blocked-operator-switch).
   Existing BYPASSRLS roles receive chain SELECT and schedule
   SELECT/UPDATE during migration. Provision those roles first, or apply those
   narrow grants afterward when provisioning them. Preserve existing authorized
