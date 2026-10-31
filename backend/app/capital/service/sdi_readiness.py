@@ -15,10 +15,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import sdi_capital, sdi_capital_checks
 from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
 from app.identity.public import Bank
 from app.policy.public import base_currency
-from app.services import sdi_capital, sdi_capital_checks
 
 _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 _EXPOSURE_TYPES = frozenset({"LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDING"})

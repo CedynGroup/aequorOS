@@ -1082,9 +1082,9 @@ def test_a_live_payload_may_carry_labels_beside_its_registered_metrics() -> None
         registry,
         _evidence(
             live_module_metrics={
-                "app/services/regulatory_capital.py": {
-                    "car_pct": "app/services/regulatory_capital.py:1290",
-                    "worst_scenario": "app/services/regulatory_capital.py:1290",
+                "app/capital/service/regulatory_capital.py": {
+                    "car_pct": "app/capital/service/regulatory_capital.py:1290",
+                    "worst_scenario": "app/capital/service/regulatory_capital.py:1290",
                 }
             }
         ),

@@ -2081,7 +2081,7 @@
   "reportAny": 2
  },
  "app.services.window_analytics": {
-  "reportPrivateUsage": 7
+  "reportPrivateUsage": 4
  },
  "app.services.withdrawal_impact": {
   "reportAny": 11,

@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app.capital.service import regulatory_capital
 from app.core.authorization import ModuleScope, SensitivityScope
 from app.core.errors import ModuleDataUnavailable
 from app.credit.service import credit_concentration, regulatory_credit
@@ -52,7 +53,6 @@ from app.models import (
 )
 from app.rating.service import sdi_rating
 from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
-from app.services import regulatory_capital
 from app.stress.models.stress import MacroScenario, MacroScenarioPath
 from app.stress.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.stress.schemas.reverse_stress import ReverseStressRunCreate

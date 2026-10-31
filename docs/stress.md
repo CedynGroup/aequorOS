@@ -197,7 +197,7 @@ documented, and reported **with and without** (¶78–81).
   gaps (`:413`). Breach multiplier (`app/liquidity/service/regulatory_liquidity.py:1619`).
 - **Capital:** 4-quarter stress path `run_capital_stress` (`app/domain/capital/engine.py:497`,
   `STRESS_QUARTERS=4`) — RWA growth, CET1 retention, FX multiplier; trigger/action ladder (`:564`).
-  Breach multiplier (`app/services/regulatory_capital.py:1575`).
+  Breach multiplier (`app/capital/service/regulatory_capital.py:1575`).
 - **Reverse stress:** `run_reverse_stress` (`app/stress/service/reverse_stress.py:72`) — bisection for
   the severity _k_ breaching a floor, two **independent** axes (liquidity=LCR, capital=CET1);
   immutable `RegulatoryRun`.

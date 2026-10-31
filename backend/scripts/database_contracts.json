@@ -1638,9 +1638,9 @@
         "tests/icaap/service/p0_qa/test_capital_plan_p0_qa.py::test_a_later_period_with_only_a_short_horizon_run_does_not_displace_the_plan",
         "tests/icaap/service/p0_qa/test_capital_plan_p0_qa.py::test_an_explicit_five_year_horizon_is_still_a_planning_run",
         "tests/icaap/service/p0_qa/test_capital_plan_p0_qa.py::test_approval_refusal_names_the_horizon_rule_when_only_a_short_run_exists",
-        "tests/services/test_capital_plan.py::test_a_non_regulatory_horizon_run_never_becomes_the_projection",
-        "tests/services/test_capital_plan.py::test_capital_plan_lifecycle_requires_forecast_and_maker_checker",
-        "tests/services/test_capital_plan_per_year_floors.py::test_a_floor_that_commences_mid_horizon_applies_only_from_that_year"
+        "tests/capital/service/test_capital_plan.py::test_a_non_regulatory_horizon_run_never_becomes_the_projection",
+        "tests/capital/service/test_capital_plan.py::test_capital_plan_lifecycle_requires_forecast_and_maker_checker",
+        "tests/capital/service/test_capital_plan_per_year_floors.py::test_a_floor_that_commences_mid_horizon_applies_only_from_that_year"
       ]
     },
     {

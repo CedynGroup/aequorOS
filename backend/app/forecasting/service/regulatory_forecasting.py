@@ -30,6 +30,7 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.crm_haircuts import DEFAULT_CRM_HAIRCUTS
 from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.capital.engine import (
     CapitalComputationError,
@@ -133,7 +134,6 @@ from app.policy.public import (
     sdi_regime,
 )
 from app.services.audit import record_event
-from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
 ENGINE_VERSION = "regulatory-forecasting-v4.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"

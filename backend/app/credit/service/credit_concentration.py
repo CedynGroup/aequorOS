@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import sdi_capital
 from app.core.errors import ModuleDataUnavailable
 from app.core.key_management.fields import blind_index
 from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
@@ -50,7 +51,6 @@ from app.policy.public import (
     institution_types,
     jurisdictions,
 )
-from app.services import sdi_capital
 from app.stress.domain.concentration import DIM_SINGLE_NAME, ConcentrationExposure
 
 _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")

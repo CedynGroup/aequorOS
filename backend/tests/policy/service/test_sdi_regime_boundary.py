@@ -26,6 +26,14 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import (
+    regulatory_capital,
+    sdi_capital,
+    sdi_capital_assurance,
+    sdi_capital_checks,
+    sdi_readiness,
+    sdi_views,
+)
 from app.domain.authority.outcomes import OutcomeDetail, OutcomeState
 from app.domain.authority.registry import REGISTRY, InstitutionClass, MetricFamily
 from app.domain.capital.engine import CapitalFact, compute_rwa
@@ -45,14 +53,6 @@ from app.models import (
     RegulatoryRun,
 )
 from app.policy.service import sdi_regime
-from app.services import (
-    regulatory_capital,
-    sdi_capital,
-    sdi_capital_assurance,
-    sdi_capital_checks,
-    sdi_readiness,
-    sdi_views,
-)
 from app.stress.service import enterprise_stress
 from tests.support.helpers import ORG_1, USER_1
 

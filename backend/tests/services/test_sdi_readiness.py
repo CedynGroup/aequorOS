@@ -12,8 +12,8 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import sdi_readiness
 from app.models import Bank, CanonicalReferenceRow, IngestionBatch, LineageRecord
-from app.services import sdi_readiness
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1
 

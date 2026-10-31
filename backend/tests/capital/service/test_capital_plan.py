@@ -21,6 +21,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.schemas.capital_plan import (
+    CapitalPlanApprove,
+    CapitalPlanContentInput,
+    CapitalPlanPut,
+    CapitalTriggerInput,
+    IlaapRefreshCreate,
+    ManagementAction,
+    Pillar2AddOnInput,
+)
+from app.capital.service import capital_plan
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
@@ -34,16 +44,6 @@ from app.models import (
 )
 from app.policy.domain import PolicyUnresolvedError, policy_unresolved
 from app.policy.service import institution_types, jurisdictions
-from app.schemas.capital_plan import (
-    CapitalPlanApprove,
-    CapitalPlanContentInput,
-    CapitalPlanPut,
-    CapitalTriggerInput,
-    IlaapRefreshCreate,
-    ManagementAction,
-    Pillar2AddOnInput,
-)
-from app.services import capital_plan
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

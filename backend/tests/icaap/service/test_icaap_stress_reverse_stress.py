@@ -18,6 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.schemas.regulatory_capital import CapitalScenarioBatchCreate
+from app.capital.service import regulatory_capital
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
@@ -26,8 +28,6 @@ from app.models import Bank, BankReportingPeriod, RegulatoryPackage
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation
 from app.reporting.service.exports import export_package
-from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.services import regulatory_capital
 from app.stress.schemas.reverse_stress import ReverseStressRunCreate
 from app.stress.service import reverse_stress
 from tests.fixtures.canonical_bank_fixture import (

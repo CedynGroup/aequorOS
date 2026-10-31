@@ -27,6 +27,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.schemas.regulatory_capital import CapitalScenarioBatchCreate
+from app.capital.service import regulatory_capital
 from app.core.authorization import Module, Permission, Sensitivity
 from app.credit.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.credit.service import regulatory_credit
@@ -55,8 +57,6 @@ from app.live.service.fact_derivation import DerivationError, DerivationResult, 
 from app.models import AuditEvent
 from app.policy.public import module_scope
 from app.rating.service import implied_rating
-from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.services import regulatory_capital
 from app.services.audit import record_event
 
 FORECAST_BASE_SCENARIO = "base"

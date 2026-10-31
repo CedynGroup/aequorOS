@@ -1,7 +1,7 @@
 """Regulatory IRRBB runs: gap / duration / EVE / EaR orchestration and dashboard.
 
 Follows the immutable calculation-run lifecycle established by
-``app.services.regulatory_capital``: runs commit ``queued`` and ``running``
+``app.capital.service.regulatory_capital``: runs commit ``queued`` and ``running``
 before executing, persist the full canonical input snapshot with a SHA-256
 ``input_hash``, and record failures as data (named error codes) rather than
 HTTP 500s. The arithmetic itself lives in the pure engine at
@@ -42,6 +42,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import sdi_capital
 from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.engine import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
@@ -120,7 +121,6 @@ from app.policy.public import (
     regulatory_parameters,
 )
 from app.reporting.service import filing_reconciliation
-from app.services import sdi_capital
 from app.services.audit import record_event
 
 ENGINE_VERSION = "regulatory-irr-v1.0.0"

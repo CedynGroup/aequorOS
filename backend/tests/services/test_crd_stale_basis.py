@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
+from app.capital.service import regulatory_capital
 from app.core.authorization import ModuleScope, SensitivityScope
 from app.domain.capital.engine import CapitalComputationError
 from app.forecasting.schemas.forecasting import ForecastRunCreate
@@ -14,7 +15,6 @@ from app.forecasting.service import regulatory_forecasting
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.live.service.fact_derivation import derive_current_facts, derive_facts
 from app.models import Bank, BankFinancialFact, BankReportingPeriod, CurrentFinancialFact
-from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
 from tests.support.authority import grant_organization_analyst

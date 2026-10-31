@@ -61,7 +61,7 @@ ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
         "run_enterprise_stress",
     ),
     "app.services.regulatory_capital:capital_breach_multiplier": (
-        "app.services.regulatory_capital",
+        "app.capital.service.regulatory_capital",
         "capital_breach_multiplier",
     ),
     "app.services.regulatory_liquidity:liquidity_breach_multiplier": (
@@ -81,19 +81,19 @@ ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
         "_table1_inputs",
     ),
     "app.services.sdi_capital:compute_sdi_capital_summary": (
-        "app.services.sdi_capital",
+        "app.capital.service.sdi_capital",
         "compute_sdi_capital_summary",
     ),
     "app.services.sdi_capital_checks:check_paid_up_capital": (
-        "app.services.sdi_capital_checks",
+        "app.capital.service.sdi_capital_checks",
         "check_paid_up_capital",
     ),
     "app.services.sdi_capital_checks:check_statutory_reserve_fund": (
-        "app.services.sdi_capital_checks",
+        "app.capital.service.sdi_capital_checks",
         "check_statutory_reserve_fund",
     ),
     "app.services.sdi_views:get_sdi_liquidity_position": (
-        "app.services.sdi_views",
+        "app.capital.service.sdi_views",
         "get_sdi_liquidity_position",
     ),
 }

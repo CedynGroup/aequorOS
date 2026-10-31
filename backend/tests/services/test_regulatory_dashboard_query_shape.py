@@ -12,6 +12,7 @@ from sqlalchemy import Connection, Engine, event, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
 from app.db.session import get_sessionmaker
 from app.domain.authority.results import Computed, FigureResult
 from app.ftp import service as regulatory_ftp
@@ -27,7 +28,6 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

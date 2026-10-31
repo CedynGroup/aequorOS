@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
@@ -35,7 +36,7 @@ from app.liquidity.service import regulatory_liquidity, window_analytics
 from app.live.domain.reporting.period_windows import trailing_month_end_window
 from app.live.service import pipeline
 from app.models import BankReportingPeriod, LiveMetricSnapshot, RegulatoryRun, User
-from app.services import job_queue, regulatory_capital
+from app.services import job_queue
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

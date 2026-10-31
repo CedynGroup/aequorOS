@@ -22,6 +22,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.public import (
+    CapitalRunError,
+)
+from app.capital.public import (
+    compute_inline as _capital_compute_inline,
+)
+from app.capital.public import (
+    latest_succeeded_baseline_run as _latest_capital_baseline_run,
+)
+from app.capital.public import (
+    run_metrics as _capital_run_metrics,
+)
 from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.authority.results import Computed
 from app.domain.capital.engine import CapitalComputationError
@@ -49,18 +61,6 @@ from app.liquidity.service.regulatory_liquidity import (
     _scalar_metrics as _liquidity_run_metrics,  # noqa: PLC2701 - dashboard-trend parity
 )
 from app.live.public import BankReportingPeriod, LiveMetricSnapshot
-from app.services.regulatory_capital import (
-    CapitalRunError,
-)
-from app.services.regulatory_capital import (
-    _compute_inline as _capital_compute_inline,  # noqa: PLC2701 - dashboard-trend parity
-)
-from app.services.regulatory_capital import (
-    _decimal_metrics as _capital_run_metrics,  # noqa: PLC2701 - dashboard-trend parity
-)
-from app.services.regulatory_capital import (
-    _latest_succeeded_baseline_run as _latest_capital_baseline_run,  # noqa: PLC2701
-)
 from app.stress.service.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
 
 _MAX_WINDOW_MONTHS = 36

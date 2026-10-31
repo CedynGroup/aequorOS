@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
+from app.capital.service import capital_plan, regulatory_capital
 from app.icaap.schemas.risk_capital import (
     IcaapAllocationDriverPut,
     IcaapAllocationPut,
@@ -33,7 +34,6 @@ from app.icaap.schemas.workspace import IcaapCycleRead, IcaapDataBlockCreate
 from app.icaap.service import allocation, blocks, pillar2, reconciliation
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import BankReportingPeriod, User
-from app.services import capital_plan, regulatory_capital
 from tests.icaap.service.conftest import AS_OF
 from tests.support.helpers import ORG_1
 
@@ -400,7 +400,7 @@ def test_the_proposal_writes_a_draft_through_the_plans_own_maker_checker(
 
 
 def _approve(reason: str):
-    from app.schemas.capital_plan import CapitalPlanApprove  # noqa: PLC0415
+    from app.capital.schemas.capital_plan import CapitalPlanApprove  # noqa: PLC0415
 
     return CapitalPlanApprove.model_validate(
         {"approval_reference": "Board minute 2025/12", "reason": reason}

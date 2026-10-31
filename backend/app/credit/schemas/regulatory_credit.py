@@ -19,15 +19,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.identity.public import BankRead, BankReportingPeriodRead
-from app.liquidity.public import RegulatoryValidationSeverity
-from app.live.public import LiveModuleView
-from app.schemas.sdi import (
+from app.capital.schemas.sdi import (
     DelinquencyBucketRead,
     LoanGradeBucketRead,
     PortfolioAtRiskRead,
     ProvisionsHeldRead,
 )
+from app.identity.public import BankRead, BankReportingPeriodRead
+from app.liquidity.public import RegulatoryValidationSeverity
+from app.live.public import LiveModuleView
 
 
 class ClosedModel(BaseModel):

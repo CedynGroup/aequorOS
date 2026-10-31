@@ -13,6 +13,8 @@ from loguru import logger
 from sqlalchemy import delete, select
 
 from app.api.deps import TenantContext
+from app.capital.schemas.regulatory_capital import CapitalScenarioBatchCreate
+from app.capital.service import regulatory_capital
 from app.core.authorization import (
     BindingStatus,
     GrantorType,
@@ -37,8 +39,6 @@ from app.models import (
     User,
 )
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
-from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,

@@ -38,6 +38,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.capital.service.regulatory_capital import _CAPITAL_FACT_GROUPS
 from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
@@ -58,7 +59,6 @@ from app.forecasting.domain.engine import (
 from app.forecasting.service.regulatory_forecasting import _FORECAST_FACT_GROUPS
 from app.liquidity.domain.engine import compute_lcr, compute_nsfr
 from app.liquidity.service.regulatory_liquidity import _LIQUIDITY_FACT_GROUPS
-from app.services.regulatory_capital import _CAPITAL_FACT_GROUPS
 from tests.equivalence.conftest import EXACT
 from tests.forecasting.domain.test_forecasting_engine import (
     BASE_ASSUMPTIONS,
