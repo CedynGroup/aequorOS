@@ -18968,7 +18968,8 @@
     "tests/icaap/service/test_snapshot_validation_rules.py::test_duplicate_resolved_current_annexes_are_refused": "unit",
     "tests/icaap/service/test_snapshot_validation_rules.py::test_resolved_annex_inputs_are_copied_immutable_and_isolated": "unit",
     "tests/icaap/service/test_snapshot_validation_rules.py::test_the_complete_rules_check_current_annex_answers[absent]": "unit",
-    "tests/icaap/service/test_snapshot_validation_rules.py::test_the_complete_rules_check_current_annex_answers[different_digest]": "unit"
+    "tests/icaap/service/test_snapshot_validation_rules.py::test_the_complete_rules_check_current_annex_answers[different_digest]": "unit",
+    "tests/architecture/test_dashboard_journeys_gate.py::test_workflow_change_detector_selects_its_inputs[backend/tests/adapters/market_data/manual_upload/fixtures.py-true]": "unit"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",
