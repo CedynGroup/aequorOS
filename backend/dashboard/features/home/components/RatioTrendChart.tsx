@@ -9,14 +9,14 @@
  *
  * This chart is the reason `scripts/assert-home-route-bundle.mjs` exists: it is
  * the only chart on the Command Center, and it is loaded through
- * `components/home/DeferredRatioTrendChart.tsx` so the charting runtime stays
+ * `features/home/components/DeferredRatioTrendChart.tsx` so the charting runtime stays
  * out of the home route's initial JavaScript. The guard asserts both halves —
  * no runtime marker in the entry graph, and one present in the deferred chunk.
  */
 
 import { useMemo, useState } from "react";
-import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
-import { seriesColor, useChartTokens } from "@/features/bi/components/echartsTheme";
+import { EChart, type BiEChartsOption } from "@/features/bi/public";
+import { seriesColor, useChartTokens } from "@/features/bi/public";
 import {
   gapAwareData,
   LINE_SERIES_BASE,
