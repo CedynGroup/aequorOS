@@ -71,7 +71,7 @@
     "lib/echartsOptions.ts",
     "lib/icaap/appetite.ts",
     "components/reports/FreshnessStrip.tsx",
-    "components/live/moduleDisplay.ts",
+    "features/live/components/moduleDisplay.ts",
     "features/home/components/RoleLens.tsx",
     "app/api/impersonation/status/route.ts",
     "lib/outbound.ts",

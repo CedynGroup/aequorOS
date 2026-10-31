@@ -25,7 +25,7 @@ import {
 } from "@/features/bi/public";
 import { runComputedAt, runThresholds } from "@/features/liquidity/components/runData";
 import { useBankContext } from "@/components/shell/BankContext";
-import LiveEngineNote from "@/components/live/LiveEngineNote";
+import { LiveEngineNote } from "@/features/live/public";
 import {
   useCfpSummary,
   useEwiDashboard,
