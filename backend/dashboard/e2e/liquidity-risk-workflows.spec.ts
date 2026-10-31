@@ -11,8 +11,12 @@
  * Basel III run-off / ASF / RSF factor the fixture registers; the spec weights
  * and sums them itself, so LCR and NSFR are derived here, not read back. The
  * early-warning values and the stressed path are engine evaluations of the
- * same book and are pinned as such. The book is carried forward unchanged to
- * the latest month end, so none of these figures move with the calendar.
+ * same book and are pinned as such — except the day-count-based
+ * weighted-average-liability-maturity indicator, which moves with the month
+ * end the book is carried forward to (the fixture's dated liabilities have
+ * fixed maturities), and is therefore DERIVED from the same anchor the
+ * bootstrap seeded at, not pinned. The ratio-based figures never move with
+ * the calendar.
  */
 import { expect, test, type Page } from "@playwright/test";
 import path from "path";
@@ -95,13 +99,68 @@ const ASF_M = total(ASF);
 const RSF_M = total(RSF);
 const NSFR_PCT = (ASF_M / RSF_M) * 100;
 
+/**
+ * The anchor the bootstrap seeded the book at (H-015): the last month end on
+ * or before E2E_TODAY, which playwright.config.ts freezes once per run and
+ * passes to both the bootstrap process and this one. Deriving it here (and
+ * never from a fresh clock) is what keeps a run that straddles a month-end
+ * midnight from seeding one anchor and asserting another.
+ */
+const anchorToday = (): Date =>
+  process.env.E2E_TODAY ? new Date(`${process.env.E2E_TODAY}T00:00:00`) : new Date();
+
+const latestMonthEndOnOrBefore = (today: Date): Date => {
+  const lastOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  if (today.getDate() === lastOfMonth) {
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  }
+  // Day 0 of a month is its previous month's last day.
+  return new Date(today.getFullYear(), today.getMonth(), 0);
+};
+
+/** The fixture's dated liabilities (`tests/support/factories/canonical.py`):
+ * every DEPOSIT or INTERBANK_BORROWING position carrying a contractual
+ * maturity. Undated deposits are funding but not dated, so the engine skips
+ * them in the weighted average (though their balances still count in it). */
+const DATED_LIABILITIES = [
+  { amount: 10_000_000, maturity: "2026-09-30" }, // DEP/4, DEP.CORP.TRM
+  { amount: 8_000_000, maturity: "2026-12-31" }, // DEP/5, DEP.RET.TRM
+  { amount: 6_000_000, maturity: "2026-08-29" }, // IBB/1, interbank borrowing
+] as const;
+
+/**
+ * The engine's weighted-average maturity of liabilities for the fixture book
+ * at ``anchor`` — the same derivation as
+ * `app/liquidity/service/liquidity_ewi.py`: each dated liability counts
+ * `max((contractual_maturity - anchor).days, 0)` days (a matured instrument
+ * contributes zero days, not a negative one), the amount-weighted mean is
+ * quantized to six decimals, and the CFP page renders it with `toFixed(0)`.
+ * Pinned constants cannot survive the anchor's month-end crossings
+ * (2026-10-31: "31 days" became "20 days").
+ */
+const weightedAverageLiabilityMaturity = (anchor: Date): string => {
+  const total = DATED_LIABILITIES.reduce((sum, line) => sum + line.amount, 0);
+  const dayCount = (maturity: string): number =>
+    Math.max(
+      Math.round((new Date(`${maturity}T00:00:00`).getTime() - anchor.getTime()) / 86_400_000),
+      0,
+    );
+  const weighted = DATED_LIABILITIES.reduce(
+    (sum, line) => sum + line.amount * dayCount(line.maturity),
+    0,
+  );
+  return `${Number((weighted / total).toFixed(6)).toFixed(0)} days`;
+};
+
+const ANCHOR = latestMonthEndOnOrBefore(anchorToday());
+
 /** The engine's evaluation of the fixture's canonical position book. */
 const EARLY_WARNINGS = [
   { name: "Growing concentration in funding sources", current: "46.21%" },
   { name: "Increase in currency mismatches", current: "2.97%" },
   {
     name: "Decline in weighted-average maturity of liabilities",
-    current: "31 days",
+    current: weightedAverageLiabilityMaturity(ANCHOR),
   },
   {
     name: "Repeated incidents approaching internal or regulatory limits",

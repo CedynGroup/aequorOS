@@ -36,6 +36,7 @@ from app.reporting.service.anchors import anchor_dates, anchor_window
 from app.reporting.service.registry import get_definition
 from scripts.e2e_bootstrap import (
     E2E_USERS,
+    _anchor_today,  # pyright: ignore[reportPrivateUsage]
     _seed_canonical_positions,  # pyright: ignore[reportPrivateUsage]
     latest_month_end_on_or_before,
 )
@@ -88,6 +89,23 @@ def test_latest_month_end_on_or_before_matches_the_workspace_anchor(today: date)
     anchors = sorted(anchor_dates(monthly, anchor_window(today)), reverse=True)
     selected = next(anchor for anchor in anchors if anchor <= today)
     assert latest_month_end_on_or_before(today) == selected
+
+
+def test_anchor_today_honours_the_e2e_today_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run can freeze the bootstrap's clock, and the journeys freeze with it.
+
+    The Playwright config sets ``E2E_TODAY`` once per run so the bootstrap and
+    the day-count-based journey expectations always compute at the same anchor
+    (see the H-015 note in ``scripts/e2e_bootstrap.py``).
+    """
+    monkeypatch.setenv("E2E_TODAY", "2026-10-15")
+    assert _anchor_today() == date(2026, 10, 15)
+
+
+def test_anchor_today_defaults_to_the_wall_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without the override nothing has moved: today is today."""
+    monkeypatch.delenv("E2E_TODAY", raising=False)
+    assert _anchor_today() == date.today()
 
 
 def test_carry_forward_reaches_the_anchor_and_leaves_the_canonical_book_alone(

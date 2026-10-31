@@ -44,6 +44,16 @@ const E2E_VAULT_KEY = Buffer.from(
 
 const BACKEND_DIR = path.join(__dirname, "..");
 const E2E_DB = path.join(E2E_TMP, "e2e.db");
+
+// One anchor per run. The bootstrap seeds the canonical book at the last month
+// end on or before today (H-015, scripts/e2e_bootstrap.py), and calendar-
+// anchored engine figures — the day-count early-warning indicator — move when
+// that anchor crosses a month end. Freezing the date HERE, once, means the
+// bootstrap webServer (which inherits this process env) and every journey
+// worker derive their expectations from the SAME anchor even when a run
+// straddles a month-end midnight. Export E2E_TODAY yourself to pin an anchor
+// and prove a journey is anchor-independent.
+process.env.E2E_TODAY ??= new Date().toISOString().slice(0, 10);
 export const E2E_KMS_UPSTREAM = process.env.BANK_KMS_ENDPOINT_URL ?? "";
 export const E2E_KMS_STATE = path.join(E2E_TMP, "kms-service-state");
 const kmsProxy = `http://127.0.0.1:${runtimePorts.kms}`;
