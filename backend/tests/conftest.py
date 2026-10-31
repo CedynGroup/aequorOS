@@ -300,10 +300,14 @@ def hermetic_etl_models(monkeypatch: pytest.MonkeyPatch) -> None:
     batch's dedup / anomaly output would otherwise depend on whether a developer had
     trained that bank's models locally (absent in CI). Force the deterministic path
     here; a test that exercises a trained model injects it explicitly via
-    ``EtlConfig`` (see ``tests/etl/test_pipeline.py``).
+    ``EtlConfig`` (see ``tests/data_engine/etl/test_pipeline.py``).
     """
-    monkeypatch.setattr("app.etl.model_loading.load_counterparty_model", lambda *a, **k: None)
-    monkeypatch.setattr("app.etl.model_loading.load_anomaly_model", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "app.data_engine.etl.model_loading.load_counterparty_model", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        "app.data_engine.etl.model_loading.load_anomaly_model", lambda *a, **k: None
+    )
 
 
 @pytest.fixture
@@ -753,7 +757,7 @@ def _db_client_lifecycle(
     fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
-    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
+    from app.data_engine.api.ingest_data import get_ingestion_storage  # noqa: PLC0415
 
     def object_storage_override() -> FakeStorage:
         return fake_storage
@@ -876,7 +880,7 @@ def real_client(
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
     """A TestClient wired to the ACTUAL primary, transaction-isolated."""
-    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
+    from app.data_engine.api.ingest_data import get_ingestion_storage  # noqa: PLC0415
 
     app = _create_app()
     app.dependency_overrides[get_object_storage] = lambda: fake_storage

@@ -662,7 +662,7 @@ only — is fixed: by-id lookups under `/banks/{bank_id}`
 (`system_of_record.get_declaration`, `canonical_withdrawal.get_withdrawal`, and
 a withdrawal's cited `declaration_id`) are bank-scoped at the query and return
 the route's ordinary 404 for a sibling bank's row before any state check, with
-no side effects. `tests/api/test_system_of_record_bank_scope.py` is the
+no side effects. `tests/data_engine/api/test_system_of_record_bank_scope.py` is the
 hermetic regression.
 
 `tests/db/test_authorization_object_reference_properties.py` is the generative

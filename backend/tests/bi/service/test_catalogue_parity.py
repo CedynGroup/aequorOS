@@ -32,8 +32,10 @@ from app.bi.domain.authority import (
 )
 from app.core.authorization import Module
 from app.credit.service import loan_classification
+from app.data_engine.domain.ingestion.optional_position_fields import (
+    OPTIONAL_POSITION_ATTRIBUTE_KEYS,
+)
 from app.domain.authority.registry import REGISTRY
-from app.domain.ingestion.optional_position_fields import OPTIONAL_POSITION_ATTRIBUTE_KEYS
 from app.live.domain.positions.families import loan_family
 from app.live.models.live import LIVE_MODULES
 from app.live.service import fact_derivation, pipeline

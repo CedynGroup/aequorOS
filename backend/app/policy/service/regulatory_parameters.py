@@ -1715,7 +1715,7 @@ SEED_PARAMETERS: tuple[ParamSpec, ...] = (
     # --- data-integrity controls (enterprise audit 2026-08-20 P0-10) -------
     # The balance-sheet identity tolerance: |assets − (liabilities + equity)| as
     # a percent of total assets, above which the book may not produce a FILED
-    # number (app/services/reconciliation.py). It is a supervisory-judgement
+    # number (app/data_engine/service/reconciliation.py). It is a supervisory-judgement
     # number, not a BoG-published one, so it ships 'pending' and is editable in
     # the operator console under four eyes. A tenant board override may only
     # TIGHTEN it (PARAMETER_DIRECTION: ceiling).

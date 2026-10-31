@@ -50,7 +50,6 @@ LAYERED_DIRECTORIES = frozenset(
         "adapters",
         "api",
         "domain",
-        "etl",
         "features",
         "models",
         "schemas",

@@ -16,13 +16,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.credit.service import loan_classification
-from app.identity.public import Bank
-from app.models import (
+from app.data_engine.public import (
     CanonicalGlAccount,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalReferenceRow,
 )
+from app.identity.public import Bank
 from app.services import sdi_capital, sdi_capital_checks
 from app.stress.domain.appendix_ii import _STATUTORY
 

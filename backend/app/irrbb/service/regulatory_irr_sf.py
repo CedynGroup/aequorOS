@@ -51,6 +51,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.data_engine.public import (
+    CanonicalCounterparty,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+    CanonicalReferenceRow,
+)
 from app.identity.public import Bank
 from app.irrbb.domain import IrrRunError
 from app.irrbb.domain import standardised as sf
@@ -85,13 +92,6 @@ from app.live.public import (
     RegulatoryMetricResult,
     RegulatoryRun,
     RegulatoryValidation,
-)
-from app.models import (
-    CanonicalCounterparty,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
-    CanonicalReferenceRow,
 )
 from app.policy.public import jurisdictions, regulatory_parameters
 from app.reporting.service import filing_reconciliation

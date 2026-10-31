@@ -2,7 +2,7 @@
 and per-bank overlays.
 
 Canonical market data entities (curves, FX rates, indices, ratings) live in
-``app.models.canonical``; this module owns the records that describe *how*
+``app.data_engine.models.canonical``; this module owns the records that describe *how*
 market data arrives: one configured vendor connection per bank (credential
 lifecycle per market_data_adapter.md §10) and the per-month quota ledger the
 pull framework enforces (§11). These are operational tables, not canonical
@@ -43,11 +43,11 @@ from sqlalchemy import (
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin
-from app.domain.ingestion.constants import (
+from app.data_engine.domain.ingestion.constants import (
     MARKET_DATA_CONNECTION_STATUSES,
     MARKET_DATA_VENDORS,
 )
+from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin
 
 # Overlay vocabulary (spec §9): what golden object the adjustment attaches
 # to, how it adjusts, and which FTP-style component it decomposes into.

@@ -131,8 +131,8 @@ SEAM_MODULES: frozenset[str] = frozenset({"app.bi.service.enqueue", "app.bi.serv
 #: a BI feature route, which is BI and therefore not scanned at all.
 SEAM_IMPORTERS: frozenset[str] = frozenset(
     {
-        "app/services/ingestion.py",
-        "app/services/canonical_withdrawal.py",
+        "app/data_engine/service/ingestion.py",
+        "app/data_engine/service/canonical_withdrawal.py",
         "app/live/service/pipeline.py",
         "app/live/service/live_refresh_triggers.py",
         "app/services/scheduler.py",

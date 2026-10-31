@@ -38,9 +38,9 @@ from app.adapters.market_data.aequor_desk.adapter import (
 from app.adapters.market_data.errors import MarketDataError
 from app.adapters.market_data.pull_runner import MarketDataBundle, ScopeExtraction, execute_pull
 from app.adapters.market_data.scope_taxonomy import DataScope
+from app.data_engine.public import bank_slug
 from app.identity.public import Bank
 from app.models import DeskDetermination, DeskPublication, Organization
-from app.services.ingestion import bank_slug
 from app.services.market_desk import determinations, entitlements, register
 
 if TYPE_CHECKING:

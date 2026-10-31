@@ -17,9 +17,10 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.data_engine.public import IngestionBatch, MappingConfigRecord, TranslationFailure
 from app.identity.public import Bank, IntegrationKey, SsoConnection
 from app.live.public import LiveFinding, LiveMetric, RegulatoryRun
-from app.models import IngestionBatch, MappingConfigRecord, Organization, TranslationFailure
+from app.models import Organization
 from app.operator.schemas import (
     TenantCapitalThresholdRead,
     TenantConfigBankRead,

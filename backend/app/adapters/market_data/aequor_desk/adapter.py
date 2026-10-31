@@ -63,7 +63,7 @@ from app.adapters.market_data.pull_runner import (
 from app.adapters.market_data.quota_tracker import estimate
 from app.adapters.market_data.scope_taxonomy import DataScope, PullFrequency
 from app.adapters.market_data.scope_translator import Catalog
-from app.domain.ingestion.contracts import (
+from app.data_engine.domain.ingestion.contracts import (
     AdapterConfig,
     AdapterIdentity,
     CanonicalRecords,

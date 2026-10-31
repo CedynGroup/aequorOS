@@ -203,7 +203,7 @@ BANK_PLANE_SYMBOLS: frozenset[str] = frozenset(
 BANK_PLANE_MODULES: frozenset[str] = frozenset(
     {
         "app.identity.models.bank",
-        "app.models.canonical",
+        "app.data_engine.models.canonical",
         "app.policy.models.parameter_register",
         "app.live.models.regulatory",
         "app.live.models.regulatory_run",

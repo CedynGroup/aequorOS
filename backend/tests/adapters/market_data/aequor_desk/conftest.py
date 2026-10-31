@@ -8,8 +8,8 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.adapters.market_data.aequor_desk.adapter import AequorDeskAdapter
+from app.data_engine.service.ingestion import bank_slug
 from app.models import Bank, DeskDetermination
-from app.services.ingestion import bank_slug
 from app.services.market_desk import determinations, observations, register
 from tests.support.helpers import ORG_1, USER_1
 from tests.support.inmemory_storage import InMemoryStorageClient

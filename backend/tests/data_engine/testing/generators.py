@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from hypothesis import strategies as st
 
-from app.domain.ingestion.contracts import (
+from app.data_engine.domain.ingestion.contracts import (
     CanonicalRecords,
     CounterpartyData,
     PositionData,

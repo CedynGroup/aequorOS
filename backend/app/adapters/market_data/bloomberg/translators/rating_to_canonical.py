@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 _CREDIT_RATING_PREFIX = "CREDIT_RATING_"
 
 # Bloomberg long-term local-currency issuer rating mnemonics -> canonical
-# agencies (app.domain.ingestion.constants.RATING_AGENCIES).
+# agencies (app.data_engine.domain.ingestion.constants.RATING_AGENCIES).
 _AGENCY_BY_FIELD_PREFIX: tuple[tuple[str, str], ...] = (
     ("RTG_MDY_", "moodys"),
     ("RTG_SP_", "sp"),

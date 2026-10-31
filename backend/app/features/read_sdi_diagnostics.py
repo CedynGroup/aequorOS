@@ -23,11 +23,10 @@ from app.api.deps import (
     TenantContext,
 )
 from app.credit.service import loan_classification
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.public import CanonicalPositionSnapshot, is_current_generation
 from app.identity import public as banks_service
 from app.identity.public import Bank
-from app.models import CanonicalPositionSnapshot
-from app.models.canonical import is_current_generation
 from app.schemas.sdi import (
     CapitalCheckRead,
     DelinquencyBucketRead,

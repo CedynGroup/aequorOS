@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
+from app.data_engine.public import IngestionBatch
 from app.db.base import utc_now
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
@@ -31,7 +32,6 @@ from app.live.schemas.live import (
     RefreshRequest,
 )
 from app.live.service import fact_derivation
-from app.models import IngestionBatch
 from app.policy.public import module_scope
 from app.services import job_queue
 from app.services.audit import record_event

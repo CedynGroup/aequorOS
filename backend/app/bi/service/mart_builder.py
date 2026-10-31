@@ -122,6 +122,12 @@ from app.bi.service.identity_policy import connected
 from app.bi.service.versions import BUILDER_VERSION
 from app.core.key_management.maintenance import lock_bank
 from app.credit.public import loan_classification
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.domain.ingestion.reference_schemas import (
+    business_units,
+    gl_segment_balances,
+    performance_targets,
+)
 from app.data_engine.public import (
     CanonicalCounterparty,
     CanonicalGlAccount,
@@ -134,12 +140,6 @@ from app.data_engine.public import (
 )
 from app.db.base import utc_now
 from app.domain.capital import loan_classification as classification_engine
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.domain.ingestion.reference_schemas import (
-    business_units,
-    gl_segment_balances,
-    performance_targets,
-)
 from app.identity.public import Bank, Outlet
 from app.live.domain.gl import pl_mapping
 from app.live.domain.positions.families import LOAN_CATEGORY_MAP, loan_family

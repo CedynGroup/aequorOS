@@ -4,7 +4,7 @@ Calculation modules request market data by business meaning — a currency's
 yield curve, an FX pair's spot, an issuer's rating — plus an as-of date and
 the institution, never by vendor concept (market_data_adapter.md §5, §15).
 Reads come from the canonical market-data entities the adapters persist
-(``app.models.canonical``), so every answer is multi-source-aware:
+(``app.data_engine.models.canonical``), so every answer is multi-source-aware:
 
 - **Current generation only** — ``superseded_by IS NULL`` (§4.3 idempotent
   re-pull semantics).
@@ -32,14 +32,14 @@ from sqlalchemy.orm import Session
 
 from app.adapters.market_data.cache import is_fresh
 from app.adapters.market_data.scope_taxonomy import ScopeCategory
-from app.db.base import utc_now
-from app.models import (
+from app.data_engine.public import (
     CanonicalCounterpartyRating,
     CanonicalFxRate,
     CanonicalMarketIndex,
     CanonicalYieldCurve,
     CanonicalYieldCurvePoint,
 )
+from app.db.base import utc_now
 
 # Validation statuses a calculation may consume (mirrors fact_derivation).
 _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
@@ -440,8 +440,7 @@ def get_fx_spot(  # noqa: PLR0913 - scope + tenant + as-of is the request key
             CanonicalFxRate.as_of_date.desc(),
             CanonicalFxRate.ingested_at.desc(),
             CanonicalFxRate.id.desc(),
-        )
-        .limit(1)
+        ).limit(1)
     )
     if row is None:
         return None
@@ -671,7 +670,8 @@ def list_fx_forward_scopes(
             CanonicalFxRate.base_currency,
             CanonicalFxRate.quote_currency,
             CanonicalFxRate.tenor_months,
-        ).where(
+        )
+        .where(
             CanonicalFxRate.organization_id == organization_id,
             CanonicalFxRate.bank_id == bank_id,
             CanonicalFxRate.rate_type == "forward",
@@ -680,7 +680,8 @@ def list_fx_forward_scopes(
             CanonicalFxRate.superseded_by.is_(None),
             CanonicalFxRate.withdrawn_at.is_(None),
             CanonicalFxRate.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
-        ).distinct()
+        )
+        .distinct()
     ).all()
     return sorted((base, quote, int(tenor)) for base, quote, tenor in rows if tenor is not None)
 

@@ -74,8 +74,16 @@ from app.credit.service.loan_classification import (
     classified_loans,
     classify_loan_book,
 )
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.domain.ingestion.reference_schemas import business_units
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.domain.ingestion.reference_schemas import business_units
+from app.data_engine.public import (
+    CanonicalCounterparty,
+    CanonicalLoanEvent,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+    CanonicalReferenceRow,
+)
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank, BankRead, BankReportingPeriodRead, EffectiveDataScope
 from app.liquidity.public import (
@@ -93,14 +101,6 @@ from app.live.public import (
     current_fact_period_or_409,
     findings_from_validations,
     live_block,
-)
-from app.models import (
-    CanonicalCounterparty,
-    CanonicalLoanEvent,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
-    CanonicalReferenceRow,
 )
 from app.policy.public import ParamCreditThreshold, get_active_params, jurisdictions
 from app.policy.public import regulatory_parameters as rp
@@ -1264,7 +1264,7 @@ def resolve_data_scope(
 
 #: The IFRS 9 stages a canonical snapshot may state. Not a vocabulary of this
 #: module's making: it is the check constraint
-#: ``ck_canonical_position_snapshots_ifrs9_stage`` (``app/models/canonical.py``),
+#: ``ck_canonical_position_snapshots_ifrs9_stage`` (``app/data_engine/models/canonical.py``),
 #: so a stage outside it cannot exist on a row and asking for one is a mistake
 #: to name rather than a filter to drop.
 _IFRS9_STAGES: tuple[int, ...] = (1, 2, 3)

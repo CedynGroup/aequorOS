@@ -44,9 +44,7 @@ from app.adapters.market_data.quota_tracker import record_consumption
 from app.adapters.market_data.scope_taxonomy import DataScope
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
-from app.db.base import utc_now
-from app.identity.public import Bank
-from app.models import (
+from app.data_engine.public import (
     CanonicalCounterpartyRating,
     CanonicalFxRate,
     CanonicalMarketIndex,
@@ -55,6 +53,8 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
+from app.db.base import utc_now
+from app.identity.public import Bank
 from app.services import job_queue
 from app.storage.client import ObjectMetadata, StorageLocation
 from app.storage.factory import get_storage_client

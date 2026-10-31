@@ -55,8 +55,7 @@ from app.adapters.market_data.scope_translator import (
     requests_for,
     supported_scopes,
 )
-from app.db.base import utc_now
-from app.domain.ingestion.contracts import (
+from app.data_engine.domain.ingestion.contracts import (
     AdapterIdentity,
     ConnectionStatus,
     HealthStatus,
@@ -64,6 +63,7 @@ from app.domain.ingestion.contracts import (
     SourceSchema,
     SourceTable,
 )
+from app.db.base import utc_now
 
 if TYPE_CHECKING:
     from datetime import date
@@ -82,7 +82,7 @@ if TYPE_CHECKING:
     )
     from app.adapters.market_data.bloomberg.transport import BlpTransport
     from app.adapters.market_data.scope_taxonomy import PullFrequency
-    from app.domain.ingestion.contracts import (
+    from app.data_engine.domain.ingestion.contracts import (
         AdapterConfig,
         CanonicalRecords,
         EntityType,

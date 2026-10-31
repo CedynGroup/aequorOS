@@ -352,7 +352,7 @@ def test_monthly_figures_are_none_without_a_generation_in_the_window(basis: str)
 
 def test_the_register_admits_only_a_normal_and_a_contra_sign() -> None:
     """Pinned against the ingestion contract's own enum, not restated by hand."""
-    from app.domain.ingestion.reference_schemas.gl_mapping_bsd7 import (  # noqa: PLC0415
+    from app.data_engine.domain.ingestion.reference_schemas.gl_mapping_bsd7 import (  # noqa: PLC0415
         SIGNS,
     )
 

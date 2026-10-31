@@ -43,15 +43,10 @@ from app.adapters.market_data.pull_runner import (
     execute_pull,
 )
 from app.adapters.market_data.scope_taxonomy import DataScope
+from app.data_engine.public import CanonicalCounterpartyRating, CanonicalMarketIndex, bank_slug
 from app.db.base import utc_now
 from app.identity.public import Bank
-from app.models import (
-    CanonicalCounterpartyRating,
-    CanonicalMarketIndex,
-    DeskObservation,
-    DeskOperatingEnvironmentAssessment,
-    Organization,
-)
+from app.models import DeskObservation, DeskOperatingEnvironmentAssessment, Organization
 from app.policy.public import Jurisdiction
 from app.rating.domain.operating_environment import (
     DEFAULT_PARAMETERS,
@@ -63,7 +58,6 @@ from app.rating.domain.operating_environment import (
     compute_operating_environment,
     normalize_sovereign_category,
 )
-from app.services.ingestion import bank_slug
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session

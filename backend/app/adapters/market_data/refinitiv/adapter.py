@@ -70,8 +70,7 @@ from app.adapters.market_data.scope_translator import (
     requests_for,
     supported_scopes,
 )
-from app.db.base import utc_now
-from app.domain.ingestion.contracts import (
+from app.data_engine.domain.ingestion.contracts import (
     AdapterConfig,
     AdapterIdentity,
     CanonicalRecords,
@@ -82,6 +81,7 @@ from app.domain.ingestion.contracts import (
     MappingConfig,
     SourceSchema,
 )
+from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models import MarketDataQuotaUsage
 

@@ -50,7 +50,7 @@ from app.adapters.market_data.scope_taxonomy import (
     category_of,
 )
 from app.adapters.market_data.scope_translator import Catalog
-from app.domain.ingestion.contracts import (
+from app.data_engine.domain.ingestion.contracts import (
     AdapterConfig,
     AdapterIdentity,
     CanonicalRecords,

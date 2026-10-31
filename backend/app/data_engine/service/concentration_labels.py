@@ -12,7 +12,11 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.core.key_management.concentration_identity import counterparty_group_key
 from app.core.key_management.presentation import LOCKED_TEXT, contains_placeholder
 from app.core.tenancy import TenantContext
-from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
+from app.data_engine.models.canonical import (
+    CanonicalCounterparty,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+)
 
 
 def counterparty_group_labels(

@@ -128,14 +128,14 @@ def run_tick(session: Session, job: Job) -> None:
     temenos_pulls = 0
     if temenos_enabled:
         # Lazy import: temenos_jobs pulls in the ingestion module tree.
-        from app.services.temenos_jobs import enqueue_due_temenos_pulls  # noqa: PLC0415
+        from app.data_engine.service.temenos_jobs import enqueue_due_temenos_pulls  # noqa: PLC0415
 
         temenos_pulls = len(enqueue_due_temenos_pulls(session, org_id, now=now))
 
     database_direct_probes = 0
     if database_direct_health_enabled:
         # Lazy import: the probe pulls in the database-direct adapter tree.
-        from app.services.database_direct_jobs import (  # noqa: PLC0415
+        from app.data_engine.service.database_direct_jobs import (  # noqa: PLC0415
             enqueue_due_database_direct_probes,
         )
 

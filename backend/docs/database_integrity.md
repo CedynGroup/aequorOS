@@ -94,7 +94,7 @@ from `backend/`; the service wrapper and fixtures isolate the test schemas.
 The [API integration guide §3.5](../../docs/API_INTEGRATION.md#35-reference-datasets)
 owns reference ingestion validation, consumed field names, retained alternatives
 and adapter mapping requirements. Registered schemas live in
-`app/domain/ingestion/reference_schemas/` and are enforced by `ReferenceRowData`.
+`app/data_engine/domain/ingestion/reference_schemas/` and are enforced by `ReferenceRowData`.
 
 At head before this change (`202610120099`), 25 bounded model string declarations
 in `jobs` and the original case/document/assessment/finding vertical were actually
@@ -110,7 +110,7 @@ column type parity test normalizes only the documented JSON/JSONB difference;
 other type/width differences fail. Canonical FK/key/index parity remains intact.
 
 Coverage: `tests/domain/ingestion/test_reference_row_enforcement.py`,
-`tests/adapters/test_reference_boundary.py`, adapter end-to-end tests and
+`tests/data_engine/adapters/test_reference_boundary.py`, adapter end-to-end tests and
 `tests/db/test_column_representation_parity.py`.
 
 ## Measured reverse-lineage indexes (`202610140100`)

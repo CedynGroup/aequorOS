@@ -59,7 +59,7 @@ dependencies = [
 ]
 
 # Driver-heavy database-direct backends. Lazily imported by
-# app/adapters/database_direct, so the default environment stays installable and
+# app/data_engine/adapters/database_direct, so the default environment stays installable and
 # fixture tests run without them. Install when wiring a live source database:
 #   uv sync --extra db-direct
 [project.optional-dependencies]

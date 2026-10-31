@@ -16,7 +16,7 @@ these tables: without it Postgres exempts the owner from its own policy.
 Every code path that touches the table already runs on a session that sets the
 ``app.organization_id`` GUC (``app/api/deps.py::get_tenant_db_session`` for the
 API, ``app/worker.py::_new_session`` for ``pipeline_refresh``/``official_run``,
-``app/services/history_loader.py`` for bulk loads) and already filters by
+``app/data_engine/service/history_loader.py`` for bulk loads) and already filters by
 ``organization_id`` in SQL, so the policy is a second wall behind an existing
 one — not a new access contract.
 

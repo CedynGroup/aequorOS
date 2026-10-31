@@ -9,10 +9,9 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.api.deps import DbSession, LiquidityMonitoringResource, TenantContext
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.public import CanonicalPositionSnapshot, is_current_generation
 from app.identity.public import Bank
-from app.models import CanonicalPositionSnapshot
-from app.models.canonical import is_current_generation
 from app.policy.public import institution_types
 from app.schemas.sdi import (
     LiquidityMonitoringRead,
