@@ -1136,7 +1136,8 @@ def test_pre_cutover_login_still_runs_the_application(
                     for org in (ORG_1, ORG_2):
                         connection.execute(
                             text(
-                                f"INSERT INTO {quote}.organizations (id,name,created_at,updated_at) "
+                                f"INSERT INTO {quote}.organizations "
+                                "(id,name,created_at,updated_at) "
                                 "VALUES (:org,'Privilege fixture',now(),now())"
                             ),
                             {"org": org},
@@ -1173,7 +1174,8 @@ def test_pre_cutover_login_still_runs_the_application(
                         UUID,
                         connection.execute(
                             text(
-                                "SELECT * FROM aqs_worker_claim_job(now(), ARRAY[:job_type], 'probe')"
+                                "SELECT * FROM aqs_worker_claim_job("
+                                "now(), ARRAY[:job_type], 'probe')"
                             ),
                             {"job_type": "scheduled_tick"},
                         ).scalar_one(),
