@@ -92,17 +92,22 @@ class UploadDeletionRace:
     upload_pid: int = 0
 
     def complete_upload(self) -> str:
-        with Session(self.api_engine, expire_on_commit=self.expire_on_commit) as completing:
-            completing.info["organization_id"] = ORG_1
-            self.upload_pid = cast(int, completing.scalar(text("SELECT pg_backend_pid()")))
-            result = documents.complete_upload(
-                completing,
-                self.ctx,
-                self.document_id,
-                settings=self.settings,
-                storage_client=self.storage,
-            )
-            return result.status
+        with self.api_engine.connect() as connection:
+            self.upload_pid = cast(int, connection.scalar(text("SELECT pg_backend_pid()")))
+            # PID discovery is test setup: do not spend the accelerated idle
+            # budget before the service starts. Retain this exact backend for
+            # the transaction-state assertion while storage is blocked.
+            connection.commit()
+            with Session(connection, expire_on_commit=self.expire_on_commit) as completing:
+                completing.info["organization_id"] = ORG_1
+                result = documents.complete_upload(
+                    completing,
+                    self.ctx,
+                    self.document_id,
+                    settings=self.settings,
+                    storage_client=self.storage,
+                )
+                return result.status
 
     def cleanup(self) -> None:
         with Session(self.worker_engine, expire_on_commit=False) as worker:
