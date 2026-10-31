@@ -22,7 +22,7 @@ import SdiLiquidityView from "@/features/liquidity/components/SdiLiquidityView";
 import {
   LandingInsightStrip,
   useKpiExplain,
-} from "@/components/bi/InsightStrip";
+} from "@/features/bi/public";
 import { runComputedAt, runThresholds } from "@/features/liquidity/components/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import LiveEngineNote from "@/components/live/LiveEngineNote";

@@ -6,8 +6,8 @@
  * bar means the shock helped the ratio.
  */
 
-import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
-import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
+import { EChart, type BiEChartsOption } from "@/features/bi/public";
+import { seriesColor, useChartTokens } from "@/features/bi/public";
 import {
   axisTooltip,
   BAR_SERIES_BASE,

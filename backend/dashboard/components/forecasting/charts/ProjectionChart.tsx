@@ -12,8 +12,8 @@
  * than collapsing to a zero-width band at the base line.
  */
 
-import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
-import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
+import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
+import { seriesColor, useChartTokens } from "@/features/bi/components/echartsTheme";
 import {
   axisTooltip,
   gapAwareData,

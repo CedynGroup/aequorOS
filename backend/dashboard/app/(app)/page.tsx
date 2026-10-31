@@ -41,7 +41,7 @@ import DeferredRatioTrendChart from "@/components/home/DeferredRatioTrendChart";
 import WindowAnalysis from "@/components/home/WindowAnalysis";
 import OperationalFeed from "@/components/home/OperationalFeed";
 import SdiLiquiditySummary from "@/components/home/SdiLiquiditySummary";
-import { LandingInsightStrip } from "@/components/bi/InsightStrip";
+import { LandingInsightStrip } from "@/features/bi/components/InsightStrip";
 import { centralBankName } from "@/lib/format";
 
 export default function CommandCenterPage() {

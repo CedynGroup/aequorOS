@@ -42,7 +42,7 @@ import RatioPathChart from "@/components/forecasting/charts/RatioPathChart";
 import {
   LandingInsightStrip,
   useKpiExplain,
-} from "@/components/bi/InsightStrip";
+} from "@/features/bi/components/InsightStrip";
 import ForecastingRunGate from "@/components/forecasting/RunGate";
 import { useScenarioRunSet } from "@/components/forecasting/hooks";
 import {

@@ -7,7 +7,7 @@ import { SkeletonLine } from "./Skeleton";
  * Standard card wrapper for a chart: title row + actions slot, fixed-height
  * body, and a built-in skeleton loading state.
  *
- * Pass the SAME `height` to the chart inside it — `components/bi/EChart` sizes a
+ * Pass the SAME `height` to the chart inside it — `features/bi/components/EChart` sizes a
  * canvas in pixels rather than to its container, so the two numbers agreeing is
  * what keeps the card from clipping or leaving a gap.
  */
