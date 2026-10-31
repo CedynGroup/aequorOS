@@ -7,7 +7,7 @@ sub-ledgers do NOT reconcile — assets exceed liabilities + equity by 15.28m GH
 CAR, RWA, the BoG return values) is therefore computed on a balance sheet whose
 funding side is 11.6% manufactured.
 
-The fail-closed control (``app/services/reconciliation.py``) refuses to derive
+The fail-closed control (``app/data_engine/service/reconciliation.py``) refuses to derive
 official facts on such a book. Rather than change a single fixture balance —
 which would move every golden — the fixture now carries the SAME governed
 exception a real bank would need: reason, requester, a named second approver,
@@ -25,8 +25,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.data_engine.service import reconciliation
 from app.models import Bank
-from app.services import reconciliation
 
 #: The fixture's gap is 10.41% of assets; the ceiling sits just above it so the
 #: exception covers the known defect and nothing wider.

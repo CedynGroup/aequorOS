@@ -55,6 +55,17 @@ from app.bi.models.marts import (
 from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.core.config import get_settings
 from app.core.key_management.fields import ProtectedText
+from app.credit.domain.dpd_bands import DPD_BAND_CODES
+from app.data_engine.domain.ingestion import optional_position_fields
+from app.data_engine.domain.ingestion.reference_schemas import performance_targets
+from app.data_engine.models.canonical import (
+    CanonicalCounterparty,
+    CanonicalGlAccount,
+    CanonicalLoanEvent,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+)
 from app.db.base import Base
 from app.db.session import get_bi_engine, get_bi_sessionmaker, set_tenant_rls_context
 from app.domain.authority.registry import REGISTRY, AdvisoryDesignation, MetricFamily, Regime
@@ -66,29 +77,18 @@ from app.domain.capital.loan_classification import (
     BASIS_UNCLASSIFIED,
     SDI_GRADE_ORDER,
 )
-from app.domain.credit.dpd_bands import DPD_BAND_CODES
-from app.domain.ingestion import optional_position_fields
-from app.domain.ingestion.reference_schemas import performance_targets
-from app.domain.irr.engine import IRR_BUCKETS
-from app.domain.liquidity.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
-from app.domain.positions.families import (
+from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
+from app.irrbb.domain.engine import IRR_BUCKETS
+from app.liquidity.domain.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
+from app.live.domain.positions.families import (
     LOAN_CATEGORY_MAP,
     PAST_DUE_CATEGORY,
     UNCLASSIFIED_FAMILY,
     unclassified_category,
 )
-from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
-from app.models.canonical import (
-    CanonicalCounterparty,
-    CanonicalGlAccount,
-    CanonicalLoanEvent,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
-)
-from app.models.institution_type import InstitutionType
-from app.models.live import LIVE_MODULES, LiveMetric
-from app.models.regulatory_run import RegulatoryRun
+from app.live.models.live import LIVE_MODULES, LiveMetric
+from app.live.models.regulatory_run import RegulatoryRun
+from app.policy.models.institution_type import InstitutionType
 from tests.support.database import (
     adopt_application_engine,
     managed_engine,
@@ -584,7 +584,7 @@ def test_target_vocabularies_match_the_register_that_supplies_them() -> None:
 
     ``app/bi/models/marts.py`` mirrors the ``performance_targets`` register's words
     rather than importing them, because ``app.models`` stays free of
-    ``app.domain.ingestion``. A mirror with nothing holding the two sides
+    ``app.data_engine.domain.ingestion``. A mirror with nothing holding the two sides
     together is the defect it looks like a fix for: a grain added to the
     register would be accepted on ingestion and then refused by
     ``ck_bi_fact_target_period_grain`` when the builder tried to store its

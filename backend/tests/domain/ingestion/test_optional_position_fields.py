@@ -19,9 +19,9 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.domain.ingestion.contracts import CanonicalRecords, PositionData
-from app.domain.ingestion.optional_position_fields import (
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.domain.ingestion.contracts import CanonicalRecords, PositionData
+from app.data_engine.domain.ingestion.optional_position_fields import (
     ACCOUNT_STATUS_ALIASES,
     ACCOUNT_STATUSES,
     CHANNEL_ALIASES,
@@ -32,7 +32,7 @@ from app.domain.ingestion.optional_position_fields import (
     normalize_positions,
     stated_arrears_amount,
 )
-from app.domain.ingestion.validation import (
+from app.data_engine.domain.ingestion.validation import (
     RuleConfig,
     ValidationConfig,
     ValidationContext,

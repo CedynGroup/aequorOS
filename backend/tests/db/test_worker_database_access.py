@@ -42,6 +42,8 @@ from app.db.session import get_storage_session, worker_tenant_context
 from app.identity.api import auth as auth_api
 from app.identity.public import Bank
 from app.identity.service import sso_config
+from app.market_data.service.market_desk import capture_job
+from app.market_data.service.market_desk.sources import ParseResult, ingest_capture
 from app.models import (
     AuditEvent,
     DeskDetermination,
@@ -56,8 +58,6 @@ from app.models import (
 )
 from app.operator.deps import get_operator_sessionmaker, resolve_operator_database_url
 from app.services import job_queue, scheduler
-from app.services.market_desk import capture_job
-from app.services.market_desk.sources import ParseResult, ingest_capture
 from app.storage.client import StorageLocation
 from app.storage.encryption import ObjectEncryption
 from scripts import create_operator

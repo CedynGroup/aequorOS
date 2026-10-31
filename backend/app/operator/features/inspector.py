@@ -31,15 +31,15 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.core import security
 from app.core.config import get_operator_settings, get_settings
 from app.db.base import utc_now
-from app.models.operator import OPERATOR_ROLE_RANK
 from app.operator.deps import Operator, OperatorDb, record_operator_action
-from app.operator.services import inspector
-from app.schemas.operator import (
+from app.operator.models import OPERATOR_ROLE_RANK
+from app.operator.schemas import (
     InspectorActTokenRead,
     InspectorSessionCreate,
     InspectorSessionListRead,
     InspectorSessionRead,
 )
+from app.operator.services import inspector
 from app.services.public_ids import normalize_public_id
 
 #: An act-as-examiner token never outlives this window, and never outlives its

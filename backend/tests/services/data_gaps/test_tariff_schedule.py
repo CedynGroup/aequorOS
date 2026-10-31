@@ -29,9 +29,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.data_engine.domain.ingestion.reference_schemas import schema_for
+from app.data_engine.domain.ingestion.reference_schemas.tariff_schedule import SCHEMA
 from app.db.session import get_sessionmaker
-from app.domain.ingestion.reference_schemas import schema_for
-from app.domain.ingestion.reference_schemas.tariff_schedule import SCHEMA
 from app.models import Bank, CanonicalReferenceRow
 from app.reporting.service.bog_forms.linemaps import bsd15a, bsd15b, line_maps_for
 from app.reporting.service.exports import render_bog_form_xlsx
@@ -48,7 +48,7 @@ DOMESTIC, RANGE, INTL = bsd15a.DOMESTIC, bsd15a.RANGE, bsd15b.SHEET
 #: numeric-sheet block sub-headings ("Foreign Currency Account" / "Foreign
 #: Exchange Account") take no amount — deliberately absent from the register
 RANGE_HEADINGS = {"FX.1", "FX.6"}
-#: the ML-ETL type coercer's null sentinels (app/etl/preprocessing/type_coercion)
+#: the ML-ETL type coercer's null sentinels (app/data_engine/etl/preprocessing/type_coercion)
 NULL_SENTINELS = {
     "",
     "n/a",

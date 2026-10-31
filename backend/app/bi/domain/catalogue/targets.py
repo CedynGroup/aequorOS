@@ -81,7 +81,7 @@ BANK_WIDE_SCOPE = ""
 
 #: Every register version a bank may state, each exposed as its own set of
 #: members (D-072). Mirrors ``performance_targets.VERSIONS`` rather than importing
-#: it — ``app/domain/ingestion`` is upstream of ``app/bi/domain`` and the register
+#: it — ``app/data_engine/domain/ingestion`` is upstream of ``app/bi/domain`` and the register
 #: that feeds the catalogue must not depend on the catalogue that reads it — and
 #: the parity is asserted from the catalogue side, which is the side that may see
 #: both (``tests/bi/domain/test_targets.py``). ``app/bi/models/marts.py::TARGET_VERSIONS``

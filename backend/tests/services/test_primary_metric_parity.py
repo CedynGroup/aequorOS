@@ -22,8 +22,10 @@ import re
 from pathlib import Path
 
 from app.domain.authority.registry import REGISTRY, AdvisoryDesignation
-from app.models.live import LIVE_MODULES
-from app.services.window_analytics import _PRIMARY_METRIC_KEY  # noqa: PLC2701 - the map under test
+from app.liquidity.service.window_analytics import (
+    _PRIMARY_METRIC_KEY,  # noqa: PLC2701 - the map under test
+)
+from app.live.models.live import LIVE_MODULES
 
 _DASHBOARD = Path(__file__).resolve().parents[2] / "dashboard" / "components"
 _MODULE_DISPLAY = _DASHBOARD / "live" / "moduleDisplay.ts"

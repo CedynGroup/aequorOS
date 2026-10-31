@@ -20,8 +20,15 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.domain.authority.results import FigureResult
-from app.domain.liquidity.engine import LcrResult, LiquidityFact, LiquidityParams, NsfrResult
 from app.identity.service import authorization
+from app.liquidity.domain.engine import LcrResult, LiquidityFact, LiquidityParams, NsfrResult
+from app.liquidity.schemas.regulatory_liquidity import (
+    LiquidityDashboardRead,
+    RegulatoryRunCreate,
+    RegulatoryRunRead,
+    RegulatoryScenarioCode,
+)
+from app.liquidity.service import regulatory_liquidity, window_analytics
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -29,14 +36,8 @@ from app.models import (
     CurrentFinancialFact,
     ParamCapitalThreshold,
 )
-from app.schemas.regulatory_liquidity import (
-    LiquidityDashboardRead,
-    RegulatoryRunCreate,
-    RegulatoryRunRead,
-    RegulatoryScenarioCode,
-)
-from app.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn
-from app.services import analysis_workbench, regulatory_liquidity, window_analytics
+from app.stress.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn
+from app.stress.service import analysis_workbench
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

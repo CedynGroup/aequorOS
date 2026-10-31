@@ -30,7 +30,7 @@ from app.operator.features.provision import get_provisioning_clients
 from app.operator.main import create_operator_app
 from app.operator.services import operator_auth
 from app.operator.services.tenant_provisioning import ProvisioningClients
-from app.services.regulatory_parameters import seed_rows as _regparam_seed_rows
+from app.policy.service.regulatory_parameters import seed_rows as _regparam_seed_rows
 from app.storage.config import StorageEngineSettings
 from tests.conftest import (
     _LazyTestApp,

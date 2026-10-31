@@ -25,17 +25,12 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, load_only
 
+from app.data_engine.domain.ingestion.constants import STUCK_DEDUP_STATUSES
+from app.data_engine.public import IngestionBatch, MappingConfigRecord
 from app.db.base import utc_now
-from app.domain.ingestion.constants import STUCK_DEDUP_STATUSES
 from app.identity.public import Bank
-from app.models import (
-    BankReportingPeriod,
-    IngestionBatch,
-    MappingConfigRecord,
-    ParamCapitalThreshold,
-    ParamLiquidityThreshold,
-)
-from app.schemas.operator import (
+from app.live.public import BankReportingPeriod
+from app.operator.schemas import (
     FixConfigChangeRead,
     FixConfigRequest,
     FixJobEnqueuedRead,
@@ -46,11 +41,12 @@ from app.schemas.operator import (
     FixRerunIngestionRead,
     FixRerunIngestionRequest,
 )
+from app.policy.public import ParamCapitalThreshold, ParamLiquidityThreshold
 from app.services import job_queue
 from app.services.public_ids import normalize_public_id
 
 #: The out-of-band ML-ETL dedup job type, named literally for the same reason as
-#: in ``operator_views``: importing ``app.services.etl_dedup_jobs`` would drag the
+#: in ``operator_views``: importing ``app.data_engine.service.etl_dedup_jobs`` would drag the
 #: ETL and model-loading stack into the operator app. ``job_queue.enqueue``
 #: validates it against the allow-list.
 _ETL_DEDUP_JOB_TYPE = "etl_dedup"

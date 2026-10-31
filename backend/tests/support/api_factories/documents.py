@@ -6,8 +6,8 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
+from app.case.schemas.documents import UploadRequestResponse
 from app.integrations.storage.base import StoredObjectHead
-from app.schemas.documents import UploadRequestResponse
 from tests.support.factories import CreatesApiCase, upload_payload
 from tests.support.helpers import headers
 

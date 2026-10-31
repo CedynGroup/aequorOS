@@ -27,8 +27,8 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Literal
 
-from app.domain.policy import Direction
 from app.icaap.domain.units import HUNDRED, ZERO, ratio
+from app.policy.domain import Direction
 
 Rag = Literal["green", "amber", "red", "black", "none"]
 Trend = Literal["improving", "deteriorating", "stable", "unknown"]

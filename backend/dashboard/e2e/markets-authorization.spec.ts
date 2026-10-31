@@ -29,7 +29,7 @@ async function fullCoverageWorkbook(): Promise<Buffer> {
       "run",
       "python",
       "-c",
-      "import sys; from tests.adapters.market_data.manual_upload.fixtures import build_full_coverage_workbook; sys.stdout.buffer.write(build_full_coverage_workbook())",
+      "import sys; from tests.market_data.adapters.manual_upload.fixtures import build_full_coverage_workbook; sys.stdout.buffer.write(build_full_coverage_workbook())",
     ],
     {
       cwd: BACKEND_DIR,

@@ -26,15 +26,15 @@ from app.bi.models.marts import (
     BiFactPositionDaily,
     BiFactPositionEom,
 )
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.domain.ingestion.contracts import CanonicalRecords, PositionData
-from app.domain.ingestion.optional_position_fields import (
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.domain.ingestion.contracts import CanonicalRecords, PositionData
+from app.data_engine.domain.ingestion.optional_position_fields import (
     OFFICER_ID_MAX_LENGTH,
     POSITION_ATTRIBUTE_TEXT_LIMITS,
     normalize_positions,
     over_long_text_attributes,
 )
-from app.domain.ingestion.validation import (
+from app.data_engine.domain.ingestion.validation import (
     RULE_NAMES,
     RuleConfig,
     ValidationConfig,

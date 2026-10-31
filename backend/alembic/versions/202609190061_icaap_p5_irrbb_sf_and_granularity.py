@@ -7,7 +7,7 @@ nineteen time buckets, the six shock tables, the rotation coefficients, the
 behavioural multipliers, the deposit caps, the materiality threshold, the
 scenario sets, the earnings horizon and the commencement date all reach it from
 this control plane, and an absent row is a typed ``missing_parameter`` refusal
-rather than a default (``app/domain/irr/standardised_params.py``).
+rather than a default (``app/irrbb/domain/standardised_params.py``).
 
 Nine further rows calibrate the full Gordy-Lutkebohmert granularity adjustment.
 It is not regulator-specific, so those carry Basel IRB provenance where one
@@ -29,7 +29,7 @@ row ships ``confirmation_status='pending'`` and every output that quotes one
 says so (D-039).
 
 As in ``202609190054``-``202609190059`` the rows are PINNED here rather than
-imported from ``app.services.regulatory_parameters``: a later catalogue edit
+imported from ``app.policy.service.regulatory_parameters``: a later catalogue edit
 must not change what this revision seeded. A test holds the pinned rows equal
 to the catalogue's today.
 

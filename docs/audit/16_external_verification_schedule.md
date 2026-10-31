@@ -261,7 +261,7 @@ because they touch numbers a bank sees:
    The hermetic fixture ships `leverage_min = 3`, which is **Basel III's** figure and _below_
    BoG ¶90's 6%.
 2. **The bank `car_min = 13` seed cites "Basel CRD (10% + 3% CCB)"**
-   (`backend/app/services/regulatory_parameters.py:163-170`). The arithmetic is right and
+   (`backend/app/policy/service/regulatory_parameters.py:163-170`). The arithmetic is right and
    matches the in-force figure, but **the CRD is the Bank of Ghana's Capital Requirements
    Directive, not Basel's.** See `WS-A12-2` in the remediation register.
 

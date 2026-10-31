@@ -8,7 +8,7 @@ BG/GOV/SEC/2025/23, plus the restructure cure counts of its paragraph 12
 credit PR-5 onward. The notice binds banks and SDIs alike, so both classes
 get the same rows.
 
-Values come from ``app.services.regulatory_parameters.SEED_PARAMETERS`` — the
+Values come from ``app.policy.service.regulatory_parameters.SEED_PARAMETERS`` — the
 single catalogue the resolver and the hermetic seed also read. Rows already
 present are skipped (idempotent against a database seeded either way).
 ``regulatory_parameter`` is a global, non-RLS reference table.
@@ -66,7 +66,7 @@ def _seed_table() -> sa.TableClause:
 
 
 def upgrade() -> None:
-    from app.services.regulatory_parameters import seed_rows  # noqa: PLC0415
+    from app.policy.service.regulatory_parameters import seed_rows  # noqa: PLC0415
 
     bind = op.get_bind()
     codes_sql = ", ".join(f"'{code}'" for code in PARAM_CODES)

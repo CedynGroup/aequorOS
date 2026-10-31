@@ -31,8 +31,8 @@ from app.db.session import get_sessionmaker
 from app.identity.service import authentication, authorization
 from app.identity.service.integration_keys import hash_key
 from app.models import AuditEvent, AuthorizationBinding, Bank, IntegrationKey, RefreshToken, User
-from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.test_ingestion import seed_bank
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
+from tests.data_engine.api.test_ingestion import seed_bank
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
@@ -459,19 +459,19 @@ def test_human_analyst_binding_cannot_satisfy_any_machine_push_route(
         pytest.fail("machine authorization denial must precede the push service")
 
     monkeypatch.setattr(
-        "app.features.push_data.push_ingestion.open_push_batch",
+        "app.data_engine.api.push_data.push_ingestion.open_push_batch",
         unexpected_service_call,
     )
     monkeypatch.setattr(
-        "app.features.push_data.push_ingestion.stage_push_records",
+        "app.data_engine.api.push_data.push_ingestion.stage_push_records",
         unexpected_service_call,
     )
     monkeypatch.setattr(
-        "app.features.push_data.push_ingestion.commit_push_batch",
+        "app.data_engine.api.push_data.push_ingestion.commit_push_batch",
         unexpected_service_call,
     )
     monkeypatch.setattr(
-        "app.features.push_data.push_ingestion.get_push_batch",
+        "app.data_engine.api.push_data.push_ingestion.get_push_batch",
         unexpected_service_call,
     )
     push_id = uuid4()

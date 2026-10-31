@@ -22,20 +22,12 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
 
 from app.identity.public import Bank
-from app.models import (
-    DeskDetermination,
-    DeskMethodology,
-    DeskObservation,
-    DeskPublication,
-    DeskSourceCapture,
-)
-from app.operator.deps import Operator, OperatorDb, record_operator_action
-from app.operator.inspection import require_active_inspection
-from app.operator.services.methodology_pdf import render_methodology_pdf
-from app.schemas.market_desk import (
+from app.live.public import live_refresh_triggers
+from app.market_data.public import (
     DeskCaptureContentView,
     DeskCaptureListRead,
     DeskCaptureRead,
+    DeskDetermination,
     DeskDeterminationCreate,
     DeskDeterminationListRead,
     DeskDeterminationRead,
@@ -45,22 +37,23 @@ from app.schemas.market_desk import (
     DeskEntitlementListRead,
     DeskEntitlementRead,
     DeskEntitlementRevoke,
+    DeskMethodology,
     DeskMethodologyApprove,
     DeskMethodologyCreate,
     DeskMethodologyListRead,
     DeskMethodologyRead,
     DeskMethodologyVersionPropose,
+    DeskObservation,
     DeskObservationCreate,
     DeskObservationListRead,
     DeskObservationRead,
     DeskObservationSnippet,
     DeskPackageView,
+    DeskPublication,
     DeskPublicationListRead,
     DeskPublicationRead,
     DeskResearchAdjustmentsPut,
-)
-from app.services import live_refresh_triggers
-from app.services.market_desk import (
+    DeskSourceCapture,
     calculation,
     determinations,
     entitlements,
@@ -70,6 +63,9 @@ from app.services.market_desk import (
     register,
     snippets,
 )
+from app.operator.deps import Operator, OperatorDb, record_operator_action
+from app.operator.inspection import require_active_inspection
+from app.operator.services.methodology_pdf import render_methodology_pdf
 from app.services.public_ids import normalize_public_id
 
 router = APIRouter(prefix="/desk", tags=["operator-desk"])

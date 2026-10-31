@@ -1,9 +1,9 @@
 """Grounding: does this draft say only what the platform can stand behind?
 
-Thin on purpose. The rules are in ``app/domain/ai/grounding.py``, where they are
+Thin on purpose. The rules are in ``app/ai/domain/grounding.py``, where they are
 pure and exhaustively tested, and the tenant-specific material they need — the
 bank's own names, the global jurisdiction registry, the shipped lexicon, the
-shape limits from settings — is assembled by ``app/services/ai/grounding.py``.
+shape limits from settings — is assembled by ``app/ai/service/grounding.py``.
 This module only says what a BI commentary draft's context IS:
 
 * ``facts`` is the availability map the minimiser built, so a ``{{F:...}}`` id
@@ -28,8 +28,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.ai.domain import grounding as grounding_domain
 from app.ai.public import grounding as grounding_service
-from app.domain.ai import grounding as grounding_domain
 from app.identity.public import Bank
 
 __all__ = ["error_entries", "validate_draft"]

@@ -25,6 +25,7 @@ from openpyxl import load_workbook
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.capital.service import capital_plan
 from app.models import Bank, BankReportingPeriod, RegulatoryPackage, RegulatoryRun
 from app.reporting.service import generation, workflow
 from app.reporting.service.exports import export_package
@@ -37,7 +38,7 @@ from app.reporting.service.templates import (
     get_template,
 )
 from app.reporting.service.validation import run_validation_rules
-from app.services import capital_plan, enterprise_stress
+from app.stress.service import enterprise_stress
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.icaap.service.test_icaap_stress_appendix2_report import (
     MAKER,

@@ -5,7 +5,7 @@ import AccessAdminBoundary from "@/components/access/AccessAdminBoundary";
 
 export default function AccessMembersPage() {
   return (
-    <AccessAdminBoundary>
+    <AccessAdminBoundary requireOwner>
       <MembersPanel />
     </AccessAdminBoundary>
   );

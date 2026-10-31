@@ -20,10 +20,10 @@
 > audited and invalidates the grantee's sessions, and Access → Members renders the
 > same authority sentence used by review, detail, revoke, and audit evidence.
 > Every other product route retains its existing authorization behavior until
-> its separate rollout. For the `institution` vocabulary added on 2026-09-20,
-> see the [as-built scope and rollout boundary](../backend/docs/authorization_foundation.md#institution-vocabulary-built-2026-09-20).
+> its separate rollout. Institution register enforcement is owned by the
+> [Institution rollout contract](../backend/docs/institution_enforcement_rollout.md).
 >
-> **Permission-only disabled controls:** When a Liquidity, IRRBB, FX, FTP, Forecasting, Behavioral, or Markets control is unavailable
+> **Permission-only disabled controls:** When a Liquidity, IRRBB, FX, FTP, Forecasting, Behavioral, Markets, or Institution control is unavailable
 > only because the current user lacks an exact permission, keep it visible and
 > disabled. Its hover/focus tooltip must name the required product permission
 > (module, sensitivity, and action) and direct the user to their organization
@@ -656,8 +656,8 @@ Send each user to where their job starts, not always Command Center:
 | Auditor / Compliance                | `/reports` + Audit log                |
 | Org Admin / Owner                   | `/access` (Access control)            |
 
-`/access` itself lands on Members for a member with Account administration
-authority and on My access for everyone else (`accessIndexDestination`).
+The `/access` landing follows the
+[Members authority contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29).
 
 ---
 
@@ -729,12 +729,14 @@ Access control
 └─ My access           reserved for the effective-access view
 ```
 
-The three administration tabs require organization-wide
-ACCOUNT/restricted/administer authority. They are never hidden from a member:
-without authority they are disabled with the shared permission tooltip and
-direct links render the same explanation instead of 404. My access is open to
-every member. Legacy `/settings#members`, `#authentication`, and integration-key
-anchors client-redirect to the corresponding Access routes.
+Tab and deep-link authority follow the
+[Members contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29)
+and [Account administration contract](../backend/docs/authorization_foundation.md#account-administration-enforcement-built-2026-09-08).
+Administration tabs remain visible but disabled with the shared permission
+tooltip when authority is absent; direct links render the same explanation
+instead of 404. My access is open to every member. Legacy `/settings#members`,
+`#authentication`, and integration-key anchors client-redirect to the
+corresponding Access routes.
 
 Grant preview/create and access requests share the reason picker defined by the
 [structured reason contract](../backend/docs/authorization_foundation.md#structured-grant-reasons).

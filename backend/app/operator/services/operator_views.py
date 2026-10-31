@@ -32,28 +32,21 @@ from app.core.audit_attribution import (
     shared_register_sql,
     subject_bank_sql,
 )
+from app.data_engine.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, STUCK_DEDUP_STATUSES
+from app.data_engine.public import DatabaseDirectConnection, IngestionBatch, TemenosConnection
 from app.db.base import utc_now
-from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, STUCK_DEDUP_STATUSES
 from app.identity.public import Bank, SsoConnection, User
-from app.models import (
-    AuditEvent,
-    BankReportingPeriod,
-    DatabaseDirectConnection,
+from app.live.public import BankReportingPeriod, RegulatoryRun, WorkerHeartbeat
+from app.live.public import freshness as freshness_service
+from app.market_data.public import (
     DeskDetermination,
+    DeskEntitlementRead,
     DeskOperatingEnvironmentAssessment,
-    IngestionBatch,
-    Job,
     MarketDataConnection,
-    OperatorAuditLog,
-    Organization,
-    RegulatoryRun,
-    TemenosConnection,
-    TenantStorage,
-    WorkerHeartbeat,
 )
-from app.reporting.public import RegulatoryPackage
-from app.schemas.market_desk import DeskEntitlementRead
-from app.schemas.operator import (
+from app.market_data.public import entitlements as entitlements_service
+from app.models import AuditEvent, Job, OperatorAuditLog, Organization, TenantStorage
+from app.operator.schemas import (
     ActivityItemRead,
     DataEngineConnectionRead,
     DataEnginesRead,
@@ -82,12 +75,11 @@ from app.schemas.operator import (
     WorkerHealthRead,
     WorkerHeartbeatRead,
 )
-from app.services import freshness as freshness_service
+from app.reporting.public import RegulatoryPackage
 from app.services import job_queue
-from app.services.market_desk import entitlements as entitlements_service
 
 # Connection status → fleet health bucket (all three connection tables share the
-# same status vocabulary, app/domain/ingestion/constants.py). Terminal/off states
+# same status vocabulary, app/data_engine/domain/ingestion/constants.py). Terminal/off states
 # (DISABLED, REVOKED, REPLACED_PENDING_DELETION) are intentional and not a health
 # problem, so they fall through to no bucket.
 _CONNECTION_OK: frozenset[str] = frozenset({"ACTIVE"})
@@ -750,7 +742,7 @@ def list_jobs(db: Session, *, limit: int, status_filter: str | None = None) -> O
 
 
 #: The out-of-band ML-ETL dedup job type. Named literally rather than imported
-#: from ``app.services.etl_dedup_jobs``: that module pulls in the whole ETL and
+#: from ``app.data_engine.service.etl_dedup_jobs``: that module pulls in the whole ETL and
 #: model-loading stack, which the operator app has no reason to load. The
 #: allow-list in ``job_queue.JOB_TYPES`` validates it on every use.
 ETL_DEDUP_JOB_TYPE = "etl_dedup"

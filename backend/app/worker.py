@@ -35,12 +35,14 @@ from app.bi.jobs import (
     bi_retention,
     bi_subscriptions,
 )
+from app.case.service import documents
 from app.core import audit_integrity
 from app.core.config import get_settings
 from app.core.key_management import reencryption
 from app.core.logging import configure_logging, get_request_id, reset_request_id, set_request_id
 from app.core.observability import Condition, emit
 from app.core.tls import validate_service_transports
+from app.data_engine.service import database_direct_jobs, etl_dedup_jobs, ingestion, temenos_jobs
 from app.db.base import utc_now
 from app.db.session import (
     apply_worker_tenant_context,
@@ -51,6 +53,9 @@ from app.db.session import (
 from app.db.worker_access import DESK_SIGNATURE, has_worker_function
 from app.icaap.service import ai_jobs as icaap_ai_jobs
 from app.identity.public import run_session_purge
+from app.live.service import pipeline
+from app.market_data.service import market_data_jobs
+from app.market_data.service.market_desk import capture_job as desk_capture_job
 from app.models import (
     Bank,
     DeskCurveDefinition,
@@ -61,20 +66,8 @@ from app.models import (
     Job,
     WorkerHeartbeat,
 )
-from app.services import (
-    database_direct_jobs,
-    documents,
-    etl_dedup_jobs,
-    ingestion,
-    job_queue,
-    market_data_jobs,
-    notification_email_mirror,
-    pipeline,
-    reporting_deadline_scan,
-    scheduler,
-    temenos_jobs,
-)
-from app.services.market_desk import capture_job as desk_capture_job
+from app.notifications.service import notification_email_mirror, reporting_deadline_scan
+from app.services import job_queue, scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +77,7 @@ Handler = Callable[[Session, Job], None]
 # JOB_TYPES entry with no handler here is enqueueable but never claimable, so
 # its jobs sit "queued" forever (how notification_email_mirror was orphaned
 # until 2026-08-09: enqueued by every tick, absent here). The parity test in
-# tests/services/test_desk_capture_job.py enforces the invariant.
+# tests/market_data/service/test_desk_capture_job.py enforces the invariant.
 HANDLERS: dict[str, Handler] = {
     "bank_reencrypt": reencryption.run,
     "session_purge": run_session_purge,
@@ -456,7 +449,7 @@ def _warn_if_ai_unconfigured(settings) -> None:  # pragma: no cover - process en
     e-signature lesson, where a boot refusal locked out the person who could fix
     it. A log line is enough: its jobs simply cancel at the run gate.
     """
-    from app.services.ai import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
+    from app.ai.service import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
 
     if not settings.ai.commentary_enabled:
         logger.warning("AI worker started with AI_COMMENTARY_ENABLED off; requests will cancel.")

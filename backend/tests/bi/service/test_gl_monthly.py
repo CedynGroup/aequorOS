@@ -28,8 +28,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.bi.domain import extract
+from app.data_engine.models.canonical import CanonicalGlAccount
 from app.db.base import Base
-from app.domain.gl import pl_mapping
+from app.live.domain.gl import pl_mapping
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -38,7 +39,6 @@ from app.models import (
     BiMartBuild,
     CanonicalReferenceRow,
 )
-from app.models.canonical import CanonicalGlAccount
 from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
 from tests.bi.service.test_mart_builder import AS_OF, CTX, MID_MONTH, build, new_batch, seed_book
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
@@ -383,7 +383,7 @@ def test_a_non_integral_register_sign_is_refused_not_truncated(db_session: Sessi
     assert all("PlSignError" in (row.error or "") for row in records.values())
     assert db_session.scalar(select(func.count()).select_from(BiFactGlMonthly)) == 0
     # the register's own contract forbids the value, so a validated push cannot reach here
-    from app.domain.ingestion.reference_schemas.gl_mapping_bsd7 import (  # noqa: PLC0415
+    from app.data_engine.domain.ingestion.reference_schemas.gl_mapping_bsd7 import (  # noqa: PLC0415
         validate_mapping_row,
     )
 

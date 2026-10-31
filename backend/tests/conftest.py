@@ -40,11 +40,9 @@ from app.core.config import Settings, get_settings
 from app.core.key_management.settings import get_key_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
-from app.features.ingest_data import get_ingestion_storage
 from app.identity.service import authorization
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
-from app.main import create_app
 from app.models import Organization, User
 from tests.fixtures.reference_data import seed_global_reference_data
 from tests.real_data import REAL_DATA_DATABASE_URL
@@ -73,13 +71,18 @@ hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 #: and the demo tenants.
 pytest_plugins = [
     "tests.support.database_fixtures",
+    "tests.ai.fixtures",
+    "tests.support.canonical_book",
     "tests.bi.fixtures",
     "tests.capital.fixtures",
+    "tests.case.fixtures",
     "tests.credit.fixtures",
     "tests.forecasting.fixtures",
     "tests.ftp.fixtures",
     "tests.fx.fixtures",
+    "tests.identity.fixtures",
     "tests.irrbb.fixtures",
+    "tests.icaap.testing.annexes",
     "tests.market_data.fixtures",
     "tests.reporting.fixtures",
 ]
@@ -255,13 +258,13 @@ def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     machine is running it. Tests that need a model use ``use_model(...)``, which
     is checked before the backend is ever resolved.
     """
-    from app.services.ai import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
-    from app.services.ai import google_model, openai_model  # noqa: PLC0415 - same boundary
+    from app.ai.service import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
+    from app.ai.service import google_model, openai_model  # noqa: PLC0415 - same boundary
 
     def _refuse(self: object, *args: object, **kwargs: object) -> None:
         message = (
             f"A real {type(self).__name__} was constructed in a test. Use the "
-            "recorded_model fixture or app.services.ai.client.use_model(...)."
+            "recorded_model fixture or app.ai.service.client.use_model(...)."
         )
         raise ai_client.RealModelForbiddenError(message)
 
@@ -297,15 +300,27 @@ def hermetic_etl_models(monkeypatch: pytest.MonkeyPatch) -> None:
     batch's dedup / anomaly output would otherwise depend on whether a developer had
     trained that bank's models locally (absent in CI). Force the deterministic path
     here; a test that exercises a trained model injects it explicitly via
-    ``EtlConfig`` (see ``tests/etl/test_pipeline.py``).
+    ``EtlConfig`` (see ``tests/data_engine/etl/test_pipeline.py``).
     """
-    monkeypatch.setattr("app.etl.model_loading.load_counterparty_model", lambda *a, **k: None)
-    monkeypatch.setattr("app.etl.model_loading.load_anomaly_model", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "app.data_engine.etl.model_loading.load_counterparty_model", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        "app.data_engine.etl.model_loading.load_anomaly_model", lambda *a, **k: None
+    )
 
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(create_app(), raise_server_exceptions=False)
+    return TestClient(_create_app(), raise_server_exceptions=False)
+
+
+def _create_app() -> FastAPI:
+    # The xdist controller registers fixtures but never needs the API. Defer
+    # route registration until a client or shared app actually requests it.
+    from app.main import create_app  # noqa: PLC0415
+
+    return create_app()
 
 
 class FakeStorage:
@@ -424,7 +439,7 @@ class _TestDatabase:
 
 @dataclass
 class _LazyTestApp:
-    factory: Callable[[], FastAPI] = create_app
+    factory: Callable[[], FastAPI] = _create_app
     app: FastAPI | None = None
 
     def get(self) -> FastAPI:
@@ -619,10 +634,14 @@ rollback_sessionmaker_lifecycle = _rollback_sessionmaker_lifecycle
 
 @pytest.fixture
 def _bound_test_sessionmaker(
+    request: pytest.FixtureRequest,
     _shared_test_database: _TestDatabase,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[sessionmaker]:
     """Bind one test to a connection whose outer transaction is never committed."""
+    if "canonical_book_baseline" in request.keywords:
+        yield cast(sessionmaker[Session], request.getfixturevalue("canonical_book_sessionmaker"))
+        return
     with _rollback_sessionmaker_lifecycle(_shared_test_database, monkeypatch) as maker:
         # SQLite needs a physical BEGIN before the first savepoint; the shared
         # lifecycle also redirects every application session to this connection.
@@ -739,6 +758,7 @@ def _db_client_lifecycle(
     fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
+    from app.data_engine.api.ingest_data import get_ingestion_storage  # noqa: PLC0415
 
     def object_storage_override() -> FakeStorage:
         return fake_storage
@@ -860,8 +880,10 @@ def real_client(
     fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
-    """A TestClient using the configured opt-in database and outer rollback."""
-    app = create_app()
+    """A TestClient wired to the ACTUAL primary, transaction-isolated."""
+    from app.data_engine.api.ingest_data import get_ingestion_storage  # noqa: PLC0415
+
+    app = _create_app()
     app.dependency_overrides[get_object_storage] = lambda: fake_storage
     app.dependency_overrides[get_ingestion_storage] = lambda: storage_engine
     with TestClient(app, raise_server_exceptions=False) as test_client:

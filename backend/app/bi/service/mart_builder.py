@@ -13,7 +13,7 @@ pure ``app/bi/domain/extract.py``; loan grades come from
 credit engine uses, read WITHOUT entering the calculation plane's parameter
 ledger); engine metrics are COPIED from ``live_metrics`` and the latest
 succeeded baseline ``regulatory_runs``; the monthly GL mart is computed by the
-same ``app/domain/gl/pl_mapping.py`` functions BSD7 files with (D-021). The
+same ``app/live/domain/gl/pl_mapping.py`` functions BSD7 files with (D-021). The
 builder reads canonical, live and regulatory tables and writes ONLY ``bi_*``
 tables; it never calls ``derive_facts``.
 
@@ -122,6 +122,12 @@ from app.bi.service.identity_policy import connected
 from app.bi.service.versions import BUILDER_VERSION
 from app.core.key_management.maintenance import lock_bank
 from app.credit.public import loan_classification
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.domain.ingestion.reference_schemas import (
+    business_units,
+    gl_segment_balances,
+    performance_targets,
+)
 from app.data_engine.public import (
     CanonicalCounterparty,
     CanonicalGlAccount,
@@ -134,15 +140,9 @@ from app.data_engine.public import (
 )
 from app.db.base import utc_now
 from app.domain.capital import loan_classification as classification_engine
-from app.domain.gl import pl_mapping
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.domain.ingestion.reference_schemas import (
-    business_units,
-    gl_segment_balances,
-    performance_targets,
-)
-from app.domain.positions.families import LOAN_CATEGORY_MAP, loan_family
 from app.identity.public import Bank, Outlet
+from app.live.domain.gl import pl_mapping
+from app.live.domain.positions.families import LOAN_CATEGORY_MAP, loan_family
 from app.live.public import BankReportingPeriod, LiveMetric, RegulatoryRun
 from app.policy.public import institution_types, jurisdictions
 from app.policy.public import regulatory_parameters as rp

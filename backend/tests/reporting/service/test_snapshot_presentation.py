@@ -215,6 +215,7 @@ def assert_staff_bodies_hidden(
         "ICAAP-REPORT",
     ],
 )
+@pytest.mark.usefixtures("institution_profile_authority")
 def test_enabled_key_support_reads_are_metadata_only_for_real_generated_packages(
     db_client: TestClient,
     db_session: Session,

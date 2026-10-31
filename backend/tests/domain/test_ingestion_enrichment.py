@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.ingestion.enrichment import (
+from app.data_engine.domain.ingestion.enrichment import (
     apply_manual_override,
     assign_behavioral_maturity,
     merge_ordered,

@@ -18,13 +18,13 @@ adds is the last mile, in five small pieces:
 ``prompt``
     A byte-stable static system block, one of two fixed mode blocks, then the
     payload as the user turn. Prompt caching is requested with a flag; whether it
-    can be honoured is the vendor's question, answered in ``app/services/ai``.
+    can be honoured is the vendor's question, answered in ``app/ai/service``.
 
 ``schema``
     ``CommentaryDraft`` — the structured output the model must return.
 
 ``validate``
-    The BI context for ``app/domain/ai/grounding.py``. Every number and every name
+    The BI context for ``app/ai/domain/grounding.py``. Every number and every name
     in the model's prose is a placeholder or the draft is refused.
 
 ``fallback``

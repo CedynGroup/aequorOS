@@ -17,7 +17,7 @@ from app.icaap.schemas.workspace import (
 )
 from app.icaap.service import parameters, readiness, sections
 from app.models import RegulatoryParameter
-from app.services import jurisdictions
+from app.policy.service import jurisdictions
 
 
 def _detail(caught: pytest.ExceptionInfo[HTTPException]) -> dict[str, Any]:

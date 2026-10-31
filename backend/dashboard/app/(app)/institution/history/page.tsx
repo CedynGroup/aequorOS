@@ -12,6 +12,10 @@ import type {
   BankNameHistoryCreate,
   BankNameHistoryRead,
 } from "@aequoros/risk-service-api";
+import {
+  InstitutionAction,
+  useInstitutionAuthority,
+} from "@/components/institution/authority";
 import PageHeader from "@/components/ui/PageHeader";
 import PageContainer from "@/components/ui/PageContainer";
 import SectionCard from "@/components/ui/SectionCard";
@@ -37,7 +41,8 @@ export default function NameHistoryPage() {
   const { bank } = useBankContext();
   const bankId = bank?.id;
 
-  const query = useInstitutionProfile(bankId);
+  const authority = useInstitutionAuthority();
+  const query = useInstitutionProfile(bankId, authority.generalView);
   const entries = useMemo(() => {
     const rows = query.data?.nameHistory ?? [];
     // Timeline reads newest change first; undated entries sink to the end.
@@ -59,7 +64,9 @@ export default function NameHistoryPage() {
         eyebrow="Institution Profile"
         title="Name history"
         action={
-          <button
+          <InstitutionAction
+            sensitivity="confidential"
+            permission="create"
             type="button"
             onClick={() => {
               setEditor(null);
@@ -69,7 +76,7 @@ export default function NameHistoryPage() {
           >
             <Plus size={13} aria-hidden />
             Add entry
-          </button>
+          </InstitutionAction>
         }
       />
 
@@ -132,7 +139,9 @@ export default function NameHistoryPage() {
                       <span className="font-mono text-caption text-slate tnum">
                         changed {fmtRegisterDate(entry.changedOn)}
                       </span>
-                      <button
+                      <InstitutionAction
+                        sensitivity="confidential"
+                        permission="edit"
                         type="button"
                         onClick={() => {
                           setAdding(false);
@@ -142,7 +151,7 @@ export default function NameHistoryPage() {
                       >
                         <Pencil size={11} aria-hidden />
                         Edit
-                      </button>
+                      </InstitutionAction>
                     </div>
                     {entry.changeReason && (
                       <p className="mt-1 text-caption text-navy/80 leading-relaxed">

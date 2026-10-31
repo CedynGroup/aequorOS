@@ -11,8 +11,8 @@ from app.domain.capital.loan_classification import (
     classify_book,
     grid_from_params,
 )
-from app.domain.stress.concentration import ConcentrationExposure
-from app.services.regulatory_parameters import SEED_PARAMETERS
+from app.policy.service.regulatory_parameters import SEED_PARAMETERS
+from app.stress.domain.concentration import ConcentrationExposure
 
 
 def bank_parameters() -> dict[str, Decimal]:

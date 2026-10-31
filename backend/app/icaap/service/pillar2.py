@@ -35,9 +35,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
 from app.core.authorization import ConditionCheck, ConditionKind
+from app.credit.domain import granularity as granularity_credit
 from app.db.base import utc_now
-from app.domain.credit import granularity as granularity_credit
-from app.domain.irr import standardised_params as sf_params
 from app.icaap.domain.blocks import BLOCK_CATALOGUE
 from app.icaap.domain.frameworks.schema import Framework, Pillar2Component
 from app.icaap.domain.methods import PILLAR2_METHODS
@@ -86,6 +85,7 @@ from app.icaap.schemas.risk_capital import (
 from app.icaap.service import digests, guards, params, pillar2_inputs
 from app.icaap.service.pillar2_inputs import granularity as granularity_inputs
 from app.identity.public import Bank
+from app.irrbb.domain import standardised_params as sf_params
 from app.policy.public import jurisdictions
 from app.services.audit import record_event
 

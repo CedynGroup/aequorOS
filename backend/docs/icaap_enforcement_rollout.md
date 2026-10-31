@@ -132,7 +132,7 @@ queued request must never be the one call that still goes out.
 ## Before enabling AI drafting
 
 `AI_COMMENTARY_ENABLED` defaults off and
-`app/services/ai/approved_configurations.json` ships EMPTY, so a deployed
+`app/ai/service/approved_configurations.json` ships EMPTY, so a deployed
 environment refuses every request until a reviewed commit adds the exact
 `(feature, prompt_version, model, effort, app_env)` tuple. The full checklist —
 data-protection opinion, provider terms and DPA, counsel review of the consent

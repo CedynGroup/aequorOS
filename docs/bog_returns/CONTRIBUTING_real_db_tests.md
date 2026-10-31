@@ -7,7 +7,7 @@ Connection construction and ownership are documented in the
 [test connection guide](../../backend/tests/support/DATABASE.md).
 Those guides supersede this conversion recipe's former primary-database directions.
 
-## The pattern (reference conversion: `backend/tests/api/test_regulatory_liquidity.py`)
+## The pattern (reference conversion: `backend/tests/liquidity/api/test_regulatory_liquidity.py`)
 
 - `from tests.real_data import REAL_BANK_ID, REAL_ORG_ID, REAL_USER_ID, real_headers,
 other_headers, requires_real_data`; module-level `pytestmark = requires_real_data`.

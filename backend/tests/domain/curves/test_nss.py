@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from app.domain.curves.nss import NssBounds, NssParameters, fit_nss, nss_zero
+from app.market_data.domain.curves.nss import NssBounds, NssParameters, fit_nss, nss_zero
 
 TRUE = NssParameters(beta0=0.12, beta1=-0.06, beta2=0.08, beta3=-0.03, tau1=1.2, tau2=6.0)
 GRID = np.array([0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0])
