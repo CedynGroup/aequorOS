@@ -12,7 +12,7 @@ from app.data_engine.api.upload_seam import (
     IngestionStorage,
 )
 from app.data_engine.api.upload_seam import (
-    get_ingestion_storage as get_ingestion_storage,  # noqa: F401 - stable override import site
+    get_ingestion_storage as get_ingestion_storage,  # noqa: F401, PLC0414 - stable override import site
 )
 from app.data_engine.domain.ingestion.constants import SourceSystem
 from app.data_engine.schemas.data_activation import (
