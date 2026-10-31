@@ -1024,7 +1024,7 @@ def test_a_named_line_item_no_authority_claims_fails() -> None:
     failures = registry.check_completeness(
         _evidence(
             filed_line_item_codes={
-                "ratio:car": "app/domain/capital/engine.py:911",
+                "ratio:car": "app/capital/domain/engine.py:911",
                 "fx_var:diversification_benefit": "app/fx/domain/engine.py:340",
             }
         )

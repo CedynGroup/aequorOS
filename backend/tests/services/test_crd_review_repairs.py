@@ -10,7 +10,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, undefer_group
 
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     CapitalFact,
     RiskWeightUnavailable,
     _credit_line_items,  # pyright: ignore[reportPrivateUsage]
@@ -33,11 +33,11 @@ from app.stress.domain.credit_bottom_up import compute_bottom_up_credit
 from app.stress.service.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.credit.service.test_crd_credit_exposures import (
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.data_engine.api.test_ingestion import seed_bank
-from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE
 from tests.services.test_derivation_fail_closed_defaults import (

@@ -35,16 +35,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.engine import (
+    CapitalFact,
+    CapitalRegisterRefused,
+    tier1_capital,
+)
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.domain.authority.outcomes import (
     NotComputable,
     OutcomeDetail,
-)
-from app.domain.capital.engine import (
-    CapitalFact,
-    CapitalRegisterRefused,
-    tier1_capital,
 )
 from app.fx.domain.engine import (
     FX_SAMPLE_POLICY,

@@ -26,6 +26,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.engine import assert_capital_register_usable
 from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.data_engine.public import (
     CanonicalCounterparty,
@@ -35,7 +36,6 @@ from app.data_engine.public import (
     CanonicalReferenceRow,
 )
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
-from app.domain.capital.engine import assert_capital_register_usable
 from app.identity.public import Bank
 from app.live.public import BankFinancialFact, BankReportingPeriod, RegulatoryRun
 from app.market_data import public as market_data_sources

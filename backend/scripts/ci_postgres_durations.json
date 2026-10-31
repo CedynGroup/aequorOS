@@ -245,7 +245,7 @@
     "tests/credit/service/test_credit_concentration.py": 3.315,
     "tests/credit/service/test_credit_exposure_book.py": 12.36,
     "tests/services/test_derivation_fail_closed_defaults.py": 0.004,
-    "tests/services/test_ecl_and_crm.py": 8.45,
+    "tests/capital/service/test_ecl_and_crm.py": 8.45,
     "tests/services/test_filing_retention.py": 51.616,
     "tests/services/test_hqla_level_ingestion_end_to_end.py": 3.036,
     "tests/services/test_input_hash_determinism.py": 1.374,

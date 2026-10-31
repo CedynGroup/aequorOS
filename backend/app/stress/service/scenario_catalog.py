@@ -25,10 +25,10 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.capital.public import regulatory_capital
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     REQUIRED_STRESS_SHOCK_KEYS as CAPITAL_REQUIRED_KEYS,
 )
+from app.capital.public import regulatory_capital
 from app.ftp.public import (
     FTP_RUN_SCENARIO_CODES,
     SHOCK_CURVE_SHIFT_BP,

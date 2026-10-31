@@ -21,6 +21,7 @@ from sqlalchemy.sql import Select
 from app.api import deps
 from app.api.deps import IcaapAccess
 from app.attestation.service import stepup
+from app.capital.domain.engine import CapitalParams, CapitalRatiosResult, RwaResult
 from app.capital.service import regulatory_capital
 from app.core import security
 from app.core.audit_attribution import subject_bank_sql
@@ -42,7 +43,6 @@ from app.data_engine.schemas.database_connection import DatabaseConnectionCreate
 from app.data_engine.schemas.ingestion import PositionSnapshotOverrideCreate
 from app.data_engine.schemas.push import PushBatchOpen, PushRecordsPage
 from app.data_engine.service import database_connections, ingestion, push_ingestion
-from app.domain.capital.engine import CapitalParams, CapitalRatiosResult, RwaResult
 from app.icaap.schemas.workspace import (
     IcaapCycleCreate,
     IcaapSectionCommit,

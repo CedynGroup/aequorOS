@@ -131,13 +131,6 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
     # ---- data engine (the shared adapters namespace is data-engine-owned)
     (r"^adapters/__init__$", "data_engine"),
-    # ---- regulatory engines
-    (
-        r"^(services/(regulatory_capital|sdi_capital.*|sdi_views|sdi_readiness|capital_plan)"
-        r"|domain/capital/.*|capital/models/capital_plan|schemas/(regulatory_capital|sdi|capital_plan)"
-        r"|features/(run_regulatory_capital|manage_capital_plan|read_sdi_diagnostics))$",
-        "capital",
-    ),
 )
 _COMPILED_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     (re.compile(pattern), feature) for pattern, feature in FEATURE_RULES

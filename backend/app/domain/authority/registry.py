@@ -1780,7 +1780,7 @@ REGISTRY.register_all(
             authority_reference="Banks and SDI Act 2016 (Act 930) s.29",
             notes="Simplified bucket weights, no market or operational RWA component.",
             # The two prescribed-percentage-of-credit-RWA lines are the s.29
-            # branch of compute_rwa (app/domain/capital/engine.py:437, :467):
+            # branch of compute_rwa (app/capital/domain/engine.py:437, :467):
             # ``params.rwa_pct_of_credit_rwa`` is populated only on this path
             # and is None on the Basel path, so these lines can only appear on
             # an SDI run. They belong here and NOT to crd_basel_capital_run -

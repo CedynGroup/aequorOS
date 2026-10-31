@@ -15,7 +15,7 @@ from typing import cast
 
 import pytest
 
-from app.domain.capital.ecl import EclAssumption, EclComputationError, EclExposure
+from app.capital.domain.ecl import EclAssumption, EclComputationError, EclExposure
 from app.fx.domain.engine import FxPosition
 from app.icaap.domain.pillar2 import fx as icaap_fx
 from app.irrbb.domain.engine import IrrPosition

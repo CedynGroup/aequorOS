@@ -22,6 +22,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.engine import CapitalComputationError
+from app.capital.domain.engine import MissingParameterError as CapitalMissingParameter
 from app.capital.public import (
     CapitalRunError,
 )
@@ -36,8 +38,6 @@ from app.capital.public import (
 )
 from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.authority.results import Computed
-from app.domain.capital.engine import CapitalComputationError
-from app.domain.capital.engine import MissingParameterError as CapitalMissingParameter
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.liquidity.schemas.window_analytics import (

@@ -13,8 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
-from app.domain.authority.outcomes import NotComputable, OutcomeState
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     GREEN_BUFFER_PP,
     BiaGrossIncomeUnavailable,
     CapitalComputationError,
@@ -28,6 +27,7 @@ from app.domain.capital.engine import (
     has_complete_ecl_coverage,
     run_capital_stress,
 )
+from app.domain.authority.outcomes import NotComputable, OutcomeState
 
 MONEY = Decimal("0.0001")
 RATIO = Decimal("0.000001")

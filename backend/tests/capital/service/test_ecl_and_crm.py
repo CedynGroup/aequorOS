@@ -21,23 +21,23 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.capital.service import regulatory_capital
-from app.credit.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
-from app.credit.service import credit_params
-from app.db.base import utc_now
-from app.domain.authority.registry import AdvisoryDesignation, authorities_for_metric
-from app.domain.capital.ecl import (
+from app.capital.domain.ecl import (
     EclAssumption,
     EclComputationError,
     EclExposure,
     EclScenario,
     compute_ecl,
 )
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     CapitalFact,
     CapitalParams,
     compute_rwa,
 )
+from app.capital.service import regulatory_capital
+from app.credit.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
+from app.credit.service import credit_params
+from app.db.base import utc_now
+from app.domain.authority.registry import AdvisoryDesignation, authorities_for_metric
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.live.service.fact_derivation import derive_facts
 from app.models import (
