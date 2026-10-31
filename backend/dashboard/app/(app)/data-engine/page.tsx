@@ -16,8 +16,8 @@ import {
 import BatchesTable from '@/components/data-engine/BatchesTable';
 import ActivatePanel from '@/components/data-engine/ActivatePanel';
 import ConnectionHealthPanel from '@/components/data-engine/ConnectionHealthPanel';
-import LiveStatusCard from '@/components/live/LiveStatusCard';
-import UnreconciledBookBanner from '@/components/live/UnreconciledBookBanner';
+import LiveStatusCard from '@/features/live/components/LiveStatusCard';
+import UnreconciledBookBanner from '@/features/live/components/UnreconciledBookBanner';
 
 export default function DataEngineOverviewPage() {
   return (

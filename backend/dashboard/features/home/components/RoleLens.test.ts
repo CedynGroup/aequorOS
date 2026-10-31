@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import { ROLE_CONFIG, type RoleLens } from "./RoleLens";
-import { DEFAULT_MODULE_ORDER } from "../../../components/live/moduleDisplay";
+import { DEFAULT_MODULE_ORDER } from "../../live/components/moduleDisplay";
 
 const lenses = Object.keys(ROLE_CONFIG) as RoleLens[];
 assert.deepEqual(lenses.sort(), ["alm", "cfo", "risk", "treasurer"]);

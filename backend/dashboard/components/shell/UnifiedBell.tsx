@@ -27,7 +27,7 @@ import { fmtRelative, labelize } from "@/lib/api/values";
 import {
   LIVE_MODULE_HREFS,
   LIVE_MODULE_LABELS,
-} from "@/components/live/moduleDisplay";
+} from "@/features/live/components/moduleDisplay";
 
 function severityTone(severity: AlertSeverity): StatusTone {
   switch (severity) {

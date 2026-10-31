@@ -2,7 +2,7 @@ import type { LiveModule, LiveModuleView } from "@aequoros/risk-service-api";
 import {
   livePrimaryMetricKey,
   type LivePrimaryMetric,
-} from "@/components/live/moduleDisplay";
+} from "@/features/live/components/moduleDisplay";
 import { formatFigure, labelize, numOrNull } from "@/lib/api/values";
 import { fmtNum, fmtPct } from "@/lib/format";
 import type { MetricRow } from "./BoardPackSections";
