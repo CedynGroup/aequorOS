@@ -12,11 +12,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
+from app.core.authorization import Module, ModuleScope, Permission, RoleBundle, SensitivityScope
 from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.models.bank import Bank
+from app.identity.schemas.auth import MeResponse
+from app.identity.schemas.authorization import EffectiveAuthorityRead
 from app.live.public import RegulatoryRun
 from app.models import BankReportingPeriod
 from app.models.audit_event import AuditEvent
@@ -120,6 +122,13 @@ def test_incomplete_or_inactive_grants_have_no_effect(
     db_session.commit()
     response = unbound.post(URL, headers=headers(), json=payload())
     assert response.status_code == 403, response.text
+    profile = unbound.get("/api/v1/auth/me", headers=headers())
+    assert profile.status_code == 200, profile.text
+    projection = MeResponse.model_validate(profile.json()).effective_authority
+    assert not any(
+        cap.module == Module.RISK and cap.sensitivity.value == "confidential"
+        for cap in projection.organization_capabilities
+    )
     assert db_session.scalar(select(func.count()).select_from(MacroScenario)) == 0
 
 
@@ -128,6 +137,13 @@ def test_partial_bindings_do_not_compose(unbound: TestClient, db_session: Sessio
     grant(db_session, module=ModuleScope.CAPITAL, sensitivity=SensitivityScope.CONFIDENTIAL)
     response = unbound.post(URL, headers=headers(), json=payload())
     assert response.status_code == 403, response.text
+    profile = unbound.get("/api/v1/auth/me", headers=headers())
+    assert profile.status_code == 200, profile.text
+    projection = MeResponse.model_validate(profile.json()).effective_authority
+    assert not any(
+        cap.module == Module.RISK and cap.sensitivity.value == "confidential"
+        for cap in projection.organization_capabilities
+    )
 
 
 def test_exact_bank_grant_never_covers_organization_scenarios(
@@ -489,3 +505,83 @@ def test_hidden_and_missing_stress_objects_have_identical_responses(
     restored = unbound.get(f"{collection}/{object_id}", headers=headers())
     assert restored.status_code == 200, restored.text
     assert restored.json() == original.json()
+
+
+@pytest.mark.parametrize("bank_scoped", [False, True])
+@pytest.mark.parametrize(
+    ("role", "permissions"),
+    [
+        (RoleBundle.VIEWER, {Permission.VIEW}),
+        (
+            RoleBundle.ANALYST,
+            {
+                Permission.VIEW,
+                Permission.CREATE,
+                Permission.EDIT,
+                Permission.RUN,
+                Permission.VALIDATE,
+                Permission.EXPORT,
+            },
+        ),
+        (RoleBundle.APPROVER, {Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
+    ],
+)
+def test_risk_capabilities_reach_profiles_in_their_exact_scope(
+    unbound: TestClient,
+    db_session: Session,
+    bank_scoped: bool,
+    role: RoleBundle,
+    permissions: set[Permission],
+) -> None:
+    bank_id = seed_bank(unbound)
+    grant(db_session, role, bank_id=bank_id if bank_scoped else None)
+    response = unbound.get("/api/v1/auth/me", headers=headers(roles=("viewer",)))
+    assert response.status_code == 200, response.text
+    projection = MeResponse.model_validate(response.json()).effective_authority
+    authority = unbound.get("/api/v1/auth/effective-authority", headers=headers(roles=("viewer",)))
+    assert authority.status_code == 200, authority.text
+    assert EffectiveAuthorityRead.model_validate(authority.json()) == projection
+    organization_permissions = {cap.permission for cap in projection.organization_capabilities}
+    assert organization_permissions == (set() if bank_scoped else permissions)
+    assert all(
+        cap.module == Module.RISK and cap.sensitivity.value == "confidential"
+        for cap in projection.organization_capabilities
+    )
+    assert len(projection.institution_capabilities) == 1
+    institution = projection.institution_capabilities[0]
+    assert institution.institution_id == bank_id
+    assert {cap.permission for cap in institution.capabilities} == permissions
+    assert all(
+        cap.module == Module.RISK and cap.sensitivity.value == "confidential"
+        for cap in institution.capabilities
+    )
+    assert all(
+        cap.requires_contextual_authorization == (cap.permission == Permission.APPROVE)
+        for cap in (*projection.organization_capabilities, *institution.capabilities)
+    )
+    assert not projection.can_administer_grants
+    assert unbound.get("/api/v1/organization/users", headers=headers()).status_code == 403
+
+    grant(
+        db_session,
+        RoleBundle.ACCOUNT_ADMIN,
+        module=ModuleScope.ACCOUNT,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    grant(db_session, RoleBundle.AUDITOR, module=ModuleScope.AUDIT)
+    response = unbound.get("/api/v1/auth/me", headers=headers(roles=("viewer",)))
+    assert response.status_code == 200, response.text
+    with_account_and_audit = MeResponse.model_validate(response.json()).effective_authority
+    assert [
+        cap for cap in with_account_and_audit.organization_capabilities if cap.module == Module.RISK
+    ] == projection.organization_capabilities
+    assert with_account_and_audit.institution_capabilities[0].institution_id == bank_id
+    assert (Module.ACCOUNT, "restricted", Permission.ADMINISTER) in {
+        (cap.module, cap.sensitivity.value, cap.permission)
+        for cap in with_account_and_audit.organization_capabilities
+    }
+    assert (Module.AUDIT, "confidential", Permission.VIEW) in {
+        (cap.module, cap.sensitivity.value, cap.permission)
+        for cap in with_account_and_audit.organization_capabilities
+    }
+    assert not with_account_and_audit.can_administer_grants
