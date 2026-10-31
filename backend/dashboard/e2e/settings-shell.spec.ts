@@ -154,7 +154,7 @@ test.describe("Settings link for a scalar Account administrator", () => {
     await page.goto("/access/members");
     await expect(
       page.getByText(
-        "This section is available to organization owners and administrators.",
+        "Only organization owners can manage members and grants.",
         { exact: true },
       ),
     ).toBeVisible();

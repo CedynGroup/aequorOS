@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session
 from app.core.key_management.fields import blind_index
 from app.core.key_management.local import LocalKeyProvider
 from app.core.tenancy import TenantContext
+from app.data_engine.models.canonical import CanonicalCounterparty
+from app.data_engine.service import canonical_withdrawal
+from app.data_engine.service.canonical_withdrawal import WithdrawalError
 from app.identity.models.institution_profile import RelatedParty
 from app.identity.public import Bank
-from app.models.canonical import CanonicalCounterparty
-from app.services import canonical_withdrawal
-from app.services.canonical_withdrawal import WithdrawalError
 from tests.core.test_bank_field_encryption import BANK_A, CTX, IDENTIFIER, counterparty, provider
 from tests.db.test_postgres_migrations import alembic_config_for_app
 from tests.support.helpers import ORG_1

@@ -5,21 +5,21 @@ from decimal import Decimal
 
 from hypothesis import strategies as st
 
-from app.domain.liquidity.engine import (
+from app.liquidity.domain.engine import (
     LiquidityFact,
     LiquidityParams,
     compute_lcr,
     compute_nsfr,
     money,
 )
-from app.services.parameter_register import (
+from app.policy.service.parameter_register import (
     BANK_CAPITAL_THRESHOLDS,
     BANK_LCR_INFLOWS,
     BANK_LCR_OUTFLOWS,
     BANK_NSFR_ASF,
     BANK_NSFR_RSF,
 )
-from app.services.regulatory_parameters import SEED_PARAMETERS
+from app.policy.service.regulatory_parameters import SEED_PARAMETERS
 
 
 def liquidity_params() -> LiquidityParams:

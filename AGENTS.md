@@ -110,7 +110,7 @@ Each rule is stated in full in the document the index names.
   identity in matching logic or display code. `bog_`-prefixed fact categories and
   the `refinitiv` vendor id are load-bearing keys, not leaks — never rename them.
 - **Market data has one writer.** Persist only through `pull_runner.execute_pull`,
-  read only through `app/services/market_data.py`, keep vendor credentials only in
+  read only through `app/market_data/service/market_data.py`, keep vendor credentials only in
   `EncryptedDbVault`, and never let a raw vendor error reach a bank-facing surface.
 - **Connected bank keys govern object access.** Use `StorageClient` and
   `app/core/key_management`; unavailable connected keys or legacy plaintext refuse

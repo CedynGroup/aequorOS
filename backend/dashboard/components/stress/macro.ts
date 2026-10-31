@@ -1,6 +1,6 @@
 /**
  * Macro-variable registry for the stress scenario builder (docs/stress.md §3.1,
- * AppIII Table 6). Mirrors the backend's ``MACRO_VARIABLES`` (app/models/stress.py)
+ * AppIII Table 6). Mirrors the backend's ``MACRO_VARIABLES`` (app/stress/models/stress.py)
  * — the 13 Table 6 drivers a governed scenario authors as base/stress paths over
  * a ≥3-year horizon. Each entry carries the directive unit and how the value is
  * displayed (a fraction rendered as a percentage vs a raw level).

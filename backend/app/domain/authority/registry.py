@@ -55,7 +55,7 @@ The divergences you must not "fix" by asserting equality
 ``lcr_pct`` and ``car_pct`` each exist more than once, deliberately:
 
 * ``lcr_pct`` / ``basel_bog_liquidity_run`` — the LCR-NSFR return's LCR.
-  ``app.domain.liquidity.engine.compute_lcr`` owns its aggregate inflow cap;
+  ``app.liquidity.domain.engine.compute_lcr`` owns its aggregate inflow cap;
   ``ARCHITECTURE.md`` §3 owns its per-figure refusal contract.
 * ``lcr_pct`` / ``lmtd_table11_capped`` — the LMT Table 11 by-currency LCR.
   It caps too. The two divergences are (a) the cap SOURCE — a governed,
@@ -461,7 +461,7 @@ class MetricAuthority:
         """The platform's name for :attr:`authority_reference`.
 
         ``regulatory_parameter``, ``system_of_record`` and
-        :mod:`app.domain.policy.resolver` all call a governed legal basis a
+        :mod:`app.policy.domain.resolver` all call a governed legal basis a
         ``source_citation``; the forensic re-audit uses that name too. This
         registry named the same thing ``authority_reference`` first, and it is
         a serialised key (``to_dict``) that provenance already writes, so it
@@ -1081,13 +1081,13 @@ _GH = "GH"
 #: honest epoch is better than inventing per-metric commencement dates.
 _EPOCH = date(2026, 1, 1)
 
-_PARAMS_TENANT = "app.services.params:get_active_params"
-_PARAMS_CONTROL = "app.services.regulatory_parameters:resolve"
+_PARAMS_TENANT = "app.policy.service.params:get_active_params"
+_PARAMS_CONTROL = "app.policy.service.regulatory_parameters:resolve"
 
 # Both bumped to v2.0.0 on 2026-08-22 (forensic re-audit D-5): each engine
 # changed methodology in a way that moves a filed figure over unchanged inputs.
 # The declaring constants carry the reasoning and the versioning rule
-# (``app.services.regulatory_capital.ENGINE_VERSION`` and its liquidity peer);
+# (``app.capital.service.regulatory_capital.ENGINE_VERSION`` and its liquidity peer);
 # these must track them, and a registry test asserts they do.
 _CAPITAL_VERSION = "regulatory-capital-v5.0.0"
 _LIQ_VERSION = "regulatory-liquidity-v2.0.0"
@@ -1113,12 +1113,12 @@ _REVERSE_VERSION = "reverse-stress-v1.0.0"
 #: liquidity/capital outputs share NAMES with regulatory metrics while being
 #: mathematically different. Nothing regulatory may ever read them.
 _FORBID_CASE_PLANE: tuple[str, ...] = (
-    "app.services.calculations:calculate_forecast",
-    "app.services.liquidity:calculate_metrics",
-    "app.services.capital:_indicator",
-    "app.models.calculation:CalculationRun",
-    "app.models.calculation:CalculationForecastPeriod",
-    "app.models.capital:CapitalProjection",
+    "app.case.service.calculations:calculate_forecast",
+    "app.case.service.liquidity:calculate_metrics",
+    "app.case.service.capital:_indicator",
+    "app.case.models.calculation:CalculationRun",
+    "app.case.models.calculation:CalculationForecastPeriod",
+    "app.case.models.capital:CapitalProjection",
 )
 
 _FORBID_CLIENT = ("dashboard client-side arithmetic",)
@@ -1686,7 +1686,10 @@ REGISTRY.register(
             ),
             resolution_status=UNRESOLVED_AUDIT_FINDING,
             equality_assertion_forbidden=False,
-            evidence=("backend/tests/api/test_forecasting.py - divergence asserted in a comment",),
+            evidence=(
+                "backend/tests/forecasting/api/test_forecasting.py - "
+                "divergence asserted in a comment",
+            ),
         ),
         notes=(
             "Value lives at RegulatoryRun(forecast).metrics['path'][n]['car_pct'], not as a "
@@ -2225,7 +2228,7 @@ REGISTRY.register_all(
                 "an EXPOSURE DRAFT (February 2026, effective 1 January 2027 at P9), which "
                 "is why the methodology's citation still carries the sentinel. Persisted "
                 "only when the active parameter set carries the parallel_up_450 shock; "
-                "app/services/scenario_catalog.py labels the scenario 'informational', "
+                "app/stress/service/scenario_catalog.py labels the scenario 'informational', "
                 "which is correct while the guideline is not in force and becomes wrong "
                 "on the day it is."
             ),
@@ -2246,7 +2249,7 @@ REGISTRY.register_all(
         _irr("duration_gap", engine="app.domain.irr.engine:compute_duration"),
         # The two terms of the gap identity that duration_gap already stands on:
         # ``duration_gap = asset_modified - (PV_liabilities / PV_assets) *
-        # liability_modified`` (app/domain/irr/engine.py:338). One call to
+        # liability_modified`` (app/irrbb/domain/engine.py:338). One call to
         # compute_duration returns all three. An authority over the difference
         # that does not reach its own operands is not an authority over anything,
         # so these carry the SAME citation rather than a new one.
@@ -2298,7 +2301,7 @@ REGISTRY.register_all(
         # regulator requires them.
         #
         # Also NOT bound here: fx_var:diversification_benefit. That line is no
-        # longer written at all (app/domain/fx/engine.py::compute_var); the
+        # longer written at all (app/fx/domain/engine.py::compute_var); the
         # residual of two value-at-risk figures cannot have a firmer basis than
         # the figures themselves, and it was reaching a sealed run on both planes
         # — as an fx_var line item and as the diversification_benefit_ghs metric
@@ -2696,7 +2699,7 @@ REGISTRY.register(
 
 # --- CREDIT: implied bank rating and PD (advisory only) -------------------
 
-#: The scorecard's own parameter register version. ``app.services.implied_rating``
+#: The scorecard's own parameter register version. ``app.rating.service.implied_rating``
 #: is already one of the engine modules the registry test suite imports, so this
 #: string cannot drift from the constant it copies.
 _RATING_VERSION = "rating-scorecard/1.0"
@@ -2716,7 +2719,7 @@ _RATING_NO_AUTHORITY = (
 )
 
 _RATING_NOTES = (
-    "Published to the live plane only (app/services/implied_rating.py::compute_live) and "
+    "Published to the live plane only (app/rating/service/implied_rating.py::compute_live) and "
     "sealed into ImpliedRatingRun, never into a RegulatoryRun. The module feeds no return: "
     "nothing under app/reporting/service/ reads it. ADVISORY_ONLY is therefore "
     "the operative constraint as well as the honest label - these figures must not reach a "
@@ -2754,7 +2757,7 @@ def _rating(metric_id: str, *, engine: str, notes: str = "") -> MetricAuthority:
             "reference:sovereign_counterparty_rating",
             "param:desk_methodology.AEQ-GHS-BANK-PD",
         ),
-        policy_resolver="app.services.implied_rating:ensure_default_methodology",
+        policy_resolver="app.rating.service.implied_rating:ensure_default_methodology",
         calculation_engine=engine,
         calculation_version=_RATING_VERSION,
         parameter_set=("DeskMethodology.AEQ-GHS-BANK-PD",),

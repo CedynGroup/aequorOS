@@ -5,8 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.operator.deps import Operator, OperatorDb, record_operator_action
+from app.operator.schemas import DataEnginesRead
 from app.operator.services import operator_views
-from app.schemas.operator import DataEnginesRead
 
 router = APIRouter(prefix="/data-engines", tags=["operator-data-engines"])
 

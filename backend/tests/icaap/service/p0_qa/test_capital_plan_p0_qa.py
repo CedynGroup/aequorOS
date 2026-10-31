@@ -18,6 +18,14 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.schemas.capital_plan import (
+    CapitalPlanContentInput,
+    CapitalPlanPut,
+    Pillar2AddOnInput,
+)
+from app.capital.service import capital_plan
+from app.forecasting.schemas.forecasting import ForecastRunCreate
+from app.forecasting.service import regulatory_forecasting
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -25,9 +33,6 @@ from app.models import (
     RegulatoryParameter,
     RegulatoryRun,
 )
-from app.schemas.capital_plan import CapitalPlanContentInput, CapitalPlanPut, Pillar2AddOnInput
-from app.schemas.forecasting import ForecastRunCreate
-from app.services import capital_plan, regulatory_forecasting
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -439,8 +444,12 @@ def test_the_horizon_predicate_compiles_for_postgres() -> None:
 def test_approval_refusal_names_the_horizon_rule_when_only_a_short_run_exists(
     db_session: Session,
 ) -> None:
-    from app.schemas.capital_plan import CapitalPlanApprove  # noqa: PLC0415
-    from tests.services.test_capital_plan import CHECKER, _content, _ensure_checker  # noqa: PLC0415
+    from app.capital.schemas.capital_plan import CapitalPlanApprove  # noqa: PLC0415
+    from tests.capital.service.test_capital_plan import (  # noqa: PLC0415
+        CHECKER,
+        _content,
+        _ensure_checker,
+    )
 
     materialize_canonical_test_book(db_session)
     _ensure_checker(db_session)

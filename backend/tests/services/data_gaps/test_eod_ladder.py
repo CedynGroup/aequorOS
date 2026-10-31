@@ -31,8 +31,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
+from app.data_engine.models.canonical import CanonicalPosition, CanonicalPositionSnapshot
 from app.db.session import get_sessionmaker
-from app.models.canonical import CanonicalPosition, CanonicalPositionSnapshot
 from scripts.ingest_push import read_rows
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,

@@ -4,7 +4,7 @@ Auth gate, compute-preview (persists no assessment state), the maker-checker
 lifecycle at the API boundary, and the four-eyes refusal (the operator dev
 session is a single identity, so self-approval is exactly the 422 path). Heavy
 publish fan-out is proven at the service layer
-(``tests/services/test_operating_environment.py``).
+(``tests/market_data/service/test_operating_environment.py``).
 """
 
 from __future__ import annotations
@@ -65,9 +65,7 @@ def test_compute_preview_persists_nothing(
 
 
 def test_stage_and_lifecycle(operator_client: TestClient, operator_db: Session) -> None:
-    created = operator_client.post(
-        f"{BASE}/assessments", json=_body(), headers=operator_headers()
-    )
+    created = operator_client.post(f"{BASE}/assessments", json=_body(), headers=operator_headers())
     assert created.status_code == 201, created.text
     assessment = created.json()
     assessment_id = assessment["id"]
@@ -76,9 +74,7 @@ def test_stage_and_lifecycle(operator_client: TestClient, operator_db: Session) 
     assert assessment["proposed_by"] == "dev@aequoros.com"
 
     # GET item + list.
-    got = operator_client.get(
-        f"{BASE}/assessments/{assessment_id}", headers=operator_headers()
-    )
+    got = operator_client.get(f"{BASE}/assessments/{assessment_id}", headers=operator_headers())
     assert got.status_code == 200
     listed = operator_client.get(f"{BASE}/assessments", headers=operator_headers())
     assert listed.status_code == 200
@@ -93,13 +89,9 @@ def test_stage_and_lifecycle(operator_client: TestClient, operator_db: Session) 
 
 def test_four_eyes_self_approval_rejected(operator_client: TestClient) -> None:
     """The dev session proposes AND tries to approve — four-eyes → 422."""
-    created = operator_client.post(
-        f"{BASE}/assessments", json=_body(), headers=operator_headers()
-    )
+    created = operator_client.post(f"{BASE}/assessments", json=_body(), headers=operator_headers())
     assessment_id = created.json()["id"]
-    operator_client.post(
-        f"{BASE}/assessments/{assessment_id}/submit", headers=operator_headers()
-    )
+    operator_client.post(f"{BASE}/assessments/{assessment_id}/submit", headers=operator_headers())
     approved = operator_client.post(
         f"{BASE}/assessments/{assessment_id}/approve", headers=operator_headers()
     )
@@ -110,8 +102,6 @@ def test_missing_required_input_is_422(operator_client: TestClient) -> None:
     inputs = dict(_INPUTS)
     del inputs["system_car_pct"]
     body = {"jurisdiction_code": "GH", "cob_date": COB, "inputs": inputs}
-    response = operator_client.post(
-        f"{BASE}/assessments", json=body, headers=operator_headers()
-    )
+    response = operator_client.post(f"{BASE}/assessments", json=body, headers=operator_headers())
     # Pydantic rejects the incomplete closed model before the service runs.
     assert response.status_code == 422

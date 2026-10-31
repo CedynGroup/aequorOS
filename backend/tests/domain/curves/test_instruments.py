@@ -11,9 +11,9 @@ from datetime import date
 
 import pytest
 
-from app.domain.curves.calendars import USA, next_imm_date
-from app.domain.curves.conventions import DayCount, year_fraction
-from app.domain.curves.instruments import (
+from app.market_data.domain.curves.calendars import USA, next_imm_date
+from app.market_data.domain.curves.conventions import DayCount, year_fraction
+from app.market_data.domain.curves.instruments import (
     DEFAULT_FUTURES_VOL,
     DepositHelper,
     FraHelper,
@@ -26,7 +26,7 @@ from app.domain.curves.instruments import (
     usd_sofr_ois,
     usd_swap_vs_3m,
 )
-from app.domain.curves.multicurve import (
+from app.market_data.domain.curves.multicurve import (
     MarketQuote,
     SolvedCurve,
     build_curve_set,
@@ -153,10 +153,13 @@ def test_forward_start_deposit_dates_and_reprice() -> None:
         (date(2024, 2, 1), date(2024, 5, 1), date(2024, 8, 1), date(2025, 6, 20)),
         (0.056, 0.050, 0.046, 0.042),
     )
-    assert abs(
-        fwd.implied_quote(sloped, sloped)
-        - DepositHelper("3M", USA).implied_quote(sloped, sloped)
-    ) > 1e-3
+    assert (
+        abs(
+            fwd.implied_quote(sloped, sloped)
+            - DepositHelper("3M", USA).implied_quote(sloped, sloped)
+        )
+        > 1e-3
+    )
 
 
 def test_forward_start_swap_and_ois_reprice_at_par() -> None:

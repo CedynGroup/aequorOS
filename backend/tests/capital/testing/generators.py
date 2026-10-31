@@ -6,8 +6,8 @@ from decimal import Decimal
 from hypothesis import strategies as st
 
 from app.domain.capital.engine import CapitalFact, CapitalParams, compute_rwa, money
-from app.services.parameter_register import BANK_CAPITAL_THRESHOLDS, BANK_RISK_WEIGHTS
-from app.services.regulatory_parameters import SEED_PARAMETERS
+from app.policy.service.parameter_register import BANK_CAPITAL_THRESHOLDS, BANK_RISK_WEIGHTS
+from app.policy.service.regulatory_parameters import SEED_PARAMETERS
 
 
 def capital_params() -> CapitalParams:

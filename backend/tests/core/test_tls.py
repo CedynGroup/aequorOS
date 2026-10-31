@@ -22,9 +22,6 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 
-from app.adapters.database_direct.config import ConnectionConfig, TlsConfig
-from app.adapters.database_direct.drivers.base import require_verified_transport
-from app.adapters.database_direct.errors import DatabaseDirectError
 from app.attestation.service.tsa import build_pdf_timestamper
 from app.core.config import Settings, TsaSettings, get_settings
 from app.core.serve import listener_options
@@ -37,6 +34,9 @@ from app.core.tls import (
     validate_service_transports,
 )
 from app.core.tls_evidence import probe_https
+from app.data_engine.adapters.database_direct.config import ConnectionConfig, TlsConfig
+from app.data_engine.adapters.database_direct.drivers.base import require_verified_transport
+from app.data_engine.adapters.database_direct.errors import DatabaseDirectError
 from app.integrations.storage.s3 import S3ObjectStorage
 from app.main import create_app
 from app.reporting.service.channels.errors import ChannelPreconditionError

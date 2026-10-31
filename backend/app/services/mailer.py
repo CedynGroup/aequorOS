@@ -1,6 +1,6 @@
 """The platform's ONE outbound mail path, over the deployment's SMTP relay.
 
-Extracted from ``app/services/notification_email_mirror.py`` (D-170), which had
+Extracted from ``app/notifications/service/notification_email_mirror.py`` (D-170), which had
 been the only mail path in the codebase and is now this module's first caller.
 Everything here was already there; what is new is that it is now reusable and
 that a second feature — BI subscriptions — cannot grow a second transport, a

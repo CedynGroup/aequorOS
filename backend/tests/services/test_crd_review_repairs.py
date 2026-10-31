@@ -16,8 +16,10 @@ from app.domain.capital.engine import (
     _credit_line_items,  # pyright: ignore[reportPrivateUsage]
     compute_rwa,
 )
-from app.domain.stress.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
-from app.domain.stress.credit_bottom_up import compute_bottom_up_credit
+from app.live.service.fact_derivation import (
+    _derive_specs,  # pyright: ignore[reportPrivateUsage]
+    _load_canonical,  # pyright: ignore[reportPrivateUsage]
+)
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -26,34 +28,32 @@ from app.models import (
     CanonicalProduct,
     RegulatoryRun,
 )
-from app.services.enterprise_stress import (
+from app.stress.domain.appendix_ii import _crd_class  # pyright: ignore[reportPrivateUsage]
+from app.stress.domain.credit_bottom_up import compute_bottom_up_credit
+from app.stress.service.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
-from app.services.fact_derivation import (
-    _derive_specs,  # pyright: ignore[reportPrivateUsage]
-    _load_canonical,  # pyright: ignore[reportPrivateUsage]
+from tests.credit.service.test_crd_credit_exposures import (
+    _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.api.test_enterprise_stress import (
+from tests.data_engine.api.test_ingestion import seed_bank
+from tests.domain.test_capital_engine import bog_capital_params
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.fixtures.capital_structure import MAKER, REPORTING_DATE
+from tests.services.test_derivation_fail_closed_defaults import (
+    _canonical,  # pyright: ignore[reportPrivateUsage]
+    _row,  # pyright: ignore[reportPrivateUsage]
+)
+from tests.stress.api.test_enterprise_stress import (
     RUNS_URL,
     _approve_scenario,  # pyright: ignore[reportPrivateUsage]
     _create_scenario,  # pyright: ignore[reportPrivateUsage]
     _period_id,  # pyright: ignore[reportPrivateUsage]
     _seed_checker,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.api.test_enterprise_stress_phase4 import (
+from tests.stress.api.test_enterprise_stress_phase4 import (
     _AS_OF,  # pyright: ignore[reportPrivateUsage]
     _seed_canonical_positions,  # pyright: ignore[reportPrivateUsage]
-)
-from tests.api.test_ingestion import seed_bank
-from tests.domain.test_capital_engine import bog_capital_params
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
-from tests.fixtures.capital_structure import MAKER, REPORTING_DATE
-from tests.services.test_crd_credit_exposures import (
-    _stress_row,  # pyright: ignore[reportPrivateUsage]
-)
-from tests.services.test_derivation_fail_closed_defaults import (
-    _canonical,  # pyright: ignore[reportPrivateUsage]
-    _row,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.support.helpers import headers
 

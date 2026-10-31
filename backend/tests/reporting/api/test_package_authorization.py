@@ -37,8 +37,8 @@ from app.models import (
     RegulatoryPackage,
     User,
 )
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.reporting.service import version_chain
-from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,

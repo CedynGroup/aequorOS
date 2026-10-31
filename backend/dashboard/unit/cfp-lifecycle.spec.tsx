@@ -310,7 +310,7 @@ it("saves every authored collection against the closed backend schema, allowing 
       expect(
         runBackend<boolean>(
           `
-from app.schemas.liquidity_cfp import CfpPut
+from app.liquidity.schemas.liquidity_cfp import CfpPut
 CfpPut.model_validate(payload)
 print(json.dumps(True))
 `,
@@ -481,7 +481,7 @@ it("requires an independent checker after saving displayed edits", async () => {
       expect(
         runBackend<boolean>(
           `
-from app.schemas.liquidity_cfp import CfpPut
+from app.liquidity.schemas.liquidity_cfp import CfpPut
 CfpPut.model_validate(payload)
 print(json.dumps(True))
 `,
@@ -710,7 +710,7 @@ it("preserves loaded and edited funding descriptions through the closed wire con
   expect(
     runBackend<string[]>(
       `
-from app.schemas.liquidity_cfp import CfpPut
+from app.liquidity.schemas.liquidity_cfp import CfpPut
 print(json.dumps([CfpPut.model_validate(item).content.funding_options[0].source
     for item in payload]))
 `,

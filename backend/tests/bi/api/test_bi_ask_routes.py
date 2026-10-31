@@ -51,6 +51,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.ai.models import AiCommentarySettings
+from app.ai.service import client as ai_client
+from app.ai.service import features, gates
 from app.bi.domain.catalogue import CATALOGUE_VERSION, catalogue
 from app.bi.jobs import bi_nlq
 from app.bi.models.marts import BiQueryLog
@@ -68,9 +71,6 @@ from app.core.config import get_settings
 from app.db.base import utc_now
 from app.identity.service import authorization
 from app.models import AuditEvent, AuthorizationBinding, Bank, Job, User
-from app.models.ai import AiCommentarySettings
-from app.services.ai import client as ai_client
-from app.services.ai import features, gates
 from tests.bi.api.test_bi_routes import AS_OF, BANK_ID, seed_bi_mart
 from tests.support.helpers import ORG_1, headers
 

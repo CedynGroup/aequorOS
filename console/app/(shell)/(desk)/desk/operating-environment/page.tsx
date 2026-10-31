@@ -73,7 +73,7 @@ import {
  */
 
 // ---------------------------------------------------------------------------
-// Input metadata — mirrors app/domain/rating/operating_environment.py
+// Input metadata — mirrors app/rating/domain/operating_environment.py
 // ---------------------------------------------------------------------------
 
 interface FieldMeta {

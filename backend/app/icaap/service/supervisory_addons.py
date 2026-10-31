@@ -273,9 +273,7 @@ def create_addon(  # noqa: PLR0913 - a recorded letter is its named parts
             )
     digest = hashlib.sha256(content).hexdigest()
 
-    from app.services.ingestion import (  # noqa: PLC0415 - defer cyclic feature dependencies
-        bank_slug,
-    )
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     slug = bank_slug(db, access.bank)
     storage.ensure_institution(slug)
@@ -423,9 +421,7 @@ def withdraw_addon(
 def prepare_letter_download(
     db: Session, access: IcaapAccess, addon_id: UUID
 ) -> tuple[BankSupervisoryAddon, str]:
-    from app.services.ingestion import (  # noqa: PLC0415 - defer cyclic feature dependencies
-        bank_slug,
-    )
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     row = _addon_or_404(db, access, addon_id)
     slug = bank_slug(db, access.bank)

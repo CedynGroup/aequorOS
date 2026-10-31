@@ -15,7 +15,7 @@ from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.presentation import LOCKED_JSON, LOCKED_TEXT
 from app.core.key_management.types import KeyStatus, KeyUnavailableError
 from app.identity.schemas.institution_profile import (
-    InstitutionProfileFullRead,
+    InstitutionProfileAccessRead,
     RelatedPartyCreate,
     RelatedPartyRead,
     RelatedPartyRoleInput,
@@ -33,7 +33,7 @@ def party(db_session: Session, provider: LocalKeyProvider) -> RelatedPartyRead:
     fields.connect(db_session, provider)
     return institution_profile.create_related_party(
         db_session,
-        fields.CTX,
+        fields.REGISTER_CTX,
         fields.BANK_A,
         RelatedPartyCreate(
             reason="Synthetic supplied-field update",
@@ -84,7 +84,7 @@ def test_http_locked_shareholding_mutations_preserve_identity_and_scope(  # noqa
     owners = [
         institution_profile.create_related_party(
             db_session,
-            fields.CTX,
+            fields.REGISTER_CTX,
             bank_id,
             RelatedPartyCreate(
                 reason="Synthetic shareholding owner",
@@ -156,7 +156,7 @@ def test_http_locked_shareholding_mutations_preserve_identity_and_scope(  # noqa
     assert response.status_code == 503, response.text
     provider.set_status(fields.KEY_A, KeyStatus.ACTIVE)
     db_session.expunge_all()
-    restored = institution_profile.get_full_profile(db_session, fields.CTX, fields.BANK_A)
+    restored = institution_profile.get_full_profile(db_session, fields.REGISTER_CTX, fields.BANK_A)
     current = next(record for record in restored.related_parties if record.id == party.id)
     assert current.full_name == party.full_name
     assert current.contact == party.contact
@@ -216,7 +216,7 @@ def test_http_numeric_update_preserves_protected_storage_and_recovers(
         f"/api/v1/banks/{fields.BANK_A}/institution-profile", headers=headers()
     )
     assert response.status_code == 200, response.text
-    profile = InstitutionProfileFullRead.model_validate_json(response.text)
+    profile = InstitutionProfileAccessRead.model_validate_json(response.text)
     restored = profile.related_parties[0]
     assert restored.full_name == party.full_name
     assert restored.contact == party.contact
@@ -270,7 +270,7 @@ def test_http_protected_changes_and_clears_refuse_atomically(  # noqa: PLR0913
     response = db_client.get(
         f"/api/v1/banks/{fields.BANK_A}/institution-profile", headers=headers()
     )
-    current = InstitutionProfileFullRead.model_validate_json(response.text).related_parties[0]
+    current = InstitutionProfileAccessRead.model_validate_json(response.text).related_parties[0]
     assert current.status == "active"
     assert current.roles[0].annual_fees == Decimal("30")
 
@@ -352,7 +352,7 @@ def test_http_role_ids_are_scoped_to_bank_and_party(
 ) -> None:
     foreign = institution_profile.create_related_party(
         db_session,
-        fields.CTX,
+        fields.REGISTER_CTX,
         fields.BANK_B if foreign_bank else fields.BANK_A,
         RelatedPartyCreate(
             reason="Foreign role owner",
@@ -384,7 +384,7 @@ def test_http_role_ids_are_scoped_to_bank_and_party(
         (fields.BANK_B if foreign_bank else fields.BANK_A, foreign),
     ):
         db_session.expunge_all()
-        current = institution_profile.get_full_profile(db_session, fields.CTX, bank_id)
+        current = institution_profile.get_full_profile(db_session, fields.REGISTER_CTX, bank_id)
         assert (
             next(record for record in current.related_parties if record.id == expected.id).roles
             == expected.roles

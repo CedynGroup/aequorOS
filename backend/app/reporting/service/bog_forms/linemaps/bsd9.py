@@ -19,7 +19,7 @@ figure and the sheet note says the bank adds subsidiaries' balances and
 eliminations before filing. **Data-gap closure (2026-08-16):** the
 ``subsidiaries`` reference dataset (the subsidiary register + book, one row
 per subsidiary per reporting date — schema
-``app/domain/ingestion/reference_schemas/subsidiaries.py``, spec
+``app/data_engine/domain/ingestion/reference_schemas/subsidiaries.py``, spec
 docs/data_engine/datasets/subsidiaries.md) now feeds the two consolidation-
 only blocks: "10. Minority interests" is ``refs.sum`` of the group's own
 ``minority_interest_ghs`` workings over fully consolidated subsidiaries, split

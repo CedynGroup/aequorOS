@@ -8,8 +8,8 @@ from fastapi import APIRouter, Query
 
 from app.operator.deps import Operator, OperatorDb, record_operator_action
 from app.operator.inspection import require_active_inspection
+from app.operator.schemas import TenantActivityRead
 from app.operator.services import operator_views
-from app.schemas.operator import TenantActivityRead
 from app.services.public_ids import normalize_public_id
 
 router = APIRouter(prefix="/tenants", tags=["operator-activity"])

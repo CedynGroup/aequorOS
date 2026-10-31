@@ -21,7 +21,7 @@ from app.db.base import utc_now
 from app.models import OperatorAuditLog
 from app.operator.deps import OperatorContext, record_operator_action
 from app.operator.features import audit_log
-from app.schemas.operator import OperatorAuditLogListRead
+from app.operator.schemas import OperatorAuditLogListRead
 from tests.db.test_database_roles import administrator, role_banks, role_schema
 from tests.support.helpers import ORG_1
 

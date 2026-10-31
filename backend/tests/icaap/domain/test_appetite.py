@@ -8,8 +8,6 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from app.domain.policy import Direction
-from app.domain.policy.resolver import PARAMETER_DIRECTION
 from app.icaap.domain.appetite import (
     APPETITE_METRIC_CATALOGUE,
     RAG,
@@ -21,6 +19,8 @@ from app.icaap.domain.appetite import (
     evaluate,
     validate_ordering,
 )
+from app.policy.domain import Direction
+from app.policy.domain.resolver import PARAMETER_DIRECTION
 
 CAR = Thresholds(appetite=Decimal(16), tolerance=Decimal("14.5"), capacity=Decimal(13))
 CAR_REFERENCE = RegulatoryReference("car_min", Decimal(13), Direction.FLOOR, "pending")

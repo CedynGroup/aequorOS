@@ -16,9 +16,9 @@ from __future__ import annotations
 import re
 import typing
 
-from app.features import manage_live_engine
-from app.features.manage_live_engine import list_live_snapshots
-from app.models.live import LIVE_MODULES
+from app.live.api import manage_live_engine
+from app.live.api.manage_live_engine import list_live_snapshots
+from app.live.models.live import LIVE_MODULES
 
 
 def _module_pattern() -> re.Pattern[str]:

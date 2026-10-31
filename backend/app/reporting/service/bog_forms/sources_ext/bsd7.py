@@ -43,9 +43,10 @@ from typing import Any
 
 from sqlalchemy import func, or_, select
 
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.data_engine.public import CanonicalGlAccount
-from app.domain.gl import pl_mapping
-from app.domain.gl.pl_mapping import (
+from app.live.domain.gl import pl_mapping
+from app.live.domain.gl.pl_mapping import (
     LINE_ATTRIBUTE,
     MAPPING_KIND,
     BalanceBasis,
@@ -56,13 +57,12 @@ from app.domain.gl.pl_mapping import (
     Window,
     fiscal_year_start,
 )
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.live.public import BankFinancialFact, BankReportingPeriod
 
 from ..sources import ResolveContext, reference_rows, require_usable_capital_register, resolver
 
 # The pure rules — windows, the CoA → item mapping, the YTD / period-movement
-# arithmetic — live in ``app/domain/gl/pl_mapping.py`` (D-021) so the BI plane's
+# arithmetic — live in ``app/live/domain/gl/pl_mapping.py`` (D-021) so the BI plane's
 # monthly GL mart is computed by the SAME functions this return files. This
 # module keeps the database selection and the resolver registration, and
 # re-exports the names its tests and line maps import.

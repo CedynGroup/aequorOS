@@ -1,6 +1,6 @@
 /**
  * Pins the live engine's headline-metric map so its two mirrors cannot drift:
- * `_PRIMARY_METRIC_KEY` in `backend/app/services/window_analytics.py` (its
+ * `_PRIMARY_METRIC_KEY` in `backend/app/liquidity/service/window_analytics.py` (its
  * parity test reads THIS file's source) and the labels rendered by
  * `components/home/WindowAnalysis.tsx`. Also pins the D-013
  * direction rule: the IRR headline is stored signed, judged on magnitude —

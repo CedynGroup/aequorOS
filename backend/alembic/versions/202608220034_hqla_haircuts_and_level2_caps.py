@@ -1,6 +1,6 @@
 """Seed the Basel HQLA haircuts + Level-2 caps into the control plane.
 
-Enterprise audit 2026-08-20 **P0-8**: ``app/domain/liquidity/engine.py`` summed
+Enterprise audit 2026-08-20 **P0-8**: ``app/liquidity/domain/engine.py`` summed
 every fact carrying an ``hqla_level`` at FACE VALUE — no 15% Level-2A haircut, no
 Level-2B haircut, no 40% Level-2 cap, no 15% Level-2B sub-cap — so the LCR was
 correct only for a book that is entirely Level 1 and overstated otherwise.
@@ -11,7 +11,7 @@ values (BCBS 238 §II.A) to the GLOBAL ``regulatory_parameter`` table for the
 ``bank`` institution class — the LCR is a Basel, bank-only measure, so no SDI row
 is seeded.
 
-The values themselves come from ``app.services.regulatory_parameters.SEED_
+The values themselves come from ``app.policy.service.regulatory_parameters.SEED_
 PARAMETERS``, the single catalogue the resolver and the hermetic-test seed also
 read, so the three can never drift. Rows already present (a fresh deployment
 whose ``202608200025`` seed ran after the catalogue was extended) are skipped, so
@@ -75,7 +75,7 @@ def _seed_table() -> sa.TableClause:
 
 def upgrade() -> None:
     # Deferred import: the single seed catalogue lives with the resolver.
-    from app.services.regulatory_parameters import seed_rows  # noqa: PLC0415
+    from app.policy.service.regulatory_parameters import seed_rows  # noqa: PLC0415
 
     bind = op.get_bind()
     # Dialect-neutral IN list; PARAM_CODES is a module constant, never user input.

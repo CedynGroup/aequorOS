@@ -6,17 +6,21 @@ import asyncio
 import gc
 import os
 import weakref
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import ExitStack
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import LiteralString, cast
 
+import psycopg
 import pytest
 import sqlalchemy
+from psycopg import sql
+from psycopg.errors import LockNotAvailable
+from psycopg.rows import dict_row
 from sqlalchemy import Connection, Engine, event, inspect, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import IntegrityError, ResourceClosedError
+from sqlalchemy.exc import DBAPIError, IntegrityError, ResourceClosedError
 from sqlalchemy.orm import Session
 
 from app.core.key_management.registry import lock_bank_version
@@ -86,12 +90,12 @@ def test_session_factory_preserves_outer_rollback_and_context(tmp_path: Path) ->
             assert connection.scalar(text("SELECT count(*) FROM probe")) == 0
 
 
-def test_sqlite_connections_enforce_foreign_keys(
-    isolated_db: TestDatabaseConnections,
-) -> None:
-    if isolated_db.url.drivername.startswith("postgresql"):
-        pytest.skip("SQLite foreign-key connection setup")
-    with isolated_db.connection() as connection:
+def test_sqlite_connections_enforce_foreign_keys(tmp_path: Path) -> None:
+    # This contract is specifically SQLite even in a Postgres integration job.
+    with (
+        isolated_database(f"sqlite:///{tmp_path / 'foreign-keys.db'}") as db,
+        db.connection() as connection,
+    ):
         _ = connection.execute(text("CREATE TABLE parent (id integer primary key)"))
         _ = connection.execute(text("CREATE TABLE child (parent_id integer REFERENCES parent(id))"))
         connection.commit()
@@ -409,6 +413,8 @@ def test_async_encryption_lock_uses_owning_schema_namespace() -> None:
             lock_bank_version(session, "OR-TEST", "BK-TEST", read=True)
             expected = cast(int, session.scalar(lock_identity))
 
+        key = _bank_lock_key(owner)
+
         async def run() -> None:
             async with owner.async_engine() as engine, engine.connect() as connection:
 
@@ -418,5 +424,282 @@ def test_async_encryption_lock_uses_owning_schema_namespace() -> None:
                         return cast(int, session.scalar(lock_identity))
 
                 assert await connection.run_sync(acquire) == expected
+                await connection.rollback()
+                borrowed = await connection.get_raw_connection()
+                raw = cast(psycopg.AsyncConnection[tuple[object, ...]], borrowed.driver_connection)
+                assert isinstance(raw, psycopg.AsyncConnection)
+                with owner.session() as holder:
+                    lock_bank_version(holder, "OR-TEST", "BK-TEST")
+                    _ = await raw.execute("SET LOCAL lock_timeout='250ms'")
+                    with pytest.raises(LockNotAvailable):
+                        _ = await raw.execute(
+                            "SELECT pg_advisory_xact_lock_shared(%(key)s)", {"key": key}
+                        )
+                    await raw.rollback()
+                async with raw.cursor(row_factory=dict_row) as cursor:
+                    _ = await cursor.execute(
+                        "SELECT pg_advisory_xact_lock_shared(%(key)s)", {"key": key}
+                    )
+                    _ = await cursor.execute(cast(LiteralString, lock_identity.text))
+                    row = await cursor.fetchone()
+                    assert row is not None
+                    assert tuple(row.values()) == (expected,)
+                with owner.session() as contender:
+                    _ = contender.execute(text("SET LOCAL lock_timeout='250ms'"))
+                    with pytest.raises(DBAPIError) as error:
+                        lock_bank_version(contender, "OR-TEST", "BK-TEST")
+                    assert isinstance(error.value.orig, LockNotAvailable)
+                await raw.rollback()
 
         asyncio.run(run())
+
+
+@postgres_only
+def test_adopted_and_migration_pools_preserve_schema_lock_identity(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with (
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as owner,
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as other,
+        database_connections(owner.database_url) as adopted,
+    ):
+        with owner.connection() as connection:
+            role = cast(str, connection.scalar(text("SELECT current_user")))
+        options = f"-cstatement_timeout=10000 -crole={role} " + cast(
+            str, make_url(owner.database_url).query["options"]
+        )
+        with database_connections(
+            make_url(owner.database_url).update_query_dict({"options": options})
+        ) as configured:
+            install_migration_engines(monkeypatch, owner.engine())
+            pools = [
+                owner.engine(),
+                adopted.engine(),
+                managed_engine(request, owner.database_url),
+                configured.engine(),
+                sqlalchemy.engine_from_config({"sqlalchemy.url": owner.database_url}),
+            ]
+            with owner.session() as holder:
+                lock_bank_version(holder, "OR-LOCKTEST", "BK-LOCKTEST", read=True)
+                for engine in pools:
+                    with managed_session_factory(request, engine)() as contender:
+                        _ = contender.execute(text("SET LOCAL lock_timeout='250ms'"))
+                        with pytest.raises(DBAPIError) as error:
+                            lock_bank_version(contender, "OR-LOCKTEST", "BK-LOCKTEST")
+                        assert isinstance(error.value.orig, LockNotAvailable)
+                with other.session() as independent:
+                    _ = independent.execute(text("SET LOCAL lock_timeout='250ms'"))
+                    lock_bank_version(independent, "OR-LOCKTEST", "BK-LOCKTEST")
+            with adopted.session() as released:
+                _ = released.execute(text("SET LOCAL lock_timeout='250ms'"))
+                lock_bank_version(released, "OR-LOCKTEST", "BK-LOCKTEST")
+
+
+def _bank_lock_key(owner: TestDatabaseConnections) -> int:
+    keys: list[int] = []
+    engine = owner.engine()
+
+    def capture(
+        _connection: Connection,
+        _clause: object,
+        _multiparams: object,
+        params: Mapping[str, object],
+        _options: object,
+    ) -> None:
+        if isinstance(params.get("key"), int):
+            keys.append(cast(int, params["key"]))
+
+    event.listen(engine, "before_execute", capture)
+    with owner.session(bind=engine) as session:
+        lock_bank_version(session, "OR-TEST", "BK-TEST")
+    assert len(keys) == 1
+    return keys[0]
+
+
+def _native_lock_pool(
+    owner: TestDatabaseConnections,
+    engine: Engine,
+    pool: str,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> tuple[TestDatabaseConnections, Engine | None]:
+    db = owner
+    if pool == "adopted":
+        from app.db.session import get_engine  # noqa: PLC0415
+
+        request.addfinalizer(get_engine.cache_clear)
+        native_engine = owner.adopt_engine(get_engine(owner.database_url))
+    elif pool == "migration":
+        native_engine = owner.migration_engine()
+    elif pool == "alembic":
+        install_migration_engines(monkeypatch, engine)
+        native_engine = sqlalchemy.engine_from_config({"sqlalchemy.url": owner.database_url})
+    elif pool == "context":
+        db = owner.with_context(replace(owner.context, organization_id="OR-NATIVE"))
+        native_engine = db.engine()
+    elif pool == "extra":
+        native_engine = owner.engine()
+    else:
+        native_engine = None
+
+    return db, native_engine
+
+
+@postgres_only
+@pytest.mark.parametrize("shared", [False, True])
+@pytest.mark.parametrize("pool", ["default", "extra", "adopted", "migration", "alembic", "context"])
+def test_native_and_orm_bank_locks_contend_and_release(
+    shared: bool, pool: str, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    with isolated_database(os.environ["TEST_DATABASE_URL"]) as owner:
+        engine = owner.engine()
+        key = {"key": _bank_lock_key(owner)}
+        statement = (
+            "SELECT pg_advisory_xact_lock_shared(%(key)s)"
+            if shared
+            else "SELECT pg_advisory_xact_lock(%(key)s)"
+        )
+        db, native_engine = _native_lock_pool(owner, engine, pool, monkeypatch, request)
+
+        with ExitStack() as resources:
+            if native_engine is None:
+                raw = resources.enter_context(db.raw_connection())
+            else:
+                borrowed = native_engine.raw_connection()
+                resources.callback(borrowed.close)
+                resources.callback(borrowed.rollback)
+                raw = cast(psycopg.Connection[tuple[object, ...]], borrowed.driver_connection)
+            with owner.session() as holder:
+                lock_bank_version(holder, "OR-TEST", "BK-TEST")
+                with raw.cursor() as cursor:
+                    _ = cursor.execute("SET LOCAL lock_timeout='250ms'")
+                    with pytest.raises(LockNotAvailable):
+                        _ = cursor.execute(statement, key)
+                raw.rollback()
+            with owner.session() as reader:
+                lock_bank_version(reader, "OR-TEST", "BK-TEST", read=True)
+                _ = raw.execute("SET LOCAL lock_timeout='250ms'")
+                if shared:
+                    _ = raw.execute(statement, key)
+                else:
+                    with pytest.raises(LockNotAvailable):
+                        _ = raw.execute(statement, key)
+                raw.rollback()
+            _ = raw.execute(statement, key)
+            with owner.session() as contender:
+                _ = contender.execute(text("SET LOCAL lock_timeout='250ms'"))
+                with pytest.raises(DBAPIError) as error:
+                    lock_bank_version(contender, "OR-TEST", "BK-TEST")
+                assert isinstance(error.value.orig, LockNotAvailable)
+            raw.rollback()
+            with owner.session() as released:
+                _ = released.execute(text("SET LOCAL lock_timeout='250ms'"))
+                lock_bank_version(released, "OR-TEST", "BK-TEST")
+
+
+@postgres_only
+@pytest.mark.parametrize("shared", [False, True])
+def test_native_bank_locks_are_schema_scoped_and_probes_are_unchanged(shared: bool) -> None:
+    statement = (
+        "SELECT pg_advisory_xact_lock_shared(%(key)s)"
+        if shared
+        else "SELECT pg_advisory_xact_lock(%(key)s)"
+    )
+    with (
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as first,
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as second,
+        first.raw_connection() as holder,
+        second.raw_connection() as independent,
+    ):
+        _ = holder.execute(statement, {"key": 123})
+        _ = independent.execute("SET LOCAL lock_timeout='250ms'")
+        _ = independent.execute("SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123})
+        _ = holder.execute("SELECT pg_advisory_xact_lock(%(probe_key)s)", {"probe_key": 456})
+        assert independent.execute(
+            "SELECT pg_try_advisory_xact_lock(%(probe_key)s)", {"probe_key": 456}
+        ).fetchone() == (False,)
+        _ = holder.execute("SELECT pg_advisory_xact_lock(%s, %s)", (123, 456))
+        assert independent.execute(
+            "SELECT pg_try_advisory_xact_lock(%s, %s)", (123, 456)
+        ).fetchone() == (False,)
+        holder.rollback()
+        assert independent.execute(
+            "SELECT pg_try_advisory_xact_lock(%(probe_key)s)", {"probe_key": 456}
+        ).fetchone() == (True,)
+
+
+def _assert_native_stream_keeps_rows_and_locks(
+    owner: TestDatabaseConnections, raw: psycopg.Connection[tuple[object, ...]]
+) -> None:
+    with raw.cursor(row_factory=dict_row) as cursor:
+        assert list(cursor.stream("SELECT %s AS value", (19,))) == [{"value": 19}]
+        rows = list(cursor.stream("SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123}))
+        assert len(rows) == 1
+        with owner.raw_connection() as contender:
+            _ = contender.execute("SET LOCAL lock_timeout='250ms'")
+            with pytest.raises(LockNotAvailable):
+                _ = contender.execute("SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123})
+    raw.rollback()
+
+
+@postgres_only
+@pytest.mark.parametrize("client_side", [False, True])
+def test_native_cursor_factories_keep_rows_and_execution_modes(client_side: bool) -> None:
+    class CustomCursor(psycopg.Cursor[dict[str, object]]):
+        pass
+
+    class CustomClientCursor(psycopg.ClientCursor[dict[str, object]]):
+        pass
+
+    factory = CustomClientCursor if client_side else CustomCursor
+
+    with isolated_database(os.environ["TEST_DATABASE_URL"]) as owner:
+        key = {"key": _bank_lock_key(owner)}
+        engine = owner.engine(connect_args={"cursor_factory": factory})
+        borrowed = engine.raw_connection()
+        try:
+            raw = cast(psycopg.Connection[tuple[object, ...]], borrowed.driver_connection)
+            assert isinstance(raw, psycopg.Connection)
+            with raw.cursor(row_factory=dict_row) as cursor:
+                assert isinstance(cursor, factory)
+                assert cursor.execute("SELECT %s AS value", (17,)) is cursor
+                assert cursor.fetchone() == {"value": 17}
+                cursor.executemany(
+                    "SELECT pg_advisory_xact_lock(%(key)s)",
+                    [{"key": 123}, {"key": 456}],
+                )
+                with owner.raw_connection() as contender:
+                    _ = contender.execute("SET LOCAL lock_timeout='250ms'")
+                    with pytest.raises(LockNotAvailable):
+                        _ = contender.execute(
+                            sql.SQL("SELECT pg_advisory_xact_lock(%(key)s)"), {"key": 456}
+                        )
+            raw.rollback()
+            with raw.cursor() as cursor:
+                _ = cursor.execute(b"SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123})
+                with owner.raw_connection() as contender:
+                    _ = contender.execute("SET LOCAL lock_timeout='250ms'")
+                    with pytest.raises(LockNotAvailable):
+                        _ = contender.execute("SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123})
+            raw.rollback()
+            with owner.session() as holder:
+                lock_bank_version(holder, "OR-TEST", "BK-TEST")
+                _ = raw.execute("SET LOCAL lock_timeout='250ms'")
+                with pytest.raises(LockNotAvailable):
+                    _ = raw.execute("SELECT pg_advisory_xact_lock(%(key)s)", key)
+                raw.rollback()
+            if not client_side:
+                _assert_native_stream_keeps_rows_and_locks(owner, raw)
+            with raw.cursor(name="native_rows", row_factory=dict_row) as server:
+                _ = server.execute("SELECT %s AS value", (23,))
+                assert server.fetchone() == {"value": 23}
+            with raw.cursor(name="native_locks") as server:
+                _ = server.execute("SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123})
+                _ = server.fetchone()
+                with owner.raw_connection() as contender:
+                    _ = contender.execute("SET LOCAL lock_timeout='250ms'")
+                    with pytest.raises(LockNotAvailable):
+                        _ = contender.execute("SELECT pg_advisory_xact_lock(%(key)s)", {"key": 123})
+        finally:
+            borrowed.rollback()
+            borrowed.close()

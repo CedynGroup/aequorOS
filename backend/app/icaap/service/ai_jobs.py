@@ -37,13 +37,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.ai.domain import grounding as grounding_domain
 from app.ai.public import ModelResult, gates, observability
 from app.ai.public import client as ai_client
 from app.ai.public import grounding as grounding_service
 from app.attestation.public import canonical_json, sha256_hex
 from app.core.config import get_settings
 from app.db.base import utc_now
-from app.domain.ai import grounding as grounding_domain
 from app.icaap.domain.frameworks import registry
 from app.icaap.models.ai import ICAAP_AI_TERMINAL_STATUSES, IcaapAiSuggestion
 from app.icaap.models.workspace import IcaapCycle

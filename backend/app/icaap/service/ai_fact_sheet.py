@@ -453,7 +453,7 @@ def resolve_limits(
     fallback minimum in a regulatory narrative would be a fabricated statement.
     """
     from app.capital.public import capital_plan  # noqa: PLC0415 - defer cyclic feature dependencies
-    from app.domain.policy.resolver import PARAMETER_DIRECTION  # noqa: PLC0415
+    from app.policy.domain.resolver import PARAMETER_DIRECTION  # noqa: PLC0415
 
     codes = tuple(
         dict.fromkeys(code for fid in fids if (code := ai_facts.LIMIT_PARAMS.get(fid)) is not None)

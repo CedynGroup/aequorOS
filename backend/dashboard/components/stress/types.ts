@@ -2,8 +2,8 @@
  * Hand-written contracts for the stress workbench (docs/stress.md Phase 6).
  *
  * These mirror the backend Pydantic schemas EXACTLY as they serialise on the
- * wire (app/schemas/{stress,enterprise_stress,management_actions}.py and the
- * domain serializers under app/domain/stress/). Because the workbench fetches
+ * wire (app/stress/schemas/{stress,enterprise_stress,management_actions}.py and the
+ * domain serializers under app/stress/domain/). Because the workbench fetches
  * these endpoints directly (the generated OpenAPI client does not yet carry the
  * Phase-1..5 stress surface, and regeneration is owned by a concurrent effort),
  * the JSON is consumed raw — hence **snake_case** keys and stringified Decimals,

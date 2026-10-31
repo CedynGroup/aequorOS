@@ -38,7 +38,7 @@ from app.api.deps import (
     ScopedMutationTenant,
     Tenant,
 )
-from app.features.ingest_data import IngestionStorage
+from app.data_engine.public import IngestionStorage
 from app.reporting.schemas.packages import (
     ChannelConfigPut,
     ChannelConfigRead,
@@ -488,7 +488,7 @@ def download_email_fallback_eml(
     import io  # noqa: PLC0415
     from email.message import EmailMessage  # noqa: PLC0415
 
-    from app.services.ingestion import bank_slug  # noqa: PLC0415
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     bundle = reporting_workflow.email_fallback_instructions(db, access.ctx, bank_id, package_id)
     message = EmailMessage()

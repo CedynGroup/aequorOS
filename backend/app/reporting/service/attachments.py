@@ -379,7 +379,7 @@ def upload_package_attachment(  # noqa: PLR0913 - an upload is its named parts
             attachment_id=str(duplicate.id),
         )
 
-    from app.services.ingestion import bank_slug  # noqa: PLC0415 - avoid an import cycle
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     slug = bank_slug(db, bank)
     storage.ensure_institution(slug)

@@ -8,9 +8,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from app.domain.ingestion.constants import REFERENCE_DATASET_KINDS
-from app.domain.ingestion.contracts import ReferenceRowData
-from app.domain.ingestion.reference_schemas import SCHEMAS
+from app.data_engine.domain.ingestion.constants import REFERENCE_DATASET_KINDS
+from app.data_engine.domain.ingestion.contracts import ReferenceRowData
+from app.data_engine.domain.ingestion.reference_schemas import SCHEMAS
 
 
 def _row(kind: str, payload: dict[str, str | None]) -> ReferenceRowData:

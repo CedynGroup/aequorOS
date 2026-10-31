@@ -57,13 +57,13 @@ from sqlalchemy.orm import Load, Session
 
 from app.api.deps import TenantContext
 from app.capital.public import regulatory_capital, sdi_capital
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.data_engine.public import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity.public import Bank, RelatedParty
 from app.liquidity.public import BANK_MINIMUM_PCT as _TABLE1_BANK_MINIMUM_PCT
 from app.liquidity.public import regulatory_liquidity

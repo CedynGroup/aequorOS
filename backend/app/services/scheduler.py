@@ -45,7 +45,8 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.services import job_queue, module_scope
+from app.policy.service import module_scope
+from app.services import job_queue
 from app.services.job_queue import enqueue_platform_daily
 
 SCHEDULED_TICK = "scheduled_tick"
@@ -120,21 +121,23 @@ def run_tick(session: Session, job: Job) -> None:
     market_data_pulls = 0
     if market_data_enabled:
         # Lazy import: market_data_jobs pulls in the ingestion module tree.
-        from app.services.market_data_jobs import enqueue_due_market_data_pulls  # noqa: PLC0415
+        from app.market_data.service.market_data_jobs import (  # noqa: PLC0415
+            enqueue_due_market_data_pulls,
+        )
 
         market_data_pulls = len(enqueue_due_market_data_pulls(session, org_id, now=now))
 
     temenos_pulls = 0
     if temenos_enabled:
         # Lazy import: temenos_jobs pulls in the ingestion module tree.
-        from app.services.temenos_jobs import enqueue_due_temenos_pulls  # noqa: PLC0415
+        from app.data_engine.service.temenos_jobs import enqueue_due_temenos_pulls  # noqa: PLC0415
 
         temenos_pulls = len(enqueue_due_temenos_pulls(session, org_id, now=now))
 
     database_direct_probes = 0
     if database_direct_health_enabled:
         # Lazy import: the probe pulls in the database-direct adapter tree.
-        from app.services.database_direct_jobs import (  # noqa: PLC0415
+        from app.data_engine.service.database_direct_jobs import (  # noqa: PLC0415
             enqueue_due_database_direct_probes,
         )
 
@@ -147,7 +150,7 @@ def run_tick(session: Session, job: Job) -> None:
     desk_capture_enqueued = False
     if settings.desk.desk_capture_enabled:
         # Lazy import: the capture job pulls in the market-desk source tree.
-        from app.services.market_desk.capture_job import (  # noqa: PLC0415
+        from app.market_data.service.market_desk.capture_job import (  # noqa: PLC0415
             enqueue_due_desk_capture,
         )
 
@@ -156,11 +159,13 @@ def run_tick(session: Session, job: Job) -> None:
     # Daily reporting-deadline scan (submission_pipeline_plan.md §W3): the scan
     # date rides the coalesce key, so each org gets at most one scan per day.
     # Lazy import: the scan pulls in the regulatory reporting module tree.
-    from app.services.reporting_deadline_scan import enqueue_due_deadline_scan  # noqa: PLC0415
+    from app.notifications.service.reporting_deadline_scan import (  # noqa: PLC0415
+        enqueue_due_deadline_scan,
+    )
 
     deadline_scan_enqueued = enqueue_due_deadline_scan(session, org_id, now=now)
 
-    from app.services.notification_email_mirror import (  # noqa: PLC0415
+    from app.notifications.service.notification_email_mirror import (  # noqa: PLC0415
         enqueue_due_notification_mirror,
         mirror_enabled,
     )
