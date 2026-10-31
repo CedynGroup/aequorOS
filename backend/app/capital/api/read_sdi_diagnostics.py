@@ -22,12 +22,7 @@ from app.api.deps import (
     Tenant,
     TenantContext,
 )
-from app.credit.service import loan_classification
-from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
-from app.data_engine.public import CanonicalPositionSnapshot, is_current_generation
-from app.identity import public as banks_service
-from app.identity.public import Bank
-from app.schemas.sdi import (
+from app.capital.schemas.sdi import (
     CapitalCheckRead,
     DelinquencyBucketRead,
     LoanGradeBucketRead,
@@ -52,13 +47,18 @@ from app.schemas.sdi import (
     SdiReadinessRead,
     SdiRwaRiskClassRead,
 )
-from app.services import (
+from app.capital.service import (
     sdi_capital,
     sdi_capital_assurance,
     sdi_capital_checks,
     sdi_readiness,
     sdi_views,
 )
+from app.credit.service import loan_classification
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.public import CanonicalPositionSnapshot, is_current_generation
+from app.identity import public as banks_service
+from app.identity.public import Bank
 
 router = APIRouter(tags=["sdi-diagnostics"])
 

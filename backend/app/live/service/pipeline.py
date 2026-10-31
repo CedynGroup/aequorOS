@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.bi.service.enqueue import enqueue_mart_refresh
+from app.capital.service import regulatory_capital
 from app.core.authorization import Module, Permission, Sensitivity
 from app.credit.service import regulatory_credit
 from app.db.base import utc_now
@@ -53,7 +54,6 @@ from app.models import Job
 from app.policy.public import module_scope
 from app.rating.service import implied_rating
 from app.reporting.service import filing_reconciliation
-from app.services import regulatory_capital
 from app.services.audit import record_event
 
 REFRESH_EVENT = "bank_data.refreshed"

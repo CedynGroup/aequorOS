@@ -11,6 +11,7 @@ from app.api.deps import (
     ScopedMutationTenant,
     Tenant,
 )
+from app.capital.service import regulatory_capital
 from app.core.authorization import Module, Permission, Sensitivity
 from app.identity import public as scoped_authorization
 from app.liquidity.schemas.regulatory_liquidity import (
@@ -24,7 +25,6 @@ from app.liquidity.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
 )
 from app.liquidity.service import regulatory_liquidity
-from app.services import regulatory_capital
 
 router = APIRouter(tags=["regulatory-liquidity"])
 

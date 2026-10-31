@@ -76,9 +76,9 @@ def capital_run(canonical_book: Session, access: IcaapAccess) -> None:
     """A sealed baseline capital run for the cycle's own year end."""
     from sqlalchemy import select  # noqa: PLC0415
 
+    from app.capital.service import regulatory_capital  # noqa: PLC0415
     from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate  # noqa: PLC0415
     from app.models import BankReportingPeriod  # noqa: PLC0415
-    from app.services import regulatory_capital  # noqa: PLC0415
     from tests.icaap.service.conftest import AS_OF  # noqa: PLC0415
 
     period = canonical_book.scalar(

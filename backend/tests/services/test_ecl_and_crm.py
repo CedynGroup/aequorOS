@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
 from app.credit.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.credit.service import credit_params
 from app.db.base import utc_now
@@ -48,7 +49,6 @@ from app.models import (
     RegulatoryRun,
 )
 from app.reporting.service.provenance import declared_methodology_notes
-from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

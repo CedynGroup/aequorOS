@@ -490,7 +490,7 @@ def test_the_import_guard_catches_a_deliberate_violation(tmp_path: Path) -> None
     for label, body in samples.items():
         probe = tmp_path / "probe.py"
         probe.write_text(body, encoding="utf-8")
-        if not forbidden_bi_imports(probe, module="app.services.regulatory_capital"):
+        if not forbidden_bi_imports(probe, module="app.capital.service.regulatory_capital"):
             missed.append(label)
     assert missed == [], f"These imports walk through the guard: {missed}"
 

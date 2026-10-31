@@ -28,6 +28,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
+from app.capital.service import regulatory_capital
 from app.core.key_management import registry as key_registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
@@ -63,7 +64,6 @@ from app.models import (
     RegulatoryParameter,
     User,
 )
-from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import APPROVAL_TIMESTAMP, SAMPLE_BANK_ID
 from tests.icaap.service.conftest import AS_OF
 from tests.support.helpers import ORG_1

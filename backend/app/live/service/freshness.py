@@ -45,6 +45,9 @@ def get_bank_freshness(
     bank_id: str,
     reporting_period_id: UUID | None = None,
 ) -> BankFreshnessRead:
+    from app.capital.service import (  # noqa: PLC0415 - engines consume live contracts
+        regulatory_capital,
+    )
     from app.credit.service import (  # noqa: PLC0415 - engines consume live contracts
         regulatory_credit,
     )
@@ -55,7 +58,6 @@ def get_bank_freshness(
         regulatory_liquidity,
     )
     from app.rating.service import implied_rating  # noqa: PLC0415 - engines consume live contracts
-    from app.services import regulatory_capital  # noqa: PLC0415 - engines consume live contracts
 
     hash_functions: dict[str, _HashFn] = {
         "liquidity": regulatory_liquidity.current_input_hash,

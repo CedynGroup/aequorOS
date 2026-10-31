@@ -25,6 +25,27 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.crm_haircuts import DEFAULT_CRM_HAIRCUTS
+from app.capital.schemas.regulatory_capital import (
+    Bsd2HeaderRead,
+    Bsd2PreviewRead,
+    Bsd2RatioRowRead,
+    Bsd2RowRead,
+    Bsd2SummaryRowRead,
+    Bsd2WeightedRowRead,
+    CapitalBuffersRead,
+    CapitalDashboardRead,
+    CapitalLineRead,
+    CapitalMetricsRead,
+    CapitalScenarioBatchCreate,
+    CapitalStructureRead,
+    CapitalStructureSummaryRead,
+    CapitalTrendPointRead,
+    CapitalValidationRead,
+    RwaBreakdownRead,
+    RwaCompositionRead,
+)
+from app.capital.service import sdi_capital, sdi_capital_checks
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.ecl import (
@@ -108,26 +129,6 @@ from app.policy.public import (
 )
 from app.policy.public import institution_class as _resolve_institution_class
 from app.reporting.service import filing_reconciliation
-from app.schemas.regulatory_capital import (
-    Bsd2HeaderRead,
-    Bsd2PreviewRead,
-    Bsd2RatioRowRead,
-    Bsd2RowRead,
-    Bsd2SummaryRowRead,
-    Bsd2WeightedRowRead,
-    CapitalBuffersRead,
-    CapitalDashboardRead,
-    CapitalLineRead,
-    CapitalMetricsRead,
-    CapitalScenarioBatchCreate,
-    CapitalStructureRead,
-    CapitalStructureSummaryRead,
-    CapitalTrendPointRead,
-    CapitalValidationRead,
-    RwaBreakdownRead,
-    RwaCompositionRead,
-)
-from app.services import sdi_capital, sdi_capital_checks
 from app.services.audit import record_event
 
 #: Bumped 2026-08-22 (forensic re-audit D-5) from ``v1.0.0``. MAJOR, because the
@@ -194,21 +195,6 @@ _CAPITAL_FACT_GROUPS = (
 # ECL engine, never passed to run_capital_stress (which rejects unknown keys).
 ECL_CONDITIONING_KEYS = ("ecl_pd_multiplier", "ecl_lgd_multiplier")
 
-# Phase 2 item 9: Basel II comprehensive-approach supervisory haircuts
-# (¶151 table; conservative representative pick per class — 10-business-day
-# holding period, the table's upper band where a range applies). These are
-# CODE defaults, overridable per class through the effective-dated
-# ``param_crm_haircut`` register; a class absent from both gets zero
-# recognition — a haircut is never invented.
-DEFAULT_CRM_HAIRCUTS: dict[str, Decimal] = {
-    "CASH": Decimal("0"),
-    "GOLD": Decimal("15"),
-    "SOVEREIGN_DEBT": Decimal("4"),
-    "BANK_DEBT": Decimal("8"),
-    "CORPORATE_DEBT": Decimal("8"),
-    "EQUITY_MAIN_INDEX": Decimal("15"),
-    "EQUITY_OTHER": Decimal("25"),
-}
 _CET1_LINE_PREFIX = "cet1:"
 _AT1_LINE_PREFIX = "at1:"
 _T2_LINE_PREFIX = "t2:"

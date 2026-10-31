@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app import worker
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
 from app.core.config import get_settings
 from app.data_engine.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.data_engine.domain.ingestion.locations import StagedIngestionLocation
@@ -51,7 +52,7 @@ from app.models import (
 )
 from app.reporting.schemas.packages import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.reporting.service import generation
-from app.services import job_queue, regulatory_capital
+from app.services import job_queue
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import (
     FIXTURE_AS_OF,

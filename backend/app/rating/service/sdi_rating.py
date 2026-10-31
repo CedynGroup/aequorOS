@@ -411,7 +411,7 @@ def _asset_quality_evidence(
 def _liquidity_evidence(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> list[RatioEvidence]:
-    from app.services import sdi_views  # noqa: PLC0415 - breaks an import cycle
+    from app.capital.service import sdi_views  # noqa: PLC0415 - breaks an import cycle
 
     try:
         position = sdi_views.get_sdi_liquidity_position(db, ctx, bank, as_of)
@@ -461,7 +461,7 @@ def _liquidity_evidence(
 def _concentration_evidence(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> list[RatioEvidence]:
-    from app.services import sdi_views  # noqa: PLC0415 - breaks an import cycle
+    from app.capital.service import sdi_views  # noqa: PLC0415 - breaks an import cycle
 
     largest: Decimal | None = None
     top5: Decimal | None = None

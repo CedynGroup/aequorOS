@@ -15,6 +15,9 @@ from app.bi.api.manage_bi_notifications import router as bi_notifications_router
 from app.bi.api.read_bi import require_bi_enabled
 from app.bi.api.read_bi import router as bi_read_router
 from app.bi.api.read_bi_feeds import router as bi_feeds_router
+from app.capital.api.manage_capital_plan import router as capital_plan_router
+from app.capital.api.read_sdi_diagnostics import router as sdi_diagnostics_router
+from app.capital.api.run_regulatory_capital import router as regulatory_capital_router
 from app.case.api.bulk_update_cases import router as bulk_update_cases_router
 from app.case.api.generate_case_reports import router as case_reports_router
 from app.case.api.list_case_taxonomy import router as case_taxonomy_router
@@ -37,9 +40,6 @@ from app.data_engine.api.manage_reconciliation import router as reconciliation_r
 from app.data_engine.api.manage_system_of_record import router as system_of_record_router
 from app.data_engine.api.manage_temenos_connections import router as temenos_connections_router
 from app.data_engine.api.push_data import router as push_router
-from app.features.manage_capital_plan import router as capital_plan_router
-from app.features.read_sdi_diagnostics import router as sdi_diagnostics_router
-from app.features.run_regulatory_capital import router as regulatory_capital_router
 from app.features.track_jobs import router as jobs_router
 from app.forecasting.api.manage_forecast_assumptions import (
     router as forecast_assumptions_router,

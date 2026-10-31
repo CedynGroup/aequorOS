@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess
+from app.capital.service import regulatory_capital
 from app.icaap.domain.blocks import BlockStatus
 from app.icaap.models.workspace import IcaapBlockBinding
 from app.icaap.schemas.workspace import (
@@ -23,7 +24,6 @@ from app.icaap.schemas.workspace import (
 from app.icaap.service import blocks, resolvers, sections
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import AuditEvent, BankReportingPeriod
-from app.services import regulatory_capital
 from tests.icaap.service.conftest import AS_OF
 
 pytestmark = pytest.mark.usefixtures("capital_run_authority")

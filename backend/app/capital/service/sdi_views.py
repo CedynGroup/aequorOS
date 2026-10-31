@@ -14,6 +14,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import sdi_capital
 from app.identity.public import Bank
 from app.policy.public import regulatory_parameters
 from app.reporting.service.le_generation import (
@@ -36,7 +37,6 @@ from app.reporting.service.le_generation import (
     _table1_thresholds,
     _unencumbered,
 )
-from app.services import sdi_capital
 
 _ZERO = Decimal("0")
 

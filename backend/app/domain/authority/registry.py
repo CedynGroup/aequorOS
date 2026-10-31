@@ -1087,7 +1087,7 @@ _PARAMS_CONTROL = "app.policy.service.regulatory_parameters:resolve"
 # Both bumped to v2.0.0 on 2026-08-22 (forensic re-audit D-5): each engine
 # changed methodology in a way that moves a filed figure over unchanged inputs.
 # The declaring constants carry the reasoning and the versioning rule
-# (``app.services.regulatory_capital.ENGINE_VERSION`` and its liquidity peer);
+# (``app.capital.service.regulatory_capital.ENGINE_VERSION`` and its liquidity peer);
 # these must track them, and a registry test asserts they do.
 _CAPITAL_VERSION = "regulatory-capital-v5.0.0"
 _LIQ_VERSION = "regulatory-liquidity-v2.0.0"

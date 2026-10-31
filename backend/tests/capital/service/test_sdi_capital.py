@@ -14,14 +14,14 @@ from decimal import Decimal
 import pytest
 from fastapi import HTTPException
 
-from app.domain.capital.engine import CapitalParams
-from app.services import sdi_capital
-from app.services.regulatory_capital import (
+from app.capital.service import sdi_capital
+from app.capital.service.regulatory_capital import (
     CapitalRunError,
     _ActiveCapitalParams,  # pyright: ignore[reportPrivateUsage]
     _buffers_or_409,  # pyright: ignore[reportPrivateUsage]
     _engine_params,  # pyright: ignore[reportPrivateUsage]
 )
+from app.domain.capital.engine import CapitalParams
 
 _ZERO = Decimal("0")
 

@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
@@ -32,7 +33,6 @@ from app.identity.service import authorization
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.liquidity.service import regulatory_liquidity
 from app.models import BankReportingPeriod, RegulatoryRun
-from app.services import regulatory_capital
 from app.stress.schemas.scenario_workbench import (
     AnalysisRunCreate,
     SavedAnalysisCreate,

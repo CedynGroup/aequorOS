@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
+from app.capital.service import regulatory_capital
 from app.icaap.domain import reconciliation as recon_domain
 from app.icaap.schemas.risk_capital import (
     IcaapPillar2Approve,
@@ -29,7 +30,6 @@ from app.icaap.schemas.workspace import IcaapCycleRead, IcaapDataBlockCreate, Ic
 from app.icaap.service import blocks, pillar2, risks
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import BankReportingPeriod, User
-from app.services import regulatory_capital
 from tests.icaap.service.conftest import AS_OF
 from tests.support.helpers import ORG_1
 

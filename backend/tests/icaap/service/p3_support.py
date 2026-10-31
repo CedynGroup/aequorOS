@@ -255,9 +255,9 @@ def seal_capital_run(db: Session, access: IcaapAccess) -> None:
     """
     from sqlalchemy import select as _select  # noqa: PLC0415
 
+    from app.capital.service import regulatory_capital  # noqa: PLC0415
     from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate  # noqa: PLC0415
     from app.models import BankReportingPeriod  # noqa: PLC0415
-    from app.services import regulatory_capital  # noqa: PLC0415
 
     period = db.scalar(
         _select(BankReportingPeriod).where(

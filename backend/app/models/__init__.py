@@ -50,6 +50,7 @@ from app.bi.models.notifications import (
     BiSubscription,
     BiSubscriptionDelivery,
 )
+from app.capital.models.capital_plan import CapitalPlan, IlaapSnapshot
 from app.case.models.calculation import (
     CalculationForecastPeriod,
     CalculationRun,
@@ -195,7 +196,6 @@ from app.market_data.models.market_desk import (
 )
 from app.market_data.models.market_desk_curves import DeskCurveDefinition
 from app.models.audit_event import AuditEvent
-from app.models.capital_plan import CapitalPlan, IlaapSnapshot
 from app.models.job import Job
 from app.models.organization import Organization
 from app.notifications.models import Notification

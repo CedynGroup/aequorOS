@@ -20,6 +20,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.capital.service import sdi_capital, sdi_capital_checks
+from app.capital.service.sdi_capital import net_own_funds
 from app.data_engine.domain.ingestion.capital_tiers import parse_capital_tier
 from app.data_engine.domain.ingestion.constants import SourceSystem
 from app.data_engine.domain.ingestion.contracts import (
@@ -38,8 +40,6 @@ from app.models import (
     IngestionBatch,
     TranslationFailure,
 )
-from app.services import sdi_capital, sdi_capital_checks
-from app.services.sdi_capital import net_own_funds
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,

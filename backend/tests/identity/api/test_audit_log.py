@@ -21,6 +21,7 @@ from sqlalchemy.sql import Select
 from app.api import deps
 from app.api.deps import IcaapAccess
 from app.attestation.service import stepup
+from app.capital.service import regulatory_capital
 from app.core import security
 from app.core.audit_attribution import subject_bank_sql
 from app.core.authorization import (
@@ -103,7 +104,6 @@ from app.reporting.schemas.filing_workflow import (
 )
 from app.reporting.service import workflow
 from app.reporting.service.filing_workflow import templates
-from app.services import regulatory_capital
 from app.services.audit import record_event
 from tests.conftest import (
     ApiTestApp,

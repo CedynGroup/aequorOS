@@ -134,7 +134,7 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     # ---- regulatory engines
     (
         r"^(services/(regulatory_capital|sdi_capital.*|sdi_views|sdi_readiness|capital_plan)"
-        r"|domain/capital/.*|models/capital_plan|schemas/(regulatory_capital|sdi|capital_plan)"
+        r"|domain/capital/.*|capital/models/capital_plan|schemas/(regulatory_capital|sdi|capital_plan)"
         r"|features/(run_regulatory_capital|manage_capital_plan|read_sdi_diagnostics))$",
         "capital",
     ),

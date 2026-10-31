@@ -41,6 +41,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Load, Session
 
 from app.api.deps import TenantContext
+from app.capital.schemas.sdi import (
+    DelinquencyBucketRead,
+    LoanGradeBucketRead,
+    PortfolioAtRiskRead,
+    ProvisionsHeldRead,
+)
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.credit.domain.dpd_bands import DPD_BAND_CODES
@@ -105,12 +111,6 @@ from app.live.public import (
 from app.policy.public import ParamCreditThreshold, get_active_params, jurisdictions
 from app.policy.public import regulatory_parameters as rp
 from app.reporting.service import filing_reconciliation
-from app.schemas.sdi import (
-    DelinquencyBucketRead,
-    LoanGradeBucketRead,
-    PortfolioAtRiskRead,
-    ProvisionsHeldRead,
-)
 from app.services.audit import record_event
 
 ENGINE_VERSION = "regulatory-credit-v1.0.0"

@@ -6,15 +6,15 @@ from uuid import UUID
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import CapitalAggregatedView, CapitalRun, DbSession, Tenant
-from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunBatchRead
-from app.schemas.regulatory_capital import (
+from app.capital.schemas.regulatory_capital import (
     Bsd2PreviewRead,
     CapitalDashboardRead,
     CapitalScenarioBatchCreate,
     CapitalStructureRead,
     RwaBreakdownRead,
 )
-from app.services import regulatory_capital
+from app.capital.service import regulatory_capital
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunBatchRead
 
 router = APIRouter(tags=["regulatory-capital"])
 

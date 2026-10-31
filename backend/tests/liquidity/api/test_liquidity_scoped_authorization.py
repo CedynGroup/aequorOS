@@ -18,6 +18,7 @@ from sqlalchemy import delete, event, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
@@ -48,7 +49,6 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from app.services import regulatory_capital
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,

@@ -4,7 +4,6 @@
     "tests/ai/api/test_ai_settings_routes.py": 0.35,
     "tests/api/test_authorization_object_reference_coverage.py": 69.451,
     "tests/case/api/test_capital.py": 8.267,
-    "tests/api/test_capital_authorization.py": 20.397,
     "tests/credit/api/test_credit_authorization.py": 1.383,
     "tests/credit/api/test_credit_route_authorization.py": 128.812,
     "tests/api/test_cross_tenant_bank_routes.py": 11.241,
@@ -250,8 +249,6 @@
     "tests/services/data_gaps/test_teller_withdrawals.py": 2.111,
     "tests/case/service/test_assessments.py": 0.398,
     "tests/services/test_audit_integrity_schedule.py": 2.927,
-    "tests/services/test_capital_plan.py": 11.704,
-    "tests/services/test_capital_plan_per_year_floors.py": 4.154,
     "tests/services/test_capital_register_refusal.py": 43.318,
     "tests/services/test_capital_structure_tiers.py": 12.903,
     "tests/services/test_crd_counterparty_and_bank_claims.py": 27.512,
@@ -416,6 +413,9 @@
     "tests/market_data/service/test_desk_capture_job.py": 0.666,
     "tests/market_data/service/test_market_data_jobs.py": 0.208,
     "tests/market_data/service/test_fx_forward.py": 0.025,
-    "tests/market_data/service/market_desk_sources/test_ingest_capture.py": 7.382
+    "tests/market_data/service/market_desk_sources/test_ingest_capture.py": 7.382,
+    "tests/capital/service/test_capital_plan.py": 11.704,
+    "tests/capital/service/test_capital_plan_per_year_floors.py": 4.154,
+    "tests/capital/api/test_capital_authorization.py": 20.397
   }
 }

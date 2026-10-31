@@ -14,7 +14,7 @@ from app.api.deps import (
     DbSession,
     IlaapRefreshAccess,
 )
-from app.schemas.capital_plan import (
+from app.capital.schemas.capital_plan import (
     CapitalPlanApprove,
     CapitalPlanPut,
     CapitalPlanRead,
@@ -23,8 +23,8 @@ from app.schemas.capital_plan import (
     IlaapSnapshotListRead,
     IlaapSnapshotRead,
 )
+from app.capital.service import capital_plan
 from app.schemas.common import ErrorResponse
-from app.services import capital_plan
 
 router = APIRouter(tags=["capital-plan"])
 

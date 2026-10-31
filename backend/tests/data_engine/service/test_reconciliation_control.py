@@ -26,6 +26,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.schemas.regulatory_capital import CapitalScenarioBatchCreate
+from app.capital.service import regulatory_capital
 from app.data_engine.domain.ingestion.constants import POSITION_TYPES, SOURCE_SYSTEMS
 from app.data_engine.service import reconciliation
 from app.domain.authority.outcomes import NotComputable, OutcomeState
@@ -55,8 +57,7 @@ from app.models import (
 )
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import calendar, generation
-from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.services import job_queue, regulatory_capital
+from app.services import job_queue
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.factories.reconciliation import (
