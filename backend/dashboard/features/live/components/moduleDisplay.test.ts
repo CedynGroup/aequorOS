@@ -19,7 +19,7 @@ import type {
   LiveModule,
   WindowAnalyticsRead,
 } from "@aequoros/risk-service-api";
-import { SemanticDelta } from "../ui/DeltaBadge";
+import { SemanticDelta } from "../../../components/ui/DeltaBadge";
 import {
   DEFAULT_MODULE_ORDER,
   LIVE_MODULE_HREFS,
@@ -314,15 +314,23 @@ test("WindowAnalysis renders each daily headline with the live card's label", ()
     if (request === "@/lib/api/client") {
       return { isApiError: () => false, isModuleUnavailable: () => false };
     }
+    if (request === "@/components/shell/BankContext") {
+      // The live `public` barrel re-exports UnreconciledBookBanner, which
+      // drags the bank-profile provider — and through it the whole BI API
+      // plane — into the legacy runner. This test never renders the banner.
+      return { useBankContext: () => ({ bank: undefined }) };
+    }
     const resolved = request.startsWith("@/")
-      ? join(__dirname, "../..", request.slice(2))
+      ? // Compiled to .test-out/features/live/components: three levels up is
+        // the compile root the `@/` alias denotes.
+        join(__dirname, "../../..", request.slice(2))
       : request;
     return originalLoad(resolved, parent, isMain);
   };
   let renderer: ReturnType<typeof create> | undefined;
   try {
-    const WindowAnalysis: typeof import("../../features/home/components/WindowAnalysis").default =
-      require("../../features/home/components/WindowAnalysis").default;
+    const WindowAnalysis: typeof import("../../home/components/WindowAnalysis").default =
+      require("../../home/components/WindowAnalysis").default;
     act(() => {
       renderer = create(createElement(WindowAnalysis, { bankId: data.bankId }));
     });

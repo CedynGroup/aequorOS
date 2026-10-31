@@ -34,7 +34,7 @@ import RoleLensTabs, {
   useRoleLens,
 } from "@/features/home/components/RoleLens";
 import BreachBanner from "@/features/home/components/BreachBanner";
-import UnreconciledBookBanner from "@/components/live/UnreconciledBookBanner";
+import { UnreconciledBookBanner } from "@/features/live/public";
 import PulseWall from "@/features/home/components/PulseWall";
 import BalanceSheetStrip from "@/features/home/components/BalanceSheetStrip";
 import DeferredRatioTrendChart from "@/features/home/components/DeferredRatioTrendChart";

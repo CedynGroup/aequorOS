@@ -14,10 +14,10 @@
 import type { LiveModule } from "@aequoros/risk-service-api";
 // Relative imports keep this module runnable under the node test build
 // (tsconfig.test.json emits CommonJS without rewriting the `@/` alias).
-import { num } from "../../lib/api/values";
-import { fmtPct } from "../../lib/format";
+import { num } from "../../../lib/api/values";
+import { fmtPct } from "../../../lib/format";
 // Type-only: the two axes below are exactly the ones `SemanticDelta` renders.
-import type { DeltaDirection, DeltaFavorability } from "../ui/DeltaBadge";
+import type { DeltaDirection, DeltaFavorability } from "../../../components/ui/DeltaBadge";
 
 export const LIVE_MODULE_LABELS: Record<LiveModule, string> = {
   liquidity: "Liquidity",
