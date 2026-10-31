@@ -217,11 +217,13 @@ function writeDistFixture(
     /** react-grid-layout present in a deferred chunk of the builder route. */
     gridLayoutDeferred?: boolean;
     /**
-     * The Command Center's deferred chart chunk carries EChart's loading label,
+     * The Command Center's deferred chart body carries its frame title,
      * which is what proves the chart is still IN that chunk. `false` is what a
      * deleted or statically-imported chart looks like.
      */
     chartDeferred?: boolean;
+    /** The second deferred stage carries the ECharts canvas runtime. */
+    chartCanvasDeferred?: boolean;
     /**
      * The Command Center's deferred chart chunk also carries the ECharts runtime
      * — i.e. `features/bi/components/EChart.tsx` stopped deferring the canvas, so the home
@@ -247,7 +249,7 @@ function writeDistFixture(
   const chartBoundaryChunk = chunk(
     "ratio-chart.js",
     filler +
-      (options.chartDeferred === false ? "" : '"Drawing the chart";') +
+      (options.chartDeferred === false ? "" : '"Ratio trend";') +
       (options.chartRuntimeInChartChunk ? '"_echarts_instance_";' : ""),
   );
   const editorChunk = chunk("editor.js", filler + '"ProseMirror-focused"');
@@ -286,7 +288,7 @@ function writeDistFixture(
     "/backend/dashboard/app/(app)/page": [homeChunk],
   });
 
-  const loadable = (route: string, files: string[]) => {
+  const loadable = (route: string, stages: string[][]) => {
     const file = join(
       root,
       "server",
@@ -295,12 +297,20 @@ function writeDistFixture(
       "react-loadable-manifest.json",
     );
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify({ "1": { files } }));
+    writeFileSync(
+      file,
+      JSON.stringify(
+        Object.fromEntries(stages.map((files, index) => [index, { files }])),
+      ),
+    );
   };
-  loadable("(app)/page", [chartBoundaryChunk]);
-  loadable("(app)/icaap/[cycleId]/sections/[sectionKey]/page", [editorChunk]);
-  loadable("(app)/explore/page", [echartsChunk, gridChunk]);
-  loadable("(app)/dashboards/new/page", [builderChunk]);
+  loadable("(app)/page", [
+    [chartBoundaryChunk],
+    options.chartCanvasDeferred === false ? [] : [echartsChunk],
+  ]);
+  loadable("(app)/icaap/[cycleId]/sections/[sectionKey]/page", [[editorChunk]]);
+  loadable("(app)/explore/page", [[echartsChunk, gridChunk]]);
+  loadable("(app)/dashboards/new/page", [[builderChunk]]);
 }
 
 function runBundleGuard(
@@ -438,7 +448,7 @@ test("the bundle guard's react-grid-layout rule fires on both of its own violati
   rmSync(base, { recursive: true, force: true });
 });
 
-test("the bundle guard's Command Center chart rule fires on both of its own violations", () => {
+test("the bundle guard's Command Center chart rule rejects missing stages and a bundled runtime", () => {
   const base = mkdtempSync(join(tmpdir(), "aeq-bundle-guard-chart-"));
 
   // The control: a build where the chart is deferred AND its chunk is free of the
@@ -472,17 +482,35 @@ test("the bundle guard's Command Center chart rule fires on both of its own viol
       "clean build, so the rule would report clean forever.",
   );
   assert.ok(
-    /Drawing the chart/.test(gone.text),
+    /found 0 body and 1 canvas/.test(gone.text),
     `the guard failed without naming the missing chart boundary:\n${gone.text}`,
   );
 
-  // Violation two: the chart chunk carries the ECharts runtime, i.e. the SECOND
+  const canvasGone = join(base, "canvas-gone");
+  writeDistFixture(canvasGone, {
+    agGridInHome: false,
+    agGridDeferred: true,
+    chartCanvasDeferred: false,
+  });
+  const canvas = runBundleGuard(canvasGone);
+  assert.notEqual(
+    canvas.code,
+    0,
+    "the guard passed a build without its deferred canvas",
+  );
+  assert.ok(
+    /found 1 body and 0 canvas/.test(canvas.text),
+    `the guard failed without naming the missing canvas:\n${canvas.text}`,
+  );
+
+  // The chart chunk carries the ECharts runtime, i.e. the SECOND
   // deferral inside features/bi/components/EChart.tsx stopped happening. The Command
   // Center's entry graph is still clean, so nothing else in the guard notices.
   const runtimeInChart = join(base, "runtime-in-chart");
   writeDistFixture(runtimeInChart, {
     agGridInHome: false,
     agGridDeferred: true,
+    chartCanvasDeferred: false,
     chartRuntimeInChartChunk: true,
   });
   const carried = runBundleGuard(runtimeInChart);
