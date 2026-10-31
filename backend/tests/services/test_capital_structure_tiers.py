@@ -20,6 +20,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.capital.domain.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
 from app.capital.service import sdi_capital, sdi_capital_checks
 from app.capital.service.sdi_capital import net_own_funds
 from app.data_engine.domain.ingestion.capital_tiers import parse_capital_tier
@@ -32,7 +33,6 @@ from app.data_engine.domain.ingestion.contracts import (
 from app.data_engine.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
 from app.data_engine.service import ingestion
 from app.domain.authority.outcomes import OutcomeState
-from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
 from app.live.service.fact_derivation import derive_facts
 from app.models import (
     Bank,

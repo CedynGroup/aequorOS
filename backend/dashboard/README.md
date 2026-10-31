@@ -12,6 +12,12 @@ to login and failed external compliance filters.
 
 ---
 
+## Code layout
+
+Feature code moves into `features/<feature>/` one feature per change, with a
+boundary ratchet and a move codemod shared with the backend program: see
+[FEATURE_LAYOUT.md](FEATURE_LAYOUT.md).
+
 ## Scope
 
 App Router pages cover the authenticated shell, login, the inspector,
@@ -1039,6 +1045,8 @@ retain the server's existing sensitivity-specific projection.
 The enterprise stress workbench remains at `/irr/enterprise-stress`, with its
 own IRRBB tab and links from the module workspaces. It runs a governed macro
 scenario across engines. Module scenario tabs never dispatch enterprise stress.
+Access requirements and disabled-action guidance follow the
+[Stress rollout contract](../docs/stress_enforcement_rollout.md#required-authority).
 Its IRRBB correctness dependency remains #306.
 
 FTP what-if compares baseline with a chosen module scenario and optional curve

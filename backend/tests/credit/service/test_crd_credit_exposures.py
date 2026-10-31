@@ -6,13 +6,13 @@ from decimal import Decimal
 
 import pytest
 
-from app.credit.service.credit_exposure_book import ExposureRow
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     CapitalFact,
     CapitalParams,
     RiskWeightUnavailable,
     _credit_line_items,  # pyright: ignore[reportPrivateUsage]
 )
+from app.credit.service.credit_exposure_book import ExposureRow
 from app.live.service.fact_derivation import (
     DerivationError,
     _derive_specs,  # pyright: ignore[reportPrivateUsage]
@@ -24,7 +24,7 @@ from app.stress.domain.appendix_ii import _crd_class  # pyright: ignore[reportPr
 from app.stress.domain.credit_bottom_up import compute_bottom_up_credit
 from app.stress.domain.translation import MacroPathPoint
 from app.stress.service import enterprise_stress
-from tests.domain.test_capital_engine import bog_capital_params
+from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.services.test_derivation_fail_closed_defaults import (
     _canonical,  # pyright: ignore[reportPrivateUsage]
     _row,  # pyright: ignore[reportPrivateUsage]

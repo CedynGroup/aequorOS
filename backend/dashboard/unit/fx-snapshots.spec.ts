@@ -7,7 +7,7 @@ import {
 } from "./fx/testing/generators";
 import { assertFxStoredPositions } from "./fx/testing/assertions";
 import { RegulatoryRunReadFromJSON } from "@aequoros/risk-service-api";
-import { fxPositionSplits, fxRunParameters } from "../components/fx/params";
+import { fxPositionSplits, fxRunParameters } from "../features/fx/components/params";
 
 function storedRun(inputs: unknown) {
   return RegulatoryRunReadFromJSON({

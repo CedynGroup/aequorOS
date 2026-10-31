@@ -334,7 +334,7 @@ def record_binding_revoke_audit(
     )
 
 
-_ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT)
+_ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT, Module.RISK)
 _INSTITUTION_MODULES = tuple(module for module in Module if module is not Module.ACCOUNT)
 _REQUIRED_RUNTIME_CONDITIONS: dict[Permission, tuple[ConditionKind, ...]] = {
     Permission.APPROVE: (ConditionKind.MAKER_CHECKER,),

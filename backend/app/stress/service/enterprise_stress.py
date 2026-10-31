@@ -29,17 +29,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.capital.public import regulatory_capital, sdi_capital
-from app.core.authorization import Module, Permission, Sensitivity
-from app.credit.public import credit_exposure_book
-from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
-from app.domain.capital.ecl import (
+from app.capital.domain.ecl import (
     STRESS_CHARGE_TAX_TREATMENT,
     EclAssumption,
     EclComputationError,
     EclExposure,
 )
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     FACT_GROUP_ECL_EXPOSURE,
     GENERAL_PROVISIONS_CATEGORY,
     TIER_T2,
@@ -53,7 +49,11 @@ from app.domain.capital.engine import (
     resolve_risk_weight,
     tier1_capital,
 )
-from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
+from app.capital.domain.loan_classification import NPL_GRADES, normalise_bog_classification
+from app.capital.public import regulatory_capital, sdi_capital
+from app.core.authorization import Module, Permission, Sensitivity
+from app.credit.public import credit_exposure_book
+from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
 from app.forecasting.domain.engine import ForecastAssumptions, ForecastFact, ForecastParams
 from app.fx.domain.engine import FxPosition
 from app.identity import public as scoped_authorization
@@ -1572,6 +1572,15 @@ def _run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestr
 ) -> EnterpriseStressRead:
     """Run one enterprise stress test and persist it as an immutable run."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.RUN,
+        module=Module.RISK,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="enterprise_stress_run",
+    )
     if payload.include_fx:
         scoped_authorization.require_resolved_bank_permission(
             db,

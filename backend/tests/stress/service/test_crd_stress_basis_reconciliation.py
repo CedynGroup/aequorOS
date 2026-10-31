@@ -43,11 +43,11 @@ from app.stress.service import enterprise_stress
 from app.stress.service.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.credit.service.test_crd_credit_exposures import (
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.data_engine.api.test_ingestion import seed_bank
-from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.capital_structure import MAKER
 from tests.services.test_crd_review_repairs import (
     _ErrorResponse,  # pyright: ignore[reportPrivateUsage]
@@ -77,7 +77,10 @@ from tests.stress.service.test_crd_credit_stress_repairs import (
 )
 from tests.support.helpers import USER_2, headers
 
-pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶123–124, ¶138–139")
+pytestmark = [
+    pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶123–124, ¶138–139"),
+    pytest.mark.usefixtures("stress_run_authority"),
+]
 
 
 @pytest.mark.parametrize("foreign", [False, True])

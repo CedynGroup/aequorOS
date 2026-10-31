@@ -195,7 +195,7 @@ documented, and reported **with and without** (¶78–81).
 - **Liquidity:** `apply_liquidity_stress` (`app/liquidity/domain/engine.py:277`) — run-off/inflow/
   HQLA-haircut/ASF-RSF overrides; behavioural stressed ladder (`:494`); FX-depreciation currency
   gaps (`:413`). Breach multiplier (`app/liquidity/service/regulatory_liquidity.py:1619`).
-- **Capital:** 4-quarter stress path `run_capital_stress` (`app/domain/capital/engine.py:497`,
+- **Capital:** 4-quarter stress path `run_capital_stress` (`app/capital/domain/engine.py:497`,
   `STRESS_QUARTERS=4`) — RWA growth, CET1 retention, FX multiplier; trigger/action ladder (`:564`).
   Breach multiplier (`app/capital/service/regulatory_capital.py:1575`).
 - **Reverse stress:** `run_reverse_stress` (`app/stress/service/reverse_stress.py:72`) — bisection for
@@ -263,8 +263,10 @@ quarantined `StressScenario` split with one library):
 
 The platform ships immutable, code-defined defaults from
 `backend/app/stress/service/default_macro_scenarios.py`. They are resolved at read/run time, not seeded
-as tenant rows, so the e2e bootstrap, local sandbox and every new organization see the same
-versioned set without a provisioning step. Their UUIDv5 identifiers are stable per code and
+as tenant rows, so authorized readers can access the versioned set without a
+provisioning step. Visibility and cloning follow the
+[Stress authority contract](../backend/docs/stress_enforcement_rollout.md#required-authority).
+Their UUIDv5 identifiers are stable per code and
 definition version; a new definition version has a new ID. They appear as
 `owner=system`, `status=approved`, and need no maker-checker transition. Editing, submitting,
 approving or archiving one is refused; **Clone to editable draft** copies its year-end points into
@@ -277,7 +279,7 @@ entries expose cloning instead of mutation actions, and the BoG placeholder cann
 because it has no numeric path. A fresh organization needs no scenario provisioning, but
 execution still requires an ingested institution, a reporting period, the required inputs and
 run authority. The visible-disabled run control follows the
-[IRRBB authority and shared tooltip contract](../backend/docs/irrbb_enforcement_rollout.md#dashboard-controls).
+[Stress authority contract](../backend/docs/stress_enforcement_rollout.md#required-authority).
 
 Saved runs reopen from their immutable scenario snapshot, even after the corresponding system
 definition version is no longer in the current catalogue. Latest-result lookup matches the
@@ -387,7 +389,7 @@ A dynamic balance-sheet/P&L/capital projection over ≥3 years, base + stress, p
 
 ### 3.5 IFRS-9 ECL under stress (¶48–49)
 
-A stress mode over the existing ECL engine (`app/domain/capital/ecl.py`): scenario → PD/LGD → ECL,
+A stress mode over the existing ECL engine (`app/capital/domain/ecl.py`): scenario → PD/LGD → ECL,
 with **Perfect Foresight** (project ≥3 years of macro from day one) and **Single Scenario** (100%
 weight). Feeds Table 1's losses-by-exposure-class and Table 3's impairment line.
 

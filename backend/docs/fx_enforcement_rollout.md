@@ -33,7 +33,7 @@ Running the FX scenario batch and compute-only FX analysis requires FX `run`
 with sensitivity `confidential`. Enterprise stress runs with `include_fx=true`
 (default) require that same FX permission in the service before input reads or
 persistence, in addition to the
-[shared enterprise execution gates](irrbb_enforcement_rollout.md#affected-surfaces).
+[shared enterprise execution gates](stress_enforcement_rollout.md#required-authority).
 Runs explicitly excluding FX retain those shared gates. Creating a custom FX scenario or saved analysis
 requires FX `create`; changing, archiving, or deleting one requires FX `edit`,
 all at that same sensitivity. No route infers authority from `users.role`, token

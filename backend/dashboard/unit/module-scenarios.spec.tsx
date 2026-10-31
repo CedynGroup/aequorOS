@@ -18,11 +18,13 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SessionProvider } from "next-auth/react";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import type { WorkbenchModule } from "@aequoros/risk-service-api";
 import ScenarioWorkbench from "../components/workbench/ScenarioWorkbench";
 import EnterpriseStressPage from "../app/(app)/irr/enterprise-stress/page";
+import ProfileProvider from "../components/profile/ProfileProvider";
 import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
 import { queryAuthorityScope } from "../lib/api/queryPolicy";
 import { apiBaseUrl } from "../lib/api/client";
@@ -440,6 +442,26 @@ it("offers readers disabled scoped run and save controls", async () => {
 it("keeps enterprise stress on its own page and explains a missing reporting period", async () => {
   context.hasPeriod = false;
   server.use(
+    http.get(`${apiBaseUrl}/auth/me`, () =>
+      HttpResponse.json({
+        effective_authority: {
+          organization_capabilities: [],
+          institution_capabilities: [
+            {
+              institution_id: "BK-SAMP0001",
+              capabilities: [
+                {
+                  module: "risk",
+                  sensitivity: "confidential",
+                  permission: "view",
+                  data_scope: { kind: "all", branches: [], regions: [] },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ),
     http.get(`${apiBaseUrl}/macro-scenarios`, () =>
       HttpResponse.json({ scenarios: [] }),
     ),
@@ -452,14 +474,27 @@ it("keeps enterprise stress on its own page and explains a missing reporting per
       <QueryAuthorityScopeProvider
         scope={queryAuthorityScope("org", "fixture", 1)}
       >
-        <EnterpriseStressPage />
+        <SessionProvider
+          session={{
+            expires: "2099-01-01T00:00:00Z",
+            accessToken: "fixture",
+            user: { organizationId: "org", email: "fixture" },
+          }}
+          refetchOnWindowFocus={false}
+        >
+          <ProfileProvider>
+            <EnterpriseStressPage />
+          </ProfileProvider>
+        </SessionProvider>
       </QueryAuthorityScopeProvider>
     </QueryClientProvider>,
   );
   expect(
     screen.getByRole("heading", { name: "Enterprise Stress Workbench" }),
   ).toBeVisible();
-  expect(screen.getByText("A reporting period is required")).toBeVisible();
+  expect(
+    await screen.findByText("A reporting period is required"),
+  ).toBeVisible();
   expect(
     screen.getByRole("link", { name: "Open Data Engine" }),
   ).toHaveAttribute("href", "/data-engine");

@@ -5,7 +5,7 @@ Follows the immutable calculation-run lifecycle established by
 before executing, persist the full canonical input snapshot with a SHA-256
 ``input_hash``, and record failures as data (named error codes) rather than
 HTTP 500s. The arithmetic itself lives in the pure engine at
-``app.domain.capital.engine``.
+``app.capital.domain.engine``.
 """
 
 from __future__ import annotations
@@ -26,29 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.capital.domain.crm_haircuts import DEFAULT_CRM_HAIRCUTS
-from app.capital.schemas.regulatory_capital import (
-    Bsd2HeaderRead,
-    Bsd2PreviewRead,
-    Bsd2RatioRowRead,
-    Bsd2RowRead,
-    Bsd2SummaryRowRead,
-    Bsd2WeightedRowRead,
-    CapitalBuffersRead,
-    CapitalDashboardRead,
-    CapitalLineRead,
-    CapitalMetricsRead,
-    CapitalScenarioBatchCreate,
-    CapitalStructureRead,
-    CapitalStructureSummaryRead,
-    CapitalTrendPointRead,
-    CapitalValidationRead,
-    RwaBreakdownRead,
-    RwaCompositionRead,
-)
-from app.capital.service import sdi_capital, sdi_capital_checks
-from app.core.authorization import Module, Permission, Sensitivity
-from app.core.errors import ModuleDataUnavailable
-from app.domain.capital.ecl import (
+from app.capital.domain.ecl import (
     BASE_SCENARIO,
     STRESS_CHARGE_TAX_TREATMENT,
     EclAssumption,
@@ -59,7 +37,7 @@ from app.domain.capital.ecl import (
     compute_ecl,
     stress_charge,
 )
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     FACT_GROUP_CAPITAL_COMPONENT,
     MODELLED_ECL_CHARGE_CATEGORY,
     TIER_CET1,
@@ -84,6 +62,28 @@ from app.domain.capital.engine import (
     run_capital_stress,
     unstaged_loan_ead,
 )
+from app.capital.schemas.regulatory_capital import (
+    Bsd2HeaderRead,
+    Bsd2PreviewRead,
+    Bsd2RatioRowRead,
+    Bsd2RowRead,
+    Bsd2SummaryRowRead,
+    Bsd2WeightedRowRead,
+    CapitalBuffersRead,
+    CapitalDashboardRead,
+    CapitalLineRead,
+    CapitalMetricsRead,
+    CapitalScenarioBatchCreate,
+    CapitalStructureRead,
+    CapitalStructureSummaryRead,
+    CapitalTrendPointRead,
+    CapitalValidationRead,
+    RwaBreakdownRead,
+    RwaCompositionRead,
+)
+from app.capital.service import sdi_capital, sdi_capital_checks
+from app.core.authorization import Module, Permission, Sensitivity
+from app.core.errors import ModuleDataUnavailable
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank, BankRead, BankReportingPeriodRead
 from app.liquidity.schemas.regulatory_liquidity import (

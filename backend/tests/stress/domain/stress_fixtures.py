@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import replace
 from decimal import Decimal
 
-from app.domain.capital.engine import CapitalFact
+from app.capital.domain.engine import CapitalFact
 from app.forecasting.domain.engine import ForecastFact
 from app.liquidity.domain.engine import LiquidityFact
 from app.stress.domain.translation import MacroPathPoint

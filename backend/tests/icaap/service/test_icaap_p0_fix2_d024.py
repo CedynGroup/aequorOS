@@ -87,13 +87,15 @@ from tests.support.inmemory_storage import InMemoryStorageClient
 
 __all__ = ["storage"]
 
-# The enterprise stress run this suite prepares requires scoped FX and IRRBB
-# calculation authority (an unconditional IRRBB check landed on the run
-# service), and the capital-plan forecast it drives through ``_run_forecast``
-# requires scoped Forecasting ``run`` authority, so it takes the same fixtures
-# as the suites it borrows ``_run_enterprise_stress`` and ``_run_forecast`` from.
+# Stress runs require scoped Risk, FX and IRRBB authority; the capital-plan
+# forecast additionally requires Forecasting RUN.
 pytestmark = [
-    pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority", "forecasting_run_authority"),
+    pytest.mark.usefixtures(
+        "fx_run_authority",
+        "irrbb_run_authority",
+        "stress_run_authority",
+        "forecasting_run_authority",
+    ),
     pytest.mark.usefixtures("return_generation_authority"),
     pytest.mark.usefixtures("capital_run_authority"),
 ]

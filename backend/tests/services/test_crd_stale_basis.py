@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
+from app.capital.domain.engine import CapitalComputationError
 from app.capital.service import regulatory_capital
 from app.core.authorization import ModuleScope, SensitivityScope
-from app.domain.capital.engine import CapitalComputationError
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate

@@ -31,8 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.capital.domain.crm_haircuts import DEFAULT_CRM_HAIRCUTS
-from app.core.authorization import Module, Permission, Sensitivity
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     CapitalComputationError,
     CapitalParams,
     CapitalRegisterRefused,
@@ -40,9 +39,10 @@ from app.domain.capital.engine import (
     classify_capital_ratio,
     require_credit_exposure_basis,
 )
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     MissingParameterError as CapitalMissingParameterError,
 )
+from app.core.authorization import Module, Permission, Sensitivity
 from app.forecasting import service as assumption_register
 from app.forecasting.domain.assumptions import ASSUMPTION_KEYS, PRESET_CODES
 from app.forecasting.domain.engine import (

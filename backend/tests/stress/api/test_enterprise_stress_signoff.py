@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.authorization import RoleBundle
 from app.db.session import get_sessionmaker
 from app.models import User
 from tests.data_engine.api.test_ingestion import seed_bank
@@ -23,9 +24,12 @@ from tests.stress.api.test_enterprise_stress import (
     _period_id,
     _seed_checker,
 )
+from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
-pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
+pytestmark = pytest.mark.usefixtures(
+    "fx_run_authority", "irrbb_run_authority", "stress_run_authority"
+)
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 SIGNOFF_URL = "/api/v1/banks/{bank_id}/enterprise-stress/signoffs"
@@ -46,6 +50,7 @@ def _seed_board(client: TestClient) -> UUID:
             )
         )
         session.commit()
+        grant(session, RoleBundle.VIEWER, user_id=board_id)
     finally:
         session.close()
     return board_id

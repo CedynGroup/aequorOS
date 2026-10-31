@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import RoleBundle
 from app.models import User
 from app.policy.service.institution_types import SEED_TYPES
 from app.stress.schemas.stress import (
@@ -24,11 +25,14 @@ from app.stress.schemas.stress import (
     MacroScenarioUpdate,
 )
 from app.stress.service import default_macro_scenarios, macro_scenarios
+from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, USER_1
 
+pytestmark = pytest.mark.usefixtures("stress_run_authority")
+
 CHECKER = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
-MAKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
-CHECKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=CHECKER)
+MAKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+CHECKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=CHECKER, authorization_version=1)
 
 
 def _seed_checker(db_session: Session) -> None:
@@ -43,6 +47,7 @@ def _seed_checker(db_session: Session) -> None:
         )
     )
     db_session.commit()
+    grant(db_session, RoleBundle.APPROVER, user_id=CHECKER)
 
 
 def _supervisory_payload(code: str = "bog_supervisory_2027") -> MacroScenarioCreate:

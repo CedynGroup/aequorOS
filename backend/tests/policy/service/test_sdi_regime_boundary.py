@@ -26,6 +26,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.engine import CapitalFact, compute_rwa
 from app.capital.service import (
     regulatory_capital,
     sdi_capital,
@@ -36,7 +37,6 @@ from app.capital.service import (
 )
 from app.domain.authority.outcomes import OutcomeDetail, OutcomeState
 from app.domain.authority.registry import REGISTRY, InstitutionClass, MetricFamily
-from app.domain.capital.engine import CapitalFact, compute_rwa
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
 from app.liquidity.schemas.liquidity_thresholds import LiquidityThresholdUpdate

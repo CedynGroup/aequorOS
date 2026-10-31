@@ -6,8 +6,8 @@ from decimal import Decimal
 from hypothesis import given
 from hypothesis import strategies as st
 
+from app.capital.domain.loan_classification import classify_book
 from app.credit.domain.concentration_monitor import ConcentrationLimit, monitor_concentration
-from app.domain.capital.loan_classification import classify_book
 from tests.credit.testing.assertions import (
     TOLERANCE,
     assert_concentration_reconciles,

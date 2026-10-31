@@ -19,7 +19,7 @@ literal — and an unseeded limit yields status ``na`` with a named validation,
 not an invented threshold.
 
 Orchestration only: classification itself stays in the pure engine
-(``app.domain.capital.loan_classification``) via ``classify_loan_book``. The
+(``app.capital.domain.loan_classification``) via ``classify_loan_book``. The
 snapshot both tiers hash is the ordered per-loan value list (reference,
 exposure, DPD, stage, stated classification, stated provisions) plus every
 resolved parameter — no row ids, no timestamps — so the live hash equals the

@@ -1,0 +1,18 @@
+{
+  "violations": [
+    "features/fx/components/FxModuleFrame.tsx -> components/live/LiveEngineNote",
+    "features/fx/components/FxModuleFrame.tsx -> components/workbench/RunModuleScenarios",
+    "features/fx/components/charts/ExposureBars.tsx -> components/bi/EChart",
+    "features/fx/components/charts/ExposureBars.tsx -> components/bi/echartsTheme",
+    "features/fx/components/charts/ForwardCurve.tsx -> components/bi/EChart",
+    "features/fx/components/charts/ForwardCurve.tsx -> components/bi/echartsTheme",
+    "features/fx/components/charts/HedgeScatter.tsx -> components/bi/EChart",
+    "features/fx/components/charts/HedgeScatter.tsx -> components/bi/echartsTheme",
+    "features/fx/components/charts/TrendChart.tsx -> components/bi/EChart",
+    "features/fx/components/charts/TrendChart.tsx -> components/bi/echartsTheme",
+    "features/fx/components/charts/VarWaterfall.tsx -> components/bi/EChart",
+    "features/fx/components/charts/VarWaterfall.tsx -> components/bi/echartsTheme",
+    "features/fx/routes/exposure.tsx -> components/bi/InsightStrip",
+    "features/fx/routes/scenarios.tsx -> components/workbench/ScenarioWorkbench"
+  ]
+}

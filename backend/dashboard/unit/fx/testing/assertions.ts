@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import type { FxPositionSplit } from "../../../components/fx/params";
+import type { FxPositionSplit } from "../../../features/fx/components/params";
 
 /** Saved cents and display hundredths round-trip exactly through params.ts and
  * ScenarioStrip. Currency identity, ordering and saved verdicts remain exact.

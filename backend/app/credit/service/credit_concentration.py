@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.capital.service import sdi_capital
 from app.core.errors import ModuleDataUnavailable
 from app.core.key_management.fields import blind_index
@@ -42,7 +43,6 @@ from app.data_engine.public import (
     CanonicalProduct,
     counterparty_group_labels,
 )
-from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
 from app.identity.public import Bank
 from app.live.public import load_current_facts
 from app.policy.public import (

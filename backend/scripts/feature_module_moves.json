@@ -1496,5 +1496,12 @@
   ["tests.services.test_sdi_capital", "tests.capital.service.test_sdi_capital"],
   ["tests.api.test_capital_authorization", "tests.capital.api.test_capital_authorization"],
   ["app.features.read_sdi_diagnostics", "app.capital.api.read_sdi_diagnostics"],
-  ["app.schemas.sdi", "app.capital.schemas.sdi"]
+  ["app.schemas.sdi", "app.capital.schemas.sdi"],
+  ["app.domain.capital", "app.capital.domain"],
+  ["app.domain.capital.ecl", "app.capital.domain.ecl"],
+  ["app.domain.capital.engine", "app.capital.domain.engine"],
+  ["app.domain.capital.loan_classification", "app.capital.domain.loan_classification"],
+  ["tests.domain.test_capital_engine", "tests.capital.domain.test_capital_engine"],
+  ["tests.domain.test_loan_classification", "tests.capital.domain.test_loan_classification"],
+  ["tests.services.test_ecl_and_crm", "tests.capital.service.test_ecl_and_crm"]
 ]
