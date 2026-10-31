@@ -18,5 +18,13 @@
   [
     "components/workbench",
     "features/workbench/components"
+  ],
+  [
+    "components/risk",
+    "features/risk/components"
+  ],
+  [
+    "components/alerts",
+    "features/risk/components"
   ]
 ]
