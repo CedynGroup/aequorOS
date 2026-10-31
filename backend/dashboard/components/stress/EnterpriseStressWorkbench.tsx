@@ -28,6 +28,7 @@ import KpiStat from "@/components/ui/KpiStat";
 import ChartFrame from "@/components/ui/ChartFrame";
 import StatusPill from "@/components/ui/StatusPill";
 import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary from "@/components/ui/QueryBoundary";
 import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 import { ApiError } from "@/lib/api/client";
 import {
@@ -382,21 +383,29 @@ function ScopedEnterpriseStressWorkbench({
           </div>
           <div className="xl:col-span-3 space-y-6">
             {builderOpen ? (
-              <ScenarioBuilder
-                defaultBankId={bankId}
-                editScenario={
-                  editScenarioId ? (editScenario.data ?? null) : null
-                }
-                onSaved={() => {
-                  setBuilderOpen(false);
-                  setEditScenarioId(null);
-                  void approved.refetch();
-                }}
-                onCancel={() => {
-                  setBuilderOpen(false);
-                  setEditScenarioId(null);
-                }}
-              />
+              <QueryBoundary
+                key={editScenarioId ?? "new"}
+                isLoading={Boolean(editScenarioId) && editScenario.isPending}
+                error={editScenarioId ? editScenario.error : null}
+                onRetry={() => void editScenario.refetch()}
+                contained
+              >
+                <ScenarioBuilder
+                  defaultBankId={bankId}
+                  editScenario={
+                    editScenarioId ? (editScenario.data ?? null) : null
+                  }
+                  onSaved={() => {
+                    setBuilderOpen(false);
+                    setEditScenarioId(null);
+                    void approved.refetch();
+                  }}
+                  onCancel={() => {
+                    setBuilderOpen(false);
+                    setEditScenarioId(null);
+                  }}
+                />
+              </QueryBoundary>
             ) : (
               <SectionCard
                 title="Run enterprise stress"
