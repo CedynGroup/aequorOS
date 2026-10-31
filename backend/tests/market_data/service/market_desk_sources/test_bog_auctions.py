@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from tests.services.market_desk_sources.conftest import read_fixture
+from tests.market_data.service.market_desk_sources.conftest import read_fixture
 
 from app.market_data.service.market_desk.sources import bog_auctions
 from app.market_data.service.market_desk.sources.core import ParseContext

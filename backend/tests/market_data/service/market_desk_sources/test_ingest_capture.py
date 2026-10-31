@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from tests.services.market_desk_sources.conftest import DESK_OPERATOR, read_fixture
+from tests.market_data.service.market_desk_sources.conftest import DESK_OPERATOR, read_fixture
 
 from app.market_data.service.market_desk import observations
 from app.market_data.service.market_desk.sources import ingest_capture

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.ids import new_uuid7
 from app.models import DeskSourceCapture
 
-FIXTURES = Path(__file__).parents[2] / "fixtures" / "market_desk"
+FIXTURES = Path(__file__).parents[3] / "fixtures" / "market_desk"
 RAW = FIXTURES / "raw"
 
 DESK_OPERATOR = "desk-analyst@aequoros.com"

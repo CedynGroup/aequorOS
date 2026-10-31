@@ -12,7 +12,7 @@ from urllib.parse import parse_qs
 
 import httpx
 import pytest
-from tests.services.market_desk_sources.conftest import read_fixture
+from tests.market_data.service.market_desk_sources.conftest import read_fixture
 
 from app.market_data.service.market_desk.sources import fetch
 

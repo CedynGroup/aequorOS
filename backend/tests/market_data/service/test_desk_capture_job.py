@@ -264,7 +264,7 @@ def test_byte_identical_recapture_stores_no_second_payload(
     _enable(monkeypatch, DESK_CAPTURE_SOURCES="bog_interbank_daily")
     # The real harvested BoG page, not a synthetic one.
     page = (
-        Path(__file__).parents[1]
+        Path(__file__).parents[2]
         / "fixtures"
         / "market_desk"
         / "raw"

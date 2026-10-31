@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from tests.services.market_desk_sources.conftest import read_fixture
+from tests.market_data.service.market_desk_sources.conftest import read_fixture
 
 from app.market_data.service.market_desk.sources import gfim
 from app.market_data.service.market_desk.sources.core import QF_NO_TRADES, ParseContext

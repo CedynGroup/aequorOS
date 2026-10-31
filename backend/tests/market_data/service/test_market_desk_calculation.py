@@ -39,7 +39,7 @@ from app.models import (
 from tests.support.helpers import ORG_1
 from tests.support.inmemory_storage import InMemoryStorageClient
 
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "market_desk" / "series"
+FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "market_desk" / "series"
 COB = date(2026, 8, 7)
 ANALYST = "analyst@aequoros.com"
 LEAD = "lead@aequoros.com"
