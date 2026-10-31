@@ -22,10 +22,12 @@
     "features/liquidity/components/CfpLifecycle.tsx -> components/profile/ProfileProvider",
     "features/liquidity/components/SdiLiquidityMonitoringView.tsx -> components/basel/sdiHooks",
     "features/liquidity/components/SdiLiquidityView.tsx -> components/basel/sdiHooks",
-    "features/liquidity/components/results.test.tsx -> components/risk/LimitWall",
-    "features/liquidity/components/results.test.tsx -> components/risk/limits",
     "features/liquidity/components/results.test.tsx -> features/bi/components/echartsTheme",
     "features/liquidity/routes/overview.tsx -> components/live/LiveEngineNote",
+    "features/risk/components/alerts/AlertStream.tsx -> components/live/moduleDisplay",
+    "features/risk/routes/alerts.tsx -> components/basel/sdiHooks",
+    "features/risk/routes/overview.tsx -> components/basel/sdiHooks",
+    "features/risk/routes/overview.tsx -> features/bi/components/InsightStrip",
     "features/workbench/components/ScenarioWorkbench.tsx -> components/ftp/FtpWhatIf"
   ]
 }
