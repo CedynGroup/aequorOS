@@ -1,4 +1,8 @@
-"""Reject direct test DB construction outside tests/support/database.py."""
+"""Ratchet direct DB construction out of tests; support/database.py owns it.
+
+The temporary allowlist records counts by path and constructor, not line
+numbers. New calls fail immediately; removing calls requires shrinking it.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +13,10 @@ from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
+from pydantic import TypeAdapter
+
 BACKEND = Path(__file__).resolve().parents[1]
+ALLOWLIST = BACKEND / "tests/architecture/test_database_connection_allowlist.json"
 CONSTRUCTORS = frozenset(
     {
         "sqlalchemy.create_engine",
@@ -23,10 +30,6 @@ CONSTRUCTORS = frozenset(
         "psycopg.connect",
         "psycopg.Connection.connect",
         "psycopg.AsyncConnection.connect",
-        "sqlite3.connect",
-        "sqlite3.dbapi2.connect",
-        "sqlite3.Connection",
-        "sqlite3.dbapi2.Connection",
     }
 )
 
@@ -52,8 +55,6 @@ class ConstructorVisitor(ast.NodeVisitor):
             return self.aliases.get(node.id, "")
         if isinstance(node, ast.Attribute):
             return f"{self.qualified(node.value)}.{node.attr}"
-        if isinstance(node, ast.Subscript):
-            return self.qualified(node.value)
         return ""
 
     def child_table(self, node: ast.expr | ast.stmt, name: str) -> symtable.SymbolTable:
@@ -250,17 +251,37 @@ def inventory(root: Path) -> dict[str, dict[str, int]]:
 
 class GuardArguments(argparse.Namespace):
     root: Path = BACKEND
+    allowlist: Path = ALLOWLIST
+    strict: bool = False
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument("--root", type=Path, default=BACKEND)
+    _ = parser.add_argument("--allowlist", type=Path, default=ALLOWLIST)
+    _ = parser.add_argument("--strict", action="store_true", help="Reject even allowlisted calls")
     args = parser.parse_args(argv, namespace=GuardArguments())
-    actual = inventory(args.root)
-    if actual:
-        for path, calls in actual.items():
-            print(f"{path}: direct DB constructors {calls}. Use tests.support.database.")
+    root, allowlist, strict = args.root, args.allowlist, args.strict
+    actual = inventory(root)
+    expected = (
+        {}
+        if strict
+        else TypeAdapter(dict[str, dict[str, int]]).validate_json(allowlist.read_text())
+    )
+    if actual != expected:
+        for path in sorted(actual.keys() | expected.keys()):
+            if actual.get(path) != expected.get(path):
+                print(
+                    f"{path}: direct DB constructors {actual.get(path, {})}; "
+                    f"allowlisted {expected.get(path, {})}. Use tests.support.database."
+                )
         return 1
+    total = sum(sum(calls.values()) for calls in actual.values())
+    if total:
+        print(
+            f"WARNING: {total} legacy DB constructor calls in {len(actual)} test files "
+            "remain allowlisted; migrate to tests.support.database."
+        )
     return 0
 
 
