@@ -8,8 +8,6 @@ import json
 from datetime import date
 from decimal import Decimal
 
-from tests.market_data.service.market_desk_sources.conftest import read_fixture
-
 from app.market_data.service.market_desk.sources import bog_wdt
 from app.market_data.service.market_desk.sources.core import (
     QF_AS_OF_FROM_CAPTURE,
@@ -18,6 +16,7 @@ from app.market_data.service.market_desk.sources.core import (
     ParseContext,
     dedupe_and_resolve_conflicts,
 )
+from tests.market_data.service.market_desk_sources.conftest import read_fixture
 
 CTX = ParseContext(as_of_date=date(2026, 8, 9))
 

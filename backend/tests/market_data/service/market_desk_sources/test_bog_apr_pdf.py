@@ -12,10 +12,9 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from tests.market_data.service.market_desk_sources.conftest import read_fixture
-
 from app.market_data.service.market_desk.sources import bog_apr_pdf
 from app.market_data.service.market_desk.sources.core import ParseContext
+from tests.market_data.service.market_desk_sources.conftest import read_fixture
 
 CTX = ParseContext(as_of_date=date(2026, 8, 9))
 

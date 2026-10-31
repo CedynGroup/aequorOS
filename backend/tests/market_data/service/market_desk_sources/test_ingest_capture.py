@@ -8,7 +8,6 @@ from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from tests.market_data.service.market_desk_sources.conftest import DESK_OPERATOR, read_fixture
 
 from app.market_data.service.market_desk import observations
 from app.market_data.service.market_desk.sources import ingest_capture
@@ -17,6 +16,7 @@ from app.market_data.service.market_desk.sources.core import (
     QF_STALE_SOURCE,
 )
 from app.models import DeskObservation
+from tests.market_data.service.market_desk_sources.conftest import DESK_OPERATOR, read_fixture
 
 
 def _current(db: Session, series_code: str, as_of: date) -> list[DeskObservation]:

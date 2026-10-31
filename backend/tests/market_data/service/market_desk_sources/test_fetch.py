@@ -12,9 +12,9 @@ from urllib.parse import parse_qs
 
 import httpx
 import pytest
-from tests.market_data.service.market_desk_sources.conftest import read_fixture
 
 from app.market_data.service.market_desk.sources import fetch
+from tests.market_data.service.market_desk_sources.conftest import read_fixture
 
 
 def _session(handler, *, pacer: fetch.Pacer | None = None) -> fetch.DeskSession:
