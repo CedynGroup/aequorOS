@@ -53,7 +53,14 @@ const E2E_DB = path.join(E2E_TMP, "e2e.db");
 // worker derive their expectations from the SAME anchor even when a run
 // straddles a month-end midnight. Export E2E_TODAY yourself to pin an anchor
 // and prove a journey is anchor-independent.
-process.env.E2E_TODAY ??= new Date().toISOString().slice(0, 10);
+if (process.env.E2E_TODAY === undefined) {
+  const today = new Date();
+  process.env.E2E_TODAY = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+}
 export const E2E_KMS_UPSTREAM = process.env.BANK_KMS_ENDPOINT_URL ?? "";
 export const E2E_KMS_STATE = path.join(E2E_TMP, "kms-service-state");
 const kmsProxy = `http://127.0.0.1:${runtimePorts.kms}`;
