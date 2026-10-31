@@ -21,7 +21,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.capital import loan_classification as lc
+from app.capital.domain import loan_classification as lc
 
 # Seeded regulatory values (regulatory_parameters.SEED_PARAMETERS) reproduced as
 # plain test inputs — the pure engine never reaches for the control plane.

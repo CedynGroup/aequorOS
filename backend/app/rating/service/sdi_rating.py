@@ -39,7 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY, CapitalRegisterRefused
+from app.capital.domain.engine import CAPITAL_REGISTER_REFUSED_CATEGORY, CapitalRegisterRefused
 from app.identity.public import Bank
 from app.market_data.public import DeskMethodology
 from app.rating.domain.engine import ComponentScore, grade_for_score, score_components

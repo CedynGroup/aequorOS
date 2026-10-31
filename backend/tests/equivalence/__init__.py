@@ -35,7 +35,7 @@ the ledger that says which claims either gate actually proves.
 
 Nothing here equates two methodologies. Where the forecast is asserted equal to
 the capital run, it is because BOTH sides call
-``app.domain.capital.engine.compute_capital_ratios`` — one engine, one method,
+``app.capital.domain.engine.compute_capital_ratios`` — one engine, one method,
 previously handed two different fact sets. Aligning an input scope is not
 merging two regulatory methods, and no engine's arithmetic was changed to make
 two numbers agree.

@@ -21,10 +21,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.engine import CapitalRegisterRefused, assert_capital_register_usable
 from app.capital.service import sdi_readiness
 from app.data_engine.public import CanonicalCounterpartyRating, CanonicalMarketIndex
 from app.db.base import utc_now
-from app.domain.capital.engine import CapitalRegisterRefused, assert_capital_register_usable
 from app.identity.public import Bank, InstitutionProfile
 from app.live.public import (
     BankFinancialFact,

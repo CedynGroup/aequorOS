@@ -57,12 +57,12 @@ from app.bi.domain.authority import (
     designation_of,
     resolve_authority,
 )
+from app.capital.domain.loan_classification import ClassifiedLoan
 from app.credit.domain.dpd_bands import dpd_band
 from app.data_engine.domain.ingestion.optional_position_fields import (
     POSITION_ATTRIBUTE_TEXT_LIMITS,
     over_long_text_attributes,
 )
-from app.domain.capital.loan_classification import ClassifiedLoan
 from app.irrbb.domain.buckets import repricing_bucket
 from app.liquidity.domain.ladder import LADDER_HORIZON_DAYS, ladder_bucket_index
 from app.live.domain.gl import pl_mapping

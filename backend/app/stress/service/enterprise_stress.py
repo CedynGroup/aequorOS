@@ -29,17 +29,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.capital.public import regulatory_capital, sdi_capital
-from app.core.authorization import Module, Permission, Sensitivity
-from app.credit.public import credit_exposure_book
-from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
-from app.domain.capital.ecl import (
+from app.capital.domain.ecl import (
     STRESS_CHARGE_TAX_TREATMENT,
     EclAssumption,
     EclComputationError,
     EclExposure,
 )
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     FACT_GROUP_ECL_EXPOSURE,
     GENERAL_PROVISIONS_CATEGORY,
     TIER_T2,
@@ -53,7 +49,11 @@ from app.domain.capital.engine import (
     resolve_risk_weight,
     tier1_capital,
 )
-from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
+from app.capital.domain.loan_classification import NPL_GRADES, normalise_bog_classification
+from app.capital.public import regulatory_capital, sdi_capital
+from app.core.authorization import Module, Permission, Sensitivity
+from app.credit.public import credit_exposure_book
+from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
 from app.forecasting.domain.engine import ForecastAssumptions, ForecastFact, ForecastParams
 from app.fx.domain.engine import FxPosition
 from app.identity import public as scoped_authorization

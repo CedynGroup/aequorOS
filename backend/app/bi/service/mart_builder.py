@@ -120,6 +120,7 @@ from app.bi.service.compiler import compile_query
 from app.bi.service.errors import BiQueryError
 from app.bi.service.identity_policy import connected
 from app.bi.service.versions import BUILDER_VERSION
+from app.capital.domain import loan_classification as classification_engine
 from app.core.key_management.maintenance import lock_bank
 from app.credit.public import loan_classification
 from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
@@ -139,7 +140,6 @@ from app.data_engine.public import (
     is_current_generation,
 )
 from app.db.base import utc_now
-from app.domain.capital import loan_classification as classification_engine
 from app.identity.public import Bank, Outlet
 from app.live.domain.gl import pl_mapping
 from app.live.domain.positions.families import LOAN_CATEGORY_MAP, loan_family

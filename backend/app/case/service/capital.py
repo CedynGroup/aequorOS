@@ -6,7 +6,7 @@ equity over total assets, liabilities over total assets, and the change in
 equity — against fixed MVP review thresholds.
 
 It is not regulatory capital. Basel CAR, CET1, Tier 1 and leverage are
-computed by `app.domain.capital.engine` from `BankFinancialFact` over
+computed by `app.capital.domain.engine` from `BankFinancialFact` over
 risk-weighted assets, sealed into a `RegulatoryRun`, and filed. An SDI's s.29
 CAR is `app.capital.service.sdi_capital`. Nothing here reads a bank fact, calls a
 regulatory engine, or reaches a return — see `app.case.service.case_plane` for the

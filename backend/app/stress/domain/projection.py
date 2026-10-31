@@ -54,9 +54,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
-from app.domain.capital.ecl import EclAssumption
-from app.domain.capital.engine import (
+from app.capital.domain.ecl import EclAssumption
+from app.capital.domain.engine import (
     GENERAL_PROVISIONS_CATEGORY,
     TIER_AT1,
     TIER_CET1,
@@ -70,6 +69,7 @@ from app.domain.capital.engine import (
     compute_rwa,
     has_complete_ecl_coverage,
 )
+from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.forecasting.domain.engine import (
     RETAINED_EARNINGS_CATEGORY,
     ForecastAssumptions,

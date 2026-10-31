@@ -1,6 +1,6 @@
 """Loan classification + provisioning service (docs/sdi.md §2.2, §4, §7 Phase G).
 
-Thin orchestration over the pure ``app.domain.capital.loan_classification``
+Thin orchestration over the pure ``app.capital.domain.loan_classification``
 engine: resolve the tenant's institution class, build the class grid from the
 regulatory-parameter control plane (every DPD boundary and provisioning rate
 comes from ``regulatory_parameters.resolve`` — never a literal), load the bank's
@@ -38,11 +38,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain import loan_classification as engine
 from app.credit.domain.dpd_bands import DPD_BANDS as _DPD_BANDS
 from app.credit.domain.restructure import restructure_holds_npl
 from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
-from app.domain.capital import loan_classification as engine
 from app.identity.public import Bank
 from app.policy.public import institution_types, jurisdictions
 from app.policy.public import regulatory_parameters as rp

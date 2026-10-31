@@ -11,12 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from app.capital.service import regulatory_capital
-from app.core.authorization import ModuleScope, SensitivityScope
-from app.core.errors import ModuleDataUnavailable
-from app.credit.service import credit_concentration, regulatory_credit
-from app.domain.authority.outcomes import OutcomeState
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
     MODELLED_ECL_CHARGE_CATEGORY,
     CapitalFact,
@@ -25,6 +20,11 @@ from app.domain.capital.engine import (
     compute_rwa,
     tier1_capital,
 )
+from app.capital.service import regulatory_capital
+from app.core.authorization import ModuleScope, SensitivityScope
+from app.core.errors import ModuleDataUnavailable
+from app.credit.service import credit_concentration, regulatory_credit
+from app.domain.authority.outcomes import OutcomeState
 from app.forecasting.schemas.forecasting import (
     ForecastRunCreate,
     OptimizerRunCreate,
@@ -58,7 +58,7 @@ from app.stress.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.stress.schemas.reverse_stress import ReverseStressRunCreate
 from app.stress.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn, WorkbenchModule
 from app.stress.service import analysis_workbench, enterprise_stress, reverse_stress
-from tests.domain.test_capital_engine import bog_capital_params
+from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import (
     MAKER,

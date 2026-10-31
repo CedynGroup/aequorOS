@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.capital.engine import CapitalFact
+from app.capital.domain.engine import CapitalFact
 from app.models import (
     Bank,
     BankFinancialFact,
