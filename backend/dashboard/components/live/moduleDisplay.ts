@@ -7,7 +7,7 @@
  *
  * `PRIMARY_METRIC` is mirrored by `_PRIMARY_METRIC_KEY` in
  * `backend/app/liquidity/service/window_analytics.py` and by `METRIC_LABELS` in
- * `components/home/WindowAnalysis.tsx`; parity tests read this file's source,
+ * `features/home/components/WindowAnalysis.tsx`; parity tests read this file's source,
  * so keep every entry in the shape `module: { key: "...", label: "..." }`.
  */
 

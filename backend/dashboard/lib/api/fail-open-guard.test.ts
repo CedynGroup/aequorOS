@@ -75,7 +75,7 @@ const SCANNED_DIRS = [
   "components/risk",
   "components/reports",
   "components/alerts",
-  "components/home",
+  "features/home",
   "components/live",
   "components/submissions",
   "components/behavioral",

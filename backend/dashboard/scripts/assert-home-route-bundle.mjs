@@ -147,7 +147,7 @@ if (offendingBiChunks.length > 0) {
  * The Command Center's ratio chart, and the two things that must be true of it.
  *
  * It is the ONLY chart on the home route, and it is reached through
- * `components/home/DeferredRatioTrendChart.tsx`, so the route must have exactly
+ * `features/home/components/DeferredRatioTrendChart.tsx`, so the route must have exactly
  * one deferred entry. That entry's chunk then has to satisfy BOTH halves of a
  * rule, which is why reading it is not optional:
  *

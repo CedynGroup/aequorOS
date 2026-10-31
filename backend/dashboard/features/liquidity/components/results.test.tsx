@@ -95,7 +95,7 @@ loader._load = (request, parent, isMain) => {
       path.resolve(__dirname, "../../..", "features/bi/components/echartsTheme"),
       parent,
       isMain,
-    ) as typeof import("../../../features/bi/components/echartsTheme");
+    ) as typeof import("../../bi/components/echartsTheme");
     return {
       __esModule: true,
       EChart: ({ option }: { option: typeof chartOption }) => {
@@ -128,7 +128,7 @@ const LimitWall = require("../../../components/risk/LimitWall")
 const { liquidityLimits } =
   require("../../../components/risk/limits") as typeof import("../../../components/risk/limits");
 const { usePulseCards } =
-  require("../../../components/home/pulse") as typeof import("../../../components/home/pulse");
+  require("@/features/home/public") as typeof import("@/features/home/public");
 
 function readLiquidityPulse() {
   let pulse: ReturnType<typeof usePulseCards>["cards"]["liquidity"] | undefined;
@@ -141,10 +141,10 @@ function readLiquidityPulse() {
   return pulse;
 }
 
-const PulseWall = require("../../../components/home/PulseWall")
-  .default as typeof import("../../../components/home/PulseWall").default;
-const BreachBanner = require("../../../components/home/BreachBanner")
-  .default as typeof import("../../../components/home/BreachBanner").default;
+const PulseWall = require("@/features/home/public")
+  .PulseWall as typeof import("@/features/home/public").PulseWall;
+const BreachBanner = require("@/features/home/public")
+  .BreachBanner as typeof import("@/features/home/public").BreachBanner;
 const Buffer = require("../../../app/(app)/liquidity/buffer/page")
   .default as typeof import("../../../app/(app)/liquidity/buffer/page").default;
 const Overview = require("../../../app/(app)/liquidity/page")
