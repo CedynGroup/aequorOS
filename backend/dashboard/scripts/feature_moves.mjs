@@ -19,6 +19,10 @@
 // `check` fails when a ledgered module is still present at its old path.
 // Validation happens before any file changes; overlapping moves must run as
 // separate commands.
+//
+// The layout tooling itself is excluded from rewrites: the codemod's source
+// and tests carry fixture paths, and FEATURE_LAYOUT.md documents the scheme
+// with examples, none of which are instances of a move.
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -27,6 +31,13 @@ import { spawnSync } from "node:child_process";
 const REWRITE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".md", ".yml", ".yaml", ".css"]);
 const SKIP_DIRS = new Set(["node_modules", "coverage", ".test-out", "test-results", "playwright-report"]);
 const LEDGER_NAME = "feature_module_moves.json";
+const REWRITE_EXCLUDED = new Set([
+  "scripts/feature_moves.mjs",
+  "scripts/feature_moves.test.mjs",
+  "scripts/check_feature_boundaries.mjs",
+  "scripts/check_feature_boundaries.test.mjs",
+  "FEATURE_LAYOUT.md",
+]);
 const FOLLOW_OK = new Set(["/", '"', "'", "`", " ", "\t", ")", "]", ",", ":", ">", "*", "\n"]);
 
 function die(message) {
@@ -193,8 +204,9 @@ function moveCommand(options) {
 
   for (const [oldPath, newPath] of options.pairs) {
     gitMove(root, oldPath, newPath);
-    const isRoutePage = options.shim && oldPath.startsWith("app/") && oldPath.endsWith("page.tsx");
-    if (isRoutePage) {
+    const isRouteEntry =
+      options.shim && oldPath.startsWith("app/") && (oldPath.endsWith("page.tsx") || oldPath.endsWith("layout.tsx"));
+    if (isRouteEntry) {
       writeFileSync(path.posix.join(root, oldPath), shimContent(newPath));
     } else {
       ledger.push([oldPath, newPath]);
@@ -203,7 +215,11 @@ function moveCommand(options) {
 
   const files = gitLsFiles(root) ?? listFiles(root, []);
   const rewriteable = files.filter(
-    (file) => file !== LEDGER_NAME && REWRITE_EXTS.has(path.posix.extname(file)) && existsSync(path.posix.join(root, file)),
+    (file) =>
+      file !== LEDGER_NAME &&
+      !REWRITE_EXCLUDED.has(file) &&
+      REWRITE_EXTS.has(path.posix.extname(file)) &&
+      existsSync(path.posix.join(root, file)),
   );
   for (const [oldPath, newPath] of options.pairs) {
     for (const relFile of rewriteable) {

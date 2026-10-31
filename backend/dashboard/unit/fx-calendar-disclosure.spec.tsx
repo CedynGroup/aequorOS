@@ -4,7 +4,7 @@ import { cleanup, render as renderUi, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FxDashboardReadFromJSON } from "@aequoros/risk-service-api";
-import FxModuleFrame from "../components/fx/FxModuleFrame";
+import FxModuleFrame from "../features/fx/components/FxModuleFrame";
 import FxVarPage from "../app/(app)/fx/var/page";
 import FxExposurePage from "../app/(app)/fx/page";
 import FxLimitsPage from "../app/(app)/fx/limits/page";

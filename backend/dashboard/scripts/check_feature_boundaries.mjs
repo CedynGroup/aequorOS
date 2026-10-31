@@ -27,7 +27,7 @@ const SOURCE_EXTS = new Set([".ts", ".tsx"]);
 // The shared layer every feature may import (the kernel analog): the generated
 // API client, shared UI primitives and shared charts. Root-level lib modules
 // are shared until a feature owns them.
-const SHARED_PREFIXES = ["lib/api/", "components/ui/", "components/charts/"];
+const SHARED_PREFIXES = ["lib/api/", "components/ui/", "components/charts/", "components/shell/"];
 
 export function parseArgs(argv) {
   const options = { root: null, baseline: null, update: false, quiet: false };
@@ -69,22 +69,29 @@ function featureNames(root) {
 
 // Ownership of a dashboard-relative module path (no extension):
 //   features/<name>/**          -> that feature
+//   lib/api/**, components/{ui,charts,shell}/** -> "shared"
 //   lib/<name>/**, components/<name>/** when <name> is a feature -> that feature
-//   lib/api/**, components/{ui,charts}/**, root lib modules, root files -> "shared"
+//   lib/<file> (a root-level lib module, not a directory) -> "shared"
 //   anything else               -> null (unowned legacy; importing it from a
 //                                  feature is a baseline-recorded violation)
-export function ownerOf(relModule, features) {
+export function ownerOf(relModule, features, root) {
   if (relModule.startsWith("features/")) {
     const name = relModule.split("/")[1];
     if (features.has(name)) return name;
   }
   const [first, second] = relModule.split("/");
   if (first === "app") return "app";
+  if (SHARED_PREFIXES.some((prefix) => relModule.startsWith(prefix))) return "shared";
   if ((first === "lib" || first === "components") && second !== undefined && features.has(second)) {
     return second;
   }
   if (first === "lib" && second === undefined) return "shared";
-  if (SHARED_PREFIXES.some((prefix) => relModule.startsWith(prefix))) return "shared";
+  // A root-level lib file (lib/format.ts) is shared; a lib subdirectory that
+  // no feature owns yet is unowned legacy.
+  if (first === "lib" && second !== undefined) {
+    const dir = existsSync(path.posix.join(root, relModule)) && statSync(path.posix.join(root, relModule)).isDirectory();
+    return dir ? null : "shared";
+  }
   return null;
 }
 
@@ -146,7 +153,7 @@ export function scan(root, baseline) {
     for (const specifier of importsOfFile(readFileSync(file, "utf8"))) {
       const target = resolveSpecifier(root, relFile, specifier);
       if (target === null) continue;
-      const targetOwner = ownerOf(target, features);
+      const targetOwner = ownerOf(target, features, root);
       if (targetOwner === owner || targetOwner === "shared" || targetOwner === "app") continue;
       const isPublicInterface = new RegExp(`^features/${targetOwner}/public$`).test(target);
       if (targetOwner !== null && isPublicInterface) continue;

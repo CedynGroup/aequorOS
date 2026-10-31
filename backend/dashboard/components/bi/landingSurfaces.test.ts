@@ -58,6 +58,14 @@ function dashboardRoot(): string {
 
 const ROOT = dashboardRoot();
 
+/**
+ * Modules whose landing page moved into features/: the app/ route file is a
+ * thin re-export shim, so content rules must read the implementation.
+ */
+const ROUTE_SOURCE: Record<string, string> = {
+  fx: "features/fx/routes/exposure.tsx",
+};
+
 /** A file's source with its comments removed. */
 function code(relativePath: string): string {
   const source = readFileSync(join(ROOT, relativePath), "utf8");
@@ -79,7 +87,7 @@ const LANDING_PAGES = [
   "app/(app)/liquidity/page.tsx",
   "app/(app)/credit/page.tsx",
   "app/(app)/forecasting/page.tsx",
-  "app/(app)/fx/page.tsx",
+  "features/fx/routes/exposure.tsx",
   "app/(app)/ftp/page.tsx",
   "app/(app)/markets/page.tsx",
   "app/(app)/risk/page.tsx",
@@ -269,7 +277,7 @@ const EXPLAIN_PAGES: Record<string, readonly string[]> = {
 
 test("each module KPI that is an engine copy opens its provenance, and the page renders the drawer", () => {
   for (const [page, metrics] of Object.entries(EXPLAIN_PAGES)) {
-    const path = `app/(app)/${page}/page.tsx`;
+    const path = ROUTE_SOURCE[page] ?? `app/(app)/${page}/page.tsx`;
     const source = code(path);
     assert.ok(
       /import\s*\{[^}]*\buseKpiExplain\b[^}]*\}\s*from\s*["']@\/components\/bi\/InsightStrip["']/.test(
@@ -415,7 +423,7 @@ test("the strip paraphrases a grant denial and renders every other refusal in th
 
 test("each page's BI surfaces speak about the page's own reporting date, never today", () => {
   for (const page of ["basel", "liquidity", "credit", "fx", "ftp"]) {
-    const source = code(`app/(app)/${page}/page.tsx`);
+    const source = code(ROUTE_SOURCE[page] ?? `app/(app)/${page}/page.tsx`);
     assert.ok(
       /const asOf = data\??\.period\.periodEnd( \?\? null)?;/.test(source),
       `${page}: asOf must be the dashboard payload's reporting period end`,

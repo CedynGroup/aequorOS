@@ -1,14 +1,1 @@
-"use client";
-import PageContainer from "@/components/ui/PageContainer";
-import PageHeader from "@/components/ui/PageHeader";
-import ScenarioWorkbench from "@/components/workbench/ScenarioWorkbench";
-export default function ModuleScenariosPage() {
-  return (
-    <>
-      <PageHeader eyebrow="FX" title="FX Scenarios" />
-      <PageContainer className="py-6">
-        <ScenarioWorkbench module="fx" />
-      </PageContainer>
-    </>
-  );
-}
+export { default } from "@/features/fx/routes/scenarios";
