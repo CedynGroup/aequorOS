@@ -599,6 +599,9 @@ def _seed_canonical_positions(session: Session) -> None:
     A real bank's book and its fact spine advance together;
     passing the date explicitly is what makes the fixture behave that way. The
     hermetic suite keeps the default, so nothing there moves.
+
+    Day-count expectations must use this same moving anchor. For the shared
+    ``E2E_TODAY`` override, see ``dashboard/README.md#end-to-end-playwright``.
     """
     as_of = latest_month_end_on_or_before()
     seed_canonical_fixture(
@@ -704,13 +707,19 @@ def _materialize_book(session: Session) -> None:
     )
 
 
+def _anchor_today() -> date:
+    """Read the shared run date; override usage is in ``dashboard/README.md``."""
+    override = os.environ.get("E2E_TODAY")
+    return date.fromisoformat(override) if override else date.today()
+
+
 def latest_month_end_on_or_before(today: date | None = None) -> date:
     """The last month end on or before ``today``.
 
     Mirrors the Returns workspace's first anchor <= today in descending order,
     including today itself when it is a month end.
     """
-    today = today or date.today()
+    today = today or _anchor_today()
     if today.day == calendar.monthrange(today.year, today.month)[1]:
         return today
     return today.replace(day=1) - timedelta(days=1)
