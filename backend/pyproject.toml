@@ -45,7 +45,7 @@ dependencies = [
   "python-docx",
   "pyyaml",
   "rapidfuzz",
-  "reportlab>=4.0,<5.1",  # pinned: deterministic bytes rely on invariant=1 (G12)
+  "reportlab>=4.0,<5.2",  # pinned: deterministic bytes rely on invariant=1 (G12)
   "scikit-learn",
   # Direct import, not a scikit-learn leftover: the curve library
   # (app/market_data/domain/curves) uses scipy.interpolate.PchipInterpolator and
