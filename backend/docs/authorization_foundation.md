@@ -279,11 +279,11 @@ Institution Profile navigation (`/institution` and its tabs) requires a final,
 non-contextual organization-scoped ACCOUNT/restricted `view` capability;
 institution-scoped capabilities and Account administration alone do not expose it.
 Context-dependent capabilities may support structural navigation, but actions and deep links never treat them as final authorization.
-This dashboard slice gates action controls only where the projected capability is
-already final and non-contextual. Module-specific mutations such as run,
-configure, approve, sign-off, and submit remain with their dependency-ordered
-endpoint cutovers; each cutover must drive its UI control from the same final
-authority that its backend route enforces before side effects.
+Action controls may use structural eligibility to offer a contextual action;
+the server must still evaluate its workflow conditions before side effects.
+Module-specific mutations such as run, configure, approve, sign-off, and submit
+follow their dependency-ordered endpoint cutovers; each cutover must drive its UI
+control from the matching scoped capability.
 
 Verified operator examiner impersonation remains explicit staff-plane read
 authority rather than a tenant binding. Its server projection grants only
@@ -807,10 +807,10 @@ Generic regulatory-run lists/details also gate Capital, Credit and enterprise
 stress under their module authorities. Direct enterprise-stress history,
 latest and detail reads require RISK/aggregated (history) or RISK/confidential
 (detail and execution response), with whole-institution coverage. Execution
-also requires RISK/confidential RUN and retains engine-specific RUN checks.
-This closes the parallel read path
-that otherwise disclosed capital stress outcomes independently of the FX
-projection. This is a denial-only access change; no bindings are backfilled. Run
+authority follows the [Stress rollout contract](stress_enforcement_rollout.md).
+This closes the parallel read path that otherwise disclosed capital stress
+outcomes independently of the FX projection. This is a denial-only access change;
+no bindings are backfilled. Run
 `scripts/authorization_access_impact.py` for each enforcement deployment
 and retain its dated output outside the repository.
 

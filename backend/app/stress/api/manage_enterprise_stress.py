@@ -1,9 +1,10 @@
 """Enterprise-wide stress test endpoints (docs/stress.md §3.3–3.4, Phase 2).
 
 POST runs one enterprise stress against an APPROVED macro scenario and persists
-it as an immutable RegulatoryRun (analyst+ — it mints an official run); GET
+it as an immutable RegulatoryRun; GET
 retrieves the latest run (with its Appendix II tables) for a period + scenario.
-Governed (approved-scenario-only) and RLS-scoped.
+Governed (approved-scenario-only) and RLS-scoped. Scoped execution authority is
+defined in backend/docs/stress_enforcement_rollout.md.
 """
 
 from __future__ import annotations

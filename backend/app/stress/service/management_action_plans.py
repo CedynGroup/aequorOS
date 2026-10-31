@@ -4,11 +4,13 @@ The authoritative CRUD + maker-checker lifecycle for ``ManagementActionPlan`` �
 governed, documented set of credible management actions the directive requires
 (¶80). Governance mirrors ``macro_scenarios`` exactly:
 
-- ``draft`` plans are freely editable by an analyst (maker);
+- ``draft`` plans are editable by an authorized maker;
 - ``submit`` moves a draft to ``pending_approval``;
-- ``approve`` requires a DIFFERENT user with the approver role (maker ≠ checker,
+- ``approve`` requires a DIFFERENT authorized checker (maker ≠ checker,
   ¶16), stamps ``approved_by`` / ``approval_timestamp`` and bumps the version;
 - an ``approved`` plan is immutable; ``archive`` retires a plan.
+
+Scoped authority is defined in backend/docs/stress_enforcement_rollout.md.
 
 Only an ``approved`` plan may feed an official enterprise-stress run —
 ``resolve_for_official_run`` is the guard the service calls. ``build_domain_plan``

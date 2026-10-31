@@ -4,9 +4,9 @@ The authoritative CRUD + maker-checker lifecycle for ``MacroScenario`` — the
 governed spine every later stress phase consumes. Effective governance mirrors
 the return/desk approval model already in the codebase:
 
-- ``draft`` scenarios are freely editable by an analyst (maker);
+- ``draft`` scenarios are editable by an authorized maker;
 - ``submit`` moves a draft to ``pending_approval``;
-- ``approve`` requires a DIFFERENT user with the approver role (maker ≠ checker),
+- ``approve`` requires a DIFFERENT authorized checker (maker ≠ checker),
   stamps ``approved_by``/``approval_timestamp`` and bumps the version;
 - an ``approved`` scenario is immutable (edits are refused);
 - ``archive`` retires a scenario from any live state.
@@ -15,7 +15,8 @@ Only an ``approved`` scenario may feed an official run — ``resolve_for_officia
 is the guard the Phase 2 enterprise orchestrator calls. Every mutation carries a
 non-empty reason and is audit-logged. Tenant-row reads/writes are org-scoped in
 code (defense-in-depth on top of the migration's RLS FORCE policies). System
-definitions follow the separate contract in docs/stress.md §3.1.1.
+definitions follow the separate contract in docs/stress.md §3.1.1. Scoped
+authority is defined in backend/docs/stress_enforcement_rollout.md.
 """
 
 from __future__ import annotations

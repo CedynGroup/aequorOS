@@ -23,15 +23,23 @@ executable verification contract.
   engine's RUN check and its Risk response-view boundary, and no longer
   depends on the scalar Analyst role.
 - The existing IRRBB/confidential entry gate on `/irr/enterprise-stress` remains
-  in place. The workbench additionally requires RISK/confidential VIEW before
-  issuing its scenario, management-action or run queries.
-- Sign-off preparation requires RISK/confidential CREATE or EDIT. Reads require
-  VIEW. The final attestation ceremony is not completed by this change.
+  in place. The workbench additionally requires RISK/confidential VIEW on the
+  active bank before mounting its query-owning content. A grant on another bank
+  does not permit scenario, management-action or run queries for this workbench.
+- Organization scenario controls consume organization capabilities from the
+  shared effective-authority projection; exact-bank capabilities never substitute
+  for them. Approval eligibility remains contextual: the server checks the maker
+  against the checker. Risk capabilities do not confer Account administration.
+- Sign-off preparation requires RISK/confidential CREATE for a new sign-off and
+  EDIT to update, submit or withdraw it. Reads require VIEW. Final attestation
+  retains its legacy `ApproverTenant` floor pending #185.
 
-Lists filter authorized scopes before path/item counts and returned totals.
-Unauthorized object IDs return 404. Evaluator failures deny closed. Refused
-mutations cannot create scenarios, action items, sign-offs or successful audit
-events. No production bindings are created or backfilled.
+Disabled controls explain the missing permission on hover and keyboard focus.
+These boundaries require whole-institution data coverage. Lists filter authorized
+scopes before path/item counts and returned totals. For callers without VIEW,
+existing and missing object IDs return an identical 404 response. Evaluator
+failures deny closed. Refused mutations cannot create scenarios, action items,
+sign-offs or successful audit events. No production bindings are created or backfilled.
 
 ## Deployment gate
 

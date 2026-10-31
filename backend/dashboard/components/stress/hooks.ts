@@ -5,9 +5,7 @@
  * governed macro scenarios, enterprise-wide stress runs (+ Appendix II) and the
  * management-action plan library.
  *
- * These endpoints are not yet in the generated OpenAPI client (regeneration is
- * owned by a concurrent effort, so `lib/api/hooks.ts` is off-limits here). The
- * hooks therefore issue authenticated `fetch`es directly and unwrap the backend
+ * These hooks issue authenticated `fetch`es directly and unwrap the backend
  * error envelope into the shared `ApiError`, mirroring `lib/api/client.ts` so
  * `QueryBoundary` / `ErrorPanel` render failures identically to the rest of the
  * app.

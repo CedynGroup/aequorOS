@@ -263,8 +263,10 @@ quarantined `StressScenario` split with one library):
 
 The platform ships immutable, code-defined defaults from
 `backend/app/stress/service/default_macro_scenarios.py`. They are resolved at read/run time, not seeded
-as tenant rows, so the e2e bootstrap, local sandbox and every new organization see the same
-versioned set without a provisioning step. Their UUIDv5 identifiers are stable per code and
+as tenant rows, so authorized readers can access the versioned set without a
+provisioning step. Visibility and cloning follow the
+[Stress authority contract](../backend/docs/stress_enforcement_rollout.md#required-authority).
+Their UUIDv5 identifiers are stable per code and
 definition version; a new definition version has a new ID. They appear as
 `owner=system`, `status=approved`, and need no maker-checker transition. Editing, submitting,
 approving or archiving one is refused; **Clone to editable draft** copies its year-end points into
@@ -277,7 +279,7 @@ entries expose cloning instead of mutation actions, and the BoG placeholder cann
 because it has no numeric path. A fresh organization needs no scenario provisioning, but
 execution still requires an ingested institution, a reporting period, the required inputs and
 run authority. The visible-disabled run control follows the
-[IRRBB authority and shared tooltip contract](../backend/docs/irrbb_enforcement_rollout.md#dashboard-controls).
+[Stress authority contract](../backend/docs/stress_enforcement_rollout.md#required-authority).
 
 Saved runs reopen from their immutable scenario snapshot, even after the corresponding system
 definition version is no longer in the current catalogue. Latest-result lookup matches the
