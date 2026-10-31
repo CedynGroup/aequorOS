@@ -19007,7 +19007,8 @@
     "tests/scripts/test_reporting_reorganization.py::test_reporting_operations_after_fresh_import[app.capital.service.sdi_views]": "unit",
     "tests/db/test_database_roles.py::test_matrix_detects_a_returning_bypassrls_attribute[aqs_operator]": "integration",
     "tests/db/test_database_roles.py::test_matrix_detects_a_returning_bypassrls_attribute[aqs_worker]": "integration",
-    "tests/db/test_database_roles.py::test_operator_cannot_read_financial_or_personal_tables_directly": "integration"
+    "tests/db/test_database_roles.py::test_operator_cannot_read_financial_or_personal_tables_directly": "integration",
+    "tests/db/test_database_roles.py::test_pre_cutover_login_still_runs_the_application": "integration"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",
