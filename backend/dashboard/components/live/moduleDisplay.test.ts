@@ -2,7 +2,7 @@
  * Pins the live engine's headline-metric map so its two mirrors cannot drift:
  * `_PRIMARY_METRIC_KEY` in `backend/app/liquidity/service/window_analytics.py` (its
  * parity test reads THIS file's source) and the labels rendered by
- * `components/home/WindowAnalysis.tsx`. Also pins the D-013
+ * `features/home/components/WindowAnalysis.tsx`. Also pins the D-013
  * direction rule: the IRR headline is stored signed, judged on magnitude —
  * and (A1-02) that the pulse badge's glyph and figure follow the SIGNED move
  * while only its colour follows the magnitude judgement.
@@ -321,8 +321,8 @@ test("WindowAnalysis renders each daily headline with the live card's label", ()
   };
   let renderer: ReturnType<typeof create> | undefined;
   try {
-    const WindowAnalysis: typeof import("../home/WindowAnalysis").default =
-      require("../home/WindowAnalysis").default;
+    const WindowAnalysis: typeof import("../../features/home/components/WindowAnalysis").default =
+      require("../../features/home/components/WindowAnalysis").default;
     act(() => {
       renderer = create(createElement(WindowAnalysis, { bankId: data.bankId }));
     });
