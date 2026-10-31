@@ -1,6 +1,6 @@
 "use client";
 
-import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
+import { RunModuleScenarios } from "@/features/workbench/public";
 import PageContainer from "@/components/ui/PageContainer";
 import { ArrowUpRight } from "lucide-react";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";

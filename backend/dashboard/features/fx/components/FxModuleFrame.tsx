@@ -7,7 +7,7 @@
  * a render prop so the payload is fetched (and cached) once per query key.
  */
 
-import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
+import { RunModuleScenarios } from "@/features/workbench/public";
 import ValidationList from "@/components/ui/ValidationList";
 import PageContainer from "@/components/ui/PageContainer";
 import type { ReactNode } from "react";
