@@ -537,13 +537,14 @@ def test_overlapping_readiness_callers_share_dependency_result(
         def health_check(self) -> StorageHealth:
             calls.append("probed")
             entered.set()
-            assert release.wait(timeout=5)
+            _ = release.wait()
             return StorageHealth(
                 healthy=healthy, backend="s3", detail="synthetic-private-storage-detail"
             )
 
     monkeypatch.setattr(health, "get_storage_client", SlowStorage)
-    monkeypatch.setattr(health, "_READINESS_TIMEOUT_SECONDS", 2)
+    # The release event controls coalescing; deadline behavior is covered separately.
+    monkeypatch.setattr(health, "_READINESS_TIMEOUT_SECONDS", None)
 
     async def exercise() -> None:
         async with AsyncClient(
