@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterator
+from contextlib import closing
 from datetime import timedelta
 from pathlib import Path
 from threading import Lock
@@ -1068,95 +1069,119 @@ def test_api_role_can_connect_test_rotate_and_confirm_bank_key(
 
 
 def test_pre_cutover_login_still_runs_the_application(
-    role_schema: migrations.MigratedPostgresSchema,
-    administrator: Engine,
+    monkeypatch: pytest.MonkeyPatch,
     request: pytest.FixtureRequest,
 ) -> None:
-    """The role foundation is not a cutover: a deployment login from before
-    it (own password, BYPASSRLS, wide grants, no ``aqs_*`` identity) still
-    runs the application unchanged after the full migration chain. No
-    migration rewires logins, revokes the deployment actor's grants or
-    switches a connection URL, so the new roles activate only through the
-    documented credential-switch steps of the deployment runbook."""
+    """Upgrade a pre-foundation login without repairing its identity or function grants."""
     name, password = f"legacy_probe_{uuid4().hex}", uuid4().hex
-    schema = role_schema.schema_name
+    administrator = managed_engine(
+        request, migrations.postgres_administrator_url(), administrative=True
+    )
     with administrator.begin() as connection:
-        quote = connection.dialect.identifier_preparer.quote_identifier(schema)
         connection.execute(
             text(
                 f"CREATE ROLE {name} LOGIN PASSWORD '{password}' INHERIT "
                 "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS"
             )
         )
-        connection.execute(text(f"GRANT USAGE ON SCHEMA {quote} TO {name}"))
-        connection.execute(text(f"GRANT ALL ON ALL TABLES IN SCHEMA {quote} TO {name}"))
-        connection.execute(text(f"GRANT ALL ON ALL SEQUENCES IN SCHEMA {quote} TO {name}"))
-        connection.execute(text(f"GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA {quote} TO {name}"))
-    url = (
-        make_url(role_schema.app_engine.url)
-        .set(username=name, password=password)
-        .update_query_dict({"options": f"-csearch_path={schema}"})
-    )
     try:
-        engine = managed_engine(request, url)
-        try:
-            with Session(engine) as session:
-                assert session.scalar(text("SELECT current_user")) == name
-                assert (
-                    session.scalar(
-                        text(
-                            "SELECT count(*) FROM pg_auth_members m "
-                            "JOIN pg_roles r ON r.oid=m.roleid "
-                            "JOIN pg_roles l ON l.oid=m.member "
-                            "WHERE l.rolname=current_user AND r.rolname LIKE 'aqs%'"
+        monkeypatch.setenv("APP_ENV", "test")
+        monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "1")
+        with closing(
+            migrations.migrate_isolated_postgres_schema(
+                monkeypatch, downgrade=False, revision="202610110097"
+            )
+        ) as schemas:
+            role_schema = next(schemas)
+            schema = role_schema.schema_name
+            with administrator.begin() as connection:
+                quote = connection.dialect.identifier_preparer.quote_identifier(schema)
+                connection.execute(text(f"GRANT USAGE ON SCHEMA {quote} TO {name}"))
+                connection.execute(text(f"GRANT ALL ON ALL TABLES IN SCHEMA {quote} TO {name}"))
+                connection.execute(text(f"GRANT ALL ON ALL SEQUENCES IN SCHEMA {quote} TO {name}"))
+            migrations.command.upgrade(migrations.alembic_config_for_app(), "head")
+            url = (
+                make_url(role_schema.app_engine.url)
+                .set(username=name, password=password)
+                .update_query_dict({"options": f"-csearch_path={schema}"})
+            )
+            engine = managed_engine(request, url)
+            try:
+                with engine.connect() as connection:
+                    assert connection.scalar(text("SELECT current_user")) == name
+                    assert tuple(
+                        connection.execute(
+                            text(
+                                "SELECT rolcanlogin, rolinherit, rolsuper, rolcreatedb, "
+                                "rolcreaterole, rolreplication, rolbypassrls FROM pg_roles "
+                                "WHERE rolname=current_user"
+                            )
+                        ).one()
+                    ) == (True, True, False, False, False, False, True)
+                    assert (
+                        connection.scalar(
+                            text(
+                                "SELECT count(*) FROM pg_auth_members m "
+                                "JOIN pg_roles l ON l.oid=m.member "
+                                "WHERE l.rolname=current_user"
+                            )
                         )
+                        == 0
                     )
-                    == 0
-                )
-                # Cross-bank visibility the pre-cutover operator path relies on.
-                assert set(session.scalars(select(Organization.id))) == {ORG_1, ORG_2}
-                # The API's tenant-scoped write path, unchanged.
-                bank = Bank(
-                    organization_id=ORG_1,
-                    name="Legacy path",
-                    short_name="Legacy",
-                    currency="GHS",
-                    jurisdiction_code="GH",
-                    license_type="bank",
-                    institution_type="universal_bank",
-                )
-                session.add(bank)
-                session.flush()
-                job = Job(
-                    organization_id=ORG_1,
-                    bank_id=bank.id,
-                    job_type="scheduled_tick",
-                    status="queued",
-                    payload={},
-                )
-                session.add(job)
-                session.commit()
-                job_id = job.id
-            # The worker claim path still serves the legacy credential: the
-            # compatibility function is granted to the bypass roles.
-            with engine.begin() as connection:
-                claimed = cast(
-                    UUID,
+                with administrator.begin() as connection:
+                    connection.execute(text(f"GRANT ALL ON ALL TABLES IN SCHEMA {quote} TO {name}"))
                     connection.execute(
-                        text(
-                            "SELECT * FROM aqs_worker_claim_job(now(), ARRAY[:job_type], 'probe')"
-                        ),
-                        {"job_type": "scheduled_tick"},
-                    ).scalar_one(),
-                )
-                assert claimed == job_id
-        finally:
-            engine.dispose()
+                        text(f"GRANT ALL ON ALL SEQUENCES IN SCHEMA {quote} TO {name}")
+                    )
+                    for org in (ORG_1, ORG_2):
+                        connection.execute(
+                            text(
+                                f"INSERT INTO {quote}.organizations (id,name,created_at,updated_at) "
+                                "VALUES (:org,'Privilege fixture',now(),now())"
+                            ),
+                            {"org": org},
+                        )
+                with Session(engine) as session:
+                    # Cross-bank visibility the pre-cutover operator path relies on.
+                    assert set(session.scalars(select(Organization.id))) == {ORG_1, ORG_2}
+                    # The API's tenant-scoped write path, unchanged.
+                    bank = Bank(
+                        organization_id=ORG_1,
+                        name="Legacy path",
+                        short_name="Legacy",
+                        currency="GHS",
+                        jurisdiction_code="GH",
+                        license_type="bank",
+                        institution_type="universal_bank",
+                    )
+                    session.add(bank)
+                    session.flush()
+                    job = Job(
+                        organization_id=ORG_1,
+                        bank_id=bank.id,
+                        job_type="scheduled_tick",
+                        status="queued",
+                        payload={},
+                    )
+                    session.add(job)
+                    session.commit()
+                    job_id = job.id
+                # The worker claim path still serves the legacy credential: the
+                # compatibility function is granted to the bypass roles.
+                with engine.begin() as connection:
+                    claimed = cast(
+                        UUID,
+                        connection.execute(
+                            text(
+                                "SELECT * FROM aqs_worker_claim_job(now(), ARRAY[:job_type], 'probe')"
+                            ),
+                            {"job_type": "scheduled_tick"},
+                        ).scalar_one(),
+                    )
+                    assert claimed == job_id
+            finally:
+                engine.dispose()
     finally:
         with administrator.begin() as connection:
-            quote = connection.dialect.identifier_preparer.quote_identifier(schema)
-            connection.execute(text(f"REVOKE ALL ON ALL TABLES IN SCHEMA {quote} FROM {name}"))
-            connection.execute(text(f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA {quote} FROM {name}"))
-            connection.execute(text(f"REVOKE ALL ON ALL FUNCTIONS IN SCHEMA {quote} FROM {name}"))
-            connection.execute(text(f"REVOKE USAGE ON SCHEMA {quote} FROM {name}"))
             connection.execute(text(f"DROP ROLE {name}"))
+        administrator.dispose()
