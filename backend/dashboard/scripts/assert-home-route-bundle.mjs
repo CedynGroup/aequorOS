@@ -78,15 +78,15 @@ const EDITOR_MARKERS = ["ProseMirror-hideselection", "ProseMirror-focused"];
  * resize grip, and its own stylesheet keys off both. It arrived with the saved
  * dashboard builder (Phase 3, `react-grid-layout` 2.2.4, whose peer range
  * `>= 16.3.0` admits React 19), and it belongs here because the builder's grid
- * is a client-only runtime reached through `components/bi/BuilderGrid.tsx`. This
+ * is a client-only runtime reached through `features/bi/components/BuilderGrid.tsx`. This
  * guard already earned its keep on it once: the first draft imported one
  * CONSTANT from `BuilderGridCanvas.tsx` into the tile renderer, which put the
  * whole library in `/dashboards/new`'s initial bundle — deferred in name only.
  *
  * The home insight strip uses the lightweight SVG `components/ui/Sparkline`.
- * Any BI chart must be reached through `components/bi/EChart.tsx`, the BI grid
- * through `components/bi/PivotGrid.tsx`, and the builder's canvas through
- * `components/bi/BuilderGrid.tsx`; all three load with
+ * Any BI chart must be reached through `features/bi/components/EChart.tsx`, the BI grid
+ * through `features/bi/components/PivotGrid.tsx`, and the builder's canvas through
+ * `features/bi/components/BuilderGrid.tsx`; all three load with
  * `dynamic(..., { ssr: false })`.
  */
 const BI_RUNTIME_MARKERS = [
@@ -137,7 +137,7 @@ if (offendingBiChunks.length > 0) {
   throw new Error(
     "Command Center initial entry graph contains a BI charting or grid " +
       `runtime: ${offendingBiChunks.join(", ")}. Charts must be reached only ` +
-      "through components/bi/EChart.tsx, which imports the canvas with " +
+      "through features/bi/components/EChart.tsx, which imports the canvas with " +
       "dynamic(..., { ssr: false }); the home insight strip uses the SVG " +
       "components/ui/Sparkline.",
   );
@@ -155,7 +155,7 @@ if (offendingBiChunks.length > 0) {
  *   deferred chunk rather than having quietly moved into the initial bundle (the
  *   negative assertions above only say what is ABSENT from the entry graph, and
  *   would pass just as happily if the chart were deleted); and
- * - it must NOT contain a charting runtime. `components/bi/EChart.tsx` defers the
+ * - it must NOT contain a charting runtime. `features/bi/components/EChart.tsx` defers the
  *   canvas a SECOND time, inside the already-deferred chart, so the Command
  *   Center pays for an 8 KB component and pays for ECharts only when it draws.
  *   Under Recharts this chunk carried the whole library.
@@ -192,7 +192,7 @@ if (
       `loading label ${JSON.stringify(CHART_BOUNDARY_MARKER)}: ` +
       `${deferredChartChunks.join(", ")}. Either the label was reworded (update ` +
       "CHART_BOUNDARY_MARKER after checking the new build output), or the ratio " +
-      "chart no longer reaches the canvas through components/bi/EChart.tsx.",
+      "chart no longer reaches the canvas through features/bi/components/EChart.tsx.",
   );
 }
 
@@ -206,7 +206,7 @@ const chartChunksCarryingRuntime = deferredChartSources.flatMap(
 if (chartChunksCarryingRuntime.length > 0) {
   throw new Error(
     "The Command Center's deferred chart chunk carries a charting runtime: " +
-      `${chartChunksCarryingRuntime.join(", ")}. components/bi/EChart.tsx must ` +
+      `${chartChunksCarryingRuntime.join(", ")}. features/bi/components/EChart.tsx must ` +
       "load the canvas with dynamic(..., { ssr: false }) so the home route pays " +
       "for the runtime only when it draws.",
   );
@@ -266,7 +266,7 @@ const exploreEntries = Object.values(
 
 if (exploreEntries.length === 0) {
   throw new Error(
-    `Expected a deferred BI chart entry in ${exploreLoadableManifestPath}; found none. components/bi/EChart.tsx must load the canvas with next/dynamic.`,
+    `Expected a deferred BI chart entry in ${exploreLoadableManifestPath}; found none. features/bi/components/EChart.tsx must load the canvas with next/dynamic.`,
   );
 }
 
@@ -302,7 +302,7 @@ if (!deferredBiHasAgGrid) {
       `(${AG_GRID_MARKERS.join(", ")}): ${deferredBiChunks.join(", ")}. Either ` +
       "the markers changed in an ag-grid-community upgrade (update " +
       "BI_RUNTIME_MARKERS after checking the new build output), or the grid is " +
-      "no longer loaded through components/bi/PivotGrid.tsx with " +
+      "no longer loaded through features/bi/components/PivotGrid.tsx with " +
       "dynamic(..., { ssr: false }) and has moved into an initial bundle.",
   );
 }
@@ -325,7 +325,7 @@ const builderEntries = Object.values(
 
 if (builderEntries.length === 0) {
   throw new Error(
-    `Expected a deferred BI builder entry in ${builderLoadableManifestPath}; found none. components/bi/BuilderGrid.tsx must load the canvas with next/dynamic.`,
+    `Expected a deferred BI builder entry in ${builderLoadableManifestPath}; found none. features/bi/components/BuilderGrid.tsx must load the canvas with next/dynamic.`,
   );
 }
 
@@ -343,7 +343,7 @@ if (!deferredBuilderHasGridLayout) {
       `marker (${GRID_LAYOUT_MARKERS.join(", ")}): ${deferredBuilderChunks.join(", ")}. ` +
       "Either the markers changed in a react-grid-layout upgrade (update " +
       "BI_RUNTIME_MARKERS after checking the new build output), or the grid is no " +
-      "longer loaded through components/bi/BuilderGrid.tsx with " +
+      "longer loaded through features/bi/components/BuilderGrid.tsx with " +
       "dynamic(..., { ssr: false }) and has moved into an initial bundle.",
   );
 }

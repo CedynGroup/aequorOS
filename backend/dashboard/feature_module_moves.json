@@ -6,5 +6,9 @@
   [
     "components/liquidity",
     "features/liquidity/components"
+  ],
+  [
+    "components/bi",
+    "features/bi/components"
   ]
 ]

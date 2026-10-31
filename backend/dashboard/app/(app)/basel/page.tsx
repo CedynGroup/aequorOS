@@ -19,7 +19,7 @@ import FloorNotAssessed from "@/components/basel/FloorNotAssessed";
 import {
   LandingInsightStrip,
   useKpiExplain,
-} from "@/components/bi/InsightStrip";
+} from "@/features/bi/components/InsightStrip";
 import { useBankContext } from "@/components/shell/BankContext";
 import LiveEngineNote from "@/components/live/LiveEngineNote";
 import { useCapitalDashboard, useRegulatoryRun } from "@/lib/api/hooks";

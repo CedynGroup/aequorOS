@@ -8,7 +8,7 @@ import ChartFrame from '@/components/ui/ChartFrame';
 import ValidationList from '@/components/ui/ValidationList';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import FtpModuleFrame, { type FtpFrameContext } from '@/components/ftp/FtpModuleFrame';
-import { LandingInsightStrip, useKpiExplain } from '@/components/bi/InsightStrip';
+import { LandingInsightStrip, useKpiExplain } from '@/features/bi/components/InsightStrip';
 import TransferCurveChart from '@/components/ftp/charts/TransferCurveChart';
 import TrendChart from '@/components/ftp/charts/TrendChart';
 import { num } from '@/lib/api/values';

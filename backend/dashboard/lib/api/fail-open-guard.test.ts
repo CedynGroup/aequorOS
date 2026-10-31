@@ -92,7 +92,7 @@ const SCANNED_DIRS = [
   // answered with nothing. Both of those states are one `?? 0` away from being
   // a fabricated measurement on a board pack, which is exactly this guard's
   // subject — so the whole tree is in scope from the day it exists.
-  "components/bi",
+  "features/bi",
   // The coverage notice is the only thing on a scoped reader's screen that says
   // the totals beside it are not the institution's. It renders no figure itself,
   // but it DECIDES how a figure is read — which is the half of the P0-19 finding

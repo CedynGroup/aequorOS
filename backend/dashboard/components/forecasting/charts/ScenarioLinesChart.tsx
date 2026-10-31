@@ -6,8 +6,8 @@
  * scenario chart.
  */
 
-import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
-import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
+import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
+import { seriesColor, useChartTokens } from "@/features/bi/components/echartsTheme";
 import {
   axisTooltip,
   gapAwareData,

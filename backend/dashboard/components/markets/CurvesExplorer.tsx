@@ -31,8 +31,8 @@ import {
 import type { YieldCurveViewRead } from "@aequoros/risk-service-api";
 import ChartFrame from "@/components/ui/ChartFrame";
 import SubTabs from "@/components/ui/SubTabs";
-import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
-import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
+import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
+import { seriesColor, useChartTokens } from "@/features/bi/components/echartsTheme";
 import {
   axisTooltip,
   gapAwareData,
