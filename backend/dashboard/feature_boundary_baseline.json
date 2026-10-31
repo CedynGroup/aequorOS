@@ -10,7 +10,6 @@
     "features/bi/components/notifications.test.ts -> unit/backend",
     "features/bi/routes/explore.tsx -> components/access/CoverageNotice",
     "features/bi/routes/insights.tsx -> components/access/CoverageNotice",
-    "features/home/components/BreachBanner.tsx -> features/live/components/moduleDisplay",
     "features/home/components/RoleLens.test.ts -> features/live/components/moduleDisplay",
     "features/home/components/SdiLiquiditySummary.tsx -> components/basel/sdiHooks",
     "features/liquidity/components/CfpLifecycle.tsx -> components/institution/shared",
@@ -21,7 +20,6 @@
     "features/live/components/moduleDisplay.test.ts -> features/home/components/WindowAnalysis",
     "features/risk/routes/alerts.tsx -> components/basel/sdiHooks",
     "features/risk/routes/overview.tsx -> components/basel/sdiHooks",
-    "features/risk/routes/overview.tsx -> features/bi/components/InsightStrip",
     "features/workbench/components/ScenarioWorkbench.tsx -> components/ftp/FtpWhatIf"
   ]
 }
