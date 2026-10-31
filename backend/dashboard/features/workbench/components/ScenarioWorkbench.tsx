@@ -12,7 +12,7 @@ import type {
   EffectiveCapabilityRead,
   WorkbenchModule,
 } from "@aequoros/risk-service-api";
-import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
+import RunModuleScenarios from "@/features/workbench/components/RunModuleScenarios";
 import ScenarioMetrics, {
   scenarioLabel,
   scenarioRisk,

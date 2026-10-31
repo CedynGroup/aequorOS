@@ -20,7 +20,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import RunModuleScenarios from "../components/workbench/RunModuleScenarios";
+import RunModuleScenarios from "../features/workbench/components/RunModuleScenarios";
 import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
 import { queryAuthorityScope, scopedQueryKey } from "../lib/api/queryPolicy";
 import { apiBaseUrl } from "../lib/api/client";

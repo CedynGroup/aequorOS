@@ -22,7 +22,7 @@ import { SessionProvider } from "next-auth/react";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import type { WorkbenchModule } from "@aequoros/risk-service-api";
-import ScenarioWorkbench from "../components/workbench/ScenarioWorkbench";
+import ScenarioWorkbench from "../features/workbench/components/ScenarioWorkbench";
 import EnterpriseStressPage from "../app/(app)/irr/enterprise-stress/page";
 import ProfileProvider from "../components/profile/ProfileProvider";
 import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";

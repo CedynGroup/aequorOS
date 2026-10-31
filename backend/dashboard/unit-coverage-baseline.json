@@ -518,7 +518,7 @@
     "components/ui/StatusPill.tsx": 0,
     "components/ui/SubTabs.tsx": 0,
     "components/ui/ValidationList.tsx": 3,
-    "components/workbench/ScenarioWorkbench.tsx": 2,
+    "features/workbench/components/ScenarioWorkbench.tsx": 2,
     "lib/api/QueryAuthorityBoundary.tsx": 0,
     "lib/api/accountAdministration.ts": 0,
     "lib/api/ask.ts": 2,
